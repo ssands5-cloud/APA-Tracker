@@ -1,0 +1,283 @@
+name: Remote Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - builder/post-promotion-stock-control-repair-20260823
+      - builder/production-readiness-20260823
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-runner-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  vba-parity:
+    name: VBA parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Verify reviewed/importable VBA parity
+        run: python tests/verify_vba_init_authority.py
+      - name: Verify VBA source and reachability contracts
+        run: >-
+          python -m unittest
+          tests.test_vba_source
+          tests.test_vba_lint
+          tests.test_vba_project_reachable
+          tests.test_vba_reachability_matrix
+          -v
+
+  control-census:
+    name: Control census
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Exercise replacement census and graph contracts
+        run: python -m unittest tests.test_control_migration tests.test_xlsm_control_preserver -v
+
+  button-reachability:
+    name: Button reachability
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Verify installer fail-closed target wiring
+        run: python -m unittest tests.test_setup_excel_buttons_hardening tests.test_vba_reachability_matrix -v
+      - name: Verify VBA target reachability contract
+        run: python tests/verify_vba_init_authority.py
+
+  runtime-simulation:
+    name: Runtime simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Exercise safe runtime paths with mocks/fixtures
+        run: >-
+          python -m unittest
+          tests.test_runtime_readiness_contracts
+          tests.test_entry_points
+          tests.test_daily_collection_edges
+          tests.test_portable_runtime_paths
+          -v
+      - name: Verify VBA runtime-state restoration contract
+        run: python tests/verify_tracker_runtime_state.py
+
+  scheduler-simulation:
+    name: Scheduler simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Validate scheduler deployment contract without registration
+        run: python scripts/scheduler_contract_dry_run.py --output scheduler_contract_dry_run.json
+      - name: Verify unattended-preparation contracts
+        run: python -m unittest tests.test_acceptance_preparation_contracts -v
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-runner-scheduler-${{ github.sha }}
+          path: scheduler_contract_dry_run.json
+          if-no-files-found: error
+          retention-days: 30
+
+  artifact-fingerprinting:
+    name: Artifact fingerprinting
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fingerprint tracked release-critical artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            release_gate.json
+            CryptoCommandCenter.bas
+            vba/CryptoCommandCenter.bas
+            setup_excel_buttons.py
+            control_migration.py
+            build_uat_candidate.py
+            Tracker.xlsx
+          )
+          : > remote_runner_fingerprints.sha256
+          for file in "${files[@]}"; do
+            test -f "$file"
+            sha256sum "$file" >> remote_runner_fingerprints.sha256
+          done
+          cat remote_runner_fingerprints.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-runner-fingerprints-${{ github.sha }}
+          path: remote_runner_fingerprints.sha256
+          if-no-files-found: error
+          retention-days: 90
+
+  drift-detection:
+    name: Drift detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Establish exact branch/upstream identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            target_ref="${{ github.event.pull_request.head.ref }}"
+            target_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            target_ref="$GITHUB_REF_NAME"
+            target_sha="$GITHUB_SHA"
+          fi
+          git fetch --no-tags origin "$target_ref"
+          git checkout -B "$target_ref" "$target_sha"
+          git branch --set-upstream-to="origin/$target_ref" "$target_ref"
+          test "$(git rev-parse HEAD)" = "$target_sha"
+      - name: Verify release-gate and repository invariants
+        run: |
+          python tests/verify_release_gate_current_state.py
+          python repo_health_check.py --pre-commit
+      - name: Prove checks left the sandbox clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)" || {
+            echo "Remote Runner introduced workspace drift:" >&2
+            git status --short >&2
+            exit 1
+          }
+
+  rogue-process-detection:
+    name: Rogue-process detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Exercise attributed-process cleanup contracts
+        run: python -m unittest tests.test_com_lifecycle -v
+      - name: Refuse unexpected office/emulation processes in sandbox
+        shell: python
+        run: |
+          from pathlib import Path
+          bad_names = {"excel.exe", "soffice", "libreoffice", "wine", "wineserver"}
+          found = []
+          proc = Path("/proc")
+          for entry in proc.iterdir():
+              if not entry.name.isdigit():
+                  continue
+              try:
+                  name = (entry / "comm").read_text(errors="replace").strip().lower()
+                  if name in bad_names:
+                      cmd = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+                      found.append((entry.name, name, cmd))
+              except (FileNotFoundError, PermissionError, ProcessLookupError):
+                  pass
+          if found:
+              raise SystemExit("rogue process(es) detected: " + repr(found))
+          print("ROGUE_PROCESS_DETECTION: PASS")
+
+  regression-suite:
+    name: Full regression suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Compile Python tree
+        run: python -m compileall -q crypto_analyzer scripts tests *.py
+      - name: Run full discovered suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  remote-runner-green:
+    name: Remote Runner green gate
+    if: always()
+    needs:
+      - vba-parity
+      - control-census
+      - button-reachability
+      - runtime-simulation
+      - scheduler-simulation
+      - artifact-fingerprinting
+      - drift-detection
+      - rogue-process-detection
+      - regression-suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every autonomous job to pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          needs = json.loads(os.environ["RESULTS"])
+          failed = {name: data.get("result") for name, data in needs.items()
+                    if data.get("result") != "success"}
+          if failed:
+              raise SystemExit(f"REMOTE_RUNNER: FAIL {failed}")
+          print("REMOTE_RUNNER: PASS")
+          PY
+        env:
+          RESULTS: ${{ toJSON(needs) }}

@@ -1,0 +1,210 @@
+name: Tracker pre-UAT gate
+
+on:
+  pull_request:
+    paths:
+      - Tracker.xlsx
+      - CryptoCommandCenter.bas
+      - vba/CryptoCommandCenter.bas
+      - setup_excel_buttons.py
+      - crypto_analyzer/bootstrap.py
+      - crypto_analyzer/decision_engine.py
+      - crypto_analyzer/pipeline.py
+      - crypto_analyzer/workbook_save.py
+      - crypto_analyzer/shadow_price_truth_gate.py
+      - crypto_analyzer/shadow_feedback_live_adapter.py
+      - crypto_analyzer/shadow_feedback_order_candidate.py
+      - scripts/refresh_tracker_stocks.py
+      - scripts/publish_market_log_feed.py
+      - scripts/run_controlled_negative_uat_ci.py
+      - scripts/package_controlled_negative_evidence.py
+      - scripts/scheduler_contract_dry_run.py
+      - scripts/backup_prune_plan.py
+      - scripts/unattended_acceptance.ps1
+      - scripts/post_promotion_entrypoint_acceptance.ps1
+      - scripts/uat_scheduler_probe.cmd
+      - scripts/install_crypto_tracker_task.ps1
+      - scripts/sync_market_log_to_tracker.py
+      - resolve_python.bat
+      - python.cmd
+      - run.bat
+      - run_daily.bat
+      - run_daily_manager.bat
+      - '*.bat'
+      - '*.ps1'
+      - '*.cmd'
+      - daily_market_manager.py
+      - scripts/install_tracker_workbook.py
+      - tests/verify_tracker_pr.py
+      - tests/verify_tracker_history_guard.py
+      - tests/verify_tracker_runtime_state.py
+      - tests/verify_vba_init_authority.py
+      - tests/verify_release_gate_current_state.py
+      - tests/test_runtime_readiness_contracts.py
+      - tests/test_acceptance_preparation_contracts.py
+      - tests/test_setup_excel_buttons_hardening.py
+      - tests/**/*.py
+      - repo_health_check.py
+      - release_gate.json
+      - docs/UNATTENDED_ACCEPTANCE_AND_BACKUP_PRUNING.md
+      - .gitattributes
+      - .github/workflows/controlled-negative-uat.yml
+      - .github/workflows/daily-repo-health.yml
+      - .github/workflows/tracker-pre-uat.yml
+  push:
+    branches:
+      - main
+      - builder/tracker-live-data
+    paths:
+      - Tracker.xlsx
+      - CryptoCommandCenter.bas
+      - vba/CryptoCommandCenter.bas
+      - setup_excel_buttons.py
+      - crypto_analyzer/**
+      - scripts/**
+      - resolve_python.bat
+      - python.cmd
+      - run.bat
+      - run_daily.bat
+      - run_daily_manager.bat
+      - '*.bat'
+      - '*.ps1'
+      - '*.cmd'
+      - daily_market_manager.py
+      - tests/**
+      - repo_health_check.py
+      - release_gate.json
+      - docs/UNATTENDED_ACCEPTANCE_AND_BACKUP_PRUNING.md
+      - .gitattributes
+      - .github/workflows/controlled-negative-uat.yml
+      - .github/workflows/daily-repo-health.yml
+      - .github/workflows/tracker-pre-uat.yml
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  tracker-pre-uat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Python gates/helpers
+        run: >-
+          python -m py_compile
+          setup_excel_buttons.py
+          tests/verify_tracker_pr.py
+          tests/verify_tracker_history_guard.py
+          tests/verify_tracker_runtime_state.py
+          tests/verify_vba_init_authority.py
+          tests/verify_release_gate_current_state.py
+          tests/test_runtime_readiness_contracts.py
+          tests/test_acceptance_preparation_contracts.py
+          tests/test_setup_excel_buttons_hardening.py
+          tests/test_autonomous_repo_hygiene.py
+          scripts/refresh_tracker_stocks.py
+          scripts/run_controlled_negative_uat_ci.py
+          scripts/package_controlled_negative_evidence.py
+          scripts/scheduler_contract_dry_run.py
+          scripts/backup_prune_plan.py
+          scripts/install_tracker_workbook.py
+          crypto_analyzer/bootstrap.py
+          repo_health_check.py
+
+      - name: Parse Windows PowerShell readiness scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "scripts/unattended_acceptance.ps1",
+            "scripts/post_promotion_entrypoint_acceptance.ps1",
+            "scripts/install_crypto_tracker_task.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${file}: $($_.Message)" }
+              exit 1
+            }
+          }
+          Write-Host "POWERSHELL_PARSE: PASS"
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Verify current release gate state
+        run: python tests/verify_release_gate_current_state.py
+
+      - name: Verify owner-approved sheet migration policy
+        run: python -m unittest tests.test_sheet_migration -v
+
+      - name: Verify workbook read-only fail-closed contract
+        run: python -m unittest tests.test_workbook_save.TestFailureLeavesTargetIntact.test_read_only_target_is_refused_without_damage -v
+
+      - name: Verify VBA init source authority
+        run: python tests/verify_vba_init_authority.py
+
+      - name: Verify runtime readiness contracts
+        run: python -m unittest tests.test_runtime_readiness_contracts -v
+
+      - name: Verify acceptance preparation contracts
+        run: python -m unittest tests.test_acceptance_preparation_contracts -v
+
+      - name: Verify VBA/button installer hardening
+        run: python -m unittest tests.test_setup_excel_buttons_hardening -v
+
+      - name: Verify tracker package and source contracts
+        run: python tests/verify_tracker_pr.py
+
+      - name: Verify history asset identity guard
+        run: python tests/verify_tracker_history_guard.py
+
+      - name: Verify VBA runtime-state restoration
+        run: python tests/verify_tracker_runtime_state.py
+
+      - name: Full repository Python regression suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Scheduler deployment dry-run
+        run: python scripts/scheduler_contract_dry_run.py --output output/scheduler_contract_dry_run.json
+
+      - name: Verify repository health on exact builder head
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            target_ref="${{ github.event.pull_request.head.ref }}"
+            target_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            target_ref="$GITHUB_REF_NAME"
+            target_sha="$GITHUB_SHA"
+          fi
+          git fetch --no-tags origin "$target_ref"
+          git checkout -B "$target_ref" "$target_sha"
+          git branch --set-upstream-to="origin/$target_ref" "$target_ref"
+          python repo_health_check.py --pre-commit
+
+      - name: Upload scheduler dry-run evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-contract-dry-run-${{ github.event.pull_request.head.sha || github.sha }}
+          path: output/scheduler_contract_dry_run.json
+          if-no-files-found: error
+          retention-days: 30

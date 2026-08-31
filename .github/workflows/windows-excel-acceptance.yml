@@ -1,0 +1,601 @@
+name: Windows Excel Shadow Acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: windows-excel-shadow-acceptance-invest-excel
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  APPROVED_RUNNER_HEAD: "3543191e7b753b1918b0717f400b1d51f5c71d27"
+  APPROVED_RUNNER_RUN_ID: "32925239521"
+  APPROVED_RUNNER_COMMENT_ID: "5420211713"
+  EXPECTED_BASELINE_SHA256: "3D7061C197FB7D0E2B24CDD64855D90CD4EE97322641EF8A6D7AE30FD5ACD946"
+  EXPECTED_DONOR_SHA256: "2150A43E560CB2DE8AC8404E71D3E6B14D2EE7DA6EE13A5A8E2E689D75533004"
+  EXPECTED_PRODUCTION_SHA256: "997CBBBA3AEB65985D11EB685B47029A4D1A3DBF2A2934D1762A9788FB32664C"
+
+jobs:
+  shadow-acceptance:
+    name: Validate repaired shadow workbook on real Excel
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.number == 200 &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'builder/post-promotion-stock-control-repair-20260823') ||
+      (github.event_name != 'pull_request' &&
+       github.ref_name == 'builder/post-promotion-stock-control-repair-20260823')
+    runs-on: [self-hosted, Windows, X64, invest-excel, excel, vba, com]
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact shadow-acceptance head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Prove exact checkout and approved-runner ancestry
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:EXPECTED_SHA.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Checkout drift: expected $expected, got $actual"
+          }
+          $status = git status --porcelain
+          if ($status) {
+            throw "Checkout is dirty before shadow acceptance:`n$status"
+          }
+          git merge-base --is-ancestor $env:APPROVED_RUNNER_HEAD $actual
+          if ($LASTEXITCODE -ne 0) {
+            throw "Acceptance head is not descended from the exact auditor-approved runner head."
+          }
+          Write-Host "SHADOW_ACCEPTANCE_HEAD=$actual"
+          Write-Host "APPROVED_RUNNER_ANCESTOR=$env:APPROVED_RUNNER_HEAD"
+
+      - name: Re-prove exact Claude runner approval from PR 200
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/comments/$env:APPROVED_RUNNER_COMMENT_ID"
+          $comment = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+          if ([int64]$comment.id -ne [int64]$env:APPROVED_RUNNER_COMMENT_ID) {
+            throw "Auditor approval comment ID mismatch."
+          }
+          $expectedIssueUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/issues/200"
+          if ([string]$comment.issue_url -ne $expectedIssueUrl) {
+            throw "Pinned auditor approval comment does not belong to PR 200."
+          }
+          $body = [string]$comment.body
+          $wantedHead = "AUDIT_HEAD: $env:APPROVED_RUNNER_HEAD"
+          $wantedRun = "RUN_ID: $env:APPROVED_RUNNER_RUN_ID"
+          $wantedApproval = "AUDITOR_RECOMMENDATION: RUNNER APPROVED"
+          $wantedAuthorization = "GPT is authorized to begin implementation of the remote Windows/Excel SHADOW acceptance pipeline."
+          foreach ($required in @(
+            $wantedHead,
+            $wantedRun,
+            $wantedApproval,
+            $wantedAuthorization,
+            'NEW_CRITICAL: 0',
+            'NEW_HIGH: 0',
+            'NEW_MEDIUM: 0'
+          )) {
+            if (-not $body.Contains($required)) {
+              throw "Pinned Claude runner approval comment is missing required evidence: $required"
+            }
+          }
+          "AUDITOR_APPROVAL_VERIFIED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AUDITOR_APPROVAL_COMMENT_ID=$env:APPROVED_RUNNER_COMMENT_ID" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "CLAUDE_RUNNER_APPROVAL: PASS"
+          Write-Host "CLAUDE_RUNNER_APPROVAL_COMMENT_ID=$env:APPROVED_RUNNER_COMMENT_ID"
+
+      - name: Resolve resident Python 3.14 and required dependencies
+        shell: powershell
+        run: |
+          $candidates = New-Object System.Collections.Generic.List[string]
+          $py = Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($py) {
+            try {
+              $viaLauncher = (& $py.Source -3.14 -c "import sys; print(sys.executable)").Trim()
+              if ($LASTEXITCODE -eq 0 -and $viaLauncher) { [void]$candidates.Add($viaLauncher) }
+            }
+            catch {}
+          }
+          $localPython = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"
+          if (Test-Path -LiteralPath $localPython -PathType Leaf) { [void]$candidates.Add($localPython) }
+          $pythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
+          if ($pythonCommand -and $pythonCommand.CommandType -eq 'Application') {
+            [void]$candidates.Add($pythonCommand.Source)
+          }
+
+          $resolvedPython = $null
+          foreach ($candidate in @($candidates | Select-Object -Unique)) {
+            try {
+              $minor = (& $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
+              if ($LASTEXITCODE -eq 0 -and $minor -eq '3.14') {
+                $resolvedPython = $candidate
+                break
+              }
+            }
+            catch {}
+          }
+          if (-not $resolvedPython) {
+            throw "Resident Python 3.14 was not found for the signed-in runner account."
+          }
+          & $resolvedPython -c "import pythoncom, win32com.client, win32process, win32gui, win32con, openpyxl"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Resident Python lacks required COM/openpyxl dependencies; acceptance refuses environment mutation."
+          }
+          "RUNNER_PYTHON=$resolvedPython" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "RUNNER_PYTHON=$resolvedPython"
+
+      - name: Run post-approval static contracts
+        shell: powershell
+        run: >-
+          & $env:RUNNER_PYTHON scripts/run_unittest_stable.py
+          tests.test_unittest_stable_runner_contract
+          tests.test_windows_excel_runner_contract
+          tests.test_windows_excel_runner_evidence_gate
+          tests.test_windows_excel_runner_process_census
+          tests.test_windows_excel_runner_host_context
+          tests.test_windows_excel_runner_vbe_focus
+          tests.test_windows_excel_shadow_acceptance_contract
+          tests.test_merge_repaired_uat_user_state
+          tests.test_repaired_uat_candidate_preparation
+          -v
+
+      - name: Stage pinned inputs and build repaired shadow workbook
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if (Get-Process EXCEL -ErrorAction SilentlyContinue) {
+            throw "Excel is already running before shadow staging."
+          }
+
+          function Get-Sha256([string]$Path) {
+            $digest = (& $env:RUNNER_PYTHON -c "import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1],'rb'),'sha256').hexdigest().upper())" $Path).Trim()
+            if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9A-F]{64}$') {
+              throw "Unable to compute SHA256 for $Path"
+            }
+            return $digest
+          }
+
+          $baselineOriginal = Join-Path $env:USERPROFILE "Desktop\Invest-master-UAT-185\backups\uat_candidate_b491b13_20260823_115802\Crypto_Analysis_UAT_CANDIDATE.xlsm"
+          $donorOriginal = Join-Path $env:USERPROFILE "Desktop\Invest_LOCAL_PRESERVE_20260824_130545\Crypto_Analysis_CURRENT.xlsm"
+          $production = Join-Path $env:USERPROFILE "Desktop\Invest\output\Crypto_Analysis.xlsm"
+          $liveRoot = Join-Path $env:USERPROFILE "Desktop\Invest"
+
+          foreach ($item in @($baselineOriginal, $donorOriginal, $production)) {
+            if (-not (Test-Path -LiteralPath $item -PathType Leaf)) {
+              throw "Required acceptance input missing: $item"
+            }
+          }
+
+          function Require-Hash([string]$Path, [string]$Expected, [string]$Label) {
+            $actual = Get-Sha256 $Path
+            if ($actual -ne $Expected.ToUpperInvariant()) {
+              throw "$Label SHA256 mismatch: expected $Expected, got $actual"
+            }
+            return $actual
+          }
+
+          $baselineBefore = Require-Hash $baselineOriginal $env:EXPECTED_BASELINE_SHA256 'baseline-original'
+          $donorBefore = Require-Hash $donorOriginal $env:EXPECTED_DONOR_SHA256 'donor-original'
+          $productionBefore = Require-Hash $production $env:EXPECTED_PRODUCTION_SHA256 'production-original'
+
+          $stageRoot = Join-Path $env:RUNNER_TEMP "invest-shadow-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $stageRoot) {
+            throw "Unique acceptance stage already exists: $stageRoot"
+          }
+          New-Item -ItemType Directory -Path $stageRoot | Out-Null
+
+          $baselineCopy = Join-Path $stageRoot 'structural_baseline.xlsm'
+          $donorCopy = Join-Path $stageRoot 'user_state_donor.xlsm'
+          $merged = Join-Path $stageRoot 'merged_reviewed_source.xlsm'
+          Copy-Item -LiteralPath $baselineOriginal -Destination $baselineCopy
+          Copy-Item -LiteralPath $donorOriginal -Destination $donorCopy
+          Require-Hash $baselineCopy $env:EXPECTED_BASELINE_SHA256 'baseline-copy' | Out-Null
+          Require-Hash $donorCopy $env:EXPECTED_DONOR_SHA256 'donor-copy' | Out-Null
+
+          & $env:RUNNER_PYTHON scripts/merge_repaired_uat_user_state.py `
+            --baseline $baselineCopy `
+            --expected-baseline-sha256 $env:EXPECTED_BASELINE_SHA256 `
+            --donor $donorCopy `
+            --expected-donor-sha256 $env:EXPECTED_DONOR_SHA256 `
+            --output $merged
+          if ($LASTEXITCODE -ne 0) {
+            throw "Reviewed user-state merge failed."
+          }
+
+          $mergedHash = Get-Sha256 $merged
+          & $env:RUNNER_PYTHON scripts/prepare_repaired_uat_candidate.py `
+            --source $merged `
+            --expected-source-sha256 $mergedHash `
+            --shadow-root $env:GITHUB_WORKSPACE `
+            --live-root $liveRoot `
+            --expected-head $env:EXPECTED_SHA
+          if ($LASTEXITCODE -ne 0) {
+            throw "Repaired shadow UAT preparation failed."
+          }
+
+          if (Get-Process EXCEL -ErrorAction SilentlyContinue) {
+            throw "Excel survived repaired shadow candidate preparation."
+          }
+
+          $candidate = Join-Path $env:GITHUB_WORKSPACE 'output\Crypto_Analysis.xlsm'
+          if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            throw "Prepared shadow candidate is missing."
+          }
+          $candidateHash = Get-Sha256 $candidate
+
+          $sourceEvidence = [ordered]@{
+            schema = 1
+            created_utc = [DateTime]::UtcNow.ToString('o')
+            checkout_sha = $env:EXPECTED_SHA.ToLowerInvariant()
+            baseline_original = $baselineOriginal
+            baseline_sha256_before = $baselineBefore
+            donor_original = $donorOriginal
+            donor_sha256_before = $donorBefore
+            production = $production
+            production_sha256_before = $productionBefore
+            merged_source = $merged
+            merged_source_sha256 = $mergedHash
+            candidate = $candidate
+            candidate_sha256 = $candidateHash
+            auditor_approval_comment_id = $env:AUDITOR_APPROVAL_COMMENT_ID
+            production_modified = $false
+          }
+          $sourceEvidence | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath (Join-Path $stageRoot 'windows_excel_acceptance_sources.json') -Encoding UTF8
+
+          "ACCEPTANCE_STAGE_ROOT=$stageRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_BASELINE_ORIGINAL=$baselineOriginal" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_DONOR_ORIGINAL=$donorOriginal" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_PRODUCTION=$production" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_CANDIDATE=$candidate" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_CANDIDATE_SHA=$candidateHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_STUB_LOG=$stageRoot\stub_calls.jsonl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_EVIDENCE=$stageRoot\windows_excel_shadow_acceptance.json" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "SHADOW_CANDIDATE_SHA256=$candidateHash"
+          Write-Host "PRODUCTION_SHA256_BEFORE=$productionBefore"
+
+      - name: Install deterministic checkout-local Python bridge shim
+        shell: powershell
+        run: |
+          function Get-Sha256([string]$Path) {
+            $digest = (& $env:RUNNER_PYTHON -c "import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1],'rb'),'sha256').hexdigest().upper())" $Path).Trim()
+            if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9A-F]{64}$') {
+              throw "Unable to compute SHA256 for $Path"
+            }
+            return $digest
+          }
+
+          $rootPython = Join-Path $env:GITHUB_WORKSPACE 'python.cmd'
+          if (-not (Test-Path -LiteralPath $rootPython -PathType Leaf)) {
+            throw "Tracked python.cmd is missing; refusing an unbounded command-resolution change."
+          }
+          $backup = Join-Path $env:ACCEPTANCE_STAGE_ROOT 'python.cmd.original'
+          Copy-Item -LiteralPath $rootPython -Destination $backup
+          $originalHash = Get-Sha256 $rootPython
+          $backupHash = Get-Sha256 $backup
+          if ($backupHash -ne $originalHash) {
+            throw "python.cmd backup hash mismatch."
+          }
+
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'scripts\windows_excel_acceptance.py'
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE 'output'
+          $lines = @(
+            '@echo off',
+            "set `"ACCEPTANCE_STUB_LOG=$env:ACCEPTANCE_STUB_LOG`"",
+            "set `"ACCEPTANCE_SHADOW_OUTPUT=$outputDir`"",
+            "`"$env:RUNNER_PYTHON`" `"$scriptPath`" --stub-command %*",
+            'exit /b %ERRORLEVEL%'
+          )
+          [IO.File]::WriteAllText(
+            $rootPython,
+            (($lines -join "`r`n") + "`r`n"),
+            [Text.Encoding]::ASCII
+          )
+          $instrumentedHash = Get-Sha256 $rootPython
+          if ($instrumentedHash -eq $originalHash) {
+            throw "Deterministic python.cmd instrumentation did not change the checkout bridge."
+          }
+
+          "ROOT_PYTHON_ORIGINAL_SHA=$originalHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ROOT_PYTHON_BACKUP=$backup" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ACCEPTANCE_ROOT_PYTHON_SHIM_VERIFIED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "ACCEPTANCE_PYTHON_BRIDGE_INSTRUMENTED: PASS"
+
+      - name: Execute real Excel shadow acceptance
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          Remove-Item -LiteralPath $env:ACCEPTANCE_EVIDENCE -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $env:ACCEPTANCE_STUB_LOG -Force -ErrorAction SilentlyContinue
+          & $env:RUNNER_PYTHON scripts/windows_excel_acceptance.py `
+            --candidate $env:ACCEPTANCE_CANDIDATE `
+            --expected-candidate-sha256 $env:ACCEPTANCE_CANDIDATE_SHA `
+            --production $env:ACCEPTANCE_PRODUCTION `
+            --expected-production-sha256 $env:EXPECTED_PRODUCTION_SHA256 `
+            --expected-head $env:EXPECTED_SHA `
+            --stub-log $env:ACCEPTANCE_STUB_LOG `
+            --output $env:ACCEPTANCE_EVIDENCE
+          if ($LASTEXITCODE -ne 0) {
+            throw "Real Excel shadow acceptance failed."
+          }
+
+      - name: Restore tracked Python bridge exactly
+        if: always()
+        shell: powershell
+        run: |
+          function Get-Sha256([string]$Path) {
+            $digest = (& $env:RUNNER_PYTHON -c "import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1],'rb'),'sha256').hexdigest().upper())" $Path).Trim()
+            if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9A-F]{64}$') {
+              throw "Unable to compute SHA256 for $Path"
+            }
+            return $digest
+          }
+
+          if ($env:ROOT_PYTHON_BACKUP -and
+              (Test-Path -LiteralPath $env:ROOT_PYTHON_BACKUP -PathType Leaf)) {
+            $rootPython = Join-Path $env:GITHUB_WORKSPACE 'python.cmd'
+            Copy-Item -LiteralPath $env:ROOT_PYTHON_BACKUP -Destination $rootPython -Force
+            $restored = Get-Sha256 $rootPython
+            if ($restored -ne $env:ROOT_PYTHON_ORIGINAL_SHA) {
+              throw "Tracked python.cmd restoration hash mismatch."
+            }
+            git diff --exit-code -- python.cmd
+            if ($LASTEXITCODE -ne 0) {
+              throw "Tracked python.cmd differs after restoration."
+            }
+            Write-Host "ACCEPTANCE_PYTHON_BRIDGE_RESTORE: PASS"
+          }
+
+      - name: Refuse surviving Excel process
+        if: always()
+        shell: powershell
+        run: |
+          $excel = Get-Process EXCEL -ErrorAction SilentlyContinue
+          if ($excel) {
+            $pids = ($excel | Select-Object -ExpandProperty Id) -join ', '
+            throw "SHADOW_ACCEPTANCE: FAIL - EXCEL.EXE survived: $pids"
+          }
+          Write-Host "SHADOW_ACCEPTANCE_EXCEL_CLEANUP: PASS"
+
+      - name: Verify original inputs remain byte-identical
+        if: always()
+        shell: powershell
+        run: |
+          if (-not $env:ACCEPTANCE_BASELINE_ORIGINAL) {
+            Write-Host "SOURCE_IDENTITY_CHECK: NOT RUN - staging was never established."
+            exit 0
+          }
+
+          function Get-Sha256([string]$Path) {
+            $digest = (& $env:RUNNER_PYTHON -c "import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1],'rb'),'sha256').hexdigest().upper())" $Path).Trim()
+            if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9A-F]{64}$') {
+              throw "Unable to compute SHA256 for $Path"
+            }
+            return $digest
+          }
+
+          $baselineAfter = Get-Sha256 $env:ACCEPTANCE_BASELINE_ORIGINAL
+          $donorAfter = Get-Sha256 $env:ACCEPTANCE_DONOR_ORIGINAL
+          $productionAfter = Get-Sha256 $env:ACCEPTANCE_PRODUCTION
+          if ($baselineAfter -ne $env:EXPECTED_BASELINE_SHA256) {
+            throw "Original structural baseline changed."
+          }
+          if ($donorAfter -ne $env:EXPECTED_DONOR_SHA256) {
+            throw "Original user-state donor changed."
+          }
+          if ($productionAfter -ne $env:EXPECTED_PRODUCTION_SHA256) {
+            throw "Production workbook changed."
+          }
+          Write-Host "BASELINE_ORIGINAL_UNCHANGED: PASS"
+          Write-Host "DONOR_ORIGINAL_UNCHANGED: PASS"
+          Write-Host "PRODUCTION_ORIGINAL_UNCHANGED: PASS"
+
+      - name: Validate shadow acceptance evidence before green
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if (-not (Test-Path -LiteralPath $env:ACCEPTANCE_EVIDENCE -PathType Leaf)) {
+            throw "Shadow acceptance evidence JSON is missing."
+          }
+          $e = Get-Content -LiteralPath $env:ACCEPTANCE_EVIDENCE -Raw | ConvertFrom-Json
+          if ([int]$e.schema -ne 2 -or $e.status -ne 'PASS') {
+            throw "Shadow acceptance evidence did not PASS schema 2."
+          }
+          if ($e.checked_out_sha -ne $env:EXPECTED_SHA.ToLowerInvariant()) {
+            throw "Acceptance evidence SHA mismatch."
+          }
+          if ($e.approved_runner.audit_head -ne $env:APPROVED_RUNNER_HEAD) {
+            throw "Approved runner head evidence mismatch."
+          }
+          if ([int64]$e.approved_runner.run_id -ne [int64]$env:APPROVED_RUNNER_RUN_ID) {
+            throw "Approved runner run ID mismatch."
+          }
+          if ($e.approved_runner.workflow_runtime_approval_verified -ne $true) {
+            throw "Runtime auditor approval was not proven."
+          }
+          if ($e.deterministic_python_bridge.status -ne 'PASS' -or
+              $e.deterministic_python_bridge.checkout_local_python_cmd_verified -ne $true -or
+              $e.deterministic_python_bridge.network_allowed -ne $false) {
+            throw "Deterministic checkout-local Python bridge evidence failed."
+          }
+
+          if ($e.static_nine_control_contract.status -ne 'PASS') {
+            throw "Static nine-control contract failed."
+          }
+          if ([int]$e.runtime_controls.census.physical_control_count -ne 9) {
+            throw "Runtime physical control count is not 9."
+          }
+          if ($e.runtime_controls.status -ne 'PASS' -or
+              [int]$e.runtime_controls.executed_count -ne 9) {
+            throw "All nine runtime controls were not exercised."
+          }
+
+          if ($e.compile.status -ne 'PASS' -or $e.compile.whole_project_compile -ne $true) {
+            throw "True whole-project Debug->Compile did not PASS."
+          }
+          if ([int]$e.compile.compile_control_id -ne 578 -or
+              [int]$e.compile.controller_result -ne 578) {
+            throw "Compile command ID/result mismatch."
+          }
+          if ([int]$e.compile.dialog_count_observed -ne 0) {
+            throw "Candidate compile produced a dialog."
+          }
+          if ([double]$e.compile.no_dialog_confirmed_seconds -lt 2.9) {
+            throw "Compile no-dialog observation window is too short."
+          }
+          if ([int]$e.compile.sentinel_value -ne 6066) {
+            throw "Compile sentinel did not execute."
+          }
+
+          if (@($e.stock_refresh).Count -ne 2 -or
+              [int]$e.stock_refresh_total_bridge_calls -ne 2) {
+            throw "Both REFRESH STOCKS controls were not proven independently."
+          }
+          foreach ($row in @($e.stock_refresh)) {
+            if ($row.status -ne 'PASS' -or
+                $row.workbook_assertions.status -ne 'PASS') {
+              throw "REFRESH STOCKS workbook behavior did not PASS."
+            }
+          }
+
+          if ($e.logs_resolution.status -ne 'PASS' -or
+              $e.logs_resolution.computed_from_thisworkbook_path -ne $true) {
+            throw "Open Logs shadow resolution did not PASS."
+          }
+          $expectedLog = [IO.Path]::GetFullPath(
+            (Join-Path $env:GITHUB_WORKSPACE 'output\logs.txt')
+          )
+          if ([IO.Path]::GetFullPath([string]$e.logs_resolution.exact_path) -ne $expectedLog) {
+            throw "Open Logs did not resolve to exact shadow logs.txt."
+          }
+
+          if ($e.shadow_workbook_disk_unchanged -ne $true) {
+            throw "Shadow workbook bytes changed during acceptance."
+          }
+          if ($e.production_modified -ne $false) {
+            throw "Production workbook changed during acceptance."
+          }
+          if ($e.scheduled_tasks_modified -ne $false) {
+            throw "Scheduled task state/definition changed during acceptance."
+          }
+          foreach ($task in @('Crypto Tracker','CryptoTracker Daily Run','Daily Market Manager')) {
+            if ($e.scheduler.before.$task.state -ne 'Disabled') {
+              throw "Pre-acceptance scheduler state was not Disabled for $task."
+            }
+            if ($e.scheduler.after.$task.state -ne 'Disabled') {
+              throw "Post-acceptance scheduler state was not Disabled for $task."
+            }
+            if ($e.scheduler.before.$task.definition_sha256 -ne
+                $e.scheduler.after.$task.definition_sha256) {
+              throw "Scheduled task definition changed for $task."
+            }
+          }
+
+          if ($e.cleanup.excel_pid_gone -ne $true -or
+              @($e.cleanup.remaining_excel_pids).Count -ne 0) {
+            throw "Excel cleanup evidence is not clean."
+          }
+          if ($e.cleanup.forced_excel_kill_used -ne $false) {
+            throw "Passing acceptance required forced Excel termination."
+          }
+          if ($e.promotion_authorized -ne $false -or
+              $e.production_ready -ne $false) {
+            throw "Acceptance crossed the production boundary."
+          }
+
+          $tracked = git status --porcelain --untracked-files=no
+          if ($tracked) {
+            throw "Tracked checkout changed during acceptance:`n$tracked"
+          }
+          Write-Host "WINDOWS_EXCEL_SHADOW_ACCEPTANCE_EVIDENCE: PASS"
+
+      - name: Shadow acceptance green gate
+        shell: powershell
+        run: |
+          Write-Host "REMOTE_SHADOW_ACCEPTANCE: PASS"
+          Write-Host "NINE_REAL_CONTROLS: PASS"
+          Write-Host "DEBUG_COMPILE: PASS"
+          Write-Host "BOTH_REFRESH_STOCKS: PASS"
+          Write-Host "OPEN_LOGS_SHADOW_RESOLUTION: PASS"
+          Write-Host "PRODUCTION_MODIFIED: NO"
+          Write-Host "SCHEDULER_MODIFIED: NO"
+          Write-Host "CLAUDE_PIPELINE_AUDIT_REQUIRED: YES"
+          Write-Host "PROMOTION_AUTHORIZED: NO"
+          Write-Host "PRODUCTION_READY: NO"
+
+      - name: Assemble non-workbook evidence bundle
+        if: always()
+        shell: powershell
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'acceptance_evidence'
+          if (Test-Path -LiteralPath $bundle) {
+            Remove-Item -LiteralPath $bundle -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $bundle | Out-Null
+
+          $note = @(
+            "run_id=$env:GITHUB_RUN_ID",
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT",
+            "head=$env:GITHUB_SHA",
+            "candidate_workbook_bytes_uploaded=NO",
+            "production_modified=NO CLAIM ONLY IF MAIN GATES PASS"
+          ) -join "`n"
+          Set-Content -LiteralPath (Join-Path $bundle 'collection_status.txt') -Value $note -Encoding UTF8
+
+          $paths = @(
+            $env:ACCEPTANCE_EVIDENCE,
+            $env:ACCEPTANCE_STUB_LOG,
+            (Join-Path $env:GITHUB_WORKSPACE 'output\REPAIRED_UAT_MANIFEST.json'),
+            (Join-Path $env:GITHUB_WORKSPACE 'output\REPAIRED_UAT_CHECKLIST.txt')
+          )
+          if ($env:ACCEPTANCE_STAGE_ROOT) {
+            $paths += (Join-Path $env:ACCEPTANCE_STAGE_ROOT 'windows_excel_acceptance_sources.json')
+            $paths += (Join-Path $env:ACCEPTANCE_STAGE_ROOT 'merged_reviewed_source.xlsm.user_state_merge.json')
+          }
+          foreach ($path in $paths) {
+            if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+              Copy-Item -LiteralPath $path -Destination $bundle
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $bundle 'Crypto_Analysis.xlsm')) {
+            throw "Candidate workbook bytes entered the evidence bundle."
+          }
+          Write-Host "SHADOW_ACCEPTANCE_EVIDENCE_BUNDLE: PREPARED"
+
+      - name: Upload shadow acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-excel-shadow-acceptance-${{ github.event.pull_request.head.sha || github.sha }}
+          path: acceptance_evidence
+          if-no-files-found: error
+          retention-days: 90

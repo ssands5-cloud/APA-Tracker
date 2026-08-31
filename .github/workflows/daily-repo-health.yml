@@ -1,0 +1,96 @@
+name: Daily repository health guard
+
+on:
+  schedule:
+    - cron: "17 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  daily-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Parse Windows PowerShell readiness scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "scripts/unattended_acceptance.ps1",
+            "scripts/post_promotion_entrypoint_acceptance.ps1",
+            "scripts/install_crypto_tracker_task.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path -LiteralPath $file),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${file}: $($_.Message)" }
+              exit 1
+            }
+          }
+          Write-Host "POWERSHELL_PARSE: PASS"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Release gate
+        run: python tests/verify_release_gate_current_state.py
+
+      - name: VBA init authority
+        run: python tests/verify_vba_init_authority.py
+
+      - name: Runtime readiness
+        run: python -m unittest tests.test_runtime_readiness_contracts -v
+
+      - name: Acceptance preparation contracts
+        run: python -m unittest tests.test_acceptance_preparation_contracts -v
+
+      - name: VBA/button installer hardening
+        run: python -m unittest tests.test_setup_excel_buttons_hardening -v
+
+      - name: Workbook read-only guard
+        run: python -m unittest tests.test_workbook_save.TestFailureLeavesTargetIntact.test_read_only_target_is_refused_without_damage -v
+
+      - name: Tracker package/source contracts
+        run: python tests/verify_tracker_pr.py
+
+      - name: History identity guard
+        run: python tests/verify_tracker_history_guard.py
+
+      - name: VBA runtime-state restoration
+        run: python tests/verify_tracker_runtime_state.py
+
+      - name: Full repository Python regression suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Scheduler deployment dry-run
+        run: python scripts/scheduler_contract_dry_run.py --output output/scheduler_contract_dry_run.json
+
+      - name: Repository health
+        run: python repo_health_check.py --pre-commit
+
+      - name: Upload scheduler dry-run
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-scheduler-contract-${{ github.sha }}
+          path: output/scheduler_contract_dry_run.json
+          if-no-files-found: error
+          retention-days: 30

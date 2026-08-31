@@ -1,0 +1,283 @@
+name: Windows Excel Runner Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-excel-runner-validation-invest-excel
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  windows-excel-capability:
+    name: Validate dedicated Windows Excel runner
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'builder/post-promotion-stock-control-repair-20260823') ||
+      (github.event_name != 'pull_request' &&
+       github.ref_name == 'builder/post-promotion-stock-control-repair-20260823')
+    runs-on: [self-hosted, Windows, X64, invest-excel, excel, vba, com]
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact trusted repair commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+          persist-credentials: false
+
+      - name: Prove exact checkout identity before execution
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) {
+            throw "Checkout drift: expected $env:EXPECTED_SHA, got $actual"
+          }
+          $status = git status --porcelain
+          if ($status) {
+            throw "Checkout is dirty before runner validation:`n$status"
+          }
+          Write-Host "TRUSTED_REPAIR_HEAD=$actual"
+
+      - name: Resolve resident Python 3.14 and COM dependency
+        shell: powershell
+        run: |
+          $candidates = New-Object System.Collections.Generic.List[string]
+
+          $py = Get-Command py.exe -ErrorAction SilentlyContinue
+          if ($py) {
+            try {
+              $viaLauncher = (& $py.Source -3.14 -c "import sys; print(sys.executable)").Trim()
+              if ($LASTEXITCODE -eq 0 -and $viaLauncher) {
+                [void]$candidates.Add($viaLauncher)
+              }
+            }
+            catch {}
+          }
+
+          $localPython = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"
+          if (Test-Path -LiteralPath $localPython -PathType Leaf) {
+            [void]$candidates.Add($localPython)
+          }
+
+          $pythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
+          if ($pythonCommand -and $pythonCommand.CommandType -eq 'Application') {
+            [void]$candidates.Add($pythonCommand.Source)
+          }
+
+          $resolvedPython = $null
+          foreach ($candidate in @($candidates | Select-Object -Unique)) {
+            try {
+              $minor = (& $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
+              if ($LASTEXITCODE -eq 0 -and $minor -eq '3.14') {
+                $resolvedPython = $candidate
+                break
+              }
+            }
+            catch {}
+          }
+
+          if (-not $resolvedPython) {
+            throw "Resident Python 3.14 was not found for the signed-in runner account. Refusing toolcache installation/elevation."
+          }
+
+          $version = (& $resolvedPython -c "import sys; print(sys.version.split()[0])").Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Resident Python executable failed version probe: $resolvedPython"
+          }
+
+          & $resolvedPython -m pip --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Resident Python 3.14 does not have a working pip module: $resolvedPython"
+          }
+
+          & $resolvedPython -c "import pythoncom, win32com.client, win32process, win32gui, win32con"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "pywin32 import missing; installing to the current user profile only."
+            & $resolvedPython -m pip install --user "pywin32>=306"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Current-user pywin32 installation failed."
+            }
+            & $resolvedPython -c "import pythoncom, win32com.client, win32process, win32gui, win32con"
+            if ($LASTEXITCODE -ne 0) {
+              throw "pywin32 imports still fail after current-user installation."
+            }
+          }
+
+          "RUNNER_PYTHON=$resolvedPython" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "RUNNER_PYTHON=$resolvedPython"
+          Write-Host "RUNNER_PYTHON_VERSION=$version"
+          Write-Host "PYWIN32_IMPORT: PASS"
+
+      - name: Prove Windows PowerShell and runner identity
+        shell: powershell
+        run: |
+          if ($env:RUNNER_OS -ne 'Windows') { throw "Expected Windows runner, got $env:RUNNER_OS" }
+          if ($env:RUNNER_ARCH -ne 'X64') { throw "Expected X64 runner, got $env:RUNNER_ARCH" }
+          if ($PSVersionTable.PSVersion.Major -lt 5) { throw "PowerShell 5.1 or newer is required." }
+          if (-not $env:RUNNER_PYTHON -or -not (Test-Path -LiteralPath $env:RUNNER_PYTHON -PathType Leaf)) {
+            throw "RUNNER_PYTHON was not resolved to a real executable."
+          }
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Host "RUNNER_OS=$env:RUNNER_OS"
+          Write-Host "RUNNER_ARCH=$env:RUNNER_ARCH"
+          Write-Host "POWERSHELL=$($PSVersionTable.PSVersion)"
+          & $env:RUNNER_PYTHON --version
+
+      - name: Parse runner bootstrap PowerShell
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path -LiteralPath "scripts/bootstrap_windows_excel_runner.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "Runner bootstrap PowerShell parse failed."
+          }
+          Write-Host "WINDOWS_RUNNER_BOOTSTRAP_PARSE: PASS"
+
+      - name: Run runner-validation static contracts on this exact checkout
+        shell: powershell
+        run: >-
+          & $env:RUNNER_PYTHON scripts/run_unittest_stable.py
+          tests.test_unittest_stable_runner_contract
+          tests.test_windows_excel_runner_contract
+          tests.test_windows_excel_runner_evidence_gate
+          tests.test_windows_excel_runner_process_census
+          tests.test_windows_excel_runner_host_context
+          tests.test_windows_excel_runner_vbe_focus
+          -v
+
+      - name: Prove Excel COM, VBOM, auditor-hardened VBA compile, execution, XLSM save, and cleanup
+        shell: powershell
+        env:
+          EXPECTED_REPAIR_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          Remove-Item -LiteralPath windows_excel_runner_probe.json -Force -ErrorAction SilentlyContinue
+          & $env:RUNNER_PYTHON scripts/windows_excel_runner_probe_focus.py --output windows_excel_runner_probe.json
+
+      - name: Refuse surviving Excel process
+        if: always()
+        shell: powershell
+        run: |
+          $excel = Get-Process EXCEL -ErrorAction SilentlyContinue
+          if ($excel) {
+            $pids = ($excel | Select-Object -ExpandProperty Id) -join ', '
+            throw "WINDOWS_EXCEL_RUNNER: FAIL - EXCEL.EXE survived capability probe: $pids"
+          }
+          Write-Host "WINDOWS_EXCEL_RUNNER_CLEANUP: PASS"
+
+      - name: Validate capability evidence JSON before publication
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if (-not (Test-Path -LiteralPath windows_excel_runner_probe.json -PathType Leaf)) {
+            throw "Runner capability evidence JSON is missing."
+          }
+          $e = Get-Content -LiteralPath windows_excel_runner_probe.json -Raw | ConvertFrom-Json
+          $expected = $env:EXPECTED_SHA.ToLowerInvariant()
+          if ([int]$e.schema -ne 3) { throw "Capability evidence schema is not 3." }
+          if ($e.status -ne 'PASS') { throw "Capability evidence status is not PASS." }
+          if ($e.checked_out_sha -ne $expected) { throw "Capability evidence checkout SHA mismatch." }
+          if ($e.expected_repair_sha -ne $expected) { throw "Capability evidence expected SHA mismatch." }
+
+          if ($e.host.runner_os -ne 'Windows') { throw "Host certificate runner_os is not Windows." }
+          if ($e.host.runner_arch -ne 'X64') { throw "Host certificate runner_arch is not X64." }
+          if (-not [string]$e.host.runner_name -or -not $e.host.runner_name.StartsWith('invest-excel-')) { throw "Host certificate runner name is invalid." }
+          if ($e.host.repository -ne 'ssands5-cloud/Invest-master') { throw "Host certificate repository is invalid." }
+          if ([int]$e.host.session_id -eq 0) { throw "Host certificate reports Windows Session 0." }
+          if ([int]$e.host.access_vbom -ne 1) { throw "Host certificate AccessVBOM is not 1." }
+          if ($e.host.workspace_under_runner_work -ne $true) { throw "Host workspace is outside the dedicated runner work root." }
+          if ($e.host.runner_metadata_present -ne $true) { throw "Dedicated runner registration metadata was not proven." }
+
+          if (-not [string]$e.excel_version -or -not [string]$e.excel_build) { throw "Excel version/build evidence is missing." }
+          if ($e.excel.display_alerts -ne $false) { throw "Excel DisplayAlerts evidence is not false." }
+          if ([int]$e.excel.automation_security -ne 3) { throw "Excel AutomationSecurity evidence is not 3." }
+
+          if ($e.vba.active_project_targeted -ne $true) { throw "Disposable RunnerProbe project was not the active VBE project." }
+          if ($e.vba.vbe_ui_focus -ne 'PASS' -or $e.vba.vbe_visible -ne $true) { throw "VBE focus evidence is not PASS." }
+          if ($e.vba.compile_invocation_origin -ne 'separate-disposable-controller-vba') { throw "Compile invocation did not originate from the isolated VBA controller." }
+          if ([int]$e.vba.compile_control_id -ne 578) { throw "Compile control ID is not 578." }
+
+          $neg = $e.vba.compile_negative_control
+          if ($neg.status -ne 'PASS') { throw "Compile negative control did not PASS." }
+          if ($neg.dialog_detected -ne $true) { throw "Compile negative dialog was not detected." }
+          if ($neg.dialog_title -ne 'Microsoft Visual Basic for Applications') { throw "Compile negative dialog title is wrong." }
+          if ($neg.dialog_class_name -ne '#32770') { throw "Compile negative dialog class is wrong." }
+          if ([int]$neg.dialog_count_observed -ne 1) { throw "Compile negative dialog count is not exactly one." }
+          if (-not ([string]$neg.dialog_text).ToLowerInvariant().Contains('variable not defined')) { throw "Compile negative dialog did not prove Variable not defined." }
+          if ($neg.defect_category -ne 'compile-time-only: undeclared variable under Option Explicit') { throw "Compile negative defect category is wrong." }
+          if ($neg.injected_defect_code -ne 'RunnerProbeValue = UndefinedCompileSymbol') { throw "Compile negative injected defect is wrong." }
+          if ($neg.watcher_armed_before_execute -ne $true) { throw "Compile negative watcher was not armed before execution." }
+          if (-not [string]$neg.dismissal_method) { throw "Compile negative dialog dismissal method is missing." }
+          if ([double]$neg.detection_seconds -lt 0) { throw "Compile negative detection timing is invalid." }
+          if ([int]$neg.controller_result -ne 578) { throw "Compile negative controller result is not 578." }
+
+          $pos = $e.vba.compile_positive_control
+          if ($pos.status -ne 'PASS') { throw "Compile positive control did not PASS." }
+          if ($pos.compile_command_executed -ne $true) { throw "Compile positive command was not executed." }
+          if ($pos.dialog_detected -ne $false) { throw "Compile positive control observed a dialog." }
+          if ([int]$pos.dialog_count_observed -ne 0) { throw "Compile positive dialog count is not zero." }
+          if ([double]$pos.no_dialog_confirmed_seconds -lt 2.9) { throw "Compile positive no-dialog observation window is too short." }
+          if ($pos.watcher_armed_before_execute -ne $true) { throw "Compile positive watcher was not armed before execution." }
+          if ([int]$pos.controller_result -ne 578) { throw "Compile positive controller result is not 578." }
+
+          if ($e.vba.vbom_access -ne 'PASS') { throw "VBOM evidence is not PASS." }
+          if ($e.vba.compile -ne 'PASS' -or $e.vba.compile_command_executed -ne $true) { throw "VBA Compile evidence is not PASS." }
+          if ($e.vba.execution -ne 'PASS') { throw "VBA execution evidence is not PASS." }
+          if ($e.vba.vbe_dialog_observed_with_displayalerts_false -ne $true) { throw "VBE dialog suppression check was not proven." }
+
+          if ($e.workbook_isolation.computed -ne $true -or $e.workbook_isolation.status -ne 'PASS') { throw "Workbook isolation was not computed as PASS." }
+          if ([int]$e.workbook_isolation.observed_workbook_count -ne 2) { throw "Workbook isolation did not observe exactly two disposable workbooks." }
+          if (@($e.workbook_isolation.unexpected_names).Count -ne 0) { throw "Unexpected workbook name was observed." }
+          if (@($e.workbook_isolation.missing_names).Count -ne 0) { throw "Expected disposable workbook was missing." }
+          if (@($e.workbook_isolation.unexpected_absolute_paths).Count -ne 0) { throw "A file-backed workbook outside temp was observed." }
+          if ($e.tracker_workbook_opened -ne $false) { throw "Computed tracker-workbook isolation is not false." }
+          if ($e.production_path_referenced -ne $false) { throw "Computed production-path isolation is not false." }
+
+          if ($e.xlsm_save.status -ne 'PASS' -or $e.xlsm_save.vba_project_part -ne 'PASS') { throw "Disposable XLSM evidence is not PASS." }
+          if ($e.cleanup.excel_pid_gone -ne $true) { throw "Attributed Excel PID did not exit cleanly." }
+          if (@($e.cleanup.remaining_excel_pids).Count -ne 0) { throw "Excel process survived capability probe." }
+          if ($e.cleanup.forced_kill_used -ne $false) { throw "A passing runner probe required forced Excel termination." }
+          if ($e.cleanup.temp_xlsm_removed -ne $true) { throw "Disposable XLSM survived capability probe." }
+
+          Write-Host "WINDOWS_EXCEL_RUNNER_HOST_CONTEXT: PASS"
+          Write-Host "WINDOWS_EXCEL_RUNNER_COMPILE_NEGATIVE: PASS"
+          Write-Host "WINDOWS_EXCEL_RUNNER_COMPILE_POSITIVE: PASS"
+          Write-Host "WINDOWS_EXCEL_RUNNER_WORKBOOK_ISOLATION: PASS"
+          Write-Host "WINDOWS_EXCEL_RUNNER_EVIDENCE_JSON: PASS"
+
+      - name: Windows Excel runner validation green gate
+        shell: powershell
+        run: |
+          Write-Host "WINDOWS_EXCEL_RUNNER_VALIDATION: PASS"
+          Write-Host "ACCEPTANCE_PIPELINE_ENABLED: NO"
+          Write-Host "AUDITOR_APPROVAL_REQUIRED_BEFORE_ACCEPTANCE_IMPLEMENTATION: YES"
+          Write-Host "PRODUCTION_MODIFIED: NO"
+          Write-Host "PRODUCTION_READY: NO"
+
+      - name: Upload runner capability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-excel-runner-probe-${{ github.event.pull_request.head.sha || github.sha }}
+          path: windows_excel_runner_probe.json
+          if-no-files-found: error
+          retention-days: 90
