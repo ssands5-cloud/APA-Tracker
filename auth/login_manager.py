@@ -5,6 +5,10 @@ Each user's authenticated session is stored in
 ``~/.apa_tracker/sessions/<username>.json`` with mode 0600 so that only
 the owning OS account can read the file.
 
+Sessions are serialised as JSON, not pickle. Only the cookie fields needed
+to rebuild the jar are stored, so loading a session file can never execute
+code from it -- which a pickle in a predictable home-directory path could.
+
 Typical usage::
 
     mgr = LoginManager(config)
@@ -31,6 +35,38 @@ from auth.credentials import (
 from parser.apa_page_map import LOGIN_FORM
 
 logger = logging.getLogger(__name__)
+
+#: Bumped when the on-disk session layout changes. A file written by an
+#: older build is ignored rather than half-read, and the user re-logs in.
+SESSION_FORMAT_VERSION = 1
+
+
+def _cookies_to_list(jar) -> list:
+    """Flatten a cookie jar into JSON-serialisable dicts."""
+    return [
+        {
+            "name": cookie.name,
+            "value": cookie.value,
+            "domain": cookie.domain,
+            "path": cookie.path,
+            "secure": bool(cookie.secure),
+            "expires": cookie.expires,
+        }
+        for cookie in jar
+    ]
+
+
+def _cookies_from_list(items):
+    """Rebuild cookie objects from :func:`_cookies_to_list` output."""
+    for item in items:
+        yield requests.cookies.create_cookie(
+            name=item["name"],
+            value=item["value"],
+            domain=item.get("domain", ""),
+            path=item.get("path", "/"),
+            secure=bool(item.get("secure", False)),
+            expires=item.get("expires"),
+        )
 
 
 class AuthenticationError(RuntimeError):
@@ -189,9 +225,9 @@ class LoginManager:
             return False
 
     def save_session(self) -> Path:
-        """Pickle the current session cookies to disk.
+        """Write the current session cookies to disk as JSON.
 
-        The file is written with mode 0600 so only the current OS user can
+        The file is created with mode 0600 so only the current OS user can
         read it.
 
         Returns:
@@ -203,17 +239,26 @@ class LoginManager:
             raise AuthenticationError("Cannot save session: not logged in.")
 
         path = get_user_session_path(self.username)
-        with path.open("wb") as fh:
-            pickle.dump(self._session.cookies, fh)
+        payload = {
+            "version": SESSION_FORMAT_VERSION,
+            "username": self.username,
+            "cookies": _cookies_to_list(self._session.cookies),
+        }
+        # Created 0600 rather than chmod-ed afterwards: a file created at the
+        # default umask is world-readable for as long as the write takes, and
+        # if the write raises, the chmod never runs at all.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
         path.chmod(0o600)
         logger.debug("Session saved to %s", path)
         return path
 
     def load_session(self, path: Optional[Path] = None) -> bool:
-        """Restore a session from a pickle file.
+        """Restore a session from a JSON session file.
 
         Args:
-            path: Explicit path to the pickle.  Defaults to the standard
+            path: Explicit path to the session file.  Defaults to the standard
                   user session path derived from :attr:`username`.
 
         Returns:
@@ -229,10 +274,26 @@ class LoginManager:
 
         session = requests.Session()
         try:
-            with path.open("rb") as fh:
-                session.cookies.update(pickle.load(fh))
-        except Exception as exc:
+            with path.open("r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except (OSError, ValueError) as exc:
+            # A pickle file left by an older build lands here too: it is not
+            # valid JSON, so it is discarded and a fresh login runs.
             logger.warning("Failed to load session from %s: %s", path, exc)
+            return False
+
+        version = payload.get("version") if isinstance(payload, dict) else None
+        if version != SESSION_FORMAT_VERSION:
+            logger.warning(
+                "Ignoring session file %s: unsupported format version %r", path, version
+            )
+            return False
+
+        try:
+            for cookie in _cookies_from_list(payload.get("cookies") or []):
+                session.cookies.set_cookie(cookie)
+        except (KeyError, TypeError) as exc:
+            logger.warning("Session file %s is malformed: %s", path, exc)
             return False
 
         self._session = session
