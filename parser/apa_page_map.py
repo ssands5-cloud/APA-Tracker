@@ -35,17 +35,20 @@ PLAYER_PAGE = {
     "summary_selector": "div.player-summary",
 }
 
-# MATCH PAGE - Real selectors from portal inspection
+# MATCH PAGE - Validated selectors from live portal inspection
+# Real HTML: player name is in <span class="sm-block"> inside the first <td>
+# Player ID (#xxxxxxx) appears as plain text in the same <td>, not in an href
+# All numeric columns use class="text-center"
+# Each team has its own .table-responsive wrapper; no div.col-md-6 team sections
 MATCH_PAGE = {
     "table_selector": ".table-responsive table.table",
     "table_row_selector": "tbody tr",
-    "player_name_selector": "div.player a",
-    "skill_level_col": 1,  # Index in row
+    "player_name_selector": "td span.sm-block",  # FIXED: plain span, not <a> link
+    "skill_level_col": 1,
     "matches_won_lost_col": 2,
     "win_pct_col": 3,
     "ppm_col": 4,
     "pa_col": 5,
-    # Column headers from real portal
     "columns": [
         "player_name",
         "skill_level",
@@ -54,8 +57,9 @@ MATCH_PAGE = {
         "ppm",
         "pa",
     ],
-    "team_section_selector": "div.col-md-6",
-    "team_name_selector": "h3.teamName a",
+    # Each .table-responsive block is one team's table; no wrapping section divs
+    "team_section_selector": ".table-responsive",
+    "team_name_selector": "h3.teamName, h3, .team-name",  # best-effort; may be absent
     "match_metadata_selectors": {
         "location": "span.location",
         "date_time": "span.match-date-time",

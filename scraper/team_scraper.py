@@ -56,9 +56,14 @@ def parse_team_roster(html: str, team_id: str) -> TeamRosterData:
     """Parse team HTML and extract roster."""
     soup = BeautifulSoup(html, "html.parser")
 
-    # Extract team name
-    team_link = soup.select_one(MATCH_PAGE["team_name_selector"])
-    team_name = team_link.get_text(strip=True) if team_link else f"Team {team_id}"
+    # Extract team name (best-effort; selector may not always match)
+    team_name = f"Team {team_id}"
+    try:
+        team_link = soup.select_one(MATCH_PAGE["team_name_selector"])
+        if team_link:
+            team_name = team_link.get_text(strip=True) or team_name
+    except Exception as e:
+        logger.warning("Error extracting team name for %s: %s", team_id, e)
 
     # Find roster table
     table = soup.select_one(MATCH_PAGE["table_selector"])
@@ -96,28 +101,77 @@ def _parse_roster_rows(table) -> list[TeamMember]:
 
 
 def _parse_roster_row(cells) -> Optional[TeamMember]:
-    """Parse a single player row from the roster table."""
-    # Cell 0: Player Name (contains <a> link)
-    player_link = cells[0].select_one(MATCH_PAGE["player_name_selector"])
-    if not player_link:
+    """Parse a single player row from the roster table.
+
+    Real portal structure (validated via DevTools inspection):
+      <td>
+        <span class="sm-block">Player Name</span>
+        #80200640
+      </td>
+      <td class="text-center">3</td>   <!-- Skill Level -->
+      ...
+    """
+    # Cell 0: Player Name in <span class="sm-block">; ID as plain text "#xxxxxxx"
+    try:
+        name_span = cells[0].select_one("span.sm-block")
+        if not name_span:
+            logger.debug("No span.sm-block found in roster row, skipping")
+            return None
+
+        player_name = name_span.get_text(strip=True)
+        if not player_name:
+            logger.debug("Empty player name in roster row, skipping")
+            return None
+
+        all_text = cells[0].get_text(strip=True)
+        id_match = re.search(r"#(\d+)", all_text)
+        player_id = id_match.group(1) if id_match else ""
+    except Exception as e:
+        logger.warning("Error extracting player name/id from roster row: %s", e)
         return None
 
-    player_name = player_link.get_text(strip=True)
-    player_id = _extract_id_from_href(player_link.get("href", ""))
+    # Extract numeric columns with individual fallbacks
+    try:
+        skill_level = _parse_int(cells[MATCH_PAGE["skill_level_col"]].get_text(strip=True))
+    except Exception as e:
+        logger.warning("Error parsing skill_level for %s: %s", player_name, e)
+        skill_level = None
 
-    # Extract numeric columns
-    skill_level = _parse_int(cells[MATCH_PAGE["skill_level_col"]].get_text(strip=True))
-    matches_won_played = _parse_matches_won_lost(
-        cells[MATCH_PAGE["matches_won_lost_col"]].get_text(strip=True)
-    )
-    win_pct = _parse_percentage(
-        cells[MATCH_PAGE["win_pct_col"]].get_text(strip=True)
-    )
-    ppm = _parse_float(cells[MATCH_PAGE["ppm_col"]].get_text(strip=True))
-    pa = _parse_percentage(cells[MATCH_PAGE["pa_col"]].get_text(strip=True))
+    try:
+        matches_won_played = _parse_matches_won_lost(
+            cells[MATCH_PAGE["matches_won_lost_col"]].get_text(strip=True)
+        )
+    except Exception as e:
+        logger.warning("Error parsing matches_won_played for %s: %s", player_name, e)
+        matches_won_played = None
+
+    try:
+        win_pct = _parse_percentage(
+            cells[MATCH_PAGE["win_pct_col"]].get_text(strip=True)
+        )
+    except Exception as e:
+        logger.warning("Error parsing win_pct for %s: %s", player_name, e)
+        win_pct = None
+
+    try:
+        ppm = _parse_float(cells[MATCH_PAGE["ppm_col"]].get_text(strip=True))
+    except Exception as e:
+        logger.warning("Error parsing ppm for %s: %s", player_name, e)
+        ppm = None
+
+    try:
+        pa = _parse_percentage(cells[MATCH_PAGE["pa_col"]].get_text(strip=True))
+    except Exception as e:
+        logger.warning("Error parsing pa for %s: %s", player_name, e)
+        pa = None
 
     matches_won = matches_won_played.get("won", 0) if matches_won_played else 0
     matches_played = matches_won_played.get("played", 0) if matches_won_played else 0
+
+    logger.debug(
+        "Parsed roster member: %s (id=%s) sl=%s won=%s/%s",
+        player_name, player_id, skill_level, matches_won, matches_played,
+    )
 
     return TeamMember(
         player_name=player_name,

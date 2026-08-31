@@ -50,28 +50,40 @@ def parse_player_stats(html: str, player_id: str) -> dict:
     """Parse player profile page and extract stats."""
     soup = BeautifulSoup(html, "html.parser")
 
-    # Extract player name from page header
-    player_name = _extract_player_name(soup)
+    try:
+        player_name = _extract_player_name(soup)
+    except Exception as e:
+        logger.warning("Error extracting player name for %s: %s", player_id, e)
+        player_name = "Unknown Player"
 
-    # Try to extract lifetime stats from the visible metrics
-    lifetime_stats = _extract_lifetime_stats(soup)
+    try:
+        lifetime_stats = _extract_lifetime_stats(soup)
+    except Exception as e:
+        logger.warning("Error extracting lifetime stats for %s: %s", player_id, e)
+        lifetime_stats = {}
+
+    try:
+        matches = _extract_match_history(soup)
+    except Exception as e:
+        logger.warning("Error extracting match history for %s: %s", player_id, e)
+        matches = []
 
     return {
         "player_id": player_id,
         "player_name": player_name,
         "lifetime_stats": lifetime_stats,
-        "matches": _extract_match_history(soup),
+        "matches": matches,
     }
 
 
 def _extract_player_name(soup) -> str:
     """Extract player name from profile header."""
-    # Look for player name in header, badge, or title
-    header = soup.select_one("h1, h2, .profile-header")
-    if header:
-        return header.get_text(strip=True)
-
-    # Fallback: look in meta or other places
+    try:
+        header = soup.select_one("h1, h2, .profile-header")
+        if header:
+            return header.get_text(strip=True)
+    except Exception as e:
+        logger.debug("Error in _extract_player_name: %s", e)
     return "Unknown Player"
 
 
@@ -89,8 +101,6 @@ def _extract_lifetime_stats(soup) -> dict:
         "mini_slams": 0,
     }
 
-    # Look for stat blocks or divs containing numeric values
-    # Common structure: stat name followed by number
     stat_labels = {
         "won": ["WON", "Wins"],
         "played": ["PLAYED", "Played"],
@@ -103,12 +113,17 @@ def _extract_lifetime_stats(soup) -> dict:
         "mini_slams": ["MINI SLAMS", "Mini Slams"],
     }
 
-    # Find all text nodes and number patterns
-    text = soup.get_text()
+    try:
+        text = soup.get_text()
+    except Exception as e:
+        logger.warning("Error getting page text for stat extraction: %s", e)
+        return stats
+
     for stat_key, labels in stat_labels.items():
         for label in labels:
-            if label.lower() in text.lower():
-                # Try to find the number following this label
+            try:
+                if label.lower() not in text.lower():
+                    continue
                 pattern = re.escape(label) + r"\s*[:\s]*(\d+\.?\d*)"
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
@@ -120,6 +135,9 @@ def _extract_lifetime_stats(soup) -> dict:
                     else:
                         stats[stat_key] = int(float(value))
                     break
+            except Exception as e:
+                logger.warning("Error parsing stat '%s' for label '%s': %s", stat_key, label, e)
+                continue
 
     return stats
 
