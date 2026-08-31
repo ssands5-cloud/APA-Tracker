@@ -1,0 +1,37 @@
+site:
+  base_url: "https://league.poolplayers.com"
+  login_path: "/login"
+  # Placeholders -- update these after inspecting your local league portal's
+  # actual URLs (view source / devtools network tab while browsing logged in).
+  standings_path: "/standings"
+  team_path_template: "/teams/{team_id}"
+  player_path_template: "/players/{player_id}"
+
+league:
+  league_id: "CHANGE_ME"
+  division_id: "CHANGE_ME"
+  season: "2026 Summer"
+
+team:
+  team_id: "CHANGE_ME"
+  team_name: "CHANGE_ME"
+
+database:
+  path: "data/apa_tracker.db"
+
+session:
+  cache_path: ".session_cache/cookies.pkl"
+  timeout_seconds: 15
+  max_retries: 3
+
+scheduler:
+  daily_sync_hour: 6
+  weekly_refresh_day: "Sunday"
+  weekly_refresh_hour: 5
+
+export:
+  excel_output_path: "exports/apa_stats.xlsx"
+
+logging:
+  level: "INFO"
+  file: "logs/apa_tracker.log"
