@@ -43,7 +43,7 @@ PLAYER_PAGE = {
 MATCH_PAGE = {
     "table_selector": ".table-responsive table.table",
     "table_row_selector": "tbody tr",
-    "player_name_selector": "td span.sm-block",  # FIXED: plain span, not <a> link
+    "player_name_selector": "span.sm-block",  # FIXED: plain span inside first <td>, not <a> link
     "skill_level_col": 1,
     "matches_won_lost_col": 2,
     "win_pct_col": 3,

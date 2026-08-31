@@ -179,7 +179,7 @@ def _parse_player_row(cells) -> Optional[PlayerStats]:
     """
     # Cell 0: Player Name in <span class="sm-block">; ID as plain text "#xxxxxxx"
     try:
-        name_span = cells[0].select_one("span.sm-block")
+        name_span = cells[0].select_one(MATCH_PAGE["player_name_selector"])
         if not name_span:
             logger.debug("No span.sm-block found in player row, skipping")
             return None
