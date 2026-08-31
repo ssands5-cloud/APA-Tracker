@@ -5,3 +5,7 @@ exports/
 logs/
 __pycache__/
 *.pyc
+
+# Auth session storage
+.apa_tracker/
+.env
