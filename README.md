@@ -62,6 +62,31 @@ python -m scheduler.weekly_refresh  # full refresh + Excel export
 Wire either of those into Windows Task Scheduler (or cron, if running under
 WSL) at the times set in `apa_config.yaml`'s `scheduler` section.
 
+### Running it on a schedule via GitHub Actions
+
+`.github/workflows/daily-sync.yml` runs `scheduler.daily_sync` once a day
+(matching `apa_config.yaml`'s `scheduler.daily_sync_hour`) and commits the
+updated `data/apa_tracker.db` back to the repo, so standings history keeps
+accumulating even when nobody is running it manually. Before it will
+actually collect anything you need to:
+
+1. Add `APA_USERNAME` / `APA_PASSWORD` as repository secrets (Settings →
+   Secrets and variables → Actions) — the workflow does **not** read `.env`.
+2. Fill in `apa_config.yaml`'s `league.league_id`, `league.division_id`,
+   `team.team_id`, and `team.team_name` with your real values.
+3. Confirm `parser/apa_page_map.py`'s selectors match the real portal
+   markup (step 4 above).
+
+Until all three are done, the scheduled run will fail at login/scrape
+rather than silently doing nothing — check the Actions run logs.
+
+## Testing
+
+```
+pip install -r requirements-dev.txt
+python -m pytest tests/
+```
+
 ## Notes
 
 - This only scrapes pages behind your own login for your own team/league —
