@@ -1,0 +1,718 @@
+From fa0b51680d00749b00d3a570300ecb7355d891ed Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 31 Aug 2026 23:01:43 +0000
+Subject: [PATCH 1/3] fix(parser): raise on table shape mismatch instead of
+ misaligning silently
+
+parse_table mapped cells to columns positionally via dict(zip(...)). A row
+of the wrong width therefore shifted every field after the discrepancy and
+returned without complaint. From the state audit, one extra leading cell:
+
+  expected  {'rank': '1', 'team_name': 'Cue Crew', 'wins': '10',       ...}
+  actual    {'rank': '',  'team_name': '1',        'wins': 'Cue Crew', ...}
+
+Downstream that does not surface either: _to_int('Cue Crew') returns None
+(database/ingest.py:195), so the row lands in StandingsSnapshot looking
+ordinary, with losses holding the value that belonged to wins.
+
+parse_table now validates each row's width against the declared columns and
+raises TableShapeError naming the selector, the row index, the declared
+columns and the cells actually received. strict=False keeps the old
+skip-and-continue behaviour for exploratory work.
+
+Two related cases handled while here:
+
+  - Header rows inside <tbody> (every cell a <th>) are skipped rather than
+    returned as a data row whose values are the column captions.
+  - A table selector matching nothing now raises TableNotFoundError in
+    strict mode. Returning [] rendered "the markup moved" and "this league
+    has no standings" identically.
+
+Callers get strict mode by default, so a shape change stops the scrape
+rather than feeding the database. That is the intent: a wrong number is
+more expensive than a failed run, because it cannot be identified later.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01M6T5FzSsbYhfhhdUJxAjKz
+---
+ parser/html_parser.py     | 103 +++++++++++++++++++++++++++++++++---
+ tests/__init__.py         |   0
+ tests/test_html_parser.py | 107 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 202 insertions(+), 8 deletions(-)
+ create mode 100644 tests/__init__.py
+ create mode 100644 tests/test_html_parser.py
+
+diff --git a/parser/html_parser.py b/parser/html_parser.py
+index bc528fe..ea974f3 100644
+--- a/parser/html_parser.py
++++ b/parser/html_parser.py
+@@ -1,5 +1,11 @@
+ """
+ Generic HTML table/summary parsing helpers shared by all scraper modules.
++
++Parsing here is deliberately strict. A scraper that returns a wrong number is
++far more expensive than one that stops: a wrong number reaches the database,
++gets aggregated, and is indistinguishable from a real one months later. So a
++table whose shape does not match what the caller declared raises rather than
++guessing which cell went where.
+ """
+ 
+ from __future__ import annotations
+@@ -12,25 +18,106 @@ from bs4 import BeautifulSoup
+ logger = logging.getLogger(__name__)
+ 
+ 
+-def parse_table(html: str, table_selector: str, row_selector: str, columns: list[str]) -> list[dict[str, Any]]:
++class TableNotFoundError(LookupError):
++    """The table selector matched nothing on the page.
++
++    Distinct from "the table was empty": an absent table usually means the
++    markup moved or the page is an error/login page, and reporting it as
++    zero rows renders a missing result as a definite one.
++    """
++
++
++class TableShapeError(ValueError):
++    """A row's cell count does not match the declared column set.
++
++    Carries the offending cells so the caller can see what actually arrived
++    rather than re-fetching the page to find out.
++    """
++
++    def __init__(self, selector: str, row_index: int, columns: list[str], cells: list[str]) -> None:
++        self.selector = selector
++        self.row_index = row_index
++        self.columns = list(columns)
++        self.cells = list(cells)
++        super().__init__(
++            f"Row {row_index} of {selector!r} has {len(cells)} cell(s) but "
++            f"{len(columns)} column(s) were declared. Declared: {self.columns}. "
++            f"Received: {self.cells}. The portal markup has probably changed -- "
++            f"update the column list in parser/apa_page_map.py rather than "
++            f"letting values map to the wrong fields."
++        )
++
++
++def _is_header_row(row) -> bool:
++    """True when every cell in the row is a <th>.
++
++    Header rows routinely appear inside <tbody> on this portal, and a header
++    row that survives into the results reads as a data row whose values are
++    the column captions.
++    """
++    cells = row.find_all(["td", "th"])
++    return bool(cells) and all(cell.name == "th" for cell in cells)
++
++
++def parse_table(
++    html: str,
++    table_selector: str,
++    row_selector: str,
++    columns: list[str],
++    *,
++    strict: bool = True,
++) -> list[dict[str, Any]]:
+     """Parse an HTML table into a list of dicts keyed by `columns`.
+ 
+-    Cells beyond len(columns) are ignored; rows with fewer cells than
+-    `columns` are skipped (usually a header/footer row that slipped
+-    through the row_selector).
++    Cells are matched to columns by position, so a row of the wrong width
++    means every field after the discrepancy is wrong. In strict mode -- the
++    default -- that raises :class:`TableShapeError` instead of returning
++    plausible-looking, misaligned data.
++
++    Header rows (every cell a ``<th>``) and completely empty rows are skipped
++    before the width check, since neither is a shape problem.
++
++    Args:
++        html: The page source.
++        table_selector: CSS selector for the table.
++        row_selector: CSS selector for rows, relative to the table.
++        columns: Field names, in the order the cells appear.
++        strict: Raise on a shape mismatch. Set ``False`` to log and skip the
++            offending row instead -- appropriate only for exploratory work,
++            never for a run whose output is ingested.
++
++    Raises:
++        TableNotFoundError: `table_selector` matched nothing (strict only).
++        TableShapeError: A data row's width did not match `columns` (strict only).
+     """
+     soup = BeautifulSoup(html, "html.parser")
+     table = soup.select_one(table_selector)
+     if table is None:
++        if strict:
++            raise TableNotFoundError(
++                f"No table matched {table_selector!r}. The page may be a login "
++                f"or error page, or the markup has changed."
++            )
+         logger.warning("Table not found for selector: %s", table_selector)
+         return []
+ 
+     records: list[dict[str, Any]] = []
+-    for row in table.select(row_selector):
+-        cells = [cell.get_text(strip=True) for cell in row.find_all(["td", "th"])]
+-        if len(cells) < len(columns):
+-            logger.debug("Skipping short row: %s", cells)
++    for index, row in enumerate(table.select(row_selector)):
++        raw_cells = row.find_all(["td", "th"])
++        if not raw_cells:
++            continue
++        if _is_header_row(row):
++            logger.debug("Skipping header row %s in %s", index, table_selector)
+             continue
++
++        cells = [cell.get_text(strip=True) for cell in raw_cells]
++        if len(cells) != len(columns):
++            error = TableShapeError(table_selector, index, columns, cells)
++            if strict:
++                raise error
++            logger.warning("%s", error)
++            continue
++
+         records.append(dict(zip(columns, cells)))
+     return records
+ 
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/test_html_parser.py b/tests/test_html_parser.py
+new file mode 100644
+index 0000000..e9929bc
+--- /dev/null
++++ b/tests/test_html_parser.py
+@@ -0,0 +1,107 @@
++"""Unit tests for parser/html_parser.py.
++
++Fixtures are the ones from the state audit (apa-ground-truth.html,
++https://claude.ai/code/artifact/ee8264ee-ac00-4563-b1c8-08d9e20b3a24), where
++each was shown producing wrong data against the pre-fix parser.
++"""
++
++from __future__ import annotations
++
++import pytest
++
++from parser.html_parser import (
++    TableNotFoundError,
++    TableShapeError,
++    parse_table,
++)
++
++COLUMNS = ["rank", "team_name", "wins", "losses", "points"]
++
++WELL_FORMED = """<table class="standings"><tbody>
++<tr><td>1</td><td>Cue Crew</td><td>10</td><td>2</td><td>88</td></tr>
++<tr><td>2</td><td>Rack Attack</td><td>8</td><td>4</td><td>71</td></tr>
++</tbody></table>"""
++
++# The audit fixture: one extra leading cell (a logo, a checkbox, an action
++# link) shifts every value one place to the right.
++EXTRA_LEADING_CELL = """<table class="standings"><tbody>
++<tr><td><img/></td><td>1</td><td>Cue Crew</td><td>10</td><td>2</td><td>88</td></tr>
++</tbody></table>"""
++
++SHORT_ROW = """<table class="standings"><tbody>
++<tr><td>1</td><td>Cue Crew</td><td>10</td></tr>
++</tbody></table>"""
++
++HEADER_INSIDE_BODY = """<table class="standings"><tbody>
++<tr><th>Rank</th><th>Team</th><th>W</th><th>L</th><th>Pts</th></tr>
++<tr><td>1</td><td>Cue Crew</td><td>10</td><td>2</td><td>88</td></tr>
++</tbody></table>"""
++
++
++class TestWellFormedTables:
++    def test_parses_rows_into_declared_columns(self):
++        rows = parse_table(WELL_FORMED, "table.standings", "tbody tr", COLUMNS)
++        assert rows == [
++            {"rank": "1", "team_name": "Cue Crew", "wins": "10", "losses": "2", "points": "88"},
++            {"rank": "2", "team_name": "Rack Attack", "wins": "8", "losses": "4", "points": "71"},
++        ]
++
++
++class TestShapeMismatchRaises:
++    """The audit's central finding: misalignment used to pass silently."""
++
++    def test_extra_leading_cell_raises_instead_of_shifting(self):
++        with pytest.raises(TableShapeError) as excinfo:
++            parse_table(EXTRA_LEADING_CELL, "table.standings", "tbody tr", COLUMNS)
++        error = excinfo.value
++        assert error.row_index == 0
++        assert len(error.cells) == 6
++        assert error.columns == COLUMNS
++
++    def test_error_message_shows_what_actually_arrived(self):
++        with pytest.raises(TableShapeError) as excinfo:
++            parse_table(EXTRA_LEADING_CELL, "table.standings", "tbody tr", COLUMNS)
++        message = str(excinfo.value)
++        assert "6 cell(s)" in message and "5 column(s)" in message
++        assert "Cue Crew" in message
++
++    def test_short_row_also_raises(self):
++        with pytest.raises(TableShapeError):
++            parse_table(SHORT_ROW, "table.standings", "tbody tr", COLUMNS)
++
++    def test_pre_fix_behaviour_is_gone(self):
++        """Before the fix this returned wins='Cue Crew' with no warning."""
++        try:
++            rows = parse_table(EXTRA_LEADING_CELL, "table.standings", "tbody tr", COLUMNS)
++        except TableShapeError:
++            return
++        pytest.fail(f"shape mismatch was accepted and produced {rows}")
++
++
++class TestNonStrictMode:
++    def test_skips_the_bad_row_and_keeps_going(self):
++        html = WELL_FORMED.replace(
++            "<tr><td>2</td>", "<tr><td><img/></td><td>2</td>"
++        )
++        rows = parse_table(html, "table.standings", "tbody tr", COLUMNS, strict=False)
++        assert len(rows) == 1
++        assert rows[0]["team_name"] == "Cue Crew"
++
++
++class TestHeaderRows:
++    def test_header_row_inside_tbody_is_not_a_data_row(self):
++        rows = parse_table(HEADER_INSIDE_BODY, "table.standings", "tbody tr", COLUMNS)
++        assert len(rows) == 1
++        assert rows[0]["rank"] == "1"
++        assert "Rank" not in [row["rank"] for row in rows]
++
++
++class TestMissingTable:
++    def test_absent_table_raises_rather_than_reporting_zero_rows(self):
++        with pytest.raises(TableNotFoundError):
++            parse_table("<html><body>Please log in</body></html>",
++                        "table.standings", "tbody tr", COLUMNS)
++
++    def test_non_strict_returns_empty(self):
++        assert parse_table("<html></html>", "table.standings", "tbody tr",
++                           COLUMNS, strict=False) == []
+-- 
+2.43.0
+
+
+From edcc35ea26282cc320bdeee1c750ddb9e1139b72 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 31 Aug 2026 23:01:44 +0000
+Subject: [PATCH 2/3] refactor(parser): drop dead selector keys and correct the
+ map's own claim
+
+TEAM_PAGE["roster_table_selector" / "roster_row_selector" / "roster_columns"]
+and PLAYER_PAGE["stats_columns" / "stats_table_selector"] were read by
+nothing. Roster parsing uses MATCH_PAGE selectors (team_scraper.py:60,64,77);
+player parsing used no map at all.
+
+They were not merely unused, they were a trap. PLAYER_PAGE["stats_columns"]
+declared [match_date, opponent, skill_level, points_earned, result] while
+_parse_match_row reads [match_date, opponent, result, skill_level,
+points_earned]. Positions 2, 3 and 4 disagree, so the obvious cleanup --
+wiring the declared map into the parser -- would have silently filed skill
+level as the match result.
+
+The module docstring claimed every selector had been "updated with real
+selectors from league.poolplayers.com portal inspection". That held for
+MATCH_PAGE only; STANDINGS_PAGE, TEAM_PAGE and PLAYER_PAGE are still
+generic guesses such as table.standings. The docstring now states
+verification status per map, and records what was removed and why so the
+keys are not reinstated casually.
+
+Keys still in use (TEAM_PAGE schedule_*, all of MATCH_PAGE, STANDINGS_PAGE)
+are untouched, and a test asserts they stay.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01M6T5FzSsbYhfhhdUJxAjKz
+---
+ parser/apa_page_map.py     | 34 ++++++++++++++++++----
+ tests/test_apa_page_map.py | 59 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 87 insertions(+), 6 deletions(-)
+ create mode 100644 tests/test_apa_page_map.py
+
+diff --git a/parser/apa_page_map.py b/parser/apa_page_map.py
+index f97d30d..d95e1a8 100644
+--- a/parser/apa_page_map.py
++++ b/parser/apa_page_map.py
+@@ -3,7 +3,28 @@ Central map of CSS selectors / field names for each page type on the
+ league portal. Keeping these in one place means a markup change on the
+ site only requires edits here, not in every scraper module.
+ 
+-Updated with real selectors from league.poolplayers.com portal inspection.
++VERIFICATION STATUS -- read before trusting any selector here.
++
++  MATCH_PAGE      Derived from real league.poolplayers.com markup.
++  LOGIN_FORM      Field names are plausible but UNVERIFIED against a live
++                  login page; the portal front end is a JavaScript app, so
++                  a server-rendered form may not exist at all.
++  STANDINGS_PAGE  PLACEHOLDER. `table.standings` is a guess, not observed.
++  TEAM_PAGE       PLACEHOLDER. Only the schedule_* keys are used, and they
++                  are likewise unobserved.
++  PLAYER_PAGE     PLACEHOLDER. Nothing here is currently read by any code.
++
++An earlier version of this docstring claimed every selector had been taken
++from portal inspection. That was true of MATCH_PAGE only, and the claim is
++what made the placeholders look load-bearing.
++
++Removed deliberately, do not reinstate without checking the parsers first:
++TEAM_PAGE["roster_table_selector" / "roster_row_selector" / "roster_columns"]
++and PLAYER_PAGE["stats_columns" / "stats_table_selector"]. All were dead --
++roster parsing reads MATCH_PAGE, and player parsing read nothing. The
++stats_columns order also contradicted the order _parse_match_row actually
++uses, so wiring the map back up would have silently misfiled skill level as
++the match result.
+ """
+ 
+ LOGIN_FORM = {
+@@ -20,18 +41,19 @@ STANDINGS_PAGE = {
+ }
+ 
+ TEAM_PAGE = {
+-    "roster_table_selector": "table.roster",
+-    "roster_row_selector": "tbody tr",
+-    "roster_columns": ["player_name", "skill_level", "matches_played"],
++    # roster_* keys removed: roster parsing uses MATCH_PAGE selectors
++    # (scraper/team_scraper.py:60,64,77), never these.
+     "schedule_table_selector": "table.schedule",
+     "schedule_row_selector": "tbody tr",
+     "schedule_columns": ["date", "opponent", "location", "result"],
+ }
+ 
+ PLAYER_PAGE = {
+-    "stats_table_selector": "table.player-stats",
++    # stats_table_selector and stats_columns removed: nothing read them, and
++    # the column order they declared disagreed with the order
++    # scraper/player_scraper.py:_parse_match_row actually uses at positions
++    # 2, 3 and 4. Activating them would have misfiled every row.
+     "stats_row_selector": "tbody tr",
+-    "stats_columns": ["match_date", "opponent", "skill_level", "points_earned", "result"],
+     "summary_selector": "div.player-summary",
+ }
+ 
+diff --git a/tests/test_apa_page_map.py b/tests/test_apa_page_map.py
+new file mode 100644
+index 0000000..8989415
+--- /dev/null
++++ b/tests/test_apa_page_map.py
+@@ -0,0 +1,59 @@
++"""Guards on parser/apa_page_map.py.
++
++The removed keys were dead config that would have misfiled data if anyone
++wired them back up -- see apa-ground-truth.html,
++https://claude.ai/code/artifact/ee8264ee-ac00-4563-b1c8-08d9e20b3a24
++These tests fail if they reappear without the parsers changing too.
++"""
++
++from __future__ import annotations
++
++import parser.apa_page_map as page_map
++from parser.apa_page_map import MATCH_PAGE, PLAYER_PAGE, STANDINGS_PAGE, TEAM_PAGE
++
++
++class TestDeadKeysStayRemoved:
++    def test_team_page_has_no_roster_keys(self):
++        assert not [k for k in TEAM_PAGE if k.startswith("roster_")], (
++            "roster parsing reads MATCH_PAGE selectors; a roster_* key here is "
++            "dead config that looks authoritative"
++        )
++
++    def test_player_page_has_no_stats_columns(self):
++        assert "stats_columns" not in PLAYER_PAGE, (
++            "stats_columns declared a column order contradicting the one "
++            "_parse_match_row uses at positions 2, 3 and 4"
++        )
++
++    def test_player_page_has_no_stats_table_selector(self):
++        assert "stats_table_selector" not in PLAYER_PAGE
++
++
++class TestKeysStillInUseArePresent:
++    def test_team_page_keeps_schedule_keys(self):
++        for key in ("schedule_table_selector", "schedule_row_selector", "schedule_columns"):
++            assert key in TEAM_PAGE
++
++    def test_match_page_keeps_the_verified_selectors(self):
++        for key in ("table_selector", "table_row_selector", "player_name_selector",
++                    "team_name_selector", "skill_level_col"):
++            assert key in MATCH_PAGE
++
++    def test_standings_page_is_intact(self):
++        assert STANDINGS_PAGE["columns"] == ["rank", "team_name", "wins", "losses", "points"]
++
++
++class TestDocstringDoesNotOverclaim:
++    """The old docstring said every selector came from portal inspection.
++    Only MATCH_PAGE did, and that claim is what made placeholders look real.
++    """
++
++    def test_names_the_placeholder_maps(self):
++        doc = page_map.__doc__ or ""
++        for name in ("STANDINGS_PAGE", "TEAM_PAGE", "PLAYER_PAGE"):
++            assert name in doc
++        assert "PLACEHOLDER" in doc
++
++    def test_does_not_claim_blanket_verification(self):
++        doc = (page_map.__doc__ or "").lower()
++        assert "updated with real selectors from league.poolplayers.com portal inspection" not in doc
+-- 
+2.43.0
+
+
+From 90dbc7e559db188608681c2bac05d8f4da8335a6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 31 Aug 2026 23:01:44 +0000
+Subject: [PATCH 3/3] fix(scraper): identify match tables by their headers, not
+ by cell count
+
+_extract_match_history walked every <table> on the player page and treated
+any row of three or more cells as a match. A navigation bar, a lifetime
+summary widget and a header row all clear that bar. Against the audit
+fixture -- one real match table plus two unrelated ones -- it returned five
+matches, four of them invented:
+
+  {'match_date': 'Home', 'opponent': 'Teams', 'result': 'Standings'}   nav bar
+  {'match_date': 'Won',  'opponent': 'Played', 'result': 'PPM'}        widget header
+  {'match_date': '42',   'opponent': '60',     'result': '2.1'}        widget data
+  {'match_date': 'Date', 'opponent': 'Opponent', 'result': 'Result'}   table header
+
+Those flow into PlayerMatch through ingest_player_matches
+(database/ingest.py:169) and, because PlayerMatch is unique on
+(player_id, match_date, opponent), each lands as a distinct row and inflates
+every count derived from it.
+
+A table now qualifies only if its headers name both a date column and an
+opponent column. A table with no <th> does not qualify, deliberately:
+skipping a real table produces no data and a log line, while admitting a
+fake one produces wrong data that cannot be told from real matches later.
+When tables exist but none qualify, that is logged at WARNING so "found
+nothing" cannot be read as "played nothing".
+
+Scope: this changes only which tables are scanned. _parse_match_row's field
+mapping is byte-identical, and nothing here touches the Match model or the
+ingestion path -- both remain open audit findings.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01M6T5FzSsbYhfhhdUJxAjKz
+---
+ scraper/player_scraper.py                 |  71 ++++++++++++--
+ tests/test_player_scraper_match_tables.py | 111 ++++++++++++++++++++++
+ 2 files changed, 174 insertions(+), 8 deletions(-)
+ create mode 100644 tests/test_player_scraper_match_tables.py
+
+diff --git a/scraper/player_scraper.py b/scraper/player_scraper.py
+index 2e316e6..8396e4a 100644
+--- a/scraper/player_scraper.py
++++ b/scraper/player_scraper.py
+@@ -12,7 +12,7 @@ from typing import Optional
+ import requests
+ from bs4 import BeautifulSoup
+ 
+-from parser.apa_page_map import PLAYER_PAGE, MATCH_PAGE
++from parser.apa_page_map import MATCH_PAGE
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -124,22 +124,77 @@ def _extract_lifetime_stats(soup) -> dict:
+     return stats
+ 
+ 
++#: Header captions that identify a table's date column. A match table must
++#: have one of these AND one of MATCH_TABLE_OPPONENT_HEADERS to qualify.
++MATCH_TABLE_DATE_HEADERS = frozenset({"date", "match date", "matchdate", "when"})
++
++#: Header captions that identify a table's opponent column.
++MATCH_TABLE_OPPONENT_HEADERS = frozenset(
++    {"opponent", "opponents", "vs", "vs.", "versus", "against", "opposing player"}
++)
++
++
++def _table_headers(table) -> set:
++    """Lowercased text of every <th> in a table."""
++    return {th.get_text(strip=True).lower() for th in table.find_all("th")}
++
++
++def _looks_like_match_table(table) -> bool:
++    """Whether a table is plausibly a match history table.
++
++    Cell count alone does not identify one. A site navigation bar, a lifetime
++    summary widget and a match table all have three or more cells per row, so
++    counting cells admits all three and the non-match rows become fabricated
++    matches -- a nav bar arriving as "Home vs Teams, result: Standings".
++
++    The test here is the header row: a match table names both a date column
++    and an opponent column. A table with no <th> at all does not qualify,
++    which is deliberate. Skipping a real table is visible in the logs and
++    yields no data; admitting a fake one yields wrong data that reaches the
++    database and cannot be told apart from real matches later.
++    """
++    headers = _table_headers(table)
++    if not headers:
++        return False
++    return bool(headers & MATCH_TABLE_DATE_HEADERS) and bool(
++        headers & MATCH_TABLE_OPPONENT_HEADERS
++    )
++
++
+ def _extract_match_history(soup) -> list[dict]:
+-    """Extract match history from stats table or session sections."""
++    """Extract match history from tables that are actually match tables."""
+     matches = []
+-
+-    # Look for stats tables
+     tables = soup.find_all("table")
+-    for table in tables:
+-        rows = table.find_all("tr")
+-        for row in rows:
++    qualifying = [table for table in tables if _looks_like_match_table(table)]
++
++    skipped = len(tables) - len(qualifying)
++    if skipped:
++        logger.debug("Skipped %d table(s) with no date+opponent header pair", skipped)
++
++    for table in qualifying:
++        for row in table.find_all("tr"):
+             cells = row.find_all(["td", "th"])
++            if not cells:
++                continue
++            # A header row inside the body is captions, not a match.
++            if all(cell.name == "th" for cell in cells):
++                continue
+             if len(cells) >= 3:  # At least date, opponent, result
+                 match_entry = _parse_match_row(cells)
+                 if match_entry:
+                     matches.append(match_entry)
+ 
+-    logger.info("Extracted %d match entries", len(matches))
++    if tables and not qualifying:
++        # Do not let "found nothing" read as "played nothing".
++        logger.warning(
++            "Found %d table(s) on the player page but none had both a date and an "
++            "opponent header, so no match history was extracted. If the portal "
++            "renamed those columns, add the new captions to "
++            "MATCH_TABLE_DATE_HEADERS / MATCH_TABLE_OPPONENT_HEADERS.",
++            len(tables),
++        )
++
++    logger.info("Extracted %d match entries from %d qualifying table(s)", len(matches), len(qualifying))
+     return matches
+ 
+ 
+diff --git a/tests/test_player_scraper_match_tables.py b/tests/test_player_scraper_match_tables.py
+new file mode 100644
+index 0000000..1e28473
+--- /dev/null
++++ b/tests/test_player_scraper_match_tables.py
+@@ -0,0 +1,111 @@
++"""Match-table identification in scraper/player_scraper.py.
++
++The fixture is the audit's: a player page carrying one real match table plus
++two unrelated ones. Against the pre-fix parser it yielded five "matches", four
++fabricated -- see apa-ground-truth.html,
++https://claude.ai/code/artifact/ee8264ee-ac00-4563-b1c8-08d9e20b3a24
++"""
++
++from __future__ import annotations
++
++from bs4 import BeautifulSoup
++
++from scraper.player_scraper import (
++    _extract_match_history,
++    _looks_like_match_table,
++    parse_player_stats,
++)
++
++PLAYER_PAGE_HTML = """
++<html><body>
++  <h1>Alice Smith</h1>
++  <table class="site-nav"><tr><td>Home</td><td>Teams</td><td>Standings</td></tr></table>
++  <table class="lifetime"><tr><th>Won</th><th>Played</th><th>PPM</th></tr>
++                          <tr><td>42</td><td>60</td><td>2.1</td></tr></table>
++  <table class="player-stats"><tbody>
++    <tr><th>Date</th><th>Opponent</th><th>Result</th><th>SL</th><th>Pts</th></tr>
++    <tr><td>08/15/2026</td><td>Rack Attack</td><td>W</td><td>5</td><td>3</td></tr>
++    <tr><td>08/22/2026</td><td>Side Pocket</td><td>L</td><td>5</td><td>1</td></tr>
++  </tbody></table>
++</body></html>"""
++
++NO_TABLES_AT_ALL = "<html><body><p>No matches played yet.</p></body></html>"
++
++
++def _tables(html):
++    return BeautifulSoup(html, "html.parser").find_all("table")
++
++
++class TestTableIdentification:
++    def test_navigation_table_is_rejected(self):
++        nav = _tables(PLAYER_PAGE_HTML)[0]
++        assert _looks_like_match_table(nav) is False
++
++    def test_summary_widget_is_rejected(self):
++        lifetime = _tables(PLAYER_PAGE_HTML)[1]
++        assert _looks_like_match_table(lifetime) is False
++
++    def test_real_match_table_is_accepted(self):
++        stats = _tables(PLAYER_PAGE_HTML)[2]
++        assert _looks_like_match_table(stats) is True
++
++    def test_needs_both_date_and_opponent_headers(self):
++        date_only = _tables("<table><tr><th>Date</th><th>Points</th></tr></table>")[0]
++        assert _looks_like_match_table(date_only) is False
++
++
++class TestExtraction:
++    def test_only_real_matches_are_returned(self):
++        soup = BeautifulSoup(PLAYER_PAGE_HTML, "html.parser")
++        matches = _extract_match_history(soup)
++        assert len(matches) == 2
++
++    def test_none_of_the_audit_fabrications_survive(self):
++        soup = BeautifulSoup(PLAYER_PAGE_HTML, "html.parser")
++        dates = {m["match_date"] for m in _extract_match_history(soup)}
++        # Every one of these was returned as a match before the fix.
++        assert dates.isdisjoint({"Home", "Won", "42", "Date"})
++        assert dates == {"08/15/2026", "08/22/2026"}
++
++    def test_header_row_of_a_real_table_is_skipped(self):
++        soup = BeautifulSoup(PLAYER_PAGE_HTML, "html.parser")
++        opponents = {m["opponent"] for m in _extract_match_history(soup)}
++        assert "Opponent" not in opponents
++
++    def test_field_mapping_is_unchanged(self):
++        """_parse_match_row was deliberately not touched by this change."""
++        soup = BeautifulSoup(PLAYER_PAGE_HTML, "html.parser")
++        first = _extract_match_history(soup)[0]
++        assert first == {
++            "match_date": "08/15/2026",
++            "opponent": "Rack Attack",
++            "result": "W",
++            "skill_level": "5",
++            "points_earned": "3",
++        }
++
++    def test_page_with_no_tables_yields_nothing(self):
++        soup = BeautifulSoup(NO_TABLES_AT_ALL, "html.parser")
++        assert _extract_match_history(soup) == []
++
++
++class TestWarnsRatherThanSilentlyReturningNothing:
++    def test_tables_present_but_none_qualify_logs_a_warning(self, caplog):
++        html = """<html><body>
++          <table><tr><th>Won</th><th>Played</th><th>PPM</th></tr>
++                 <tr><td>42</td><td>60</td><td>2.1</td></tr></table>
++        </body></html>"""
++        soup = BeautifulSoup(html, "html.parser")
++        with caplog.at_level("WARNING"):
++            assert _extract_match_history(soup) == []
++        assert any(
++            "none had both a date and an opponent header" in record.getMessage()
++            for record in caplog.records
++        )
++
++
++class TestEndToEnd:
++    def test_parse_player_stats_returns_only_real_matches(self):
++        result = parse_player_stats(PLAYER_PAGE_HTML, "P1")
++        assert result["player_id"] == "P1"
++        assert len(result["matches"]) == 2
+-- 
+2.43.0
+
