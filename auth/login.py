@@ -31,15 +31,14 @@ class Credentials:
 
     @classmethod
     def from_env(cls) -> "Credentials":
-        username = os.environ.get("APA_USERNAME")
-        password = os.environ.get("APA_PASSWORD")
+        username = (os.environ.get("APA_USERNAME") or "").strip()
+        password = (os.environ.get("APA_PASSWORD") or "").strip()
         if not username or not password:
             raise LoginError(
                 "APA_USERNAME and APA_PASSWORD must be set in the environment. "
                 "Copy .env.example to .env and fill in your league portal credentials."
             )
         return cls(username=username, password=password)
-
 
 def _extract_csrf_token(html: str, field_name: str) -> Optional[str]:
     """Pull a hidden CSRF/verification token out of the login form, if present.
