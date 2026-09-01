@@ -230,7 +230,7 @@ class LoginManager:
         session = requests.Session()
         try:
             with path.open(encoding="utf-8") as fh:
-                session.cookies = requests.utils.cookiejar_from_dict(json.load(fh))
+                requests.utils.add_dict_to_cookiejar(session.cookies, json.load(fh))
         except Exception as exc:
             logger.warning("Failed to load session from %s: %s", path, exc)
             return False
