@@ -6,7 +6,7 @@ The resolution order is:
 
 1. Environment variables (``APA_USERNAME`` / ``APA_PASSWORD``) — preferred
    for CI and automation.
-2. Saved session on disk (``~/.apa_tracker/sessions/<user>.pkl``).
+2. Saved session on disk (``~/.apa_tracker/sessions/<user>.json``).
 3. Interactive prompt if nothing else works.
 """
 

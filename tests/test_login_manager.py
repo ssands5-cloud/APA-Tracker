@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import pickle
+import json
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -144,12 +144,14 @@ class TestSessionPersistence:
 
         # Inject a fake session
         fake_session = requests.Session()
+        fake_session.cookies.set("session_id", "abc123")
         mgr._session = fake_session
 
         # Save
         path = mgr.save_session()
         assert path.exists()
         assert oct(path.stat().st_mode)[-3:] == "600"
+        assert json.loads(path.read_text(encoding="utf-8")) == {"session_id": "abc123"}
 
         # Load into a new manager
         mgr2 = LoginManager(MINIMAL_CONFIG, username="alice@example.com")
@@ -157,12 +159,13 @@ class TestSessionPersistence:
         with patch.object(mgr2, "is_authenticated", return_value=True):
             loaded = mgr2.load_session(path)
         assert loaded is True
+        assert mgr2._session.cookies.get("session_id") == "abc123"
 
     def test_load_nonexistent_returns_false(self, monkeypatch):
         monkeypatch.delenv("APA_USERNAME", raising=False)
         monkeypatch.delenv("APA_PASSWORD", raising=False)
         mgr = LoginManager(MINIMAL_CONFIG, username="ghost@example.com")
-        result = mgr.load_session(Path("/tmp/does_not_exist_xyz.pkl"))
+        result = mgr.load_session(Path("/tmp/does_not_exist_xyz.json"))
         assert result is False
 
 

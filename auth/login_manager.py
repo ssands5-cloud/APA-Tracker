@@ -189,7 +189,7 @@ class LoginManager:
             return False
 
     def save_session(self) -> Path:
-        """Pickle the current session cookies to disk.
+        """Save the current session cookies as JSON.
 
         The file is written with mode 0600 so only the current OS user can
         read it.
@@ -203,17 +203,17 @@ class LoginManager:
             raise AuthenticationError("Cannot save session: not logged in.")
 
         path = get_user_session_path(self.username)
-        with path.open("wb") as fh:
-            pickle.dump(self._session.cookies, fh)
+        with path.open("w", encoding="utf-8") as fh:
+            json.dump(requests.utils.dict_from_cookiejar(self._session.cookies), fh)
         path.chmod(0o600)
         logger.debug("Session saved to %s", path)
         return path
 
     def load_session(self, path: Optional[Path] = None) -> bool:
-        """Restore a session from a pickle file.
+        """Restore a session from a JSON cookie file.
 
         Args:
-            path: Explicit path to the pickle.  Defaults to the standard
+            path: Explicit path to the JSON cookie file. Defaults to the standard
                   user session path derived from :attr:`username`.
 
         Returns:
@@ -229,8 +229,8 @@ class LoginManager:
 
         session = requests.Session()
         try:
-            with path.open("rb") as fh:
-                session.cookies.update(pickle.load(fh))
+            with path.open(encoding="utf-8") as fh:
+                session.cookies = requests.utils.cookiejar_from_dict(json.load(fh))
         except Exception as exc:
             logger.warning("Failed to load session from %s: %s", path, exc)
             return False
