@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>APA-Tracker — Three Blockers Status Report</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.5; }
+  h1 { border-bottom: 3px solid #333; padding-bottom: 0.4rem; }
+  h2 { margin-top: 2.5rem; padding: 0.4rem 0.8rem; border-radius: 4px; }
+  .b1 h2 { background: #fff3cd; }
+  .b2 h2 { background: #d4edda; }
+  .b3 h2 { background: #f8d7da; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #ccc; padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: #eee; }
+  code { background: #f4f4f4; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+  .status { font-weight: bold; padding: 0.15rem 0.6rem; border-radius: 3px; color: #fff; display: inline-block; }
+  .status.blocked { background: #c9302c; }
+  .status.ready { background: #5cb85c; }
+  .status.waiting { background: #f0ad4e; }
+  .status.na { background: #777; }
+  .meta { color: #555; font-size: 0.9em; }
+  .verified { color: #1a7f37; }
+  .unverified { color: #b45309; }
+  ul { margin-top: 0.3rem; }
+  footer { margin-top: 3rem; color: #777; font-size: 0.85em; border-top: 1px solid #ddd; padding-top: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>APA-Tracker — Three Blockers Status Report</h1>
+<p class="meta">Generated: 2026-09-01T12:05 UTC · Source: live inspection of <code>ssands5-cloud/APA-Tracker</code> (all branches fetched, current HEAD SHAs re-checked at generation time)</p>
+
+<table>
+<tr><th>Blocker</th><th>Status</th><th>Blocking on</th></tr>
+<tr><td>1 — Invest-master Daily Audit</td><td><span class="status waiting">WAITING ON PAUL</span></td><td>Sign-off on replacement Routine prompt + settings before first arm</td></tr>
+<tr><td>2 — Competing Session Fixes</td><td><span class="status waiting">PATCH VERIFIED — NOT YET PUSHED</span></td><td>Claude to run <code>git am</code>/<code>git apply</code> + push to branch</td></tr>
+<tr><td>3 — Missing Match Model</td><td><span class="status blocked">BLOCKED — NO CODE PER INSTRUCTION</span></td><td>Paul's decision on FK vs. denormalized fields</td></tr>
+</table>
+
+<section class="b1">
+<h2>Blocker 1 — Invest-master Daily Audit</h2>
+<p><strong>Cause of auto-disable:</strong> <span class="unverified">Unverified from this session</span> — claimed <code>ended_reason: auto_disabled_repo_access</code> at <code>2026-08-31T14:08:42Z</code>, sourced from another session's <code>list_triggers</code> transcript, not independently re-checked. This session's own GitHub access is scoped to <code>ssands5-cloud/APA-Tracker</code> only — a direct query for <code>Invest-master</code> returns "do not have permission to view them," and no Routines/triggers tool exists in this tool surface.</p>
+<p><strong>Recovered settings (for recreation):</strong></p>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>cron</td><td><code>0 14 * * *</code> UTC</td></tr>
+<tr><td>environment</td><td><code>env_01MSdqYbZLrtxgLkUoCESzaC</code></td></tr>
+<tr><td>source</td><td><code>https://github.com/ssands5-cloud/Invest-master.git</code></td></tr>
+<tr><td>model</td><td><code>claude-sonnet-5</code></td></tr>
+<tr><td>tools</td><td>Bash / Read / Write / Edit / Glob / Grep</td></tr>
+</table>
+<p><strong>Why the old prompt can't be reused verbatim:</strong> <code>notes/PROTOCOL.md</code> §2 (pasted content, verified self-consistent) makes <code>Build_Status.md</code> a frozen historical record — "Do not append to it" — while the old Routine prompt instructed exactly that append-and-push-to-main behavior. Re-arming it unmodified would violate the current protocol on its first fire.</p>
+<p><strong>Corrected requirement (per §2/§3/§4, as pasted and verified consistent):</strong></p>
+<ul>
+<li>Writes go to <code>notes/claude.md</code> only (Claude/auditor-owned file), never <code>Build_Status.md</code>, <code>PROTOCOL.md</code>, or <code>DECISIONS.md</code> (Paul-owned, agents read-only).</li>
+<li>Every cycle: fetch <code>origin</code> first (no local-copy reads), validate baseline reachability with <code>git merge-base --is-ancestor</code> before diffing, name the exact ref checked, then write+push the entry in the same cycle.</li>
+<li>Entry header format: <code>## &lt;date/SHA&gt;</code> per §4.</li>
+<li>Explicit prohibitions carried from the 392-PR incident: no branch creation, no <code>git add -A</code>, no author override.</li>
+</ul>
+<p><strong>Outstanding action:</strong> <code>ROUTINE-v5-daily-audit-recreate.md</code> has been <em>described</em> in chat but never actually committed/pushed to a branch this session can fetch. Claude was instructed to commit it for real, and to hold off arming the Routine until Paul confirms both the prompt text and the settings block — first action is a write to <code>main</code>, so sign-off precedes first fire, not after.</p>
+</section>
+
+<section class="b2">
+<h2>Blocker 2 — Competing Session Fixes</h2>
+<p><strong>Resolution reached:</strong> rather than choosing between the two competing branches, the gap was closed directly — PR #1's branch (<code>claude/fix-login-manager-session-persistence</code>, currently at <code>4e07643</code>) gained the one thing the competing <code>-again</code> branch had that it didn't: preservation of <code>cookie._rest</code> (carries <code>HttpOnly</code>/<code>SameSite</code> flags that were previously silently dropped on every session reload).</p>
+<p><strong>Verification performed this session</strong> (isolated worktree, not the working copy):</p>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td><code>git apply --check</code> of patch onto <code>4e07643</code></td><td class="verified">Clean — no <code>-3</code> merge needed</td></tr>
+<tr><td><code>tests/test_login_manager.py</code> before patch</td><td class="verified">13 passed</td></tr>
+<tr><td><code>tests/test_login_manager.py</code> after patch</td><td class="verified">17 passed (+4 new <code>TestCookieFidelity</code> tests)</td></tr>
+<tr><td>Full <code>tests/</code> suite before patch</td><td class="verified">17 passed</td></tr>
+<tr><td>Full <code>tests/</code> suite after patch</td><td class="verified">21 passed — matches Claude's reported count</td></tr>
+<tr><td><code>py_compile</code> on changed files</td><td class="verified">Clean</td></tr>
+</table>
+<p><strong>Why PR #1 (patched) beats the <code>-again</code> branch:</strong></p>
+<ul>
+<li>Explicit <code>SESSION_FORMAT_VERSION</code> gate — stale/foreign session files fail closed instead of being coerced.</li>
+<li>File created <code>0600</code> via <code>os.open(..., 0o600)</code> at creation, not <code>chmod</code>-ed after the write (no world-readable window).</li>
+<li>Narrow exception handling (<code>OSError</code>/<code>ValueError</code> for parse, <code>KeyError</code>/<code>TypeError</code> for cookie reconstruction) vs. the <code>-again</code> branch's bare <code>except Exception</code>.</li>
+<li>Now matches <code>-again</code> on cookie fidelity (<code>_rest</code> preserved) after this patch — the one place it previously lagged.</li>
+</ul>
+<p><strong>Outstanding action:</strong> patch is verified but <strong>not yet applied to the actual remote branch</strong> — <code>origin/claude/fix-login-manager-session-persistence</code> is still at <code>4e07643</code> as of this report. Exact push instructions were given to Claude; this session has no write path to that branch.</p>
+</section>
+
+<section class="b3">
+<h2>Blocker 3 — Missing Match Model</h2>
+<p><strong>Status: confirmed still broken, no code touched (per instruction).</strong></p>
+<pre style="background:#f4f4f4; padding:0.8rem; border-radius:4px; overflow-x:auto;">$ python3 -c "import database.ingest"
+ImportError: cannot import name 'Match' from 'database.models'
+  (database/models.py)</pre>
+<p>Re-run against the current tree at report time — the error is identical to the original finding. <code>database/ingest.py:13</code> imports <code>Match</code>, which is not defined anywhere in <code>database/models.py</code>. This transitively breaks <code>scheduler/daily_sync.py</code> and <code>scheduler/weekly_refresh.py</code> at import time, even though neither module calls the match-specific ingest functions directly.</p>
+<p><strong>Open decisions for Paul (unchanged from prior analysis):</strong></p>
+<ol>
+<li><strong>Names beside IDs</strong> — <code>ingest_match()</code> stores <code>home_team_name</code>/<code>away_team_name</code> alongside team IDs, duplicating <code>Team.name</code>. Denormalize deliberately, or make them real FKs to <code>Team</code>?</li>
+<li><strong>StandingsSnapshot outlier</strong> — it holds <code>team_name</code> as a bare string (<code>models.py:48</code>) with no FK. If <code>Match</code> gets FKs, <code>StandingsSnapshot</code> becomes the inconsistent one.</li>
+<li><strong><code>match_date</code> as text</strong> — adding <code>Match</code> doesn't fix <code>PlayerMatch</code>'s uniqueness constraint over raw scraped-text dates. Normalizing to a real date type is a migration, not a model addition.</li>
+</ol>
+</section>
+
+<h2 style="background:#e2e3e5;">Open Pull Requests (live, this session)</h2>
+<table>
+<tr><th>#</th><th>Title</th><th>Head → Base</th><th>State</th><th>Updated</th></tr>
+<tr><td>8</td><td>Fix session persistence with scoped JSON cookies</td><td><code>copilot/claudefix-login-manager-session-persistence-again</code> → <code>copilot/build-secure-authentication-system</code></td><td>open</td><td>2026-09-01T03:53:32Z</td></tr>
+<tr><td>7</td><td>Fix parser table-shape validation and match-table detection</td><td><code>copilot/claudeparser-defect-fixes</code> → <code>main</code></td><td>open</td><td>2026-09-01T03:52:03Z</td></tr>
+<tr><td>5</td><td>merge: session persistence — pickle dead code → JSON with atomic 0600 write</td><td><code>copilot/claudefix-login-manager-session-persistence</code> → <code>copilot/build-secure-authentication-system</code></td><td>open</td><td>2026-08-31T23:22:49Z</td></tr>
+<tr><td>4</td><td>Scaffold authenticated GraphQL client layer</td><td><code>copilot/build-graphql-client-module</code> → <code>main</code></td><td>open</td><td>2026-08-31T12:25:50Z</td></tr>
+<tr><td>3</td><td>Add secure multi-user authentication system</td><td><code>copilot/build-secure-authentication-system</code> → <code>main</code></td><td>open</td><td>2026-08-31T03:56:19Z</td></tr>
+<tr><td>2</td><td>feat: league analytics spreadsheet export system</td><td><code>copilot/build-league-analytics-spreadsheet-system</code> → <code>main</code></td><td>open</td><td>2026-08-31T03:48:46Z</td></tr>
+<tr><td>1</td><td>fix(scraper): correct CSS selectors from live portal inspection</td><td><code>copilot/update-scrapers-css-selectors</code> → <code>main</code></td><td>open</td><td>2026-08-31T03:25:11Z</td></tr>
+</table>
+<p class="meta">Note: PR #1 in chat refers to the <code>claude/fix-login-manager-session-persistence</code> branch, which does not itself have an open PR row above — its work reaches <code>main</code> via PR #5's chain (<code>...persistence</code> → <code>build-secure-authentication-system</code> → <code>main</code>, not yet merged).</p>
+
+<footer>
+<p><span class="verified">Green text</span> = independently verified this session by direct command execution. <span class="unverified">Amber text</span> = reported by another session/agent, not independently re-checked here due to tool-access limits (no Invest-master repo access, no Routines/triggers tool).</p>
+</footer>
+
+</body>
+</html>
