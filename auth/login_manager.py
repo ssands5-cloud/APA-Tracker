@@ -32,6 +32,21 @@ from parser.apa_page_map import LOGIN_FORM
 
 logger = logging.getLogger(__name__)
 
+_COOKIE_ATTRIBUTES = (
+    "version",
+    "name",
+    "value",
+    "port",
+    "domain",
+    "path",
+    "secure",
+    "expires",
+    "discard",
+    "comment",
+    "comment_url",
+    "rfc2109",
+)
+
 
 class AuthenticationError(RuntimeError):
     """Raised when login against the APA portal fails."""
@@ -203,8 +218,15 @@ class LoginManager:
             raise AuthenticationError("Cannot save session: not logged in.")
 
         path = get_user_session_path(self.username)
+        cookies = [
+            {
+                **{attribute: getattr(cookie, attribute) for attribute in _COOKIE_ATTRIBUTES},
+                "rest": cookie._rest,
+            }
+            for cookie in self._session.cookies
+        ]
         with path.open("w", encoding="utf-8") as fh:
-            json.dump(requests.utils.dict_from_cookiejar(self._session.cookies), fh)
+            json.dump(cookies, fh)
         path.chmod(0o600)
         logger.debug("Session saved to %s", path)
         return path
@@ -230,7 +252,8 @@ class LoginManager:
         session = requests.Session()
         try:
             with path.open(encoding="utf-8") as fh:
-                requests.utils.add_dict_to_cookiejar(session.cookies, json.load(fh))
+                for cookie_data in json.load(fh):
+                    session.cookies.set_cookie(requests.cookies.create_cookie(**cookie_data))
         except Exception as exc:
             logger.warning("Failed to load session from %s: %s", path, exc)
             return False

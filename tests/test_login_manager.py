@@ -144,14 +144,27 @@ class TestSessionPersistence:
 
         # Inject a fake session
         fake_session = requests.Session()
-        fake_session.cookies.set("session_id", "abc123")
+        fake_session.cookies.set_cookie(
+            requests.cookies.create_cookie(
+                "session_id",
+                "abc123",
+                domain="portal.example",
+                path="/private",
+                secure=True,
+            )
+        )
         mgr._session = fake_session
 
         # Save
         path = mgr.save_session()
         assert path.exists()
         assert oct(path.stat().st_mode)[-3:] == "600"
-        assert json.loads(path.read_text(encoding="utf-8")) == {"session_id": "abc123"}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload[0]["name"] == "session_id"
+        assert payload[0]["value"] == "abc123"
+        assert payload[0]["domain"] == "portal.example"
+        assert payload[0]["path"] == "/private"
+        assert payload[0]["secure"] is True
 
         # Load into a new manager
         mgr2 = LoginManager(MINIMAL_CONFIG, username="alice@example.com")
@@ -159,7 +172,12 @@ class TestSessionPersistence:
         with patch.object(mgr2, "is_authenticated", return_value=True):
             loaded = mgr2.load_session(path)
         assert loaded is True
-        assert mgr2._session.cookies.get("session_id") == "abc123"
+        cookie = next(iter(mgr2._session.cookies))
+        assert cookie.name == "session_id"
+        assert cookie.value == "abc123"
+        assert cookie.domain == "portal.example"
+        assert cookie.path == "/private"
+        assert cookie.secure is True
 
     def test_load_nonexistent_returns_false(self, monkeypatch):
         monkeypatch.delenv("APA_USERNAME", raising=False)
