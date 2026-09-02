@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>APA Tracker Demo</title>
+  <style>
+    :root {
+      --navy: #102a43;
+      --blue: #1976d2;
+      --ink: #243b53;
+      --muted: #627d98;
+      --line: #d9e2ec;
+      --surface: #f5f7fa;
+      --green: #17804c;
+      --red: #c53030;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--surface); }
+    header { color: white; background: var(--navy); padding: 22px max(24px, calc((100% - 1180px) / 2)); }
+    header .bar { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: 26px; }
+    header p { margin: 0; color: #bcccdc; }
+    .sync { padding: 8px 12px; border: 1px solid #486581; border-radius: 7px; color: #d9e2ec; font-size: 13px; }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 50px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+    .tab { padding: 9px 16px; border-radius: 6px; color: var(--muted); background: white; border: 1px solid var(--line); }
+    .tab.active { color: white; background: var(--blue); border-color: var(--blue); }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .card, section { background: white; border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 2px 5px #102a4312; }
+    .card { padding: 18px; }
+    .label { margin-bottom: 8px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .value { margin-bottom: 5px; color: var(--navy); font-size: 29px; font-weight: 700; }
+    .hint { margin: 0; color: var(--muted); font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; }
+    section { overflow: hidden; margin-bottom: 20px; }
+    section h2 { padding: 17px 20px; margin: 0; border-bottom: 1px solid var(--line); font-size: 17px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #edf2f7; }
+    th { color: var(--muted); background: #f8fafc; font-size: 12px; text-transform: uppercase; }
+    td.num, th.num { text-align: right; }
+    tr:last-child td { border-bottom: 0; }
+    tr.highlight { background: #e8f1fb; font-weight: 600; }
+    .rank { width: 45px; color: var(--muted); }
+    .positive { color: var(--green); font-weight: 600; }
+    .negative { color: var(--red); font-weight: 600; }
+    .meter { min-width: 100px; height: 8px; background: #e6eef5; border-radius: 6px; overflow: hidden; }
+    .meter span { display: block; height: 100%; background: var(--blue); border-radius: inherit; }
+    .note { padding: 15px 20px; color: var(--muted); font-size: 13px; }
+    footer { max-width: 1180px; padding: 0 24px 30px; margin: 0 auto; color: var(--muted); font-size: 13px; }
+    @media (max-width: 800px) {
+      .cards, .grid { grid-template-columns: 1fr 1fr; }
+      .grid { display: block; }
+      .bar { flex-direction: column; align-items: flex-start !important; }
+    }
+    @media (max-width: 520px) { .cards { grid-template-columns: 1fr; } main { padding: 20px 12px 35px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div>
+        <h1>APA Tracker</h1>
+        <p>Summer 2026 · Demo data for Our Team</p>
+      </div>
+      <div class="sync">Demo mode · Last sync: Today, 6:00 AM</div>
+    </div>
+  </header>
+  <main>
+    <nav class="tabs" aria-label="Dashboard sections">
+      <div class="tab active">Overview</div><div class="tab">Standings</div>
+      <div class="tab">Roster</div><div class="tab">Match history</div>
+    </nav>
+    <div class="cards">
+      <div class="card"><div class="label">Team record</div><div class="value">6–4</div><p class="hint">60% match win rate</p></div>
+      <div class="card"><div class="label">Division rank</div><div class="value">#3</div><p class="hint">18 points</p></div>
+      <div class="card"><div class="label">Roster</div><div class="value">8</div><p class="hint">Active players</p></div>
+      <div class="card"><div class="label">Next match</div><div class="value">Thu 9/10</div><p class="hint">vs. Breakers</p></div>
+    </div>
+    <div class="grid">
+      <div>
+        <section>
+          <h2>Division standings</h2>
+          <table>
+            <thead><tr><th class="rank">Rank</th><th>Team</th><th class="num">W</th><th class="num">L</th><th class="num">Points</th></tr></thead>
+            <tbody>
+              <tr><td class="rank">1</td><td>Rack Attack</td><td class="num">8</td><td class="num">2</td><td class="num">24</td></tr>
+              <tr><td class="rank">2</td><td>Breakers</td><td class="num">7</td><td class="num">3</td><td class="num">21</td></tr>
+              <tr class="highlight"><td class="rank">3</td><td>Our Team</td><td class="num">6</td><td class="num">4</td><td class="num">18</td></tr>
+              <tr><td class="rank">4</td><td>Corner Pocket</td><td class="num">5</td><td class="num">5</td><td class="num">15</td></tr>
+              <tr><td class="rank">5</td><td>Eight Ballers</td><td class="num">3</td><td class="num">7</td><td class="num">9</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section>
+          <h2>Recent match results</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th class="num">Score</th></tr></thead>
+            <tbody>
+              <tr><td>Sep 3</td><td>Corner Pocket</td><td class="positive">Win</td><td class="num">3–2</td></tr>
+              <tr><td>Aug 27</td><td>Rack Attack</td><td class="negative">Loss</td><td class="num">2–3</td></tr>
+              <tr><td>Aug 20</td><td>Eight Ballers</td><td class="positive">Win</td><td class="num">4–1</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <section>
+        <h2>Roster performance</h2>
+        <table>
+          <thead><tr><th>Player</th><th>W–L</th><th class="num">Win %</th></tr></thead>
+          <tbody>
+            <tr><td>Alex Morgan</td><td>8–2</td><td class="num positive">80%</td></tr>
+            <tr><td>Jamie Lee</td><td>7–3</td><td class="num positive">70%</td></tr>
+            <tr><td>Chris Taylor</td><td>5–5</td><td class="num">50%</td></tr>
+            <tr><td>Sam Rivera</td><td>4–6</td><td class="num negative">40%</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          <strong>What this could add:</strong><br>
+          Player-level trends, matchup suggestions, standings history, and a clear “what changed since last sync” view.
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer>Standalone visual demo · All values are illustrative and are not connected to the APA portal.</footer>
+</body>
+</html>
