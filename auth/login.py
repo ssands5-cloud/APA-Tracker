@@ -40,6 +40,7 @@ class Credentials:
             )
         return cls(username=username, password=password)
 
+
 def _extract_csrf_token(html: str, field_name: str) -> Optional[str]:
     """Pull a hidden CSRF/verification token out of the login form, if present.
 
