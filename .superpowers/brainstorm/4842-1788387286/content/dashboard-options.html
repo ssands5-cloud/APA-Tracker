@@ -1,0 +1,49 @@
+<h2>APA Tracker demo direction</h2>
+<p class="subtitle">This is a visual sketch using the data the repository already models: standings, roster, player stats, and match history.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Option A · Excel-style overview</div>
+    <div class="mockup-body">
+      <div class="mock-nav">APA TRACKER &nbsp; | &nbsp; Standings &nbsp; Roster &nbsp; Player Stats</div>
+      <h3>Summer 2026 · Division standings</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><th style="text-align:left">Rank</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>Points</th></tr>
+        <tr><td>1</td><td>Rack Attack</td><td>8</td><td>2</td><td>24</td></tr>
+        <tr><td>2</td><td>Breakers</td><td>7</td><td>3</td><td>21</td></tr>
+        <tr><td>3</td><td>Our Team</td><td>6</td><td>4</td><td>18</td></tr>
+      </table>
+      <p class="label">Quick read</p>
+      <p>One workbook with tabs for standings and player stats. Easy to share, limited interactivity.</p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Option B · Lightweight web dashboard</div>
+    <div class="mockup-body">
+      <div class="mock-nav">APA TRACKER <span style="float:right">Last sync: Today · Refresh</span></div>
+      <div style="display:flex;gap:10px;margin:14px 0">
+        <div class="placeholder" style="flex:1"><strong>6–4</strong><br>Team record</div>
+        <div class="placeholder" style="flex:1"><strong>#3</strong><br>Division rank</div>
+        <div class="placeholder" style="flex:1"><strong>57%</strong><br>Roster win rate</div>
+      </div>
+      <h3>Roster performance</h3>
+      <div class="placeholder">Win-rate bars · matches played · recent results</div>
+      <p class="label">Quick read</p>
+      <p>More useful for decisions and demos, but needs a small app and sample database.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle">Which direction should the first demo emphasize?</p>
+<div class="options">
+  <div class="option" data-choice="excel" onclick="toggleSelect(this)">
+    <div class="letter">A</div><div class="content"><h3>Excel first</h3><p>Fastest path to a concrete artifact using the existing exporter.</p></div>
+  </div>
+  <div class="option" data-choice="web" onclick="toggleSelect(this)">
+    <div class="letter">B</div><div class="content"><h3>Web dashboard first</h3><p>Best for seeing the product shape and deciding what to add.</p></div>
+  </div>
+  <div class="option" data-choice="both" onclick="toggleSelect(this)">
+    <div class="letter">C</div><div class="content"><h3>Both in sequence</h3><p>Generate a sample Excel workbook, then wrap the same data in a simple dashboard.</p></div>
+  </div>
+</div>
