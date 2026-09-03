@@ -8,9 +8,9 @@ ui.export_excel.export_to_excel), pointed at tests/fixtures/*.json instead
 of a real GraphQL response. That's the whole point: what this produces is
 what the real pipeline produces, not a hand-typed mockup.
 
-The four fixtures were written independently (one per row-mapper's own
-test), so they don't share one consistent set of team/match ids -- treat
-this as two honest, separately-sourced illustrations glued into one
+The fixtures were written independently (one per row-mapper's own test),
+so they don't share one consistent set of team/match/player ids -- treat
+this as several honest, separately-sourced illustrations glued into one
 workbook, not a single fabricated season. Each section below says which
 fixture it came from.
 
@@ -32,9 +32,21 @@ if str(_project_root) not in sys.path:
 from sqlalchemy.orm import Session
 
 from database.engine import create_db_engine
-from database.ingest import ingest_match, ingest_match_scores, ingest_standings
+from database.ingest import (
+    ingest_eight_ball_stats,
+    ingest_match,
+    ingest_match_scores,
+    ingest_player_team_history,
+    ingest_standings,
+    upsert_player,
+)
 from scheduler.graphql_sync import ingest_viewer_data
-from scraper.graphql_scraper import division_standings_rows, match_player_scores
+from scraper.graphql_scraper import (
+    division_standings_rows,
+    eight_ball_stats_row,
+    match_player_scores,
+    team_stat_rows,
+)
 from ui.export_excel import export_to_excel
 from ui.export_json import export_to_json
 
@@ -66,6 +78,8 @@ def main() -> None:
     matches_by_viewer = _load("matches_by_viewer_response.json")["data"]["viewer"]
     division = _load("division_standings_response.json")["data"]["division"]
     match_detail = _load("match_detail_response.json")["data"]["match"]
+    eight_ball_stats = _load("eight_ball_stats_response.json")["data"]["alias"]
+    team_stat = _load("team_stat_response.json")["data"]["alias"]
 
     engine = create_db_engine(DEMO_CONFIG)
     with Session(engine) as db:
@@ -112,6 +126,20 @@ def main() -> None:
         logger.info(
             "ingest_match_scores: %d player scoresheet row(s) for match %s (%d new, %d updated)",
             len(scores), match_detail["id"], created, updated,
+        )
+
+        # 5. getEightBallStats + TeamStat -- HANDOFF.md item 2. A separate
+        # fixture player (not one of the above four's ids -- see this
+        # file's own docstring on why they don't share an id space) so the
+        # demo actually shows what career stats and team history look like,
+        # rather than leaving those two sheets/tabs empty.
+        stats_player = upsert_player(db, "900123", eight_ball_stats.get("displayName") or "")
+        written = ingest_eight_ball_stats(db, stats_player, eight_ball_stats_row(eight_ball_stats))
+        history_rows = team_stat_rows(team_stat)
+        ingest_player_team_history(db, stats_player, history_rows)
+        logger.info(
+            "ingest_eight_ball_stats/ingest_player_team_history: %d format(s), %d team-history row(s) for %s",
+            written, len(history_rows), stats_player.name,
         )
 
         excel_path = export_to_excel(db, DEMO_CONFIG)

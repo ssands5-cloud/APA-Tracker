@@ -145,7 +145,7 @@ class TestExcelExportSeesLiveData:
         path = export_to_excel(db, {"export": {"excel_output_path": str(out)}})
 
         workbook = openpyxl.load_workbook(path)
-        assert workbook.sheetnames == ["Standings", "Player Stats"]
+        assert workbook.sheetnames == ["Standings", "Player Stats", "Career Stats", "Team History"]
 
         rows = [[cell.value for cell in row] for row in workbook["Player Stats"].iter_rows()]
         header, alex = rows[0], rows[1]

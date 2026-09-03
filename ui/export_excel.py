@@ -12,7 +12,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
-from database.queries import all_players, latest_standings, player_match_history
+from database.queries import all_players, career_stats, latest_standings, player_match_history, team_history
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,14 @@ def export_to_excel(db: Session, config: dict) -> str:
 
     standings_df = _standings_dataframe(db)
     player_stats_df = _player_stats_dataframe(db)
+    career_stats_df = _career_stats_dataframe(db)
+    team_history_df = _team_history_dataframe(db)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
         player_stats_df.to_excel(writer, sheet_name="Player Stats", index=False)
+        career_stats_df.to_excel(writer, sheet_name="Career Stats", index=False)
+        team_history_df.to_excel(writer, sheet_name="Team History", index=False)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -93,3 +97,47 @@ def _player_stats_dataframe(db: Session) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(records)
+
+
+def _career_stats_dataframe(db: Session) -> pd.DataFrame:
+    """HANDOFF.md item 2: lifetime stats per (player, format), from
+    getEightBallStats. Empty for anyone the alias-id resolution never ran
+    for (opponents; a player whose Player row didn't exist yet at sync
+    time) -- absent from this sheet, not a zero row."""
+    return pd.DataFrame(
+        [
+            {
+                "Player": row.player.name if row.player else "",
+                "Format": row.format,
+                "Matches Won": row.matches_won,
+                "Matches Played": row.matches_played,
+                "CLA": row.cla,
+                "Defensive Shot Avg": row.defensive_shot_avg,
+                "Matches (Last 2 Yrs)": row.match_count_last_two_yrs,
+                "Last Played": row.last_played,
+            }
+            for row in career_stats(db)
+        ]
+    )
+
+
+def _team_history_dataframe(db: Session) -> pd.DataFrame:
+    """HANDOFF.md item 2: cross-season team history, from TeamStat."""
+    return pd.DataFrame(
+        [
+            {
+                "Player": row.player.name if row.player else "",
+                "Current": row.is_current,
+                "Team": row.team_name,
+                "Division": row.division_id,
+                "Tournament": row.is_tournament,
+                "Session": row.session_name,
+                "Nickname": row.nick_name,
+                "Skill Level": row.skill_level,
+                "Rank": row.rank,
+                "Matches Won": row.matches_won,
+                "Matches Played": row.matches_played,
+            }
+            for row in team_history(db)
+        ]
+    )

@@ -47,6 +47,7 @@ __CSS__
     <button class="tab" data-tab="teams">Teams</button>
     <button class="tab" data-tab="matches">Matches</button>
     <button class="tab" data-tab="standings">Standings</button>
+    <button class="tab" data-tab="career">Career</button>
   </nav>
 </header>
 
@@ -55,6 +56,7 @@ __CSS__
   <section id="panel-teams" class="panel-view"></section>
   <section id="panel-matches" class="panel-view"></section>
   <section id="panel-standings" class="panel-view"></section>
+  <section id="panel-career" class="panel-view"></section>
 </main>
 
 <footer>
@@ -352,6 +354,68 @@ function renderStandings() {
   `;
 }
 
+function renderCareer() {
+  const careerStats = DATA.career_stats || [];
+  const teamHistory = DATA.team_history || [];
+  const players = [...new Set([...careerStats, ...teamHistory].map(r => r.player))];
+
+  if (players.length === 0) {
+    document.getElementById('panel-career').innerHTML = `
+      <section class="block">
+        <h2>Career stats</h2>
+        <p class="empty">No career stats ingested yet -- see HANDOFF.md item 2 for what feeds this tab (getEightBallStats / TeamStat).</p>
+      </section>`;
+    return;
+  }
+
+  const sections = players.map(player => {
+    const stats = careerStats.filter(r => r.player === player);
+    const history = teamHistory.filter(r => r.player === player);
+
+    const statRows = stats.map(s => `
+      <tr>
+        <td>${esc(s.format)}</td>
+        <td class="num">${s.matches_won ?? '—'}</td>
+        <td class="num">${s.matches_played ?? '—'}</td>
+        <td class="num">${s.cla ?? '—'}</td>
+        <td class="num">${s.defensive_shot_avg ?? '—'}</td>
+        <td class="num">${s.match_count_last_two_yrs ?? '—'}</td>
+        <td>${esc(s.last_played ?? '—')}</td>
+      </tr>`).join('');
+
+    const historyRows = history.map(h => `
+      <tr>
+        <td>${esc(h.team_name)}</td>
+        <td>${esc(h.session_name)}</td>
+        <td>${h.is_current ? '<span class="pill win">Current</span>' : '<span class="pill bye">Past</span>'}</td>
+        <td class="num">${h.skill_level ?? '—'}</td>
+        <td class="num">${h.rank ?? '—'}</td>
+        <td class="num">${h.matches_won ?? '—'}</td>
+        <td class="num">${h.matches_played ?? '—'}</td>
+      </tr>`).join('');
+
+    return `
+      <section class="block">
+        <h2>${esc(player)} — lifetime stats</h2>
+        <div class="panel table-wrap">
+          <table>
+            <thead><tr><th>Format</th><th class="num">Won</th><th class="num">Played</th><th class="num">CLA</th><th class="num">Def. Shot Avg</th><th class="num">Last 2 Yrs</th><th>Last Played</th></tr></thead>
+            <tbody>${statRows || '<tr><td colspan="7" class="empty">No lifetime stats.</td></tr>'}</tbody>
+          </table>
+        </div>
+        <h2>${esc(player)} — team history</h2>
+        <div class="panel table-wrap">
+          <table>
+            <thead><tr><th>Team</th><th>Session</th><th></th><th class="num">SL</th><th class="num">Rank</th><th class="num">Won</th><th class="num">Played</th></tr></thead>
+            <tbody>${historyRows || '<tr><td colspan="7" class="empty">No team history.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }).join('');
+
+  document.getElementById('panel-career').innerHTML = sections;
+}
+
 function activateTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel-view').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
@@ -365,6 +429,7 @@ renderOverview();
 renderTeamsList();
 renderMatchesList();
 renderStandings();
+renderCareer();
 """
 
 
