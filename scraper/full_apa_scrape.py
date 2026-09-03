@@ -40,6 +40,18 @@ from playwright.async_api import async_playwright
 
 print("IMPORTS OK")
 
+if sys.version_info[:2] == (3, 14):
+    print()
+    print("WARNING: Python 3.14 has a confirmed bug on Windows where")
+    print("asyncio.run() crashes the whole process with zero output and no")
+    print("traceback -- reproduced directly with scraper/diagnose_eventloop.py,")
+    print("and this script needs asyncio.run() to do anything at all. If it")
+    print("dies right after this message with nothing else printed, that is")
+    print("almost certainly it. Use Python 3.12 or 3.13 instead: run")
+    print("`py -0` to see what's installed, `winget install Python.Python.3.12`")
+    print("if 3.12 isn't there, then `py -3.12 -m venv venv` to rebuild the venv.")
+    print()
+
 # --- Paths / logging ------------------------------------------------------
 
 SCRIPT_DIR = Path(__file__).resolve().parent

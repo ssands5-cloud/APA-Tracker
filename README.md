@@ -23,6 +23,21 @@ results in a small SQLite database, and exporting summaries to Excel.
 
 ## Setup
 
+**Requires Python 3.12 or 3.13, NOT 3.14.** Python 3.14.3 on Windows has a
+confirmed bug where `asyncio.run()` crashes the entire process with zero
+output and no traceback -- not catchable by any `try/except`, since it
+happens below where Python's own exception handling runs at all. Confirmed
+directly: `scraper/diagnose_eventloop.py` isolates it down to the exact
+call (a bare, do-nothing coroutine passed to `asyncio.run()`) and reproduces
+it every time on 3.14.3, while the identical script completes cleanly under
+3.12.10 on the same machine. This breaks `scraper/full_apa_scrape.py` and
+`scraper/capture_apa_graphql.py` (anything using Playwright's async API)
+outright, since Playwright's driver never even starts.
+
+If `py -0` shows only 3.14 installed, get 3.12 with `winget install
+Python.Python.3.12` (or the installer from python.org), then create the
+venv from that version specifically: `py -3.12 -m venv venv`.
+
 1. Install dependencies:
 
    ```
