@@ -14,3 +14,7 @@ __pycache__/
 apa-capture-full.json
 apa-capture-shapes.json
 apa-graphql-requests.json
+
+# Output of scraper/full_apa_scrape.py -- sanitized (types only), but still
+# generated output, not source.
+scraper/sanitized_fixtures/
