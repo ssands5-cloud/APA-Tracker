@@ -200,6 +200,16 @@ def write_sanitized_fixture(operation_name, variables, query, response_json):
     return path, entity_type, entity_id
 
 
+#: Heartbeat counters, so a run where nothing gets captured can say WHY:
+#: the listener never seeing traffic (a real bug) looks completely
+#: different from it seeing plenty of traffic that just isn't GraphQL, or
+#: GraphQL calls with no post_data (neither of which is a bug in this
+#: script -- the second is what Apollo's client-side cache produces: a
+#: page whose data was already fetched earlier in the session can render
+#: with NO new network request at all).
+_SEEN = {"total": 0, "graphql_host": 0, "no_post_data": 0, "captured": 0}
+
+
 async def handle_graphql_response(response):
     """Reads one GraphQL response and writes a sanitized fixture for it.
 
@@ -219,12 +229,21 @@ async def handle_graphql_response(response):
     like "some operations just never got captured, no error, no reason."
     """
     try:
+        _SEEN["total"] += 1
+        if _SEEN["total"] % 20 == 0:
+            log(f"... heartbeat: {_SEEN['total']} response(s) seen total, "
+                f"{_SEEN['graphql_host']} to gql.poolplayers.com, "
+                f"{_SEEN['captured']} captured so far")
+
         if GRAPHQL_HOST not in response.url:
             return
+        _SEEN["graphql_host"] += 1
 
         request = response.request
         post_data = request.post_data_json  # a property, not a coroutine
         if not post_data:
+            _SEEN["no_post_data"] += 1
+            log(f"GRAPHQL RESPONSE WITH NO REQUEST BODY (not capturable): {response.url}")
             return
 
         try:
@@ -249,6 +268,7 @@ async def handle_graphql_response(response):
             path, entity_type, entity_id = write_sanitized_fixture(
                 operation_name, item.get("variables"), item.get("query"), resp_item
             )
+            _SEEN["captured"] += 1
             log(f"CAPTURED: {operation_name}  entity={entity_type}/{entity_id}  -> {path.relative_to(SCRIPT_DIR)}")
 
             if entity_type == "team":
@@ -433,6 +453,24 @@ async def main():
         await asyncio.to_thread(input, "Press Enter here when you are done browsing... ")
 
         await browser.close()
+
+    log(
+        f"NETWORK SUMMARY: {_SEEN['total']} response(s) seen total, "
+        f"{_SEEN['graphql_host']} to gql.poolplayers.com "
+        f"({_SEEN['no_post_data']} with no request body, not capturable), "
+        f"{_SEEN['captured']} operation(s) captured."
+    )
+    if _SEEN["total"] == 0:
+        log("Zero responses of ANY kind were seen. The listener itself never fired --")
+        log("that would point at something wrong with how it was registered, not at")
+        log("which pages were visited.")
+    elif _SEEN["graphql_host"] == 0:
+        log("Traffic was seen, but none of it went to gql.poolplayers.com. Either the")
+        log("pages visited don't use the GraphQL API, or the browser ended up on a")
+        log("different host (e.g. redirected to a logged-out/marketing page).")
+    elif _SEEN["captured"] == 0:
+        log("GraphQL calls were seen but none had a capturable request body -- see the")
+        log("'GRAPHQL RESPONSE WITH NO REQUEST BODY' lines above, if any.")
 
     validate_fixtures()
     log("SCRAPE COMPLETE")
