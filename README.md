@@ -92,16 +92,27 @@ control:
 $env:APA_ACCESS_TOKEN = "<access token from your current APA session>"
 ```
 
-**2. Run the sync.** It fetches team, roster and schedule; writes them to
-SQLite; and refreshes the Excel workbook:
+**2. Run the sync.** By default this discovers and syncs *every team the
+account plays on* -- no `team.team_id`/`division_id` config needed -- and
+for each one: the team itself, its roster, every match (schedule and
+score), the division standings, and a full per-player scoresheet for every
+match that's actually been played. All of it writes to SQLite; the Excel
+workbook and a JSON export refresh afterward:
 
 ```powershell
-python -m scheduler.graphql_sync              # sync + Excel export
-python -m scheduler.graphql_sync --no-export  # sync only
+python -m scheduler.graphql_sync                 # every team, sync + Excel export
+python -m scheduler.graphql_sync --no-export      # every team, sync only
+python -m scheduler.graphql_sync --single-team    # only apa_config.yaml's team.team_id (the original, narrower path)
 ```
 
-If the token has expired (they don't last long) the run stops with a message
-saying exactly that, rather than a traceback.
+No page needs clicking through for any of this -- it's direct API calls
+once the token above is set. If the token has expired (they don't last
+long) the run stops with a message saying exactly that, rather than a
+traceback; get a fresh one and set the env var again.
+
+Player *career* stats (not per-match, but "how has this player done across
+seasons") aren't in this sync yet -- see `docs/graphql-captures/*/HANDOFF.md`
+item 2.
 
 #### Capturing queries by logging in (easiest)
 

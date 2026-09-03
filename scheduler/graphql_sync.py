@@ -339,5 +339,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="apa_config.yaml")
     parser.add_argument("--no-export", action="store_true", help="Skip the Excel export")
+    parser.add_argument(
+        "--single-team", action="store_true",
+        help="Sync only apa_config.yaml's configured team.team_id (the original, "
+             "narrower path). Default is every team the account plays on, "
+             "discovered from the account itself -- see run_all_teams().",
+    )
     args = parser.parse_args()
-    run(args.config, export=not args.no_export)
+    if args.single_team:
+        run(args.config, export=not args.no_export)
+    else:
+        run_all_teams(args.config, export=not args.no_export)
