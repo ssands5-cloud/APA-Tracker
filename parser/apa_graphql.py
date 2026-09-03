@@ -286,6 +286,185 @@ query matchesByViewer {
 }
 """
 
+# --- HANDOFF.md item 2: NOT wired up yet -----------------------------------
+#
+# Both queries below are copied verbatim from the real captures
+# (docs/graphql-captures/2026-09-03-full-session/global/global/
+# getEightBallStats.json and TeamStat.json), unmodified -- nothing to trim,
+# neither requests a name/email beyond the player's own displayName, already
+# used the same way in MATCH_DETAIL_QUERY. Both take an "alias" id, and
+# scraper.graphql_scraper.fetch_eight_ball_stats/fetch_team_stat accept that
+# id as a plain parameter -- they do not decide where it comes from.
+#
+# What's still missing is which field on a roster entry actually IS that
+# alias id (roster[].id vs roster[].member.id -- see HANDOFF.md item 2 for
+# the exact confirmation step). Do not call either fetch function from
+# scheduler/graphql_sync.py, and do not guess the id, until that's answered:
+# a wrong id silently returns a different real person's stats.
+
+GET_EIGHT_BALL_STATS_QUERY = """
+query getEightBallStats($id: Int!) {
+  alias(id: $id) {
+    players(current: null, active: null) {
+      id
+      session {
+        id
+        __typename
+      }
+      ... on EightBallPlayer {
+        eightOnBreaks(include: [PLAYOFFS])
+        eightBallBreakAndRuns(include: [PLAYOFFS])
+        rackless(include: [PLAYOFFS])
+        miniSlams(include: [PLAYOFFS])
+        __typename
+      }
+      ... on NineBallPlayer {
+        nineOnSnaps(include: [PLAYOFFS])
+        nineBallBreakAndRuns(include: [PLAYOFFS])
+        miniSlams(include: [PLAYOFFS])
+        skunks(include: [PLAYOFFS])
+        __typename
+      }
+      __typename
+    }
+    id
+    displayName
+    EightBallStats: stats(filter: EIGHT) {
+      ... on EightBallLifetimeStatistics {
+        id
+        matchesWon
+        matchesPlayed
+        CLA
+        defensiveShotAvg
+        matchCountForLastTwoYrs
+        lastPlayed
+        __typename
+      }
+      __typename
+    }
+    NineBallStats: stats(filter: NINE) {
+      ... on NineBallLifetimeStatistics {
+        id
+        matchesWon
+        matchesPlayed
+        CLA
+        defensiveShotAvg
+        matchCountForLastTwoYrs
+        lastPlayed
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+"""
+
+TEAM_STAT_QUERY = """
+query TeamStat($id: Int!, $limit: Int!, $offset: Int!) {
+  alias(id: $id) {
+    id
+    pastTeams: players(current: false, active: null, limit: $limit, offset: $offset) {
+      id
+      ...EightBallTeam
+      ...NineBallTeam
+      ...MastersTeam
+      __typename
+    }
+    currentTeams: players(current: true, active: null) {
+      id
+      ...EightBallTeam
+      ...NineBallTeam
+      ...MastersTeam
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment NineBallTeam on NineBallPlayer {
+  id
+  isActive
+  role
+  rosterPosition
+  nickName
+  matchesPlayed
+  matchesWon
+  session {
+    id
+    name
+    __typename
+  }
+  skillLevel
+  rank
+  team {
+    id
+    name
+    division {
+      id
+      isTournament
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment EightBallTeam on EightBallPlayer {
+  id
+  isActive
+  role
+  rosterPosition
+  nickName
+  matchesPlayed
+  matchesWon
+  session {
+    id
+    name
+    __typename
+  }
+  skillLevel
+  rank
+  team {
+    id
+    name
+    division {
+      id
+      isTournament
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment MastersTeam on MastersPlayer {
+  id
+  isActive
+  role
+  rosterPosition
+  nickName
+  matchesPlayed
+  matchesWon
+  session {
+    id
+    name
+    __typename
+  }
+  team {
+    id
+    name
+    division {
+      id
+      isTournament
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+"""
+
 # Retained for compatibility with code that checks these names.
 LEAGUE_BOX_QUERY = None  # superseded by DIVISION_STANDINGS_QUERY -- see above
 MATCH_QUERY = None

@@ -19,9 +19,51 @@ holds operations not yet classified to division/team/match (see
   (`fetch_dashboard_teams`/`dashboard_teams_rows`, `fetch_matches_by_viewer`/
   `viewer_matches_rows`), `scheduler/graphql_sync.py` (`ingest_viewer_data`,
   `run_all_teams`), 19 new tests. Commit `c908f77`.
-- ⛔ **Item 2 is BLOCKED on one confirmation, not started** — see the new
-  note inside item 2 below. Do not guess past it; wiring the wrong id
-  silently pulls a different person's stats, which is worse than no data.
+- ⛔ **Item 2 is BLOCKED on one confirmation — scaffolding done, wiring not
+  started.** `parser/apa_graphql.py` now has `GET_EIGHT_BALL_STATS_QUERY` /
+  `TEAM_STAT_QUERY` (copied verbatim from this capture's real query text --
+  see `getEightBallStats.json` / `TeamStat.json`'s `"query"` field, not
+  reconstructed from memory). `scraper/graphql_scraper.py` has
+  `fetch_eight_ball_stats(config, alias_id)` / `fetch_team_stat(config,
+  alias_id, limit, offset)` plus row-mappers `eight_ball_stats_row` /
+  `team_stat_rows`, all taking `alias_id` as a plain caller-supplied
+  argument -- none of them decide where that id comes from. Fixtures +
+  tests in `tests/fixtures/eight_ball_stats_response.json` /
+  `team_stat_response.json` and `tests/test_player_stats_scaffolding_fixture.py`.
+  **Nothing calls these from `scheduler/graphql_sync.py`.** Do not guess
+  past the confirmation below; wiring the wrong id silently pulls a
+  different person's stats, which is worse than no data.
+
+## Demo tooling (offline, fixture-driven)
+
+Three scripts, meant to be run in order, none of them touching the network:
+
+1. `python scripts/build_demo.py` — runs the real ingestion pipeline
+   (`ingest_viewer_data`, `ingest_standings`, `ingest_match`/
+   `ingest_match_scores`) against `tests/fixtures/*.json`, writing
+   `data/demo_apa_tracker.db`, `exports/demo_apa_stats.xlsx`, and
+   `exports/demo_apa_data.json` (all gitignored).
+2. `python scripts/render_demo_html.py` — reads that JSON export and renders
+   `exports/demo_dashboard.html`: a tabbed Overview/Teams/Matches/Standings
+   page with click-through team → matches and match → scoresheet
+   navigation, the whole page driven by the one embedded JSON document
+   (`<script type="application/json" id="demo-data">`), not hand-typed
+   markup.
+3. Publish that HTML file as an Artifact to actually look at it.
+
+`tests/test_build_demo.py` and `tests/test_render_demo_html.py` smoke-test
+both scripts so a signature change in any composed function (or a change
+that lets untrusted-looking data break out of the embedded `<script>` tag)
+fails here first. `ui/export_json.py` is the JSON counterpart to
+`ui/export_excel.py` and has its own shape/round-trip tests in
+`tests/test_export_json.py`.
+
+Known limitation, called out on the rendered page itself: the four
+fixtures were written independently for their own tests and don't share
+one consistent team/match id space (a team can appear under two different
+numeric ids depending which fixture produced it). The demo's client-side
+team → matches lookup falls back to matching by team name when the id
+doesn't bridge, rather than hiding the mismatch.
 
 ## Three things worth building from this capture, in priority order
 

@@ -1,0 +1,44 @@
+{
+  "_comment": "Sanitized fixture for GET_EIGHT_BALL_STATS_QUERY (real operation name: getEightBallStats), shaped to match the real capture (docs/graphql-captures/2026-09-03-full-session/global/global/getEightBallStats.json). All ids/names invented. SCAFFOLDING ONLY -- see HANDOFF.md item 2. Do not treat the alias id (900123) as confirmed against any real roster field.",
+  "data": {
+    "alias": {
+      "id": 900123,
+      "displayName": "Jordan Rivera",
+      "players": [
+        {
+          "id": 501,
+          "session": { "id": 9, "__typename": "Session" },
+          "nineOnSnaps": 3,
+          "nineBallBreakAndRuns": 1,
+          "miniSlams": 0,
+          "skunks": 2,
+          "__typename": "NineBallPlayer"
+        }
+      ],
+      "EightBallStats": [
+        {
+          "id": 7001,
+          "matchesWon": 64,
+          "matchesPlayed": 91,
+          "CLA": 1,
+          "defensiveShotAvg": 0.18,
+          "matchCountForLastTwoYrs": 40,
+          "lastPlayed": "2026-08-27",
+          "__typename": "EightBallLifetimeStatistics"
+        }
+      ],
+      "NineBallStats": [
+        {
+          "id": 7002,
+          "matchesWon": 22,
+          "matchesPlayed": 35,
+          "CLA": 0,
+          "defensiveShotAvg": 0.11,
+          "matchCountForLastTwoYrs": 15,
+          "lastPlayed": "2026-07-14",
+          "__typename": "NineBallLifetimeStatistics"
+        }
+      ]
+    }
+  }
+}

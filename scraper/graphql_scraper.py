@@ -17,11 +17,13 @@ from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
     DASHBOARD_TEAMS_QUERY,
     DIVISION_STANDINGS_QUERY,
+    GET_EIGHT_BALL_STATS_QUERY,
     MATCH_DETAIL_QUERY,
     MATCHES_BY_VIEWER_QUERY,
     TEAM_PAGE_QUERY,
     TEAM_ROSTER_QUERY,
     TEAM_SCHEDULE_QUERY,
+    TEAM_STAT_QUERY,
 )
 
 logger = logging.getLogger(__name__)
@@ -496,6 +498,111 @@ def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
                     "points_earned": points_earned,
                     "forfeited": bool(score.get("matchForfeited")),
                     "incomplete": bool(score.get("incompleteMatch")),
+                }
+            )
+    return rows
+
+
+# --- HANDOFF.md item 2: scaffolding only, not wired into any sync path -----
+#
+# fetch_eight_ball_stats/fetch_team_stat take `alias_id` as a plain caller-
+# supplied argument -- they do not decide where it comes from, so adding
+# them here doesn't require answering HANDOFF.md's open question. What DOES
+# require answering it is calling either one from scheduler/graphql_sync.py
+# with an id sourced from a roster row: do not do that until HANDOFF.md item
+# 2's confirmation step is done. A wrong id here doesn't error, it silently
+# returns a different real person's stats.
+
+
+def fetch_eight_ball_stats(config: dict, alias_id: int) -> dict[str, Any]:
+    """Fetch one alias's lifetime 8-ball/9-ball stats and per-session extras.
+
+    Raises the same errors as fetch_team_data. Returns {} if the server has
+    no alias at that id (a nulled `alias`), same convention as
+    fetch_match_detail's "no such match".
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(GET_EIGHT_BALL_STATS_QUERY, {"id": int(alias_id)}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("alias") or {}
+
+
+def eight_ball_stats_row(alias: dict[str, Any]) -> dict[str, Any]:
+    """Flatten one alias's lifetime stats into one row -- both formats side
+    by side, since a player can have a lifetime record in either or both.
+    """
+    eight = (alias.get("EightBallStats") or [{}])[0] or {}
+    nine = (alias.get("NineBallStats") or [{}])[0] or {}
+    return {
+        "alias_id": alias.get("id"),
+        "display_name": alias.get("displayName") or "",
+        "eight_ball_matches_won": eight.get("matchesWon"),
+        "eight_ball_matches_played": eight.get("matchesPlayed"),
+        "eight_ball_cla": eight.get("CLA"),
+        "eight_ball_defensive_shot_avg": eight.get("defensiveShotAvg"),
+        "eight_ball_last_played": eight.get("lastPlayed"),
+        "nine_ball_matches_won": nine.get("matchesWon"),
+        "nine_ball_matches_played": nine.get("matchesPlayed"),
+        "nine_ball_cla": nine.get("CLA"),
+        "nine_ball_defensive_shot_avg": nine.get("defensiveShotAvg"),
+        "nine_ball_last_played": nine.get("lastPlayed"),
+    }
+
+
+def fetch_team_stat(config: dict, alias_id: int, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+    """Fetch one alias's team history -- every past and current team,
+    across whatever formats and divisions it played in.
+
+    Paginated on `pastTeams` only (`currentTeams` has no limit/offset in the
+    real query -- there are never many current teams at once). Raises the
+    same errors as fetch_team_data.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    variables = {"id": int(alias_id), "limit": int(limit), "offset": int(offset)}
+    try:
+        payload = execute(TEAM_STAT_QUERY, variables, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("alias") or {}
+
+
+def team_stat_rows(alias: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per team (past or current) this alias has played on."""
+    rows = []
+    for is_current, key in ((False, "pastTeams"), (True, "currentTeams")):
+        for entry in alias.get(key) or []:
+            entry = entry or {}
+            team = entry.get("team") or {}
+            division = team.get("division") or {}
+            session = entry.get("session") or {}
+            rows.append(
+                {
+                    "is_current": is_current,
+                    "team_id": str(team.get("id") or ""),
+                    "team_name": team.get("name") or "",
+                    "division_id": str(division.get("id") or ""),
+                    "is_tournament": bool(division.get("isTournament")),
+                    "session_name": session.get("name") or "",
+                    "nick_name": entry.get("nickName") or "",
+                    "skill_level": entry.get("skillLevel"),
+                    "rank": entry.get("rank"),
+                    "matches_won": entry.get("matchesWon"),
+                    "matches_played": entry.get("matchesPlayed"),
+                    "is_active": bool(entry.get("isActive")),
                 }
             )
     return rows
