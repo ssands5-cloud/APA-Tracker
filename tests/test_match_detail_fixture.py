@@ -12,8 +12,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from database.ingest import ingest_match_scores
-from database.models import Base, PlayerMatch
+import pytest
+
+from database.ingest import ingest_match, ingest_match_scores
+from database.models import Base, Match, PlayerMatch
 from scraper.graphql_scraper import match_player_scores
 
 FIXTURE = json.loads(
@@ -73,49 +75,106 @@ class TestMatchPlayerScores:
 
 
 class TestIngestionEndToEnd:
-    def test_all_five_scores_land_in_the_database(self, tmp_path):
+    def _seeded_db(self, tmp_path):
+        """A DB with the Match row already present, as any real caller has:
+        ingest_match() always runs (from the schedule) before match detail is
+        ever fetched for that match."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
         engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
         Base.metadata.create_all(engine)
-        with Session(engine) as db:
-            rows = match_player_scores(MATCH)
-            created, updated = ingest_match_scores(db, 555001, rows)
-            assert (created, updated) == (5, 0)
+        db = Session(engine)
+        ingest_match(
+            db, match_id="555001", home_team_id="90001", away_team_id="90002",
+            home_team_name="Chalk It Up", away_team_name="Rack Attack",
+        )
+        return db
 
-            records = db.query(PlayerMatch).filter_by(match_id=555001).all()
-            assert len(records) == 5
-            by_ext_id = {r.player.external_id: r for r in records}
-            assert by_ext_id["501"].result == "W"
-            assert by_ext_id["501"].points_earned == 6
-            assert by_ext_id["501"].team_name == "Chalk It Up"
+    def test_all_five_scores_land_in_the_database(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        rows = match_player_scores(MATCH)
+        created, updated = ingest_match_scores(db, "555001", rows)
+        assert (created, updated) == (5, 0)
+
+        match_pk = db.query(Match).filter_by(external_id="555001").one().id
+        records = db.query(PlayerMatch).filter_by(match_id=match_pk).all()
+        assert len(records) == 5
+        by_ext_id = {r.player.external_id: r for r in records}
+        assert by_ext_id["501"].result == "W"
+        assert by_ext_id["501"].points_earned == 6
+        assert by_ext_id["501"].team_name == "Chalk It Up"
+
+    def test_the_foreign_key_actually_resolves(self, tmp_path):
+        """Regression test for a real bug: ingest_match_scores originally
+        stored APA's match id directly as PlayerMatch.match_id, which
+        foreign-keys to Match.id -- a SEPARATE autoincrement primary key.
+        SQLite does not enforce foreign keys by default, so the mismatch
+        (PlayerMatch.match_id == "555001" while the real row's id was 1)
+        never raised; `.match` just silently returned None."""
+        db = self._seeded_db(tmp_path)
+        ingest_match_scores(db, "555001", match_player_scores(MATCH))
+
+        pm = db.query(PlayerMatch).first()
+        assert pm.match is not None, "PlayerMatch.match must resolve to a real Match row"
+        assert pm.match.external_id == "555001"
+
+    def test_opponent_is_the_other_side_not_the_players_own_team(self, tmp_path):
+        """head_to_head() in analytics/team_stats.py filters on `opponent`;
+        this ingestion path never set it, so it silently matched nothing."""
+        db = self._seeded_db(tmp_path)
+        ingest_match_scores(db, "555001", match_player_scores(MATCH))
+
+        by_ext_id = {r.player.external_id: r for r in db.query(PlayerMatch).all()}
+        assert by_ext_id["501"].opponent == "Rack Attack"    # home player
+        assert by_ext_id["601"].opponent == "Chalk It Up"    # away player
+
+    def test_match_date_is_filled_in_for_chronological_ordering(self, tmp_path):
+        """database.queries.player_match_history() orders by match_date;
+        left NULL, a GraphQL-sourced row would sort arbitrarily instead of
+        chronologically, and analytics.player_stats.recent_form() (which
+        slices the last N) would return an arbitrary N, not the recent ones."""
+        db = self._seeded_db(tmp_path)
+        ingest_match_scores(db, "555001", match_player_scores(MATCH))
+
+        pm = db.query(PlayerMatch).first()
+        match = db.query(Match).filter_by(external_id="555001").one()
+        assert pm.match_date == match.match_date
 
     def test_rerunning_updates_rather_than_duplicates(self, tmp_path):
         """Re-fetching after a match goes from unfinalized to finalized must
         update the existing rows, not skip them or add duplicates."""
+        db = self._seeded_db(tmp_path)
+        rows = match_player_scores(MATCH)
+        ingest_match_scores(db, "555001", rows)
+
+        # Simulate the result changing on a re-fetch (e.g. a correction).
+        revised = [dict(r) for r in rows]
+        revised[0]["result"] = "L"
+        revised[0]["points_earned"] = 0
+
+        created, updated = ingest_match_scores(db, "555001", revised)
+        assert (created, updated) == (0, 5)
+
+        match_pk = db.query(Match).filter_by(external_id="555001").one().id
+        assert db.query(PlayerMatch).filter_by(match_id=match_pk).count() == 5
+
+        changed = (
+            db.query(PlayerMatch)
+            .join(PlayerMatch.player)
+            .filter_by(external_id="501")
+            .one()
+        )
+        assert changed.result == "L"
+
+    def test_scores_for_an_unknown_match_raise_rather_than_orphaning(self, tmp_path):
+        """The exact shape of the original bug: calling this before
+        ingest_match() must fail loudly, not create a foreign key to nothing."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+        engine = create_engine(f"sqlite:///{tmp_path / 'test2.db'}")
         Base.metadata.create_all(engine)
         with Session(engine) as db:
-            rows = match_player_scores(MATCH)
-            ingest_match_scores(db, 555001, rows)
-
-            # Simulate the result changing on a re-fetch (e.g. a correction).
-            revised = [dict(r) for r in rows]
-            revised[0]["result"] = "L"
-            revised[0]["points_earned"] = 0
-
-            created, updated = ingest_match_scores(db, 555001, revised)
-            assert (created, updated) == (0, 5)
-            assert db.query(PlayerMatch).filter_by(match_id=555001).count() == 5
-
-            changed = (
-                db.query(PlayerMatch)
-                .join(PlayerMatch.player)
-                .filter_by(external_id="501")
-                .one()
-            )
-            assert changed.result == "L"
+            with pytest.raises(ValueError, match="555001"):
+                ingest_match_scores(db, "555001", match_player_scores(MATCH))

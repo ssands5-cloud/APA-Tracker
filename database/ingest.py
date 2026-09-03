@@ -142,38 +142,71 @@ def ingest_match(
     return match.id, True
 
 
+def _resolve_match_pk(db: Session, match_external_id) -> Match:
+    """Look up a Match row by APA's own id, not the database's internal one.
+
+    Every caller of ingest_match_roster/ingest_match_scores knows the match
+    only by APA's id (the same one ingest_match() was given as `match_id`).
+    That id is stored in Match.external_id; Match.id is a separate,
+    autoincrement primary key assigned by SQLAlchemy. Storing the external id
+    directly onto PlayerMatch.match_id -- which foreign-keys to Match.id --
+    silently created an orphaned reference: PlayerMatch.match_id == "555001"
+    while the real row's primary key was 1. SQLite does not enforce foreign
+    keys by default, so nothing raised; `player_match.match` just resolved to
+    None. Confirmed directly: ingest_match() then ingest_match_scores() with
+    the same id, then checking `.match` on the result.
+
+    Raises ValueError rather than silently creating the same orphaned
+    reference again: a match's row-level scores should never exist before
+    the match itself does.
+    """
+    match = db.query(Match).filter_by(external_id=str(match_external_id)).one_or_none()
+    if match is None:
+        raise ValueError(
+            f"No Match with external_id={match_external_id!r}. Call ingest_match() "
+            "for this match before ingesting its roster or scores."
+        )
+    return match
+
+
 def ingest_match_roster(
     db: Session,
-    match_id: int,
+    match_id,
     team_id: str,
     team_name: str,
     roster: list[dict],
 ) -> int:
-    """Link players to a match via the roster."""
+    """Link players to a match via the roster.
+
+    `match_id` is APA's own match id (Match.external_id), the same value
+    passed to ingest_match() -- not the database's internal primary key.
+    """
+    match = _resolve_match_pk(db, match_id)
     count = 0
     for entry in roster:
         player_id = entry.get("player_id") or entry.get("player_name", "")
         player_name = entry.get("player_name", "")
-        
+
         # Ensure player exists
         player = upsert_player(db, player_id, player_name)
-        
+
         # Check if this player-match combo already exists
         existing = (
             db.query(PlayerMatch)
-            .filter_by(player_id=player.id, match_id=match_id)
+            .filter_by(player_id=player.id, match_id=match.id)
             .one_or_none()
         )
-        
+
         if existing:
-            logger.debug("PlayerMatch for player %s in match %d already exists", player_id, match_id)
+            logger.debug("PlayerMatch for player %s in match %s already exists", player_id, match_id)
             continue
-        
+
         # Create PlayerMatch record
         db.add(
             PlayerMatch(
                 player_id=player.id,
-                match_id=match_id,
+                match_id=match.id,
+                match_date=match.match_date,
                 team_id=team_id,
                 team_name=team_name,
                 skill_level=_to_int(entry.get("skill_level")),
@@ -185,14 +218,19 @@ def ingest_match_roster(
             )
         )
         count += 1
-    
+
     db.commit()
-    logger.info("Ingested %d player-match records for match %d", count, match_id)
+    logger.info("Ingested %d player-match records for match %s", count, match_id)
     return count
 
 
-def ingest_match_scores(db: Session, match_id: int, scores: list[dict]) -> tuple[int, int]:
+def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int, int]:
     """Persist one match's per-player scoresheet rows.
+
+    `match_id` is APA's own match id (Match.external_id) -- see
+    _resolve_match_pk's docstring for why this isn't just PlayerMatch.match_id
+    set directly: that shipped once already as an orphaned foreign key that
+    nothing caught, because SQLite does not enforce FKs by default.
 
     Returns (created, updated). Unlike ingest_match_roster, an existing row is
     UPDATED rather than skipped: match_player_scores() can be re-run against
@@ -200,6 +238,7 @@ def ingest_match_scores(db: Session, match_id: int, scores: list[dict]) -> tuple
     forfeit/incomplete flag or the final result can change between those two
     reads. Deduped the same way, on (player_id, match_id).
     """
+    match = _resolve_match_pk(db, match_id)
     created = updated = 0
     for entry in scores:
         player_id = entry.get("player_id") or ""
@@ -208,10 +247,24 @@ def ingest_match_scores(db: Session, match_id: int, scores: list[dict]) -> tuple
 
         existing = (
             db.query(PlayerMatch)
-            .filter_by(player_id=player.id, match_id=match_id)
+            .filter_by(player_id=player.id, match_id=match.id)
             .one_or_none()
         )
+        # opponent is the OTHER side's name, not this player's own team --
+        # analytics.team_stats.head_to_head() filters PlayerMatch.opponent,
+        # and without this it silently matched nothing for any row ingested
+        # through this path.
+        own_team_id = entry.get("team_id")
+        if own_team_id == match.home_team_id:
+            opponent = match.away_team_name
+        elif own_team_id == match.away_team_id:
+            opponent = match.home_team_name
+        else:
+            opponent = None
+
         fields = {
+            "match_date": match.match_date,
+            "opponent": opponent,
             "team_id": entry.get("team_id"),
             "team_name": entry.get("team_name"),
             "skill_level": _to_int(entry.get("skill_level")),
@@ -223,7 +276,7 @@ def ingest_match_scores(db: Session, match_id: int, scores: list[dict]) -> tuple
                 setattr(existing, key, value)
             updated += 1
         else:
-            db.add(PlayerMatch(player_id=player.id, match_id=match_id, **fields))
+            db.add(PlayerMatch(player_id=player.id, match_id=match.id, **fields))
             created += 1
 
     db.commit()
