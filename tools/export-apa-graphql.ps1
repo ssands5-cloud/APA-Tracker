@@ -59,10 +59,18 @@ function Get-ResponseBodies {
     }
 }
 
+$totalEntries = 0
+$graphqlEntries = 0
+$withPostData = 0
+$seenOperations = [System.Collections.Generic.List[string]]::new()
+
 foreach ($entry in @($har.log.entries)) {
+    $totalEntries++
     $request = $entry.request
     if ($request.url -notlike "*gql.poolplayers.com/graphql*") { continue }
+    $graphqlEntries++
     if ([string]::IsNullOrWhiteSpace($request.postData.text)) { continue }
+    $withPostData++
 
     try {
         $requestBodies = @($request.postData.text | ConvertFrom-Json)
@@ -77,6 +85,7 @@ foreach ($entry in @($har.log.entries)) {
 
     for ($i = 0; $i -lt $requestBodies.Count; $i++) {
         $body = $requestBodies[$i]
+        if ($body.operationName) { $seenOperations.Add([string]$body.operationName) }
         if ($body.operationName -notin $wantedOperations) { continue }
 
         $response = $null
@@ -97,7 +106,34 @@ foreach ($entry in @($har.log.entries)) {
 }
 
 if ($operations.Count -eq 0) {
-    throw ("No {0} operations found. Capture the APA page(s) that issue them and save HAR with content." -f ($wantedOperations -join ", "))
+    # "Found nothing" has several very different causes and they need
+    # different fixes, so say which one this is instead of one flat message.
+    $uniqueSeen = @($seenOperations | Select-Object -Unique)
+
+    Write-Host "No wanted operations found in: $HarPath"
+    Write-Host "  HAR entries total:            $totalEntries"
+    Write-Host "  ...to gql.poolplayers.com:    $graphqlEntries"
+    Write-Host "  ...carrying a request body:   $withPostData"
+    Write-Host "  GraphQL operations seen:      $(if ($uniqueSeen) { $uniqueSeen -join ', ' } else { '(none)' })"
+    Write-Host "  Looking for:                  $($wantedOperations -join ', ')"
+    Write-Host ""
+
+    if ($totalEntries -eq 0) {
+        throw "That HAR file is empty. Re-record: DevTools open, reload the page, THEN save."
+    }
+    if ($graphqlEntries -eq 0) {
+        throw ("None of the $totalEntries requests went to the GraphQL endpoint. This HAR is " +
+               "probably from the wrong page, or was saved before the page loaded. Open the " +
+               "APA team or standings page with DevTools on the Network tab, reload it, and " +
+               "save the HAR again.")
+    }
+    if ($withPostData -eq 0) {
+        throw ("Found $graphqlEntries GraphQL requests but none carried a request body. Save " +
+               "the log as 'HAR with content' -- a plain HAR omits the bodies.")
+    }
+    throw ("Found $graphqlEntries GraphQL requests, but none of them were the operations " +
+           "wanted. The page you captured issues: $($uniqueSeen -join ', '). Visit the page " +
+           "that loads the data you need and capture that one.")
 }
 
 $missing = $wantedOperations | Where-Object { $_ -notin $operations.operationName }

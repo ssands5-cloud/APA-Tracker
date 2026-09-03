@@ -31,7 +31,7 @@ class TestIngestTeamData:
 
         assert counts == {
             "roster": 1, "standings": 1, "matches_seen": 1, "matches_new": 1,
-            "byes": 0, "unscored": 0,
+            "matches_updated": 0, "byes": 0, "unscored": 0,
         }
         team = db.query(Team).one()
         assert team.external_id == "13082948"
@@ -54,8 +54,54 @@ class TestIngestTeamData:
         second = ingest_team_data(db, TEAM_DATA)
 
         assert second["matches_new"] == 0, "a re-sync must not re-insert known matches"
+        assert second["matches_updated"] == 1
         assert db.query(Match).count() == 1
         assert db.query(Player).count() == 1
+
+    def test_a_score_arriving_later_updates_the_existing_match(self, db):
+        """The schedule is published before the season, so almost every match
+        is first seen unplayed. Skipping known matches meant a result could
+        never arrive."""
+        unplayed = {
+            "team": TEAM_DATA["team"], "roster": [],
+            "schedule": [{"id": 700, "week": 2, "status": "SCHEDULED", "isScored": False,
+                          "home": {"id": 13082948, "name": "Chalk It Up"},
+                          "away": {"id": 2, "name": "Rack Attack"}}],
+        }
+        ingest_team_data(db, unplayed)
+        match = db.query(Match).one()
+        assert (match.home_score, match.away_score) == (None, None)
+        assert match.is_scored is False
+
+        played = {
+            "team": TEAM_DATA["team"], "roster": [],
+            "schedule": [dict(unplayed["schedule"][0], status="COMPLETED", isScored=True,
+                              isFinalized=True,
+                              results=[{"homeAway": "HOME", "points": {"total": 3}},
+                                       {"homeAway": "AWAY", "points": {"total": 2}}])],
+        }
+        counts = ingest_team_data(db, played)
+
+        assert counts["matches_new"] == 0 and counts["matches_updated"] == 1
+        db.expire_all()
+        match = db.query(Match).one()
+        assert (match.home_score, match.away_score) == (3, 2)
+        assert match.is_scored is True and match.is_finalized is True
+        assert match.week == 2
+
+    def test_partially_scored_match_keeps_the_missing_side_null(self, db):
+        data = {
+            "team": TEAM_DATA["team"], "roster": [],
+            "schedule": [{"id": 701, "isScored": True, "isFinalized": False,
+                          "home": {"id": 13082948, "name": "Chalk It Up"},
+                          "away": {"id": 2, "name": "Rack Attack"},
+                          "results": [{"homeAway": "HOME", "points": {"total": 2}}]}],
+        }
+        ingest_team_data(db, data)
+        match = db.query(Match).one()
+        assert match.home_score == 2
+        assert match.away_score is None, "a missing side is unknown, not zero"
+        assert match.is_finalized is False
 
     def test_bye_week_is_recorded_as_a_bye(self, db):
         data = {

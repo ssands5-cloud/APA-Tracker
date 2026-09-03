@@ -94,27 +94,52 @@ def ingest_match(
     location: Optional[str] = None,
     match_date: Optional[str] = None,
     status: Optional[str] = None,
-) -> Optional[int]:
-    """Create or update a match record."""
+    home_score: Optional[float] = None,
+    away_score: Optional[float] = None,
+    week: Optional[int] = None,
+    is_bye: bool = False,
+    is_scored: bool = False,
+    is_finalized: bool = False,
+) -> tuple[Optional[int], bool]:
+    """Create or update a match record.
+
+    Returns (match_id, created). A match must be updatable, not skipped: the
+    schedule is published before the season, so nearly every match is first
+    seen unplayed and only later carries a score. Skipping known matches meant
+    a result could never arrive.
+
+    Returns `created` separately because "seen again" and "new this run" are
+    different numbers, and an id alone cannot tell them apart.
+    """
+    fields = {
+        "home_team_id": home_team_id,
+        "away_team_id": away_team_id,
+        "home_team_name": home_team_name,
+        "away_team_name": away_team_name,
+        "location": location,
+        "match_date": match_date,
+        "status": status,
+        "home_score": home_score,
+        "away_score": away_score,
+        "week": week,
+        "is_bye": is_bye,
+        "is_scored": is_scored,
+        "is_finalized": is_finalized,
+    }
+
     existing = db.query(Match).filter_by(external_id=match_id).one_or_none()
     if existing:
-        logger.debug("Match %s already exists, skipping", match_id)
-        return None
+        for key, value in fields.items():
+            setattr(existing, key, value)
+        db.commit()
+        logger.debug("Updated match %s", match_id)
+        return existing.id, False
 
-    match = Match(
-        external_id=match_id,
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        home_team_name=home_team_name,
-        away_team_name=away_team_name,
-        location=location,
-        match_date=match_date,
-        status=status,
-    )
+    match = Match(external_id=match_id, **fields)
     db.add(match)
     db.commit()
     logger.info("Ingested match %s", match_id)
-    return match.id
+    return match.id, True
 
 
 def ingest_match_roster(

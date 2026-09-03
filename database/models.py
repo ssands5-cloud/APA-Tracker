@@ -6,7 +6,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -68,6 +77,21 @@ class Match(Base):
     # different formats (scraped portal text vs the API's ISO startTime).
     match_date = Column(String)
     status = Column(String)
+    week = Column(Integer)
+
+    # Scores stay NULL until the match is actually scored. NULL and 0 are
+    # different facts -- "not played yet" versus "shut out" -- and a match
+    # that is scored but not yet finalized can legitimately carry one side's
+    # points and not the other's.
+    home_score = Column(Float)
+    away_score = Column(Float)
+
+    # A bye is a real schedule slot with no opponent, kept so a missing week
+    # never reads as lost data. is_finalized marks a result the league has
+    # confirmed; is_scored alone can still change.
+    is_bye = Column(Boolean, default=False)
+    is_scored = Column(Boolean, default=False)
+    is_finalized = Column(Boolean, default=False)
 
     player_matches = relationship("PlayerMatch", back_populates="match")
 

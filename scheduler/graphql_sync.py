@@ -67,13 +67,14 @@ def ingest_team_data(db: Session, data: dict) -> dict[str, int]:
         ingest_standings(db, standings)
 
     matches = schedule_rows(data)
-    ingested = 0
+    created = 0
+    updated = 0
     for row in matches:
         if not row["match_id"]:
             logger.warning("Skipping a schedule entry with no match id: week %s", row.get("week"))
             continue
         # Byes are recorded too -- a missing week reads as lost data later.
-        if ingest_match(
+        _, was_created = ingest_match(
             db,
             match_id=row["match_id"],
             home_team_id=row["home_team_id"],
@@ -83,14 +84,22 @@ def ingest_team_data(db: Session, data: dict) -> dict[str, int]:
             location=row["location"],
             match_date=row["date"],
             status=row["status"],
-        ) is not None:
-            ingested += 1
+            home_score=row["home_score"],
+            away_score=row["away_score"],
+            week=row["week"],
+            is_bye=row["is_bye"],
+            is_scored=row["is_scored"],
+            is_finalized=row["is_finalized"],
+        )
+        created += was_created
+        updated += not was_created
 
     return {
         "roster": len(roster),
         "standings": len(standings),
         "matches_seen": len(matches),
-        "matches_new": ingested,
+        "matches_new": created,
+        "matches_updated": updated,
         "byes": sum(1 for row in matches if row["is_bye"]),
         "unscored": sum(1 for row in matches if not row["is_scored"]),
     }

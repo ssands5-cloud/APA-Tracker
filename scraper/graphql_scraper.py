@@ -31,9 +31,22 @@ def _token(config: dict) -> str:
     token = (config.get("apa") or {}).get("access_token") or os.environ.get("APA_ACCESS_TOKEN")
     if not token:
         raise AccessTokenMissing(
-            "No APA access token. Set it for this shell only:\n"
-            '  $env:APA_ACCESS_TOKEN = "<token from your logged-in APA session>"\n'
+            "No APA access token found. Set it for this shell only, replacing "
+            "the whole quoted string with your real token:\n"
+            '  $env:APA_ACCESS_TOKEN = "eyJhbGciOi...your token here..."\n'
             "Never put the token in apa_config.yaml, a script, or source control."
+        )
+
+    # Caught before the network call because the instructions people copy show
+    # a placeholder in angle brackets, and pasting it verbatim otherwise costs
+    # a round trip and comes back as the API's opaque "token is no longer
+    # valid" -- which reads as an expiry problem, not a paste problem.
+    stripped = token.strip()
+    if stripped.startswith("<") and stripped.endswith(">"):
+        raise AccessTokenMissing(
+            f"APA_ACCESS_TOKEN is still the placeholder text {stripped!r}, not a "
+            "real token. Replace the whole quoted string, angle brackets and "
+            "all, with the token from your logged-in APA session."
         )
     return token
 
@@ -138,6 +151,15 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
         home = match.get("home") or {}
         away = match.get("away") or {}
         location = match.get("location") or {}
+        scores = {
+            "home": None,
+            "away": None,
+        }
+        for result in match.get("results") or []:
+            side = str(result.get("homeAway") or "").lower()
+            points = (result.get("points") or {}).get("total")
+            if side in {"home", "away"}:
+                scores[side] = points
         rows.append(
             {
                 "match_id": str(match.get("id") or ""),
@@ -153,6 +175,8 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "is_scored": bool(match.get("isScored")),
                 "is_finalized": bool(match.get("isFinalized")),
                 "results": match.get("results") or [],
+                "home_score": scores["home"],
+                "away_score": scores["away"],
             }
         )
     return rows

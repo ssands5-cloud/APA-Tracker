@@ -5,3 +5,6 @@ exports/
 logs/
 __pycache__/
 *.pyc
+
+# Local scratch state from agent tooling; not part of the project.
+.superpowers/
