@@ -12,9 +12,10 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
-    UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -111,22 +112,40 @@ class StandingsSnapshot(Base):
 
 
 class PlayerMatch(Base):
-    """One player's involvement in one match. Two ingest paths write here:
+    """One player's involvement in one match. Three ingest paths write here:
 
     - ``ingest_player_matches`` fills ``match_date`` / ``opponent`` /
       ``points_earned`` / ``result`` from a player's own match-history page.
+      No ``match_id`` -- this path predates the ``Match`` table entirely.
     - ``ingest_match_roster`` fills ``match_id`` / ``team_id`` / ``team_name``
-      and the roster totals from a specific match's roster tables.
+      and the roster totals from a specific match's roster tables. Leaves
+      ``opponent`` NULL.
+    - ``ingest_match_scores`` fills ``match_id`` plus ``opponent`` (derived
+      from the Match itself) and the real per-player scoresheet fields.
 
-    The two sets barely overlap, which is why almost every column is nullable.
-    The unique constraint only guards the first path; the second de-duplicates
-    on ``(player_id, match_id)`` in ``ingest_match_roster`` instead, since its
-    rows leave ``match_date`` and ``opponent`` NULL.
+    The uniqueness guard below is a PARTIAL index -- (player_id, match_date,
+    opponent), but only where match_id IS NULL -- covering ingest_player_matches
+    alone. It used to be a blanket table-wide constraint, which broke the
+    first time ingest_match_scores ran against a real account: two DIFFERENT
+    real matches (different teams, different divisions) landed on the same
+    match_date against two different opponents that happened to share a
+    name ("Mark It Up"), so the same player's two genuinely different
+    match-linked rows collided on (player_id, match_date, opponent) even
+    though their match_id differed. The match-linked paths already
+    deduplicate correctly in Python on (player_id, match_id) before
+    inserting/updating (see ingest_match_roster/ingest_match_scores in
+    database/ingest.py) -- the blanket DB constraint was redundant for them
+    at best, actively wrong at worst.
     """
 
     __tablename__ = "player_matches"
     __table_args__ = (
-        UniqueConstraint("player_id", "match_date", "opponent", name="uq_player_match"),
+        Index(
+            "uq_player_match_history",
+            "player_id", "match_date", "opponent",
+            unique=True,
+            sqlite_where=text("match_id IS NULL"),
+        ),
     )
 
     id = Column(Integer, primary_key=True)
