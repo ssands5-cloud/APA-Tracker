@@ -1,0 +1,45 @@
+name: Tests
+
+# The actual apa-tracker test suite (pytest). Pinned to 3.12 and 3.13 only --
+# NEVER add 3.14 here. Python 3.14.3's asyncio.run() crashes the whole
+# process on Windows with zero traceback (see README.md's "Requires Python
+# 3.12 or 3.13, NOT 3.14" section and scraper/diagnose_eventloop.py, which
+# bisected the bug down to running an event loop, not constructing one).
+# This workflow runs on Linux so that specific crash won't reproduce here,
+# but pinning the matrix keeps a 3.14 upgrade from being picked up silently.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run test suite
+        run: python -m pytest tests/ -v
