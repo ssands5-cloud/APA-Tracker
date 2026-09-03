@@ -103,7 +103,22 @@ def execute(
     errors, timeouts) with a short exponential backoff -- it does not
     retry on GraphQL errors or HTTP 4xx/5xx, those are raised directly.
     """
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        # gql.poolplayers.com is a different subdomain from
+        # league.poolplayers.com (where the token is captured), making this
+        # a cross-origin request. A real browser sends Origin/Referer on
+        # that automatically; requests does not add them on its own. First
+        # real live run without these got "Login session has expired" on a
+        # token captured seconds earlier -- too fast to be real expiry, and
+        # consistent with a same-origin/session check on the backend that a
+        # bearer-token-only request without these headers fails. Unverified
+        # as THE fix until confirmed against the live API, but it's the
+        # most concrete, honest difference between what the browser sent
+        # (and which worked) and what this client was sending (which didn't).
+        "Origin": "https://league.poolplayers.com",
+        "Referer": "https://league.poolplayers.com/",
+    }
     if access_token:
         headers["authorization"] = access_token
 
