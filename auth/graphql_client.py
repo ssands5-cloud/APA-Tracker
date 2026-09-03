@@ -28,12 +28,21 @@ _AUTH_EXTENSION_CODES = {"UNAUTHENTICATED", "FORBIDDEN"}
 #: no UNAUTHENTICATED extension code. Status and extension checks alone
 #: therefore classified it as a generic GraphQL error, and callers watching for
 #: GraphQLAuthError never saw it. The message is the only signal this API gives.
+#:
+#: A second, DIFFERENT phrasing showed up the same way running run_all_teams()
+#: for real for the first time: "Login session has expired" -- "session", not
+#: "token", so none of the existing markers matched and it surfaced as a raw
+#: traceback instead of the friendly "get a fresh token" message. This API
+#: appears to have more than one wording for the same underlying rejection;
+#: expect this list to keep growing as new ones turn up, not to be complete.
 _AUTH_MESSAGE_MARKERS = (
     "token is no longer valid",
     "invalid token",
     "token is invalid",
     "token expired",
     "expired token",
+    "session has expired",
+    "session expired",
     "not authenticated",
     "unauthenticated",
     "unauthorized",

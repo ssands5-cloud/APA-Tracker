@@ -53,6 +53,17 @@ class TestExpiredTokenClassification:
             with pytest.raises(GraphQLAuthError):
                 execute("query {}", access_token="stale")
 
+    def test_the_login_session_expired_response_is_also_an_auth_error(self):
+        """A second real live response, different wording: "Login session
+        has expired" ("session", not "token") -- hit running run_all_teams()
+        for real for the first time. Neither of the two live phrasings
+        share a substring beyond "expired", so both need their own marker.
+        """
+        payload = {"errors": [{"message": "Login session has expired"}]}
+        with patch("requests.post", _post(payload)):
+            with pytest.raises(GraphQLAuthError):
+                execute("query {}", access_token="stale")
+
     def test_401_is_still_an_auth_error(self):
         with patch("requests.post", _post({"errors": [{"message": "nope"}]}, 401)):
             with pytest.raises(GraphQLAuthError):
@@ -66,6 +77,16 @@ class TestExpiredTokenClassification:
 
     def test_an_ordinary_error_is_not_misread_as_an_auth_failure(self):
         payload = {"errors": [{"message": "Team with id 99 was not found"}]}
+        with patch("requests.post", _post(payload)):
+            with pytest.raises(GraphQLError) as excinfo:
+                execute("query {}", access_token="good")
+        assert not isinstance(excinfo.value, GraphQLAuthError)
+
+    def test_the_word_session_alone_does_not_trigger_a_false_positive(self):
+        """"session has expired"/"session expired" are the markers, not the
+        bare word "session" -- an unrelated error mentioning a session
+        (e.g. a practice-session lookup) must not be relabelled as expiry."""
+        payload = {"errors": [{"message": "Practice session with id 5 was not found"}]}
         with patch("requests.post", _post(payload)):
             with pytest.raises(GraphQLError) as excinfo:
                 execute("query {}", access_token="good")
