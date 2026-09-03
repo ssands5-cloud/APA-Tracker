@@ -11,8 +11,7 @@ the same requests the official web app makes), not guessed.
 
 Auth documents (login/authorize/generateAccessToken/revokeToken) are
 confirmed working shapes, pulled verbatim from the bundle. The data
-documents below (standings/roster/player stats) are placeholders
-pending a real capture -- see the TODO on each.
+the team documents below were captured from the authenticated team page.
 """
 
 GRAPHQL_ENDPOINT = "https://gql.poolplayers.com/graphql"
@@ -66,7 +65,7 @@ REVOKE_TOKEN_MUTATION = """
 }
 """
 
-# --- Data queries (PENDING real capture) ---
+# --- Data queries captured from the authenticated team page ---
 #
 # The matchup page (league.poolplayers.com/<league>/match/<id>) renders a
 # roster table (player name, skill level, matches won/played, win %, PPM,
@@ -83,7 +82,54 @@ REVOKE_TOKEN_MUTATION = """
 # Redact the `authorization` header value before sharing -- only the
 # query/variables/response shape is needed, never the live token.
 
+TEAM_PAGE_QUERY = """
+query teamPage($id: Int!) {
+  team(id: $id) {
+    id name number isTied standing
+    division { id name number timeOfPlay nightOfPlay format state isTournament }
+    location { id name address { id name } }
+    session { id name }
+    league { id slug }
+  }
+}
+"""
+
+TEAM_ROSTER_QUERY = """
+query teamRoster($id: Int!) {
+  team(id: $id) {
+    id name number
+    league { id slug }
+    division { id type }
+    roster {
+      id memberNumber displayName matchesWon matchesPlayed
+      ... on EightBallPlayer { pa ppm skillLevel }
+      ... on NineBallPlayer { pa ppm skillLevel }
+      member { id }
+    }
+  }
+}
+"""
+
+TEAM_SCHEDULE_QUERY = """
+query teamSchedule($id: Int!) {
+  team(id: $id) {
+    id sessionBonusPoints sessionPoints sessionTotalPoints
+    division { id isTournament }
+    matches(unscheduled: true) {
+      week type id isBye status scoresheet startTime isMine isPaid
+      isTournament isScored isFinalized isPlayoff description tableNumber
+      results { homeAway points { total } }
+      timeZone { id name }
+      location { id name address { id name } }
+      home { id name number isMine }
+      away { id name number isMine }
+      division { id scheduleInEdit isTournament }
+    }
+  }
+}
+"""
+
+# Retained for compatibility with code that checks these names.
 MATCH_QUERY = None
-TEAM_ROSTER_QUERY = None
 PLAYER_STATS_QUERY = None
 STANDINGS_QUERY = None

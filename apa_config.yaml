@@ -13,8 +13,13 @@ league:
   season: "2026 Summer"
 
 team:
-  team_id: "CHANGE_ME"
-  team_name: "CHANGE_ME"
+  team_id: "13082948"
+  team_name: "Team 13082948"
+
+apa:
+  # Set APA_ACCESS_TOKEN in the environment; do not put a token here.
+  league_id: 1438
+  division_id: 436670
 
 database:
   path: "data/apa_tracker.db"

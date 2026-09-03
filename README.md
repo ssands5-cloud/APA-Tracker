@@ -43,6 +43,7 @@ results in a small SQLite database, and exporting summaries to Excel.
    - `site.base_url` and the `*_path` / `*_path_template` fields — point
      these at your actual league portal (they're placeholders right now).
    - `league.league_id`, `team.team_id`, `team.team_name`.
+   - `apa.league_id` and `apa.division_id` for GraphQL metadata.
    - `database.path` / `export.excel_output_path` if you want them
      somewhere other than `data/` and `exports/`.
 
@@ -61,6 +62,21 @@ python -m scheduler.weekly_refresh  # full refresh + Excel export
 
 Wire either of those into Windows Task Scheduler (or cron, if running under
 WSL) at the times set in `apa_config.yaml`'s `scheduler` section.
+
+### Live GraphQL team data
+
+The APA Teams page uses the GraphQL endpoint rather than server-rendered HTML.
+To run the captured team queries, set the short-lived access token in the
+process environment only:
+
+```powershell
+$env:APA_ACCESS_TOKEN = "<access token from your current APA session>"
+python -c "import yaml; from scraper.graphql_scraper import fetch_team_data; print(fetch_team_data(yaml.safe_load(open('apa_config.yaml'))).keys())"
+```
+
+Never save the token in `apa_config.yaml`, a script, a HAR file, or source
+control. The GraphQL helper returns team metadata, roster rows, and schedule
+rows; response fixtures should be sanitized before being used in tests.
 
 ## Notes
 
