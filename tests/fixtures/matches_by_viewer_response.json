@@ -1,0 +1,43 @@
+{
+  "_comment": "Sanitized fixture for MATCHES_BY_VIEWER_QUERY, shaped to match the real matchesByViewer capture (docs/graphql-captures/2026-09-03-full-session/global/global/matchesByViewer.json). Two teams here, one match each -- one scored, one a bye -- to exercise viewer_matches_rows() distinguishing matches by team once flattened. All ids/names invented.",
+  "data": {
+    "viewer": {
+      "id": 900001,
+      "teams": [
+        {
+          "id": 13082948, "name": "Chalk It Up", "number": "3",
+          "session": { "id": 9, "name": "2026 Summer" },
+          "matches": [
+            {
+              "type": "EIGHT", "id": 51478063, "week": 9, "isBye": false,
+              "status": "COMPLETED", "startTime": "2026-08-27T19:00:00-04:00",
+              "isMine": true, "isScored": true, "isFinalized": true, "isPlayoff": false,
+              "tableNumber": "4",
+              "results": [
+                { "homeAway": "HOME", "points": { "total": 18 } },
+                { "homeAway": "AWAY", "points": { "total": 12 } }
+              ],
+              "home": { "id": 13082948, "name": "Chalk It Up", "number": "3" },
+              "away": { "id": 90002, "name": "Rack Attack", "number": "7" }
+            }
+          ]
+        },
+        {
+          "id": 13082718, "name": "Rack Attack", "number": "7",
+          "session": { "id": 9, "name": "2026 Summer" },
+          "matches": [
+            {
+              "type": "EIGHT", "id": 51419677, "week": 10, "isBye": true,
+              "status": "BYE", "startTime": "2026-09-03T19:00:00-04:00",
+              "isMine": true, "isScored": false, "isFinalized": false, "isPlayoff": false,
+              "tableNumber": null,
+              "results": [],
+              "home": { "id": 13082718, "name": "Rack Attack", "number": "7" },
+              "away": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

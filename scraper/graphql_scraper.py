@@ -15,8 +15,10 @@ from typing import Any
 
 from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
+    DASHBOARD_TEAMS_QUERY,
     DIVISION_STANDINGS_QUERY,
     MATCH_DETAIL_QUERY,
+    MATCHES_BY_VIEWER_QUERY,
     TEAM_PAGE_QUERY,
     TEAM_ROSTER_QUERY,
     TEAM_SCHEDULE_QUERY,
@@ -188,16 +190,25 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def fetch_division_standings(config: dict) -> dict[str, Any]:
+def fetch_division_standings(config: dict, division_id=None) -> dict[str, Any]:
     """Fetch the full division standings table -- every team, not just ours.
 
-    Returns {} when no division id is configured, so callers can treat "not
-    configured" and "nothing came back" the same way rather than branching on
-    which. Raises AccessTokenExpired the same way fetch_team_data does; a
-    non-auth GraphQL error (e.g. a bad division id) is the caller's to decide
-    whether to fall back on, so it is not swallowed here.
+    `division_id` overrides apa_config.yaml's single configured one -- added
+    once the real capture (2026-09-03) showed an account's teams can span
+    several different divisions at once (4 teams, 4 divisions), which one
+    hardcoded id could never cover. Existing callers passing just `config`
+    are unaffected: the fallback below reproduces the original behavior
+    exactly.
+
+    Returns {} when no division id is available at all, so callers can treat
+    "not configured" and "nothing came back" the same way rather than
+    branching on which. Raises AccessTokenExpired the same way
+    fetch_team_data does; a non-auth GraphQL error (e.g. a bad division id)
+    is the caller's to decide whether to fall back on, so it is not
+    swallowed here.
     """
-    division_id = (config.get("apa") or {}).get("division_id")
+    if division_id is None:
+        division_id = (config.get("apa") or {}).get("division_id")
     if not division_id:
         return {}
     token = _token(config)
@@ -234,6 +245,124 @@ def division_standings_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
                 "points": team.get("sessionTotalPoints"),
             }
         )
+    return rows
+
+
+def fetch_dashboard_teams(config: dict) -> dict[str, Any]:
+    """Fetch every team the logged-in account plays on -- viewer-scoped, no
+    team_id needed at all.
+
+    Real capture (2026-09-03, docs/graphql-captures/2026-09-03-full-session/)
+    proved this matters: the account plays on 4 teams, not the 1 hardcoded
+    in apa_config.yaml's team.team_id. This is the new source of truth for
+    "which teams does this account play on" -- see dashboard_teams_rows().
+
+    Returns the raw `viewer` object (with `leagueTeams` / `tournamentTeams`),
+    or {} if the server nulled it.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(DASHBOARD_TEAMS_QUERY, {}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("viewer") or {}
+
+
+def dashboard_teams_rows(viewer: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per team the account plays on, league or tournament alike."""
+    rows = []
+    for team in (viewer.get("leagueTeams") or []) + (viewer.get("tournamentTeams") or []):
+        team = team or {}
+        division = team.get("division") or {}
+        league = team.get("league") or {}
+        session = team.get("session") or {}
+        rows.append(
+            {
+                "team_id": str(team.get("id") or ""),
+                "team_name": team.get("name") or "",
+                "standing": team.get("standing"),
+                "matches_played": team.get("totalTeamMatchesPlayed"),
+                "is_tied": bool(team.get("isTied")),
+                "division_id": str(division.get("id") or ""),
+                "division_type": division.get("type"),
+                "is_tournament": bool(division.get("isTournament")),
+                "league_id": str(league.get("id") or ""),
+                "league_slug": league.get("slug") or "",
+                "session_name": session.get("name") or "",
+            }
+        )
+    return rows
+
+
+def fetch_matches_by_viewer(config: dict) -> dict[str, Any]:
+    """Fetch every match, for every team the account plays on, in one call.
+
+    Viewer-scoped, no team_id needed -- see fetch_dashboard_teams(). Returns
+    the raw `viewer` object (with `teams`, each carrying its own `matches`),
+    or {} if the server nulled it.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(MATCHES_BY_VIEWER_QUERY, {}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("viewer") or {}
+
+
+def viewer_matches_rows(viewer: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every match, for every team the account plays on, as one flat list.
+
+    Shaped like schedule_rows()'s output, with team_id/team_name added --
+    without it, matches from different teams would collide once flattened
+    together. Byes are kept, not dropped, for the same reason schedule_rows()
+    keeps them: a missing week should never read as lost data.
+    """
+    rows = []
+    for team in viewer.get("teams") or []:
+        team = team or {}
+        team_id = str(team.get("id") or "")
+        team_name = team.get("name") or ""
+        for match in team.get("matches") or []:
+            match = match or {}
+            home = match.get("home") or {}
+            away = match.get("away") or {}
+            scores = {"home": None, "away": None}
+            for result in match.get("results") or []:
+                side = str(result.get("homeAway") or "").lower()
+                points = (result.get("points") or {}).get("total")
+                if side in {"home", "away"}:
+                    scores[side] = points
+            rows.append(
+                {
+                    "team_id": team_id,
+                    "team_name": team_name,
+                    "match_id": str(match.get("id") or ""),
+                    "week": match.get("week"),
+                    "date": match.get("startTime"),
+                    "status": match.get("status"),
+                    "home_team_id": str(home.get("id") or ""),
+                    "home_team_name": home.get("name") or "",
+                    "away_team_id": str(away.get("id") or ""),
+                    "away_team_name": away.get("name") or "",
+                    "is_bye": bool(match.get("isBye")),
+                    "is_scored": bool(match.get("isScored")),
+                    "is_finalized": bool(match.get("isFinalized")),
+                    "home_score": scores["home"],
+                    "away_score": scores["away"],
+                }
+            )
     return rows
 
 

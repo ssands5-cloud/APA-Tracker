@@ -227,6 +227,65 @@ query MatchPage($id: Int!) {
 }
 """
 
+# --- Viewer-scoped queries: no id needed at all ---
+#
+# Captured 2026-09-03 from a real logged-in session (55-operation capture,
+# see docs/graphql-captures/2026-09-03-full-session/HANDOFF.md for the full
+# writeup). Both take zero variables -- they read the currently authenticated
+# member implicitly, via `viewer`. This is a real design change from every
+# query above: apa_config.yaml hardcodes one team.team_id, but the real
+# capture proved the account plays on 4 teams, not 1. These two replace that
+# assumption rather than extend it.
+#
+# Both are trimmed from the real captured documents the same way
+# MATCH_DETAIL_QUERY and DIVISION_SCHEDULE_QUERY already are:
+# matchesByViewer's real query additionally requests orderItems { order {
+# member { firstName lastName } } } (billing/order PII) and fee /
+# membershipExpires / scoresheet / isPaid (account/billing fields )-- none
+# of that is requested here.
+
+DASHBOARD_TEAMS_QUERY = """
+query dashboardTeams {
+  viewer {
+    id
+    ... on Member {
+      leagueTeams: teams(type: [RELEASED, WEEKLY], current: true) {
+        id name standing totalTeamMatchesPlayed isTied
+        division { id type isTournament }
+        league { id slug }
+        session { id name }
+      }
+      tournamentTeams: teams(type: [TOURNAMENT], current: true) {
+        id name standing totalTeamMatchesPlayed isTied
+        division { id type isTournament }
+        league { id slug }
+        session { id name }
+      }
+    }
+  }
+}
+"""
+
+MATCHES_BY_VIEWER_QUERY = """
+query matchesByViewer {
+  viewer {
+    id
+    ... on Member {
+      teams {
+        id name number
+        session { id name }
+        matches {
+          type id week isBye status startTime isMine isScored isFinalized isPlayoff tableNumber
+          results { homeAway points { total } }
+          home { id name number }
+          away { id name number }
+        }
+      }
+    }
+  }
+}
+"""
+
 # Retained for compatibility with code that checks these names.
 LEAGUE_BOX_QUERY = None  # superseded by DIVISION_STANDINGS_QUERY -- see above
 MATCH_QUERY = None
