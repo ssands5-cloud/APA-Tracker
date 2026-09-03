@@ -3,7 +3,28 @@ Central map of CSS selectors / field names for each page type on the
 league portal. Keeping these in one place means a markup change on the
 site only requires edits here, not in every scraper module.
 
-Updated with real selectors from league.poolplayers.com portal inspection.
+VERIFICATION STATUS -- read before trusting any selector here.
+
+  MATCH_PAGE      Derived from real league.poolplayers.com markup.
+  LOGIN_FORM      Field names are plausible but UNVERIFIED against a live
+                  login page; the portal front end is a JavaScript app, so
+                  a server-rendered form may not exist at all.
+  STANDINGS_PAGE  PLACEHOLDER. `table.standings` is a guess, not observed.
+  TEAM_PAGE       PLACEHOLDER. Only the schedule_* keys are used, and they
+                  are likewise unobserved.
+  PLAYER_PAGE     PLACEHOLDER. Nothing here is currently read by any code.
+
+An earlier version of this docstring claimed every selector had been taken
+from portal inspection. That was true of MATCH_PAGE only, and the claim is
+what made the placeholders look load-bearing.
+
+Removed deliberately, do not reinstate without checking the parsers first:
+TEAM_PAGE["roster_table_selector" / "roster_row_selector" / "roster_columns"]
+and PLAYER_PAGE["stats_columns" / "stats_table_selector"]. All were dead --
+roster parsing reads MATCH_PAGE, and player parsing read nothing. The
+stats_columns order also contradicted the order _parse_match_row actually
+uses, so wiring the map back up would have silently misfiled skill level as
+the match result.
 """
 
 LOGIN_FORM = {
@@ -20,18 +41,13 @@ STANDINGS_PAGE = {
 }
 
 TEAM_PAGE = {
-    "roster_table_selector": "table.roster",
-    "roster_row_selector": "tbody tr",
-    "roster_columns": ["player_name", "skill_level", "matches_played"],
     "schedule_table_selector": "table.schedule",
     "schedule_row_selector": "tbody tr",
     "schedule_columns": ["date", "opponent", "location", "result"],
 }
 
 PLAYER_PAGE = {
-    "stats_table_selector": "table.player-stats",
     "stats_row_selector": "tbody tr",
-    "stats_columns": ["match_date", "opponent", "skill_level", "points_earned", "result"],
     "summary_selector": "div.player-summary",
 }
 

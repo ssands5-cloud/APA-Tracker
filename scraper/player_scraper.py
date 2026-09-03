@@ -12,9 +12,12 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-from parser.apa_page_map import PLAYER_PAGE, MATCH_PAGE
+from parser.apa_page_map import MATCH_PAGE
 
 logger = logging.getLogger(__name__)
+
+MATCH_TABLE_DATE_HEADERS = frozenset({"date", "match date", "matchdate", "when"})
+MATCH_TABLE_OPPONENT_HEADERS = frozenset({"opponent", "opp", "vs", "vs."})
 
 
 @dataclass
@@ -124,20 +127,38 @@ def _extract_lifetime_stats(soup) -> dict:
     return stats
 
 
-def _extract_match_history(soup) -> list[dict]:
-    """Extract match history from stats table or session sections."""
-    matches = []
+def _is_match_history_table(table) -> bool:
+    """Return True when a table contains the date/opponent columns for match history."""
+    header_text = {
+        th.get_text(" ", strip=True).lower()
+        for th in table.select("thead th, tr th, th")
+        if th.get_text(" ", strip=True)
+    }
+    return bool(header_text & MATCH_TABLE_DATE_HEADERS) and bool(
+        header_text & MATCH_TABLE_OPPONENT_HEADERS
+    )
 
-    # Look for stats tables
-    tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        for row in rows:
+
+def _extract_match_history(soup) -> list[dict]:
+    """Extract match history from the actual match table(s) on the page."""
+    matches = []
+    qualifying_tables = [table for table in soup.find_all("table") if _is_match_history_table(table)]
+
+    if not qualifying_tables:
+        logger.warning("No table on the player page looked like a match-history table")
+        logger.info("Extracted %d match entries", len(matches))
+        return matches
+
+    for table in qualifying_tables:
+        for row in table.select("tr"):
             cells = row.find_all(["td", "th"])
-            if len(cells) >= 3:  # At least date, opponent, result
-                match_entry = _parse_match_row(cells)
-                if match_entry:
-                    matches.append(match_entry)
+            if not cells or all(cell.name == "th" for cell in cells):
+                continue
+            if len(cells) < 3:
+                continue
+            match_entry = _parse_match_row(cells)
+            if match_entry:
+                matches.append(match_entry)
 
     logger.info("Extracted %d match entries", len(matches))
     return matches
