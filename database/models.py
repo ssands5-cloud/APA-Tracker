@@ -93,5 +93,7 @@ class Match(Base):
     location = Column(String)
     match_date = Column(String)
     status = Column(String)
+    home_score = Column(Float)
+    away_score = Column(Float)
 
     player_matches = relationship("PlayerMatch", back_populates="match")

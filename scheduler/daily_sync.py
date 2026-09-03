@@ -23,6 +23,7 @@ from scraper.league_scraper import fetch_standings
 from scraper.player_scraper import fetch_player_stats
 from scraper.team_scraper import fetch_roster
 from scraper.graphql_scraper import fetch_team_data, roster_rows, schedule_rows
+from ui.export_excel import export_to_excel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -57,28 +58,30 @@ def run(config_path: str = "apa_config.yaml") -> None:
                         match["location"],
                         match["date"],
                         match["status"],
+                        match["home_score"],
+                        match["away_score"],
                     )
-            logger.info("Fetched %d live matches", len(schedule_rows(live)))
-            return
+            export_to_excel(db, config)
+            logger.info("Fetched %d live matches and exported workbook", len(schedule_rows(live)))
+        else:
+            session_mgr = SessionManager(config)
+            http_session = session_mgr.get_session()
+            standings = fetch_standings(http_session, config)
+            ingest_standings(db, standings)
 
-        session_mgr = SessionManager(config)
-        http_session = session_mgr.get_session()
-        standings = fetch_standings(http_session, config)
-        ingest_standings(db, standings)
+            team_cfg = config.get("team", {})
+            team = upsert_team(db, team_cfg.get("team_id", ""), team_cfg.get("team_name", ""))
 
-        team_cfg = config.get("team", {})
-        team = upsert_team(db, team_cfg.get("team_id", ""), team_cfg.get("team_name", ""))
+            roster = fetch_roster(http_session, config)
+            upsert_roster(db, team, roster)
 
-        roster = fetch_roster(http_session, config)
-        upsert_roster(db, team, roster)
-
-        for player in team.players:
-            try:
-                stats = fetch_player_stats(http_session, config, player.external_id)
-            except Exception:
-                logger.exception("Failed to fetch stats for player %s", player.name)
-                continue
-            ingest_player_matches(db, player, stats["matches"])
+            for player in team.players:
+                try:
+                    stats = fetch_player_stats(http_session, config, player.external_id)
+                except Exception:
+                    logger.exception("Failed to fetch stats for player %s", player.name)
+                    continue
+                ingest_player_matches(db, player, stats["matches"])
 
     logger.info("Daily sync complete")
 

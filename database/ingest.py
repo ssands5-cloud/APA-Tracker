@@ -94,12 +94,24 @@ def ingest_match(
     location: Optional[str] = None,
     match_date: Optional[str] = None,
     status: Optional[str] = None,
+    home_score: Optional[float] = None,
+    away_score: Optional[float] = None,
 ) -> Optional[int]:
     """Create or update a match record."""
     existing = db.query(Match).filter_by(external_id=match_id).one_or_none()
     if existing:
-        logger.debug("Match %s already exists, skipping", match_id)
-        return None
+        existing.home_team_id = home_team_id
+        existing.away_team_id = away_team_id
+        existing.home_team_name = home_team_name
+        existing.away_team_name = away_team_name
+        existing.location = location
+        existing.match_date = match_date
+        existing.status = status
+        existing.home_score = home_score
+        existing.away_score = away_score
+        db.commit()
+        logger.debug("Updated match %s", match_id)
+        return existing.id
 
     match = Match(
         external_id=match_id,
@@ -110,6 +122,8 @@ def ingest_match(
         location=location,
         match_date=match_date,
         status=status,
+        home_score=home_score,
+        away_score=away_score,
     )
     db.add(match)
     db.commit()

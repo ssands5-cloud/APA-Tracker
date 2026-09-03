@@ -67,6 +67,15 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
         home = match.get("home") or {}
         away = match.get("away") or {}
         location = match.get("location") or {}
+        scores = {
+            "home": None,
+            "away": None,
+        }
+        for result in match.get("results") or []:
+            side = str(result.get("homeAway") or "").lower()
+            points = (result.get("points") or {}).get("total")
+            if side in {"home", "away"}:
+                scores[side] = points
         rows.append(
             {
                 "match_id": str(match.get("id") or ""),
@@ -82,6 +91,8 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "is_scored": bool(match.get("isScored")),
                 "is_finalized": bool(match.get("isFinalized")),
                 "results": match.get("results") or [],
+                "home_score": scores["home"],
+                "away_score": scores["away"],
             }
         )
     return rows
