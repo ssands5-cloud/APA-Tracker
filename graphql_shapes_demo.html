@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APA Tracker — GraphQL Shapes Demo</title>
+<style>
+  :root {
+    --navy: #102a43; --blue: #1976d2; --ink: #243b53; --muted: #627d98;
+    --line: #d9e2ec; --surface: #f5f7fa; --green: #17804c; --red: #c53030;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: var(--surface); }
+  header { color: white; background: var(--navy); padding: 20px max(24px, calc((100% - 1100px) / 2)); }
+  header h1 { margin: 0 0 4px; font-size: 24px; }
+  header p { margin: 0; color: #bcccdc; font-size: 14px; }
+  .banner {
+    background: #fff8e1; border-bottom: 1px solid #e6c200; color: #6b5900;
+    padding: 10px max(24px, calc((100% - 1100px) / 2)); font-size: 13px;
+  }
+  .banner strong { color: #4a3f00; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 24px 50px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab {
+    padding: 9px 16px; border-radius: 6px; color: var(--muted); background: white;
+    border: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  }
+  .tab.active { color: white; background: var(--blue); border-color: var(--blue); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  section {
+    background: white; border: 1px solid var(--line); border-radius: 9px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  section h2 { padding: 15px 18px; margin: 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  section .sub { padding: 0 18px 12px; margin-top: -8px; color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #edf2f7; }
+  th { color: var(--muted); background: #f8fafc; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  tr.highlight { background: #e8f1fb; }
+  .pos { color: var(--green); font-weight: 600; }
+  .neg { color: var(--red); font-weight: 600; }
+  .flag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .flag.bye { background: #fdf0e0; color: #a05a00; }
+  .flag.forfeit { background: #fde8e8; color: #a02020; }
+  .flag.incomplete { background: #eef0fb; color: #33389c; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: white; border: 1px solid var(--line); border-radius: 9px; padding: 14px 16px; }
+  .card .label { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 22px; font-weight: 700; color: var(--navy); }
+  .field-name { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>APA Tracker</h1>
+  <p>GraphQL shapes demo — real field names, fabricated values</p>
+</header>
+
+<div class="banner">
+  <strong>This page shows what the app CAN display, not live data.</strong>
+  Every value below is invented. The field names, nesting, and enum values
+  are real — confirmed against a sanitized capture of the actual APA API on
+  2026-09-03 (see <span class="field-name">docs/graphql-captures/2026-09-03-shapes.json</span>).
+  No network request is made anywhere on this page; everything is embedded below.
+</div>
+
+<main>
+  <nav class="tabs">
+    <div class="tab active" data-panel="team">Team</div>
+    <div class="tab" data-panel="roster">Roster</div>
+    <div class="tab" data-panel="schedule">Schedule</div>
+    <div class="tab" data-panel="standings">Standings</div>
+    <div class="tab" data-panel="history">Player Match History</div>
+  </nav>
+
+  <div id="team" class="panel active"></div>
+  <div id="roster" class="panel"></div>
+  <div id="schedule" class="panel"></div>
+  <div id="standings" class="panel"></div>
+  <div id="history" class="panel"></div>
+</main>
+
+<script>
+// ---------------------------------------------------------------------
+// Embedded sanitized data. Shapes match the real, captured GraphQL API
+// (teamPage / teamRoster / teamSchedule / divsionStandings / MatchPage).
+// Every id, name, and number here is fabricated -- see the banner above.
+// No fetch(), no XHR, no external script or stylesheet on this page.
+// ---------------------------------------------------------------------
+
+const TEAM = {
+  id: 13082948, name: "Chalk It Up", number: "4", standing: 3, isTied: false,
+  division: { id: 436670, name: "Thursday 8-Ball", nightOfPlay: "THURSDAY", format: "Regular" },
+  session: { name: "2026 Summer" },
+  league: { id: 1438, slug: "example-league" },
+  location: { name: "The Corner Pocket" },
+};
+
+const ROSTER = [
+  { id: 1, displayName: "Alex R.", matchesWon: 8, matchesPlayed: 10, skillLevel: 5, ppm: 2.1, pa: 0.77, member: { id: 80200640 } },
+  { id: 2, displayName: "Jamie L.", matchesWon: 7, matchesPlayed: 10, skillLevel: 4, ppm: 1.9, pa: 0.71, member: { id: 80200641 } },
+  { id: 3, displayName: "Chris T.", matchesWon: 5, matchesPlayed: 10, skillLevel: 6, ppm: 2.4, pa: 0.63, member: { id: 80200642 } },
+  { id: 4, displayName: "Sam R.",  matchesWon: 4, matchesPlayed: 9,  skillLevel: 3, ppm: 1.4, pa: 0.58, member: { id: 80200643 } },
+];
+
+const SCHEDULE = [
+  { id: 555001, week: 9, startTime: "2026-08-27T19:00:00-04:00", status: "COMPLETED", isBye: false,
+    isScored: true, isFinalized: true, home: { id: 13082948, name: "Chalk It Up" }, away: { id: 90002, name: "Rack Attack" },
+    results: [{ homeAway: "HOME", points: { total: 18 } }, { homeAway: "AWAY", points: { total: 12 } }] },
+  { id: 555002, week: 10, startTime: "2026-09-03T19:00:00-04:00", status: "SCHEDULED", isBye: false,
+    isScored: false, isFinalized: false, home: { id: 90005, name: "Eight Ballers" }, away: { id: 13082948, name: "Chalk It Up" },
+    results: [] },
+  { id: 555003, week: 11, startTime: "2026-09-10T19:00:00-04:00", status: "BYE", isBye: true,
+    isScored: false, isFinalized: false, home: { id: 13082948, name: "Chalk It Up" }, away: null, results: [] },
+];
+
+const DIVISION_STANDINGS = [
+  { id: 13082948, name: "Chalk It Up", standing: 1, sessionTotalPoints: 142, pointsLastWeek: 20, isTied: false, isBye: false },
+  { id: 90002,    name: "Rack Attack", standing: 2, sessionTotalPoints: 138, pointsLastWeek: 18, isTied: false, isBye: false },
+  { id: 90003,    name: "Side Pocket Squad", standing: 3, sessionTotalPoints: 129, pointsLastWeek: 21, isTied: true, isBye: false },
+  { id: 90004,    name: "Corner Pocket", standing: 3, sessionTotalPoints: 129, pointsLastWeek: 15, isTied: true, isBye: false },
+  { id: 90005,    name: "Eight Ballers", standing: 5, sessionTotalPoints: 98,  pointsLastWeek: 12, isTied: false, isBye: false },
+  { id: 90006,    name: "Bye Week", standing: null, sessionTotalPoints: 0, pointsLastWeek: 0, isTied: false, isBye: true },
+];
+
+// One match's full scoresheet -- the shape MATCH_DETAIL_QUERY returns.
+const MATCH_DETAIL = {
+  id: 555001, isFinalized: true, week: 9,
+  home: { id: 13082948, name: "Chalk It Up" }, away: { id: 90002, name: "Rack Attack" },
+  results: [
+    { homeAway: "HOME", scores: [
+      { player: { id: 501, displayName: "Alex R." }, skillLevel: 5, winLoss: "W", eightBallMatchPointsEarned: 6, matchForfeited: false, incompleteMatch: false },
+      { player: { id: 502, displayName: "Jamie L." }, skillLevel: 4, winLoss: "L", eightBallMatchPointsEarned: 3, matchForfeited: false, incompleteMatch: false },
+      { player: { id: 503, displayName: "Chris T." }, skillLevel: 6, winLoss: "L", eightBallMatchPointsEarned: 0, matchForfeited: true,  incompleteMatch: false },
+    ]},
+    { homeAway: "AWAY", scores: [
+      { player: { id: 601, displayName: "Player Four" }, skillLevel: 5, winLoss: "L", eightBallMatchPointsEarned: 3, matchForfeited: false, incompleteMatch: false },
+      { player: { id: 602, displayName: "Player Five" }, skillLevel: 3, winLoss: "W", eightBallMatchPointsEarned: 6, matchForfeited: false, incompleteMatch: true },
+    ]},
+  ],
+};
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v; else node.setAttribute(k, v);
+  }
+  for (const child of children) {
+    node.append(child && child.nodeType ? child : document.createTextNode(child ?? ""));
+  }
+  return node;
+}
+
+function table(headers, rows) {
+  const thead = el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", h.num ? { class: "num" } : {}, h.label))));
+  const tbody = el("tbody", {}, ...rows);
+  return el("table", {}, thead, tbody);
+}
+
+// --- Team panel ---
+document.getElementById("team").append(
+  el("div", { class: "cards" },
+    el("div", { class: "card" }, el("div", { class: "label" }, "Team"), el("div", { class: "value" }, TEAM.name)),
+    el("div", { class: "card" }, el("div", { class: "label" }, "Division"), el("div", { class: "value" }, TEAM.division.name)),
+    el("div", { class: "card" }, el("div", { class: "label" }, "Session"), el("div", { class: "value" }, TEAM.session.name)),
+    el("div", { class: "card" }, el("div", { class: "label" }, "Home"), el("div", { class: "value" }, TEAM.location.name)),
+  ),
+  el("section", {},
+    el("h2", {}, "Team metadata"),
+    el("div", { class: "sub" }, "From ", el("span", { class: "field-name" }, "TEAM_PAGE_QUERY"), " (operation ", el("span", { class: "field-name" }, "teamPage"), ")"),
+    table(
+      [{ label: "Field" }, { label: "Value" }],
+      Object.entries({
+        id: TEAM.id, name: TEAM.name, number: TEAM.number, standing: TEAM.standing,
+        isTied: String(TEAM.isTied), "division.nightOfPlay": TEAM.division.nightOfPlay,
+        "division.format": TEAM.division.format, "league.slug": TEAM.league.slug,
+      }).map(([k, v]) => el("tr", {}, el("td", { class: "field-name" }, k), el("td", {}, String(v))))
+    )
+  )
+);
+
+// --- Roster panel ---
+document.getElementById("roster").append(
+  el("section", {},
+    el("h2", {}, "Roster"),
+    el("div", { class: "sub" }, "From ", el("span", { class: "field-name" }, "TEAM_ROSTER_QUERY"), " — win % is derived client-side (matchesWon / matchesPlayed), not returned by the API"),
+    table(
+      [{ label: "Player" }, { label: "Skill Level", num: true }, { label: "W-L", num: true },
+       { label: "Win %", num: true }, { label: "PPM", num: true }, { label: "PA", num: true }],
+      ROSTER.map((p) => {
+        const winPct = p.matchesPlayed ? (p.matchesWon / p.matchesPlayed) : 0;
+        return el("tr", {},
+          el("td", {}, p.displayName),
+          el("td", { class: "num" }, String(p.skillLevel)),
+          el("td", { class: "num" }, `${p.matchesWon}-${p.matchesPlayed - p.matchesWon}`),
+          el("td", { class: "num" }, (winPct * 100).toFixed(0) + "%"),
+          el("td", { class: "num" }, p.ppm.toFixed(1)),
+          el("td", { class: "num" }, (p.pa * 100).toFixed(0) + "%"),
+        );
+      })
+    )
+  )
+);
+
+// --- Schedule panel ---
+document.getElementById("schedule").append(
+  el("section", {},
+    el("h2", {}, "Schedule"),
+    el("div", { class: "sub" }, "From ", el("span", { class: "field-name" }, "TEAM_SCHEDULE_QUERY"), " — byes are shown, not dropped"),
+    table(
+      [{ label: "Week", num: true }, { label: "Date" }, { label: "Opponent" }, { label: "Status" }, { label: "Score", num: true }],
+      SCHEDULE.map((m) => {
+        if (m.isBye) {
+          return el("tr", {}, el("td", { class: "num" }, String(m.week)),
+            el("td", {}, new Date(m.startTime).toLocaleDateString()), el("td", {}, "—"),
+            el("td", {}, el("span", { class: "flag bye" }, "BYE")), el("td", { class: "num" }, "—"));
+        }
+        const isHome = m.home.id === TEAM.id;
+        const opponent = isHome ? m.away.name : m.home.name;
+        const homePts = m.results.find((r) => r.homeAway === "HOME")?.points?.total;
+        const awayPts = m.results.find((r) => r.homeAway === "AWAY")?.points?.total;
+        const score = m.isScored ? `${homePts ?? "–"} - ${awayPts ?? "–"}` : "—";
+        return el("tr", {}, el("td", { class: "num" }, String(m.week)),
+          el("td", {}, new Date(m.startTime).toLocaleDateString()),
+          el("td", {}, (isHome ? "vs " : "@ ") + opponent),
+          el("td", {}, m.status),
+          el("td", { class: "num" }, score));
+      })
+    )
+  )
+);
+
+// --- Standings panel ---
+document.getElementById("standings").append(
+  el("section", {},
+    el("h2", {}, "Division standings"),
+    el("div", { class: "sub" },
+      "From ", el("span", { class: "field-name" }, "DIVISION_STANDINGS_QUERY"),
+      " (real operation name is misspelled on the live API: ", el("span", { class: "field-name" }, "divsionStandings"),
+      "). Wins/Losses are intentionally blank — the API ranks by cumulative points, not a maintained win/loss record."),
+    table(
+      [{ label: "Rank", num: true }, { label: "Team" }, { label: "Points", num: true }, { label: "Pts Last Wk", num: true }, { label: "" }],
+      DIVISION_STANDINGS.map((t) => el("tr", { class: t.id === TEAM.id ? "highlight" : "" },
+        el("td", { class: "num" }, t.standing == null ? "—" : String(t.standing)),
+        el("td", {}, t.name),
+        el("td", { class: "num" }, t.isBye ? "—" : String(t.sessionTotalPoints)),
+        el("td", { class: "num" }, t.isBye ? "—" : String(t.pointsLastWeek)),
+        el("td", {}, t.isBye ? el("span", { class: "flag bye" }, "BYE") : (t.isTied ? "tied" : ""))
+      ))
+    )
+  )
+);
+
+// --- Player match history panel ---
+const scoreRows = [];
+for (const result of MATCH_DETAIL.results) {
+  const team = result.homeAway === "HOME" ? MATCH_DETAIL.home : MATCH_DETAIL.away;
+  for (const s of result.scores) scoreRows.push({ team: team.name, ...s });
+}
+document.getElementById("history").append(
+  el("section", {},
+    el("h2", {}, `Match #${MATCH_DETAIL.id} — Week ${MATCH_DETAIL.week} scoresheet`),
+    el("div", { class: "sub" },
+      "From ", el("span", { class: "field-name" }, "MATCH_DETAIL_QUERY"),
+      " (trimmed from the real ", el("span", { class: "field-name" }, "MatchPage"),
+      " operation — billing fields dropped, see parser/apa_graphql.py)"),
+    table(
+      [{ label: "Player" }, { label: "Team" }, { label: "Skill Level", num: true }, { label: "Result" }, { label: "Points", num: true }, { label: "" }],
+      scoreRows.map((s) => el("tr", {},
+        el("td", {}, s.player.displayName),
+        el("td", {}, s.team),
+        el("td", { class: "num" }, String(s.skillLevel)),
+        el("td", {}, el("span", { class: s.winLoss === "W" ? "pos" : "neg" }, s.winLoss)),
+        el("td", { class: "num" }, String(s.eightBallMatchPointsEarned)),
+        el("td", {},
+          s.matchForfeited ? el("span", { class: "flag forfeit" }, "FORFEIT") : "",
+          s.incompleteMatch ? el("span", { class: "flag incomplete" }, "INCOMPLETE") : "")
+      ))
+    )
+  )
+);
+
+// --- Tabs ---
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.panel).classList.add("active");
+  });
+});
+</script>
+</body>
+</html>

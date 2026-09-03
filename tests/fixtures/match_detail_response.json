@@ -1,0 +1,90 @@
+{
+  "_comment": "Sanitized fixture for MATCH_DETAIL_QUERY, our trimmed version of the real MatchPage operation (shape confirmed in docs/graphql-captures/2026-09-03-shapes.json). The real query also requests fees{} and orderItems{order{member{firstName,lastName}}} -- billing/order fields dropped deliberately, see parser/apa_graphql.py. All names/ids invented. Includes one forfeited and one incomplete row to exercise those flags.",
+  "data": {
+    "match": {
+      "id": 555001,
+      "isFinalized": true,
+      "isTournament": false,
+      "tableNumber": "4",
+      "startTime": "2026-08-27T19:00:00-04:00",
+      "week": 9,
+      "isBye": false,
+      "isScored": true,
+      "home": { "id": 90001, "name": "Chalk It Up", "number": "3" },
+      "away": { "id": 90002, "name": "Rack Attack", "number": "7" },
+      "results": [
+        {
+          "homeAway": "HOME",
+          "overUnder": 1,
+          "forfeits": 0,
+          "matchesWon": 3,
+          "matchesPlayed": 5,
+          "points": {
+            "bonus": 2, "penalty": 0, "won": 15, "adjustment": 0,
+            "sportsmanship": 1, "total": 18, "skillLevelViolationAdjustment": 0
+          },
+          "scores": [
+            {
+              "id": 7001, "player": { "id": 501, "displayName": "Player One" },
+              "matchPositionNumber": 1, "playerPosition": 1, "skillLevel": 5,
+              "eightBallWins": 2, "eightOnBreak": 0, "eightBallBreakAndRun": 1,
+              "nineBallPoints": null, "nineOnSnap": null, "nineBallBreakAndRun": null,
+              "nineBallMatchPointsEarned": null,
+              "winLoss": "W", "matchForfeited": false, "doublesMatch": false,
+              "eightBallMatchPointsEarned": 6, "incompleteMatch": false
+            },
+            {
+              "id": 7002, "player": { "id": 502, "displayName": "Player Two" },
+              "matchPositionNumber": 2, "playerPosition": 2, "skillLevel": 4,
+              "eightBallWins": 1, "eightOnBreak": 1, "eightBallBreakAndRun": 0,
+              "nineBallPoints": null, "nineOnSnap": null, "nineBallBreakAndRun": null,
+              "nineBallMatchPointsEarned": null,
+              "winLoss": "L", "matchForfeited": false, "doublesMatch": false,
+              "eightBallMatchPointsEarned": 3, "incompleteMatch": false
+            },
+            {
+              "id": 7003, "player": { "id": 503, "displayName": "Player Three" },
+              "matchPositionNumber": 3, "playerPosition": 3, "skillLevel": 6,
+              "eightBallWins": 0, "eightOnBreak": 0, "eightBallBreakAndRun": 0,
+              "nineBallPoints": null, "nineOnSnap": null, "nineBallBreakAndRun": null,
+              "nineBallMatchPointsEarned": null,
+              "winLoss": "L", "matchForfeited": true, "doublesMatch": false,
+              "eightBallMatchPointsEarned": 0, "incompleteMatch": false
+            }
+          ]
+        },
+        {
+          "homeAway": "AWAY",
+          "overUnder": -1,
+          "forfeits": 1,
+          "matchesWon": 2,
+          "matchesPlayed": 5,
+          "points": {
+            "bonus": 0, "penalty": 0, "won": 12, "adjustment": 0,
+            "sportsmanship": 0, "total": 12, "skillLevelViolationAdjustment": 0
+          },
+          "scores": [
+            {
+              "id": 7004, "player": { "id": 601, "displayName": "Player Four" },
+              "matchPositionNumber": 1, "playerPosition": 1, "skillLevel": 5,
+              "eightBallWins": 1, "eightOnBreak": 0, "eightBallBreakAndRun": 0,
+              "nineBallPoints": null, "nineOnSnap": null, "nineBallBreakAndRun": null,
+              "nineBallMatchPointsEarned": null,
+              "winLoss": "L", "matchForfeited": false, "doublesMatch": false,
+              "eightBallMatchPointsEarned": 3, "incompleteMatch": false
+            },
+            {
+              "id": 7005, "player": { "id": 602, "displayName": "Player Five" },
+              "matchPositionNumber": 2, "playerPosition": 2, "skillLevel": 3,
+              "eightBallWins": 2, "eightOnBreak": 0, "eightBallBreakAndRun": 0,
+              "nineBallPoints": null, "nineOnSnap": null, "nineBallBreakAndRun": null,
+              "nineBallMatchPointsEarned": null,
+              "winLoss": "W", "matchForfeited": false, "doublesMatch": false,
+              "eightBallMatchPointsEarned": 6, "incompleteMatch": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

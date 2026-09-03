@@ -16,6 +16,7 @@ from typing import Any
 from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
     DIVISION_STANDINGS_QUERY,
+    MATCH_DETAIL_QUERY,
     TEAM_PAGE_QUERY,
     TEAM_ROSTER_QUERY,
     TEAM_SCHEDULE_QUERY,
@@ -302,3 +303,70 @@ def match_score(row: dict[str, Any]) -> tuple[Any, Any]:
             points[side] = total
 
     return (points.get("home"), points.get("away"))
+
+
+def fetch_match_detail(config: dict, match_id: int) -> dict[str, Any]:
+    """Fetch one match's full scoresheet -- both sides, every player's line.
+
+    This is the only source of per-player, per-match statistics (skill level,
+    games won, break-and-runs, forfeits, the win/loss call): the schedule and
+    team queries carry only the team-level score. Callers walk a division's
+    or team's schedule for match ids, then call this once per match that is
+    actually scored.
+
+    Raises the same errors as fetch_team_data. Returns {} if the server has
+    no match at that id (a nulled `match`), so callers can treat "no such
+    match" and "match not found" the same way.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(MATCH_DETAIL_QUERY, {"id": int(match_id)}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("match") or {}
+
+
+def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per player who played in this match -- the per-game scoresheet.
+
+    A forfeited or incomplete line is still returned, flagged rather than
+    dropped: a player who forfeited did participate in the match, and
+    silently omitting the row would undercount matches played, not just
+    matches won.
+
+    `points_earned` maps 8-ball and 9-ball match points onto one field since
+    a division plays one format or the other, never both, so exactly one of
+    the two source fields is ever non-null for a given player.
+    """
+    rows = []
+    for result in match.get("results") or []:
+        result = result or {}
+        side = (result.get("homeAway") or "").lower()
+        team = (match.get("home") if side == "home" else match.get("away")) or {}
+        for score in result.get("scores") or []:
+            score = score or {}
+            player = score.get("player") or {}
+            points_earned = score.get("eightBallMatchPointsEarned")
+            if points_earned is None:
+                points_earned = score.get("nineBallMatchPointsEarned")
+            rows.append(
+                {
+                    "match_id": str(match.get("id") or ""),
+                    "player_id": str(player.get("id") or ""),
+                    "player_name": player.get("displayName") or "",
+                    "team_id": str(team.get("id") or ""),
+                    "team_name": team.get("name") or "",
+                    "skill_level": score.get("skillLevel"),
+                    "result": score.get("winLoss"),
+                    "points_earned": points_earned,
+                    "forfeited": bool(score.get("matchForfeited")),
+                    "incomplete": bool(score.get("incompleteMatch")),
+                }
+            )
+    return rows

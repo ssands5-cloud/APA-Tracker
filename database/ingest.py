@@ -191,6 +191,49 @@ def ingest_match_roster(
     return count
 
 
+def ingest_match_scores(db: Session, match_id: int, scores: list[dict]) -> tuple[int, int]:
+    """Persist one match's per-player scoresheet rows.
+
+    Returns (created, updated). Unlike ingest_match_roster, an existing row is
+    UPDATED rather than skipped: match_player_scores() can be re-run against
+    the same match after it goes from unfinalized to finalized, and a
+    forfeit/incomplete flag or the final result can change between those two
+    reads. Deduped the same way, on (player_id, match_id).
+    """
+    created = updated = 0
+    for entry in scores:
+        player_id = entry.get("player_id") or ""
+        player_name = entry.get("player_name") or ""
+        player = upsert_player(db, player_id, player_name)
+
+        existing = (
+            db.query(PlayerMatch)
+            .filter_by(player_id=player.id, match_id=match_id)
+            .one_or_none()
+        )
+        fields = {
+            "team_id": entry.get("team_id"),
+            "team_name": entry.get("team_name"),
+            "skill_level": _to_int(entry.get("skill_level")),
+            "result": entry.get("result"),
+            "points_earned": _to_float(entry.get("points_earned")),
+        }
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+            updated += 1
+        else:
+            db.add(PlayerMatch(player_id=player.id, match_id=match_id, **fields))
+            created += 1
+
+    db.commit()
+    logger.info(
+        "Ingested match %s scores: %d new, %d updated player-match row(s)",
+        match_id, created, updated,
+    )
+    return created, updated
+
+
 def ingest_player_matches(db: Session, player: Player, matches: list[dict]) -> int:
     count = 0
     for row in matches:

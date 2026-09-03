@@ -1,0 +1,52 @@
+{
+  "_comment": "Sanitized fixture for DIVISION_STANDINGS_QUERY (real operation name: divsionStandings, misspelled on the live API and matched exactly since GraphQL operation names are matched verbatim). Shape confirmed against docs/graphql-captures/2026-09-03-shapes.json -- a real capture reduced to field names and types, no data. All team names, ids, and numbers below are invented. 6 teams, matching the real capture's '...6 item(s)'.",
+  "data": {
+    "division": {
+      "id": 436670,
+      "teams": [
+        {
+          "id": 90001, "name": "Chalk It Up", "number": "3",
+          "standing": 1, "pointsLastWeek": 20, "lastWeek": 1,
+          "sessionTotalPoints": 142, "totalTeamMatchesPlayed": 9,
+          "isTied": false, "isBye": false,
+          "league": { "id": 1438, "slug": "sample-league" }
+        },
+        {
+          "id": 90002, "name": "Rack Attack", "number": "7",
+          "standing": 2, "pointsLastWeek": 18, "lastWeek": 2,
+          "sessionTotalPoints": 138, "totalTeamMatchesPlayed": 9,
+          "isTied": false, "isBye": false,
+          "league": { "id": 1438, "slug": "sample-league" }
+        },
+        {
+          "id": 90003, "name": "Side Pocket Squad", "number": "1",
+          "standing": 3, "pointsLastWeek": 21, "lastWeek": 4,
+          "sessionTotalPoints": 129, "totalTeamMatchesPlayed": 9,
+          "isTied": true, "isBye": false,
+          "league": { "id": 1438, "slug": "sample-league" }
+        },
+        {
+          "id": 90004, "name": "Corner Pocket", "number": "5",
+          "standing": 3, "pointsLastWeek": 15, "lastWeek": 3,
+          "sessionTotalPoints": 129, "totalTeamMatchesPlayed": 9,
+          "isTied": true, "isBye": false,
+          "league": { "id": 1438, "slug": "sample-league" }
+        },
+        {
+          "id": 90005, "name": "Eight Ballers", "number": "2",
+          "standing": 5, "pointsLastWeek": 12, "lastWeek": 6,
+          "sessionTotalPoints": 98, "totalTeamMatchesPlayed": 8,
+          "isTied": false, "isBye": false,
+          "league": { "id": 1438, "slug": "sample-league" }
+        },
+        {
+          "id": 90006, "name": "Bye Week", "number": "9",
+          "standing": null, "pointsLastWeek": 0, "lastWeek": 0,
+          "sessionTotalPoints": 0, "totalTeamMatchesPlayed": 0,
+          "isTied": false, "isBye": true,
+          "league": { "id": 1438, "slug": "sample-league" }
+        }
+      ]
+    }
+  }
+}
