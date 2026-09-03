@@ -46,6 +46,7 @@ from scraper.graphql_scraper import (
     viewer_matches_rows,
 )
 from ui.export_excel import export_to_excel
+from ui.export_json import export_to_json
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -267,6 +268,8 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         if export:
             path = export_to_excel(db, config)
             logger.info("Excel export written to %s", path)
+            json_path = export_to_json(db, config)
+            logger.info("JSON export written to %s", json_path)
 
     logger.info(
         "All-teams sync complete: %d team(s), %d roster entries, %d standings row(s) "
@@ -323,6 +326,8 @@ def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, 
         if export:
             path = export_to_excel(db, config)
             logger.info("Excel export written to %s", path)
+            json_path = export_to_json(db, config)
+            logger.info("JSON export written to %s", json_path)
 
     logger.info(
         "Sync complete: %d roster entries, %d/%d matches new (%d byes, %d not yet scored)",
