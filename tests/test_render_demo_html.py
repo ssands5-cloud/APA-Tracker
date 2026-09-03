@@ -88,4 +88,8 @@ def test_main_reads_and_writes_expected_paths(tmp_path):
         sys.argv = old_argv
 
     assert out_path.exists()
-    assert "<title>APA Tracker</title>" in out_path.read_text()
+    # render_demo_html.py writes with encoding="utf-8" explicitly (its data
+    # can contain non-ASCII player/team names); read_text() must match that
+    # rather than falling back to the platform default, which is cp1252 on
+    # Windows and chokes on bytes outside that codec's mapped range.
+    assert "<title>APA Tracker</title>" in out_path.read_text(encoding="utf-8")

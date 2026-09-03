@@ -14,6 +14,7 @@ import json
 import os
 import pickle
 import stat
+import subprocess
 
 import pytest
 import requests
@@ -59,8 +60,20 @@ class TestSaveWritesJSON:
         mgr = SessionManager(_config(cache_path))
         mgr._save_cookies(requests.Session())
 
-        mode = stat.S_IMODE(os.stat(cache_path).st_mode)
-        assert mode == 0o600
+        if os.name == "nt":
+            # os.open(..., 0o600) is a no-op on NTFS -- st_mode always reads
+            # back as the default 0o666 regardless. The real protection on
+            # Windows is the icacls ACL rewrite in _save_cookies; assert
+            # that actually landed instead of a POSIX-only stat bit that
+            # Windows has no meaningful equivalent for.
+            result = subprocess.run(
+                ["icacls", str(cache_path)], capture_output=True, text=True, check=True,
+            )
+            assert "Everyone" not in result.stdout
+            assert "BUILTIN\\Users" not in result.stdout
+        else:
+            mode = stat.S_IMODE(os.stat(cache_path).st_mode)
+            assert mode == 0o600
 
 
 class TestRoundTrip:
