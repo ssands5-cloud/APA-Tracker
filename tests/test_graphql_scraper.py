@@ -17,6 +17,8 @@ from scraper.graphql_scraper import (
     AccessTokenMissing,
     _token,
     match_score,
+    division_standings_rows,
+    fetch_division_standings,
     roster_rows,
     standings_rows,
     schedule_rows,
@@ -205,3 +207,55 @@ class TestStandingsRows:
 
     def test_no_team_means_no_snapshot(self):
         assert standings_rows({}) == []
+
+
+# --- Real division standings (the query captured 2026-09-03) -----------------
+
+DIVISION_STANDINGS = {
+    "id": 436670,
+    "teams": [
+        {"id": 1, "name": "Rack Attack", "number": "1", "standing": 1, "pointsLastWeek": 12,
+         "lastWeek": 1, "sessionTotalPoints": 72, "totalTeamMatchesPlayed": 10,
+         "isTied": False, "isBye": False, "league": {"id": 1438, "slug": "x"}},
+        {"id": 13082948, "name": "Chalk It Up", "number": "4", "standing": 3,
+         "pointsLastWeek": 9, "lastWeek": 2, "sessionTotalPoints": 57,
+         "totalTeamMatchesPlayed": 10, "isTied": False, "isBye": False,
+         "league": {"id": 1438, "slug": "x"}},
+    ],
+}
+
+
+class TestDivisionStandingsRows:
+    """The real query returns the whole division, not just our team."""
+
+    def test_every_team_in_the_division_becomes_a_row(self):
+        rows = division_standings_rows(DIVISION_STANDINGS)
+        assert len(rows) == 2
+        assert {r["team_name"] for r in rows} == {"Rack Attack", "Chalk It Up"}
+
+    def test_rank_and_points_come_straight_from_the_api(self):
+        rows = division_standings_rows(DIVISION_STANDINGS)
+        ours = next(r for r in rows if r["team_name"] == "Chalk It Up")
+        assert ours["rank"] == 3
+        assert ours["points"] == 57
+
+    def test_wins_and_losses_are_none_not_guessed(self):
+        """This endpoint doesn't return them; APA ranks on session points.
+        A derived number here would look authoritative and be wrong."""
+        for row in division_standings_rows(DIVISION_STANDINGS):
+            assert row["wins"] is None
+            assert row["losses"] is None
+
+    def test_missing_or_empty_division_yields_no_rows(self):
+        assert division_standings_rows({}) == []
+        assert division_standings_rows({"teams": None}) == []
+
+    def test_null_team_entry_does_not_raise(self):
+        assert division_standings_rows({"teams": [None]})[0]["team_name"] == ""
+
+
+class TestFetchDivisionStandings:
+    def test_no_division_id_configured_returns_empty_not_an_error(self, monkeypatch):
+        monkeypatch.setenv("APA_ACCESS_TOKEN", "tok")
+        assert fetch_division_standings({"team": {"team_id": "1"}}) == {}
+        assert fetch_division_standings({"apa": {}}) == {}

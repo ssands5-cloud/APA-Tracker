@@ -184,3 +184,52 @@ class TestExcelExportSeesLiveData:
         upsert_player(db, "P9", "Newcomer")
         frame = _player_stats_dataframe(db)
         assert frame.iloc[0]["Source"] == "no data"
+
+
+class TestRealDivisionStandings:
+    """With the division query captured (2026-09-03), standings are the real
+    table for every team, not our own row derived from our own schedule."""
+
+    DIVISION = {
+        "id": 436670,
+        "teams": [
+            {"id": 1, "name": "Rack Attack", "standing": 1, "sessionTotalPoints": 72},
+            {"id": 13082948, "name": "Chalk It Up", "standing": 3, "sessionTotalPoints": 57},
+            {"id": 9, "name": "Corner Pocket", "standing": 5, "sessionTotalPoints": 41},
+        ],
+    }
+
+    def test_all_division_teams_are_snapshotted(self, db):
+        from database.models import StandingsSnapshot
+
+        data = dict(TEAM_DATA, division=self.DIVISION)
+        counts = ingest_team_data(db, data)
+
+        assert counts["standings"] == 3, "the whole division, not just our team"
+        rows = db.query(StandingsSnapshot).all()
+        assert {r.team_name for r in rows} == {"Rack Attack", "Chalk It Up", "Corner Pocket"}
+        ours = next(r for r in rows if r.team_name == "Chalk It Up")
+        assert (ours.rank, ours.points) == (3, 57)
+
+    def test_falls_back_to_our_team_when_no_division_data(self, db):
+        """A config without a division id still gets its own snapshot."""
+        counts = ingest_team_data(db, TEAM_DATA)
+        assert counts["standings"] == 1
+
+    def test_the_excel_standings_sheet_shows_the_division(self, db, tmp_path):
+        pytest.importorskip("openpyxl")
+        import openpyxl
+
+        from ui.export_excel import export_to_excel
+
+        ingest_team_data(db, dict(TEAM_DATA, division=self.DIVISION))
+        path = export_to_excel(db, {"export": {"excel_output_path": str(tmp_path / "d.xlsx")}})
+
+        sheet = openpyxl.load_workbook(path)["Standings"]
+        rows = [[c.value for c in r] for r in sheet.iter_rows()]
+        header, data_rows = rows[0], rows[1:]
+        assert len(data_rows) == 3
+        # Ordered by rank, as latest_standings() sorts them.
+        assert [dict(zip(header, r))["Team"] for r in data_rows] == [
+            "Rack Attack", "Chalk It Up", "Corner Pocket",
+        ]

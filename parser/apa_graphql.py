@@ -129,25 +129,106 @@ query teamSchedule($id: Int!) {
 }
 """
 
-# --- Known to exist, still to capture ---
+# --- Division queries, captured 2026-09-03 from the real division standings
+# page (docs/graphql-captures/2026-09-03-shapes.json has the full sanitized
+# capture: field names and types, no data). This is the query that used to be
+# guessed at as "LeagueBox" -- the real operation is spelled divsionStandings,
+# missing the first "i", and GraphQL matches operation names exactly.
+
+DIVISION_STANDINGS_QUERY = """
+query divsionStandings($id: Int!) {
+  division(id: $id) {
+    id
+    teams {
+      id name number standing pointsLastWeek lastWeek
+      sessionTotalPoints totalTeamMatchesPlayed isTied isBye
+      league { id slug }
+    }
+  }
+}
+"""
+
+DIVISION_CONTACTS_QUERY = """
+query DivisionContacts($id: Int!) {
+  division(id: $id) {
+    id name
+    contacts { phone alias { id displayName } }
+  }
+}
+"""
+
+DIVISION_ROSTERS_QUERY = """
+query divisionRosters($id: Int!) {
+  division(id: $id) {
+    id
+    teams {
+      isBye
+      id name number
+      league { id slug }
+      division { id type }
+      roster {
+        id memberNumber displayName matchesWon matchesPlayed
+        ... on EightBallPlayer { pa ppm skillLevel }
+        ... on NineBallPlayer { pa ppm skillLevel }
+        member { id }
+      }
+    }
+  }
+}
+"""
+
+# --- Division schedule and match detail: captured, but trimmed here ---
 #
-# These operation names were seen in the network tab but their query
-# documents have not been captured, so nothing can use them yet. To fill one
-# in: open the page that issues it while logged in, save the network log as
-# "HAR with content", run tools/export-apa-graphql.ps1, and copy the `query`
-# for that operation here. Never copy the `authorization` header.
-#
-#   LeagueBox         The full division standings table. Until this exists,
-#                     scraper.graphql_scraper.standings_rows can only
-#                     snapshot OUR team's rank -- not the division table.
-#   DivisionContacts  Division contact details.
-#
-# Both are issued by the league/division standings page, which is why a HAR
-# captured from the team page alone does not contain them.
-LEAGUE_BOX_QUERY = None
-DIVISION_CONTACTS_QUERY = None
+# The real divisionSchedule and MatchPage documents (see the same capture
+# file) also request orderItems { order { member { firstName lastName } } }
+# and, on MatchPage, fees { amount tax total }. Those are billing/order
+# fields from the app's payment flow -- personal and financial data this
+# tracker has no reason to request, store, or be liable for. The versions
+# below ask for everything actually used (results, scores, schedule dates)
+# and nothing from that subtree.
+
+DIVISION_SCHEDULE_QUERY = """
+query divisionSchedule($id: Int!) {
+  division(id: $id) {
+    id
+    teams { id name number active isBye }
+    schedule {
+      id description date weekOfPlay skip
+      matches {
+        id isBye status startTime isScored isFinalized isPlayoff tableNumber
+        results { homeAway points { total } }
+        home { id name number }
+        away { id name number }
+      }
+    }
+  }
+}
+"""
+
+MATCH_DETAIL_QUERY = """
+query MatchPage($id: Int!) {
+  match(id: $id) {
+    id isFinalized isTournament tableNumber startTime week isBye isScored
+    home { id name number }
+    away { id name number }
+    results {
+      homeAway overUnder forfeits matchesWon matchesPlayed
+      points { bonus penalty won adjustment sportsmanship total skillLevelViolationAdjustment }
+      scores {
+        id
+        player { id displayName }
+        matchPositionNumber playerPosition skillLevel
+        eightBallWins eightOnBreak eightBallBreakAndRun
+        nineBallPoints nineOnSnap nineBallBreakAndRun nineBallMatchPointsEarned
+        winLoss matchForfeited doublesMatch eightBallMatchPointsEarned incompleteMatch
+      }
+    }
+  }
+}
+"""
 
 # Retained for compatibility with code that checks these names.
+LEAGUE_BOX_QUERY = None  # superseded by DIVISION_STANDINGS_QUERY -- see above
 MATCH_QUERY = None
 PLAYER_STATS_QUERY = None
 STANDINGS_QUERY = None

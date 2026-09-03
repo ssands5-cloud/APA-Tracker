@@ -14,7 +14,12 @@ import os
 from typing import Any
 
 from auth.graphql_client import GraphQLAuthError, execute
-from parser.apa_graphql import TEAM_PAGE_QUERY, TEAM_ROSTER_QUERY, TEAM_SCHEDULE_QUERY
+from parser.apa_graphql import (
+    DIVISION_STANDINGS_QUERY,
+    TEAM_PAGE_QUERY,
+    TEAM_ROSTER_QUERY,
+    TEAM_SCHEDULE_QUERY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,13 +187,62 @@ def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def fetch_division_standings(config: dict) -> dict[str, Any]:
+    """Fetch the full division standings table -- every team, not just ours.
+
+    Returns {} when no division id is configured, so callers can treat "not
+    configured" and "nothing came back" the same way rather than branching on
+    which. Raises AccessTokenExpired the same way fetch_team_data does; a
+    non-auth GraphQL error (e.g. a bad division id) is the caller's to decide
+    whether to fall back on, so it is not swallowed here.
+    """
+    division_id = (config.get("apa") or {}).get("division_id")
+    if not division_id:
+        return {}
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(DIVISION_STANDINGS_QUERY, {"id": int(division_id)}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("division") or {}
+
+
+def division_standings_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per team in the division, from the real standings query.
+
+    `rank` and `points` come straight from the API. `wins` and `losses` stay
+    None: this endpoint does not return them at all -- APA ranks by
+    cumulative session points, not a maintained win/loss record -- and a
+    guessed count is worse than an honest gap.
+    """
+    rows = []
+    for team in division.get("teams") or []:
+        team = team or {}
+        rows.append(
+            {
+                "team_name": team.get("name") or "",
+                "rank": team.get("standing"),
+                "wins": None,
+                "losses": None,
+                "points": team.get("sessionTotalPoints"),
+            }
+        )
+    return rows
+
+
 def standings_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     """A standings snapshot for OUR team only -- one row, or none.
 
-    The captured queries cover one team, so this cannot see the rest of the
-    division: it is our own rank and points over time, not a full table. The
-    full division standings need a captured `LeagueBox` query, which does not
-    exist yet (parser/apa_graphql.py).
+    Superseded by division_standings_rows() wherever a division id is
+    configured: that one returns the full division table, straight from the
+    API's own numbers. This is the fallback for when it isn't -- our own rank
+    and points, derived from our own schedule, when no other team is visible.
 
     Rank and points come straight from the API. Wins and losses are derived,
     by comparing the two sides' totals on matches the API marks scored, and

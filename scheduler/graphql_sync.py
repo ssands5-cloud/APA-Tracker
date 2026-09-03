@@ -31,6 +31,8 @@ from database.ingest import ingest_match, ingest_standings, upsert_roster, upser
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
+    division_standings_rows,
+    fetch_division_standings,
     fetch_team_data,
     roster_rows,
     schedule_rows,
@@ -60,9 +62,11 @@ def ingest_team_data(db: Session, data: dict) -> dict[str, int]:
     roster = roster_rows(data)
     upsert_roster(db, team, roster)
 
-    # One snapshot per run for our own team; see standings_rows on why the
-    # rest of the division is not available yet.
-    standings = standings_rows(data)
+    # Prefer the real division table when we have it: every team's rank and
+    # points, as the API reports them. standings_rows is the fallback for a
+    # config with no division id, and covers our team alone.
+    division = data.get("division") or {}
+    standings = division_standings_rows(division) if division.get("teams") else standings_rows(data)
     if standings:
         ingest_standings(db, standings)
 
@@ -124,6 +128,24 @@ def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, 
         identity["session_name"] or "(no session)",
         identity["standing"],
     )
+
+    # The division table is a separate query on a separate id, and it is a
+    # bonus rather than the point of the run: a failure here (a wrong division
+    # id, say) must not throw away the team data already fetched. An expired
+    # token is the exception -- that means nothing else will work either.
+    try:
+        data["division"] = fetch_division_standings(config)
+        team_count = len((data["division"] or {}).get("teams") or [])
+        if team_count:
+            logger.info("Fetched division standings for %d teams", team_count)
+    except (AccessTokenMissing, AccessTokenExpired):
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Could not fetch division standings (%s: %s). Continuing with this "
+            "team's own standing only.", type(exc).__name__, exc,
+        )
+        data["division"] = {}
 
     engine = create_db_engine(config)
 
