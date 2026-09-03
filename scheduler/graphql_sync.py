@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import datetime
 
 import yaml
 from sqlalchemy.orm import Session
@@ -198,7 +199,15 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         # One division standings fetch per DISTINCT division actually found
         # on the account's own teams -- not from config, and not one fetch
         # per team, since two teams can share a division.
+        #
+        # One shared timestamp for every division in THIS run: ingest_standings
+        # defaults to datetime.utcnow() per call, and latest_standings() (what
+        # the Excel/JSON exports read) filters to the single MAX captured_at --
+        # so without a shared timestamp, only the last division processed ever
+        # showed up in an export. Confirmed against a real 4-division account:
+        # the Standings sheet had 10 rows instead of 40, silently.
         standings_count = 0
+        synced_at = datetime.utcnow()
         for division_id in {row["division_id"] for row in team_rows if row["division_id"]}:
             try:
                 division = fetch_division_standings(config, division_id=division_id)
@@ -212,7 +221,7 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
                 continue
             rows = division_standings_rows(division)
             if rows:
-                ingest_standings(db, rows)
+                ingest_standings(db, rows, captured_at=synced_at)
                 standings_count += len(rows)
         counts["standings"] = standings_count
 

@@ -15,9 +15,19 @@ from database.models import Player, PlayerMatch, Match, StandingsSnapshot, Team
 logger = logging.getLogger(__name__)
 
 
-def ingest_standings(db: Session, standings: list[dict]) -> int:
-    """Insert one snapshot row per standings entry, timestamped `now`."""
-    now = datetime.utcnow()
+def ingest_standings(db: Session, standings: list[dict], captured_at: Optional[datetime] = None) -> int:
+    """Insert one snapshot row per standings entry, timestamped `now`.
+
+    `captured_at` lets a caller ingesting several divisions in one sync run
+    (run_all_teams) give every division's rows the SAME timestamp. Real bug
+    without it: each division got its own datetime.utcnow() call,
+    microseconds apart, and latest_standings()/the Excel and JSON exports
+    filter to the single MAX captured_at -- so only the last division
+    processed ever showed up; the other three vanished with no error.
+    Confirmed against a real 4-division sync: the exported Standings sheet
+    had 10 rows instead of 40, one team's division only.
+    """
+    now = captured_at or datetime.utcnow()
     count = 0
     for row in standings:
         db.add(

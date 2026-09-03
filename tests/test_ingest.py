@@ -19,14 +19,18 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timedelta
+
 from database.ingest import (
     ingest_match,
     ingest_match_scores,
     ingest_player_matches,
+    ingest_standings,
     upsert_player,
     upsert_team,
 )
 from database.models import Base, PlayerMatch
+from database.queries import latest_standings
 
 
 @pytest.fixture
@@ -74,6 +78,62 @@ class TestTwoMatchLinkedRowsSharingDateAndOpponentName:
         assert len(rows) == 2
         assert rows[0].match_id != rows[1].match_id
         assert {r.opponent for r in rows} == {"Mark It Up"}
+
+
+class TestIngestStandingsSharedTimestamp:
+    """Real bug from the first real 4-division sync: run_all_teams() calls
+    ingest_standings() once per division, and without an explicit shared
+    captured_at, each call's default datetime.utcnow() lands microseconds
+    apart. latest_standings() (what the Excel/JSON exports read) filters to
+    the single MAX captured_at -- so only the last division ever showed up.
+    Confirmed against a real account: 40 real standings rows across 4
+    divisions, only 10 (the last division processed) reached the export.
+    """
+
+    def test_default_timestamps_reproduce_the_bug(self, db):
+        """Without captured_at, two separate ingest_standings() calls a
+        moment apart really do get different timestamps, and
+        latest_standings() really does drop the earlier one -- this is
+        what run_all_teams() did before the fix."""
+        ingest_standings(db, [{"team_name": "Division A Team", "rank": 1, "points": 100}])
+        ingest_standings(db, [{"team_name": "Division B Team", "rank": 1, "points": 90}])
+
+        rows = latest_standings(db)
+        names = {r.team_name for r in rows}
+        assert names == {"Division B Team"}, (
+            "if this starts failing because both rows show up, the bug this "
+            "test documents may have been fixed some OTHER way -- that's "
+            "fine, but update/remove this test rather than leaving it "
+            "asserting the old broken behavior"
+        )
+
+    def test_a_shared_captured_at_keeps_every_division(self, db):
+        """The actual fix: pass the SAME captured_at to every division's
+        ingest_standings() call within one sync run."""
+        synced_at = datetime.utcnow()
+        ingest_standings(
+            db, [{"team_name": "Division A Team", "rank": 1, "points": 100}],
+            captured_at=synced_at,
+        )
+        ingest_standings(
+            db, [{"team_name": "Division B Team", "rank": 1, "points": 90}],
+            captured_at=synced_at,
+        )
+
+        rows = latest_standings(db)
+        names = {r.team_name for r in rows}
+        assert names == {"Division A Team", "Division B Team"}
+
+    def test_a_later_sync_run_supersedes_an_earlier_one(self, db):
+        """Two full sync runs, each internally consistent -- the later run's
+        rows are what latest_standings() should return, not a mix of both."""
+        earlier = datetime.utcnow() - timedelta(hours=1)
+        later = datetime.utcnow()
+        ingest_standings(db, [{"team_name": "Stale Team", "rank": 1, "points": 50}], captured_at=earlier)
+        ingest_standings(db, [{"team_name": "Fresh Team", "rank": 1, "points": 60}], captured_at=later)
+
+        rows = latest_standings(db)
+        assert {r.team_name for r in rows} == {"Fresh Team"}
 
 
 class TestPerPlayerHistoryPathStillDeduplicates:
