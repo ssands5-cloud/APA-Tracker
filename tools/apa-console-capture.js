@@ -57,7 +57,7 @@
     console.log("captured:", operationName);
   }
 
-  function handleGraphQLCall(url, rawBody, responseJsonPromise) {
+  function handleGraphQLCall(url, rawBody, getResponseJson) {
     if (!url.includes(GRAPHQL_HOST) || !rawBody) return;
     let parsedBody;
     try {
@@ -66,7 +66,10 @@
       return;
     }
     const items = Array.isArray(parsedBody) ? parsedBody : [parsedBody];
-    responseJsonPromise
+    // getResponseJson() -- rather than an already-created promise -- is
+    // called only once every early-return above has passed, so a promise
+    // that might reject is never left without a .catch() attached to it.
+    getResponseJson()
       .then((responseJson) => {
         const responseItems = Array.isArray(responseJson) ? responseJson : [responseJson];
         items.forEach((item, index) => {
@@ -89,9 +92,9 @@
     return originalFetch.apply(this, arguments).then((response) => {
       if (typeof body === "string") {
         try {
-          handleGraphQLCall(url, body, response.clone().json());
+          handleGraphQLCall(url, body, () => response.clone().json());
         } catch (e) {
-          /* not JSON, or already consumed -- ignore */
+          /* already consumed -- ignore */
         }
       }
       return response;
@@ -108,8 +111,9 @@
   XMLHttpRequest.prototype.send = function (body) {
     if (this.__apaUrl && typeof body === "string") {
       this.addEventListener("load", () => {
+        const xhr = this;
         try {
-          handleGraphQLCall(this.__apaUrl, body, Promise.resolve(JSON.parse(this.responseText)));
+          handleGraphQLCall(xhr.__apaUrl, body, () => Promise.resolve(JSON.parse(xhr.responseText)));
         } catch (e) {
           /* ignore */
         }

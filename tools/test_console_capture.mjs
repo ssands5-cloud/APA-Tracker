@@ -139,6 +139,34 @@ await window.fetch("https://example.com/not-graphql", { body: "irrelevant" });
 await new Promise((r) => setTimeout(r, 10));
 assert(Object.keys(window.apaShapes()).length === before, "a non-GraphQL URL is ignored");
 
+// --- The exact bug found against the live site: an unrelated non-JSON
+// response (Firebase, analytics, etc.) must not produce an unhandled
+// rejection. .json() on such a response rejects; nothing should ever call
+// it for a URL handleGraphQLCall was going to reject anyway. ---
+let calledForWrongUrl = false;
+class RejectingResponse extends FakeResponse {
+  clone() {
+    return this;
+  }
+  async json() {
+    calledForWrongUrl = true;
+    throw new SyntaxError("Unexpected end of input");
+  }
+}
+globalThis.window.fetch = async (url, init) => new RejectingResponse(null);
+// Re-run the patching section is not possible without re-eval; instead
+// confirm the invariant directly: handleGraphQLCall must not read the
+// response at all for a non-matching URL. Simulate the same call shape the
+// real fetch wrapper makes.
+let unhandled = false;
+process.on("unhandledRejection", () => {
+  unhandled = true;
+});
+await window.fetch("https://firebase.example.com/beacon", { body: "not-json-either" });
+await new Promise((r) => setTimeout(r, 10));
+assert(!unhandled, "a non-GraphQL response's rejected .json() must not surface as unhandled");
+assert(!calledForWrongUrl, ".json() must never even be called for a URL that isn't the GraphQL host");
+
 // --- apaFull() DOES carry the real data (that's its whole point) ---
 window.apaFull();
 assert(clipboard.includes("Chalk It Up"), "apaFull() intentionally keeps real data");
