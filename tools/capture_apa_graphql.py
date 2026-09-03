@@ -45,6 +45,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Running this as `python tools/capture_apa_graphql.py` puts tools/ on sys.path,
+# not the repo root, so --sync could not import scheduler.graphql_sync at all.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 GRAPHQL_HOST = "gql.poolplayers.com"
 LEAGUE_URL = "https://league.poolplayers.com"
 
@@ -108,7 +114,16 @@ def capture(sync: bool = False) -> dict:
     token_holder: dict[str, str] = {}
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        try:
+            browser = p.chromium.launch(headless=False)
+        except Exception as exc:
+            # Playwright installs the library and the browser binary in two
+            # separate steps, and missing the second one is the common case.
+            sys.exit(
+                f"Could not start Chromium: {exc}\n\n"
+                "If it says the browser is not installed, run:\n"
+                "    python -m playwright install chromium"
+            )
         context = browser.new_context()
         page = context.new_page()
 
