@@ -171,5 +171,58 @@ assert(!calledForWrongUrl, ".json() must never even be called for a URL that isn
 window.apaFull();
 assert(clipboard.includes("Chalk It Up"), "apaFull() intentionally keeps real data");
 
+// --- Token handling ---------------------------------------------------------
+const SECRET = "eyJhbGciOiJIUzI1NiJ9.SECRETTOKENVALUE.sig";
+
+// Re-arm, then make a request that actually carries an auth header (the one
+// at the top of this file deliberately had none).
+eval(src);
+await window.fetch("https://gql.poolplayers.com/graphql", {
+  body: requestBody,
+  headers: { authorization: SECRET },
+});
+await new Promise((r) => setTimeout(r, 10));
+
+// It must never appear in the shareable output, whichever header shape the
+// app happens to use.
+window.apaShapes();
+assert(!clipboard.includes(SECRET), "the token must never reach apaShapes() output");
+assert(!clipboard.includes("authorization"), "no auth header key in shareable output");
+
+// apaToken() emits a runnable command carrying the token.
+window.apaToken();
+assert(clipboard.includes(SECRET), "apaToken() must include the captured token");
+assert(
+  clipboard.includes("$env:APA_ACCESS_TOKEN") && clipboard.includes("scheduler.graphql_sync"),
+  "apaToken() must copy a ready-to-run command, not a bare token"
+);
+
+// Header shapes: plain object, Headers-like, and array-of-pairs all work.
+for (const [label, headers] of [
+  ["plain object", { authorization: SECRET + "-A" }],
+  ["capitalised key", { Authorization: SECRET + "-B" }],
+  ["Headers instance", { get: (k) => (k === "authorization" ? SECRET + "-C" : null) }],
+  ["array of pairs", [["Authorization", SECRET + "-D"]]],
+]) {
+  // Re-evaluate the script for a clean token slot each time.
+  clipboard = null;
+  eval(src);
+  await window.fetch("https://gql.poolplayers.com/graphql", { body: requestBody, headers });
+  await new Promise((r) => setTimeout(r, 10));
+  window.apaToken();
+  assert(clipboard && clipboard.includes(SECRET), `token read from a ${label}`);
+}
+
+// A non-GraphQL request's auth header must not be harvested.
+clipboard = null;
+eval(src);
+await window.fetch("https://analytics.example.com/x", {
+  body: requestBody,
+  headers: { authorization: "SOMEONE-ELSES-TOKEN" },
+});
+await new Promise((r) => setTimeout(r, 10));
+window.apaToken();
+assert(clipboard === null, "no token is taken from a non-GraphQL host");
+
 console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

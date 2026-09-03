@@ -52,6 +52,26 @@
     return typeof value;
   }
 
+  // Held in this tab's memory only, never auto-copied and never printed.
+  // apaToken() is the single place it can leave, and it leaves as a command
+  // meant for your own terminal.
+  let accessToken = null;
+
+  function rememberToken(headers) {
+    if (accessToken || !headers) return;
+    let value = null;
+    if (typeof headers.get === "function") {
+      value = headers.get("authorization"); // a Headers instance
+    } else if (Array.isArray(headers)) {
+      const found = headers.find((pair) => String(pair[0]).toLowerCase() === "authorization");
+      value = found ? found[1] : null;
+    } else {
+      const key = Object.keys(headers).find((k) => k.toLowerCase() === "authorization");
+      value = key ? headers[key] : null;
+    }
+    if (value) accessToken = String(value);
+  }
+
   function record(operationName, variables, query, response) {
     captures[operationName] = { operationName, variables, query, response };
     console.log("captured:", operationName);
@@ -89,6 +109,9 @@
   window.fetch = function (input, init) {
     const url = typeof input === "string" ? input : (input && input.url) || "";
     const body = (init && init.body) || (typeof input === "object" && input.body) || null;
+    if (url.includes(GRAPHQL_HOST)) {
+      rememberToken((init && init.headers) || (typeof input === "object" && input.headers));
+    }
     return originalFetch.apply(this, arguments).then((response) => {
       if (typeof body === "string") {
         try {
@@ -161,5 +184,21 @@
     return captures;
   };
 
-  console.log("APA capture armed. Browse your team page and standings page now (no reload), then run apaShapes().");
+  window.apaToken = function () {
+    if (!accessToken) {
+      console.log("No access token seen yet. Load a page that fetches data first.");
+      return;
+    }
+    // Copied as a ready-to-run command so it goes clipboard -> your own
+    // terminal in one step, with no hand-copying of the token itself.
+    copy(`$env:APA_ACCESS_TOKEN = "${accessToken}"; python -m scheduler.graphql_sync`);
+    console.log("%cCopied a PowerShell command to your clipboard.", "font-weight:bold");
+    console.log("Paste it into PowerShell in the repo folder and press Enter.");
+    console.log("%cThis one contains your live token. Never paste it into a chat.",
+                "color:#c00;font-weight:bold");
+  };
+
+  console.log("APA capture armed. Browse your team page and standings page now (no reload).");
+  console.log("  apaShapes()  -> sanitized schema, safe to share");
+  console.log("  apaToken()   -> a ready-to-run sync command, for YOUR terminal only");
 })();
