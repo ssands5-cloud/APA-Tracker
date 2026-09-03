@@ -1,0 +1,143 @@
+"""Live sync job: pull team data from the APA GraphQL API and ingest it.
+
+This is the GraphQL counterpart to `daily_sync`, which scrapes HTML pages.
+The team, roster and schedule pages on league.poolplayers.com are a
+client-side app with no server-rendered HTML, so the data behind them is
+only reachable this way.
+
+Run manually with::
+
+    python -m scheduler.graphql_sync
+
+It needs a short-lived access token from your own logged-in session, read
+from the environment only::
+
+    $env:APA_ACCESS_TOKEN = "<token>"
+
+The token is never written to disk, never logged, and never belongs in
+apa_config.yaml.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+
+import yaml
+from sqlalchemy.orm import Session
+
+from database.engine import create_db_engine
+from database.ingest import ingest_match, ingest_standings, upsert_roster, upsert_team
+from scraper.graphql_scraper import (
+    AccessTokenExpired,
+    AccessTokenMissing,
+    fetch_team_data,
+    roster_rows,
+    schedule_rows,
+    standings_rows,
+    team_row,
+)
+from ui.export_excel import export_to_excel
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+
+def load_config(path: str = "apa_config.yaml") -> dict:
+    with open(path, "r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+def ingest_team_data(db: Session, data: dict) -> dict[str, int]:
+    """Map fetched GraphQL data onto the existing ingestion functions."""
+    identity = team_row(data)
+    team = upsert_team(
+        db,
+        identity["team_id"] or str((data.get("team") or {}).get("id") or ""),
+        identity["team_name"],
+    )
+
+    roster = roster_rows(data)
+    upsert_roster(db, team, roster)
+
+    # One snapshot per run for our own team; see standings_rows on why the
+    # rest of the division is not available yet.
+    standings = standings_rows(data)
+    if standings:
+        ingest_standings(db, standings)
+
+    matches = schedule_rows(data)
+    ingested = 0
+    for row in matches:
+        if not row["match_id"]:
+            logger.warning("Skipping a schedule entry with no match id: week %s", row.get("week"))
+            continue
+        # Byes are recorded too -- a missing week reads as lost data later.
+        if ingest_match(
+            db,
+            match_id=row["match_id"],
+            home_team_id=row["home_team_id"],
+            away_team_id=row["away_team_id"],
+            home_team_name=row["home_team_name"],
+            away_team_name="BYE" if row["is_bye"] else row["away_team_name"],
+            location=row["location"],
+            match_date=row["date"],
+            status=row["status"],
+        ) is not None:
+            ingested += 1
+
+    return {
+        "roster": len(roster),
+        "standings": len(standings),
+        "matches_seen": len(matches),
+        "matches_new": ingested,
+        "byes": sum(1 for row in matches if row["is_bye"]),
+        "unscored": sum(1 for row in matches if not row["is_scored"]),
+    }
+
+
+def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, int]:
+    config = load_config(config_path)
+
+    try:
+        data = fetch_team_data(config)
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        # These are the user's to fix, and the traceback adds nothing.
+        logger.error("%s", exc)
+        raise SystemExit(1) from exc
+
+    identity = team_row(data)
+    logger.info(
+        "Fetched %s (#%s) -- %s, %s, standing %s",
+        identity["team_name"] or "(unnamed team)",
+        identity["team_number"],
+        identity["division_name"] or "(no division)",
+        identity["session_name"] or "(no session)",
+        identity["standing"],
+    )
+
+    engine = create_db_engine(config)
+
+    with Session(engine) as db:
+        counts = ingest_team_data(db, data)
+        if export:
+            path = export_to_excel(db, config)
+            logger.info("Excel export written to %s", path)
+
+    logger.info(
+        "Sync complete: %d roster entries, %d/%d matches new (%d byes, %d not yet scored)",
+        counts["roster"],
+        counts["matches_new"],
+        counts["matches_seen"],
+        counts["byes"],
+        counts["unscored"],
+    )
+    return counts
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default="apa_config.yaml")
+    parser.add_argument("--no-export", action="store_true", help="Skip the Excel export")
+    args = parser.parse_args()
+    run(args.config, export=not args.no_export)

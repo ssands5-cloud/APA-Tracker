@@ -50,18 +50,46 @@ def _standings_dataframe(db: Session) -> pd.DataFrame:
 
 
 def _player_stats_dataframe(db: Session) -> pd.DataFrame:
+    """One row per player, from match history where we have it.
+
+    The two ingest paths carry different things. Per-match history (scraped
+    stats pages) supports counting wins and losses directly. The GraphQL
+    roster carries season totals only -- no individual results -- so a player
+    known only through it has no match rows, and deriving from history alone
+    printed a live 8-2 player as 0-0.
+
+    History wins where present, roster totals fill in otherwise, and "Source"
+    says which -- so a zero is never ambiguous between "played none" and "this
+    path carries no match detail".
+    """
     records = []
     for player in all_players(db):
         matches = player_match_history(db, player.external_id)
         stat = summarize_player(player.name, matches)
+
+        if stat.matches_played:
+            played, wins = stat.matches_played, stat.wins
+            losses, win_pct = stat.losses, stat.win_pct
+            source = "match history"
+        else:
+            played = player.matches_played or 0
+            wins = player.matches_won or 0
+            losses = max(played - wins, 0)
+            win_pct = round(player.win_pct, 3) if player.win_pct is not None else 0.0
+            source = "roster totals" if played else "no data"
+
         records.append(
             {
                 "Player": stat.player_name,
-                "Matches": stat.matches_played,
-                "Wins": stat.wins,
-                "Losses": stat.losses,
-                "Win %": stat.win_pct,
+                "Skill Level": player.skill_level,
+                "Matches": played,
+                "Wins": wins,
+                "Losses": losses,
+                "Win %": win_pct,
+                "PPM": player.ppm,
+                "PA": player.pa,
                 "Avg Points": stat.avg_points,
+                "Source": source,
             }
         )
     return pd.DataFrame(records)
