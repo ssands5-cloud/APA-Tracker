@@ -7,7 +7,15 @@ from __future__ import annotations
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import Player, PlayerMatch, StandingsSnapshot, Team
+from database.models import Match, Player, PlayerMatch, StandingsSnapshot, Team
+
+
+def all_teams(db: Session) -> list[Team]:
+    return db.query(Team).order_by(Team.name).all()
+
+
+def all_matches(db: Session) -> list[Match]:
+    return db.query(Match).order_by(Match.week, Match.id).all()
 
 
 def latest_standings(db: Session) -> list[StandingsSnapshot]:

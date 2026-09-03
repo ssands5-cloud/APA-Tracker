@@ -36,6 +36,7 @@ from database.ingest import ingest_match, ingest_match_scores, ingest_standings
 from scheduler.graphql_sync import ingest_viewer_data
 from scraper.graphql_scraper import division_standings_rows, match_player_scores
 from ui.export_excel import export_to_excel
+from ui.export_json import export_to_json
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -43,10 +44,11 @@ logger = logging.getLogger(__name__)
 FIXTURES = _project_root / "tests" / "fixtures"
 DEMO_DB_PATH = "data/demo_apa_tracker.db"
 DEMO_EXCEL_PATH = "exports/demo_apa_stats.xlsx"
+DEMO_JSON_PATH = "exports/demo_apa_data.json"
 
 DEMO_CONFIG = {
     "database": {"path": DEMO_DB_PATH},
-    "export": {"excel_output_path": DEMO_EXCEL_PATH},
+    "export": {"excel_output_path": DEMO_EXCEL_PATH, "json_output_path": DEMO_JSON_PATH},
 }
 
 
@@ -112,9 +114,11 @@ def main() -> None:
             len(scores), match_detail["id"], created, updated,
         )
 
-        path = export_to_excel(db, DEMO_CONFIG)
+        excel_path = export_to_excel(db, DEMO_CONFIG)
+        json_path = export_to_json(db, DEMO_CONFIG)
 
-    print(f"\nDemo workbook written to {path}")
+    print(f"\nDemo workbook written to {excel_path}")
+    print(f"Demo JSON written to {json_path}")
     print(f"Demo database written to {db_file}")
 
 

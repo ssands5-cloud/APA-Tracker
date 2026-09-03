@@ -36,6 +36,7 @@ scheduler:
 
 export:
   excel_output_path: "exports/apa_stats.xlsx"
+  json_output_path: "exports/apa_data.json"
 
 logging:
   level: "INFO"
