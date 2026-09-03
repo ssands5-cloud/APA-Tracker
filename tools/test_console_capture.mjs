@@ -20,6 +20,37 @@ globalThis.copy = (text) => {
   clipboard = text;
 };
 
+// Read the script under test BEFORE stubbing URL below -- the stub replaces
+// Node's real URL constructor, which readFileSync's path resolution needs.
+const scriptSource = readFileSync(
+  new URL("./apa-console-capture.js", import.meta.url),
+  "utf8"
+);
+
+// Enough DOM to observe the download path apaToken() uses.
+const downloads = [];
+let lastBlobText = null;
+globalThis.Blob = class {
+  constructor(parts) {
+    lastBlobText = parts.join("");
+  }
+};
+globalThis.URL = { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} };
+globalThis.document = {
+  createElement: () => ({
+    set download(name) {
+      this._name = name;
+    },
+    get download() {
+      return this._name;
+    },
+    click() {
+      downloads.push({ name: this._name, content: lastBlobText });
+    },
+  }),
+  body: { appendChild() {}, removeChild() {} },
+};
+
 const REAL_TEAM_RESPONSE = {
   data: {
     team: {
@@ -83,7 +114,7 @@ globalThis.XMLHttpRequest = class {
 };
 
 // --- Load and eval the script (it's an IIFE attaching to window.fetch etc.) ---
-const src = readFileSync(new URL("./apa-console-capture.js", import.meta.url), "utf8");
+const src = scriptSource;
 eval(src);
 
 console.log("APA capture armed" in {} ? "" : ""); // no-op, script already logged its own banner
@@ -174,6 +205,10 @@ assert(clipboard.includes("Chalk It Up"), "apaFull() intentionally keeps real da
 // --- Token handling ---------------------------------------------------------
 const SECRET = "eyJhbGciOiJIUzI1NiJ9.SECRETTOKENVALUE.sig";
 
+// Restore a working fetch: the rejection test above left one that always
+// throws, and the token assertions want a normal response.
+globalThis.window.fetch = async () => new FakeResponse(REAL_TEAM_RESPONSE);
+
 // Re-arm, then make a request that actually carries an auth header (the one
 // at the top of this file deliberately had none).
 eval(src);
@@ -189,12 +224,24 @@ window.apaShapes();
 assert(!clipboard.includes(SECRET), "the token must never reach apaShapes() output");
 assert(!clipboard.includes("authorization"), "no auth header key in shareable output");
 
-// apaToken() emits a runnable command carrying the token.
+// apaToken() must NOT use the clipboard: that is the same channel used to
+// send apaShapes() output into a chat, and a live token went to the wrong
+// window because the two differed only by where you pasted. It downloads a
+// file instead, which cannot be pasted anywhere by accident.
+clipboard = null;
 window.apaToken();
-assert(clipboard.includes(SECRET), "apaToken() must include the captured token");
+assert(clipboard === null, "apaToken() must never touch the clipboard");
+assert(downloads.length === 1, "apaToken() downloads a file");
+assert(downloads[0].name === "run-apa-sync.ps1", "downloaded with a runnable name");
+assert(downloads[0].content.includes(SECRET), "the downloaded script carries the token");
 assert(
-  clipboard.includes("$env:APA_ACCESS_TOKEN") && clipboard.includes("scheduler.graphql_sync"),
-  "apaToken() must copy a ready-to-run command, not a bare token"
+  downloads[0].content.includes("$env:APA_ACCESS_TOKEN") &&
+    downloads[0].content.includes("scheduler.graphql_sync"),
+  "the downloaded script is a ready-to-run sync, not a bare token"
+);
+assert(
+  downloads[0].content.includes("Do not share this file"),
+  "the downloaded script warns about what it contains"
 );
 
 // Header shapes: plain object, Headers-like, and array-of-pairs all work.
@@ -205,16 +252,19 @@ for (const [label, headers] of [
   ["array of pairs", [["Authorization", SECRET + "-D"]]],
 ]) {
   // Re-evaluate the script for a clean token slot each time.
-  clipboard = null;
+  const before = downloads.length;
   eval(src);
   await window.fetch("https://gql.poolplayers.com/graphql", { body: requestBody, headers });
   await new Promise((r) => setTimeout(r, 10));
   window.apaToken();
-  assert(clipboard && clipboard.includes(SECRET), `token read from a ${label}`);
+  assert(
+    downloads.length === before + 1 && downloads[downloads.length - 1].content.includes(SECRET),
+    `token read from a ${label}`
+  );
 }
 
 // A non-GraphQL request's auth header must not be harvested.
-clipboard = null;
+const beforeTail = downloads.length;
 eval(src);
 await window.fetch("https://analytics.example.com/x", {
   body: requestBody,
@@ -222,7 +272,7 @@ await window.fetch("https://analytics.example.com/x", {
 });
 await new Promise((r) => setTimeout(r, 10));
 window.apaToken();
-assert(clipboard === null, "no token is taken from a non-GraphQL host");
+assert(downloads.length === beforeTail, "no token is taken from a non-GraphQL host");
 
 console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

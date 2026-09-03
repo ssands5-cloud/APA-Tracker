@@ -189,12 +189,36 @@
       console.log("No access token seen yet. Load a page that fetches data first.");
       return;
     }
-    // Copied as a ready-to-run command so it goes clipboard -> your own
-    // terminal in one step, with no hand-copying of the token itself.
-    copy(`$env:APA_ACCESS_TOKEN = "${accessToken}"; python -m scheduler.graphql_sync`);
-    console.log("%cCopied a PowerShell command to your clipboard.", "font-weight:bold");
-    console.log("Paste it into PowerShell in the repo folder and press Enter.");
-    console.log("%cThis one contains your live token. Never paste it into a chat.",
+
+    // Deliberately NOT copy(). An earlier version put this on the clipboard,
+    // and the clipboard is the same channel used to send apaShapes() output
+    // into a chat -- so the two differed only by which window you pasted
+    // into, and a live token went to the wrong one. A download cannot be
+    // pasted anywhere by accident: it lands in Downloads as a file you run.
+    const script = [
+      "# Runs one APA sync with the token captured from your browser session.",
+      "# The token below is LIVE and short-lived (~15 minutes).",
+      "# Do not share this file or paste its contents anywhere. Delete it after use.",
+      "",
+      `$env:APA_ACCESS_TOKEN = "${accessToken}"`,
+      "python -m scheduler.graphql_sync",
+      "$env:APA_ACCESS_TOKEN = $null",
+      "",
+    ].join("\r\n");
+
+    const url = URL.createObjectURL(new Blob([script], { type: "text/plain" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "run-apa-sync.ps1";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    console.log("%cDownloaded run-apa-sync.ps1", "font-weight:bold");
+    console.log("In PowerShell, from the repo folder, run:");
+    console.log('  powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\run-apa-sync.ps1"');
+    console.log("%cThat file holds a live token. Delete it when the sync is done.",
                 "color:#c00;font-weight:bold");
   };
 
