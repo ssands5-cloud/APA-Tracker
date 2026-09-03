@@ -31,10 +31,45 @@ class Player(Base):
     external_id = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     skill_level = Column(Integer)
+    # Current-season roster totals, refreshed on every roster ingest.
+    # ingest.upsert_roster() has always assigned these; with no columns behind
+    # them they were set as plain Python attributes and silently never saved.
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+    win_pct = Column(Float)
+    ppm = Column(Float)
+    pa = Column(Float)
     team_id = Column(Integer, ForeignKey("teams.id"))
 
     team = relationship("Team", back_populates="players")
     matches = relationship("PlayerMatch", back_populates="player")
+
+
+class Match(Base):
+    """One scheduled or completed match between two teams.
+
+    Team names are stored next to the team ids rather than resolved through a
+    foreign key: the schedule names both sides even for opponents whose roster
+    has never been scraped, and a match against an unknown team must still
+    record who it was against.
+    """
+
+    __tablename__ = "matches"
+
+    id = Column(Integer, primary_key=True)
+    external_id = Column(String, unique=True, nullable=False)
+    home_team_id = Column(String)
+    away_team_id = Column(String)
+    home_team_name = Column(String)
+    away_team_name = Column(String)
+    location = Column(String)
+    # Kept as delivered text, matching PlayerMatch.match_date. Normalising to a
+    # real datetime is a separate change: the two ingest paths deliver
+    # different formats (scraped portal text vs the API's ISO startTime).
+    match_date = Column(String)
+    status = Column(String)
+
+    player_matches = relationship("PlayerMatch", back_populates="match")
 
 
 class StandingsSnapshot(Base):
@@ -52,7 +87,18 @@ class StandingsSnapshot(Base):
 
 
 class PlayerMatch(Base):
-    """A single logged match result for a player, scraped from their stats page."""
+    """One player's involvement in one match. Two ingest paths write here:
+
+    - ``ingest_player_matches`` fills ``match_date`` / ``opponent`` /
+      ``points_earned`` / ``result`` from a player's own match-history page.
+    - ``ingest_match_roster`` fills ``match_id`` / ``team_id`` / ``team_name``
+      and the roster totals from a specific match's roster tables.
+
+    The two sets barely overlap, which is why almost every column is nullable.
+    The unique constraint only guards the first path; the second de-duplicates
+    on ``(player_id, match_id)`` in ``ingest_match_roster`` instead, since its
+    rows leave ``match_date`` and ``opponent`` NULL.
+    """
 
     __tablename__ = "player_matches"
     __table_args__ = (
@@ -61,10 +107,19 @@ class PlayerMatch(Base):
 
     id = Column(Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey("matches.id"))
+    team_id = Column(String)
+    team_name = Column(String)
     match_date = Column(String)  # stored as scraped text; normalize later if needed
     opponent = Column(String)
     skill_level = Column(Integer)
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+    win_pct = Column(Float)
+    ppm = Column(Float)
+    pa = Column(Float)
     points_earned = Column(Float)
     result = Column(String)
 
     player = relationship("Player", back_populates="matches")
+    match = relationship("Match", back_populates="player_matches")
