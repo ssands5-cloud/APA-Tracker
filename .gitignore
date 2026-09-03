@@ -19,5 +19,9 @@ apa-graphql-requests.json
 # generated output, not source.
 scraper/sanitized_fixtures/
 
+# Downloaded scoresheet PDFs from scraper/full_apa_scrape.py -- real league
+# data (not sanitized like the fixtures above), never belongs in the repo.
+scraper/scoresheets/
+
 # Log file written by scraper/full_apa_scrape.py.
 scraper/full_apa_scrape.log

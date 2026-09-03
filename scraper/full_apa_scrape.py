@@ -6,7 +6,16 @@ machine, in YOUR terminal. It opens a real, visible Chromium window, asks
 YOU (locally) for your APA username and password, logs in, then writes a
 SANITIZED fixture (field names and value TYPES only, no real values) for
 every GraphQL response the site makes while you browse -- organized under
-scraper/sanitized_fixtures/<entity type>/<entity id>/<operation>.json.
+scraper/sanitized_fixtures/<entity type>/<entity id>/<operation>.json. If
+you click to download a match scoresheet PDF, that gets saved too, as-is
+(not sanitized -- it's a real document), under scraper/scoresheets/.
+
+Everything this script captures, it captures passively, reacting to pages
+YOU navigate to and things YOU click. Nothing here drives the browser
+through teams, weeks, or matches on its own -- that would be automated
+scraping, which this project deliberately avoids. Click through your own
+account at whatever pace you like; every GraphQL response and every
+download along the way gets caught regardless of which page it happened on.
 
 Your credentials are read by getpass()/input() into local Python variables,
 used once to fill the login form, and never written to disk, logged, or
@@ -56,6 +65,7 @@ if sys.version_info[:2] == (3, 14):
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = SCRIPT_DIR / "sanitized_fixtures"
+SCORESHEETS_DIR = SCRIPT_DIR / "scoresheets"
 LOG_PATH = SCRIPT_DIR / "full_apa_scrape.log"
 
 
@@ -207,7 +217,7 @@ def write_sanitized_fixture(operation_name, variables, query, response_json):
 #: script -- the second is what Apollo's client-side cache produces: a
 #: page whose data was already fetched earlier in the session can render
 #: with NO new network request at all).
-_SEEN = {"total": 0, "graphql_host": 0, "no_post_data": 0, "captured": 0}
+_SEEN = {"total": 0, "graphql_host": 0, "no_post_data": 0, "captured": 0, "downloads": 0}
 
 
 async def handle_graphql_response(response):
@@ -276,6 +286,48 @@ async def handle_graphql_response(response):
     except Exception:
         log("EXCEPTION IN GRAPHQL RESPONSE HANDLER:")
         log(traceback.format_exc())
+
+
+async def handle_download(download):
+    """Saves any file the browser downloads while you're browsing -- a
+    match scoresheet PDF, in practice -- into scraper/scoresheets/.
+
+    Purely reactive, same as handle_graphql_response above: this only saves
+    a download YOUR OWN clicking already triggered. Nothing here clicks a
+    download link on its own or walks matches looking for one.
+    """
+    try:
+        SCORESHEETS_DIR.mkdir(parents=True, exist_ok=True)
+        suggested = download.suggested_filename or (
+            f"download-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.pdf"
+        )
+        target = SCORESHEETS_DIR / suggested
+        if target.exists():
+            # Two different matches can suggest the same filename (e.g. a
+            # generic "scoresheet.pdf") -- a timestamp suffix keeps a later
+            # one from silently overwriting an earlier one.
+            target = SCORESHEETS_DIR / (
+                f"{target.stem}-{datetime.now(timezone.utc):%H%M%S}{target.suffix}"
+            )
+        await download.save_as(target)
+        _SEEN["downloads"] += 1
+        log(f"DOWNLOADED: {suggested} -> {target.relative_to(SCRIPT_DIR)}")
+    except Exception:
+        log("EXCEPTION IN DOWNLOAD HANDLER:")
+        log(traceback.format_exc())
+
+
+def wire_download_capture(page):
+    """Attach the download listener to one page.
+
+    Called for the page main() creates AND for every new page/tab the
+    context opens afterward (context.on("page", ...) below) -- a scoresheet
+    might open in a new tab rather than the one you started on, and a
+    listener on only the original page would silently miss it. Same reason
+    handle_graphql_response is registered on the context instead of one
+    page: see the comment above context.on("response", ...) in main().
+    """
+    page.on("download", handle_download)
 
 
 def validate_fixtures():
@@ -395,7 +447,13 @@ async def main():
         context.on("response", handle_graphql_response)
         log("GRAPHQL CAPTURE READY")
 
+        # New tabs (a scoresheet opening in one, in particular) need their
+        # own download listener wired up as they're created -- see
+        # wire_download_capture's docstring.
+        context.on("page", wire_download_capture)
+
         page = await context.new_page()
+        wire_download_capture(page)
         log("PAGE CREATED")
 
         log("NAVIGATING TO LOGIN PAGE")
@@ -443,6 +501,10 @@ async def main():
         print("as you go -- watch that folder fill in, and watch this console")
         print("for CAPTURED / FOUND N TEAMS / FOUND N ROSTER ENTRIES lines.")
         print()
+        print("If a match page has a scoresheet PDF, clicking to download it")
+        print("is captured too -- saved under scraper/scoresheets/. Nothing")
+        print("clicks that for you; this only saves a download you started.")
+        print()
 
         # Run in a worker thread, not the main thread: a plain blocking
         # input() call would also block asyncio's event loop, which
@@ -458,7 +520,8 @@ async def main():
         f"NETWORK SUMMARY: {_SEEN['total']} response(s) seen total, "
         f"{_SEEN['graphql_host']} to gql.poolplayers.com "
         f"({_SEEN['no_post_data']} with no request body, not capturable), "
-        f"{_SEEN['captured']} operation(s) captured."
+        f"{_SEEN['captured']} operation(s) captured, "
+        f"{_SEEN['downloads']} file(s) downloaded to scraper/scoresheets/."
     )
     if _SEEN["total"] == 0:
         log("Zero responses of ANY kind were seen. The listener itself never fired --")
