@@ -31,6 +31,11 @@ class Player(Base):
     external_id = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     skill_level = Column(Integer)
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+    win_pct = Column(Float)
+    ppm = Column(Float)
+    pa = Column(Float)
     team_id = Column(Integer, ForeignKey("teams.id"))
 
     team = relationship("Team", back_populates="players")
@@ -61,6 +66,9 @@ class PlayerMatch(Base):
 
     id = Column(Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey("matches.id"))
+    team_id = Column(String)
+    team_name = Column(String)
     match_date = Column(String)  # stored as scraped text; normalize later if needed
     opponent = Column(String)
     skill_level = Column(Integer)
@@ -68,3 +76,22 @@ class PlayerMatch(Base):
     result = Column(String)
 
     player = relationship("Player", back_populates="matches")
+    match = relationship("Match", back_populates="player_matches")
+
+
+class Match(Base):
+    """A team-level match returned by the APA schedule query."""
+
+    __tablename__ = "matches"
+
+    id = Column(Integer, primary_key=True)
+    external_id = Column(String, unique=True, nullable=False)
+    home_team_id = Column(String)
+    away_team_id = Column(String)
+    home_team_name = Column(String)
+    away_team_name = Column(String)
+    location = Column(String)
+    match_date = Column(String)
+    status = Column(String)
+
+    player_matches = relationship("PlayerMatch", back_populates="match")

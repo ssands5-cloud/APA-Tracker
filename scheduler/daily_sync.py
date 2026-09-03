@@ -10,17 +10,19 @@ Windows Task Scheduler / cron using the hour in apa_config.yaml
 from __future__ import annotations
 
 import logging
+import os
 
 import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from auth.session_manager import SessionManager
-from database.ingest import ingest_player_matches, ingest_standings, upsert_roster, upsert_team
+from database.ingest import ingest_match, ingest_player_matches, ingest_standings, upsert_roster, upsert_team
 from database.models import Base
 from scraper.league_scraper import fetch_standings
 from scraper.player_scraper import fetch_player_stats
 from scraper.team_scraper import fetch_roster
+from scraper.graphql_scraper import fetch_team_data, roster_rows, schedule_rows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,10 +39,30 @@ def run(config_path: str = "apa_config.yaml") -> None:
     engine = create_engine(f"sqlite:///{config['database']['path']}")
     Base.metadata.create_all(engine)
 
-    session_mgr = SessionManager(config)
-    http_session = session_mgr.get_session()
-
     with Session(engine) as db:
+        if config.get("apa", {}).get("access_token") or os.environ.get("APA_ACCESS_TOKEN"):
+            live = fetch_team_data(config)
+            team_data = live["team"]
+            team = upsert_team(db, str(team_data.get("id") or config["team"]["team_id"]), team_data.get("name") or config["team"].get("team_name", ""))
+            upsert_roster(db, team, roster_rows(live))
+            for match in schedule_rows(live):
+                if match["match_id"]:
+                    ingest_match(
+                        db,
+                        match["match_id"],
+                        match["home_team_id"],
+                        match["away_team_id"],
+                        match["home_team_name"],
+                        match["away_team_name"],
+                        match["location"],
+                        match["date"],
+                        match["status"],
+                    )
+            logger.info("Fetched %d live matches", len(schedule_rows(live)))
+            return
+
+        session_mgr = SessionManager(config)
+        http_session = session_mgr.get_session()
         standings = fetch_standings(http_session, config)
         ingest_standings(db, standings)
 
