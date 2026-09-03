@@ -28,22 +28,37 @@ import yaml
 from sqlalchemy.orm import Session
 
 from database.engine import create_db_engine
-from database.ingest import ingest_match, ingest_match_scores, ingest_standings, upsert_roster, upsert_team
+from database.ingest import (
+    ingest_eight_ball_stats,
+    ingest_match,
+    ingest_match_scores,
+    ingest_player_team_history,
+    ingest_standings,
+    upsert_roster,
+    upsert_team,
+)
+from database.models import Player
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
+    alias_id_for_league,
     dashboard_teams_rows,
     division_standings_rows,
+    eight_ball_stats_row,
     fetch_dashboard_teams,
     fetch_division_standings,
+    fetch_eight_ball_stats,
+    fetch_formats_by_member_id,
     fetch_match_detail,
     fetch_matches_by_viewer,
     fetch_team_data,
+    fetch_team_stat,
     match_player_scores,
     roster_rows,
     schedule_rows,
     standings_rows,
     team_row,
+    team_stat_rows,
     viewer_matches_rows,
 )
 from ui.export_excel import export_to_excel
@@ -274,6 +289,63 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
                 scoresheet_count += created + updated
         counts["scoresheet_rows"] = scoresheet_count
 
+        # Career stats (getEightBallStats) and cross-season team history
+        # (TeamStat) for the ACCOUNT'S OWN member -- HANDOFF.md item 2,
+        # confirmed 2026-09-03 against a real account. The alias id these
+        # two queries need is neither a roster entry's own id nor
+        # roster[].member.id; it's reached via fetch_formats_by_member_id,
+        # one alias per (member, league). One fetch for the member's alias
+        # list, then one alias_id per DISTINCT (league, format) actually
+        # found on the account's own teams -- the same "found on the
+        # account, not from config" principle as the standings loop above.
+        #
+        # Requires the viewer's own Player row (from the roster loop above,
+        # keyed on member id) to already exist -- upsert_player() would
+        # otherwise create a nameless placeholder here, and it should
+        # already exist unless roster ingestion for every one of the
+        # account's own teams somehow failed.
+        career_stats_count = team_history_count = 0
+        member_id = viewer_teams.get("id")
+        viewer_player = db.query(Player).filter_by(external_id=str(member_id)).one_or_none() if member_id else None
+        if member_id and viewer_player is None:
+            logger.warning(
+                "Viewer's own Player row (member id %s) not found -- skipping career "
+                "stats/team history this run.", member_id,
+            )
+        elif member_id:
+            try:
+                member = fetch_formats_by_member_id(config, member_id)
+            except (AccessTokenMissing, AccessTokenExpired):
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Could not fetch member aliases (%s: %s); skipping career stats/team history.",
+                    type(exc).__name__, exc,
+                )
+                member = {}
+
+            seen_alias_ids: set[int] = set()
+            for row in team_rows:
+                alias_id = alias_id_for_league(member, row["league_id"], format_=row["division_type"])
+                if not alias_id or alias_id in seen_alias_ids:
+                    continue
+                seen_alias_ids.add(alias_id)
+                try:
+                    stats = fetch_eight_ball_stats(config, alias_id)
+                    team_stat = fetch_team_stat(config, alias_id)
+                except (AccessTokenMissing, AccessTokenExpired):
+                    raise
+                except Exception as exc:
+                    logger.warning(
+                        "Could not fetch stats for alias %s (%s: %s); skipping just that one.",
+                        alias_id, type(exc).__name__, exc,
+                    )
+                    continue
+                career_stats_count += ingest_eight_ball_stats(db, viewer_player, eight_ball_stats_row(stats))
+                team_history_count += ingest_player_team_history(db, viewer_player, team_stat_rows(team_stat))
+        counts["career_stats"] = career_stats_count
+        counts["team_history"] = team_history_count
+
         if export:
             path = export_to_excel(db, config)
             logger.info("Excel export written to %s", path)
@@ -283,9 +355,11 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
     logger.info(
         "All-teams sync complete: %d team(s), %d roster entries, %d standings row(s) "
         "across their divisions, %d/%d matches new (%d byes, %d not yet scored), "
-        "%d player scoresheet row(s) across every scored match",
+        "%d player scoresheet row(s) across every scored match, %d career stat "
+        "format(s), %d team-history row(s)",
         counts["teams"], counts["roster"], counts["standings"], counts["matches_new"],
         counts["matches_seen"], counts["byes"], counts["unscored"], counts["scoresheet_rows"],
+        counts["career_stats"], counts["team_history"],
     )
     return counts
 

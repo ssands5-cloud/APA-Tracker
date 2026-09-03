@@ -1,0 +1,22 @@
+{
+  "_comment": "Sanitized fixture for FORMATS_BY_MEMBER_ID_QUERY (real operation name: FormatsByMemberId), called with withMember=true, withAlias=false -- the confirmed bridge from a member id to their per-league alias ids (see parser/apa_graphql.py's comment above FORMATS_BY_MEMBER_ID_QUERY for how this was confirmed with real ids against a live account). All ids invented except the shape, which matches the real capture: member.aliases is a list, one entry per league the member plays in, each with its own alias id and a formats list that can include more than one format for the same league.",
+  "data": {
+    "member": {
+      "id": 900123,
+      "aliases": [
+        {
+          "id": 700001,
+          "formats": ["EIGHT", "NINE"],
+          "league": { "id": 1438, "slug": "arapahoecounty", "isDefault": true, "__typename": "League" },
+          "__typename": "Alias"
+        },
+        {
+          "id": 700002,
+          "formats": ["EIGHT"],
+          "league": { "id": 1500, "slug": "metrodenver", "isDefault": false, "__typename": "League" },
+          "__typename": "Alias"
+        }
+      ]
+    }
+  }
+}

@@ -286,21 +286,62 @@ query matchesByViewer {
 }
 """
 
-# --- HANDOFF.md item 2: NOT wired up yet -----------------------------------
+# --- HANDOFF.md item 2: CONFIRMED against a real account, 2026-09-03 -------
 #
-# Both queries below are copied verbatim from the real captures
-# (docs/graphql-captures/2026-09-03-full-session/global/global/
-# getEightBallStats.json and TeamStat.json), unmodified -- nothing to trim,
-# neither requests a name/email beyond the player's own displayName, already
-# used the same way in MATCH_DETAIL_QUERY. Both take an "alias" id, and
-# scraper.graphql_scraper.fetch_eight_ball_stats/fetch_team_stat accept that
-# id as a plain parameter -- they do not decide where it comes from.
+# The alias id getEightBallStats/TeamStat need is neither roster[].id nor
+# roster[].member.id -- it's a third number, reached through
+# FormatsByMemberId below. Confirmed with real values from DevTools on a
+# live account: member.id 3349374 (matched viewer.id and roster[].member.id
+# for the same real person) and alias.id 3224381 (what getEightBallStats/
+# TeamStat/AliasSessionStats actually sent as $id) were queried TOGETHER by
+# a real FormatsByMemberId(memberId: 3349374, aliasId: 3224381, ...) call --
+# proving the two ids belong to the same person, not that one derives from
+# the other by any transformation. The actual bridge is
+# FormatsByMemberId($memberId, withMember: true, withAlias: false) ->
+# member.aliases[] -- one entry per LEAGUE, each with its own id and a
+# formats list (a single alias can cover both EIGHT and NINE within one
+# league). Pick the alias whose league.id matches the team/division you
+# want stats for.
 #
-# What's still missing is which field on a roster entry actually IS that
-# alias id (roster[].id vs roster[].member.id -- see HANDOFF.md item 2 for
-# the exact confirmation step). Do not call either fetch function from
-# scheduler/graphql_sync.py, and do not guess the id, until that's answered:
-# a wrong id silently returns a different real person's stats.
+# GET_EIGHT_BALL_STATS_QUERY/TEAM_STAT_QUERY below are copied verbatim from
+# the real captures (docs/graphql-captures/2026-09-03-full-session/global/
+# global/getEightBallStats.json and TeamStat.json), unmodified -- nothing
+# to trim, neither requests a name/email beyond the player's own
+# displayName, already used the same way in MATCH_DETAIL_QUERY.
+
+FORMATS_BY_MEMBER_ID_QUERY = """
+query FormatsByMemberId($memberId: Int!, $withMember: Boolean!, $withAlias: Boolean!, $aliasId: Int!) {
+  alias(id: $aliasId) @include(if: $withAlias) {
+    id
+    formats
+    league {
+      id
+      slug
+      isDefault
+      __typename
+    }
+    __typename
+  }
+  member(id: $memberId) @include(if: $withMember) {
+    id
+    ... on Member {
+      aliases {
+        id
+        formats
+        league {
+          id
+          slug
+          isDefault
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+"""
 
 GET_EIGHT_BALL_STATS_QUERY = """
 query getEightBallStats($id: Int!) {

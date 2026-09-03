@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -53,6 +54,8 @@ class Player(Base):
 
     team = relationship("Team", back_populates="players")
     matches = relationship("PlayerMatch", back_populates="player")
+    career_stats = relationship("PlayerCareerStats", back_populates="player")
+    team_history = relationship("PlayerTeamHistory", back_populates="player")
 
 
 class Match(Base):
@@ -166,3 +169,64 @@ class PlayerMatch(Base):
 
     player = relationship("Player", back_populates="matches")
     match = relationship("Match", back_populates="player_matches")
+
+
+class PlayerCareerStats(Base):
+    """One row per (player, format) -- lifetime totals from
+    getEightBallStats, e.g. "64 won / 129 played, CLA 1, lastPlayed
+    2026-08-31" -- as opposed to PlayerMatch, which is per-match or
+    per-season. Upserted in place on (player_id, format) rather than
+    snapshotted per sync run: these are always-current lifetime totals, not
+    a value worth tracking a history of the way StandingsSnapshot is.
+    """
+
+    __tablename__ = "player_career_stats"
+    __table_args__ = (
+        UniqueConstraint("player_id", "format", name="uq_player_career_stats_format"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    format = Column(String, nullable=False)  # "EIGHT" or "NINE"
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+    cla = Column(Integer)
+    defensive_shot_avg = Column(Float)
+    match_count_last_two_yrs = Column(Integer)
+    last_played = Column(String)  # stored as delivered text, same convention as match_date elsewhere
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    player = relationship("Player", back_populates="career_stats")
+
+
+class PlayerTeamHistory(Base):
+    """One row per team (past or current) a player's alias has played on,
+    from TeamStat -- the cross-season history PlayerMatch has no source
+    for. Upserted on (player_id, team_name, division_id, session_name):
+    TeamStat's response is the complete list every time, not an
+    incremental diff, so a rerun should refresh existing rows rather than
+    accumulate duplicates.
+    """
+
+    __tablename__ = "player_team_history"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "team_name", "division_id", "session_name",
+            name="uq_player_team_history",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    is_current = Column(Boolean, default=False)
+    team_name = Column(String)
+    division_id = Column(String)
+    is_tournament = Column(Boolean, default=False)
+    session_name = Column(String)
+    nick_name = Column(String)
+    skill_level = Column(Integer)
+    rank = Column(Integer)
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+
+    player = relationship("Player", back_populates="team_history")

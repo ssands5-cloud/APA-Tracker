@@ -19,20 +19,41 @@ holds operations not yet classified to division/team/match (see
   (`fetch_dashboard_teams`/`dashboard_teams_rows`, `fetch_matches_by_viewer`/
   `viewer_matches_rows`), `scheduler/graphql_sync.py` (`ingest_viewer_data`,
   `run_all_teams`), 19 new tests. Commit `c908f77`.
-- ⛔ **Item 2 is BLOCKED on one confirmation — scaffolding done, wiring not
-  started.** `parser/apa_graphql.py` now has `GET_EIGHT_BALL_STATS_QUERY` /
-  `TEAM_STAT_QUERY` (copied verbatim from this capture's real query text --
-  see `getEightBallStats.json` / `TeamStat.json`'s `"query"` field, not
-  reconstructed from memory). `scraper/graphql_scraper.py` has
-  `fetch_eight_ball_stats(config, alias_id)` / `fetch_team_stat(config,
-  alias_id, limit, offset)` plus row-mappers `eight_ball_stats_row` /
-  `team_stat_rows`, all taking `alias_id` as a plain caller-supplied
-  argument -- none of them decide where that id comes from. Fixtures +
-  tests in `tests/fixtures/eight_ball_stats_response.json` /
-  `team_stat_response.json` and `tests/test_player_stats_scaffolding_fixture.py`.
-  **Nothing calls these from `scheduler/graphql_sync.py`.** Do not guess
-  past the confirmation below; wiring the wrong id silently pulls a
-  different person's stats, which is worse than no data.
+- ✅ **Item 2 is DONE, confirmed and wired end to end 2026-09-03.** The
+  alias id `getEightBallStats`/`TeamStat` need turned out to be neither
+  `roster[].id` nor `roster[].member.id` (the two candidates this file
+  used to list) -- it's a third number, reached through
+  `FormatsByMemberId(memberId, withMember: true, withAlias: false)` ->
+  `member.aliases[]` (one alias per league, each carrying its own id and a
+  `formats` list). Confirmed with real values from DevTools on a live
+  account: `memberId: 3349374` and `aliasId: 3224381` appeared together in
+  a real `FormatsByMemberId` call, proving they're the same person.
+  `parser/apa_graphql.py` has `FORMATS_BY_MEMBER_ID_QUERY` alongside
+  `GET_EIGHT_BALL_STATS_QUERY`/`TEAM_STAT_QUERY` (all copied verbatim from
+  real captured query text). `scraper/graphql_scraper.py` has
+  `fetch_formats_by_member_id`/`member_aliases_rows`/`alias_id_for_league`
+  plus the stats fetchers/row-mappers. `database/models.py` has two new
+  tables, `PlayerCareerStats` (lifetime stats per player+format, upserted
+  in place -- these only ever grow, no history worth tracking) and
+  `PlayerTeamHistory` (cross-season team assignments, upserted on the
+  natural key since TeamStat returns the complete list every time, not a
+  diff). `scheduler/graphql_sync.py::run_all_teams()` now fetches the
+  account's own member aliases once, resolves one alias id per distinct
+  (league, format) actually found on the account's own teams, and ingests
+  both for the account's own Player row. Exported in both
+  `ui/export_json.py` (`career_stats`/`team_history` keys) and available
+  via `database/queries.py`. Tests throughout: fixture
+  `tests/fixtures/formats_by_member_id_response.json`, row-mapper tests in
+  `tests/test_player_stats_scaffolding_fixture.py`, ingest tests in
+  `tests/test_ingest.py`, export tests in `tests/test_export_json.py`.
+  Un-fixed along the way: `eight_ball_stats_row` was silently dropping
+  `matchCountForLastTwoYrs` even though the real query requests it and the
+  fixture carries it -- fixed alongside this.
+  Still NOT covered: opponents' career stats (only the account's own
+  member is resolved to an alias id this way) and the alias-id-per-league
+  question for a SECOND league on a multi-league account -- confirmed
+  correct for the account's primary league, untested against a real
+  second league's alias.
 
 ## Demo tooling (offline, fixture-driven)
 

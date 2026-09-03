@@ -10,7 +10,15 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from database.models import Player, PlayerMatch, Match, StandingsSnapshot, Team
+from database.models import (
+    Match,
+    Player,
+    PlayerCareerStats,
+    PlayerMatch,
+    PlayerTeamHistory,
+    StandingsSnapshot,
+    Team,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +349,118 @@ def ingest_player_matches(db: Session, player: Player, matches: list[dict]) -> i
         count += 1
     db.commit()
     logger.info("Ingested %d new match rows for player %s", count, player.name)
+    return count
+
+
+def ingest_player_career_stats(db: Session, player: Player, stats_row: dict) -> None:
+    """Upsert one player's lifetime stats for ONE format (eight_ball_stats_row's
+    output has both formats side by side; call this once per format --
+    see ingest_eight_ball_stats below for the split).
+
+    Unlike the per-match paths, this always overwrites in place on
+    (player_id, format): lifetime totals only ever grow, so there is
+    nothing worth keeping a history of the way StandingsSnapshot does.
+    """
+    format_ = stats_row["format"]
+    existing = (
+        db.query(PlayerCareerStats)
+        .filter_by(player_id=player.id, format=format_)
+        .one_or_none()
+    )
+    fields = {
+        "matches_won": _to_int(stats_row.get("matches_won")),
+        "matches_played": _to_int(stats_row.get("matches_played")),
+        "cla": _to_int(stats_row.get("cla")),
+        "defensive_shot_avg": _to_float(stats_row.get("defensive_shot_avg")),
+        "match_count_last_two_yrs": _to_int(stats_row.get("match_count_last_two_yrs")),
+        "last_played": stats_row.get("last_played"),
+    }
+    if existing:
+        for key, value in fields.items():
+            setattr(existing, key, value)
+    else:
+        db.add(PlayerCareerStats(player_id=player.id, format=format_, **fields))
+    db.commit()
+
+
+def ingest_eight_ball_stats(db: Session, player: Player, stats_row: dict) -> int:
+    """Split scraper.graphql_scraper.eight_ball_stats_row's combined
+    (both formats in one dict) shape into up to two PlayerCareerStats rows
+    -- one per format that actually has data. Returns how many formats
+    were written (0, 1, or 2).
+    """
+    written = 0
+    if stats_row.get("eight_ball_matches_played") is not None:
+        ingest_player_career_stats(db, player, {
+            "format": "EIGHT",
+            "matches_won": stats_row.get("eight_ball_matches_won"),
+            "matches_played": stats_row.get("eight_ball_matches_played"),
+            "cla": stats_row.get("eight_ball_cla"),
+            "defensive_shot_avg": stats_row.get("eight_ball_defensive_shot_avg"),
+            "match_count_last_two_yrs": stats_row.get("eight_ball_match_count_for_last_two_yrs"),
+            "last_played": stats_row.get("eight_ball_last_played"),
+        })
+        written += 1
+    if stats_row.get("nine_ball_matches_played") is not None:
+        ingest_player_career_stats(db, player, {
+            "format": "NINE",
+            "matches_won": stats_row.get("nine_ball_matches_won"),
+            "matches_played": stats_row.get("nine_ball_matches_played"),
+            "cla": stats_row.get("nine_ball_cla"),
+            "defensive_shot_avg": stats_row.get("nine_ball_defensive_shot_avg"),
+            "match_count_last_two_yrs": stats_row.get("nine_ball_match_count_for_last_two_yrs"),
+            "last_played": stats_row.get("nine_ball_last_played"),
+        })
+        written += 1
+    logger.info("Ingested career stats for %s: %d format(s)", player.name, written)
+    return written
+
+
+def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) -> int:
+    """Upsert one row per (team, division, session) from TeamStat.
+
+    TeamStat's response is the player's COMPLETE history every time, not
+    an incremental diff -- upserting on the natural key means a rerun
+    refreshes existing rows (a since-updated matches_won/rank, say)
+    instead of accumulating duplicates.
+    """
+    count = 0
+    for row in rows:
+        existing = (
+            db.query(PlayerTeamHistory)
+            .filter_by(
+                player_id=player.id,
+                team_name=row.get("team_name") or "",
+                division_id=row.get("division_id") or "",
+                session_name=row.get("session_name") or "",
+            )
+            .one_or_none()
+        )
+        fields = {
+            "is_current": bool(row.get("is_current")),
+            "is_tournament": bool(row.get("is_tournament")),
+            "nick_name": row.get("nick_name") or "",
+            "skill_level": _to_int(row.get("skill_level")),
+            "rank": _to_int(row.get("rank")),
+            "matches_won": _to_int(row.get("matches_won")),
+            "matches_played": _to_int(row.get("matches_played")),
+        }
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(
+                PlayerTeamHistory(
+                    player_id=player.id,
+                    team_name=row.get("team_name") or "",
+                    division_id=row.get("division_id") or "",
+                    session_name=row.get("session_name") or "",
+                    **fields,
+                )
+            )
+        count += 1
+    db.commit()
+    logger.info("Ingested %d team-history row(s) for %s", count, player.name)
     return count
 
 

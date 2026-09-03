@@ -7,7 +7,7 @@ from __future__ import annotations
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import Match, Player, PlayerMatch, StandingsSnapshot, Team
+from database.models import Match, Player, PlayerCareerStats, PlayerMatch, PlayerTeamHistory, StandingsSnapshot, Team
 
 
 def all_teams(db: Session) -> list[Team]:
@@ -73,5 +73,21 @@ def match_scores(db: Session) -> list[PlayerMatch]:
         db.query(PlayerMatch)
         .filter(PlayerMatch.match_id.isnot(None))
         .order_by(PlayerMatch.match_id, PlayerMatch.id)
+        .all()
+    )
+
+
+def career_stats(db: Session) -> list[PlayerCareerStats]:
+    """Every player's lifetime stats, one row per (player, format) --
+    from getEightBallStats, HANDOFF.md item 2."""
+    return db.query(PlayerCareerStats).order_by(PlayerCareerStats.player_id, PlayerCareerStats.format).all()
+
+
+def team_history(db: Session) -> list[PlayerTeamHistory]:
+    """Every player's cross-season team history -- from TeamStat,
+    HANDOFF.md item 2."""
+    return (
+        db.query(PlayerTeamHistory)
+        .order_by(PlayerTeamHistory.player_id, PlayerTeamHistory.is_current.desc())
         .all()
     )

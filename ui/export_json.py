@@ -22,9 +22,11 @@ from database.queries import (
     all_matches,
     all_players,
     all_teams,
+    career_stats,
     latest_standings,
     match_scores,
     player_match_history,
+    team_history,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,8 @@ def export_to_json(db: Session, config: dict) -> str:
         "standings": _standings(db),
         "player_stats": _player_stats(db),
         "match_scores": _match_scores(db),
+        "career_stats": _career_stats(db),
+        "team_history": _team_history(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -107,6 +111,45 @@ def _match_scores(db: Session) -> dict[str, list[dict]]:
             }
         )
     return document
+
+
+def _career_stats(db: Session) -> list[dict]:
+    """Lifetime stats per (player, format) -- HANDOFF.md item 2, from
+    getEightBallStats. Keyed loosely (a flat list, not grouped by player)
+    since a player only ever has 1-2 rows (EIGHT and/or NINE)."""
+    return [
+        {
+            "player": row.player.name if row.player else "",
+            "format": row.format,
+            "matches_won": row.matches_won,
+            "matches_played": row.matches_played,
+            "cla": row.cla,
+            "defensive_shot_avg": row.defensive_shot_avg,
+            "match_count_last_two_yrs": row.match_count_last_two_yrs,
+            "last_played": row.last_played,
+        }
+        for row in career_stats(db)
+    ]
+
+
+def _team_history(db: Session) -> list[dict]:
+    """Cross-season team history -- HANDOFF.md item 2, from TeamStat."""
+    return [
+        {
+            "player": row.player.name if row.player else "",
+            "is_current": bool(row.is_current),
+            "team_name": row.team_name,
+            "division_id": row.division_id,
+            "is_tournament": bool(row.is_tournament),
+            "session_name": row.session_name,
+            "nick_name": row.nick_name,
+            "skill_level": row.skill_level,
+            "rank": row.rank,
+            "matches_won": row.matches_won,
+            "matches_played": row.matches_played,
+        }
+        for row in team_history(db)
+    ]
 
 
 def _player_stats(db: Session) -> list[dict]:

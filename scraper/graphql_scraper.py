@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 
 from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
     DASHBOARD_TEAMS_QUERY,
     DIVISION_STANDINGS_QUERY,
+    FORMATS_BY_MEMBER_ID_QUERY,
     GET_EIGHT_BALL_STATS_QUERY,
     MATCH_DETAIL_QUERY,
     MATCHES_BY_VIEWER_QUERY,
@@ -509,15 +510,91 @@ def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-# --- HANDOFF.md item 2: scaffolding only, not wired into any sync path -----
+# --- HANDOFF.md item 2: alias id confirmed against a real account ----------
 #
 # fetch_eight_ball_stats/fetch_team_stat take `alias_id` as a plain caller-
-# supplied argument -- they do not decide where it comes from, so adding
-# them here doesn't require answering HANDOFF.md's open question. What DOES
-# require answering it is calling either one from scheduler/graphql_sync.py
-# with an id sourced from a roster row: do not do that until HANDOFF.md item
-# 2's confirmation step is done. A wrong id here doesn't error, it silently
-# returns a different real person's stats.
+# supplied argument -- they never decided where it comes from, and now that
+# question has a confirmed answer: fetch_formats_by_member_id, below.
+#
+# The alias id is neither a roster entry's own top-level id nor
+# roster[].member.id -- it's a third number, one per (member, league),
+# reached via FormatsByMemberId(memberId, withMember: true, withAlias:
+# false) -> member.aliases[]. See parser/apa_graphql.py's comment above
+# FORMATS_BY_MEMBER_ID_QUERY for exactly how this was confirmed with real
+# ids from a live account.
+
+
+def fetch_formats_by_member_id(config: dict, member_id: int) -> dict[str, Any]:
+    """Fetch every alias (one per league) a member has, each tagged with
+    which formats (EIGHT/NINE) it plays and which league it belongs to.
+
+    This is the bridge HANDOFF.md item 2 needed: dashboardTeams/teamRoster
+    give a member id, but getEightBallStats/TeamStat need an alias id, and
+    neither of those two queries' own response fields turned out to BE it.
+
+    `aliasId` is a required (non-null) variable in the real query even
+    though it's only read when `withAlias` is true -- GraphQL validates
+    variable types before evaluating @include, so a value is always needed.
+    Passing member_id back as a placeholder is harmless: withAlias=False
+    here means the `alias(id: $aliasId)` selection is skipped entirely, so
+    its value is never actually used for anything.
+
+    Returns {} if the server has no member at that id, same convention as
+    fetch_match_detail's "no such match".
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    variables = {
+        "memberId": int(member_id),
+        "withMember": True,
+        "withAlias": False,
+        "aliasId": int(member_id),  # unused placeholder -- see docstring
+    }
+    try:
+        payload = execute(FORMATS_BY_MEMBER_ID_QUERY, variables, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return payload.get("member") or {}
+
+
+def member_aliases_rows(member: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per alias (per league) this member has."""
+    rows = []
+    for alias in member.get("aliases") or []:
+        alias = alias or {}
+        league = alias.get("league") or {}
+        rows.append(
+            {
+                "alias_id": alias.get("id"),
+                "league_id": str(league.get("id") or ""),
+                "league_slug": league.get("slug") or "",
+                "formats": list(alias.get("formats") or []),
+            }
+        )
+    return rows
+
+
+def alias_id_for_league(member: dict[str, Any], league_id: str, format_: Optional[str] = None) -> Optional[int]:
+    """The one alias id, from member_aliases_rows(member), matching a
+    specific league (and optionally a specific format within it).
+
+    Returns None rather than guessing when no row matches, or when more
+    than one does and `format_` wasn't given to disambiguate -- silently
+    picking the wrong one here means silently fetching a different
+    league's or format's stats, which HANDOFF.md item 2 already flagged as
+    worse than not fetching anything.
+    """
+    candidates = [row for row in member_aliases_rows(member) if row["league_id"] == str(league_id)]
+    if format_ is not None:
+        candidates = [row for row in candidates if format_ in row["formats"]]
+    if len(candidates) != 1:
+        return None
+    return candidates[0]["alias_id"]
 
 
 def fetch_eight_ball_stats(config: dict, alias_id: int) -> dict[str, Any]:
@@ -554,11 +631,13 @@ def eight_ball_stats_row(alias: dict[str, Any]) -> dict[str, Any]:
         "eight_ball_matches_played": eight.get("matchesPlayed"),
         "eight_ball_cla": eight.get("CLA"),
         "eight_ball_defensive_shot_avg": eight.get("defensiveShotAvg"),
+        "eight_ball_match_count_for_last_two_yrs": eight.get("matchCountForLastTwoYrs"),
         "eight_ball_last_played": eight.get("lastPlayed"),
         "nine_ball_matches_won": nine.get("matchesWon"),
         "nine_ball_matches_played": nine.get("matchesPlayed"),
         "nine_ball_cla": nine.get("CLA"),
         "nine_ball_defensive_shot_avg": nine.get("defensiveShotAvg"),
+        "nine_ball_match_count_for_last_two_yrs": nine.get("matchCountForLastTwoYrs"),
         "nine_ball_last_played": nine.get("lastPlayed"),
     }
 

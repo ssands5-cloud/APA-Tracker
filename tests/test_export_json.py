@@ -15,11 +15,22 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from database.ingest import ingest_match, ingest_match_scores, ingest_standings, upsert_team
+from database.ingest import (
+    ingest_eight_ball_stats,
+    ingest_match,
+    ingest_match_scores,
+    ingest_player_team_history,
+    ingest_standings,
+    upsert_player,
+    upsert_team,
+)
 from database.models import Base
 from ui.export_json import export_to_json
 
-REQUIRED_TOP_LEVEL_KEYS = {"generated_at", "teams", "matches", "standings", "player_stats", "match_scores"}
+REQUIRED_TOP_LEVEL_KEYS = {
+    "generated_at", "teams", "matches", "standings", "player_stats",
+    "match_scores", "career_stats", "team_history",
+}
 
 REQUIRED_MATCH_KEYS = {
     "match_id", "week", "home_team_id", "home_team_name", "away_team_id",
@@ -143,10 +154,47 @@ class TestEmptyDatabase:
         assert document["matches"] == []
         assert document["standings"] == []
         assert document["player_stats"] == []
+        assert document["career_stats"] == []
+        assert document["team_history"] == []
 
     def test_generated_at_is_always_present(self, db, tmp_path):
         document = _export(db, tmp_path)
         assert document["generated_at"]
+
+
+class TestCareerStatsAndTeamHistory:
+    """HANDOFF.md item 2, now confirmed and wired end to end."""
+
+    def test_career_stats_row_shape(self, db, tmp_path):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_eight_ball_stats(db, player, {
+            "eight_ball_matches_won": 64, "eight_ball_matches_played": 129,
+            "eight_ball_cla": 1, "eight_ball_defensive_shot_avg": 1.26,
+            "eight_ball_match_count_for_last_two_yrs": 123, "eight_ball_last_played": "2026-08-31",
+        })
+        document = _export(db, tmp_path)
+        assert document["career_stats"] == [{
+            "player": "Paul Smith", "format": "EIGHT", "matches_won": 64,
+            "matches_played": 129, "cla": 1, "defensive_shot_avg": 1.26,
+            "match_count_last_two_yrs": 123, "last_played": "2026-08-31",
+        }]
+
+    def test_team_history_row_shape(self, db, tmp_path):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_player_team_history(db, player, [{
+            "is_current": True, "team_name": "Mark It Up", "division_id": "436670",
+            "is_tournament": False, "session_name": "2026 Summer", "nick_name": "Paulie",
+            "skill_level": 4, "rank": None, "matches_won": 2, "matches_played": 2,
+        }])
+        document = _export(db, tmp_path)
+        assert document["team_history"] == [{
+            "player": "Paul Smith", "is_current": True, "team_name": "Mark It Up",
+            "division_id": "436670", "is_tournament": False, "session_name": "2026 Summer",
+            "nick_name": "Paulie", "skill_level": 4, "rank": None,
+            "matches_won": 2, "matches_played": 2,
+        }]
 
 
 class TestFileIsValidJson:

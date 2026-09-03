@@ -22,15 +22,18 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from database.ingest import (
+    ingest_eight_ball_stats,
     ingest_match,
     ingest_match_roster,
     ingest_match_scores,
     ingest_player_matches,
+    ingest_player_career_stats,
+    ingest_player_team_history,
     ingest_standings,
     upsert_player,
     upsert_team,
 )
-from database.models import Base, Player, PlayerMatch
+from database.models import Base, Player, PlayerCareerStats, PlayerMatch, PlayerTeamHistory
 from database.queries import latest_standings
 
 
@@ -214,3 +217,99 @@ class TestPerPlayerHistoryPathStillDeduplicates:
         db.add(PlayerMatch(player_id=player.id, match_date="2026-09-01", opponent="Mark It Up"))
         with pytest.raises(Exception):
             db.commit()
+
+
+class TestIngestEightBallStats:
+    """HANDOFF.md item 2, now confirmed and wired: career stats from
+    getEightBallStats, split into one PlayerCareerStats row per format."""
+
+    STATS_ROW = {
+        "alias_id": 700001,
+        "display_name": "Paul Smith",
+        "eight_ball_matches_won": 64,
+        "eight_ball_matches_played": 129,
+        "eight_ball_cla": 1,
+        "eight_ball_defensive_shot_avg": 1.26,
+        "eight_ball_match_count_for_last_two_yrs": 123,
+        "eight_ball_last_played": "2026-08-31",
+        "nine_ball_matches_won": None,
+        "nine_ball_matches_played": None,
+        "nine_ball_cla": None,
+        "nine_ball_defensive_shot_avg": None,
+        "nine_ball_match_count_for_last_two_yrs": None,
+        "nine_ball_last_played": None,
+    }
+
+    def test_writes_one_row_for_the_format_with_data(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        written = ingest_eight_ball_stats(db, player, self.STATS_ROW)
+        assert written == 1
+        row = db.query(PlayerCareerStats).filter_by(player_id=player.id, format="EIGHT").one()
+        assert row.matches_won == 64
+        assert row.matches_played == 129
+        assert row.match_count_last_two_yrs == 123
+
+    def test_skips_the_format_with_no_data(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_eight_ball_stats(db, player, self.STATS_ROW)
+        assert db.query(PlayerCareerStats).filter_by(player_id=player.id, format="NINE").count() == 0
+
+    def test_rerunning_updates_in_place_not_a_second_row(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_eight_ball_stats(db, player, self.STATS_ROW)
+        updated = dict(self.STATS_ROW, eight_ball_matches_won=65, eight_ball_matches_played=130)
+        ingest_eight_ball_stats(db, player, updated)
+
+        rows = db.query(PlayerCareerStats).filter_by(player_id=player.id, format="EIGHT").all()
+        assert len(rows) == 1
+        assert rows[0].matches_won == 65
+
+
+class TestIngestPlayerTeamHistory:
+    """HANDOFF.md item 2, now confirmed and wired: cross-season history
+    from TeamStat."""
+
+    ROWS = [
+        {
+            "is_current": False, "team_id": "13082718", "team_name": "Rack Attack",
+            "division_id": "436647", "is_tournament": False, "session_name": "2025 Fall",
+            "nick_name": "J-Rock", "skill_level": 6, "rank": 2,
+            "matches_won": 19, "matches_played": 27,
+        },
+        {
+            "is_current": True, "team_id": "13082948", "team_name": "Chalk It Up",
+            "division_id": "436670", "is_tournament": False, "session_name": "2026 Summer",
+            "nick_name": "J-Rock", "skill_level": 6, "rank": None,
+            "matches_won": 6, "matches_played": 9,
+        },
+    ]
+
+    def test_one_row_per_team(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        count = ingest_player_team_history(db, player, self.ROWS)
+        assert count == 2
+        assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).count() == 2
+
+    def test_current_vs_past_is_preserved(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_player_team_history(db, player, self.ROWS)
+        rows = {r.team_name: r for r in db.query(PlayerTeamHistory).filter_by(player_id=player.id)}
+        assert rows["Rack Attack"].is_current is False
+        assert rows["Chalk It Up"].is_current is True
+
+    def test_rerunning_updates_in_place_not_duplicated(self, db):
+        team = upsert_team(db, "T1", "Mark It Up")
+        player = upsert_player(db, "3349374", "Paul Smith", team)
+        ingest_player_team_history(db, player, self.ROWS)
+        updated = [dict(self.ROWS[0], matches_won=20), self.ROWS[1]]
+        ingest_player_team_history(db, player, updated)
+
+        rows = db.query(PlayerTeamHistory).filter_by(player_id=player.id).all()
+        assert len(rows) == 2
+        rack_attack = next(r for r in rows if r.team_name == "Rack Attack")
+        assert rack_attack.matches_won == 20
