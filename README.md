@@ -88,7 +88,38 @@ python -m scheduler.graphql_sync --no-export  # sync only
 If the token has expired (they don't last long) the run stops with a message
 saying exactly that, rather than a traceback.
 
-#### Capturing a new query
+#### Capturing queries by logging in (easiest)
+
+`tools/capture_apa_graphql.py` opens a browser, you log in by hand, and it
+records every GraphQL call the site makes while you browse. One-time setup:
+
+```powershell
+pip install playwright
+python -m playwright install chromium
+```
+
+Then:
+
+```powershell
+python tools/capture_apa_graphql.py           # capture only
+python tools/capture_apa_graphql.py --sync    # capture, then sync immediately
+```
+
+`--sync` reuses the session you just opened, so there is no token to copy
+anywhere. The token is held in memory for that run only — never written to
+disk, never printed.
+
+It writes two files, both gitignored:
+
+| File | Contains | Share it? |
+|---|---|---|
+| `apa-capture-shapes.json` | Field names and **types** only — every name, id and score replaced by `str`/`int`/`float`. Enum values like `COMPLETED` are kept. | **Yes** — it's the schema, with no data in it |
+| `apa-capture-full.json` | The real responses, for building local fixtures | **No** — has teammates' names |
+
+The script never sees your password: you type it into the real APA login page
+in the browser window it opens.
+
+#### Capturing a new query from a HAR file (alternative)
 
 Only `teamPage`, `teamRoster` and `teamSchedule` have been captured. The
 division standings table needs `LeagueBox`, which hasn't been — see the
