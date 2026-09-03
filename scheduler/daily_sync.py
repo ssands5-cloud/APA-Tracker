@@ -12,12 +12,11 @@ from __future__ import annotations
 import logging
 
 import yaml
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from auth.session_manager import SessionManager
 from database.ingest import ingest_player_matches, ingest_standings, upsert_roster, upsert_team
-from database.models import Base
+from database.engine import create_db_engine
 from scraper.league_scraper import fetch_standings
 from scraper.player_scraper import fetch_player_stats
 from scraper.team_scraper import fetch_roster
@@ -34,8 +33,7 @@ def load_config(path: str = "apa_config.yaml") -> dict:
 def run(config_path: str = "apa_config.yaml") -> None:
     config = load_config(config_path)
 
-    engine = create_engine(f"sqlite:///{config['database']['path']}")
-    Base.metadata.create_all(engine)
+    engine = create_db_engine(config)
 
     session_mgr = SessionManager(config)
     http_session = session_mgr.get_session()
