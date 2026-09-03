@@ -35,6 +35,12 @@ SAMPLE_DATA = {
     ],
     "standings": [{"rank": 1, "team_name": "Chalk It Up", "wins": None, "losses": None, "points": 142}],
     "player_stats": [],
+    "match_scores": {
+        "M1": [
+            {"player": "Alice", "team_name": "Rack & </script> Attack", "skill_level": 5,
+             "result": "W", "points_earned": 6},
+        ]
+    },
 }
 
 

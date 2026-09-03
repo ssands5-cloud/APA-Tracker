@@ -128,7 +128,8 @@ section.block > h2 { font-size: 13px; font-weight: 600; letter-spacing: .09em; t
 .team-card:hover { border-color: var(--felt); }
 .team-card .name { font-weight: 600; font-size: 19px; }
 .team-card .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-.team-card .hint { color: var(--chalk); font-size: 12px; margin-top: 2px; }
+.hint { color: var(--chalk); font-size: 12px; }
+.team-card .hint { margin-top: 2px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
 th { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--surface-alt); }
@@ -263,21 +264,25 @@ function renderTeamDetail(teamId) {
 }
 
 function renderMatchesList() {
-  const rows = DATA.matches.map(m => `
+  const rows = DATA.matches.map(m => {
+    const hasScoresheet = ((DATA.match_scores || {})[m.match_id] || []).length > 0;
+    return `
     <tr class="clickable" data-match-id="${esc(m.match_id)}">
       <td class="num">${esc(m.week ?? '—')}</td>
       <td>${esc(m.home_team_name)}</td>
       <td>${esc(m.away_team_name || '—')}</td>
       <td class="num">${scoreCell(m)}</td>
       <td>${statusPill(m)}</td>
-    </tr>`).join('');
+      <td>${hasScoresheet ? '<span class="hint">Scoresheet →</span>' : '<span class="hint" style="color:var(--muted);">Details →</span>'}</td>
+    </tr>`;
+  }).join('');
   document.getElementById('panel-matches').innerHTML = `
     <section class="block">
-      <h2>Matches — click a row for its scoresheet</h2>
+      <h2>Matches — click a row for detail</h2>
       <div class="panel table-wrap">
         <table>
-          <thead><tr><th class="num">Week</th><th>Home</th><th>Away</th><th class="num">Score</th><th>Status</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="5" class="empty">No matches ingested yet.</td></tr>'}</tbody>
+          <thead><tr><th class="num">Week</th><th>Home</th><th>Away</th><th class="num">Score</th><th>Status</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" class="empty">No matches ingested yet.</td></tr>'}</tbody>
         </table>
       </div>
     </section>
@@ -287,10 +292,31 @@ function renderMatchesList() {
   });
 }
 
+function resultPill(result) {
+  const r = (result || '').toUpperCase();
+  if (r === 'W') return '<span class="pill win">W</span>';
+  if (r === 'L') return '<span class="pill loss">L</span>';
+  return '<span class="pill bye">—</span>';
+}
+
 function renderMatchDetail(matchId) {
   const match = DATA.matches.find(m => m.match_id === matchId);
   if (!match) return renderMatchesList();
-  const scoresheet = (DATA.player_stats || []); // no per-match player breakdown is exported yet -- see note below
+  const scoresheet = (DATA.match_scores || {})[matchId] || [];
+  const scoresheetRows = scoresheet.map(row => `
+    <tr>
+      <td>${esc(row.player)}</td>
+      <td>${esc(row.team_name || '—')}</td>
+      <td class="num">${esc(row.skill_level ?? '—')}</td>
+      <td>${resultPill(row.result)}</td>
+      <td class="num">${row.points_earned ?? '—'}</td>
+    </tr>`).join('');
+  const scoresheetBlock = scoresheet.length
+    ? `<div class="table-wrap"><table>
+        <thead><tr><th>Player</th><th>Team</th><th class="num">SL</th><th>Result</th><th class="num">Pts</th></tr></thead>
+        <tbody>${scoresheetRows}</tbody>
+      </table></div>`
+    : `<p class="empty" style="text-align:left; padding:12px 20px 20px;">No per-player scoresheet ingested for this match. Only matches with a full <code>MatchPage</code> capture carry one -- see HANDOFF.md item 2 for the alias-id work that would add roster-wide stats to every match, not just scored ones.</p>`;
   document.getElementById('panel-matches').innerHTML = `
     <div class="crumb"><button id="back-to-matches">← All matches</button></div>
     <div class="panel">
@@ -300,7 +326,7 @@ function renderMatchDetail(matchId) {
         <div class="side away"><div class="team-name">${esc(match.away_team_name || '—')}</div><div class="score">${match.away_score ?? '—'}</div></div>
       </div>
       <p class="detail-meta" style="padding:12px 20px 0;">Week ${esc(match.week ?? '—')} · ${esc(match.status || '')} ${match.match_date ? '· ' + esc(match.match_date) : ''}</p>
-      <p class="empty" style="text-align:left; padding:12px 20px 20px;">Per-player scoresheet rows aren't joined to a specific match_id in this export yet -- see "Player Stats" content in the Overview export, and HANDOFF.md item 2 for the alias-id work that unblocks a real per-match roster view.</p>
+      ${scoresheetBlock}
     </div>
   `;
   document.getElementById('back-to-matches').addEventListener('click', renderMatchesList);

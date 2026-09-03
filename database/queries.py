@@ -58,3 +58,20 @@ def player_match_history(db: Session, player_external_id: str) -> list[PlayerMat
 
 def all_players(db: Session) -> list[Player]:
     return db.query(Player).order_by(Player.name).all()
+
+
+def match_scores(db: Session) -> list[PlayerMatch]:
+    """Every PlayerMatch row tied to a specific match (match_id set) -- the
+    per-match scoresheet path (ingest_match_scores/ingest_match_roster), as
+    opposed to player_match_history's per-player result-history path
+    (ingest_player_matches), which leaves match_id null. The two ingest
+    paths write disjoint columns onto the same table -- see PlayerMatch's
+    own docstring -- so filtering on match_id is what actually separates
+    them, not filtering on which columns happen to be set.
+    """
+    return (
+        db.query(PlayerMatch)
+        .filter(PlayerMatch.match_id.isnot(None))
+        .order_by(PlayerMatch.match_id, PlayerMatch.id)
+        .all()
+    )

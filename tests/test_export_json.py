@@ -19,7 +19,7 @@ from database.ingest import ingest_match, ingest_match_scores, ingest_standings,
 from database.models import Base
 from ui.export_json import export_to_json
 
-REQUIRED_TOP_LEVEL_KEYS = {"generated_at", "teams", "matches", "standings", "player_stats"}
+REQUIRED_TOP_LEVEL_KEYS = {"generated_at", "teams", "matches", "standings", "player_stats", "match_scores"}
 
 REQUIRED_MATCH_KEYS = {
     "match_id", "week", "home_team_id", "home_team_name", "away_team_id",
@@ -111,6 +111,26 @@ class TestShape:
         document = _export(seeded_db, tmp_path)
         sources = {row["source"] for row in document["player_stats"]}
         assert sources == {"match history"}
+
+    def test_match_scores_are_keyed_by_the_matchs_external_id(self, seeded_db, tmp_path):
+        document = _export(seeded_db, tmp_path)
+        assert set(document["match_scores"].keys()) == {"M1"}
+        rows = {r["player"]: r for r in document["match_scores"]["M1"]}
+        assert rows["Alice"]["result"] == "W"
+        assert rows["Alice"]["points_earned"] == 6.0
+        assert rows["Bob"]["result"] == "L"
+
+    def test_a_match_with_no_scoresheet_is_absent_not_an_empty_list(self, db, tmp_path):
+        """ingest_viewer_data-only matches never get a scoresheet -- absent
+        is more honest than a key that's always there but always empty."""
+        upsert_team(db, "T1", "Chalk It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(
+            db, match_id="M2", home_team_id="T1", away_team_id="T2",
+            home_team_name="Chalk It Up", away_team_name="Rack Attack",
+        )
+        document = _export(db, tmp_path)
+        assert document["match_scores"] == {}
 
 
 class TestEmptyDatabase:

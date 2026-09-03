@@ -18,7 +18,14 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
-from database.queries import all_matches, all_players, all_teams, latest_standings, player_match_history
+from database.queries import (
+    all_matches,
+    all_players,
+    all_teams,
+    latest_standings,
+    match_scores,
+    player_match_history,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +40,7 @@ def export_to_json(db: Session, config: dict) -> str:
         "matches": _matches(db),
         "standings": _standings(db),
         "player_stats": _player_stats(db),
+        "match_scores": _match_scores(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -77,6 +85,28 @@ def _standings(db: Session) -> list[dict]:
         }
         for r in latest_standings(db)
     ]
+
+
+def _match_scores(db: Session) -> dict[str, list[dict]]:
+    """Per-match scoresheets, keyed by the match's external id (the same
+    id used in the `matches` list above) so a client can look up
+    `match_scores[match.match_id]` directly instead of joining on the
+    database's internal primary key, which it never sees.
+    """
+    document: dict[str, list[dict]] = {}
+    for row in match_scores(db):
+        if row.match is None:
+            continue  # orphaned row; _resolve_match_pk should prevent this, but don't crash the export over it
+        document.setdefault(row.match.external_id, []).append(
+            {
+                "player": row.player.name if row.player else "",
+                "team_name": row.team_name,
+                "skill_level": row.skill_level,
+                "result": row.result,
+                "points_earned": row.points_earned,
+            }
+        )
+    return document
 
 
 def _player_stats(db: Session) -> list[dict]:
