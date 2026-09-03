@@ -129,6 +129,24 @@ query teamSchedule($id: Int!) {
 }
 """
 
+# --- Known to exist, still to capture ---
+#
+# These operation names were seen in the network tab but their query
+# documents have not been captured, so nothing can use them yet. To fill one
+# in: open the page that issues it while logged in, save the network log as
+# "HAR with content", run tools/export-apa-graphql.ps1, and copy the `query`
+# for that operation here. Never copy the `authorization` header.
+#
+#   LeagueBox         The full division standings table. Until this exists,
+#                     scraper.graphql_scraper.standings_rows can only
+#                     snapshot OUR team's rank -- not the division table.
+#   DivisionContacts  Division contact details.
+#
+# Both are issued by the league/division standings page, which is why a HAR
+# captured from the team page alone does not contain them.
+LEAGUE_BOX_QUERY = None
+DIVISION_CONTACTS_QUERY = None
+
 # Retained for compatibility with code that checks these names.
 MATCH_QUERY = None
 PLAYER_STATS_QUERY = None

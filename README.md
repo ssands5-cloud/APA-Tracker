@@ -65,18 +65,52 @@ WSL) at the times set in `apa_config.yaml`'s `scheduler` section.
 
 ### Live GraphQL team data
 
-The APA Teams page uses the GraphQL endpoint rather than server-rendered HTML.
-To run the captured team queries, set the short-lived access token in the
-process environment only:
+The APA Teams page is a client-side app talking to a GraphQL endpoint — there
+is no server-rendered HTML behind it to scrape, so team/roster/schedule data
+is only reachable this way.
+
+**1. Set the access token for this shell only.** It is short-lived, and it
+must never be saved to `apa_config.yaml`, a script, a HAR file, or source
+control:
 
 ```powershell
 $env:APA_ACCESS_TOKEN = "<access token from your current APA session>"
-python -c "import yaml; from scraper.graphql_scraper import fetch_team_data; print(fetch_team_data(yaml.safe_load(open('apa_config.yaml'))).keys())"
 ```
 
-Never save the token in `apa_config.yaml`, a script, a HAR file, or source
-control. The GraphQL helper returns team metadata, roster rows, and schedule
-rows; response fixtures should be sanitized before being used in tests.
+**2. Run the sync.** It fetches team, roster and schedule; writes them to
+SQLite; and refreshes the Excel workbook:
+
+```powershell
+python -m scheduler.graphql_sync              # sync + Excel export
+python -m scheduler.graphql_sync --no-export  # sync only
+```
+
+If the token has expired (they don't last long) the run stops with a message
+saying exactly that, rather than a traceback.
+
+#### Capturing a new query
+
+Only `teamPage`, `teamRoster` and `teamSchedule` have been captured. The
+division standings table needs `LeagueBox`, which hasn't been — see the
+bottom of `parser/apa_graphql.py`. To capture one:
+
+1. Log into APA in Chrome and open the page that shows the data you want.
+2. DevTools → Network → Fetch/XHR, then reload the page.
+3. Right-click the request list → *Save all as HAR with content*, saving to
+   `%USERPROFILE%\Desktop\apa-network.har`.
+4. Run the extractor:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File ".\tools\export-apa-graphql.ps1"
+   ```
+
+That writes `apa-graphql-requests.json` with only the operation names,
+variables, queries and **response bodies** — no headers, cookies or tokens,
+so the token never leaves your machine. The response bodies can still contain
+teammates' names, so skim the file before sharing it with anyone.
+
+A HAR captured on one page only contains the queries that page issued: if an
+operation comes back missing, visit the page that loads it and capture again.
 
 ## Notes
 
