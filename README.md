@@ -18,8 +18,14 @@ results in a small SQLite database, and exporting summaries to Excel.
   simple matchup comparisons.
 - `scheduler/` — the two jobs meant to actually run on a schedule
   (`daily_sync.py`, `weekly_refresh.py`).
-- `ui/` — Excel export today; `dashboard_stub.py` marks where a real
-  dashboard would go later.
+- `ui/` — Excel (`export_excel.py`) and JSON (`export_json.py`) exports.
+  `dashboard_stub.py` marks where a real *interactive* (Streamlit/Flask)
+  dashboard would go later — separate from the static demo page below.
+- `scripts/` — offline, fixture-driven demo build: `build_demo.py` runs the
+  real ingestion pipeline against `tests/fixtures/*.json` (no network, no
+  login) and `render_demo_html.py` turns that into a browsable
+  `exports/demo_dashboard.html`. See `docs/graphql-captures/*/HANDOFF.md`
+  for how it's wired.
 
 ## Setup
 
@@ -110,9 +116,15 @@ once the token above is set. If the token has expired (they don't last
 long) the run stops with a message saying exactly that, rather than a
 traceback; get a fresh one and set the env var again.
 
-Player *career* stats (not per-match, but "how has this player done across
-seasons") aren't in this sync yet -- see `docs/graphql-captures/*/HANDOFF.md`
-item 2.
+Player *career* stats (lifetime record per format, plus cross-season team
+history — "how has this player done across seasons," not just this match)
+are included too: the sync resolves the account's own member id to its
+per-league alias id and pulls both, landing in the "Career Stats" and
+"Team History" Excel sheets and the demo's Career tab. See
+`docs/graphql-captures/*/HANDOFF.md` item 2 for how the alias id was found
+and what's still unconfirmed (opponents' career stats aren't pulled this
+way, and the alias-per-league mapping is only confirmed against one league
+on a multi-league account).
 
 #### Capturing queries by logging in (easiest)
 
