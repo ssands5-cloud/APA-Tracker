@@ -12,7 +12,7 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-from parser.apa_page_map import PLAYER_PAGE, MATCH_PAGE
+from parser.apa_page_map import MATCH_PAGE
 
 logger = logging.getLogger(__name__)
 
@@ -124,22 +124,77 @@ def _extract_lifetime_stats(soup) -> dict:
     return stats
 
 
-def _extract_match_history(soup) -> list[dict]:
-    """Extract match history from stats table or session sections."""
-    matches = []
+#: Header captions that identify a table's date column. A match table must
+#: have one of these AND one of MATCH_TABLE_OPPONENT_HEADERS to qualify.
+MATCH_TABLE_DATE_HEADERS = frozenset({"date", "match date", "matchdate", "when"})
 
-    # Look for stats tables
+#: Header captions that identify a table's opponent column.
+MATCH_TABLE_OPPONENT_HEADERS = frozenset(
+    {"opponent", "opponents", "vs", "vs.", "versus", "against", "opposing player"}
+)
+
+
+def _table_headers(table) -> set:
+    """Lowercased text of every <th> in a table."""
+    return {th.get_text(strip=True).lower() for th in table.find_all("th")}
+
+
+def _looks_like_match_table(table) -> bool:
+    """Whether a table is plausibly a match history table.
+
+    Cell count alone does not identify one. A site navigation bar, a lifetime
+    summary widget and a match table all have three or more cells per row, so
+    counting cells admits all three and the non-match rows become fabricated
+    matches -- a nav bar arriving as "Home vs Teams, result: Standings".
+
+    The test here is the header row: a match table names both a date column
+    and an opponent column. A table with no <th> at all does not qualify,
+    which is deliberate. Skipping a real table is visible in the logs and
+    yields no data; admitting a fake one yields wrong data that reaches the
+    database and cannot be told apart from real matches later.
+    """
+    headers = _table_headers(table)
+    if not headers:
+        return False
+    return bool(headers & MATCH_TABLE_DATE_HEADERS) and bool(
+        headers & MATCH_TABLE_OPPONENT_HEADERS
+    )
+
+
+def _extract_match_history(soup) -> list[dict]:
+    """Extract match history from tables that are actually match tables."""
+    matches = []
     tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        for row in rows:
+    qualifying = [table for table in tables if _looks_like_match_table(table)]
+
+    skipped = len(tables) - len(qualifying)
+    if skipped:
+        logger.debug("Skipped %d table(s) with no date+opponent header pair", skipped)
+
+    for table in qualifying:
+        for row in table.find_all("tr"):
             cells = row.find_all(["td", "th"])
+            if not cells:
+                continue
+            # A header row inside the body is captions, not a match.
+            if all(cell.name == "th" for cell in cells):
+                continue
             if len(cells) >= 3:  # At least date, opponent, result
                 match_entry = _parse_match_row(cells)
                 if match_entry:
                     matches.append(match_entry)
 
-    logger.info("Extracted %d match entries", len(matches))
+    if tables and not qualifying:
+        # Do not let "found nothing" read as "played nothing".
+        logger.warning(
+            "Found %d table(s) on the player page but none had both a date and an "
+            "opponent header, so no match history was extracted. If the portal "
+            "renamed those columns, add the new captions to "
+            "MATCH_TABLE_DATE_HEADERS / MATCH_TABLE_OPPONENT_HEADERS.",
+            len(tables),
+        )
+
+    logger.info("Extracted %d match entries from %d qualifying table(s)", len(matches), len(qualifying))
     return matches
 
 
