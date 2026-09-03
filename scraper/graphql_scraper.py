@@ -66,15 +66,21 @@ def _team(payload: dict[str, Any]) -> dict[str, Any]:
     return (payload or {}).get("team") or {}
 
 
-def fetch_team_data(config: dict) -> dict[str, Any]:
+def fetch_team_data(config: dict, team_id: str | int | None = None) -> dict[str, Any]:
     """Fetch team metadata, roster, and schedule in three authenticated calls.
+
+    `team_id` defaults to config["team"]["team_id"] (the single-team `run()`
+    path) but can be overridden -- same pattern as
+    fetch_division_standings's `division_id` -- so a caller looping over
+    every team an account plays on (run_all_teams) isn't limited to the one
+    team apa_config.yaml happens to have configured.
 
     Raises:
         AccessTokenMissing: No token in config or environment.
         AccessTokenExpired: The token was rejected -- capture a fresh one.
         GraphQLError / GraphQLTransportError: Anything else from the API.
     """
-    team_id = int(config["team"]["team_id"])
+    team_id = int(team_id if team_id is not None else config["team"]["team_id"])
     token = _token(config)
     timeout = (config.get("session") or {}).get("timeout_seconds", 15)
     retries = (config.get("session") or {}).get("max_retries", 0)

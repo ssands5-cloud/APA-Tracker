@@ -27,7 +27,7 @@ import yaml
 from sqlalchemy.orm import Session
 
 from database.engine import create_db_engine
-from database.ingest import ingest_match, ingest_standings, upsert_roster, upsert_team
+from database.ingest import ingest_match, ingest_match_scores, ingest_standings, upsert_roster, upsert_team
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
@@ -35,8 +35,10 @@ from scraper.graphql_scraper import (
     division_standings_rows,
     fetch_dashboard_teams,
     fetch_division_standings,
+    fetch_match_detail,
     fetch_matches_by_viewer,
     fetch_team_data,
+    match_player_scores,
     roster_rows,
     schedule_rows,
     standings_rows,
@@ -213,15 +215,65 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
                 standings_count += len(rows)
         counts["standings"] = standings_count
 
+        # Roster for every team found above -- fetch_team_data's team_id
+        # override (added alongside this) means this is a flat loop over
+        # team_rows, not a single hardcoded team.team_id from config.
+        roster_count = 0
+        for row in team_rows:
+            try:
+                data = fetch_team_data(config, team_id=row["team_id"])
+            except (AccessTokenMissing, AccessTokenExpired):
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Could not fetch roster for team %s (%s: %s); skipping just that one.",
+                    row["team_name"], type(exc).__name__, exc,
+                )
+                continue
+            roster = roster_rows(data)
+            if roster:
+                team = upsert_team(db, row["team_id"], row["team_name"])
+                upsert_roster(db, team, roster)
+                roster_count += len(roster)
+        counts["roster"] = roster_count
+
+        # Per-player scoresheet for every match that's actually been played.
+        # fetch_match_detail is the one query with real per-player stats
+        # (skill level, win/loss, points earned) -- the schedule/team
+        # queries above only carry the team-level score. One call per
+        # SCORED match id already known from viewer_matches_rows -- no
+        # per-week or per-team navigation, just a flat loop over match ids
+        # the account's own dashboard already reported.
+        scoresheet_count = 0
+        for row in viewer_matches_rows(viewer_matches):
+            if not row["match_id"] or not row["is_scored"]:
+                continue
+            try:
+                match = fetch_match_detail(config, int(row["match_id"]))
+            except (AccessTokenMissing, AccessTokenExpired):
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Could not fetch match detail for match %s (%s: %s); skipping just that one.",
+                    row["match_id"], type(exc).__name__, exc,
+                )
+                continue
+            scores = match_player_scores(match)
+            if scores:
+                created, updated = ingest_match_scores(db, row["match_id"], scores)
+                scoresheet_count += created + updated
+        counts["scoresheet_rows"] = scoresheet_count
+
         if export:
             path = export_to_excel(db, config)
             logger.info("Excel export written to %s", path)
 
     logger.info(
-        "All-teams sync complete: %d team(s), %d standings row(s) across their divisions, "
-        "%d/%d matches new (%d byes, %d not yet scored)",
-        counts["teams"], counts["standings"], counts["matches_new"], counts["matches_seen"],
-        counts["byes"], counts["unscored"],
+        "All-teams sync complete: %d team(s), %d roster entries, %d standings row(s) "
+        "across their divisions, %d/%d matches new (%d byes, %d not yet scored), "
+        "%d player scoresheet row(s) across every scored match",
+        counts["teams"], counts["roster"], counts["standings"], counts["matches_new"],
+        counts["matches_seen"], counts["byes"], counts["unscored"], counts["scoresheet_rows"],
     )
     return counts
 
