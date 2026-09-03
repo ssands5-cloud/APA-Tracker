@@ -197,6 +197,16 @@ def ingest_match_roster(
         player_id = entry.get("player_id") or entry.get("player_name", "")
         player_name = entry.get("player_name", "")
 
+        # A vacant/forfeited roster slot has no real player behind it. Every
+        # such slot, across every match, would otherwise share the same
+        # blank external_id -- Player.external_id is unique, so they'd all
+        # silently collapse into ONE fake "player" accumulating match
+        # history that belongs to nobody. Confirmed against real data: an
+        # unnamed player with a 0-0 record spanning two different matches.
+        if not player_id:
+            logger.debug("Skipping a roster entry with no player id for match %s", match_id)
+            continue
+
         # Ensure player exists
         player = upsert_player(db, player_id, player_name)
 
@@ -253,6 +263,17 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
     for entry in scores:
         player_id = entry.get("player_id") or ""
         player_name = entry.get("player_name") or ""
+
+        # Same reasoning as ingest_match_roster's identical guard: a vacant/
+        # forfeited scoresheet slot has no real player behind it, and every
+        # such slot sharing a blank external_id would collapse into one
+        # fake "player" across every match it happens in. This is the exact
+        # bug found in a real export: an unnamed player with a 0-0 record
+        # spanning two unrelated matches.
+        if not player_id:
+            logger.debug("Skipping a scoresheet entry with no player id for match %s", match_id)
+            continue
+
         player = upsert_player(db, player_id, player_name)
 
         existing = (

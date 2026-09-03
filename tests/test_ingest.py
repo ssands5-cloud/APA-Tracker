@@ -23,13 +23,14 @@ from datetime import datetime, timedelta
 
 from database.ingest import (
     ingest_match,
+    ingest_match_roster,
     ingest_match_scores,
     ingest_player_matches,
     ingest_standings,
     upsert_player,
     upsert_team,
 )
-from database.models import Base, PlayerMatch
+from database.models import Base, Player, PlayerMatch
 from database.queries import latest_standings
 
 
@@ -134,6 +135,54 @@ class TestIngestStandingsSharedTimestamp:
 
         rows = latest_standings(db)
         assert {r.team_name for r in rows} == {"Fresh Team"}
+
+
+class TestVacantScoresheetSlotsAreSkippedNotMerged:
+    """Real bug found reading an actual export: a player with no name at
+    all, a 0-0 record, spanning two unrelated matches. A forfeited/vacant
+    roster slot has no real player_id, and every such slot -- across every
+    match -- shared the same blank external_id, so they all collapsed into
+    one fake "player" that accumulated match history belonging to nobody.
+    """
+
+    def test_ingest_match_scores_skips_an_entry_with_no_player_id(self, db):
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Home", away_team_name="Away")
+        created, updated = ingest_match_scores(
+            db, "M1",
+            [
+                {"player_id": "P1", "player_name": "Alice", "result": "W", "points_earned": 6},
+                {"player_id": "", "player_name": "", "result": None, "points_earned": None},
+            ],
+        )
+        assert created == 1  # only Alice
+        assert db.query(Player).filter_by(external_id="").count() == 0
+
+    def test_ingest_match_roster_skips_an_entry_with_no_player_id(self, db):
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Home", away_team_name="Away")
+        count = ingest_match_roster(
+            db, "M1", "T1", "Home",
+            [
+                {"player_id": "P1", "player_name": "Alice"},
+                {"player_id": "", "player_name": ""},
+            ],
+        )
+        assert count == 1
+        assert db.query(Player).filter_by(external_id="").count() == 0
+
+    def test_two_vacant_slots_across_two_matches_do_not_merge_into_one_player(self, db):
+        """The exact real shape: forfeited slots in TWO DIFFERENT matches
+        must not both land on one shared blank-id Player row."""
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Home", away_team_name="Away")
+        ingest_match(db, match_id="M2", home_team_id="T1", away_team_id="T3",
+                     home_team_name="Home", away_team_name="Someone Else")
+        ingest_match_scores(db, "M1", [{"player_id": "", "player_name": ""}])
+        ingest_match_scores(db, "M2", [{"player_id": "", "player_name": ""}])
+
+        assert db.query(Player).count() == 0
+        assert db.query(PlayerMatch).count() == 0
 
 
 class TestPerPlayerHistoryPathStillDeduplicates:
