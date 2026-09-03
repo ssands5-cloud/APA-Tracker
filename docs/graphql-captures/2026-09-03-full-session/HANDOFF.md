@@ -13,6 +13,16 @@ Directory layout: `<entity type>/<entity id>/<operation>.json`. `global/global/`
 holds operations not yet classified to division/team/match (see
 `scraper/full_apa_scrape.py`'s `OPERATION_ENTITY` table).
 
+## Status
+
+- ✅ **Item 1 (below) is DONE** — `parser/apa_graphql.py`, `scraper/graphql_scraper.py`
+  (`fetch_dashboard_teams`/`dashboard_teams_rows`, `fetch_matches_by_viewer`/
+  `viewer_matches_rows`), `scheduler/graphql_sync.py` (`ingest_viewer_data`,
+  `run_all_teams`), 19 new tests. Commit `c908f77`.
+- ⛔ **Item 2 is BLOCKED on one confirmation, not started** — see the new
+  note inside item 2 below. Do not guess past it; wiring the wrong id
+  silently pulls a different person's stats, which is worse than no data.
+
 ## Three things worth building from this capture, in priority order
 
 ### 1. `dashboardTeams` + `matchesByViewer` — no team_id needed at all
@@ -104,11 +114,36 @@ including the 4-team case, and wire the result into `ingest_standings`/
 
 `global/global/getEightBallStats.json` and `global/global/TeamStat.json`.
 **This is the "player match-history/statistics query" that's been an open
-gap since early in this project.** Both are scoped by an `alias` id (a
-member's per-league identity, not the same as `member.id` used elsewhere --
-check `FormatsByMemberId.json` in this same capture for how alias/member
-ids relate, and confirm which id `TEAM_ROSTER_QUERY`'s `roster[].member.id`
-actually corresponds to before wiring this up, rather than assuming).
+gap since early in this project.** Both are scoped by an `alias` id.
+
+**BLOCKED on one confirmation -- resolved partway, do not skip the rest.**
+Checked `FormatsByMemberId.json` in this capture: it proves `alias.id` is a
+PER-LEAGUE identity (`member { aliases { id, league { slug } } } }` -- one
+alias per league a member plays in), confirmed a DIFFERENT id-space from
+`member.id`. Then checked the real `teamRoster` capture
+(`team/13082718/teamRoster.json`) for whether a roster entry already carries
+its alias id: it does NOT request `alias { id }` at all, only `member { id
+}`. But each roster entry is typed `EightBallPlayer`/`NineBallPlayer` and
+carries its OWN top-level `id` (separate from `member.id`) -- structurally,
+that top-level `roster[].id` looks like it likely IS the alias id (an
+EightBallPlayer/NineBallPlayer being the per-format alias representation),
+but this is a hypothesis from schema shape, not confirmed against real data.
+
+**The cheap way to confirm it, next time the capture script runs:** open a
+team's roster page (captures `teamRoster`), note one player's `displayName`
+and note the two ids GraphQL sends back for that row (`roster[].id` and
+`roster[].member.id`) from `sanitized_fixtures/team/<id>/teamRoster.json`
+-- wait, those will be sanitized to `"int"` in that file; use `apa_full()`-
+equivalent unsanitized capture, or just watch DevTools Network tab directly
+for that one response, un-sanitized, just this once, locally, never shared.
+Then click into THAT SAME player's individual stats page (whatever link
+shows "my stats" / a player detail view) and see which numeric id
+`getEightBallStats`/`TeamStat` gets called with as `$id`. If it matches
+`roster[].id`, the hypothesis is confirmed and use that field. If it
+matches `member.id` instead, use that. If it matches neither, capture
+whatever intermediate query bridges them (there is likely one -- check for
+an operation name resembling "PlayerAlias" or similar in whatever new
+capture results) and add it to this file before wiring anything up.
 
 `getEightBallStats` returns real per-player stats: `matchesWon`,
 `matchesPlayed`, `CLA`, `defensiveShotAvg`, `matchCountForLastTwoYrs`,
