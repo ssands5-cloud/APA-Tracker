@@ -206,15 +206,36 @@ def ingest_player_matches(db: Session, player: Player, matches: list[dict]) -> i
     return count
 
 
+def _clean_number(value) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"n/a", "na", "null", "none"}:
+        return None
+    text = text.replace(",", "")
+    if text.endswith("%"):
+        text = text[:-1]
+    return text
+
+
 def _to_int(value) -> Optional[int]:
+    cleaned = _clean_number(value)
+    if cleaned is None:
+        return None
     try:
-        return int(str(value).strip())
+        numeric = float(cleaned)
     except (TypeError, ValueError):
         return None
+    if numeric.is_integer():
+        return int(numeric)
+    return None
 
 
 def _to_float(value) -> Optional[float]:
+    cleaned = _clean_number(value)
+    if cleaned is None:
+        return None
     try:
-        return float(str(value).strip())
+        return float(cleaned)
     except (TypeError, ValueError):
         return None

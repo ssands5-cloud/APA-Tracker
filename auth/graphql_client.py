@@ -81,11 +81,19 @@ def execute(
             ) from exc
         raise GraphQLTransportError(f"Non-JSON response body (HTTP {resp.status_code})") from exc
 
-    if payload.get("errors"):
-        codes = {(e.get("extensions") or {}).get("code") for e in payload["errors"]}
+    if not isinstance(payload, dict):
+        raise GraphQLTransportError(
+            f"GraphQL response JSON was {type(payload).__name__}, expected an object with 'data' or 'errors'"
+        )
+
+    errors = payload.get("errors")
+    if errors:
+        if not isinstance(errors, list):
+            raise GraphQLTransportError(f"GraphQL errors field was {type(errors).__name__}, expected a list")
+        codes = {(e.get("extensions") or {}).get("code") for e in errors if isinstance(e, dict)}
         if resp.status_code in _AUTH_STATUS_CODES or codes & _AUTH_EXTENSION_CODES:
-            raise GraphQLAuthError(payload["errors"], status_code=resp.status_code)
-        raise GraphQLError(payload["errors"], status_code=resp.status_code)
+            raise GraphQLAuthError(errors, status_code=resp.status_code)
+        raise GraphQLError(errors, status_code=resp.status_code)
 
     if resp.status_code in _AUTH_STATUS_CODES:
         raise GraphQLAuthError(

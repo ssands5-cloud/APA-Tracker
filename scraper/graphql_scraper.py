@@ -42,13 +42,18 @@ def fetch_team_data(config: dict) -> dict[str, Any]:
 def roster_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert API roster objects to the existing ingestion field names."""
     rows = []
-    for player in data.get("roster", []):
+    for player in data.get("roster", []) or []:
+        if not isinstance(player, dict):
+            continue
+        member = player.get("member") or {}
+        if not isinstance(member, dict):
+            member = {}
         played = player.get("matchesPlayed") or 0
         won = player.get("matchesWon") or 0
         rows.append(
             {
-                "player_id": str(player.get("member", {}).get("id") or player.get("id") or ""),
-                "player_name": player.get("displayName") or "",
+                "player_id": str(player.get("id") or member.get("id") or player.get("memberNumber") or ""),
+                "player_name": player.get("displayName") or player.get("name") or "",
                 "skill_level": player.get("skillLevel"),
                 "matches_won": won,
                 "matches_played": played,
@@ -63,17 +68,24 @@ def roster_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
 def schedule_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert API match objects to stable, display-ready dictionaries."""
     rows = []
-    for match in data.get("schedule", []):
+    for match in data.get("schedule", []) or []:
+        if not isinstance(match, dict):
+            continue
         home = match.get("home") or {}
         away = match.get("away") or {}
+        if not isinstance(home, dict):
+            home = {}
+        if not isinstance(away, dict):
+            away = {}
         location = match.get("location") or {}
-        scores = {
-            "home": None,
-            "away": None,
-        }
+        if not isinstance(location, dict):
+            location = {}
+        scores = {"home": None, "away": None}
         for result in match.get("results") or []:
+            if not isinstance(result, dict):
+                continue
             side = str(result.get("homeAway") or "").lower()
-            points = (result.get("points") or {}).get("total")
+            points = (result.get("points") or {}).get("total") if isinstance(result.get("points"), dict) else None
             if side in {"home", "away"}:
                 scores[side] = points
         rows.append(
