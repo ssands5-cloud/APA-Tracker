@@ -243,6 +243,13 @@ assert(
   downloads[0].content.includes("Do not share this file"),
   "the downloaded script warns about what it contains"
 );
+assert(
+  downloads[0].content.includes('Test-Path ".\\scheduler\\graphql_sync.py"') &&
+    downloads[0].content.includes("not from Downloads"),
+  "the downloaded script checks it's running from the project folder, not Downloads " +
+    "(this is the real bug a user hit: running it from Downloads gave a bare " +
+    "ModuleNotFoundError instead of an explanation)"
+);
 
 // Header shapes: plain object, Headers-like, and array-of-pairs all work.
 for (const [label, headers] of [

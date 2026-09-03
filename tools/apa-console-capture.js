@@ -200,6 +200,20 @@
       "# The token below is LIVE and short-lived (~15 minutes).",
       "# Do not share this file or paste its contents anywhere. Delete it after use.",
       "",
+      // This lands in Downloads by design (see the comment below), so
+      // running it FROM Downloads is the natural first thing to try -- and
+      // 'python -m scheduler.graphql_sync' then fails with a bare
+      // ModuleNotFoundError that means nothing to someone who didn't write
+      // it. Check for the project folder explicitly and say so in plain
+      // language instead.
+      'if (-not (Test-Path ".\\scheduler\\graphql_sync.py")) {',
+      '    Write-Host "This has to run from your apa-tracker project folder (the one with apa_config.yaml in it), not from Downloads." -ForegroundColor Red',
+      '    Write-Host "cd to that folder first, then run this script by its Downloads path, e.g.:"',
+      '    Write-Host "  cd C:\\path\\to\\apa-tracker"',
+      `    Write-Host '  & "$env:USERPROFILE\\Downloads\\run-apa-sync.ps1"'`,
+      "    exit 1",
+      "}",
+      "",
       `$env:APA_ACCESS_TOKEN = "${accessToken}"`,
       "python -m scheduler.graphql_sync",
       "$env:APA_ACCESS_TOKEN = $null",
