@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from datetime import datetime, timedelta
 
+import database.ingest as ingest_module
 from database.ingest import (
     ingest_eight_ball_stats,
     ingest_match,
@@ -94,11 +95,32 @@ class TestIngestStandingsSharedTimestamp:
     divisions, only 10 (the last division processed) reached the export.
     """
 
-    def test_default_timestamps_reproduce_the_bug(self, db):
+    def test_default_timestamps_reproduce_the_bug(self, db, monkeypatch):
         """Without captured_at, two separate ingest_standings() calls a
         moment apart really do get different timestamps, and
         latest_standings() really does drop the earlier one -- this is
-        what run_all_teams() did before the fix."""
+        what run_all_teams() did before the fix.
+
+        Two real back-to-back datetime.utcnow() calls are flaky here, not
+        illustrative: they can land in the same tick depending on the
+        platform's clock resolution (observed tying under pytest on
+        Windows), which would make this test fail for a reason that has
+        nothing to do with the bug it documents. Patched to guarantee two
+        distinct values instead, same as production actually saw them.
+        """
+        real_datetime = ingest_module.datetime
+        ticks = iter([
+            real_datetime(2026, 1, 1, 0, 0, 0, 0),
+            real_datetime(2026, 1, 1, 0, 0, 0, 1),
+        ])
+
+        class _FrozenDatetime(real_datetime):
+            @classmethod
+            def utcnow(cls):
+                return next(ticks)
+
+        monkeypatch.setattr(ingest_module, "datetime", _FrozenDatetime)
+
         ingest_standings(db, [{"team_name": "Division A Team", "rank": 1, "points": 100}])
         ingest_standings(db, [{"team_name": "Division B Team", "rank": 1, "points": 90}])
 
