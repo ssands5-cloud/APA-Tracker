@@ -1,0 +1,15 @@
+{
+  "operationName": "ComponentFeatureCheck",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:32.152683+00:00",
+  "variables": {
+    "key": "str"
+  },
+  "query": "query ComponentFeatureCheck($key: String!) {\n  feature(key: $key)\n}\n",
+  "response": {
+    "data": {
+      "feature": "bool"
+    }
+  }
+}

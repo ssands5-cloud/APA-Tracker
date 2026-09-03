@@ -1,0 +1,19 @@
+{
+  "operationName": "RaygunUserTracking",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.165145+00:00",
+  "variables": {},
+  "query": "query RaygunUserTracking {\n  viewer {\n    id\n    ... on ExternalStaff {\n      firstName\n      lastName\n      emailAddress\n      __typename\n    }\n    ... on NationalOfficeStaff {\n      firstName\n      lastName\n      emailAddress\n      __typename\n    }\n    ... on Member {\n      firstName\n      lastName\n      emailAddress\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "firstName": "str",
+        "lastName": "str",
+        "emailAddress": "str",
+        "__typename": "str"
+      }
+    }
+  }
+}

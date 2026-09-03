@@ -1,0 +1,42 @@
+{
+  "operationName": "LeagueBox",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:40.538836+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query LeagueBox($id: Int!) {\n  viewer {\n    __typename\n    id\n    firstName\n    lastName\n    emailAddress\n  }\n  league(id: $id) {\n    id\n    name\n    slug\n    isMine\n    logo\n    homePageUrl\n    facebookUrl\n    phone\n    contacts(role: LO) {\n      id\n      firstName\n      lastName\n      phone\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "__typename": "str",
+        "id": "int",
+        "firstName": "str",
+        "lastName": "str",
+        "emailAddress": "str"
+      },
+      "league": {
+        "id": "int",
+        "name": "str",
+        "slug": "str",
+        "isMine": "bool",
+        "logo": "str",
+        "homePageUrl": "str",
+        "facebookUrl": "str",
+        "phone": "str",
+        "contacts": [
+          {
+            "id": "int",
+            "firstName": "str",
+            "lastName": "str",
+            "phone": "null",
+            "__typename": "str"
+          },
+          "...1 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

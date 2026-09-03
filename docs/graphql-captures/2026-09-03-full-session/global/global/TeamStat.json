@@ -1,0 +1,80 @@
+{
+  "operationName": "TeamStat",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:10.946957+00:00",
+  "variables": {
+    "id": "int",
+    "limit": "int",
+    "offset": "int"
+  },
+  "query": "query TeamStat($id: Int!, $limit: Int!, $offset: Int!) {\n  alias(id: $id) {\n    id\n    pastTeams: players(current: false, active: null, limit: $limit, offset: $offset) {\n      id\n      ...EightBallTeam\n      ...NineBallTeam\n      ...MastersTeam\n      __typename\n    }\n    currentTeams: players(current: true, active: null) {\n      id\n      ...EightBallTeam\n      ...NineBallTeam\n      ...MastersTeam\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment NineBallTeam on NineBallPlayer {\n  id\n  isActive\n  role\n  rosterPosition\n  nickName\n  matchesPlayed\n  matchesWon\n  session {\n    id\n    name\n    __typename\n  }\n  skillLevel\n  rank\n  team {\n    id\n    name\n    division {\n      id\n      isTournament\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment EightBallTeam on EightBallPlayer {\n  id\n  isActive\n  role\n  rosterPosition\n  nickName\n  matchesPlayed\n  matchesWon\n  session {\n    id\n    name\n    __typename\n  }\n  skillLevel\n  rank\n  team {\n    id\n    name\n    division {\n      id\n      isTournament\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment MastersTeam on MastersPlayer {\n  id\n  isActive\n  role\n  rosterPosition\n  nickName\n  matchesPlayed\n  matchesWon\n  session {\n    id\n    name\n    __typename\n  }\n  team {\n    id\n    name\n    division {\n      id\n      isTournament\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n",
+  "response": {
+    "data": {
+      "alias": {
+        "id": "int",
+        "pastTeams": [
+          {
+            "id": "int",
+            "isActive": "bool",
+            "role": "MEMBER",
+            "rosterPosition": "int",
+            "nickName": "str",
+            "matchesPlayed": "int",
+            "matchesWon": "int",
+            "session": {
+              "id": "int",
+              "name": "str",
+              "__typename": "str"
+            },
+            "skillLevel": "int",
+            "rank": "int",
+            "team": {
+              "id": "int",
+              "name": "str",
+              "division": {
+                "id": "int",
+                "isTournament": "bool",
+                "__typename": "str"
+              },
+              "__typename": "str"
+            },
+            "__typename": "str"
+          },
+          "...10 item(s)"
+        ],
+        "currentTeams": [
+          {
+            "id": "int",
+            "isActive": "bool",
+            "role": "MEMBER",
+            "rosterPosition": "int",
+            "nickName": "str",
+            "matchesPlayed": "int",
+            "matchesWon": "int",
+            "session": {
+              "id": "int",
+              "name": "str",
+              "__typename": "str"
+            },
+            "skillLevel": "int",
+            "rank": "null",
+            "team": {
+              "id": "int",
+              "name": "str",
+              "division": {
+                "id": "int",
+                "isTournament": "bool",
+                "__typename": "str"
+              },
+              "__typename": "str"
+            },
+            "__typename": "str"
+          },
+          "...4 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

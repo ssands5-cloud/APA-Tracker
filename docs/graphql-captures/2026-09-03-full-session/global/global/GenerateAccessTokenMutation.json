@@ -1,0 +1,18 @@
+{
+  "operationName": "GenerateAccessTokenMutation",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.045811+00:00",
+  "variables": {
+    "refreshToken": "str"
+  },
+  "query": "mutation GenerateAccessTokenMutation($refreshToken: String!) {\n  generateAccessToken(refreshToken: $refreshToken) {\n    accessToken\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "generateAccessToken": {
+        "accessToken": "str",
+        "__typename": "str"
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "operationName": "NationalNews",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:59:11.467750+00:00",
+  "variables": {
+    "all": "bool",
+    "indLimit": "int",
+    "indOffset": "int",
+    "ntlLimit": "int",
+    "ntlOffset": "int",
+    "vLimit": "int",
+    "vOffset": "int"
+  },
+  "query": "query NationalNews($ntlOffset: Int!, $ntlLimit: Int!, $vOffset: Int!, $vLimit: Int!, $indOffset: Int!, $indLimit: Int!, $slug: String, $all: Boolean!) {\n  viewer @include(if: $all) {\n    id\n    ... on Member {\n      leagues {\n        ...viewerNtlLeagueNewsFrag\n        __typename\n      }\n      __typename\n    }\n    ... on ExternalStaff {\n      leagues {\n        ...viewerNtlLeagueNewsFrag\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  national: league(id: 589) @include(if: $all) {\n    id\n    name\n    slug\n    news(offset: $ntlOffset, limit: $ntlLimit) {\n      ...ntlNewsFrag\n      __typename\n    }\n    __typename\n  }\n  indLeague: league(slug: $slug) @skip(if: $all) {\n    id\n    news(limit: $indLimit, offset: $indOffset) {\n      ...ntlNewsFrag\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment ntlNewsFrag on News {\n  id\n  title\n  body\n  featuredImage\n  createdDate\n  updatedDate\n  effectiveDate\n  isSticky\n  league {\n    id\n    slug\n    __typename\n  }\n  __typename\n}\n\nfragment viewerNtlLeagueNewsFrag on League {\n  id\n  slug\n  news(offset: $vOffset, limit: $vLimit) {\n    ...ntlNewsFrag\n    __typename\n  }\n  __typename\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "leagues": [
+          {
+            "id": "int",
+            "slug": "str",
+            "news": [],
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      },
+      "national": {
+        "id": "int",
+        "name": "str",
+        "slug": "str",
+        "news": [],
+        "__typename": "str"
+      }
+    }
+  }
+}

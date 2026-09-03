@@ -1,0 +1,27 @@
+{
+  "operationName": "AliasSessionStatsDropdown",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:06.676901+00:00",
+  "variables": {
+    "id": "int",
+    "format": "NINE"
+  },
+  "query": "query AliasSessionStatsDropdown($id: Int!, $format: FormatType) {\n  alias(id: $id) {\n    id\n    sessions(format: $format) {\n      id\n      name\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "alias": {
+        "id": "int",
+        "sessions": [
+          {
+            "id": "int",
+            "name": "str",
+            "__typename": "str"
+          },
+          "...7 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

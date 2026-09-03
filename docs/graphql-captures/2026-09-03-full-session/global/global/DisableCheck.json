@@ -1,0 +1,24 @@
+{
+  "operationName": "DisableCheck",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.374636+00:00",
+  "variables": {},
+  "query": "query DisableCheck {\n  feature(key: \"EmergencyNotice\")\n  league(id: 589) {\n    news(limit: 1) {\n      id\n      title\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "feature": "bool",
+      "league": {
+        "news": [
+          {
+            "id": "int",
+            "title": "str",
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "operationName": "ViewerEventQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:39.553078+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query ViewerEventQuery($id: Int!) {\n  tournament(id: $id) {\n    id\n    endTime\n    event {\n      id\n      registrationWindow {\n        id\n        status\n        __typename\n      }\n      __typename\n    }\n    registrationConfig {\n      promptForWheelchairAccess\n      registrableUntil\n      __typename\n    }\n    players(filter: {context: [VIEWER]}) {\n      __typename\n      ... on TeamTournamentPlayer {\n        id\n        registered\n        notAttending\n        eligible\n        __typename\n      }\n      ... on SinglesTournamentPlayer {\n        id\n        registered\n        notAttending\n        eligible\n        __typename\n      }\n      ... on WeeklyTournamentPlayer {\n        id\n        registered\n        notAttending\n        eligible\n        __typename\n      }\n      ... on USAMTournamentPlayer {\n        id\n        __typename\n      }\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "tournament": {
+        "id": "int",
+        "endTime": "str",
+        "event": {
+          "id": "int",
+          "registrationWindow": "null",
+          "__typename": "str"
+        },
+        "registrationConfig": "null",
+        "players": [],
+        "__typename": "str"
+      }
+    }
+  }
+}

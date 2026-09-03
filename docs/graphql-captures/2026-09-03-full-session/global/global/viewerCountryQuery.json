@@ -1,0 +1,20 @@
+{
+  "operationName": "viewerCountryQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.360887+00:00",
+  "variables": {},
+  "query": "query viewerCountryQuery {\n  viewer {\n    id\n    ... on Member {\n      country {\n        id\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "country": {
+          "id": "int",
+          "__typename": "str"
+        },
+        "__typename": "str"
+      }
+    }
+  }
+}

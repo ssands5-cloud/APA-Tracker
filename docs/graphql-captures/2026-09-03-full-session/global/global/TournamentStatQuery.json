@@ -1,0 +1,39 @@
+{
+  "operationName": "TournamentStatQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:20.482102+00:00",
+  "variables": {
+    "id": "int",
+    "limit": "int",
+    "offset": "int"
+  },
+  "query": "query TournamentStatQuery($id: Int!, $limit: Int!, $offset: Int!) {\n  member(id: $id) {\n    id\n    playerTournaments(limit: $limit, offset: $offset) {\n      ... on TeamPlayerTournament {\n        __typename\n        id\n        teamNumber\n        skillLevel\n        standing\n        teamName\n        disqualified\n        tournament {\n          name\n          id\n          startTime\n          type: formatType\n          __typename\n        }\n      }\n      ... on SinglesPlayerTournament {\n        id\n        skillLevel\n        standing\n        disqualified\n        tournament {\n          name\n          id\n          startTime\n          type: formatType\n          __typename\n        }\n        __typename\n      }\n      ... on USAMPlayerTournament {\n        id\n        standing\n        disqualified\n        tournament {\n          id\n          name\n          startTime\n          type: formatType\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "member": {
+        "id": "int",
+        "playerTournaments": [
+          {
+            "__typename": "str",
+            "id": "int",
+            "teamNumber": "str",
+            "skillLevel": "str",
+            "standing": "null",
+            "teamName": "str",
+            "disqualified": "null",
+            "tournament": {
+              "name": "str",
+              "id": "int",
+              "startTime": "str",
+              "type": "NINE",
+              "__typename": "str"
+            }
+          },
+          "...1 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

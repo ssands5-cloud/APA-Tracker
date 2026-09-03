@@ -1,0 +1,16 @@
+{
+  "operationName": "LiveStream",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.372636+00:00",
+  "variables": {},
+  "query": "query LiveStream {\n  liveStream {\n    __typename\n    feeds {\n      __typename\n      ... on YoutubeLive {\n        title\n        description\n        publishTime\n        embed\n        thumbnails {\n          url\n          height\n          width\n          __typename\n        }\n        __typename\n      }\n    }\n  }\n}\n",
+  "response": {
+    "data": {
+      "liveStream": {
+        "__typename": "str",
+        "feeds": []
+      }
+    }
+  }
+}

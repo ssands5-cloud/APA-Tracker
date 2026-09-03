@@ -1,0 +1,154 @@
+{
+  "operationName": "MatchPage",
+  "entityType": "match",
+  "entityId": "51419677",
+  "capturedAt": "2026-09-03T04:59:42.946078+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query MatchPage($id: Int!) {\n  match(id: $id) {\n    id\n    isFinalized\n    isTournament\n    tableNumber\n    division {\n      id\n      electronicScoringEnabled\n      __typename\n    }\n    league {\n      id\n      esEnabled\n      __typename\n    }\n    ...matchForCart\n    __typename\n  }\n}\n\nfragment matchForCart on Match {\n  __typename\n  id\n  type\n  startTime\n  week\n  isBye\n  isMine\n  isScored\n  scoresheet\n  isPaid\n  timeZone {\n    id\n    name\n    __typename\n  }\n  location {\n    ...googleMapComponent\n    __typename\n  }\n  home {\n    id\n    name\n    number\n    isMine\n    ...rosterComponent\n    __typename\n  }\n  away {\n    id\n    name\n    number\n    isMine\n    ...rosterComponent\n    __typename\n  }\n  division {\n    id\n    scheduleInEdit\n    type\n    __typename\n  }\n  session {\n    id\n    name\n    year\n    __typename\n  }\n  league {\n    id\n    name\n    currentSessionId\n    isElectronicPaymentsEnabled\n    country {\n      id\n      __typename\n    }\n    __typename\n  }\n  fees {\n    amount\n    tax\n    total\n    __typename\n  }\n  orderItems {\n    id\n    order {\n      id\n      member {\n        id\n        firstName\n        lastName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  results {\n    homeAway\n    overUnder\n    forfeits\n    matchesWon\n    matchesPlayed\n    points {\n      bonus\n      penalty\n      won\n      adjustment\n      sportsmanship\n      total\n      skillLevelViolationAdjustment\n      __typename\n    }\n    scores {\n      id\n      player {\n        id\n        displayName\n        __typename\n      }\n      matchPositionNumber\n      playerPosition\n      skillLevel\n      eightBallWins\n      eightOnBreak\n      eightBallBreakAndRun\n      nineBallPoints\n      nineOnSnap\n      nineBallBreakAndRun\n      nineBallMatchPointsEarned\n      mastersEightBallWins\n      mastersNineBallWins\n      winLoss\n      matchForfeited\n      doublesMatch\n      dateTimeStamp\n      teamSlot\n      eightBallMatchPointsEarned\n      incompleteMatch\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment googleMapComponent on HostLocation {\n  id\n  phone\n  name\n  address {\n    id\n    name\n    address1\n    address2\n    city\n    zip\n    latitude\n    longitude\n    __typename\n  }\n  __typename\n}\n\nfragment rosterComponent on Team {\n  id\n  name\n  number\n  league {\n    id\n    slug\n    __typename\n  }\n  division {\n    id\n    type\n    __typename\n  }\n  roster {\n    id\n    memberNumber\n    displayName\n    matchesWon\n    matchesPlayed\n    ... on EightBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    ... on NineBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    member {\n      id\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n",
+  "response": {
+    "data": {
+      "match": {
+        "id": "int",
+        "isFinalized": "bool",
+        "isTournament": "bool",
+        "tableNumber": "null",
+        "division": {
+          "id": "int",
+          "electronicScoringEnabled": "bool",
+          "__typename": "str",
+          "scheduleInEdit": "bool",
+          "type": "NINE"
+        },
+        "league": {
+          "id": "int",
+          "esEnabled": "bool",
+          "__typename": "str",
+          "name": "str",
+          "currentSessionId": "int",
+          "isElectronicPaymentsEnabled": "bool",
+          "country": {
+            "id": "int",
+            "__typename": "str"
+          }
+        },
+        "__typename": "str",
+        "type": "NINE",
+        "startTime": "str",
+        "week": "int",
+        "isBye": "bool",
+        "isMine": "bool",
+        "isScored": "bool",
+        "scoresheet": "str",
+        "isPaid": "bool",
+        "timeZone": {
+          "id": "str",
+          "name": "str",
+          "__typename": "str"
+        },
+        "location": {
+          "id": "int",
+          "phone": "str",
+          "name": "str",
+          "address": {
+            "id": "int",
+            "name": "str",
+            "address1": "str",
+            "address2": "str",
+            "city": "str",
+            "zip": "str",
+            "latitude": "float",
+            "longitude": "float",
+            "__typename": "str"
+          },
+          "__typename": "str"
+        },
+        "home": {
+          "id": "int",
+          "name": "str",
+          "number": "str",
+          "isMine": "bool",
+          "league": {
+            "id": "int",
+            "slug": "str",
+            "__typename": "str"
+          },
+          "division": {
+            "id": "int",
+            "type": "NINE",
+            "__typename": "str"
+          },
+          "roster": [
+            {
+              "id": "int",
+              "memberNumber": "str",
+              "displayName": "str",
+              "matchesWon": "int",
+              "matchesPlayed": "int",
+              "pa": "float",
+              "ppm": "int",
+              "skillLevel": "int",
+              "__typename": "str",
+              "member": {
+                "id": "int",
+                "__typename": "str"
+              }
+            },
+            "...8 item(s)"
+          ],
+          "__typename": "str"
+        },
+        "away": {
+          "id": "int",
+          "name": "str",
+          "number": "str",
+          "isMine": "bool",
+          "league": {
+            "id": "int",
+            "slug": "str",
+            "__typename": "str"
+          },
+          "division": {
+            "id": "int",
+            "type": "NINE",
+            "__typename": "str"
+          },
+          "roster": [
+            {
+              "id": "int",
+              "memberNumber": "str",
+              "displayName": "str",
+              "matchesWon": "int",
+              "matchesPlayed": "int",
+              "pa": "float",
+              "ppm": "int",
+              "skillLevel": "int",
+              "__typename": "str",
+              "member": {
+                "id": "int",
+                "__typename": "str"
+              }
+            },
+            "...8 item(s)"
+          ],
+          "__typename": "str"
+        },
+        "session": {
+          "id": "int",
+          "name": "str",
+          "year": "int",
+          "__typename": "str"
+        },
+        "fees": {
+          "amount": "int",
+          "tax": "int",
+          "total": "int",
+          "__typename": "str"
+        },
+        "orderItems": [],
+        "results": []
+      }
+    }
+  }
+}

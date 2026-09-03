@@ -1,0 +1,49 @@
+{
+  "operationName": "AliasSessionStats",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:06.756493+00:00",
+  "variables": {
+    "id": "int",
+    "format": "NINE",
+    "session": "int"
+  },
+  "query": "query AliasSessionStats($id: Int!, $session: Int, $format: FormatType) {\n  alias(id: $id) {\n    id\n    league {\n      id\n      currentSessionId\n      slug\n      __typename\n    }\n    players(session: $session, format: $format, current: null, active: null) {\n      id\n      team {\n        id\n        name\n        number\n        active\n        __typename\n      }\n      ... on MastersPlayer {\n        nineOnSnaps\n        eightOnBreaks\n        nineBallBreakAndRuns\n        eightBallBreakAndRuns\n        nineBallMiniSlams\n        eightBallMiniSlams\n        mastersNineBallWins\n        mastersEightBallWins\n        matchesWon\n        matchesPlayed\n        __typename\n      }\n      ... on NineBallPlayer {\n        pa\n        ppm\n        matchesWon\n        matchesPlayed\n        miniSlams\n        nineBallBreakAndRuns\n        nineBallMatchPointsEarned\n        nineOnSnaps\n        skunks\n        __typename\n      }\n      ... on EightBallPlayer {\n        pa\n        ppm\n        eightBallMatchPointsEarned\n        matchesWon\n        matchesPlayed\n        eightBallBreakAndRuns\n        eightOnBreaks\n        miniSlams\n        rackless\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "alias": {
+        "id": "int",
+        "league": {
+          "id": "int",
+          "currentSessionId": "int",
+          "slug": "str",
+          "__typename": "str"
+        },
+        "players": [
+          {
+            "id": "int",
+            "team": {
+              "id": "int",
+              "name": "str",
+              "number": "str",
+              "active": "bool",
+              "__typename": "str"
+            },
+            "pa": "float",
+            "ppm": "float",
+            "matchesWon": "int",
+            "matchesPlayed": "int",
+            "miniSlams": "int",
+            "nineBallBreakAndRuns": "int",
+            "nineBallMatchPointsEarned": "int",
+            "nineOnSnaps": "int",
+            "skunks": "int",
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}
