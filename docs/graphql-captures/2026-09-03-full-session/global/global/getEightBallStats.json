@@ -1,0 +1,60 @@
+{
+  "operationName": "getEightBallStats",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:59:58.133998+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query getEightBallStats($id: Int!) {\n  alias(id: $id) {\n    players(current: null, active: null) {\n      id\n      session {\n        id\n        __typename\n      }\n      ... on EightBallPlayer {\n        eightOnBreaks(include: [PLAYOFFS])\n        eightBallBreakAndRuns(include: [PLAYOFFS])\n        rackless(include: [PLAYOFFS])\n        miniSlams(include: [PLAYOFFS])\n        __typename\n      }\n      ... on NineBallPlayer {\n        nineOnSnaps(include: [PLAYOFFS])\n        nineBallBreakAndRuns(include: [PLAYOFFS])\n        miniSlams(include: [PLAYOFFS])\n        skunks(include: [PLAYOFFS])\n        __typename\n      }\n      __typename\n    }\n    id\n    displayName\n    EightBallStats: stats(filter: EIGHT) {\n      ... on EightBallLifetimeStatistics {\n        id\n        matchesWon\n        matchesPlayed\n        CLA\n        defensiveShotAvg\n        matchCountForLastTwoYrs\n        lastPlayed\n        __typename\n      }\n      __typename\n    }\n    NineBallStats: stats(filter: NINE) {\n      ... on NineBallLifetimeStatistics {\n        id\n        matchesWon\n        matchesPlayed\n        CLA\n        defensiveShotAvg\n        matchCountForLastTwoYrs\n        lastPlayed\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "alias": {
+        "players": [
+          {
+            "id": "int",
+            "session": {
+              "id": "int",
+              "__typename": "str"
+            },
+            "nineOnSnaps": "int",
+            "nineBallBreakAndRuns": "int",
+            "miniSlams": "int",
+            "skunks": "int",
+            "__typename": "str"
+          },
+          "...27 item(s)"
+        ],
+        "id": "int",
+        "displayName": "str",
+        "EightBallStats": [
+          {
+            "id": "int",
+            "matchesWon": "int",
+            "matchesPlayed": "int",
+            "CLA": "int",
+            "defensiveShotAvg": "float",
+            "matchCountForLastTwoYrs": "int",
+            "lastPlayed": "str",
+            "__typename": "str"
+          },
+          "...1 item(s)"
+        ],
+        "NineBallStats": [
+          {
+            "id": "int",
+            "matchesWon": "int",
+            "matchesPlayed": "int",
+            "CLA": "int",
+            "defensiveShotAvg": "float",
+            "matchCountForLastTwoYrs": "int",
+            "lastPlayed": "str",
+            "__typename": "str"
+          },
+          "...1 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

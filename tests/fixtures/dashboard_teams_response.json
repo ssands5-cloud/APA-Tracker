@@ -1,0 +1,44 @@
+{
+  "_comment": "Sanitized fixture for DASHBOARD_TEAMS_QUERY, shaped to match the real dashboardTeams capture (docs/graphql-captures/2026-09-03-full-session/global/global/dashboardTeams.json), which itself proved the account plays on 4 teams -- 3 league teams and 1 tournament team here, to exercise both branches of dashboard_teams_rows(). All ids/names invented.",
+  "data": {
+    "viewer": {
+      "id": 900001,
+      "leagueTeams": [
+        {
+          "id": 13082948, "name": "Chalk It Up", "standing": 3,
+          "totalTeamMatchesPlayed": 9, "isTied": false,
+          "division": { "id": 436670, "type": "EIGHT", "isTournament": false },
+          "league": { "id": 1438, "slug": "sample-league" },
+          "session": { "id": 9, "name": "2026 Summer" },
+          "tournaments": []
+        },
+        {
+          "id": 13082718, "name": "Rack Attack", "standing": 1,
+          "totalTeamMatchesPlayed": 9, "isTied": false,
+          "division": { "id": 436647, "type": "EIGHT", "isTournament": false },
+          "league": { "id": 1438, "slug": "sample-league" },
+          "session": { "id": 9, "name": "2026 Summer" },
+          "tournaments": []
+        },
+        {
+          "id": 13082957, "name": "Side Pocket Squad", "standing": 4,
+          "totalTeamMatchesPlayed": 8, "isTied": true,
+          "division": { "id": 436671, "type": "NINE", "isTournament": false },
+          "league": { "id": 1438, "slug": "sample-league" },
+          "session": { "id": 9, "name": "2026 Summer" },
+          "tournaments": []
+        }
+      ],
+      "tournamentTeams": [
+        {
+          "id": 13112317, "name": "Weekend Warriors", "standing": null,
+          "totalTeamMatchesPlayed": 2, "isTied": false,
+          "division": { "id": 436648, "type": "EIGHT", "isTournament": true },
+          "league": { "id": 1438, "slug": "sample-league" },
+          "session": { "id": 12, "name": "2026 Fall Classic" },
+          "tournaments": [{ "id": 5001, "tournamentTypeName": "Singles" }]
+        }
+      ]
+    }
+  }
+}

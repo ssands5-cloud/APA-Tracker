@@ -1,0 +1,50 @@
+{
+  "_comment": "Sanitized fixture for TEAM_STAT_QUERY (real operation name: TeamStat), shaped to match the real capture (docs/graphql-captures/2026-09-03-full-session/global/global/TeamStat.json). All ids/names invented. SCAFFOLDING ONLY -- see HANDOFF.md item 2. Do not treat the alias id (900123) as confirmed against any real roster field.",
+  "data": {
+    "alias": {
+      "id": 900123,
+      "pastTeams": [
+        {
+          "id": 601,
+          "isActive": false,
+          "role": "MEMBER",
+          "rosterPosition": 3,
+          "nickName": "J-Rock",
+          "matchesPlayed": 27,
+          "matchesWon": 19,
+          "session": { "id": 7, "name": "2025 Fall", "__typename": "Session" },
+          "skillLevel": 6,
+          "rank": 2,
+          "team": {
+            "id": 13082718,
+            "name": "Rack Attack",
+            "division": { "id": 436647, "isTournament": false, "__typename": "Division" },
+            "__typename": "EightBallTeam"
+          },
+          "__typename": "EightBallPlayer"
+        }
+      ],
+      "currentTeams": [
+        {
+          "id": 602,
+          "isActive": true,
+          "role": "MEMBER",
+          "rosterPosition": 1,
+          "nickName": "J-Rock",
+          "matchesPlayed": 9,
+          "matchesWon": 6,
+          "session": { "id": 9, "name": "2026 Summer", "__typename": "Session" },
+          "skillLevel": 6,
+          "rank": null,
+          "team": {
+            "id": 13082948,
+            "name": "Chalk It Up",
+            "division": { "id": 436670, "isTournament": false, "__typename": "Division" },
+            "__typename": "EightBallTeam"
+          },
+          "__typename": "EightBallPlayer"
+        }
+      ]
+    }
+  }
+}

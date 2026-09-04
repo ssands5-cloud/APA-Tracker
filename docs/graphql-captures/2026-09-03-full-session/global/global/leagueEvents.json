@@ -1,0 +1,36 @@
+{
+  "operationName": "leagueEvents",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T05:00:39.710050+00:00",
+  "variables": {
+    "limit": "int",
+    "offset": "int"
+  },
+  "query": "fragment leagueWithScheduleFrag on League {\n  id\n  name\n  slug\n  schedule(offset: $offset, limit: $limit) {\n    ... on Tournament {\n      id\n      name\n      startTime\n      hostLocation {\n        id\n        address {\n          id\n          name\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    ... on OtherEvent {\n      id\n      name\n      startTime\n      address {\n        id\n        name\n        latitude\n        longitude\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nquery leagueEvents($offset: Int!, $limit: Int!) {\n  league(id: 589) {\n    ...leagueWithScheduleFrag\n    __typename\n  }\n  viewer {\n    id\n    ... on Member {\n      leagues(current: true) {\n        ...leagueWithScheduleFrag\n        __typename\n      }\n      __typename\n    }\n    ... on ExternalStaff {\n      leagues {\n        ...leagueWithScheduleFrag\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "league": {
+        "id": "int",
+        "name": "str",
+        "slug": "str",
+        "schedule": [],
+        "__typename": "str"
+      },
+      "viewer": {
+        "id": "int",
+        "leagues": [
+          {
+            "id": "int",
+            "name": "str",
+            "slug": "str",
+            "schedule": [],
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

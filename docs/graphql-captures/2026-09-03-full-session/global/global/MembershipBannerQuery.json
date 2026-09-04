@@ -1,0 +1,17 @@
+{
+  "operationName": "MembershipBannerQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.378972+00:00",
+  "variables": {},
+  "query": "query MembershipBannerQuery {\n  viewer {\n    ... on Member {\n      id\n      fee {\n        message\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "fee": "null",
+        "__typename": "str"
+      }
+    }
+  }
+}

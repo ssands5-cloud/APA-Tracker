@@ -1,0 +1,31 @@
+{
+  "operationName": "FormatsByMemberId",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:59:57.950905+00:00",
+  "variables": {
+    "withMember": "bool",
+    "withAlias": "bool",
+    "aliasId": "int",
+    "memberId": "int"
+  },
+  "query": "query FormatsByMemberId($memberId: Int!, $withMember: Boolean!, $withAlias: Boolean!, $aliasId: Int!) {\n  alias(id: $aliasId) @include(if: $withAlias) {\n    id\n    formats\n    league {\n      id\n      slug\n      isDefault\n      __typename\n    }\n    __typename\n  }\n  member(id: $memberId) @include(if: $withMember) {\n    id\n    ... on Member {\n      aliases {\n        id\n        formats\n        league {\n          id\n          slug\n          isDefault\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "alias": {
+        "id": "int",
+        "formats": [
+          "EIGHT",
+          "...2 item(s)"
+        ],
+        "league": {
+          "id": "int",
+          "slug": "str",
+          "isDefault": "bool",
+          "__typename": "str"
+        },
+        "__typename": "str"
+      }
+    }
+  }
+}

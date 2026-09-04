@@ -1,0 +1,21 @@
+{
+  "operationName": "FeatureCheck",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.344560+00:00",
+  "variables": {},
+  "query": "query FeatureCheck {\n  features {\n    id\n    name\n    active\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "features": [
+        {
+          "id": "int",
+          "name": "str",
+          "active": "bool",
+          "__typename": "str"
+        },
+        "...13 item(s)"
+      ]
+    }
+  }
+}

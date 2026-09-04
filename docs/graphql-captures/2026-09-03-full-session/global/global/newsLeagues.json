@@ -1,0 +1,38 @@
+{
+  "operationName": "newsLeagues",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:59:11.158200+00:00",
+  "variables": {},
+  "query": "query newsLeagues($limit: Int) {\n  viewer {\n    id\n    ... on Member {\n      leagues {\n        id\n        slug\n        name\n        __typename\n      }\n      __typename\n    }\n    ... on ExternalStaff {\n      leagues {\n        id\n        slug\n        name\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  national: league(id: 589) {\n    id\n    name\n    slug\n    news(limit: $limit) {\n      id\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "leagues": [
+          {
+            "id": "int",
+            "slug": "str",
+            "name": "str",
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      },
+      "national": {
+        "id": "int",
+        "name": "str",
+        "slug": "str",
+        "news": [
+          {
+            "id": "int",
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

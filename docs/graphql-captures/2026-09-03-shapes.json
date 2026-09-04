@@ -1,0 +1,107 @@
+{
+  "GenerateAccessTokenMutation": {
+    "operationName": "GenerateAccessTokenMutation",
+    "variables": { "refreshToken": "str" },
+    "query": "mutation GenerateAccessTokenMutation($refreshToken: String!) {\n  generateAccessToken(refreshToken: $refreshToken) {\n    accessToken\n    __typename\n  }\n}\n",
+    "response": { "data": { "generateAccessToken": { "accessToken": "str", "__typename": "str" } } }
+  },
+  "leagueDivisions": {
+    "operationName": "leagueDivisions",
+    "variables": { "slug": "str" },
+    "query": "query leagueDivisions($slug: String!, $session: Int) {\n  league(slug: $slug) {\n    id\n    currentSessionId\n    divisions(session: $session) {\n      id\n      name\n      number\n      format\n      type\n      nightOfPlay\n      isMine\n      session {\n        id\n        name\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+    "response": {
+      "data": {
+        "league": {
+          "id": "int", "currentSessionId": "int",
+          "divisions": [
+            {"id":"int","name":"str","number":"str","format":"str","type":"EIGHT","nightOfPlay":"str","isMine":"bool",
+             "session":{"id":"int","name":"str","__typename":"str"},"__typename":"str"},
+            "...30 item(s)"
+          ],
+          "__typename": "str"
+        }
+      }
+    }
+  },
+  "divisionLayout": {
+    "operationName": "divisionLayout",
+    "variables": { "id": "int" },
+    "query": "query divisionLayout($id: Int!) {\n  division(id: $id) {\n    id\n    number\n    name\n    format\n    isTournament\n    type\n    nightOfPlay\n    timeOfPlay\n    isMine\n    state\n    schedule {\n      id\n      __typename\n    }\n    league {\n      id\n      name\n      __typename\n    }\n    session {\n      id\n      name\n      __typename\n    }\n    tournament {\n      id\n      __typename\n    }\n    __typename\n  }\n}\n",
+    "response": {
+      "data": {
+        "division": {
+          "id":"int","number":"str","name":"str","format":"str","isTournament":"bool","type":"EIGHT",
+          "nightOfPlay":"str","timeOfPlay":"str","isMine":"bool","state":"CURRENT",
+          "schedule": [{"id":"int","__typename":"str"},"...18 item(s)"],
+          "league": {"id":"int","name":"str","__typename":"str"},
+          "session": {"id":"int","name":"str","__typename":"str"},
+          "tournament": "null", "__typename": "str"
+        }
+      }
+    }
+  },
+  "DivisionContacts": {
+    "operationName": "DivisionContacts",
+    "variables": { "id": "int" },
+    "query": "query DivisionContacts($id: Int!) {\n  division(id: $id) {\n    id\n    name\n    contacts {\n      phone\n      alias {\n        id\n        displayName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+    "response": { "data": { "division": { "id": "int", "name": "str", "contacts": [], "__typename": "str" } } }
+  },
+  "divsionStandings": {
+    "operationName": "divsionStandings",
+    "variables": { "id": "int" },
+    "query": "query divsionStandings($id: Int!) {\n  division(id: $id) {\n    id\n    teams {\n      id\n      name\n      number\n      standing\n      pointsLastWeek\n      lastWeek\n      sessionTotalPoints\n      totalTeamMatchesPlayed\n      isTied\n      isBye\n      league {\n        id\n        slug\n        __typename\n      }\n      tournaments(time: FUTURE) {\n        id\n        tournamentTypeName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+    "response": {
+      "data": {
+        "division": {
+          "id": "int",
+          "teams": [
+            {"id":"int","name":"str","number":"str","standing":"int","pointsLastWeek":"int","lastWeek":"int",
+             "sessionTotalPoints":"int","totalTeamMatchesPlayed":"int","isTied":"bool","isBye":"bool",
+             "league":{"id":"int","slug":"str","__typename":"str"},"tournaments":[],"__typename":"str"},
+            "...6 item(s)"
+          ],
+          "__typename": "str"
+        }
+      }
+    }
+  },
+  "divisionRosters": {
+    "operationName": "divisionRosters",
+    "variables": { "id": "int" },
+    "query": "query divisionRosters($id: Int!) {\n  division(id: $id) {\n    id\n    teams {\n      isBye\n      ...rosterComponent\n      location {\n        id\n        name\n        address {\n          id\n          name\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment rosterComponent on Team {\n  id\n  name\n  number\n  league {\n    id\n    slug\n    __typename\n  }\n  division {\n    id\n    type\n    __typename\n  }\n  roster {\n    id\n    memberNumber\n    displayName\n    matchesWon\n    matchesPlayed\n    ... on EightBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    ... on NineBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    member {\n      id\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n",
+    "response": {
+      "data": {
+        "division": {
+          "id": "int",
+          "teams": [
+            {"isBye":"bool","id":"int","name":"str","number":"str",
+             "league":{"id":"int","slug":"str","__typename":"str"},
+             "division":{"id":"int","type":"EIGHT","__typename":"str"},
+             "roster":[{"id":"int","memberNumber":"str","displayName":"str","matchesWon":"int","matchesPlayed":"int",
+                        "pa":"float","ppm":"int","skillLevel":"int","__typename":"str",
+                        "member":{"id":"int","__typename":"str"}},"...8 item(s)"],
+             "__typename":"str",
+             "location":{"id":"int","name":"str","address":{"id":"int","name":"str","__typename":"str"},"__typename":"str"}},
+            "...6 item(s)"
+          ],
+          "__typename": "str"
+        }
+      }
+    }
+  },
+  "divisionSchedule": {
+    "operationName": "divisionSchedule",
+    "variables": { "id": "int" },
+    "query": "query divisionSchedule($id: Int!) {\n  viewer {\n    id\n    __typename\n  }\n  division(id: $id) {\n    id\n    contacts {\n      phone\n      alias {\n        id\n        displayName\n        __typename\n      }\n      __typename\n    }\n    teams {\n      id\n      name\n      active\n      number\n      isBye\n      location {\n        id\n        name\n        phone\n        __typename\n      }\n      __typename\n    }\n    schedule {\n      id\n      description\n      date\n      weekOfPlay\n      skip\n      matches {\n        ...matchListItem\n        __typename\n      }\n      __typename\n    }\n    scheduleInEdit\n    __typename\n  }\n}\n\nfragment matchListItem on Match {\n  id\n  isBye\n  status\n  scoresheet\n  startTime\n  isMine\n  isPaid\n  isTournament\n  isScored\n  isFinalized\n  isPlayoff\n  description\n  tableNumber\n  results {\n    homeAway\n    points {\n      total\n      __typename\n    }\n    __typename\n  }\n  timeZone {\n    id\n    name\n    __typename\n  }\n  location {\n    id\n    name\n    address {\n      id\n      name\n      __typename\n    }\n    __typename\n  }\n  home {\n    id\n    name\n    number\n    isMine\n    __typename\n  }\n  away {\n    id\n    name\n    number\n    isMine\n    __typename\n  }\n  league {\n    id\n    isMine\n    slug\n    isElectronicPaymentsEnabled\n    __typename\n  }\n  orderItems {\n    id\n    order {\n      id\n      member {\n        id\n        firstName\n        lastName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  division {\n    id\n    scheduleInEdit\n    isTournament\n    __typename\n  }\n  __typename\n}\n"
+  },
+  "MatchPage": {
+    "operationName": "MatchPage",
+    "variables": { "id": "int" },
+    "query": "query MatchPage($id: Int!) {\n  match(id: $id) {\n    id\n    isFinalized\n    isTournament\n    tableNumber\n    division {\n      id\n      electronicScoringEnabled\n      __typename\n    }\n    league {\n      id\n      esEnabled\n      __typename\n    }\n    ...matchForCart\n    __typename\n  }\n}\n\nfragment matchForCart on Match {\n  __typename\n  id\n  type\n  startTime\n  week\n  isBye\n  isMine\n  isScored\n  scoresheet\n  isPaid\n  timeZone {\n    id\n    name\n    __typename\n  }\n  location {\n    ...googleMapComponent\n    __typename\n  }\n  home {\n    id\n    name\n    number\n    isMine\n    ...rosterComponent\n    __typename\n  }\n  away {\n    id\n    name\n    number\n    isMine\n    ...rosterComponent\n    __typename\n  }\n  division {\n    id\n    scheduleInEdit\n    type\n    __typename\n  }\n  session {\n    id\n    name\n    year\n    __typename\n  }\n  league {\n    id\n    name\n    currentSessionId\n    isElectronicPaymentsEnabled\n    country {\n      id\n      __typename\n    }\n    __typename\n  }\n  fees {\n    amount\n    tax\n    total\n    __typename\n  }\n  orderItems {\n    id\n    order {\n      id\n      member {\n        id\n        firstName\n        lastName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  results {\n    homeAway\n    overUnder\n    forfeits\n    matchesWon\n    matchesPlayed\n    points {\n      bonus\n      penalty\n      won\n      adjustment\n      sportsmanship\n      total\n      skillLevelViolationAdjustment\n      __typename\n    }\n    scores {\n      id\n      player {\n        id\n        displayName\n        __typename\n      }\n      matchPositionNumber\n      playerPosition\n      skillLevel\n      eightBallWins\n      eightOnBreak\n      eightBallBreakAndRun\n      nineBallPoints\n      nineOnSnap\n      nineBallBreakAndRun\n      nineBallMatchPointsEarned\n      mastersEightBallWins\n      mastersNineBallWins\n      winLoss\n      matchForfeited\n      doublesMatch\n      dateTimeStamp\n      teamSlot\n      eightBallMatchPointsEarned\n      incompleteMatch\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment googleMapComponent on HostLocation {\n  id\n  phone\n  name\n  address {\n    id\n    name\n    address1\n    address2\n    city\n    zip\n    latitude\n    longitude\n    __typename\n  }\n  __typename\n}\n\nfragment rosterComponent on Team {\n  id\n  name\n  number\n  league {\n    id\n    slug\n    __typename\n  }\n  division {\n    id\n    type\n    __typename\n  }\n  roster {\n    id\n    memberNumber\n    displayName\n    matchesWon\n    matchesPlayed\n    ... on EightBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    ... on NineBallPlayer {\n      pa\n      ppm\n      skillLevel\n      __typename\n    }\n    member {\n      id\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n"
+  },
+  "divisionMVP": {
+    "operationName": "divisionMVP",
+    "note": "Player-of-the-month style program data. Not currently used by anything in this codebase."
+  },
+  "_notes": "Captured via tools/apa-console-capture.js from a real logged-in session on 2026-09-03. This file is the sanitized SHAPES output only -- field names and types, no real values -- safe to commit. divisionSchedule and MatchPage's captured documents pull orderItems/order/member (firstName, lastName) and fees (billing amounts): personal/billing data this tracker has no reason to store. parser/apa_graphql.py's versions of those two queries are trimmed to drop that subtree rather than reusing these documents verbatim."
+}

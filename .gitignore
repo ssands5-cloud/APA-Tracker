@@ -5,3 +5,23 @@ exports/
 logs/
 __pycache__/
 *.pyc
+
+# Local scratch state from agent tooling; not part of the project.
+.superpowers/
+
+# Local GraphQL captures. The "full" file has real names; the "shapes" file
+# has types only, but neither belongs in the repo.
+apa-capture-full.json
+apa-capture-shapes.json
+apa-graphql-requests.json
+
+# Output of scraper/full_apa_scrape.py -- sanitized (types only), but still
+# generated output, not source.
+scraper/sanitized_fixtures/
+
+# Downloaded scoresheet PDFs from scraper/full_apa_scrape.py -- real league
+# data (not sanitized like the fixtures above), never belongs in the repo.
+scraper/scoresheets/
+
+# Log file written by scraper/full_apa_scrape.py.
+scraper/full_apa_scrape.log

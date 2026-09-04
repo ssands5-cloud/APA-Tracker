@@ -1,0 +1,31 @@
+{
+  "operationName": "notificationBell",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.365547+00:00",
+  "variables": {},
+  "query": "query notificationBell {\n  viewer {\n    id\n    notificationBellCount\n    notifications(limit: 10) {\n      id\n      type\n      title\n      body\n      isRead\n      createdDate\n      typeId\n      metaData\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "notificationBellCount": "int",
+        "notifications": [
+          {
+            "id": "int",
+            "type": "str",
+            "title": "str",
+            "body": "str",
+            "isRead": "bool",
+            "createdDate": "str",
+            "typeId": "null",
+            "metaData": "str",
+            "__typename": "str"
+          },
+          "...4 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

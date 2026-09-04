@@ -1,0 +1,41 @@
+{
+  "operationName": "TournamentBannerQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.376094+00:00",
+  "variables": {},
+  "query": "query TournamentBannerQuery {\n  viewer {\n    id\n    ... on Member {\n      registrationWindows(status: [IN_PROGRESS, CLOSED]) {\n        id\n        tournamentPlayers(mine: true, registered: false) {\n          ... on TeamTournamentPlayer {\n            id\n            __typename\n          }\n          ... on SinglesTournamentPlayer {\n            id\n            __typename\n          }\n          ... on WeeklyTournamentPlayer {\n            id\n            __typename\n          }\n          ... on USAMTournamentPlayer {\n            id\n            __typename\n          }\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "errors": [
+      {
+        "message": "str",
+        "path": [
+          "str",
+          "...2 item(s)"
+        ],
+        "extensions": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "exception": {
+            "message": "str",
+            "locations": [
+              {
+                "line": "int",
+                "column": "int"
+              },
+              "...1 item(s)"
+            ],
+            "path": [
+              "str",
+              "...2 item(s)"
+            ]
+          },
+          "serviceName": "str"
+        }
+      },
+      "...1 item(s)"
+    ],
+    "data": {
+      "viewer": "null"
+    }
+  }
+}

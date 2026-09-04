@@ -1,0 +1,19 @@
+{
+  "operationName": "ViewerQuery",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.161818+00:00",
+  "variables": {},
+  "query": "query ViewerQuery {\n  viewer {\n    __typename\n    id\n    firstName\n    lastName\n    emailAddress\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "__typename": "str",
+        "id": "int",
+        "firstName": "str",
+        "lastName": "str",
+        "emailAddress": "str"
+      }
+    }
+  }
+}

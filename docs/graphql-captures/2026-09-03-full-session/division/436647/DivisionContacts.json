@@ -1,0 +1,31 @@
+{
+  "operationName": "DivisionContacts",
+  "entityType": "division",
+  "entityId": "436647",
+  "capturedAt": "2026-09-03T04:59:25.758314+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query DivisionContacts($id: Int!) {\n  division(id: $id) {\n    id\n    name\n    contacts {\n      phone\n      alias {\n        id\n        displayName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "division": {
+        "id": "int",
+        "name": "str",
+        "contacts": [
+          {
+            "phone": "str",
+            "alias": {
+              "id": "int",
+              "displayName": "str",
+              "__typename": "str"
+            },
+            "__typename": "str"
+          },
+          "...1 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

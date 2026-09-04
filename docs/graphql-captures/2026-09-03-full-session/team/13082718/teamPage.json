@@ -1,0 +1,54 @@
+{
+  "operationName": "teamPage",
+  "entityType": "team",
+  "entityId": "13082718",
+  "capturedAt": "2026-09-03T04:59:25.592246+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query teamPage($id: Int!) {\n  team(id: $id) {\n    id\n    name\n    number\n    isTied\n    standing\n    division {\n      id\n      name\n      number\n      timeOfPlay\n      nightOfPlay\n      format\n      state\n      isTournament\n      tournament {\n        id\n        name\n        __typename\n      }\n      __typename\n    }\n    location {\n      id\n      name\n      address {\n        id\n        name\n        __typename\n      }\n      __typename\n    }\n    session {\n      id\n      name\n      __typename\n    }\n    league {\n      id\n      slug\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "team": {
+        "id": "int",
+        "name": "str",
+        "number": "str",
+        "isTied": "bool",
+        "standing": "int",
+        "division": {
+          "id": "int",
+          "name": "str",
+          "number": "str",
+          "timeOfPlay": "str",
+          "nightOfPlay": "str",
+          "format": "str",
+          "state": "CURRENT",
+          "isTournament": "bool",
+          "tournament": "null",
+          "__typename": "str"
+        },
+        "location": {
+          "id": "int",
+          "name": "str",
+          "address": {
+            "id": "int",
+            "name": "str",
+            "__typename": "str"
+          },
+          "__typename": "str"
+        },
+        "session": {
+          "id": "int",
+          "name": "str",
+          "__typename": "str"
+        },
+        "league": {
+          "id": "int",
+          "slug": "str",
+          "__typename": "str"
+        },
+        "__typename": "str"
+      }
+    }
+  }
+}

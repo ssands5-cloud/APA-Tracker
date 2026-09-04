@@ -1,0 +1,17 @@
+{
+  "operationName": "Header",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.362841+00:00",
+  "variables": {},
+  "query": "query Header {\n  viewer {\n    id\n    initials\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "initials": "PS",
+        "__typename": "str"
+      }
+    }
+  }
+}

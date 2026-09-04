@@ -1,0 +1,50 @@
+{
+  "operationName": "getMemberStatsHeader",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:58:07.353170+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query getMemberStatsHeader($id: Int!) {\n  member(id: $id) {\n    id\n    firstName\n    lastName\n    initials\n    aliases(includeInactive: true) {\n      id\n      displayName\n      memberNumber\n      league {\n        id\n        slug\n        name\n        isDefault\n        number\n        __typename\n      }\n      formats\n      stats {\n        __typename\n        skillLevel\n        CLA\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "member": {
+        "id": "int",
+        "firstName": "str",
+        "lastName": "str",
+        "initials": "RR",
+        "aliases": [
+          {
+            "id": "int",
+            "displayName": "str",
+            "memberNumber": "str",
+            "league": {
+              "id": "int",
+              "slug": "str",
+              "name": "str",
+              "isDefault": "bool",
+              "number": "str",
+              "__typename": "str"
+            },
+            "formats": [
+              "EIGHT",
+              "...2 item(s)"
+            ],
+            "stats": [
+              {
+                "__typename": "str",
+                "skillLevel": "int",
+                "CLA": "int"
+              },
+              "...2 item(s)"
+            ],
+            "__typename": "str"
+          },
+          "...3 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

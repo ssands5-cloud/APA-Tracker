@@ -1,0 +1,29 @@
+{
+  "operationName": "rules",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:58:46.067067+00:00",
+  "variables": {},
+  "query": "query rules {\n  viewer {\n    ... on Member {\n      id\n      leagues {\n        id\n        name\n        byLaws {\n          id\n          url\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "leagues": [
+          {
+            "id": "int",
+            "name": "str",
+            "byLaws": {
+              "id": "int",
+              "url": "str",
+              "__typename": "str"
+            },
+            "__typename": "str"
+          },
+          "...2 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

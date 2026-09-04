@@ -1,0 +1,19 @@
+{
+  "operationName": "login",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:18.129664+00:00",
+  "variables": {
+    "username": "str",
+    "password": "str"
+  },
+  "query": "mutation login($username: String!, $password: String!) {\n  login(input: {username: $username, password: $password}) {\n    __typename\n    ... on SuccessLoginPayload {\n      deviceRefreshToken\n      __typename\n    }\n    ... on PartialSuspendedLoginPayload {\n      leagueIds\n      deviceRefreshToken\n      __typename\n    }\n    ... on DeniedLoginPayload {\n      reason\n      __typename\n    }\n  }\n}",
+  "response": {
+    "data": {
+      "login": {
+        "__typename": "str",
+        "deviceRefreshToken": "str"
+      }
+    }
+  }
+}

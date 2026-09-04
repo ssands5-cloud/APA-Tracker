@@ -1,0 +1,101 @@
+{
+  "operationName": "teamSchedule",
+  "entityType": "team",
+  "entityId": "13082718",
+  "capturedAt": "2026-09-03T04:59:25.763532+00:00",
+  "variables": {
+    "id": "int"
+  },
+  "query": "query teamSchedule($id: Int!) {\n  team(id: $id) {\n    id\n    sessionBonusPoints\n    sessionPoints\n    sessionTotalPoints\n    division {\n      id\n      isTournament\n      __typename\n    }\n    matches(unscheduled: true) {\n      week\n      type\n      ...matchListItem\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment matchListItem on Match {\n  id\n  isBye\n  status\n  scoresheet\n  startTime\n  isMine\n  isPaid\n  isTournament\n  isScored\n  isFinalized\n  isPlayoff\n  description\n  tableNumber\n  results {\n    homeAway\n    points {\n      total\n      __typename\n    }\n    __typename\n  }\n  timeZone {\n    id\n    name\n    __typename\n  }\n  location {\n    id\n    name\n    address {\n      id\n      name\n      __typename\n    }\n    __typename\n  }\n  home {\n    id\n    name\n    number\n    isMine\n    __typename\n  }\n  away {\n    id\n    name\n    number\n    isMine\n    __typename\n  }\n  league {\n    id\n    isMine\n    slug\n    isElectronicPaymentsEnabled\n    __typename\n  }\n  orderItems {\n    id\n    order {\n      id\n      member {\n        id\n        firstName\n        lastName\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  division {\n    id\n    scheduleInEdit\n    isTournament\n    __typename\n  }\n  __typename\n}\n",
+  "response": {
+    "data": {
+      "team": {
+        "id": "int",
+        "sessionBonusPoints": "int",
+        "sessionPoints": "int",
+        "sessionTotalPoints": "int",
+        "division": {
+          "id": "int",
+          "isTournament": "bool",
+          "__typename": "str"
+        },
+        "matches": [
+          {
+            "week": "int",
+            "type": "EIGHT",
+            "id": "int",
+            "isBye": "bool",
+            "status": "COMPLETED",
+            "scoresheet": "null",
+            "startTime": "str",
+            "isMine": "bool",
+            "isPaid": "bool",
+            "isTournament": "bool",
+            "isScored": "bool",
+            "isFinalized": "bool",
+            "isPlayoff": "bool",
+            "description": "str",
+            "tableNumber": "null",
+            "results": [
+              {
+                "homeAway": "HOME",
+                "points": {
+                  "total": "int",
+                  "__typename": "str"
+                },
+                "__typename": "str"
+              },
+              "...2 item(s)"
+            ],
+            "timeZone": {
+              "id": "str",
+              "name": "str",
+              "__typename": "str"
+            },
+            "location": {
+              "id": "int",
+              "name": "str",
+              "address": {
+                "id": "int",
+                "name": "str",
+                "__typename": "str"
+              },
+              "__typename": "str"
+            },
+            "home": {
+              "id": "int",
+              "name": "str",
+              "number": "str",
+              "isMine": "bool",
+              "__typename": "str"
+            },
+            "away": {
+              "id": "int",
+              "name": "str",
+              "number": "str",
+              "isMine": "bool",
+              "__typename": "str"
+            },
+            "league": {
+              "id": "int",
+              "isMine": "bool",
+              "slug": "str",
+              "isElectronicPaymentsEnabled": "bool",
+              "__typename": "str"
+            },
+            "orderItems": [],
+            "division": {
+              "id": "int",
+              "scheduleInEdit": "bool",
+              "isTournament": "bool",
+              "__typename": "str"
+            },
+            "__typename": "str"
+          },
+          "...17 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}

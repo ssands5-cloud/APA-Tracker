@@ -23,6 +23,43 @@ logger = logging.getLogger(__name__)
 _AUTH_STATUS_CODES = {401, 403}
 _AUTH_EXTENSION_CODES = {"UNAUTHENTICATED", "FORBIDDEN"}
 
+#: Observed against the live API on 2026-09-03: a rejected token comes back as
+#: HTTP 200 with {"errors": [{"message": "Your token is no longer valid"}]} and
+#: no UNAUTHENTICATED extension code. Status and extension checks alone
+#: therefore classified it as a generic GraphQL error, and callers watching for
+#: GraphQLAuthError never saw it. The message is the only signal this API gives.
+#:
+#: A second, DIFFERENT phrasing showed up the same way running run_all_teams()
+#: for real for the first time: "Login session has expired" -- "session", not
+#: "token", so none of the existing markers matched and it surfaced as a raw
+#: traceback instead of the friendly "get a fresh token" message. This API
+#: appears to have more than one wording for the same underlying rejection;
+#: expect this list to keep growing as new ones turn up, not to be complete.
+_AUTH_MESSAGE_MARKERS = (
+    "token is no longer valid",
+    "invalid token",
+    "token is invalid",
+    "token expired",
+    "expired token",
+    "session has expired",
+    "session expired",
+    "not authenticated",
+    "unauthenticated",
+    "unauthorized",
+    "not authorized",
+)
+
+
+def _is_auth_failure(errors: list[dict[str, Any]], status_code: Optional[int]) -> bool:
+    """Whether a GraphQL error array means "your token is no good"."""
+    if status_code in _AUTH_STATUS_CODES:
+        return True
+    codes = {(e.get("extensions") or {}).get("code") for e in errors}
+    if codes & _AUTH_EXTENSION_CODES:
+        return True
+    text = " ".join((e.get("message") or "") for e in errors).lower()
+    return any(marker in text for marker in _AUTH_MESSAGE_MARKERS)
+
 
 class GraphQLError(RuntimeError):
     """Raised when a GraphQL response includes a top-level `errors` array,
@@ -66,7 +103,22 @@ def execute(
     errors, timeouts) with a short exponential backoff -- it does not
     retry on GraphQL errors or HTTP 4xx/5xx, those are raised directly.
     """
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        # gql.poolplayers.com is a different subdomain from
+        # league.poolplayers.com (where the token is captured), making this
+        # a cross-origin request. A real browser sends Origin/Referer on
+        # that automatically; requests does not add them on its own. First
+        # real live run without these got "Login session has expired" on a
+        # token captured seconds earlier -- too fast to be real expiry, and
+        # consistent with a same-origin/session check on the backend that a
+        # bearer-token-only request without these headers fails. Unverified
+        # as THE fix until confirmed against the live API, but it's the
+        # most concrete, honest difference between what the browser sent
+        # (and which worked) and what this client was sending (which didn't).
+        "Origin": "https://league.poolplayers.com",
+        "Referer": "https://league.poolplayers.com/",
+    }
     if access_token:
         headers["authorization"] = access_token
 
@@ -82,8 +134,7 @@ def execute(
         raise GraphQLTransportError(f"Non-JSON response body (HTTP {resp.status_code})") from exc
 
     if payload.get("errors"):
-        codes = {(e.get("extensions") or {}).get("code") for e in payload["errors"]}
-        if resp.status_code in _AUTH_STATUS_CODES or codes & _AUTH_EXTENSION_CODES:
+        if _is_auth_failure(payload["errors"], resp.status_code):
             raise GraphQLAuthError(payload["errors"], status_code=resp.status_code)
         raise GraphQLError(payload["errors"], status_code=resp.status_code)
 

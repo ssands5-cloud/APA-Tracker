@@ -1,0 +1,47 @@
+{
+  "operationName": "dashboardMVP",
+  "entityType": "global",
+  "entityId": "global",
+  "capturedAt": "2026-09-03T04:57:24.782248+00:00",
+  "variables": {},
+  "query": "query dashboardMVP {\n  viewer {\n    id\n    ... on Member {\n      players(mvp: true) {\n        id\n        session {\n          id\n          name\n          __typename\n        }\n        division {\n          id\n          __typename\n        }\n        league {\n          id\n          slug\n          __typename\n        }\n        team {\n          id\n          name\n          __typename\n        }\n        ... on EightBallPlayer {\n          pa\n          ppm\n          rank\n          session {\n            name\n            __typename\n          }\n          matchesPlayed\n          matchesNeededToQualify\n          __typename\n        }\n        ... on NineBallPlayer {\n          pa\n          ppm\n          rank\n          session {\n            name\n            __typename\n          }\n          matchesPlayed\n          matchesNeededToQualify\n          __typename\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n",
+  "response": {
+    "data": {
+      "viewer": {
+        "id": "int",
+        "players": [
+          {
+            "id": "int",
+            "session": {
+              "id": "int",
+              "name": "str",
+              "__typename": "str"
+            },
+            "division": {
+              "id": "int",
+              "__typename": "str"
+            },
+            "league": {
+              "id": "int",
+              "slug": "str",
+              "__typename": "str"
+            },
+            "team": {
+              "id": "int",
+              "name": "str",
+              "__typename": "str"
+            },
+            "pa": "float",
+            "ppm": "int",
+            "rank": "null",
+            "matchesPlayed": "int",
+            "matchesNeededToQualify": "int",
+            "__typename": "str"
+          },
+          "...4 item(s)"
+        ],
+        "__typename": "str"
+      }
+    }
+  }
+}
