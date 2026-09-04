@@ -184,6 +184,11 @@ opponents / opponents to be cautious of, per player). Full write-up,
 including the score formula and what it deliberately leaves out,
 in `docs/matchups.md`.
 
+**Where every column comes from** — `docs/data-fields.md` is the single
+source of truth for which exported columns are raw API values, which are
+computed here, and which fields were explicitly checked and found to not
+exist anywhere in the real API (so they're never fabricated).
+
 #### Capturing queries by logging in (easiest)
 
 `tools/capture_apa_graphql.py` opens a browser, you log in by hand, and it
