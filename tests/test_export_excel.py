@@ -24,7 +24,7 @@ from database.ingest import (
 from database.models import Base
 from ui.export_excel import export_to_excel
 
-EXPECTED_SHEETS = {"Standings", "Player Stats", "Career Stats", "Team History"}
+EXPECTED_SHEETS = {"Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History"}
 
 
 @pytest.fixture
@@ -53,6 +53,7 @@ class TestEmptyDatabase:
         wb = _export(db, tmp_path)
         assert wb["Career Stats"].max_row == 1  # header only
         assert wb["Team History"].max_row == 1
+        assert wb["Skill Level History"].max_row == 1
 
 
 class TestSeededData:
@@ -120,6 +121,27 @@ class TestSeededData:
         header, paul = rows[0], rows[1]
         record = dict(zip(header, paul))
         assert record["Team"] == "Mark It Up"
+
+    def test_skill_level_history_sheet_has_the_real_columns_and_values(self, db, tmp_path):
+        """Not a new extraction step -- ingest_match_scores already writes
+        PlayerMatch.skill_level per match (seeded_db above doesn't set it,
+        so this seeds its own match with one)."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     week=1, match_date="2026-06-01", status="COMPLETED",
+                     home_score=6, away_score=3)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "3349374", "player_name": "Paul Smith", "team_id": "T1",
+             "skill_level": 5, "result": "W", "points_earned": 6},
+        ])
+        wb = _export(db, tmp_path)
+        ws = wb["Skill Level History"]
+        headers = [c.value for c in ws[1]]
+        assert headers == ["Player Name", "Player ID", "Week", "Skill Level", "Match Date", "Source"]
+        row = [c.value for c in ws[2]]
+        assert row == ["Paul Smith", "3349374", 1, 5, "2026-06-01", "scoresheet"]
 
     def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
         """ingest_match_scores() never assigns a team (only upsert_roster()

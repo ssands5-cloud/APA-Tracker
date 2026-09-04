@@ -29,7 +29,8 @@ from ui.export_json import export_to_json
 
 REQUIRED_TOP_LEVEL_KEYS = {
     "generated_at", "teams", "matches", "standings", "player_stats",
-    "match_scores", "career_stats", "team_history",
+    "match_scores", "career_stats", "team_history", "skill_level_history",
+    "skill_level_summary",
 }
 
 REQUIRED_MATCH_KEYS = {
@@ -172,6 +173,8 @@ class TestEmptyDatabase:
         assert document["player_stats"] == []
         assert document["career_stats"] == []
         assert document["team_history"] == []
+        assert document["skill_level_history"] == []
+        assert document["skill_level_summary"] == []
 
     def test_generated_at_is_always_present(self, db, tmp_path):
         document = _export(db, tmp_path)
@@ -211,6 +214,65 @@ class TestCareerStatsAndTeamHistory:
             "nick_name": "Paulie", "skill_level": 4, "rank": None,
             "matches_won": 2, "matches_played": 2,
         }]
+
+
+class TestSkillLevelHistory:
+    """Not a new extraction step -- ingest_match_scores/ingest_match_roster
+    already write PlayerMatch.skill_level per match; this reads it back out
+    match-by-match instead of only the current Player.skill_level snapshot."""
+
+    def test_skill_level_history_row_shape(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     week=1, match_date="2026-06-01", status="COMPLETED",
+                     home_score=6, away_score=3)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "3349374", "player_name": "Paul Smith", "team_id": "T1",
+             "skill_level": 5, "result": "W", "points_earned": 6},
+        ])
+        document = _export(db, tmp_path)
+        assert document["skill_level_history"] == [{
+            "player": "Paul Smith", "player_id": "3349374", "week": 1,
+            "skill_level": 5, "match_date": "2026-06-01", "source": "scoresheet",
+        }]
+
+    def test_trend_volatility_and_last_change_across_two_matches(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     week=1, match_date="2026-06-01", status="COMPLETED",
+                     home_score=6, away_score=3)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "3349374", "player_name": "Paul Smith", "team_id": "T1",
+             "skill_level": 5, "result": "W", "points_earned": 6},
+        ])
+        ingest_match(db, match_id="M2", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     week=7, match_date="2026-07-20", status="COMPLETED",
+                     home_score=6, away_score=3)
+        ingest_match_scores(db, "M2", [
+            {"player_id": "3349374", "player_name": "Paul Smith", "team_id": "T1",
+             "skill_level": 6, "result": "W", "points_earned": 6},
+        ])
+        document = _export(db, tmp_path)
+
+        assert [row["week"] for row in document["skill_level_history"]] == [1, 7]
+        assert document["skill_level_summary"] == [{
+            "player": "Paul Smith", "player_id": "3349374", "current_skill_level": 6,
+            "trend": "up", "volatility": 1, "last_change": "SL 5 → SL 6 in Week 7",
+        }]
+
+    def test_a_player_never_scored_has_no_skill_level_history(self, db, tmp_path):
+        """A player known only from a roster/name, never a scored match, has
+        no skill_level reading to show -- absent, not a fabricated zero."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_player(db, "P9", "Bench Player")
+        document = _export(db, tmp_path)
+        assert document["skill_level_history"] == []
+        assert document["skill_level_summary"] == []
 
 
 class TestFileIsValidJson:

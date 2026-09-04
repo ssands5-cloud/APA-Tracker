@@ -15,7 +15,8 @@ results in a small SQLite database, and exporting summaries to Excel.
   portal's markup changes, rather than in each scraper.
 - `database/` — SQLAlchemy models plus ingest/query helpers backed by SQLite.
 - `analytics/` — derived stats: win %, standings trend, head-to-head,
-  simple matchup comparisons.
+  simple matchup comparisons, skill level trend/volatility
+  (`skill_level_trends.py`).
 - `scheduler/` — the two jobs meant to actually run on a schedule
   (`daily_sync.py`, `weekly_refresh.py`).
 - `ui/` — Excel (`export_excel.py`) and JSON (`export_json.py`) exports.
@@ -125,6 +126,25 @@ per-league alias id and pulls both, landing in the "Career Stats" and
 and what's still unconfirmed (opponents' career stats aren't pulled this
 way, and the alias-per-league mapping is only confirmed against one league
 on a multi-league account).
+
+**Skill level history** — APA skill levels get re-evaluated and can change
+mid-season, and a player who moved that way shows up as a mystery jump in
+other stats unless the change itself is visible. This isn't a new query or
+extraction step: `ingest_match_roster`/`ingest_match_scores` already write
+`PlayerMatch.skill_level` for every scored match; `database.queries.skill_level_history`
+just reads that column back out match-by-match instead of only the single
+current value on `Player.skill_level`. `analytics/skill_level_trends.py`
+turns a player's ordered readings into a trend (`up`/`down`/`stable`,
+comparing the first and last reading of the season — a dip that fully
+recovers reads `stable`), a volatility count (how many times it actually
+changed), and a plain-language last change (`"SL 5 → SL 6 in Week 7"`). It
+lands in the Excel "Skill Level History" sheet, the JSON export's
+`skill_level_history`/`skill_level_summary` keys, and the demo's own
+"Skill Level" tab (a table plus a small inline-SVG trend line per player —
+no charting library, matching the rest of the demo). Readings are kept
+match-by-match rather than deduplicated to one per week: a player can have
+more than one match in the same week number (a doubleheader, a makeup
+match), and collapsing them would silently discard a real reading.
 
 #### Capturing queries by logging in (easiest)
 

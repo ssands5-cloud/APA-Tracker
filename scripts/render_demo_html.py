@@ -48,6 +48,7 @@ __CSS__
     <button class="tab" data-tab="matches">Matches</button>
     <button class="tab" data-tab="standings">Standings</button>
     <button class="tab" data-tab="career">Career</button>
+    <button class="tab" data-tab="skill">Skill Level</button>
   </nav>
 </header>
 
@@ -57,6 +58,7 @@ __CSS__
   <section id="panel-matches" class="panel-view"></section>
   <section id="panel-standings" class="panel-view"></section>
   <section id="panel-career" class="panel-view"></section>
+  <section id="panel-skill" class="panel-view"></section>
 </main>
 
 <footer>
@@ -416,6 +418,86 @@ function renderCareer() {
   document.getElementById('panel-career').innerHTML = sections;
 }
 
+// Small dependency-free line chart -- this page uses no charting library
+// anywhere else, so a sparkline drawn as plain inline SVG stays consistent
+// with the rest of the demo instead of pulling one in for a single tab.
+function sparkline(values) {
+  const w = 240, h = 48, pad = 6;
+  if (values.length === 0) return '';
+  if (values.length === 1) {
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <circle cx="${w / 2}" cy="${h / 2}" r="3" fill="var(--felt-strong)"></circle>
+    </svg>`;
+  }
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = (max - min) || 1;
+  const stepX = (w - pad * 2) / (values.length - 1);
+  const points = values.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((v - min) / span) * (h - pad * 2);
+    return [x, y];
+  });
+  const polyline = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const dots = points.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="var(--felt-strong)"></circle>`).join('');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${polyline}" fill="none" stroke="var(--felt)" stroke-width="2"></polyline>
+    ${dots}
+  </svg>`;
+}
+
+function trendDisplay(trend) {
+  if (trend === 'up') return { symbol: '▲', color: 'var(--win)' };
+  if (trend === 'down') return { symbol: '▼', color: 'var(--loss)' };
+  if (trend === 'stable') return { symbol: '▬', color: 'var(--muted)' };
+  return { symbol: '—', color: 'var(--muted)' };
+}
+
+function renderSkillLevel() {
+  const history = DATA.skill_level_history || [];
+  const summary = DATA.skill_level_summary || [];
+
+  if (summary.length === 0) {
+    document.getElementById('panel-skill').innerHTML = `
+      <section class="block">
+        <h2>Skill level history</h2>
+        <p class="empty">No match-linked skill level readings ingested yet -- this comes from the same per-match scoresheet (MatchPage) that feeds match detail, so it fills in as matches get scored.</p>
+      </section>`;
+    return;
+  }
+
+  const sections = summary.map(s => {
+    const readings = history.filter(r => r.player_id === s.player_id);
+    const t = trendDisplay(s.trend);
+    const rows = readings.map(r => `
+      <tr>
+        <td class="num">${esc(r.week ?? '—')}</td>
+        <td class="num">${esc(r.skill_level ?? '—')}</td>
+        <td>${esc(r.match_date ?? '—')}</td>
+        <td>${esc(r.source)}</td>
+      </tr>`).join('');
+
+    return `
+      <section class="block">
+        <h2>${esc(s.player)}</h2>
+        <div class="tiles">
+          <div class="tile"><div class="num">${esc(s.current_skill_level ?? '—')}</div><div class="lbl">Current skill level</div></div>
+          <div class="tile"><div class="num" style="color:${t.color};">${t.symbol}</div><div class="lbl">Trend: ${esc(s.trend)}</div></div>
+          <div class="tile"><div class="num">${s.volatility}</div><div class="lbl">Times it changed</div></div>
+        </div>
+        <p class="detail-meta">${s.last_change ? 'Last change: ' + esc(s.last_change) : 'No change recorded this season.'}</p>
+        <div class="panel" style="padding:14px 18px;">${sparkline(readings.map(r => r.skill_level).filter(v => v !== null && v !== undefined))}</div>
+        <div class="panel table-wrap">
+          <table>
+            <thead><tr><th class="num">Week</th><th class="num">Skill Level</th><th>Match Date</th><th>Source</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" class="empty">No readings.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }).join('');
+
+  document.getElementById('panel-skill').innerHTML = sections;
+}
+
 function activateTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel-view').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
@@ -430,6 +512,7 @@ renderTeamsList();
 renderMatchesList();
 renderStandings();
 renderCareer();
+renderSkillLevel();
 """
 
 

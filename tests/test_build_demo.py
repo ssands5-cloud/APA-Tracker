@@ -31,7 +31,9 @@ def test_build_demo_produces_a_readable_workbook(tmp_path, monkeypatch):
     assert workbook_path.exists()
 
     wb = openpyxl.load_workbook(workbook_path)
-    assert set(wb.sheetnames) == {"Standings", "Player Stats", "Career Stats", "Team History"}
+    assert set(wb.sheetnames) == {
+        "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History",
+    }
 
     standings = wb["Standings"]
     assert standings.max_row > 1, "Standings sheet has no data rows"

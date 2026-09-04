@@ -91,3 +91,30 @@ def team_history(db: Session) -> list[PlayerTeamHistory]:
         .order_by(PlayerTeamHistory.player_id, PlayerTeamHistory.is_current.desc())
         .all()
     )
+
+
+def skill_level_history(db: Session) -> list[PlayerMatch]:
+    """Every match-linked PlayerMatch row that carries a skill level,
+    ordered so a player's skill level can be read match-by-match across a
+    season -- not just the single current snapshot on Player.skill_level.
+
+    No new ingestion or table needed: both ingest_match_roster and
+    ingest_match_scores already write PlayerMatch.skill_level per match:
+    this just reads that column back out (join Player for name, .match for
+    week -- see PlayerMatch/Match relationships in database/models.py).
+
+    Deliberately NOT deduplicated to one row per (player, week): a player
+    can have more than one match in the same week number (a doubleheader,
+    a makeup match), and each is a real, distinct skill-level reading --
+    collapsing them on (player, week) would silently discard one.
+    player_match_history()'s per-player-history rows (match_id IS NULL) are
+    excluded since that path never populates skill_level.
+    """
+    return (
+        db.query(PlayerMatch)
+        .join(Player, PlayerMatch.player_id == Player.id)
+        .filter(PlayerMatch.match_id.isnot(None))
+        .filter(PlayerMatch.skill_level.isnot(None))
+        .order_by(Player.name, PlayerMatch.match_date, PlayerMatch.id)
+        .all()
+    )

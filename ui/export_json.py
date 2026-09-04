@@ -18,6 +18,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
+from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
 from database.queries import (
     all_matches,
     all_players,
@@ -26,6 +27,7 @@ from database.queries import (
     latest_standings,
     match_scores,
     player_match_history,
+    skill_level_history,
     team_history,
 )
 
@@ -45,6 +47,8 @@ def export_to_json(db: Session, config: dict) -> str:
         "match_scores": _match_scores(db),
         "career_stats": _career_stats(db),
         "team_history": _team_history(db),
+        "skill_level_history": _skill_level_history(db),
+        "skill_level_summary": _skill_level_summary(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -190,3 +194,56 @@ def _player_stats(db: Session) -> list[dict]:
             }
         )
     return records
+
+
+def _skill_level_history(db: Session) -> list[dict]:
+    """Same source as export_excel._skill_level_history_dataframe -- one row
+    per match-linked PlayerMatch that carries a skill level, so the demo can
+    chart a player's skill level over the season instead of only showing
+    the current snapshot."""
+    return [
+        {
+            "player": row.player.name if row.player else "",
+            "player_id": row.player.external_id if row.player else "",
+            "week": row.match.week if row.match else None,
+            "skill_level": row.skill_level,
+            "match_date": row.match_date,
+            "source": "scoresheet" if row.result is not None else "roster",
+        }
+        for row in skill_level_history(db)
+    ]
+
+
+def _skill_level_summary(db: Session) -> list[dict]:
+    """One row per player with at least one skill_level reading: current
+    level, trend (analytics.skill_level_trends), volatility, and the most
+    recent change if there's been one. Grouped by Player.id (not name) --
+    two Player rows sharing a display name (see ui/export_excel.py's Team
+    column note) must not have their readings merged into one trend line.
+    """
+    by_player: dict[int, list] = {}
+    for row in skill_level_history(db):
+        by_player.setdefault(row.player_id, []).append(row)
+
+    summaries = []
+    for matches in by_player.values():
+        player = matches[0].player
+        changes = skill_level_changes(matches)
+        last_change = changes[-1] if changes else None
+        last_change_text = None
+        if last_change:
+            last_change_text = f"SL {last_change.from_level} → SL {last_change.to_level}"
+            if last_change.week is not None:
+                last_change_text += f" in Week {last_change.week}"
+
+        summaries.append(
+            {
+                "player": player.name if player else "",
+                "player_id": player.external_id if player else "",
+                "current_skill_level": matches[-1].skill_level,
+                "trend": skill_level_trend(matches),
+                "volatility": skill_level_volatility(matches),
+                "last_change": last_change_text,
+            }
+        )
+    return summaries

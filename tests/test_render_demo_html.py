@@ -44,6 +44,30 @@ SAMPLE_DATA = {
 }
 
 
+def test_renders_without_skill_level_keys_present():
+    """SAMPLE_DATA predates skill_level_history/skill_level_summary --
+    exercises the same "old export, new page" case a real upgrade hits."""
+    html = render_demo_html.render(SAMPLE_DATA)
+    assert 'data-tab="skill"' in html
+    assert 'id="panel-skill"' in html
+
+
+def test_skill_level_tab_renders_a_real_reading():
+    data = dict(SAMPLE_DATA, skill_level_history=[
+        {"player": "Alice", "player_id": "P1", "week": 9, "skill_level": 5,
+         "match_date": "2026-08-27", "source": "scoresheet"},
+    ], skill_level_summary=[
+        {"player": "Alice", "player_id": "P1", "current_skill_level": 5,
+         "trend": "stable", "volatility": 0, "last_change": None},
+    ])
+    html = render_demo_html.render(data)
+    assert "renderSkillLevel" in html
+    # The embedded JSON carries the raw data; a real string search for the
+    # rendered value would just be re-finding the JSON blob, so this checks
+    # the function that reads it is actually wired into the init call list.
+    assert "renderSkillLevel();" in html
+
+
 def test_embedded_json_round_trips_exactly():
     html = render_demo_html.render(SAMPLE_DATA)
     match = re.search(

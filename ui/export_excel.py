@@ -12,7 +12,14 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
-from database.queries import all_players, career_stats, latest_standings, player_match_history, team_history
+from database.queries import (
+    all_players,
+    career_stats,
+    latest_standings,
+    player_match_history,
+    skill_level_history,
+    team_history,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +32,14 @@ def export_to_excel(db: Session, config: dict) -> str:
     player_stats_df = _player_stats_dataframe(db)
     career_stats_df = _career_stats_dataframe(db)
     team_history_df = _team_history_dataframe(db)
+    skill_level_history_df = _skill_level_history_dataframe(db)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
         player_stats_df.to_excel(writer, sheet_name="Player Stats", index=False)
         career_stats_df.to_excel(writer, sheet_name="Career Stats", index=False)
         team_history_df.to_excel(writer, sheet_name="Team History", index=False)
+        skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -150,5 +159,29 @@ def _team_history_dataframe(db: Session) -> pd.DataFrame:
                 "Matches Played": row.matches_played,
             }
             for row in team_history(db)
+        ]
+    )
+
+
+def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
+    """Match-by-match skill level, from PlayerMatch.skill_level -- lets a
+    change mid-season actually be seen, instead of only ever showing the
+    current value (Player.skill_level / the "Skill Level" column on
+    Player Stats). "Source" is inferred from which fields the row carries
+    (see ingest_match_roster/ingest_match_scores in database/ingest.py --
+    there's no explicit column for it): a scoresheet row always sets
+    `result`, a roster row never does.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "Player Name": row.player.name if row.player else "",
+                "Player ID": row.player.external_id if row.player else "",
+                "Week": row.match.week if row.match else None,
+                "Skill Level": row.skill_level,
+                "Match Date": row.match_date,
+                "Source": "scoresheet" if row.result is not None else "roster",
+            }
+            for row in skill_level_history(db)
         ]
     )
