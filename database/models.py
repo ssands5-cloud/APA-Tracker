@@ -286,6 +286,12 @@ class PlayerMatchup(Base):
 
     Upserted in place on (player_id, opponent_id), like PlayerCareerStats:
     always-current, not a value worth snapshotting per run.
+
+    confidence_score (added alongside sample-size/opponent-skill-level/
+    recency weighting -- see analytics/matchups.py and docs/matchups.md)
+    says how much to trust matchup_score itself: a 1-0 matchup and a 10-0
+    matchup can now land on similar scores once weighted, and confidence
+    is what tells them apart.
     """
 
     __tablename__ = "player_matchups"
@@ -303,6 +309,7 @@ class PlayerMatchup(Base):
     trend = Column(String)
     volatility = Column(Integer)
     matchup_score = Column(Integer)
+    confidence_score = Column(Integer)
 
     player = relationship("Player", foreign_keys=[player_id])
     opponent = relationship("Player", foreign_keys=[opponent_id])

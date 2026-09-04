@@ -156,7 +156,7 @@ class TestSeededData:
             "player_id": "501", "opponent_id": "601", "matches_played": 3,
             "win_rate": 0.667, "avg_points_earned": 5.0,
             "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
-            "matchup_score": 72,
+            "matchup_score": 72, "confidence_score": 63,
         }])
         wb = _export(db, tmp_path)
         ws = wb["Matchups"]
@@ -164,9 +164,10 @@ class TestSeededData:
         assert headers == [
             "Player", "Opponent", "Matches Played", "Win Rate", "Avg Points Earned",
             "Avg Opponent Skill Level", "Trend", "Volatility", "Matchup Score",
+            "Confidence Score",
         ]
         row = [c.value for c in ws[2]]
-        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72]
+        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72, 63]
 
     def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
         """ingest_match_scores() never assigns a team (only upsert_roster()

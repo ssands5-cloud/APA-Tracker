@@ -290,14 +290,14 @@ class TestMatchups:
             "player_id": "501", "opponent_id": "601", "matches_played": 3,
             "win_rate": 0.667, "avg_points_earned": 5.0,
             "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
-            "matchup_score": 72,
+            "matchup_score": 72, "confidence_score": 63,
         }])
         document = _export(db, tmp_path)
         assert document["matchups"] == [{
             "player": "Player One", "player_id": "501", "opponent": "Player Four",
             "opponent_id": "601", "matches_played": 3, "win_rate": 0.667,
             "avg_points_earned": 5.0, "avg_opponent_skill_level": 5.0,
-            "trend": "up", "volatility": 1, "matchup_score": 72,
+            "trend": "up", "volatility": 1, "matchup_score": 72, "confidence_score": 63,
         }]
 
     def test_a_matchup_row_for_an_unknown_player_is_skipped_not_crashed(self, db, tmp_path):

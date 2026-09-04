@@ -133,21 +133,33 @@ def skill_level_history(db: Session) -> list[PlayerMatch]:
 def all_head_to_head(db: Session) -> list[PlayerHeadToHead]:
     """Every raw per-match head-to-head row -- scripts/build_matchups.py
     groups these by (player_id, opponent_id) to compute player_matchups.
-    Ordered by player then opponent so rows for one pair are contiguous."""
+    Ordered by player then opponent so rows for one pair are contiguous,
+    and chronologically WITHIN each pair (oldest first) -- required by
+    analytics.matchups.weighted_win_rate's recency weighting. Match.match_date
+    is stored as delivered text (see Match's own docstring), not a real
+    datetime, but the live GraphQL source is ISO 8601, which sorts
+    correctly as plain text; PlayerHeadToHead.id breaks a tie (same date,
+    or both missing one)."""
     return (
         db.query(PlayerHeadToHead)
-        .order_by(PlayerHeadToHead.player_id, PlayerHeadToHead.opponent_id, PlayerHeadToHead.id)
+        .join(Match, PlayerHeadToHead.match_id == Match.id)
+        .order_by(
+            PlayerHeadToHead.player_id, PlayerHeadToHead.opponent_id,
+            Match.match_date, PlayerHeadToHead.id,
+        )
         .all()
     )
 
 
 def head_to_head_history(db: Session, player_id: int, opponent_id: int) -> list[PlayerHeadToHead]:
     """Every game a specific player has played against a specific
-    opponent, in insertion order."""
+    opponent, chronologically (oldest first) -- see all_head_to_head()'s
+    docstring for why this ordering matters and how it's derived."""
     return (
         db.query(PlayerHeadToHead)
-        .filter_by(player_id=player_id, opponent_id=opponent_id)
-        .order_by(PlayerHeadToHead.id)
+        .join(Match, PlayerHeadToHead.match_id == Match.id)
+        .filter(PlayerHeadToHead.player_id == player_id, PlayerHeadToHead.opponent_id == opponent_id)
+        .order_by(Match.match_date, PlayerHeadToHead.id)
         .all()
     )
 

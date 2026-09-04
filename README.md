@@ -156,10 +156,15 @@ lineup: real head-to-head record, not a season-wide average, plus a 0-100
 away player (same-numbered positions face each other in APA team format);
 `scraper/graphql_scraper.py::head_to_head_rows()` pairs them, and
 `scripts/build_matchups.py` scores every (player, opponent) pair found so
-far. Lands in the Excel "Matchups" sheet, the JSON export's `matchups` key,
-and the demo's "Matchups" tab (recommended opponents / opponents to be
-cautious of, per player). Full write-up, including the score formula and
-what it deliberately leaves out, in `docs/matchups.md`.
+far. The score is sample-size-weighted (a 1-0 record no longer scores like
+a 10-0 one), recency-weighted (a recent game counts slightly more than an
+old one), and includes an opponent-skill-level modifier (a bonus for wins
+against tougher opponents) — plus a separate `Confidence Score` saying how
+much to trust the matchup score itself. Lands in the Excel "Matchups"
+sheet, the JSON export's `matchups` key, and the demo's "Matchups" tab
+(recommended opponents / opponents to be cautious of, per player). Full
+write-up, including the score formula and what it deliberately leaves out,
+in `docs/matchups.md`.
 
 #### Capturing queries by logging in (easiest)
 

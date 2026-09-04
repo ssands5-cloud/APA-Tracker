@@ -543,6 +543,7 @@ def ingest_matchups(db: Session, rows: list[dict]) -> int:
             "trend": row.get("trend"),
             "volatility": row.get("volatility"),
             "matchup_score": row.get("matchup_score"),
+            "confidence_score": row.get("confidence_score"),
         }
         if existing:
             for key, value in fields.items():

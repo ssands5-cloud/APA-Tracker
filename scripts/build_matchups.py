@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 from analytics.matchups import (
     average_opponent_skill_level,
     average_points_earned,
+    confidence_score,
     head_to_head_win_rate,
     matchup_score,
 )
@@ -83,6 +84,7 @@ def build_matchups(db: Session) -> list[dict]:
                 "trend": trend,
                 "volatility": volatility,
                 "matchup_score": matchup_score(h2h_rows, trend, volatility),
+                "confidence_score": confidence_score(h2h_rows, trend, volatility),
             }
         )
 
@@ -115,14 +117,16 @@ def main() -> None:
     for r in ranked[:5]:
         print(
             f"  {r['player_name']} vs {r['opponent_name']}: {r['matchup_score']} "
-            f"(win rate {r['win_rate']:.0%}, {r['matches_played']} game(s))"
+            f"(confidence {r['confidence_score']}, win rate {r['win_rate']:.0%}, "
+            f"{r['matches_played']} game(s))"
         )
 
     print("\nWeakest matchups:")
     for r in ranked[-5:]:
         print(
             f"  {r['player_name']} vs {r['opponent_name']}: {r['matchup_score']} "
-            f"(win rate {r['win_rate']:.0%}, {r['matches_played']} game(s))"
+            f"(confidence {r['confidence_score']}, win rate {r['win_rate']:.0%}, "
+            f"{r['matches_played']} game(s))"
         )
 
 

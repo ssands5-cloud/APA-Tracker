@@ -210,6 +210,7 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
                 "Trend": row.trend,
                 "Volatility": row.volatility,
                 "Matchup Score": row.matchup_score,
+                "Confidence Score": row.confidence_score,
             }
             for row in all_matchups(db)
         ]

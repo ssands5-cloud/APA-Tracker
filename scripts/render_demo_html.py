@@ -518,8 +518,9 @@ function renderMatchups() {
   }
 
   const players = [...new Set(matchups.map(m => m.player))];
+  const confidenceLabel = c => c >= 70 ? 'high' : c >= 40 ? 'medium' : 'low';
   const list = (rows, emptyText) => rows.length
-    ? rows.map(r => `<li>${esc(r.opponent)} — ${scorePill(r.matchup_score)}</li>`).join('')
+    ? rows.map(r => `<li>${esc(r.opponent)} — ${scorePill(r.matchup_score)} <span class="hint">(${confidenceLabel(r.confidence_score)} confidence)</span></li>`).join('')
     : `<li class="empty" style="text-align:left; padding:4px 0; list-style:none; margin-left:-18px;">${emptyText}</li>`;
 
   const sections = players.map(player => {
@@ -537,6 +538,7 @@ function renderMatchups() {
         <td>${esc(r.trend)}</td>
         <td class="num">${r.volatility}</td>
         <td class="num">${scorePill(r.matchup_score)}</td>
+        <td class="num">${r.confidence_score} <span class="hint">(${confidenceLabel(r.confidence_score)})</span></td>
       </tr>`).join('');
 
     return `
@@ -554,7 +556,7 @@ function renderMatchups() {
         </div>
         <div class="panel table-wrap">
           <table>
-            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th></tr></thead>
+            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th><th class="num">Confidence</th></tr></thead>
             <tbody>${tableRows}</tbody>
           </table>
         </div>

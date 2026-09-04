@@ -268,6 +268,7 @@ def _matchups(db: Session) -> list[dict]:
             "trend": row.trend,
             "volatility": row.volatility,
             "matchup_score": row.matchup_score,
+            "confidence_score": row.confidence_score,
         }
         for row in all_matchups(db)
     ]

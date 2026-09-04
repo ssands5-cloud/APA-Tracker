@@ -33,27 +33,81 @@ teams faced off.
 `analytics/matchups.py::matchup_score(rows, trend, volatility)`:
 
 ```
+weight       = sample_size_weight(n)                 # 0 -> 1.0, ramping up to FULL_CONFIDENCE_GAMES (10)
+win_swing    = (weighted_win_rate(rows) - 0.5) * 80   # recency-weighted head-to-head record: ±40 swing
+skill_swing  = opponent_skill_modifier(rows)          # bonus/penalty from wins' skill-level gap, capped ±10
+
 score = 50
-       + (win_rate - 0.5) * 80      # the real head-to-head record: ±40 swing
-       + trend_modifier(trend)      # +5 up / -5 down / 0 stable or no data
-       - volatility_penalty(vol)    # 3 points per real change, capped at 15
+       + weight * (win_swing + skill_swing)   # the actual head-to-head evidence, damped by sample size
+       + trend_modifier(trend)                # +5 up / -5 down / 0 stable or no data -- NOT damped by weight
+       - volatility_penalty(vol)              # 3 points per real change, capped at 15 -- NOT damped by weight
 clamped to [0, 100]
 ```
 
 - **Win rate** is the actual won/lost record against *that specific*
-  opponent (from `player_head_to_head`), not a season-wide average.
+  opponent (from `player_head_to_head`), not a season-wide average. The
+  `matchup_score` formula uses a **recency-weighted** version
+  (`weighted_win_rate`) — see "Recency bias" below — while the exported
+  "Win Rate" column stays the plain, unweighted record.
+- **Sample-size weighting** (`sample_size_weight`) scales the win-rate and
+  opponent-skill swing by how many games you've actually got, from 0 at
+  zero games up to full strength at `FULL_CONFIDENCE_GAMES` (10) — a
+  heuristic choice, not a statistically fitted one. This is what fixes the
+  original gap: a 1-0 record and a 10-0 record no longer score the same,
+  because the 1-0 record's swing gets multiplied by roughly 0.1 instead of
+  1.0. **Trend and volatility are NOT scaled by this** — they describe the
+  player's current form in general, not something this one opponent's
+  game count should dilute.
+- **Opponent-skill-level weighting** (`opponent_skill_modifier`): a win
+  against a higher-skill-level opponent earns a bonus; a win against a
+  lower-skill-level one costs a (smaller, capped) penalty — 2 points per
+  skill level of average gap on WON games only, capped at ±10. This was
+  deliberately left out of the first version of this engine (APA's own
+  point-per-skill-level handicap already compensates for a gap in the
+  scoring itself, so a second adjustment risks double-counting), and has
+  been added back in on explicit direction — that tradeoff is a product
+  decision about how a captain wants the tool weighted, not a data
+  question. It's scoped to wins only: there's no evidence base yet for how
+  a *loss* to a much stronger opponent should compare to a loss against an
+  even one, so that stays out for now. `avg_opponent_skill_level` is still
+  reported as plain descriptive context alongside the score.
 - **Trend** and **volatility** are about the *player*, not the pair — the
   same signal the Skill Level tab shows (`analytics/skill_level_trends.py`),
   reused here rather than recomputed. A player trending up gets a small
   boost across every matchup; one whose skill level keeps bouncing around
   gets a small penalty across every matchup.
-- **`avg_opponent_skill_level`** is reported next to the score, not folded
-  into it. APA's own point-per-skill-level handicap already compensates for
-  a skill gap in the scoring itself; adding a second, unverified adjustment
-  on top risked double-counting a correction the league already makes. Use
-  it as context for your own judgment, not as a hidden factor in the number.
 - **No history yet** → score is `50` (neutral), not a guess in either
   direction.
+
+### Recency bias
+
+`weighted_win_rate(rows)` gives a more recent game slightly more say than
+an older one — a linear ramp from 0.7× (oldest game) to 1.3× (most recent),
+not a dominant effect. `rows` must already be in chronological order,
+oldest first, for this to mean anything; `database.queries.head_to_head_history`/
+`all_head_to_head` guarantee that ordering (by `Match.match_date`, falling
+back to insertion order when a date is missing or tied — see their
+docstrings for the one real caveat: `Match.match_date` is stored as
+delivered text, not a true datetime, so this relies on the live API's ISO
+8601 format sorting correctly as plain text, which it does).
+
+### Confidence score
+
+A new, separate 0-100 number (`analytics/matchups.py::confidence_score`,
+its own `Confidence Score` column/key) answering "how much should you
+trust `matchup_score`?" — because sample-size weighting means a 1-0
+matchup and a well-established 8-2 one can now land on similar scores,
+and confidence is what tells them apart. Averages three independently
+documented components:
+
+- **Sample size** — `sample_size_weight(n) * 100`: 0 at zero games, 100 at
+  `FULL_CONFIDENCE_GAMES` or more.
+- **Volatility** — `100 - 15 * volatility`, floored at 0: the same per-
+  change cost `volatility_penalty` charges the score itself.
+- **Trend stability** — `stable` is trusted most (100); a trend actively
+  moving (`up` or `down`) means the player's true current level is a
+  moving target, not a settled one (70); `no data` is a genuine unknown,
+  landing in between (50).
 
 ## Two things this deliberately doesn't include
 
@@ -90,11 +144,11 @@ tracking, just now visible in a new place.
 3. Open the "Matchups" sheet in the Excel export, or the "Matchups" tab in
    the demo/dashboard page, for each of your players.
 4. "Recommended opponents" (score ≥ 65) and "opponents to be cautious of"
-   (score ≤ 35) are the standout cases — most matchups will sit in the
-   middle with only one or two games of history, which is real information
-   too (there just isn't a strong signal yet).
-
-A low match count is the biggest caveat on any of this: a 1-0 head-to-head
-record scores identically to a 10-0 one (`matchup_score` doesn't currently
-weight by sample size). Treat an early-season score as a starting point for
-your own judgment, not a verdict.
+   (score ≤ 35) are the standout cases — most matchups will sit close to
+   the neutral 50 baseline early in a season, which is real information
+   too (there just isn't a strong signal yet, and the `Confidence Score`
+   column will say so).
+5. Check the `Confidence Score` alongside `Matchup Score` before treating
+   either number as a verdict — a high `Matchup Score` with a low
+   `Confidence Score` is a small, promising sample, not an established
+   edge.
