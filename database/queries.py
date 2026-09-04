@@ -228,6 +228,7 @@ def matchups_with_neutral_fill(db: Session) -> list[dict]:
             "win_rate": r.win_rate,
             "avg_points_earned": r.avg_points_earned,
             "avg_opponent_skill_level": r.avg_opponent_skill_level,
+            "sl_delta": r.sl_delta,
             "trend": r.trend,
             "volatility": r.volatility,
             "matchup_score": r.matchup_score,
@@ -252,7 +253,7 @@ def matchups_with_neutral_fill(db: Session) -> list[dict]:
                     "player": player.name, "player_id": player.external_id,
                     "opponent": opponent.name, "opponent_id": opponent.external_id,
                     "matches_played": 0, "win_rate": None, "avg_points_earned": None,
-                    "avg_opponent_skill_level": None, "trend": "no data", "volatility": 0,
+                    "avg_opponent_skill_level": None, "sl_delta": None, "trend": "no data", "volatility": 0,
                     "matchup_score": 50, "confidence_score": 0,
                     "format": None, "session_name": None, "has_history": False,
                 }

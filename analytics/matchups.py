@@ -125,6 +125,24 @@ def average_opponent_skill_level(rows: list[PlayerHeadToHead]) -> Optional[float
     return round(sum(levels) / len(levels), 2) if levels else None
 
 
+def average_skill_level_delta(rows: list[PlayerHeadToHead]) -> Optional[float]:
+    """P2: average (opponent_skill_level - own_skill_level) across ALL
+    games, wins and losses alike -- purely descriptive context, reported
+    alongside matchup_score but NOT folded into it.
+
+    Different from opponent_skill_modifier() below: that one only looks at
+    WINS (it's rewarding upsets) and IS weighted into matchup_score. This
+    answers a different question -- "how has the skill gap looked overall
+    in this pairing" -- regardless of who won each game.
+    """
+    deltas = [
+        r.opponent_skill_level - r.own_skill_level
+        for r in rows
+        if r.opponent_skill_level is not None and r.own_skill_level is not None
+    ]
+    return round(sum(deltas) / len(deltas), 2) if deltas else None
+
+
 def opponent_skill_modifier(rows: list[PlayerHeadToHead]) -> float:
     """Bonus for wins that came against higher-skill-level opponents (and a
     matching penalty for wins that came against lower-skill-level

@@ -14,6 +14,7 @@ from analytics.matchups import (
     _is_win,
     average_opponent_skill_level,
     average_points_earned,
+    average_skill_level_delta,
     confidence_score,
     head_to_head_win_rate,
     matchup_score,
@@ -179,6 +180,38 @@ class TestAverageOpponentSkillLevel:
     def test_averages_the_real_values(self):
         rows = [_game("W", opponent_skill_level=5), _game("L", opponent_skill_level=7)]
         assert average_opponent_skill_level(rows) == 6.0
+
+
+class TestAverageSkillLevelDelta:
+    """P2: unweighted (opponent - own) skill gap across ALL games, wins and
+    losses alike -- descriptive context, distinct from the win-scoped,
+    score-weighted opponent_skill_modifier tested below."""
+
+    def test_no_rows_is_none(self):
+        assert average_skill_level_delta([]) is None
+
+    def test_rows_missing_either_skill_level_are_skipped(self):
+        rows = [_game("W", opponent_skill_level=7, own_skill_level=None)]
+        assert average_skill_level_delta(rows) is None
+
+    def test_losses_count_too_unlike_the_win_scoped_modifier(self):
+        """The whole point of this metric: a losing record against tougher
+        opponents still shows a real positive delta here, even though
+        opponent_skill_modifier would report 0 (no wins to score)."""
+        rows = [_game("L", opponent_skill_level=8, own_skill_level=5)]
+        assert average_skill_level_delta(rows) == 3.0
+        assert opponent_skill_modifier(rows) == 0.0
+
+    def test_averages_across_wins_and_losses(self):
+        rows = [
+            _game("W", opponent_skill_level=7, own_skill_level=5),  # +2
+            _game("L", opponent_skill_level=3, own_skill_level=5),  # -2
+        ]
+        assert average_skill_level_delta(rows) == 0.0
+
+    def test_a_lower_skill_opponent_is_a_negative_delta(self):
+        rows = [_game("W", opponent_skill_level=3, own_skill_level=6)]
+        assert average_skill_level_delta(rows) == -3.0
 
 
 class TestOpponentSkillModifier:

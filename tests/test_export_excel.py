@@ -156,7 +156,7 @@ class TestSeededData:
         ingest_matchups(db, [{
             "player_id": "501", "opponent_id": "601", "matches_played": 3,
             "win_rate": 0.667, "avg_points_earned": 5.0,
-            "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
+            "avg_opponent_skill_level": 5.0, "sl_delta": 1.0, "trend": "up", "volatility": 1,
             "matchup_score": 72, "confidence_score": 63,
         }])
         wb = _export(db, tmp_path)
@@ -164,11 +164,11 @@ class TestSeededData:
         headers = [c.value for c in ws[1]]
         assert headers == [
             "Player", "Opponent", "Matches Played", "Win Rate", "Avg Points Earned",
-            "Avg Opponent Skill Level", "Trend", "Volatility", "Matchup Score",
+            "Avg Opponent Skill Level", "SL Delta", "Trend", "Volatility", "Matchup Score",
             "Confidence Score", "Format", "Session", "Has History",
         ]
         row = [c.value for c in ws[2]]
-        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72, 63, None, None, "Yes"]
+        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, 1.0, "up", 1, 72, 63, None, None, "Yes"]
 
     def test_a_known_pair_with_no_history_gets_a_neutral_fifty_row(self, db, tmp_path):
         """P1-8: two players who've each played someone, but never each

@@ -112,6 +112,23 @@ documented components:
   moving target, not a settled one (70); `no data` is a genuine unknown,
   landing in between (50).
 
+### SL delta (context, not scored)
+
+A separate `SL Delta` column/key (`analytics/matchups.py::average_skill_level_delta`)
+reports the average `opponent_skill_level - own_skill_level` across every
+game in the pairing — wins AND losses alike. It's purely descriptive: a
+positive number means this matchup has generally run against tougher
+opponents, a negative one against easier ones, but it is never folded into
+`matchup_score` itself.
+
+This is deliberately different from the skill-swing already inside
+`matchup_score` (`opponent_skill_modifier`), which only looks at WON games
+— it's rewarding upsets, not describing the pairing overall. A player who's
+0-3 against consistently higher-skill opponents gets `opponent_skill_modifier
+== 0` (no wins to reward) but a clearly positive `sl_delta`, so a captain
+can see "this has been a tough draw" even where the score alone wouldn't
+show it.
+
 ### Format and session
 
 A player's 8-ball record against an opponent doesn't predict their 9-ball

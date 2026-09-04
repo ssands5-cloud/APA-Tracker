@@ -290,14 +290,14 @@ class TestMatchups:
         ingest_matchups(db, [{
             "player_id": "501", "opponent_id": "601", "matches_played": 3,
             "win_rate": 0.667, "avg_points_earned": 5.0,
-            "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
+            "avg_opponent_skill_level": 5.0, "sl_delta": 1.0, "trend": "up", "volatility": 1,
             "matchup_score": 72, "confidence_score": 63,
         }])
         document = _export(db, tmp_path)
         assert document["matchups"] == [{
             "player": "Player One", "player_id": "501", "opponent": "Player Four",
             "opponent_id": "601", "matches_played": 3, "win_rate": 0.667,
-            "avg_points_earned": 5.0, "avg_opponent_skill_level": 5.0,
+            "avg_points_earned": 5.0, "avg_opponent_skill_level": 5.0, "sl_delta": 1.0,
             "trend": "up", "volatility": 1, "matchup_score": 72, "confidence_score": 63,
             "format": None, "session_name": None, "has_history": True,
         }]

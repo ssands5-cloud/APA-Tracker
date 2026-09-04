@@ -336,6 +336,13 @@ class PlayerMatchup(Base):
     win_rate = Column(Float)
     avg_points_earned = Column(Float)
     avg_opponent_skill_level = Column(Float)
+    # P2: average (opponent_skill_level - own_skill_level) across ALL
+    # games, wins and losses alike -- purely descriptive context, reported
+    # alongside matchup_score but NOT folded into it. Different from
+    # opponent_skill_modifier (analytics/matchups.py), which is win-scoped
+    # and IS weighted into the score: this answers "how has the skill gap
+    # looked overall", not "did a skill-gap win earn a bonus".
+    sl_delta = Column(Float)
     trend = Column(String)
     volatility = Column(Integer)
     matchup_score = Column(Integer)
