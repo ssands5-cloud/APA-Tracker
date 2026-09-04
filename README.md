@@ -165,7 +165,10 @@ demand. The score is sample-size-weighted (a 1-0 record no longer scores
 like a 10-0 one), recency-weighted (a recent game counts slightly more
 than an old one), and includes an opponent-skill-level modifier (a bonus
 for wins against tougher opponents) — plus a separate `Confidence Score`
-saying how much to trust the matchup score itself. A corrected scoresheet
+saying how much to trust the matchup score itself, and an `SL Delta`
+column giving the unweighted average skill-gap across ALL games in the
+pairing (wins and losses alike) as descriptive context alongside the
+score, not folded into it. A corrected scoresheet
 reconciles cleanly (stale pairings are removed, not left alongside
 corrected ones), results are normalized so a malformed value never counts
 as a silent loss, and a known player with no history against a specific
