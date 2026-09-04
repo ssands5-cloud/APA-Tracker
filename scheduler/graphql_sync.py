@@ -27,6 +27,7 @@ from datetime import datetime
 import yaml
 from sqlalchemy.orm import Session
 
+from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from database.ingest import (
     ingest_eight_ball_stats,
@@ -353,6 +354,16 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         counts["career_stats"] = career_stats_count
         counts["team_history"] = team_history_count
 
+        # Matchup Advantage Engine -- aggregates the head-to-head rows just
+        # ingested above (in the scoreboard loop) into player_matchups.
+        # Must run after that ingestion and before export, or the Excel/
+        # JSON "Matchups" sheet/key would always be empty on a real sync:
+        # scripts/build_matchups.py existing as a separate, manually-run
+        # script was the actual gap -- nothing wired this into the live
+        # sync itself.
+        matchup_rows = build_matchups(db)
+        counts["matchups"] = len(matchup_rows)
+
         if export:
             path = export_to_excel(db, config)
             logger.info("Excel export written to %s", path)
@@ -363,10 +374,10 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         "All-teams sync complete: %d team(s), %d roster entries, %d standings row(s) "
         "across their divisions, %d/%d matches new (%d byes, %d not yet scored), "
         "%d player scoresheet row(s) across every scored match, %d career stat "
-        "format(s), %d team-history row(s)",
+        "format(s), %d team-history row(s), %d matchup(s) computed",
         counts["teams"], counts["roster"], counts["standings"], counts["matches_new"],
         counts["matches_seen"], counts["byes"], counts["unscored"], counts["scoresheet_rows"],
-        counts["career_stats"], counts["team_history"],
+        counts["career_stats"], counts["team_history"], counts["matchups"],
     )
     return counts
 

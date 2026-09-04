@@ -31,6 +31,7 @@ if str(_project_root) not in sys.path:
 
 from sqlalchemy.orm import Session
 
+from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from database.ingest import (
     ingest_eight_ball_stats,
@@ -49,7 +50,6 @@ from scraper.graphql_scraper import (
     match_player_scores,
     team_stat_rows,
 )
-from scripts.build_matchups import build_matchups
 from ui.export_excel import export_to_excel
 from ui.export_json import export_to_json
 
@@ -151,11 +151,11 @@ def main() -> None:
         )
 
         # 6. Matchup Advantage Engine -- aggregates the head-to-head rows
-        # ingested in step 4. Called directly rather than via a subprocess
-        # to scripts/build_matchups.py: that script is for pointing at a
-        # REAL synced database (apa_config.yaml's path, not the demo's
-        # separate DEMO_CONFIG one), but the demo needs the same
-        # computation run against its own in-process session.
+        # ingested in step 4. analytics.matchup_builder.build_matchups() is
+        # shared with scheduler.graphql_sync.run_all_teams() (the real live
+        # sync) and scripts/build_matchups.py (a standalone CLI for
+        # recomputing on demand against an existing database) -- this is
+        # the same function, not a separate copy.
         matchup_rows = build_matchups(db)
         logger.info("build_matchups: %d matchup(s) computed", len(matchup_rows))
 
