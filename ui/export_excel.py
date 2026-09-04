@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
 from database.queries import (
+    all_matchups,
     all_players,
     career_stats,
     latest_standings,
@@ -33,6 +34,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     career_stats_df = _career_stats_dataframe(db)
     team_history_df = _team_history_dataframe(db)
     skill_level_history_df = _skill_level_history_dataframe(db)
+    matchups_df = _matchups_dataframe(db)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -40,6 +42,7 @@ def export_to_excel(db: Session, config: dict) -> str:
         career_stats_df.to_excel(writer, sheet_name="Career Stats", index=False)
         team_history_df.to_excel(writer, sheet_name="Team History", index=False)
         skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
+        matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -183,5 +186,31 @@ def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
                 "Source": "scoresheet" if row.result is not None else "roster",
             }
             for row in skill_level_history(db)
+        ]
+    )
+
+
+def _matchups_dataframe(db: Session) -> pd.DataFrame:
+    """Matchup Advantage Engine: one row per (player, opponent), from
+    analytics.matchups via scripts/build_matchups.py. See
+    database/models.py's PlayerMatchup docstring for why "Avg Points
+    Earned" and "Avg Opponent Skill Level" stand in for the requested
+    "innings"/"defensive shots vs opponent" columns -- neither is a real
+    field this API has ever returned at this granularity.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "Player": row.player.name if row.player else "",
+                "Opponent": row.opponent.name if row.opponent else "",
+                "Matches Played": row.matches_played,
+                "Win Rate": row.win_rate,
+                "Avg Points Earned": row.avg_points_earned,
+                "Avg Opponent Skill Level": row.avg_opponent_skill_level,
+                "Trend": row.trend,
+                "Volatility": row.volatility,
+                "Matchup Score": row.matchup_score,
+            }
+            for row in all_matchups(db)
         ]
     )

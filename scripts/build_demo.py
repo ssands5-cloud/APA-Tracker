@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from database.engine import create_db_engine
 from database.ingest import (
     ingest_eight_ball_stats,
+    ingest_head_to_head,
     ingest_match,
     ingest_match_scores,
     ingest_player_team_history,
@@ -44,9 +45,11 @@ from scheduler.graphql_sync import ingest_viewer_data
 from scraper.graphql_scraper import (
     division_standings_rows,
     eight_ball_stats_row,
+    head_to_head_rows,
     match_player_scores,
     team_stat_rows,
 )
+from scripts.build_matchups import build_matchups
 from ui.export_excel import export_to_excel
 from ui.export_json import export_to_json
 
@@ -127,6 +130,11 @@ def main() -> None:
             "ingest_match_scores: %d player scoresheet row(s) for match %s (%d new, %d updated)",
             len(scores), match_detail["id"], created, updated,
         )
+        h2h_rows = head_to_head_rows(match_detail)
+        h2h_count = ingest_head_to_head(db, h2h_rows)
+        logger.info(
+            "ingest_head_to_head: %d row(s) for match %s", h2h_count, match_detail["id"],
+        )
 
         # 5. getEightBallStats + TeamStat -- HANDOFF.md item 2. A separate
         # fixture player (not one of the above four's ids -- see this
@@ -141,6 +149,15 @@ def main() -> None:
             "ingest_eight_ball_stats/ingest_player_team_history: %d format(s), %d team-history row(s) for %s",
             written, len(history_rows), stats_player.name,
         )
+
+        # 6. Matchup Advantage Engine -- aggregates the head-to-head rows
+        # ingested in step 4. Called directly rather than via a subprocess
+        # to scripts/build_matchups.py: that script is for pointing at a
+        # REAL synced database (apa_config.yaml's path, not the demo's
+        # separate DEMO_CONFIG one), but the demo needs the same
+        # computation run against its own in-process session.
+        matchup_rows = build_matchups(db)
+        logger.info("build_matchups: %d matchup(s) computed", len(matchup_rows))
 
         excel_path = export_to_excel(db, DEMO_CONFIG)
         json_path = export_to_json(db, DEMO_CONFIG)

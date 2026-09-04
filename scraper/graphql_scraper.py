@@ -510,6 +510,67 @@ def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def head_to_head_rows(match: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per individual game, from BOTH players' perspective -- who a
+    player actually played against, not just which two teams faced off.
+
+    Pairs the home scoresheet row and the away scoresheet row that share
+    the same matchPositionNumber: standard APA team format plays
+    same-numbered positions against each other. That's reading a
+    documented field by its own name and APA's published team-match
+    format, not resolving an ambiguous id the way the HANDOFF.md alias-id
+    question was -- see PlayerHeadToHead's docstring in database/models.py.
+
+    A position missing a real player id on either side (a vacant/forfeited
+    slot, or one that only exists on one side) is skipped, not guessed at
+    -- same reasoning as match_player_scores' vacant-slot guard.
+    """
+    home_result = next((r for r in (match.get("results") or []) if (r or {}).get("homeAway") == "HOME"), {}) or {}
+    away_result = next((r for r in (match.get("results") or []) if (r or {}).get("homeAway") == "AWAY"), {}) or {}
+
+    def _by_position(result: dict) -> dict:
+        by_position = {}
+        for score in result.get("scores") or []:
+            score = score or {}
+            position = score.get("matchPositionNumber")
+            if position is None or not (score.get("player") or {}).get("id"):
+                continue
+            by_position[position] = score
+        return by_position
+
+    home_by_position = _by_position(home_result)
+    away_by_position = _by_position(away_result)
+    match_id = str(match.get("id") or "")
+
+    rows = []
+    for position, home_score in home_by_position.items():
+        away_score = away_by_position.get(position)
+        if away_score is None:
+            continue
+        rows.append(_head_to_head_row(match_id, home_score, away_score))
+        rows.append(_head_to_head_row(match_id, away_score, home_score))
+    return rows
+
+
+def _head_to_head_row(match_id: str, own_score: dict, opponent_score: dict) -> dict[str, Any]:
+    own_player = own_score.get("player") or {}
+    opponent_player = opponent_score.get("player") or {}
+    points_earned = own_score.get("eightBallMatchPointsEarned")
+    if points_earned is None:
+        points_earned = own_score.get("nineBallMatchPointsEarned")
+    return {
+        "match_id": match_id,
+        "player_id": str(own_player.get("id") or ""),
+        "player_name": own_player.get("displayName") or "",
+        "opponent_id": str(opponent_player.get("id") or ""),
+        "opponent_name": opponent_player.get("displayName") or "",
+        "own_skill_level": own_score.get("skillLevel"),
+        "opponent_skill_level": opponent_score.get("skillLevel"),
+        "result": own_score.get("winLoss"),
+        "points_earned": points_earned,
+    }
+
+
 # --- HANDOFF.md item 2: alias id confirmed against a real account ----------
 #
 # fetch_eight_ball_stats/fetch_team_stat take `alias_id` as a plain caller-

@@ -49,6 +49,7 @@ __CSS__
     <button class="tab" data-tab="standings">Standings</button>
     <button class="tab" data-tab="career">Career</button>
     <button class="tab" data-tab="skill">Skill Level</button>
+    <button class="tab" data-tab="matchups">Matchups</button>
   </nav>
 </header>
 
@@ -59,6 +60,7 @@ __CSS__
   <section id="panel-standings" class="panel-view"></section>
   <section id="panel-career" class="panel-view"></section>
   <section id="panel-skill" class="panel-view"></section>
+  <section id="panel-matchups" class="panel-view"></section>
 </main>
 
 <footer>
@@ -498,6 +500,70 @@ function renderSkillLevel() {
   document.getElementById('panel-skill').innerHTML = sections;
 }
 
+function scorePill(score) {
+  if (score >= 65) return `<span class="pill win">${score}</span>`;
+  if (score <= 35) return `<span class="pill loss">${score}</span>`;
+  return `<span class="pill bye">${score}</span>`;
+}
+
+function renderMatchups() {
+  const matchups = DATA.matchups || [];
+  if (matchups.length === 0) {
+    document.getElementById('panel-matchups').innerHTML = `
+      <section class="block">
+        <h2>Matchup Advantage Engine</h2>
+        <p class="empty">No head-to-head history ingested yet -- this needs at least one fully-scored match (MatchPage), since individual matchups are only known by pairing scoresheet positions. See docs/matchups.md.</p>
+      </section>`;
+    return;
+  }
+
+  const players = [...new Set(matchups.map(m => m.player))];
+  const list = (rows, emptyText) => rows.length
+    ? rows.map(r => `<li>${esc(r.opponent)} — ${scorePill(r.matchup_score)}</li>`).join('')
+    : `<li class="empty" style="text-align:left; padding:4px 0; list-style:none; margin-left:-18px;">${emptyText}</li>`;
+
+  const sections = players.map(player => {
+    const rows = matchups.filter(m => m.player === player).sort((a, b) => b.matchup_score - a.matchup_score);
+    const recommended = rows.filter(r => r.matchup_score >= 65).slice(0, 3);
+    const caution = rows.filter(r => r.matchup_score <= 35).slice(-3).reverse();
+
+    const tableRows = rows.map(r => `
+      <tr>
+        <td>${esc(r.opponent)}</td>
+        <td class="num">${r.matches_played}</td>
+        <td class="num">${(r.win_rate * 100).toFixed(0)}%</td>
+        <td class="num">${r.avg_points_earned ?? '—'}</td>
+        <td class="num">${r.avg_opponent_skill_level ?? '—'}</td>
+        <td>${esc(r.trend)}</td>
+        <td class="num">${r.volatility}</td>
+        <td class="num">${scorePill(r.matchup_score)}</td>
+      </tr>`).join('');
+
+    return `
+      <section class="block">
+        <h2>${esc(player)} — matchups</h2>
+        <div class="tiles" style="grid-template-columns: 1fr 1fr;">
+          <div class="tile">
+            <div class="lbl" style="margin:0 0 8px;">Recommended opponents</div>
+            <ul style="margin:0; padding-left:18px; font-size:13.5px;">${list(recommended, 'No standout advantage yet.')}</ul>
+          </div>
+          <div class="tile">
+            <div class="lbl" style="margin:0 0 8px;">Opponents to be cautious of</div>
+            <ul style="margin:0; padding-left:18px; font-size:13.5px;">${list(caution, 'No standout disadvantage yet.')}</ul>
+          </div>
+        </div>
+        <div class="panel table-wrap">
+          <table>
+            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }).join('');
+
+  document.getElementById('panel-matchups').innerHTML = sections;
+}
+
 function activateTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel-view').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
@@ -513,6 +579,7 @@ renderMatchesList();
 renderStandings();
 renderCareer();
 renderSkillLevel();
+renderMatchups();
 """
 
 

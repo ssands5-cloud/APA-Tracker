@@ -68,6 +68,25 @@ def test_skill_level_tab_renders_a_real_reading():
     assert "renderSkillLevel();" in html
 
 
+def test_renders_without_matchups_key_present():
+    """SAMPLE_DATA predates the matchups key -- exercises the "old export,
+    new page" case a real upgrade hits."""
+    html = render_demo_html.render(SAMPLE_DATA)
+    assert 'data-tab="matchups"' in html
+    assert 'id="panel-matchups"' in html
+
+
+def test_matchups_tab_is_wired_in():
+    data = dict(SAMPLE_DATA, matchups=[
+        {"player": "Alice", "player_id": "P1", "opponent": "Bob", "opponent_id": "P2",
+         "matches_played": 2, "win_rate": 1.0, "avg_points_earned": 6.0,
+         "avg_opponent_skill_level": 4.0, "trend": "up", "volatility": 0,
+         "matchup_score": 90},
+    ])
+    html = render_demo_html.render(data)
+    assert "renderMatchups();" in html
+
+
 def test_embedded_json_round_trips_exactly():
     html = render_demo_html.render(SAMPLE_DATA)
     match = re.search(

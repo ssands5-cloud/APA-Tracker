@@ -14,7 +14,9 @@ from database.models import (
     Match,
     Player,
     PlayerCareerStats,
+    PlayerHeadToHead,
     PlayerMatch,
+    PlayerMatchup,
     PlayerTeamHistory,
     StandingsSnapshot,
     Team,
@@ -461,6 +463,95 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
         count += 1
     db.commit()
     logger.info("Ingested %d team-history row(s) for %s", count, player.name)
+    return count
+
+
+def ingest_head_to_head(db: Session, rows: list[dict]) -> int:
+    """Upsert one PlayerHeadToHead row per (player, match), from
+    scraper.graphql_scraper.head_to_head_rows() -- who a player actually
+    played against, not just which two teams. head_to_head_rows() already
+    returns both directions of a position pairing as separate rows, since
+    each carries that player's own result/points/skill level rather than
+    one shared symmetric fact.
+
+    Requires the Match to already exist (ingest_match()) -- same
+    requirement as ingest_match_scores. A row with no real player/opponent
+    id is skipped, not guessed at -- head_to_head_rows() already filters
+    these, but this stays defensive against a caller passing raw rows.
+    """
+    count = 0
+    for row in rows:
+        player_id = row.get("player_id") or ""
+        opponent_id = row.get("opponent_id") or ""
+        if not player_id or not opponent_id:
+            logger.debug("Skipping a head-to-head row with a missing player/opponent id")
+            continue
+
+        match = _resolve_match_pk(db, row.get("match_id"))
+        player = upsert_player(db, player_id, row.get("player_name") or "")
+        opponent = upsert_player(db, opponent_id, row.get("opponent_name") or "")
+
+        existing = (
+            db.query(PlayerHeadToHead)
+            .filter_by(player_id=player.id, match_id=match.id)
+            .one_or_none()
+        )
+        fields = {
+            "opponent_id": opponent.id,
+            "own_skill_level": _to_int(row.get("own_skill_level")),
+            "opponent_skill_level": _to_int(row.get("opponent_skill_level")),
+            "result": row.get("result"),
+            "points_earned": _to_float(row.get("points_earned")),
+        }
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(PlayerHeadToHead(player_id=player.id, match_id=match.id, **fields))
+        count += 1
+    db.commit()
+    logger.info("Ingested %d head-to-head row(s)", count)
+    return count
+
+
+def ingest_matchups(db: Session, rows: list[dict]) -> int:
+    """Upsert one PlayerMatchup row per (player, opponent) --
+    analytics.matchups' computed aggregate, written by
+    scripts/build_matchups.py. `rows` are plain dicts keyed by external
+    player/opponent id plus the aggregate fields; both Player rows must
+    already exist (from ingest_head_to_head) -- an id with no matching
+    Player is skipped, not created from nothing.
+    """
+    count = 0
+    for row in rows:
+        player = db.query(Player).filter_by(external_id=row.get("player_id") or "").one_or_none()
+        opponent = db.query(Player).filter_by(external_id=row.get("opponent_id") or "").one_or_none()
+        if player is None or opponent is None:
+            logger.debug("Skipping a matchup row for an unknown player/opponent id")
+            continue
+
+        existing = (
+            db.query(PlayerMatchup)
+            .filter_by(player_id=player.id, opponent_id=opponent.id)
+            .one_or_none()
+        )
+        fields = {
+            "matches_played": row.get("matches_played"),
+            "win_rate": row.get("win_rate"),
+            "avg_points_earned": row.get("avg_points_earned"),
+            "avg_opponent_skill_level": row.get("avg_opponent_skill_level"),
+            "trend": row.get("trend"),
+            "volatility": row.get("volatility"),
+            "matchup_score": row.get("matchup_score"),
+        }
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(PlayerMatchup(player_id=player.id, opponent_id=opponent.id, **fields))
+        count += 1
+    db.commit()
+    logger.info("Ingested %d matchup row(s)", count)
     return count
 
 

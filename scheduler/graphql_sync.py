@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from database.engine import create_db_engine
 from database.ingest import (
     ingest_eight_ball_stats,
+    ingest_head_to_head,
     ingest_match,
     ingest_match_scores,
     ingest_player_team_history,
@@ -53,6 +54,7 @@ from scraper.graphql_scraper import (
     fetch_matches_by_viewer,
     fetch_team_data,
     fetch_team_stat,
+    head_to_head_rows,
     match_player_scores,
     roster_rows,
     schedule_rows,
@@ -270,6 +272,7 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         # per-week or per-team navigation, just a flat loop over match ids
         # the account's own dashboard already reported.
         scoresheet_count = 0
+        head_to_head_count = 0
         for row in viewer_matches_rows(viewer_matches):
             if not row["match_id"] or not row["is_scored"]:
                 continue
@@ -287,7 +290,11 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
             if scores:
                 created, updated = ingest_match_scores(db, row["match_id"], scores)
                 scoresheet_count += created + updated
+            head_to_head = head_to_head_rows(match)
+            if head_to_head:
+                head_to_head_count += ingest_head_to_head(db, head_to_head)
         counts["scoresheet_rows"] = scoresheet_count
+        counts["head_to_head_rows"] = head_to_head_count
 
         # Career stats (getEightBallStats) and cross-season team history
         # (TeamStat) for the ACCOUNT'S OWN member -- HANDOFF.md item 2,

@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from database.ingest import ingest_match, ingest_match_scores
-from database.models import Base, Match, PlayerMatch
-from scraper.graphql_scraper import match_player_scores
+from database.ingest import ingest_head_to_head, ingest_match, ingest_match_scores
+from database.models import Base, Match, PlayerHeadToHead, PlayerMatch
+from scraper.graphql_scraper import head_to_head_rows, match_player_scores
 
 FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "match_detail_response.json").read_text()
@@ -72,6 +72,100 @@ class TestMatchPlayerScores:
 
     def test_a_result_with_no_scores_yields_no_rows_for_that_side(self):
         assert match_player_scores({"results": [{"homeAway": "HOME", "scores": []}]}) == []
+
+
+class TestHeadToHeadRows:
+    """Who a player actually played against, from pairing same-numbered
+    matchPositionNumbers across home/away -- see head_to_head_rows'
+    docstring and PlayerHeadToHead's in database/models.py for why that's
+    reading a documented field, not resolving an ambiguous id."""
+
+    def test_two_rows_per_paired_position_one_per_direction(self):
+        rows = head_to_head_rows(MATCH)
+        # Position 1 (One vs Four) and position 2 (Two vs Five), both
+        # directions -- position 3 (Three) has no away-side partner and is
+        # skipped, not guessed at (see the next test).
+        assert len(rows) == 4
+
+    def test_a_forfeited_position_with_no_opposing_player_is_skipped(self):
+        """Player Three (position 3, matchForfeited) has no away-side
+        position 3 in the fixture -- there's nobody to pair against."""
+        rows = head_to_head_rows(MATCH)
+        assert "Player Three" not in {r["player_name"] for r in rows}
+        assert "Player Three" not in {r["opponent_name"] for r in rows}
+
+    def test_each_direction_carries_its_own_perspective(self):
+        rows = {(r["player_name"], r["opponent_name"]): r for r in head_to_head_rows(MATCH)}
+        one_vs_four = rows[("Player One", "Player Four")]
+        assert one_vs_four["result"] == "W"
+        assert one_vs_four["points_earned"] == 6
+        assert one_vs_four["own_skill_level"] == 5
+        assert one_vs_four["opponent_skill_level"] == 5
+
+        four_vs_one = rows[("Player Four", "Player One")]
+        assert four_vs_one["result"] == "L"
+        assert four_vs_one["points_earned"] == 3
+
+    def test_match_id_is_attached_to_every_row(self):
+        assert all(r["match_id"] == "555001" for r in head_to_head_rows(MATCH))
+
+    def test_empty_match_yields_no_rows(self):
+        assert head_to_head_rows({}) == []
+        assert head_to_head_rows({"results": []}) == []
+
+
+class TestIngestHeadToHead:
+    def _seeded_db(self, tmp_path):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        engine = create_engine(f"sqlite:///{tmp_path / 'h2h.db'}")
+        Base.metadata.create_all(engine)
+        db = Session(engine)
+        ingest_match(
+            db, match_id="555001", home_team_id="90001", away_team_id="90002",
+            home_team_name="Chalk It Up", away_team_name="Rack Attack",
+        )
+        return db
+
+    def test_all_four_rows_land_in_the_database(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        count = ingest_head_to_head(db, head_to_head_rows(MATCH))
+        assert count == 4
+        assert db.query(PlayerHeadToHead).count() == 4
+
+    def test_a_specific_pairing_carries_the_right_values(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        ingest_head_to_head(db, head_to_head_rows(MATCH))
+
+        row = (
+            db.query(PlayerHeadToHead)
+            .join(PlayerHeadToHead.player)
+            .filter_by(external_id="501")
+            .one()
+        )
+        assert row.opponent.external_id == "601"
+        assert row.result == "W"
+        assert row.points_earned == 6
+        assert row.own_skill_level == 5
+        assert row.opponent_skill_level == 5
+
+    def test_rerunning_updates_rather_than_duplicates(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        rows = head_to_head_rows(MATCH)
+        ingest_head_to_head(db, rows)
+        ingest_head_to_head(db, rows)
+        assert db.query(PlayerHeadToHead).count() == 4
+
+    def test_a_row_with_no_opponent_id_is_skipped_not_crashed(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        count = ingest_head_to_head(db, [
+            {"match_id": "555001", "player_id": "501", "player_name": "Player One",
+             "opponent_id": "", "opponent_name": "", "own_skill_level": 5,
+             "opponent_skill_level": None, "result": "W", "points_earned": 6},
+        ])
+        assert count == 0
+        assert db.query(PlayerHeadToHead).count() == 0
 
 
 class TestIngestionEndToEnd:

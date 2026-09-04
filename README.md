@@ -14,9 +14,12 @@ results in a small SQLite database, and exporting summaries to Excel.
   one place that knows the site's CSS selectors — update it there if the
   portal's markup changes, rather than in each scraper.
 - `database/` — SQLAlchemy models plus ingest/query helpers backed by SQLite.
-- `analytics/` — derived stats: win %, standings trend, head-to-head,
-  simple matchup comparisons, skill level trend/volatility
-  (`skill_level_trends.py`).
+- `analytics/` — derived stats: win %, standings trend, skill level
+  trend/volatility (`skill_level_trends.py`), and two distinct matchup
+  tools -- `matchup_insights.py` (older, simpler: compares two players'
+  own overall win %, not specific to each other) and `matchups.py`, the
+  Matchup Advantage Engine (real head-to-head record against one specific
+  opponent -- see docs/matchups.md).
 - `scheduler/` — the two jobs meant to actually run on a schedule
   (`daily_sync.py`, `weekly_refresh.py`).
 - `ui/` — Excel (`export_excel.py`) and JSON (`export_json.py`) exports.
@@ -145,6 +148,18 @@ no charting library, matching the rest of the demo). Readings are kept
 match-by-match rather than deduplicated to one per week: a player can have
 more than one match in the same week number (a doubleheader, a makeup
 match), and collapsing them would silently discard a real reading.
+
+**Matchup Advantage Engine** — a per-opponent read for a captain setting a
+lineup: real head-to-head record, not a season-wide average, plus a 0-100
+`matchup_score`. Also not a new query: `MatchPage`'s per-game
+`matchPositionNumber` already tells you which home player played which
+away player (same-numbered positions face each other in APA team format);
+`scraper/graphql_scraper.py::head_to_head_rows()` pairs them, and
+`scripts/build_matchups.py` scores every (player, opponent) pair found so
+far. Lands in the Excel "Matchups" sheet, the JSON export's `matchups` key,
+and the demo's "Matchups" tab (recommended opponents / opponents to be
+cautious of, per player). Full write-up, including the score formula and
+what it deliberately leaves out, in `docs/matchups.md`.
 
 #### Capturing queries by logging in (easiest)
 

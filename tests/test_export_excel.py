@@ -16,6 +16,7 @@ from database.ingest import (
     ingest_eight_ball_stats,
     ingest_match,
     ingest_match_scores,
+    ingest_matchups,
     ingest_player_team_history,
     ingest_standings,
     upsert_player,
@@ -24,7 +25,9 @@ from database.ingest import (
 from database.models import Base
 from ui.export_excel import export_to_excel
 
-EXPECTED_SHEETS = {"Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History"}
+EXPECTED_SHEETS = {
+    "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History", "Matchups",
+}
 
 
 @pytest.fixture
@@ -54,6 +57,7 @@ class TestEmptyDatabase:
         assert wb["Career Stats"].max_row == 1  # header only
         assert wb["Team History"].max_row == 1
         assert wb["Skill Level History"].max_row == 1
+        assert wb["Matchups"].max_row == 1
 
 
 class TestSeededData:
@@ -142,6 +146,27 @@ class TestSeededData:
         assert headers == ["Player Name", "Player ID", "Week", "Skill Level", "Match Date", "Source"]
         row = [c.value for c in ws[2]]
         assert row == ["Paul Smith", "3349374", 1, 5, "2026-06-01", "scoresheet"]
+
+    def test_matchups_sheet_has_the_real_columns_and_values(self, db, tmp_path):
+        """Not the scoring math (see tests/test_matchups.py) -- just that
+        a computed PlayerMatchup row lands in the sheet correctly."""
+        upsert_player(db, "501", "Player One")
+        upsert_player(db, "601", "Player Four")
+        ingest_matchups(db, [{
+            "player_id": "501", "opponent_id": "601", "matches_played": 3,
+            "win_rate": 0.667, "avg_points_earned": 5.0,
+            "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
+            "matchup_score": 72,
+        }])
+        wb = _export(db, tmp_path)
+        ws = wb["Matchups"]
+        headers = [c.value for c in ws[1]]
+        assert headers == [
+            "Player", "Opponent", "Matches Played", "Win Rate", "Avg Points Earned",
+            "Avg Opponent Skill Level", "Trend", "Volatility", "Matchup Score",
+        ]
+        row = [c.value for c in ws[2]]
+        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72]
 
     def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
         """ingest_match_scores() never assigns a team (only upsert_roster()

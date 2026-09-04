@@ -230,3 +230,79 @@ class PlayerTeamHistory(Base):
     matches_played = Column(Integer)
 
     player = relationship("Player", back_populates="team_history")
+
+
+class PlayerHeadToHead(Base):
+    """One row per individual game within a scored match -- who a player
+    actually played against, not just which two teams faced off.
+
+    A team match's `results[].scores[]` doesn't name the opposing player
+    directly, but each score row carries `matchPositionNumber`/
+    `playerPosition`, and standard APA team format plays same-numbered
+    positions against each other (position 1 home vs position 1 away, and
+    so on) -- see scraper.graphql_scraper.head_to_head_rows(). That's a
+    documented field, not a guess at an ambiguous id: unlike the alias-id
+    question in HANDOFF.md, matchPositionNumber's meaning is given by its
+    name and APA's own published team-match format.
+
+    Raw, per-match facts -- database.queries aggregates these into the
+    player_matchups table (PlayerMatchup, below), the same raw/aggregate
+    split as PlayerMatch vs Player.matches_won.
+    """
+
+    __tablename__ = "player_head_to_head"
+    __table_args__ = (
+        UniqueConstraint("player_id", "match_id", name="uq_player_head_to_head_match"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    opponent_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    own_skill_level = Column(Integer)
+    opponent_skill_level = Column(Integer)
+    result = Column(String)
+    points_earned = Column(Float)
+
+    player = relationship("Player", foreign_keys=[player_id])
+    opponent = relationship("Player", foreign_keys=[opponent_id])
+    match = relationship("Match")
+
+
+class PlayerMatchup(Base):
+    """One row per (player, opponent) -- the Matchup Advantage Engine's
+    aggregate: win rate, points/skill-level context, and a 0-100
+    matchup_score, all derived from PlayerHeadToHead by
+    analytics.matchups and written by scripts/build_matchups.py.
+
+    Two real fields the original ask wanted aren't here: "innings" isn't a
+    stat this API has ever returned (checked every captured query --
+    parser/apa_graphql.py), and "defensive shots" only exists as a
+    career-wide average (PlayerCareerStats.defensive_shot_avg), never
+    per-opponent -- there's nothing to average per matchup. Rather than
+    invent numbers for either, avg_points_earned and
+    avg_opponent_skill_level stand in: real, per-opponent, and actually in
+    the data. See docs/matchups.md.
+
+    Upserted in place on (player_id, opponent_id), like PlayerCareerStats:
+    always-current, not a value worth snapshotting per run.
+    """
+
+    __tablename__ = "player_matchups"
+    __table_args__ = (
+        UniqueConstraint("player_id", "opponent_id", name="uq_player_matchups_pair"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    opponent_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    matches_played = Column(Integer)
+    win_rate = Column(Float)
+    avg_points_earned = Column(Float)
+    avg_opponent_skill_level = Column(Float)
+    trend = Column(String)
+    volatility = Column(Integer)
+    matchup_score = Column(Integer)
+
+    player = relationship("Player", foreign_keys=[player_id])
+    opponent = relationship("Player", foreign_keys=[opponent_id])

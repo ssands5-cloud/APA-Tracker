@@ -19,6 +19,7 @@ from database.ingest import (
     ingest_eight_ball_stats,
     ingest_match,
     ingest_match_scores,
+    ingest_matchups,
     ingest_player_team_history,
     ingest_standings,
     upsert_player,
@@ -30,7 +31,7 @@ from ui.export_json import export_to_json
 REQUIRED_TOP_LEVEL_KEYS = {
     "generated_at", "teams", "matches", "standings", "player_stats",
     "match_scores", "career_stats", "team_history", "skill_level_history",
-    "skill_level_summary",
+    "skill_level_summary", "matchups",
 }
 
 REQUIRED_MATCH_KEYS = {
@@ -175,6 +176,7 @@ class TestEmptyDatabase:
         assert document["team_history"] == []
         assert document["skill_level_history"] == []
         assert document["skill_level_summary"] == []
+        assert document["matchups"] == []
 
     def test_generated_at_is_always_present(self, db, tmp_path):
         document = _export(db, tmp_path)
@@ -273,6 +275,38 @@ class TestSkillLevelHistory:
         document = _export(db, tmp_path)
         assert document["skill_level_history"] == []
         assert document["skill_level_summary"] == []
+
+
+class TestMatchups:
+    """The Matchup Advantage Engine's aggregate (PlayerMatchup) -- this only
+    checks the export shape, not the scoring math itself. See
+    tests/test_matchups.py for the analytics functions and
+    tests/test_ingest.py for ingest_matchups()."""
+
+    def test_matchup_row_shape(self, db, tmp_path):
+        upsert_player(db, "501", "Player One")
+        upsert_player(db, "601", "Player Four")
+        ingest_matchups(db, [{
+            "player_id": "501", "opponent_id": "601", "matches_played": 3,
+            "win_rate": 0.667, "avg_points_earned": 5.0,
+            "avg_opponent_skill_level": 5.0, "trend": "up", "volatility": 1,
+            "matchup_score": 72,
+        }])
+        document = _export(db, tmp_path)
+        assert document["matchups"] == [{
+            "player": "Player One", "player_id": "501", "opponent": "Player Four",
+            "opponent_id": "601", "matches_played": 3, "win_rate": 0.667,
+            "avg_points_earned": 5.0, "avg_opponent_skill_level": 5.0,
+            "trend": "up", "volatility": 1, "matchup_score": 72,
+        }]
+
+    def test_a_matchup_row_for_an_unknown_player_is_skipped_not_crashed(self, db, tmp_path):
+        """ingest_matchups() requires both Player rows to already exist --
+        this documents that an unresolvable id is dropped, not a crash."""
+        written = ingest_matchups(db, [{"player_id": "999", "opponent_id": "998", "matchup_score": 50}])
+        assert written == 0
+        document = _export(db, tmp_path)
+        assert document["matchups"] == []
 
 
 class TestFileIsValidJson:

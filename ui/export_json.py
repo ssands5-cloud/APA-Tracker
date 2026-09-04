@@ -21,6 +21,7 @@ from analytics.player_stats import summarize_player
 from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
 from database.queries import (
     all_matches,
+    all_matchups,
     all_players,
     all_teams,
     career_stats,
@@ -49,6 +50,7 @@ def export_to_json(db: Session, config: dict) -> str:
         "team_history": _team_history(db),
         "skill_level_history": _skill_level_history(db),
         "skill_level_summary": _skill_level_summary(db),
+        "matchups": _matchups(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -247,3 +249,25 @@ def _skill_level_summary(db: Session) -> list[dict]:
             }
         )
     return summaries
+
+
+def _matchups(db: Session) -> list[dict]:
+    """Same source as export_excel._matchups_dataframe -- one row per
+    (player, opponent) from the Matchup Advantage Engine
+    (analytics.matchups / scripts/build_matchups.py)."""
+    return [
+        {
+            "player": row.player.name if row.player else "",
+            "player_id": row.player.external_id if row.player else "",
+            "opponent": row.opponent.name if row.opponent else "",
+            "opponent_id": row.opponent.external_id if row.opponent else "",
+            "matches_played": row.matches_played,
+            "win_rate": row.win_rate,
+            "avg_points_earned": row.avg_points_earned,
+            "avg_opponent_skill_level": row.avg_opponent_skill_level,
+            "trend": row.trend,
+            "volatility": row.volatility,
+            "matchup_score": row.matchup_score,
+        }
+        for row in all_matchups(db)
+    ]

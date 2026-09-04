@@ -7,7 +7,17 @@ from __future__ import annotations
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import Match, Player, PlayerCareerStats, PlayerMatch, PlayerTeamHistory, StandingsSnapshot, Team
+from database.models import (
+    Match,
+    Player,
+    PlayerCareerStats,
+    PlayerHeadToHead,
+    PlayerMatch,
+    PlayerMatchup,
+    PlayerTeamHistory,
+    StandingsSnapshot,
+    Team,
+)
 
 
 def all_teams(db: Session) -> list[Team]:
@@ -118,3 +128,30 @@ def skill_level_history(db: Session) -> list[PlayerMatch]:
         .order_by(Player.name, PlayerMatch.match_date, PlayerMatch.id)
         .all()
     )
+
+
+def all_head_to_head(db: Session) -> list[PlayerHeadToHead]:
+    """Every raw per-match head-to-head row -- scripts/build_matchups.py
+    groups these by (player_id, opponent_id) to compute player_matchups.
+    Ordered by player then opponent so rows for one pair are contiguous."""
+    return (
+        db.query(PlayerHeadToHead)
+        .order_by(PlayerHeadToHead.player_id, PlayerHeadToHead.opponent_id, PlayerHeadToHead.id)
+        .all()
+    )
+
+
+def head_to_head_history(db: Session, player_id: int, opponent_id: int) -> list[PlayerHeadToHead]:
+    """Every game a specific player has played against a specific
+    opponent, in insertion order."""
+    return (
+        db.query(PlayerHeadToHead)
+        .filter_by(player_id=player_id, opponent_id=opponent_id)
+        .order_by(PlayerHeadToHead.id)
+        .all()
+    )
+
+
+def all_matchups(db: Session) -> list[PlayerMatchup]:
+    """Every computed (player, opponent) matchup, best score first."""
+    return db.query(PlayerMatchup).order_by(PlayerMatchup.matchup_score.desc()).all()
