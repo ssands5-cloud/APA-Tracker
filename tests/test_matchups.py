@@ -126,8 +126,11 @@ class TestHeadToHeadWinRate:
 
 
 class TestWeightedWinRate:
-    """Recency bias: a more recent game counts slightly more than an
-    older one. `rows` must be chronological, oldest first."""
+    """P2 recency bias: the most recent 3 games get a flat +10% weight,
+    older games stay at baseline. `rows` must be chronological, oldest
+    first. With 3 or fewer games there's no "older" game to contrast
+    against, so weighting only actually differentiates anything once a
+    4th (or later) game exists -- see the n=4 cases below."""
 
     def test_no_history_is_zero(self):
         assert weighted_win_rate([]) == 0.0
@@ -141,25 +144,33 @@ class TestWeightedWinRate:
         already the same in every game."""
         assert weighted_win_rate([_game("W"), _game("W"), _game("W")]) == 1.0
 
-    def test_a_recent_win_after_an_older_loss_scores_above_the_flat_average(self):
-        """[loss, win], oldest first -- the win is more recent and counts
-        for more, so this must beat the unweighted 0.5 the same two games
-        give via head_to_head_win_rate()."""
+    def test_three_or_fewer_games_are_all_in_the_recent_window_equally(self):
+        """Every game is within the last 3, so all get the same +10%
+        boost -- equal weights cancel out, matching the plain average."""
         rows = [_game("L"), _game("W")]
-        assert weighted_win_rate(rows) > head_to_head_win_rate(rows) == 0.5
+        assert weighted_win_rate(rows) == head_to_head_win_rate(rows) == 0.5
 
-    def test_a_recent_loss_after_an_older_win_scores_below_the_flat_average(self):
-        """[win, loss], oldest first -- the loss is more recent."""
-        rate = weighted_win_rate([_game("W"), _game("L")])
-        assert rate < 0.5
+    def test_a_recent_win_among_older_losses_scores_above_the_flat_average(self):
+        """4 games, oldest-first: an old loss followed by 3 recent games
+        that include the win -- the win falls in the boosted window, the
+        first loss doesn't, so this must beat the unweighted 0.25 flat
+        average the same 4 games give via head_to_head_win_rate()."""
+        rows = [_game("L"), _game("L"), _game("L"), _game("W")]
+        assert weighted_win_rate(rows) > head_to_head_win_rate(rows) == 0.25
+
+    def test_a_recent_loss_among_older_wins_scores_below_the_flat_average(self):
+        """4 games: an old win followed by 3 recent losses."""
+        rows = [_game("W"), _game("L"), _game("L"), _game("L")]
+        assert weighted_win_rate(rows) < head_to_head_win_rate(rows) == 0.25
 
     def test_order_is_what_distinguishes_the_two_cases(self):
-        """Same two games, opposite chronological order -- different
-        weighted rates proves this is really reading recency, not just
-        counting wins."""
-        recent_win = weighted_win_rate([_game("L"), _game("W")])
-        recent_loss = weighted_win_rate([_game("W"), _game("L")])
-        assert recent_win > recent_loss
+        """Same 4 games (1 win, 3 losses), the win in a different position
+        -- different weighted rates proves this is really reading recency
+        (whether the win falls in the last-3 window), not just counting
+        wins."""
+        recent_win = weighted_win_rate([_game("L"), _game("L"), _game("L"), _game("W")])
+        older_win = weighted_win_rate([_game("W"), _game("L"), _game("L"), _game("L")])
+        assert recent_win > older_win
 
 
 class TestAveragePointsEarned:

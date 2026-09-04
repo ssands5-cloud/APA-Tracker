@@ -96,15 +96,18 @@ clamped to [0, 100]
 
 ### Recency bias
 
-`weighted_win_rate(rows)` gives a more recent game slightly more say than
-an older one — a linear ramp from 0.7× (oldest game) to 1.3× (most recent),
-not a dominant effect. `rows` must already be in chronological order,
-oldest first, for this to mean anything; `database.queries.head_to_head_history`/
-`all_head_to_head` guarantee that ordering (by `Match.match_date`, falling
-back to insertion order when a date is missing or tied — see their
-docstrings for the one real caveat: `Match.match_date` is stored as
-delivered text, not a true datetime, so this relies on the live API's ISO
-8601 format sorting correctly as plain text, which it does).
+`weighted_win_rate(rows)` gives the most recent 3 games a flat +10% (1.1x)
+weight; every older game stays at a baseline 1.0x — P2 replaced the
+original linear 0.7x-1.3x ramp across the whole history with this smaller,
+more literal effect. With 3 or fewer games every game is "recent", so
+weighting has no differentiating effect until a 4th game exists. `rows`
+must already be in chronological order, oldest first, for this to mean
+anything; `database.queries.head_to_head_history`/`all_head_to_head`
+guarantee that ordering (by `Match.match_date`, falling back to insertion
+order when a date is missing or tied — see their docstrings for the one
+real caveat: `Match.match_date` is stored as delivered text, not a true
+datetime, so this relies on the live API's ISO 8601 format sorting
+correctly as plain text, which it does).
 
 ### Confidence score
 

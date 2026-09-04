@@ -82,13 +82,23 @@ def head_to_head_win_rate(rows: list[PlayerHeadToHead]) -> float:
     return round(wins / len(recognized), 3)
 
 
+_RECENT_WINDOW = 3
+_RECENT_BOOST = 1.1  # +10%
+
 def _recency_weights(n: int) -> list[float]:
-    """Linear ramp, 0.7 (oldest) to 1.3 (most recent) -- "slightly more"
-    influence for recent games, not a dominant one. A single game's weight
-    doesn't matter (there's only one to weigh), so n<=1 gets a flat 1.0."""
-    if n <= 1:
-        return [1.0] * n
-    return [0.7 + 0.6 * (i / (n - 1)) for i in range(n)]
+    """P2 recency bias: a flat baseline weight of 1.0 for every game
+    except the most recent 3, which get a flat +10% (1.1x) boost. Replaces
+    the earlier linear 0.7x-1.3x ramp across the WHOLE history -- this is
+    a smaller, more literal "recent games count slightly more", not a
+    scaling effect across every game ever played.
+
+    With 3 or fewer games, every game is within the last 3, so all of
+    them get the boost equally -- there's no "older" game left to serve
+    as a baseline, so weighting has no differentiating effect until a 4th
+    game exists. `rows` must already be in chronological order, oldest
+    first, same as before.
+    """
+    return [_RECENT_BOOST if i >= n - _RECENT_WINDOW else 1.0 for i in range(n)]
 
 
 def weighted_win_rate(rows: list[PlayerHeadToHead]) -> float:
