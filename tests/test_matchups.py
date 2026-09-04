@@ -13,6 +13,7 @@ from analytics.matchups import (
     FULL_CONFIDENCE_GAMES,
     _is_win,
     average_opponent_skill_level,
+    average_own_skill_level,
     average_points_earned,
     average_skill_level_delta,
     confidence_score,
@@ -192,6 +193,22 @@ class TestAverageOpponentSkillLevel:
     def test_averages_the_real_values(self):
         rows = [_game("W", opponent_skill_level=5), _game("L", opponent_skill_level=7)]
         assert average_opponent_skill_level(rows) == 6.0
+
+
+class TestAverageOwnSkillLevel:
+    """P2 SL delta context ("avg_own_sl") -- unweighted, includes losses,
+    mirrors average_opponent_skill_level but for the player's own side."""
+
+    def test_no_rows_is_none(self):
+        assert average_own_skill_level([]) is None
+
+    def test_averages_the_real_values_including_losses(self):
+        rows = [_game("W", own_skill_level=5), _game("L", own_skill_level=7)]
+        assert average_own_skill_level(rows) == 6.0
+
+    def test_rows_missing_own_skill_level_are_skipped(self):
+        rows = [_game("W", own_skill_level=5), _game("L", own_skill_level=None)]
+        assert average_own_skill_level(rows) == 5.0
 
 
 class TestAverageSkillLevelDelta:

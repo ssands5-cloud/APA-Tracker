@@ -211,6 +211,7 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
                 "Win Rate": row["win_rate"],
                 "Avg Points Earned": row["avg_points_earned"],
                 "Avg Opponent Skill Level": row["avg_opponent_skill_level"],
+                "Avg Own Skill Level": row["avg_own_skill_level"],
                 "SL Delta": row["sl_delta"],
                 "Trend": row["trend"],
                 "Volatility": row["volatility"],

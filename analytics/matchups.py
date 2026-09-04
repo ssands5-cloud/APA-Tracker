@@ -127,18 +127,36 @@ def average_points_earned(rows: list[PlayerHeadToHead]) -> Optional[float]:
     return round(sum(points) / len(points), 2) if points else None
 
 
+def average_own_skill_level(rows: list[PlayerHeadToHead]) -> Optional[float]:
+    """P2 SL delta context (avg_own_sl): the player's own average skill
+    level across ALL games in the pairing, wins and losses alike --
+    purely descriptive, alongside average_opponent_skill_level() and
+    average_skill_level_delta() below, never folded into matchup_score.
+    """
+    levels = [r.own_skill_level for r in rows if r.own_skill_level is not None]
+    return round(sum(levels) / len(levels), 2) if levels else None
+
+
 def average_opponent_skill_level(rows: list[PlayerHeadToHead]) -> Optional[float]:
     """Descriptive context, shown next to the score -- see
     opponent_skill_modifier() for how (a subset of) this same information
-    also feeds into the score itself."""
+    also feeds into the score itself.
+
+    This is the P2 directive's "avg_opponent_sl" -- already existed under
+    this name from the original engine, so it wasn't renamed; see
+    average_own_skill_level() above and average_skill_level_delta() below
+    for the sibling P2 fields.
+    """
     levels = [r.opponent_skill_level for r in rows if r.opponent_skill_level is not None]
     return round(sum(levels) / len(levels), 2) if levels else None
 
 
 def average_skill_level_delta(rows: list[PlayerHeadToHead]) -> Optional[float]:
-    """P2: average (opponent_skill_level - own_skill_level) across ALL
-    games, wins and losses alike -- purely descriptive context, reported
-    alongside matchup_score but NOT folded into it.
+    """P2 SL delta context ("avg_sl_delta" in the directive -- already
+    existed under this name from the prior P2 pass): average
+    (opponent_skill_level - own_skill_level) across ALL games, wins and
+    losses alike -- purely descriptive context, reported alongside
+    matchup_score but NOT folded into it.
 
     Different from opponent_skill_modifier() below: that one only looks at
     WINS (it's rewarding upsets) and IS weighted into matchup_score. This

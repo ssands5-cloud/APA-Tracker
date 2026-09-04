@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from analytics.matchups import (
     average_opponent_skill_level,
+    average_own_skill_level,
     average_points_earned,
     average_skill_level_delta,
     confidence_score,
@@ -97,10 +98,12 @@ def build_matchups(db: Session) -> list[dict]:
                 "win_rate": head_to_head_win_rate(h2h_rows),
                 "avg_points_earned": average_points_earned(h2h_rows),
                 "avg_opponent_skill_level": average_opponent_skill_level(h2h_rows),
-                # P2: unweighted, includes losses -- see
-                # analytics.matchups.average_skill_level_delta's docstring
-                # for how this differs from the win-scoped, score-weighted
+                # P2 SL delta context -- unweighted, includes losses -- see
+                # analytics.matchups.average_own_skill_level/
+                # average_skill_level_delta's docstrings for how these
+                # differ from the win-scoped, score-weighted
                 # opponent_skill_modifier already folded into matchup_score.
+                "avg_own_skill_level": average_own_skill_level(h2h_rows),
                 "sl_delta": average_skill_level_delta(h2h_rows),
                 "trend": trend,
                 "volatility": volatility,

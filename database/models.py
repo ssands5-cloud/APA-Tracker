@@ -336,6 +336,11 @@ class PlayerMatchup(Base):
     win_rate = Column(Float)
     avg_points_earned = Column(Float)
     avg_opponent_skill_level = Column(Float)
+    # P2: own average skill level across ALL games in the pairing --
+    # descriptive context alongside avg_opponent_skill_level, never
+    # weighted into matchup_score. See analytics/matchups.py's
+    # average_own_skill_level for the "avg_own_sl" P2 directive item.
+    avg_own_skill_level = Column(Float)
     # P2: average (opponent_skill_level - own_skill_level) across ALL
     # games, wins and losses alike -- purely descriptive context, reported
     # alongside matchup_score but NOT folded into it. Different from

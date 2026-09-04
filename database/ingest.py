@@ -585,6 +585,7 @@ def ingest_matchups(db: Session, rows: list[dict]) -> int:
             "win_rate": row.get("win_rate"),
             "avg_points_earned": row.get("avg_points_earned"),
             "avg_opponent_skill_level": row.get("avg_opponent_skill_level"),
+            "avg_own_skill_level": row.get("avg_own_skill_level"),
             "sl_delta": row.get("sl_delta"),
             "trend": row.get("trend"),
             "volatility": row.get("volatility"),

@@ -534,6 +534,7 @@ function renderMatchups() {
         <td class="num">${r.matches_played}</td>
         <td class="num">${r.win_rate == null ? '—' : (r.win_rate * 100).toFixed(0) + '%'}</td>
         <td class="num">${r.avg_points_earned ?? '—'}</td>
+        <td class="num">${r.avg_own_skill_level ?? '—'}</td>
         <td class="num">${r.avg_opponent_skill_level ?? '—'}</td>
         <td class="num">${r.sl_delta == null ? '—' : (r.sl_delta > 0 ? '+' : '') + r.sl_delta}</td>
         <td>${esc(r.trend)}</td>
@@ -559,7 +560,7 @@ function renderMatchups() {
         </div>
         <div class="panel table-wrap">
           <table>
-            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th class="num">SL Delta</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th><th class="num">Confidence</th><th>Format</th><th>Session</th></tr></thead>
+            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Own SL</th><th class="num">Avg Opp SL</th><th class="num">SL Delta</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th><th class="num">Confidence</th><th>Format</th><th>Session</th></tr></thead>
             <tbody>${tableRows}</tbody>
           </table>
         </div>

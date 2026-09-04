@@ -129,12 +129,19 @@ documented components:
 
 ### SL delta (context, not scored)
 
-A separate `SL Delta` column/key (`analytics/matchups.py::average_skill_level_delta`)
-reports the average `opponent_skill_level - own_skill_level` across every
-game in the pairing — wins AND losses alike. It's purely descriptive: a
-positive number means this matchup has generally run against tougher
-opponents, a negative one against easier ones, but it is never folded into
-`matchup_score` itself.
+Three separate columns/keys report skill-level context, none of them
+folded into `matchup_score` — all averaged across EVERY game in the
+pairing, wins and losses alike (unlike `opponent_skill_modifier`, see
+below):
+
+- **Avg Own Skill Level** (`average_own_skill_level`) — the player's own
+  average skill level in this pairing.
+- **Avg Opponent Skill Level** (`average_opponent_skill_level`) — already
+  existed from the original engine; the opponent's average.
+- **SL Delta** (`average_skill_level_delta`) — the average
+  `opponent_skill_level - own_skill_level`. A positive number means this
+  matchup has generally run against tougher opponents, a negative one
+  against easier ones.
 
 This is deliberately different from the skill-swing already inside
 `matchup_score` (`opponent_skill_modifier`), which only looks at WON games
