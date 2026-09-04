@@ -25,17 +25,34 @@ from analytics.matchups import (
     matchup_score,
 )
 from analytics.skill_level_trends import skill_level_trend, skill_level_volatility
-from database.ingest import ingest_matchups
+from database.ingest import ingest_matchups, prune_matchups_not_in
 from database.queries import all_head_to_head, skill_level_history
 
 
 def build_matchups(db: Session) -> list[dict]:
-    """Group every raw head-to-head row by (player, opponent), score each
-    pair, and upsert the result into player_matchups. Returns the rows
-    written, for a caller's own summary/logging."""
-    by_pair: dict[tuple[int, int], list] = defaultdict(list)
+    """Group every raw head-to-head row by (player, opponent, format,
+    session_name) -- P1-4: a player's 8-ball record against an opponent
+    doesn't predict their 9-ball one, and a stale prior session's record
+    isn't "current form" the way this session's is, so those two get their
+    own matchup rows rather than being blended into one. Rows whose
+    PlayerHeadToHead.format/session_name are both NULL (an older ingest,
+    or a call that didn't have team context handy) still group together
+    under that shared NULL/NULL bucket, same as any other real value.
+
+    Scores each pair-in-context and upserts the result into
+    player_matchups -- pruning any existing PlayerMatchup row whose exact
+    (player, opponent, format, session) no longer has ANY head-to-head
+    evidence first (P1-7: a match-level reconciliation in
+    ingest_head_to_head() can zero out a group's history entirely, and
+    this is what actually removes the now-stale aggregate rather than
+    leaving it behind). Returns the rows written, for a caller's own
+    summary/logging.
+    """
+    by_pair: dict[tuple[int, int, str, str], list] = defaultdict(list)
     for row in all_head_to_head(db):
-        by_pair[(row.player_id, row.opponent_id)].append(row)
+        by_pair[(row.player_id, row.opponent_id, row.format, row.session_name)].append(row)
+
+    prune_matchups_not_in(db, set(by_pair.keys()))
 
     # Trend/volatility are about the PLAYER, not the pair -- computed once
     # per player from their own skill level history, not once per opponent.
@@ -44,7 +61,7 @@ def build_matchups(db: Session) -> list[dict]:
         own_history_by_player[reading.player_id].append(reading)
 
     rows = []
-    for (player_id, opponent_id), h2h_rows in by_pair.items():
+    for (player_id, opponent_id, format_, session_name), h2h_rows in by_pair.items():
         player = h2h_rows[0].player
         opponent = h2h_rows[0].opponent
         own_history = own_history_by_player.get(player_id, [])
@@ -65,6 +82,8 @@ def build_matchups(db: Session) -> list[dict]:
                 "volatility": volatility,
                 "matchup_score": matchup_score(h2h_rows, trend, volatility),
                 "confidence_score": confidence_score(h2h_rows, trend, volatility),
+                "format": format_,
+                "session_name": session_name,
             }
         )
 

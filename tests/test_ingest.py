@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 import database.ingest as ingest_module
 from database.ingest import (
     ingest_eight_ball_stats,
+    ingest_head_to_head,
     ingest_match,
     ingest_match_roster,
     ingest_match_scores,
@@ -34,7 +35,7 @@ from database.ingest import (
     upsert_player,
     upsert_team,
 )
-from database.models import Base, Player, PlayerCareerStats, PlayerMatch, PlayerTeamHistory
+from database.models import Base, Player, PlayerCareerStats, PlayerHeadToHead, PlayerMatch, PlayerTeamHistory
 from database.queries import latest_standings
 
 
@@ -335,3 +336,53 @@ class TestIngestPlayerTeamHistory:
         assert len(rows) == 2
         rack_attack = next(r for r in rows if r.team_name == "Rack Attack")
         assert rack_attack.matches_won == 20
+
+
+class TestResultNormalization:
+    """P1-6: PlayerMatch.result / PlayerHeadToHead.result are normalized to
+    exactly "W", "L", or None at ingestion -- see
+    database.ingest._normalize_result. Malformed values (None, blank,
+    "UNKNOWN", lowercase) must not reach the database as-is, since
+    analytics.matchups relies on the column already being clean.
+    """
+
+    def _seeded_match(self, db):
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(
+            db, match_id="M1", home_team_id="T1", away_team_id="T2",
+            home_team_name="Mark It Up", away_team_name="Rack Attack",
+        )
+
+    @pytest.mark.parametrize("raw,expected", [
+        ("W", "W"), ("w", "W"), ("  W  ", "W"),
+        ("L", "L"), ("l", "L"),
+        (None, None), ("", None), ("   ", None), ("UNKNOWN", None), ("T", None),
+    ])
+    def test_ingest_match_scores_normalizes_result(self, db, raw, expected):
+        self._seeded_match(db)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "result": raw},
+        ])
+        row = db.query(PlayerMatch).join(PlayerMatch.player).filter_by(external_id="P1").one()
+        assert row.result == expected
+
+    @pytest.mark.parametrize("raw,expected", [
+        ("W", "W"), ("l", "L"), (None, None), ("", None), ("UNKNOWN", None),
+    ])
+    def test_ingest_head_to_head_normalizes_result(self, db, raw, expected):
+        self._seeded_match(db)
+        ingest_head_to_head(db, [
+            {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P2", "opponent_name": "Bob", "result": raw},
+        ])
+        row = db.query(PlayerHeadToHead).join(PlayerHeadToHead.player).filter_by(external_id="P1").one()
+        assert row.result == expected
+
+    def test_ingest_player_matches_normalizes_result(self, db):
+        player = upsert_player(db, "P1", "Alice")
+        ingest_player_matches(db, player, [
+            {"match_date": "2026-01-01", "opponent": "Bob", "result": "unknown"},
+        ])
+        row = db.query(PlayerMatch).filter_by(player_id=player.id).one()
+        assert row.result is None

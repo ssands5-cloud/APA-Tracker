@@ -35,16 +35,51 @@ same specific opponent this many times in a season), not a statistically
 fitted threshold. See sample_size_weight()."""
 
 
+def _is_win(result) -> Optional[bool]:
+    """True for a recognized win, False for a recognized loss, None for
+    anything else -- a missing value, a blank string, "UNKNOWN", or any
+    other value the API might return that isn't W/L. An unrecognized
+    result must not silently count as a loss, and must not count as a
+    game at all for win-rate or sample-size purposes -- see
+    recognized_results().
+
+    PlayerMatch.result / PlayerHeadToHead.result are already normalized to
+    exactly "W", "L", or None at ingestion (database.ingest._normalize_result),
+    so in practice this only ever sees clean input from real rows -- the
+    case-insensitive/whitespace handling here is defense in depth for
+    anything constructed directly (tests, a future caller), not a second
+    real-world data path.
+    """
+    normalized = str(result or "").strip().upper()
+    if normalized == "W":
+        return True
+    if normalized == "L":
+        return False
+    return None
+
+
+def recognized_results(rows: list[PlayerHeadToHead]) -> list[PlayerHeadToHead]:
+    """Rows with a recognized W/L result only. A row with a missing or
+    malformed result still exists -- its points_earned or skill-level
+    context can still be real -- it just doesn't count as a known outcome,
+    so it's excluded here rather than silently read as a loss."""
+    return [r for r in rows if _is_win(r.result) is not None]
+
+
 def head_to_head_win_rate(rows: list[PlayerHeadToHead]) -> float:
-    """Fraction of games won against this specific opponent, unweighted --
-    the real, simple record (this is what the exported "Win Rate" column
-    shows). 0.0 for no history -- not None -- since an empty record is a
-    real, reportable 0-0, not a missing value. See weighted_win_rate() for
-    the recency-weighted version matchup_score actually uses."""
-    if not rows:
+    """Fraction of RECOGNIZED-result games won against this specific
+    opponent, unweighted -- the real, simple record (this is what the
+    exported "Win Rate" column shows). 0.0 when there's no recognized
+    result to go on -- either no rows at all, or rows whose result
+    couldn't be read -- not None, since an empty record is a real,
+    reportable 0-0, not a missing value. See weighted_win_rate() for the
+    recency-weighted version matchup_score actually uses.
+    """
+    recognized = recognized_results(rows)
+    if not recognized:
         return 0.0
-    wins = sum(1 for r in rows if (r.result or "").strip().upper() == "W")
-    return round(wins / len(rows), 3)
+    wins = sum(1 for r in recognized if _is_win(r.result))
+    return round(wins / len(recognized), 3)
 
 
 def _recency_weights(n: int) -> list[float]:
@@ -57,13 +92,18 @@ def _recency_weights(n: int) -> list[float]:
 
 
 def weighted_win_rate(rows: list[PlayerHeadToHead]) -> float:
-    """Recency-weighted win rate: a win/loss from a more recent game counts
-    slightly more than an older one. Requires `rows` in chronological
-    order (oldest first) -- see this module's docstring."""
-    if not rows:
+    """Recency-weighted win rate over RECOGNIZED-result games only: a
+    win/loss from a more recent game counts slightly more than an older
+    one. A row with an unrecognized result is dropped before weighting --
+    it doesn't consume a "recent" slot it has no real outcome to justify.
+    Requires `rows` in chronological order (oldest first) -- see this
+    module's docstring.
+    """
+    recognized = recognized_results(rows)
+    if not recognized:
         return 0.0
-    weights = _recency_weights(len(rows))
-    wins = [1.0 if (r.result or "").strip().upper() == "W" else 0.0 for r in rows]
+    weights = _recency_weights(len(recognized))
+    wins = [1.0 if _is_win(r.result) else 0.0 for r in recognized]
     total_weight = sum(weights)
     if not total_weight:
         return 0.0
@@ -106,7 +146,7 @@ def opponent_skill_modifier(rows: list[PlayerHeadToHead]) -> float:
     win_gaps = [
         r.opponent_skill_level - r.own_skill_level
         for r in rows
-        if (r.result or "").strip().upper() == "W"
+        if _is_win(r.result) is True
         and r.opponent_skill_level is not None
         and r.own_skill_level is not None
     ]
@@ -142,8 +182,10 @@ def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) 
     """0-100: how much to trust matchup_score, from three independently
     documented components, averaged:
 
-    - sample size: sample_size_weight(n) * 100 -- 0 games is 0 confidence,
-      FULL_CONFIDENCE_GAMES+ games is full confidence.
+    - sample size: sample_size_weight(n) * 100 -- 0 RECOGNIZED-result games
+      is 0 confidence, FULL_CONFIDENCE_GAMES+ is full confidence. A row
+      with a malformed result doesn't count toward n -- it's not evidence
+      either way.
     - volatility: 100 minus 15 per real skill-level change (the same per-
       change cost volatility_penalty charges the score itself), floored at 0.
     - trend stability: "stable" is trusted most (100); a trend actively
@@ -151,7 +193,7 @@ def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) 
       a moving target, not a settled one (70); "no data" is a genuine
       unknown, not a settled-and-trusted state, so it lands in between (50).
     """
-    n = len(rows)
+    n = len(recognized_results(rows))
     sample_component = sample_size_weight(n) * 100
     volatility_component = max(0, 100 - volatility * 15)
     stability_component = _TREND_STABILITY.get(trend, 50)
@@ -168,14 +210,16 @@ def matchup_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> 
     general, not something this specific opponent's game count should
     dilute.
 
-    50 (neutral, not a guess at "good" or "bad") for a pair with no head-
-    to-head history at all -- there's nothing yet to score. See
-    confidence_score() for how much to trust the result, and
+    50 (neutral, not a guess at "good" or "bad") for a pair with no
+    RECOGNIZED-result head-to-head history at all -- either no rows, or
+    rows whose result couldn't be read -- there's nothing yet to score.
+    See confidence_score() for how much to trust the result, and
     docs/matchups.md for the full formula and its limitations.
     """
-    if not rows:
+    recognized = recognized_results(rows)
+    if not recognized:
         return 50
-    weight = sample_size_weight(len(rows))
+    weight = sample_size_weight(len(recognized))
     win_rate_swing = (weighted_win_rate(rows) - 0.5) * 80
     skill_swing = opponent_skill_modifier(rows)
     score = 50 + weight * (win_rate_swing + skill_swing) + trend_modifier(trend) - volatility_penalty(volatility)

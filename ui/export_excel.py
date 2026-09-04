@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
 from database.queries import (
-    all_matchups,
     all_players,
     career_stats,
     latest_standings,
+    matchups_with_neutral_fill,
     player_match_history,
     skill_level_history,
     team_history,
@@ -192,7 +192,11 @@ def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
 
 def _matchups_dataframe(db: Session) -> pd.DataFrame:
     """Matchup Advantage Engine: one row per (player, opponent), from
-    analytics.matchups via scripts/build_matchups.py. See
+    analytics.matchups via scripts/build_matchups.py, PLUS a neutral-50
+    "Has History" = No row for every known pair with no computed matchup
+    yet (database.queries.matchups_with_neutral_fill -- P1-8: a player
+    who's never faced a specific opponent shows up as "no history yet"
+    here rather than being silently absent from the sheet). See
     database/models.py's PlayerMatchup docstring for why "Avg Points
     Earned" and "Avg Opponent Skill Level" stand in for the requested
     "innings"/"defensive shots vs opponent" columns -- neither is a real
@@ -201,17 +205,20 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "Player": row.player.name if row.player else "",
-                "Opponent": row.opponent.name if row.opponent else "",
-                "Matches Played": row.matches_played,
-                "Win Rate": row.win_rate,
-                "Avg Points Earned": row.avg_points_earned,
-                "Avg Opponent Skill Level": row.avg_opponent_skill_level,
-                "Trend": row.trend,
-                "Volatility": row.volatility,
-                "Matchup Score": row.matchup_score,
-                "Confidence Score": row.confidence_score,
+                "Player": row["player"],
+                "Opponent": row["opponent"],
+                "Matches Played": row["matches_played"],
+                "Win Rate": row["win_rate"],
+                "Avg Points Earned": row["avg_points_earned"],
+                "Avg Opponent Skill Level": row["avg_opponent_skill_level"],
+                "Trend": row["trend"],
+                "Volatility": row["volatility"],
+                "Matchup Score": row["matchup_score"],
+                "Confidence Score": row["confidence_score"],
+                "Format": row["format"],
+                "Session": row["session_name"],
+                "Has History": "Yes" if row["has_history"] else "No",
             }
-            for row in all_matchups(db)
+            for row in matchups_with_neutral_fill(db)
         ]
     )

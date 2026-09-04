@@ -167,3 +167,83 @@ def head_to_head_history(db: Session, player_id: int, opponent_id: int) -> list[
 def all_matchups(db: Session) -> list[PlayerMatchup]:
     """Every computed (player, opponent) matchup, best score first."""
     return db.query(PlayerMatchup).order_by(PlayerMatchup.matchup_score.desc()).all()
+
+
+def matchups_with_neutral_fill(db: Session) -> list[dict]:
+    """Every computed PlayerMatchup row, PLUS a neutral-50 placeholder row
+    for every (player, opponent) pair among players who've appeared in
+    real head-to-head history (PlayerHeadToHead, as either side) but don't
+    yet have ANY computed matchup between them, in any format/session --
+    P1-8: a player who's simply never faced a specific opponent shows up
+    as "no history yet, neutral" in the output rather than being silently
+    absent. "Known" means "has appeared in at least one real scored game"
+    -- not every Player row ever created; a roster-only or career-stats-
+    only player with no scoresheet history isn't a real candidate
+    opponent, and including them would just be noise.
+
+    Real rows always win: this only ever ADDS a synthetic row for a pair
+    with zero PlayerMatchup rows across every format/session -- never
+    duplicates or overrides real computed data. A pair covered in ONE
+    format/session is not padded with a second "no history" row for a
+    different one; this fills gaps at the pair level, not per format.
+
+    Returns plain dicts (not ORM rows) with the same keys for both real
+    and synthetic rows, plus `has_history` so a caller (ui.export_excel,
+    ui.export_json, the demo) can render the two differently -- this is
+    an OUTPUT-layer fill: player_head_to_head/player_matchups themselves
+    are untouched.
+    """
+    real_rows = all_matchups(db)
+    covered_pairs = {(row.player_id, row.opponent_id) for row in real_rows}
+
+    known_player_ids: set[int] = set()
+    for player_id, opponent_id in db.query(PlayerHeadToHead.player_id, PlayerHeadToHead.opponent_id).distinct():
+        known_player_ids.add(player_id)
+        known_player_ids.add(opponent_id)
+
+    players_by_id = (
+        {p.id: p for p in db.query(Player).filter(Player.id.in_(known_player_ids)).all()}
+        if known_player_ids
+        else {}
+    )
+
+    rows = [
+        {
+            "player": r.player.name if r.player else "",
+            "player_id": r.player.external_id if r.player else "",
+            "opponent": r.opponent.name if r.opponent else "",
+            "opponent_id": r.opponent.external_id if r.opponent else "",
+            "matches_played": r.matches_played,
+            "win_rate": r.win_rate,
+            "avg_points_earned": r.avg_points_earned,
+            "avg_opponent_skill_level": r.avg_opponent_skill_level,
+            "trend": r.trend,
+            "volatility": r.volatility,
+            "matchup_score": r.matchup_score,
+            "confidence_score": r.confidence_score,
+            "format": r.format,
+            "session_name": r.session_name,
+            "has_history": True,
+        }
+        for r in real_rows
+    ]
+
+    for player_id in known_player_ids:
+        for opponent_id in known_player_ids:
+            if player_id == opponent_id or (player_id, opponent_id) in covered_pairs:
+                continue
+            player = players_by_id.get(player_id)
+            opponent = players_by_id.get(opponent_id)
+            if not player or not opponent:
+                continue
+            rows.append(
+                {
+                    "player": player.name, "player_id": player.external_id,
+                    "opponent": opponent.name, "opponent_id": opponent.external_id,
+                    "matches_played": 0, "win_rate": None, "avg_points_earned": None,
+                    "avg_opponent_skill_level": None, "trend": "no data", "volatility": 0,
+                    "matchup_score": 50, "confidence_score": 0,
+                    "format": None, "session_name": None, "has_history": False,
+                }
+            )
+    return rows

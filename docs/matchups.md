@@ -21,12 +21,15 @@ teams faced off.
 - `database/ingest.py::ingest_head_to_head()` writes one raw row per
   (player, match) into `player_head_to_head` — both directions of a
   pairing, since each side has its own result/points/skill level.
-- `scripts/build_matchups.py` groups those raw rows by (player, opponent),
-  scores each pair (`analytics/matchups.py`), and upserts the aggregate
-  into `player_matchups`. Run it any time after a sync or the demo build
-  has produced head-to-head rows — it never touches the network itself.
-  `scripts/build_demo.py` also calls it directly so the demo/Excel/JSON
-  outputs always include real matchup data, not a separate manual step.
+- `analytics/matchup_builder.py::build_matchups()` groups those raw rows,
+  scores each group (`analytics/matchups.py`), and upserts the aggregate
+  into `player_matchups`. Called directly by
+  `scheduler.graphql_sync.run_all_teams()` (right after head-to-head
+  ingestion, before export) and by `scripts/build_demo.py`, so the
+  Excel/JSON outputs always include current matchup data as part of a
+  normal sync or demo build. `scripts/build_matchups.py` is a thin CLI
+  wrapper around the same function, for recomputing on demand against an
+  existing database without a network call.
 
 ## How the score is computed
 
@@ -109,6 +112,58 @@ documented components:
   moving target, not a settled one (70); `no data` is a genuine unknown,
   landing in between (50).
 
+### Format and session
+
+A player's 8-ball record against an opponent doesn't predict their 9-ball
+one, and a stale prior session's record isn't "current form" the way this
+session's is — `player_matchups` is grouped and scored by
+`(player, opponent, format, session_name)`, not just `(player, opponent)`.
+Neither field comes from `MatchPage` itself (it has no division/session
+info); both are threaded in from the originating team's own context
+(`dashboard_teams_rows()`'s `division_type`/`session_name`, or the
+single-team path's `team_row()`) onto `Match` at ingestion, and
+`ingest_head_to_head()` copies them from the resolved `Match` row onto
+each `PlayerHeadToHead` it writes. A row ingested without that context
+(an older sync, or a caller with no team data handy) still aggregates,
+under a shared `NULL`/`NULL` bucket, rather than being dropped. The
+Excel sheet and JSON export both carry `Format`/`format` and
+`Session`/`session_name` columns so two rows for the same two names
+aren't a mystery duplicate.
+
+### Reconciling corrected scoresheets
+
+The API returns a match's COMPLETE current scoresheet on every fetch, not
+a diff — if a lineup correction changes who played which position,
+re-ingesting must not leave the old pairing sitting alongside the
+corrected one. `ingest_head_to_head()` reconciles at match level: every
+existing `player_head_to_head` row for a match being re-ingested is
+deleted before the current rows are inserted, scoped to just the
+match_ids actually present in that call (a different match's rows are
+untouched). If that reconciliation leaves a `(player, opponent, format,
+session)` group with zero remaining head-to-head rows anywhere,
+`build_matchups()` prunes its now-unsupported `player_matchups` row too
+(`database/ingest.py::prune_matchups_not_in`) — the aggregate is rebuilt
+from scratch each run, not just upserted on top of whatever was already there.
+
+### Result validation
+
+`PlayerMatch.result`/`PlayerHeadToHead.result` are normalized to exactly
+`"W"`, `"L"`, or `None` at ingestion (`database/ingest.py::_normalize_result`)
+— a missing value, a blank string, or anything the API doesn't document as
+a result (`"UNKNOWN"`, a typo) becomes `None`, never a silent loss. Every
+win-rate calculation and the sample size `matchup_score`/`confidence_score`
+use are based on RECOGNIZED-result games only
+(`analytics/matchups.py::recognized_results`) — a row with an unreadable
+result doesn't count as a loss, and doesn't inflate the sample either.
+
+### Referential integrity
+
+SQLite doesn't enforce foreign keys unless a connection explicitly turns
+them on — `database/engine.py::create_db_engine()` now does, for every
+connection it opens. This is what would have caught, at insert time
+instead of silently, the exact real bug that motivated
+`PlayerMatch`'s docstring: a row pointing at a match that doesn't exist.
+
 ## Two things this deliberately doesn't include
 
 The original spec for this feature asked for "average innings" and
@@ -138,17 +193,24 @@ tracking, just now visible in a new place.
 
 ## Using it as a captain
 
-1. Run a sync (`python -m scheduler.graphql_sync`) or the demo build.
-2. Run `python scripts/build_matchups.py` (safe to re-run any time; it
-   upserts).
-3. Open the "Matchups" sheet in the Excel export, or the "Matchups" tab in
+1. Run a sync (`python -m scheduler.graphql_sync`) or the demo build --
+   both already call `build_matchups()` themselves as part of the run.
+   `python scripts/build_matchups.py` is there for recomputing on demand
+   against an already-synced database, not a required extra step.
+2. Open the "Matchups" sheet in the Excel export, or the "Matchups" tab in
    the demo/dashboard page, for each of your players.
-4. "Recommended opponents" (score ≥ 65) and "opponents to be cautious of"
+3. "Recommended opponents" (score ≥ 65) and "opponents to be cautious of"
    (score ≤ 35) are the standout cases — most matchups will sit close to
    the neutral 50 baseline early in a season, which is real information
    too (there just isn't a strong signal yet, and the `Confidence Score`
    column will say so).
-5. Check the `Confidence Score` alongside `Matchup Score` before treating
+4. Check the `Confidence Score` alongside `Matchup Score` before treating
    either number as a verdict — a high `Matchup Score` with a low
    `Confidence Score` is a small, promising sample, not an established
    edge.
+5. A row with `Has History` = "No" means exactly that: this player and
+   that opponent are both known (each has real head-to-head history
+   against someone), but never against each other yet. It's shown at a
+   neutral 50/0-confidence rather than being left off the sheet, so "no
+   data" and "an even matchup" never look the same as "we don't know this
+   pair exists" -- the last of those used to be silent absence.

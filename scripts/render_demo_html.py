@@ -529,16 +529,18 @@ function renderMatchups() {
     const caution = rows.filter(r => r.matchup_score <= 35).slice(-3).reverse();
 
     const tableRows = rows.map(r => `
-      <tr>
-        <td>${esc(r.opponent)}</td>
+      <tr${r.has_history === false ? ' style="opacity:.6;"' : ''}>
+        <td>${esc(r.opponent)}${r.has_history === false ? ' <span class="hint">(no history yet)</span>' : ''}</td>
         <td class="num">${r.matches_played}</td>
-        <td class="num">${(r.win_rate * 100).toFixed(0)}%</td>
+        <td class="num">${r.win_rate == null ? '—' : (r.win_rate * 100).toFixed(0) + '%'}</td>
         <td class="num">${r.avg_points_earned ?? '—'}</td>
         <td class="num">${r.avg_opponent_skill_level ?? '—'}</td>
         <td>${esc(r.trend)}</td>
         <td class="num">${r.volatility}</td>
         <td class="num">${scorePill(r.matchup_score)}</td>
         <td class="num">${r.confidence_score} <span class="hint">(${confidenceLabel(r.confidence_score)})</span></td>
+        <td>${esc(r.format ?? '—')}</td>
+        <td>${esc(r.session_name ?? '—')}</td>
       </tr>`).join('');
 
     return `
@@ -556,7 +558,7 @@ function renderMatchups() {
         </div>
         <div class="panel table-wrap">
           <table>
-            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th><th class="num">Confidence</th></tr></thead>
+            <thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Win Rate</th><th class="num">Avg Pts</th><th class="num">Avg Opp SL</th><th>Trend</th><th class="num">Volatility</th><th class="num">Score</th><th class="num">Confidence</th><th>Format</th><th>Session</th></tr></thead>
             <tbody>${tableRows}</tbody>
           </table>
         </div>

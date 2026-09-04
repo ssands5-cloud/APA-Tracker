@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from database.ingest import (
     ingest_eight_ball_stats,
+    ingest_head_to_head,
     ingest_match,
     ingest_match_scores,
     ingest_matchups,
@@ -298,7 +299,69 @@ class TestMatchups:
             "opponent_id": "601", "matches_played": 3, "win_rate": 0.667,
             "avg_points_earned": 5.0, "avg_opponent_skill_level": 5.0,
             "trend": "up", "volatility": 1, "matchup_score": 72, "confidence_score": 63,
+            "format": None, "session_name": None, "has_history": True,
         }]
+
+class TestMatchupNeutralFill:
+    """P1-8: a known player with no head-to-head history against a
+    specific other known player must still show up, as a neutral 50, not
+    be silently absent."""
+
+    def _seed(self, db):
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack")
+        ingest_match(db, match_id="M2", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack")
+
+    def test_a_pair_with_no_history_gets_a_neutral_fifty_row(self, db, tmp_path):
+        self._seed(db)
+        # Alice has played both Bob and Carol -- Bob and Carol have never
+        # played each other.
+        ingest_head_to_head(db, [
+            {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
+        ])
+        ingest_head_to_head(db, [
+            {"match_id": "M2", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P3", "opponent_name": "Carol", "result": "L"},
+        ])
+        ingest_matchups(db, [
+            {"player_id": "P1", "opponent_id": "P2", "matches_played": 1, "win_rate": 1.0, "matchup_score": 60},
+            {"player_id": "P2", "opponent_id": "P1", "matches_played": 1, "win_rate": 0.0, "matchup_score": 40},
+            {"player_id": "P1", "opponent_id": "P3", "matches_played": 1, "win_rate": 0.0, "matchup_score": 40},
+            {"player_id": "P3", "opponent_id": "P1", "matches_played": 1, "win_rate": 1.0, "matchup_score": 60},
+        ])
+
+        document = _export(db, tmp_path)
+        pairs = {(row["player"], row["opponent"]): row for row in document["matchups"]}
+
+        assert ("Bob", "Carol") in pairs and ("Carol", "Bob") in pairs
+        assert pairs[("Bob", "Carol")]["matchup_score"] == 50
+        assert pairs[("Bob", "Carol")]["has_history"] is False
+        assert pairs[("Bob", "Carol")]["matches_played"] == 0
+        assert pairs[("Bob", "Carol")]["win_rate"] is None
+
+        # A real, computed pair must not be overridden by the fill.
+        assert pairs[("Alice", "Bob")]["has_history"] is True
+        assert pairs[("Alice", "Bob")]["matchup_score"] == 60
+
+    def test_a_player_with_no_head_to_head_history_at_all_is_excluded_from_the_fill(self, db, tmp_path):
+        """Only "known" players (appeared in at least one real
+        player_head_to_head row) participate -- a player known only from
+        a roster/career-stats context isn't a real candidate opponent and
+        shouldn't clutter the sheet with speculative pairings."""
+        self._seed(db)
+        ingest_head_to_head(db, [
+            {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
+        ])
+        upsert_player(db, "P9", "Bench Player")  # never appears in a head-to-head row
+
+        document = _export(db, tmp_path)
+        names_involved = {name for row in document["matchups"] for name in (row["player"], row["opponent"])}
+        assert "Bench Player" not in names_involved
 
     def test_a_matchup_row_for_an_unknown_player_is_skipped_not_crashed(self, db, tmp_path):
         """ingest_matchups() requires both Player rows to already exist --

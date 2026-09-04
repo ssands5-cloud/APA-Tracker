@@ -82,6 +82,14 @@ class Match(Base):
     match_date = Column(String)
     status = Column(String)
     week = Column(Integer)
+    # Not from the match itself (MatchPage doesn't return division/session
+    # info) -- threaded in from the originating team's own context at
+    # ingestion (dashboard_teams_rows()'s division_type / session_name, or
+    # team_row()'s format / session_name on the single-team path). P1-4:
+    # lets head-to-head/matchup grouping distinguish an 8-ball matchup
+    # from a 9-ball one, and one session's record from a stale one.
+    format = Column(String)
+    session_name = Column(String)
 
     # Scores stay NULL until the match is actually scored. NULL and 0 are
     # different facts -- "not played yet" versus "shut out" -- and a match
@@ -263,6 +271,12 @@ class PlayerHeadToHead(Base):
     opponent_skill_level = Column(Integer)
     result = Column(String)
     points_earned = Column(Float)
+    # Copied from Match.format/Match.session_name at ingestion (P1-4) --
+    # not part of the unique constraint above, since a given match_id
+    # already implies exactly one format/session; kept here (denormalized)
+    # so analytics.matchup_builder can group by them without a join.
+    format = Column(String)
+    session_name = Column(String)
 
     player = relationship("Player", foreign_keys=[player_id])
     opponent = relationship("Player", foreign_keys=[opponent_id])
@@ -292,11 +306,27 @@ class PlayerMatchup(Base):
     says how much to trust matchup_score itself: a 1-0 matchup and a 10-0
     matchup can now land on similar scores once weighted, and confidence
     is what tells them apart.
+
+    format/session_name (P1-4) split the aggregate by division format and
+    session -- a player's 8-ball record against an opponent doesn't
+    predict their 9-ball one, and a stale prior session's record isn't
+    "current form" the way this session's is. Both are nullable: a pair
+    whose head-to-head rows never got a format/session threaded through
+    (an older ingest, or a caller that didn't have team context handy)
+    still aggregates, just under a NULL/NULL bucket rather than being
+    dropped. NULL participates in the uniqueness check as SQL's usual
+    "distinct from everything, including another NULL" -- ingest_matchups()
+    and prune_matchups_not_in() always look rows up by the full tuple
+    rather than relying on the DB constraint alone to prevent duplicates,
+    so this doesn't create a real gap in practice.
     """
 
     __tablename__ = "player_matchups"
     __table_args__ = (
-        UniqueConstraint("player_id", "opponent_id", name="uq_player_matchups_pair"),
+        UniqueConstraint(
+            "player_id", "opponent_id", "format", "session_name",
+            name="uq_player_matchups_pair",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
@@ -310,6 +340,8 @@ class PlayerMatchup(Base):
     volatility = Column(Integer)
     matchup_score = Column(Integer)
     confidence_score = Column(Integer)
+    format = Column(String)
+    session_name = Column(String)
 
     player = relationship("Player", foreign_keys=[player_id])
     opponent = relationship("Player", foreign_keys=[opponent_id])

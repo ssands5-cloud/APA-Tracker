@@ -11,12 +11,14 @@ from __future__ import annotations
 
 from analytics.matchups import (
     FULL_CONFIDENCE_GAMES,
+    _is_win,
     average_opponent_skill_level,
     average_points_earned,
     confidence_score,
     head_to_head_win_rate,
     matchup_score,
     opponent_skill_modifier,
+    recognized_results,
     sample_size_weight,
     trend_modifier,
     volatility_penalty,
@@ -31,6 +33,74 @@ def _game(result, points=None, opponent_skill_level=None, own_skill_level=None):
         result=result, points_earned=points,
         opponent_skill_level=opponent_skill_level, own_skill_level=own_skill_level,
     )
+
+
+class TestResultValidation:
+    """P1-6: an unrecognized result must not silently count as a loss, and
+    must not count as a game at all for win-rate/sample-size purposes."""
+
+    def test_a_real_win_is_recognized(self):
+        assert _is_win("W") is True
+
+    def test_a_real_loss_is_recognized(self):
+        assert _is_win("L") is False
+
+    def test_lowercase_still_counts(self):
+        assert _is_win("w") is True
+        assert _is_win("l") is False
+
+    def test_surrounding_whitespace_is_tolerated(self):
+        assert _is_win("  W  ") is True
+
+    def test_none_is_unrecognized(self):
+        assert _is_win(None) is None
+
+    def test_blank_string_is_unrecognized(self):
+        assert _is_win("") is None
+        assert _is_win("   ") is None
+
+    def test_unknown_is_unrecognized_not_a_loss(self):
+        assert _is_win("UNKNOWN") is None
+
+    def test_an_unrelated_value_is_unrecognized(self):
+        assert _is_win("T") is None  # a hypothetical tie code, not documented anywhere
+        assert _is_win("garbage") is None
+
+    def test_recognized_results_drops_unrecognized_rows(self):
+        rows = [_game("W"), _game(None), _game("UNKNOWN"), _game("L"), _game("")]
+        assert [r.result for r in recognized_results(rows)] == ["W", "L"]
+
+    def test_win_rate_excludes_unrecognized_rows_from_both_numerator_and_denominator(self):
+        """The regression this closes: an unrecognized result used to
+        silently count as a loss (denominator went up, numerator didn't).
+        3 wins and 2 unrecognized rows must read as 100%, not 60%."""
+        rows = [_game("W"), _game("W"), _game("W"), _game(None), _game("UNKNOWN")]
+        assert head_to_head_win_rate(rows) == 1.0
+
+    def test_all_unrecognized_rows_is_zero_not_a_crash(self):
+        rows = [_game(None), _game("UNKNOWN"), _game("")]
+        assert head_to_head_win_rate(rows) == 0.0
+        assert weighted_win_rate(rows) == 0.0
+
+    def test_matchup_score_treats_all_unrecognized_rows_as_no_history(self):
+        """Rows exist, but none have a usable outcome -- same neutral 50
+        as genuinely no history at all, not a guess in either direction."""
+        rows = [_game("UNKNOWN"), _game(None)]
+        assert matchup_score(rows, "stable", 0) == 50
+
+    def test_confidence_score_sample_size_excludes_unrecognized_rows(self):
+        """A full sample of games with unrecognized results must not read
+        as high confidence -- there's no real outcome evidence in it."""
+        garbage = [_game("UNKNOWN")] * FULL_CONFIDENCE_GAMES
+        real = [_game("W")] * FULL_CONFIDENCE_GAMES
+        assert confidence_score(garbage, "stable", 0) < confidence_score(real, "stable", 0)
+
+    def test_opponent_skill_modifier_ignores_a_win_with_an_unrecognized_result(self):
+        """Can't happen from real ingested data (a row either has a
+        recognized result or none), but a directly-built row with a
+        malformed result and skill levels set must still not count."""
+        row = _game("UNKNOWN", opponent_skill_level=9, own_skill_level=1)
+        assert opponent_skill_modifier([row]) == 0.0
 
 
 class TestHeadToHeadWinRate:

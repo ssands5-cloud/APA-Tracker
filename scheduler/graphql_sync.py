@@ -120,6 +120,8 @@ def ingest_team_data(db: Session, data: dict) -> dict[str, int]:
             is_bye=row["is_bye"],
             is_scored=row["is_scored"],
             is_finalized=row["is_finalized"],
+            format=identity["format"],
+            session_name=identity["session_name"],
         )
         created += was_created
         updated += not was_created
@@ -147,6 +149,13 @@ def ingest_viewer_data(db: Session, viewer_teams: dict, viewer_matches: dict) ->
     for row in team_rows:
         upsert_team(db, row["team_id"], row["team_name"])
 
+    # P1-4: dashboardTeams already carries each team's division format
+    # (division_type) and session_name -- MatchPage/the schedule itself
+    # doesn't, so this is threaded in from the match's OWN team_id here,
+    # at the one point both are in scope together, rather than guessed at
+    # anywhere downstream.
+    team_context = {row["team_id"]: row for row in team_rows}
+
     match_rows = viewer_matches_rows(viewer_matches)
     created = updated = 0
     for row in match_rows:
@@ -156,6 +165,7 @@ def ingest_viewer_data(db: Session, viewer_teams: dict, viewer_matches: dict) ->
                 row["team_id"], row.get("week"),
             )
             continue
+        context = team_context.get(row["team_id"], {})
         _, was_created = ingest_match(
             db,
             match_id=row["match_id"],
@@ -171,6 +181,8 @@ def ingest_viewer_data(db: Session, viewer_teams: dict, viewer_matches: dict) ->
             is_bye=row["is_bye"],
             is_scored=row["is_scored"],
             is_finalized=row["is_finalized"],
+            format=context.get("division_type"),
+            session_name=context.get("session_name"),
         )
         created += was_created
         updated += not was_created

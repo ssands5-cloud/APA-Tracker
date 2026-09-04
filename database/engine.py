@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, inspect
+from sqlalchemy import Engine, create_engine, event, inspect
 
 from database.models import Base
 
@@ -48,12 +48,32 @@ def check_schema(engine: Engine) -> list[str]:
     return missing
 
 
+def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
+    """SQLite does not enforce foreign keys unless told to, per connection
+    -- it's off by default even with FKs declared in the schema. This
+    project already hit the real cost of that once: PlayerMatch.match_id
+    pointed at a Match row that didn't exist (a units mix-up -- APA's own
+    match id stored where the internal primary key belonged) and nothing
+    ever raised; `.match` just silently returned None (see
+    database/ingest.py::_resolve_match_pk's docstring, and
+    tests/test_match_detail_fixture.py::test_the_foreign_key_actually_resolves,
+    the regression test for it). Enforcement would have turned that into a
+    loud IntegrityError at insert time instead of a silent orphan.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.close()
+
+
 def create_db_engine(config: dict, create_tables: bool = True) -> Engine:
     """Return an engine for the configured SQLite file, creating what's missing.
 
     Creates the parent directory and (unless told otherwise) the tables, so a
     first run on a clean checkout works rather than failing on a missing
-    directory.
+    directory. Every connection this engine opens gets PRAGMA foreign_keys
+    = ON (see _enable_foreign_keys) -- SQLite ignores that pragma unless
+    it's set on the specific connection doing the writing, so this has to
+    be a connect-event hook, not a one-time statement.
     """
     db_path = Path((config.get("database") or {}).get("path") or DEFAULT_DB_PATH)
     if db_path.parent and not db_path.parent.exists():
@@ -61,6 +81,7 @@ def create_db_engine(config: dict, create_tables: bool = True) -> Engine:
         logger.info("Created database directory %s", db_path.parent)
 
     engine = create_engine(f"sqlite:///{db_path}")
+    event.listen(engine, "connect", _enable_foreign_keys)
     if create_tables:
         Base.metadata.create_all(engine)
 

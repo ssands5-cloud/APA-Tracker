@@ -123,6 +123,14 @@ def main() -> None:
             is_bye=bool(match_detail.get("isBye")),
             is_scored=bool(match_detail.get("isScored")),
             is_finalized=bool(match_detail.get("isFinalized")),
+            # MatchPage itself carries no division/session info (see
+            # database.ingest.ingest_match's docstring) -- a real sync
+            # threads this in from the team's own dashboardTeams context,
+            # which this fixture-driven demo doesn't have, so these are
+            # illustrative constants purely so the demo's Matchups output
+            # shows the new format/session columns with real-looking values.
+            format="EIGHT_BALL",
+            session_name="2026 Summer",
         )
         scores = match_player_scores(match_detail)
         created, updated = ingest_match_scores(db, str(match_detail["id"]), scores)

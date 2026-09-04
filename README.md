@@ -155,15 +155,25 @@ lineup: real head-to-head record, not a season-wide average, plus a 0-100
 `matchPositionNumber` already tells you which home player played which
 away player (same-numbered positions face each other in APA team format);
 `scraper/graphql_scraper.py::head_to_head_rows()` pairs them, and
-`scripts/build_matchups.py` scores every (player, opponent) pair found so
-far. The score is sample-size-weighted (a 1-0 record no longer scores like
-a 10-0 one), recency-weighted (a recent game counts slightly more than an
-old one), and includes an opponent-skill-level modifier (a bonus for wins
-against tougher opponents) — plus a separate `Confidence Score` saying how
-much to trust the matchup score itself. Lands in the Excel "Matchups"
-sheet, the JSON export's `matchups` key, and the demo's "Matchups" tab
-(recommended opponents / opponents to be cautious of, per player). Full
-write-up, including the score formula and what it deliberately leaves out,
+`analytics/matchup_builder.py::build_matchups()` scores every (player,
+opponent, format, session) group found so far -- an 8-ball record doesn't
+predict a 9-ball one, and a stale session's record isn't current form
+(both threaded in from the team's own context, not a new query). Called
+directly by the real sync and the demo build, not a separate manual step;
+`scripts/build_matchups.py` is a thin CLI wrapper for recomputing on
+demand. The score is sample-size-weighted (a 1-0 record no longer scores
+like a 10-0 one), recency-weighted (a recent game counts slightly more
+than an old one), and includes an opponent-skill-level modifier (a bonus
+for wins against tougher opponents) — plus a separate `Confidence Score`
+saying how much to trust the matchup score itself. A corrected scoresheet
+reconciles cleanly (stale pairings are removed, not left alongside
+corrected ones), results are normalized so a malformed value never counts
+as a silent loss, and a known player with no history against a specific
+known opponent shows up as a neutral 50/"Has History: No" row instead of
+being silently absent. Lands in the Excel "Matchups" sheet, the JSON
+export's `matchups` key, and the demo's "Matchups" tab (recommended
+opponents / opponents to be cautious of, per player). Full write-up,
+including the score formula and what it deliberately leaves out,
 in `docs/matchups.md`.
 
 #### Capturing queries by logging in (easiest)

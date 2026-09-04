@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from database.ingest import (
     ingest_eight_ball_stats,
+    ingest_head_to_head,
     ingest_match,
     ingest_match_scores,
     ingest_matchups,
@@ -164,10 +165,38 @@ class TestSeededData:
         assert headers == [
             "Player", "Opponent", "Matches Played", "Win Rate", "Avg Points Earned",
             "Avg Opponent Skill Level", "Trend", "Volatility", "Matchup Score",
-            "Confidence Score",
+            "Confidence Score", "Format", "Session", "Has History",
         ]
         row = [c.value for c in ws[2]]
-        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72, 63]
+        assert row == ["Player One", "Player Four", 3, 0.667, 5.0, 5.0, "up", 1, 72, 63, None, None, "Yes"]
+
+    def test_a_known_pair_with_no_history_gets_a_neutral_fifty_row(self, db, tmp_path):
+        """P1-8: two players who've each played someone, but never each
+        other, must still show up in the sheet, marked "No" under Has
+        History, instead of being silently absent."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack")
+        ingest_match(db, match_id="M2", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack")
+        ingest_head_to_head(db, [
+            {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
+        ])
+        ingest_head_to_head(db, [
+            {"match_id": "M2", "player_id": "P1", "player_name": "Alice",
+             "opponent_id": "P3", "opponent_name": "Carol", "result": "L"},
+        ])
+        # No real matchup ever computed between Bob and Carol.
+
+        wb = _export(db, tmp_path)
+        rows = [dict(zip([c.value for c in wb["Matchups"][1]], [c.value for c in r]))
+                for r in wb["Matchups"].iter_rows(min_row=2)]
+        bob_carol = next(r for r in rows if r["Player"] == "Bob" and r["Opponent"] == "Carol")
+        assert bob_carol["Matchup Score"] == 50
+        assert bob_carol["Has History"] == "No"
+        assert bob_carol["Matches Played"] == 0
 
     def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
         """ingest_match_scores() never assigns a team (only upsert_roster()

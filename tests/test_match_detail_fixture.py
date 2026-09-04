@@ -157,6 +157,65 @@ class TestIngestHeadToHead:
         ingest_head_to_head(db, rows)
         assert db.query(PlayerHeadToHead).count() == 4
 
+    def test_a_corrected_scoresheet_replaces_the_old_pairing_not_just_adds_to_it(self, tmp_path):
+        """P1-7: a per-row upsert keyed on (player_id, match_id) can't fix
+        this -- if position 2's away player changes (a lineup correction),
+        the NEW pairing has the same key as the old one (same match,
+        same home-side player_id) but a different opponent, so the old
+        (player, opponent) row for that match must be gone, not left
+        stale alongside the corrected one."""
+        db = self._seeded_db(tmp_path)
+        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        original = (
+            db.query(PlayerHeadToHead)
+            .join(PlayerHeadToHead.player).filter_by(external_id="502")  # Player Two
+            .one()
+        )
+        assert original.opponent.external_id == "602"  # originally paired with Player Five
+
+        # Corrected capture of the SAME match: position 2's away player is
+        # now a different real person (a substitution correction), same
+        # match_id, same home-side player_id -- everything else unchanged.
+        corrected_match = json.loads(json.dumps(MATCH))  # deep copy
+        for score in corrected_match["results"][1]["scores"]:  # AWAY side
+            if score["matchPositionNumber"] == 2:
+                score["player"] = {"id": 999, "displayName": "Substitute Player"}
+
+        ingest_head_to_head(db, head_to_head_rows(corrected_match))
+
+        rows = db.query(PlayerHeadToHead).join(PlayerHeadToHead.player).filter_by(external_id="502").all()
+        assert len(rows) == 1, "the old pairing must be gone, not left alongside the corrected one"
+        assert rows[0].opponent.external_id == "999"
+
+        # The old opponent (Player Five, 602) must no longer show a
+        # pairing for THIS match either -- only the new substitute does.
+        stale_pairing = (
+            db.query(PlayerHeadToHead)
+            .join(PlayerHeadToHead.player).filter_by(external_id="602")
+            .join(PlayerHeadToHead.match).filter_by(external_id="555001")
+            .one_or_none()
+        )
+        assert stale_pairing is None
+
+    def test_a_match_not_in_this_call_keeps_its_existing_rows(self, tmp_path):
+        """Reconciliation is scoped to the match_ids actually present in
+        `rows` -- ingesting one match's corrected data must not touch a
+        different match's already-ingested rows."""
+        db = self._seeded_db(tmp_path)
+        ingest_match(
+            db, match_id="555002", home_team_id="90001", away_team_id="90002",
+            home_team_name="Chalk It Up", away_team_name="Rack Attack",
+        )
+        other_match = json.loads(json.dumps(MATCH))
+        other_match["id"] = 555002
+        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        ingest_head_to_head(db, head_to_head_rows(other_match))
+        assert db.query(PlayerHeadToHead).count() == 8  # 4 per match, both intact
+
+        # Re-ingesting ONLY the first match must leave the second's rows alone.
+        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        assert db.query(PlayerHeadToHead).count() == 8
+
     def test_a_row_with_no_opponent_id_is_skipped_not_crashed(self, tmp_path):
         db = self._seeded_db(tmp_path)
         count = ingest_head_to_head(db, [

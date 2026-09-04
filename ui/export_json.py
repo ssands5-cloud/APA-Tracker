@@ -21,12 +21,12 @@ from analytics.player_stats import summarize_player
 from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
 from database.queries import (
     all_matches,
-    all_matchups,
     all_players,
     all_teams,
     career_stats,
     latest_standings,
     match_scores,
+    matchups_with_neutral_fill,
     player_match_history,
     skill_level_history,
     team_history,
@@ -254,21 +254,8 @@ def _skill_level_summary(db: Session) -> list[dict]:
 def _matchups(db: Session) -> list[dict]:
     """Same source as export_excel._matchups_dataframe -- one row per
     (player, opponent) from the Matchup Advantage Engine
-    (analytics.matchups / scripts/build_matchups.py)."""
-    return [
-        {
-            "player": row.player.name if row.player else "",
-            "player_id": row.player.external_id if row.player else "",
-            "opponent": row.opponent.name if row.opponent else "",
-            "opponent_id": row.opponent.external_id if row.opponent else "",
-            "matches_played": row.matches_played,
-            "win_rate": row.win_rate,
-            "avg_points_earned": row.avg_points_earned,
-            "avg_opponent_skill_level": row.avg_opponent_skill_level,
-            "trend": row.trend,
-            "volatility": row.volatility,
-            "matchup_score": row.matchup_score,
-            "confidence_score": row.confidence_score,
-        }
-        for row in all_matchups(db)
-    ]
+    (analytics.matchups / scripts/build_matchups.py), plus a neutral-50
+    "has_history": false row for every known pair with no computed matchup
+    yet (P1-8) -- database.queries.matchups_with_neutral_fill already
+    returns exactly this shape, so nothing to remap here."""
+    return matchups_with_neutral_fill(db)
