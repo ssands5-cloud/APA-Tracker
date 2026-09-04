@@ -130,13 +130,13 @@ class TestIngestHeadToHead:
 
     def test_all_four_rows_land_in_the_database(self, tmp_path):
         db = self._seeded_db(tmp_path)
-        count = ingest_head_to_head(db, head_to_head_rows(MATCH))
+        count = ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
         assert count == 4
         assert db.query(PlayerHeadToHead).count() == 4
 
     def test_a_specific_pairing_carries_the_right_values(self, tmp_path):
         db = self._seeded_db(tmp_path)
-        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
 
         row = (
             db.query(PlayerHeadToHead)
@@ -153,8 +153,8 @@ class TestIngestHeadToHead:
     def test_rerunning_updates_rather_than_duplicates(self, tmp_path):
         db = self._seeded_db(tmp_path)
         rows = head_to_head_rows(MATCH)
-        ingest_head_to_head(db, rows)
-        ingest_head_to_head(db, rows)
+        ingest_head_to_head(db, "555001", rows)
+        ingest_head_to_head(db, "555001", rows)
         assert db.query(PlayerHeadToHead).count() == 4
 
     def test_a_corrected_scoresheet_replaces_the_old_pairing_not_just_adds_to_it(self, tmp_path):
@@ -165,7 +165,7 @@ class TestIngestHeadToHead:
         (player, opponent) row for that match must be gone, not left
         stale alongside the corrected one."""
         db = self._seeded_db(tmp_path)
-        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
         original = (
             db.query(PlayerHeadToHead)
             .join(PlayerHeadToHead.player).filter_by(external_id="502")  # Player Two
@@ -181,7 +181,7 @@ class TestIngestHeadToHead:
             if score["matchPositionNumber"] == 2:
                 score["player"] = {"id": 999, "displayName": "Substitute Player"}
 
-        ingest_head_to_head(db, head_to_head_rows(corrected_match))
+        ingest_head_to_head(db, "555001", head_to_head_rows(corrected_match))
 
         rows = db.query(PlayerHeadToHead).join(PlayerHeadToHead.player).filter_by(external_id="502").all()
         assert len(rows) == 1, "the old pairing must be gone, not left alongside the corrected one"
@@ -208,22 +208,34 @@ class TestIngestHeadToHead:
         )
         other_match = json.loads(json.dumps(MATCH))
         other_match["id"] = 555002
-        ingest_head_to_head(db, head_to_head_rows(MATCH))
-        ingest_head_to_head(db, head_to_head_rows(other_match))
+        ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
+        ingest_head_to_head(db, "555002", head_to_head_rows(other_match))
         assert db.query(PlayerHeadToHead).count() == 8  # 4 per match, both intact
 
         # Re-ingesting ONLY the first match must leave the second's rows alone.
-        ingest_head_to_head(db, head_to_head_rows(MATCH))
+        ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
         assert db.query(PlayerHeadToHead).count() == 8
 
     def test_a_row_with_no_opponent_id_is_skipped_not_crashed(self, tmp_path):
         db = self._seeded_db(tmp_path)
-        count = ingest_head_to_head(db, [
+        count = ingest_head_to_head(db, "555001", [
             {"match_id": "555001", "player_id": "501", "player_name": "Player One",
              "opponent_id": "", "opponent_name": "", "own_skill_level": 5,
              "opponent_skill_level": None, "result": "W", "points_earned": 6},
         ])
         assert count == 0
+        assert db.query(PlayerHeadToHead).count() == 0
+
+    def test_reconciles_even_when_the_current_rows_are_empty(self, tmp_path):
+        """P1-7: a match that goes from having real pairings to zero (every
+        position vacated/forfeited by a correction) must lose its stale
+        rows, not keep them forever just because there's nothing new to
+        insert in their place."""
+        db = self._seeded_db(tmp_path)
+        ingest_head_to_head(db, "555001", head_to_head_rows(MATCH))
+        assert db.query(PlayerHeadToHead).count() == 4
+
+        ingest_head_to_head(db, "555001", [])
         assert db.query(PlayerHeadToHead).count() == 0
 
 

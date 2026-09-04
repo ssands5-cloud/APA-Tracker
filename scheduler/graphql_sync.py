@@ -303,9 +303,13 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
             if scores:
                 created, updated = ingest_match_scores(db, row["match_id"], scores)
                 scoresheet_count += created + updated
-            head_to_head = head_to_head_rows(match)
-            if head_to_head:
-                head_to_head_count += ingest_head_to_head(db, head_to_head)
+            # Called for EVERY scored match, not only when head_to_head_rows()
+            # is truthy (P1-7): a match whose corrected scoresheet now has
+            # ZERO valid pairings must still reconcile away its old ones --
+            # skipping the call here entirely would leave those stale
+            # forever, since ingest_head_to_head has no other way to learn
+            # this match_id needs reconciling.
+            head_to_head_count += ingest_head_to_head(db, row["match_id"], head_to_head_rows(match))
         counts["scoresheet_rows"] = scoresheet_count
         counts["head_to_head_rows"] = head_to_head_count
 

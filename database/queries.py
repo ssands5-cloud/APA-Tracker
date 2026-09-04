@@ -171,15 +171,21 @@ def all_matchups(db: Session) -> list[PlayerMatchup]:
 
 def matchups_with_neutral_fill(db: Session) -> list[dict]:
     """Every computed PlayerMatchup row, PLUS a neutral-50 placeholder row
-    for every (player, opponent) pair among players who've appeared in
-    real head-to-head history (PlayerHeadToHead, as either side) but don't
-    yet have ANY computed matchup between them, in any format/session --
-    P1-8: a player who's simply never faced a specific opponent shows up
-    as "no history yet, neutral" in the output rather than being silently
-    absent. "Known" means "has appeared in at least one real scored game"
-    -- not every Player row ever created; a roster-only or career-stats-
-    only player with no scoresheet history isn't a real candidate
-    opponent, and including them would just be noise.
+    for every (subject, opponent) pair with no computed matchup between
+    them yet, in any format/session -- P1-8: a player who's simply never
+    faced a specific opponent shows up as "no history yet, neutral" in the
+    output rather than being silently absent.
+
+    Subjects = roster players (Player.team_id IS NOT NULL -- someone
+    actually rostered on a team, including a brand-new player with zero
+    games played) UNION players who've appeared in real head-to-head
+    history (PlayerHeadToHead, as either side). Opponents = known
+    head-to-head players only -- a roster player with zero games isn't a
+    plausible OPPONENT to pad every other row with, but they ARE a real
+    subject a captain wants to see a placeholder row for against players
+    who ARE known. A career-stats-only "shadow" player with no roster slot
+    and no scoresheet history at all is neither a subject nor an opponent
+    -- there's no real candidate matchup to speculate about.
 
     Real rows always win: this only ever ADDS a synthetic row for a pair
     with zero PlayerMatchup rows across every format/session -- never
@@ -196,14 +202,19 @@ def matchups_with_neutral_fill(db: Session) -> list[dict]:
     real_rows = all_matchups(db)
     covered_pairs = {(row.player_id, row.opponent_id) for row in real_rows}
 
-    known_player_ids: set[int] = set()
+    known_opponent_ids: set[int] = set()
     for player_id, opponent_id in db.query(PlayerHeadToHead.player_id, PlayerHeadToHead.opponent_id).distinct():
-        known_player_ids.add(player_id)
-        known_player_ids.add(opponent_id)
+        known_opponent_ids.add(player_id)
+        known_opponent_ids.add(opponent_id)
+
+    roster_player_ids = {
+        p.id for p in db.query(Player.id).filter(Player.team_id.isnot(None))
+    }
+    subject_ids = known_opponent_ids | roster_player_ids
 
     players_by_id = (
-        {p.id: p for p in db.query(Player).filter(Player.id.in_(known_player_ids)).all()}
-        if known_player_ids
+        {p.id: p for p in db.query(Player).filter(Player.id.in_(subject_ids | known_opponent_ids)).all()}
+        if (subject_ids or known_opponent_ids)
         else {}
     )
 
@@ -228,8 +239,8 @@ def matchups_with_neutral_fill(db: Session) -> list[dict]:
         for r in real_rows
     ]
 
-    for player_id in known_player_ids:
-        for opponent_id in known_player_ids:
+    for player_id in subject_ids:
+        for opponent_id in known_opponent_ids:
             if player_id == opponent_id or (player_id, opponent_id) in covered_pairs:
                 continue
             player = players_by_id.get(player_id)

@@ -319,11 +319,11 @@ class TestMatchupNeutralFill:
         self._seed(db)
         # Alice has played both Bob and Carol -- Bob and Carol have never
         # played each other.
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M1", [
             {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
         ])
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M2", [
             {"match_id": "M2", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P3", "opponent_name": "Carol", "result": "L"},
         ])
@@ -347,21 +347,31 @@ class TestMatchupNeutralFill:
         assert pairs[("Alice", "Bob")]["has_history"] is True
         assert pairs[("Alice", "Bob")]["matchup_score"] == 60
 
-    def test_a_player_with_no_head_to_head_history_at_all_is_excluded_from_the_fill(self, db, tmp_path):
-        """Only "known" players (appeared in at least one real
-        player_head_to_head row) participate -- a player known only from
-        a roster/career-stats context isn't a real candidate opponent and
-        shouldn't clutter the sheet with speculative pairings."""
+    def test_a_roster_player_with_zero_games_gets_a_neutral_row_against_a_known_opponent(self, db, tmp_path):
+        """P1-8: subjects = roster players UNION head-to-head players. A
+        brand-new player who's on a team (a real roster slot) but hasn't
+        played a single scored game yet is still a real subject a captain
+        wants a placeholder row for against players who ARE known --
+        rather than being left off the sheet just because they have no
+        history of their own."""
         self._seed(db)
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M1", [
             {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
         ])
-        upsert_player(db, "P9", "Bench Player")  # never appears in a head-to-head row
+        team = upsert_team(db, "T1", "Mark It Up")
+        upsert_player(db, "P9", "Rookie Player", team)  # rostered, never played
 
         document = _export(db, tmp_path)
-        names_involved = {name for row in document["matchups"] for name in (row["player"], row["opponent"])}
-        assert "Bench Player" not in names_involved
+        pairs = {(row["player"], row["opponent"]): row for row in document["matchups"]}
+
+        assert ("Rookie Player", "Alice") in pairs
+        assert pairs[("Rookie Player", "Alice")]["matchup_score"] == 50
+        assert pairs[("Rookie Player", "Alice")]["has_history"] is False
+        # A roster player is a subject, not an opponent -- Bob (known only
+        # from head-to-head, no roster slot) has no reason to get a row
+        # AGAINST the rookie unless the rookie is also a known opponent.
+        assert ("Bob", "Rookie Player") not in pairs
 
     def test_a_matchup_row_for_an_unknown_player_is_skipped_not_crashed(self, db, tmp_path):
         """ingest_matchups() requires both Player rows to already exist --

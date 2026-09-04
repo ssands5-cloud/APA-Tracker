@@ -180,11 +180,11 @@ class TestSeededData:
                      home_team_name="Mark It Up", away_team_name="Rack Attack")
         ingest_match(db, match_id="M2", home_team_id="T1", away_team_id="T2",
                      home_team_name="Mark It Up", away_team_name="Rack Attack")
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M1", [
             {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P2", "opponent_name": "Bob", "result": "W"},
         ])
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M2", [
             {"match_id": "M2", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P3", "opponent_name": "Carol", "result": "L"},
         ])

@@ -477,26 +477,35 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
     return count
 
 
-def ingest_head_to_head(db: Session, rows: list[dict]) -> int:
-    """Reconcile PlayerHeadToHead at MATCH level, from
+def ingest_head_to_head(db: Session, match_id, rows: list[dict]) -> int:
+    """Reconcile PlayerHeadToHead for ONE match, from
     scraper.graphql_scraper.head_to_head_rows() -- who a player actually
     played against, not just which two teams. head_to_head_rows() already
     returns both directions of a position pairing as separate rows, since
     each carries that player's own result/points/skill level rather than
     one shared symmetric fact.
 
-    Match-level reconciliation, not upsert-by-key: for every match_id
-    represented in `rows`, every existing PlayerHeadToHead row for that
-    match is deleted before the current rows are inserted. A per-row
+    `match_id` (APA's own id, the same value passed to ingest_match()) is
+    an explicit parameter, not derived from `rows` -- P1-7: a match whose
+    CURRENT authoritative scoresheet has zero valid pairings (every
+    position vacated/forfeited by a correction) returns rows == [] from
+    head_to_head_rows(), and there would be no row left to read a match_id
+    off of. Callers must call this for EVERY scored match regardless of
+    whether rows is empty, or a match that goes from "has pairs" to "zero
+    pairs" keeps its now-stale old rows forever -- see
+    scheduler.graphql_sync.run_all_teams(), which calls this
+    unconditionally rather than only when head_to_head_rows() is truthy.
+
+    Match-level reconciliation, not upsert-by-key: every existing
+    PlayerHeadToHead row for `match_id` is deleted before the current rows
+    are inserted -- including when there are none to insert. A per-row
     upsert keyed on (player_id, match_id) -- the original design -- can't
     correct a lineup change: if a scoresheet correction means position 1
     now pairs a DIFFERENT player against player X, that's a different
     (player_id, match_id) key, so the OLD pairing's row would just sit
     there stale forever alongside the new one. The API returns each
     match's COMPLETE current scoresheet, not an incremental diff, so a
-    clean delete-then-insert per match is correct: nothing is lost for a
-    match not represented in `rows` (its existing rows are untouched),
-    and a corrected match ends up with exactly its current pairings.
+    clean delete-then-insert is correct.
 
     Requires the Match to already exist (ingest_match()) -- same
     requirement as ingest_match_scores. A row with no real player/opponent
@@ -510,22 +519,19 @@ def ingest_head_to_head(db: Session, rows: list[dict]) -> int:
     format/session_name (P1-4) come from the resolved Match row, not from
     `rows` -- head_to_head_rows()'s source (MatchPage) doesn't carry
     division/session info at all, but ingest_match() already threaded it
-    onto Match from the originating team's own context. Copying it here,
-    once per match, is simpler and more honest than re-deriving it.
+    onto Match from the originating team's own context. Copying it here
+    is simpler and more honest than re-deriving it.
     """
+    match = _resolve_match_pk(db, match_id)
+    db.query(PlayerHeadToHead).filter_by(match_id=match.id).delete()
+
     valid_rows = [r for r in rows if (r.get("player_id") or "") and (r.get("opponent_id") or "")]
     skipped = len(rows) - len(valid_rows)
     if skipped:
         logger.debug("Skipping %d head-to-head row(s) with a missing player/opponent id", skipped)
 
-    match_ids = {str(r["match_id"]) for r in valid_rows if r.get("match_id")}
-    for match_id_external in match_ids:
-        match = _resolve_match_pk(db, match_id_external)
-        db.query(PlayerHeadToHead).filter_by(match_id=match.id).delete()
-
     count = 0
     for row in valid_rows:
-        match = _resolve_match_pk(db, row["match_id"])
         player = upsert_player(db, row["player_id"], row.get("player_name") or "")
         opponent = upsert_player(db, row["opponent_id"], row.get("opponent_name") or "")
         db.add(
@@ -543,7 +549,7 @@ def ingest_head_to_head(db: Session, rows: list[dict]) -> int:
         )
         count += 1
     db.commit()
-    logger.info("Reconciled head-to-head for %d match(es): %d row(s) written", len(match_ids), count)
+    logger.info("Reconciled head-to-head for match %s: %d row(s) written", match_id, count)
     return count
 
 

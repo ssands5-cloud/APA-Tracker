@@ -372,7 +372,7 @@ class TestResultNormalization:
     ])
     def test_ingest_head_to_head_normalizes_result(self, db, raw, expected):
         self._seeded_match(db)
-        ingest_head_to_head(db, [
+        ingest_head_to_head(db, "M1", [
             {"match_id": "M1", "player_id": "P1", "player_name": "Alice",
              "opponent_id": "P2", "opponent_name": "Bob", "result": raw},
         ])

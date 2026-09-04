@@ -23,6 +23,7 @@ from analytics.matchups import (
     confidence_score,
     head_to_head_win_rate,
     matchup_score,
+    recognized_results,
 )
 from analytics.skill_level_trends import skill_level_trend, skill_level_volatility
 from database.ingest import ingest_matchups, prune_matchups_not_in
@@ -54,17 +55,25 @@ def build_matchups(db: Session) -> list[dict]:
 
     prune_matchups_not_in(db, set(by_pair.keys()))
 
-    # Trend/volatility are about the PLAYER, not the pair -- computed once
-    # per player from their own skill level history, not once per opponent.
-    own_history_by_player: dict[int, list] = defaultdict(list)
+    # Trend/volatility are about the PLAYER *in this format/session*, not
+    # blended across all of them -- P1-4: grouped the same way the matchup
+    # itself is (player_id, format, session_name), not just player_id, or
+    # an 8-ball trend would bleed into a 9-ball matchup's score. Sourced
+    # via each PlayerMatch's own Match relationship, since
+    # database.queries.skill_level_history() returns PlayerMatch rows,
+    # not PlayerHeadToHead ones -- those don't carry format/session_name
+    # directly, but every PlayerMatch that has one is match-linked.
+    own_history_by_group: dict[tuple[int, str, str], list] = defaultdict(list)
     for reading in skill_level_history(db):
-        own_history_by_player[reading.player_id].append(reading)
+        match = reading.match
+        key = (reading.player_id, match.format if match else None, match.session_name if match else None)
+        own_history_by_group[key].append(reading)
 
     rows = []
     for (player_id, opponent_id, format_, session_name), h2h_rows in by_pair.items():
         player = h2h_rows[0].player
         opponent = h2h_rows[0].opponent
-        own_history = own_history_by_player.get(player_id, [])
+        own_history = own_history_by_group.get((player_id, format_, session_name), [])
         trend = skill_level_trend(own_history)
         volatility = skill_level_volatility(own_history)
 
@@ -74,7 +83,11 @@ def build_matchups(db: Session) -> list[dict]:
                 "player_name": player.name,
                 "opponent_id": opponent.external_id,
                 "opponent_name": opponent.name,
-                "matches_played": len(h2h_rows),
+                # P1-6: only RECOGNIZED-result games count as "played" here
+                # -- an unrecognized result (see analytics.matchups) isn't
+                # evidence of a game's outcome, so it shouldn't inflate
+                # this count past what win_rate/matchup_score actually used.
+                "matches_played": len(recognized_results(h2h_rows)),
                 "win_rate": head_to_head_win_rate(h2h_rows),
                 "avg_points_earned": average_points_earned(h2h_rows),
                 "avg_opponent_skill_level": average_opponent_skill_level(h2h_rows),

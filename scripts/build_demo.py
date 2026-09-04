@@ -139,7 +139,7 @@ def main() -> None:
             len(scores), match_detail["id"], created, updated,
         )
         h2h_rows = head_to_head_rows(match_detail)
-        h2h_count = ingest_head_to_head(db, h2h_rows)
+        h2h_count = ingest_head_to_head(db, str(match_detail["id"]), h2h_rows)
         logger.info(
             "ingest_head_to_head: %d row(s) for match %s", h2h_count, match_detail["id"],
         )
