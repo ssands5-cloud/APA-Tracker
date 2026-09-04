@@ -79,11 +79,18 @@ clamped to [0, 100]
   a *loss* to a much stronger opponent should compare to a loss against an
   even one, so that stays out for now. `avg_opponent_skill_level` is still
   reported as plain descriptive context alongside the score.
-- **Trend** and **volatility** are about the *player*, not the pair — the
-  same signal the Skill Level tab shows (`analytics/skill_level_trends.py`),
-  reused here rather than recomputed. A player trending up gets a small
-  boost across every matchup; one whose skill level keeps bouncing around
-  gets a small penalty across every matchup.
+- **Trend** is about the *player*, not the pair — the same signal the
+  Skill Level tab shows (`skill_level_trend`), reused here rather than
+  recomputed: a player trending up gets a small boost across every
+  matchup, one trending down a small penalty.
+- **Volatility** is also about the player, not the pair, but P2
+  normalized it specifically for this engine (`windowed_volatility`):
+  only the last 5 skill-level readings in this (format, session) group
+  count, and the result is capped at 3 changes. This is deliberately
+  *different* from the whole-history, uncapped count the Skill Level tab
+  itself shows (`skill_level_volatility`) — a bouncy stretch from early
+  in the season shouldn't keep penalizing every matchup forever once the
+  player has settled down.
 - **No history yet** → score is `50` (neutral), not a guess in either
   direction.
 

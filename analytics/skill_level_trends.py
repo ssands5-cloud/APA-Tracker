@@ -68,6 +68,31 @@ def skill_level_trend(matches: list[PlayerMatch]) -> str:
 def skill_level_volatility(matches: list[PlayerMatch]) -> int:
     """Count of week-to-week changes -- not a statistical variance, just how
     many times the level actually moved. 0 for a player with one reading, or
-    with several readings that never changed.
+    with several readings that never changed. Uncapped, over the player's
+    WHOLE history -- see windowed_volatility() below for the Matchup
+    Advantage Engine's own, deliberately different, normalized version.
     """
     return len(skill_level_changes(matches))
+
+
+def windowed_volatility(matches: list[PlayerMatch], window: int = 5, cap: int = 3) -> int:
+    """P2 volatility normalization, for analytics.matchup_builder ONLY --
+    NOT a replacement for skill_level_volatility() above, which still
+    backs the separate, unrelated per-player Skill Level History summary
+    (ui/export_json.py's _skill_level_summaries): that one's "how volatile
+    has this player been all season" question is different from this
+    one's "how volatile has this player been RECENTLY", and changing the
+    shared function would have silently changed that other feature too --
+    out of P2's stated scope (the Matchup Advantage Engine specifically).
+
+    Counts skill-level changes among only the last `window` readings
+    (default 5) -- not the player's whole history -- then caps the result
+    at `cap` (default 3) so one wildly bouncing stretch doesn't dominate
+    matchup_score/confidence_score any more than a few real changes would.
+    `matches` must already be in chronological order (same requirement as
+    skill_level_changes) and should already be scoped to one (player,
+    format, session) group by the caller (P1-4) -- "recent" here means
+    recent WITHIN that group, not recent overall.
+    """
+    recent = matches[-window:] if window else matches
+    return min(len(skill_level_changes(recent)), cap)

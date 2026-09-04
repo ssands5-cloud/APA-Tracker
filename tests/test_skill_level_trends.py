@@ -13,6 +13,7 @@ from analytics.skill_level_trends import (
     skill_level_changes,
     skill_level_trend,
     skill_level_volatility,
+    windowed_volatility,
 )
 from database.models import Match, PlayerMatch
 
@@ -79,3 +80,38 @@ class TestSkillLevelVolatility:
     def test_counts_every_change_not_just_whether_one_happened(self):
         matches = [_reading(5), _reading(6), _reading(5), _reading(6)]
         assert skill_level_volatility(matches) == 3
+
+
+class TestWindowedVolatility:
+    """P2: the Matchup Advantage Engine's own normalized volatility --
+    windowed to the last 5 readings, capped at 3. Deliberately a separate
+    function from skill_level_volatility (see its own docstring) rather
+    than a change to it, so the unrelated Skill Level History summary
+    (ui/export_json.py) keeps its whole-history, uncapped count."""
+
+    def test_no_changes_is_zero(self):
+        assert windowed_volatility([_reading(5), _reading(5)]) == 0
+
+    def test_within_the_window_matches_the_plain_count(self):
+        matches = [_reading(5), _reading(6), _reading(5)]
+        assert windowed_volatility(matches) == 2
+
+    def test_only_looks_at_the_last_five_readings(self):
+        """Six readings with an old change (5->6) followed by five steady
+        ones: the old change falls outside the default window of 5, so it
+        must not count, unlike skill_level_volatility's whole-history 1."""
+        matches = [_reading(5), _reading(6)] + [_reading(6)] * 4
+        assert skill_level_volatility(matches) == 1
+        assert windowed_volatility(matches) == 0
+
+    def test_is_capped_at_three_even_with_more_real_changes_in_the_window(self):
+        """Five readings, four consecutive changes (5-6-5-6-5) -- more
+        than the cap, so this must clamp to 3 rather than reporting 4."""
+        matches = [_reading(5), _reading(6), _reading(5), _reading(6), _reading(5)]
+        assert skill_level_volatility(matches) == 4
+        assert windowed_volatility(matches) == 3
+
+    def test_window_and_cap_are_configurable(self):
+        matches = [_reading(5), _reading(6), _reading(5), _reading(6), _reading(5)]
+        assert windowed_volatility(matches, window=3) == 2
+        assert windowed_volatility(matches, window=5, cap=2) == 2

@@ -26,7 +26,7 @@ from analytics.matchups import (
     matchup_score,
     recognized_results,
 )
-from analytics.skill_level_trends import skill_level_trend, skill_level_volatility
+from analytics.skill_level_trends import skill_level_trend, windowed_volatility
 from database.ingest import ingest_matchups, prune_matchups_not_in
 from database.queries import all_head_to_head, skill_level_history
 
@@ -76,7 +76,12 @@ def build_matchups(db: Session) -> list[dict]:
         opponent = h2h_rows[0].opponent
         own_history = own_history_by_group.get((player_id, format_, session_name), [])
         trend = skill_level_trend(own_history)
-        volatility = skill_level_volatility(own_history)
+        # P2 volatility normalization: windowed to the last 5 readings
+        # within this (format, session)-scoped history and capped at 3 --
+        # see analytics.skill_level_trends.windowed_volatility's own
+        # docstring for why this is a separate function from
+        # skill_level_volatility rather than a change to it.
+        volatility = windowed_volatility(own_history)
 
         rows.append(
             {
