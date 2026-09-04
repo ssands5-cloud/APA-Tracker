@@ -36,14 +36,16 @@ teams faced off.
 `analytics/matchups.py::matchup_score(rows, trend, volatility)`:
 
 ```
+reliability  = reliability_weight(n)                 # P2: n / (n + 3) -- win-rate swing only, never hits 1.0
 weight       = sample_size_weight(n)                 # 0 -> 1.0, ramping up to FULL_CONFIDENCE_GAMES (10)
 win_swing    = (weighted_win_rate(rows) - 0.5) * 80   # recency-weighted head-to-head record: ±40 swing
 skill_swing  = opponent_skill_modifier(rows)          # bonus/penalty from wins' skill-level gap, capped ±10
 
 score = 50
-       + weight * (win_swing + skill_swing)   # the actual head-to-head evidence, damped by sample size
-       + trend_modifier(trend)                # +5 up / -5 down / 0 stable or no data -- NOT damped by weight
-       - volatility_penalty(vol)              # 3 points per real change, capped at 15 -- NOT damped by weight
+       + reliability * win_swing               # head-to-head record, damped by n/(n+3) reliability
+       + weight * skill_swing                  # opponent-skill bonus, damped by the older sample_size_weight
+       + trend_modifier(trend)                 # +5 up / -5 down / 0 stable or no data -- NOT damped
+       - volatility_penalty(vol)               # 3 points per real change (now capped at 3 changes) -- NOT damped
 clamped to [0, 100]
 ```
 
@@ -52,15 +54,18 @@ clamped to [0, 100]
   `matchup_score` formula uses a **recency-weighted** version
   (`weighted_win_rate`) — see "Recency bias" below — while the exported
   "Win Rate" column stays the plain, unweighted record.
-- **Sample-size weighting** (`sample_size_weight`) scales the win-rate and
-  opponent-skill swing by how many games you've actually got, from 0 at
-  zero games up to full strength at `FULL_CONFIDENCE_GAMES` (10) — a
-  heuristic choice, not a statistically fitted one. This is what fixes the
-  original gap: a 1-0 record and a 10-0 record no longer score the same,
-  because the 1-0 record's swing gets multiplied by roughly 0.1 instead of
-  1.0. **Trend and volatility are NOT scaled by this** — they describe the
-  player's current form in general, not something this one opponent's
-  game count should dilute.
+- **Sample-size weighting** comes in two separate flavors (P2 split these
+  apart — they used to be one shared factor):
+  - `reliability_weight(n) = n / (n + 3)` scales the win-rate swing only.
+    It never fully reaches 1.0 — a win-rate record is never treated as
+    fully certain, however long it gets.
+  - `sample_size_weight(n)` (unchanged) scales the opponent-skill swing
+    and `confidence_score`'s own sample component, ramping linearly to a
+    hard 1.0 at `FULL_CONFIDENCE_GAMES` (10).
+  Either way, this is what fixes the original gap: a 1-0 record's swing no
+  longer scores anywhere near a 10-0 one's. **Trend and volatility are NOT
+  scaled by either factor** — they describe the player's current form in
+  general, not something this one opponent's game count should dilute.
 - **Opponent-skill-level weighting** (`opponent_skill_modifier`): a win
   against a higher-skill-level opponent earns a bonus; a win against a
   lower-skill-level one costs a (smaller, capped) penalty — 2 points per

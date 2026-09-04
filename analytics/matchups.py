@@ -190,10 +190,33 @@ def volatility_penalty(volatility: int) -> int:
 
 def sample_size_weight(n: int) -> float:
     """0.0 for no games, ramping linearly to 1.0 at FULL_CONFIDENCE_GAMES
-    -- how much of the win-rate/opponent-skill swing to actually apply to
-    matchup_score. This is what stops a 1-0 record scoring the same as a
-    10-0 one: at n=1 only 1/FULL_CONFIDENCE_GAMES of that swing counts."""
+    -- how much of the opponent-skill swing to actually apply to
+    matchup_score, and confidence_score's own sample-size component. This
+    is what stops a 1-0 record's skill-swing bonus scoring the same as a
+    10-0 one's: at n=1 only 1/FULL_CONFIDENCE_GAMES of that swing counts.
+
+    P2 scoped a separate reliability_weight() (below) to the win-rate
+    swing specifically, leaving this one governing the skill swing and
+    confidence_score exactly as before -- see reliability_weight's own
+    docstring for why the two aren't the same function.
+    """
     return min(n / FULL_CONFIDENCE_GAMES, 1.0)
+
+
+def reliability_weight(n: int) -> float:
+    """P2 sample-size weighting: n / (n + 3), applied ONLY to the H2H
+    win-rate swing in matchup_score -- a reliability/shrinkage factor
+    (the same shape as a Bayesian estimate with a 3-game virtual prior),
+    distinct from sample_size_weight() above, which still governs the
+    opponent-skill swing and confidence_score's sample component.
+
+    Never reaches 1.0, unlike sample_size_weight's hard cap at
+    FULL_CONFIDENCE_GAMES: a win-rate swing is never treated as fully
+    certain, however long the record gets, whereas the skill-swing/
+    confidence weighting deliberately settles to full trust past a fixed
+    threshold. 0.0 for n=0 (no evidence, no swing).
+    """
+    return n / (n + 3)
 
 
 def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> int:
@@ -219,14 +242,16 @@ def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) 
 
 
 def matchup_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> int:
-    """0-100. The win-rate/opponent-skill swing (recency-weighted, per
-    weighted_win_rate() and opponent_skill_modifier()) is scaled by
-    sample_size_weight() before being added to the 50-point baseline --
-    a small sample pulls the score toward neutral rather than swinging it
-    fully. The player's own current trend and volatility are NOT scaled by
-    this pairing's sample size: they describe the player's present form in
-    general, not something this specific opponent's game count should
-    dilute.
+    """0-100. The win-rate swing (recency-weighted, per weighted_win_rate())
+    is scaled by reliability_weight() -- P2 -- and the opponent-skill swing
+    (per opponent_skill_modifier()) is scaled by sample_size_weight(), each
+    before being added to the 50-point baseline: a small sample pulls both
+    toward neutral rather than swinging the score fully, but via two
+    separately documented factors rather than one shared one (see each
+    function's own docstring for why they differ). The player's own
+    current trend and volatility are NOT scaled by either factor: they
+    describe the player's present form in general, not something this
+    specific opponent's game count should dilute.
 
     50 (neutral, not a guess at "good" or "bad") for a pair with no
     RECOGNIZED-result head-to-head history at all -- either no rows, or
@@ -237,8 +262,16 @@ def matchup_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> 
     recognized = recognized_results(rows)
     if not recognized:
         return 50
-    weight = sample_size_weight(len(recognized))
+    n = len(recognized)
+    reliability = reliability_weight(n)
+    weight = sample_size_weight(n)
     win_rate_swing = (weighted_win_rate(rows) - 0.5) * 80
     skill_swing = opponent_skill_modifier(rows)
-    score = 50 + weight * (win_rate_swing + skill_swing) + trend_modifier(trend) - volatility_penalty(volatility)
+    score = (
+        50
+        + reliability * win_rate_swing
+        + weight * skill_swing
+        + trend_modifier(trend)
+        - volatility_penalty(volatility)
+    )
     return int(round(max(0, min(100, score))))

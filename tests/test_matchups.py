@@ -20,6 +20,7 @@ from analytics.matchups import (
     matchup_score,
     opponent_skill_modifier,
     recognized_results,
+    reliability_weight,
     sample_size_weight,
     trend_modifier,
     volatility_penalty,
@@ -297,6 +298,26 @@ class TestSampleSizeWeight:
         assert sample_size_weight(FULL_CONFIDENCE_GAMES // 2) == 0.5
 
 
+class TestReliabilityWeight:
+    """P2: n / (n + 3), applied only to the H2H win-rate swing -- distinct
+    from sample_size_weight, which still governs the opponent-skill swing
+    and confidence_score's sample component (see TestSampleSizeWeight)."""
+
+    def test_no_games_is_zero_weight(self):
+        assert reliability_weight(0) == 0.0
+
+    def test_matches_the_n_over_n_plus_three_formula(self):
+        assert reliability_weight(3) == 0.5
+        assert reliability_weight(7) == 0.7
+
+    def test_never_fully_reaches_one_unlike_sample_size_weight(self):
+        """Distinguishes this from sample_size_weight, which hard-caps at
+        1.0 at FULL_CONFIDENCE_GAMES -- reliability keeps approaching 1.0
+        but never gets there, however large n gets."""
+        assert reliability_weight(1000) < 1.0
+        assert reliability_weight(FULL_CONFIDENCE_GAMES) != sample_size_weight(FULL_CONFIDENCE_GAMES)
+
+
 class TestConfidenceScore:
     def test_no_history_is_not_automatically_zero(self):
         """Zero games contributes 0 to the sample component, but the
@@ -333,12 +354,17 @@ class TestMatchupScore:
         assert matchup_score([], "no data", 0) == 50
 
     def test_a_full_sample_perfect_record_with_no_other_modifiers(self):
+        """50 + reliability_weight(10)*40 = 50 + (10/13)*40 = 80.77 -> 81.
+        Was a clean 90 before P2's reliability_weight replaced
+        sample_size_weight for the win-rate swing specifically -- see
+        TestReliabilityWeight for why the two aren't interchangeable."""
         rows = [_game("W")] * FULL_CONFIDENCE_GAMES
-        assert matchup_score(rows, "stable", 0) == 90
+        assert matchup_score(rows, "stable", 0) == 81
 
     def test_a_full_sample_winless_record_with_no_other_modifiers(self):
+        """50 - reliability_weight(10)*40 = 50 - (10/13)*40 = 19.23 -> 19."""
         rows = [_game("L")] * FULL_CONFIDENCE_GAMES
-        assert matchup_score(rows, "stable", 0) == 10
+        assert matchup_score(rows, "stable", 0) == 19
 
     def test_a_one_game_record_is_pulled_toward_neutral_not_to_the_extreme(self):
         """The actual fix for the reported bug: a 1-0 record must NOT
@@ -377,5 +403,10 @@ class TestMatchupScore:
         assert matchup_score(rows, "down", 50) == 0
 
     def test_score_is_clamped_at_a_hundred_not_above(self):
-        rows = [_game("W", opponent_skill_level=9, own_skill_level=1)] * FULL_CONFIDENCE_GAMES
+        """Needs more than FULL_CONFIDENCE_GAMES now: reliability_weight
+        never fully reaches 1.0 the way sample_size_weight does, so
+        FULL_CONFIDENCE_GAMES games alone (reliability ~0.77) isn't enough
+        win-rate swing to hit the ceiling on its own -- 30 games
+        (reliability ~0.91) is."""
+        rows = [_game("W", opponent_skill_level=9, own_skill_level=1)] * 30
         assert matchup_score(rows, "up", 0) == 100
