@@ -128,7 +128,12 @@ per-league alias id and pulls both, landing in the "Career Stats" and
 `docs/graphql-captures/*/HANDOFF.md` item 2 for how the alias id was found
 and what's still unconfirmed (opponents' career stats aren't pulled this
 way, and the alias-per-league mapping is only confirmed against one league
-on a multi-league account).
+on a multi-league account). "Career Stats" also carries lifetime on-break/
+break-and-run/mini-slam counts (plus 8-ball-only "rackless" and 9-ball-only
+"skunks") from the same query's per-session `players` list, summed across
+sessions; per-match on-break/break-and-run counts (from `MATCH_DETAIL_QUERY`
+scoresheet rows, not `getEightBallStats`) are summed per player into new
+"Player Stats" columns the same way wins/losses already are.
 
 **Skill level history** — APA skill levels get re-evaluated and can change
 mid-season, and a player who moved that way shows up as a mystery jump in

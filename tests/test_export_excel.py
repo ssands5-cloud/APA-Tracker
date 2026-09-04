@@ -70,6 +70,8 @@ class TestSeededData:
             "eight_ball_matches_won": 64, "eight_ball_matches_played": 129,
             "eight_ball_cla": 1, "eight_ball_defensive_shot_avg": 1.26,
             "eight_ball_match_count_for_last_two_yrs": 123, "eight_ball_last_played": "2026-08-31",
+            "eight_ball_on_break_count": 30, "eight_ball_break_and_runs": 5,
+            "eight_ball_rackless": 2, "eight_ball_mini_slams": 1,
         })
         ingest_player_team_history(db, player, [{
             "is_current": True, "team_name": "Mark It Up", "division_id": "436670",
@@ -93,9 +95,13 @@ class TestSeededData:
         assert headers == [
             "Player", "Format", "Matches Won", "Matches Played", "CLA",
             "Defensive Shot Avg", "Matches (Last 2 Yrs)", "Last Played",
+            "On Breaks", "Break & Runs", "Mini Slams", "Rackless", "Skunks",
         ]
         row = [c.value for c in ws[2]]
-        assert row == ["Paul Smith", "EIGHT", 64, 129, 1, 1.26, 123, "2026-08-31"]
+        assert row == [
+            "Paul Smith", "EIGHT", 64, 129, 1, 1.26, 123, "2026-08-31",
+            30, 5, 1, 2, None,  # Skunks is a nine-ball-only stat
+        ]
 
     def test_team_history_sheet_has_the_real_columns_and_values(self, seeded_db, tmp_path):
         wb = _export(seeded_db, tmp_path)

@@ -73,6 +73,19 @@ class TestMatchPlayerScores:
     def test_a_result_with_no_scores_yields_no_rows_for_that_side(self):
         assert match_player_scores({"results": [{"homeAway": "HOME", "scores": []}]}) == []
 
+    def test_on_break_and_break_and_run_counts_are_read_correctly(self):
+        """Real per-match COUNTS (see database.models.PlayerMatch's own
+        comment) -- Player One won 2 racks including a break-and-run,
+        Player Two got on the break once but never ran the rack."""
+        rows = {r["player_name"]: r for r in match_player_scores(MATCH)}
+        assert rows["Player One"]["eight_on_break"] == 0
+        assert rows["Player One"]["eight_break_and_run"] == 1
+        assert rows["Player Two"]["eight_on_break"] == 1
+        assert rows["Player Two"]["eight_break_and_run"] == 0
+        # This fixture is an 8-ball match -- the 9-ball fields stay None.
+        assert rows["Player One"]["nine_on_snap"] is None
+        assert rows["Player One"]["nine_break_and_run"] is None
+
 
 class TestHeadToHeadRows:
     """Who a player actually played against, from pairing same-numbered
@@ -269,6 +282,15 @@ class TestIngestionEndToEnd:
         assert by_ext_id["501"].result == "W"
         assert by_ext_id["501"].points_earned == 6
         assert by_ext_id["501"].team_name == "Chalk It Up"
+
+    def test_on_break_and_break_and_run_counts_land_in_the_database(self, tmp_path):
+        db = self._seeded_db(tmp_path)
+        ingest_match_scores(db, "555001", match_player_scores(MATCH))
+
+        by_ext_id = {r.player.external_id: r for r in db.query(PlayerMatch).all()}
+        assert by_ext_id["501"].eight_break_and_run == 1
+        assert by_ext_id["502"].eight_on_break == 1
+        assert by_ext_id["501"].nine_on_snap is None
 
     def test_the_foreign_key_actually_resolves(self, tmp_path):
         """Regression test for a real bug: ingest_match_scores originally

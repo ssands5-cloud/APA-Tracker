@@ -322,6 +322,10 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
             "skill_level": _to_int(entry.get("skill_level")),
             "result": _normalize_result(entry.get("result")),
             "points_earned": _to_float(entry.get("points_earned")),
+            "eight_on_break": _to_int(entry.get("eight_on_break")),
+            "eight_break_and_run": _to_int(entry.get("eight_break_and_run")),
+            "nine_on_snap": _to_int(entry.get("nine_on_snap")),
+            "nine_break_and_run": _to_int(entry.get("nine_break_and_run")),
         }
         if existing:
             for key, value in fields.items():
@@ -387,6 +391,11 @@ def ingest_player_career_stats(db: Session, player: Player, stats_row: dict) -> 
         "defensive_shot_avg": _to_float(stats_row.get("defensive_shot_avg")),
         "match_count_last_two_yrs": _to_int(stats_row.get("match_count_last_two_yrs")),
         "last_played": stats_row.get("last_played"),
+        "on_break_count": _to_int(stats_row.get("on_break_count")),
+        "break_and_runs": _to_int(stats_row.get("break_and_runs")),
+        "mini_slams": _to_int(stats_row.get("mini_slams")),
+        "rackless": _to_int(stats_row.get("rackless")),
+        "skunks": _to_int(stats_row.get("skunks")),
     }
     if existing:
         for key, value in fields.items():
@@ -412,6 +421,10 @@ def ingest_eight_ball_stats(db: Session, player: Player, stats_row: dict) -> int
             "defensive_shot_avg": stats_row.get("eight_ball_defensive_shot_avg"),
             "match_count_last_two_yrs": stats_row.get("eight_ball_match_count_for_last_two_yrs"),
             "last_played": stats_row.get("eight_ball_last_played"),
+            "on_break_count": stats_row.get("eight_ball_on_break_count"),
+            "break_and_runs": stats_row.get("eight_ball_break_and_runs"),
+            "mini_slams": stats_row.get("eight_ball_mini_slams"),
+            "rackless": stats_row.get("eight_ball_rackless"),
         })
         written += 1
     if stats_row.get("nine_ball_matches_played") is not None:
@@ -423,6 +436,10 @@ def ingest_eight_ball_stats(db: Session, player: Player, stats_row: dict) -> int
             "defensive_shot_avg": stats_row.get("nine_ball_defensive_shot_avg"),
             "match_count_last_two_yrs": stats_row.get("nine_ball_match_count_for_last_two_yrs"),
             "last_played": stats_row.get("nine_ball_last_played"),
+            "on_break_count": stats_row.get("nine_ball_on_break_count"),
+            "break_and_runs": stats_row.get("nine_ball_break_and_runs"),
+            "mini_slams": stats_row.get("nine_ball_mini_slams"),
+            "skunks": stats_row.get("nine_ball_skunks"),
         })
         written += 1
     logger.info("Ingested career stats for %s: %d format(s)", player.name, written)

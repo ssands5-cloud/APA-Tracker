@@ -261,6 +261,14 @@ class TestIngestEightBallStats:
         "nine_ball_defensive_shot_avg": None,
         "nine_ball_match_count_for_last_two_yrs": None,
         "nine_ball_last_played": None,
+        "eight_ball_on_break_count": 12,
+        "eight_ball_break_and_runs": 4,
+        "eight_ball_rackless": 2,
+        "eight_ball_mini_slams": 1,
+        "nine_ball_on_break_count": None,
+        "nine_ball_break_and_runs": None,
+        "nine_ball_mini_slams": None,
+        "nine_ball_skunks": None,
     }
 
     def test_writes_one_row_for_the_format_with_data(self, db):
@@ -272,6 +280,10 @@ class TestIngestEightBallStats:
         assert row.matches_won == 64
         assert row.matches_played == 129
         assert row.match_count_last_two_yrs == 123
+        assert row.on_break_count == 12
+        assert row.break_and_runs == 4
+        assert row.rackless == 2
+        assert row.mini_slams == 1
 
     def test_skips_the_format_with_no_data(self, db):
         team = upsert_team(db, "T1", "Mark It Up")

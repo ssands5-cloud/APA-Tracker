@@ -385,6 +385,11 @@ function renderCareer() {
         <td class="num">${s.defensive_shot_avg ?? '—'}</td>
         <td class="num">${s.match_count_last_two_yrs ?? '—'}</td>
         <td>${esc(s.last_played ?? '—')}</td>
+        <td class="num">${s.on_break_count ?? '—'}</td>
+        <td class="num">${s.break_and_runs ?? '—'}</td>
+        <td class="num">${s.mini_slams ?? '—'}</td>
+        <td class="num">${s.rackless ?? '—'}</td>
+        <td class="num">${s.skunks ?? '—'}</td>
       </tr>`).join('');
 
     const historyRows = history.map(h => `
@@ -403,8 +408,8 @@ function renderCareer() {
         <h2>${esc(player)} — lifetime stats</h2>
         <div class="panel table-wrap">
           <table>
-            <thead><tr><th>Format</th><th class="num">Won</th><th class="num">Played</th><th class="num">CLA</th><th class="num">Def. Shot Avg</th><th class="num">Last 2 Yrs</th><th>Last Played</th></tr></thead>
-            <tbody>${statRows || '<tr><td colspan="7" class="empty">No lifetime stats.</td></tr>'}</tbody>
+            <thead><tr><th>Format</th><th class="num">Won</th><th class="num">Played</th><th class="num">CLA</th><th class="num">Def. Shot Avg</th><th class="num">Last 2 Yrs</th><th>Last Played</th><th class="num">On Breaks</th><th class="num">Break &amp; Runs</th><th class="num">Mini Slams</th><th class="num">Rackless</th><th class="num">Skunks</th></tr></thead>
+            <tbody>${statRows || '<tr><td colspan="12" class="empty">No lifetime stats.</td></tr>'}</tbody>
           </table>
         </div>
         <h2>${esc(player)} — team history</h2>

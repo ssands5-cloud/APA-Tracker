@@ -133,6 +133,11 @@ def _career_stats(db: Session) -> list[dict]:
             "defensive_shot_avg": row.defensive_shot_avg,
             "match_count_last_two_yrs": row.match_count_last_two_yrs,
             "last_played": row.last_played,
+            "on_break_count": row.on_break_count,
+            "break_and_runs": row.break_and_runs,
+            "mini_slams": row.mini_slams,
+            "rackless": row.rackless,
+            "skunks": row.skunks,
         }
         for row in career_stats(db)
     ]
@@ -192,6 +197,10 @@ def _player_stats(db: Session) -> list[dict]:
                 "ppm": player.ppm,
                 "pa": player.pa,
                 "avg_points": stat.avg_points,
+                "total_eight_on_breaks": stat.total_eight_on_breaks,
+                "total_eight_break_and_runs": stat.total_eight_break_and_runs,
+                "total_nine_on_snaps": stat.total_nine_on_snaps,
+                "total_nine_break_and_runs": stat.total_nine_break_and_runs,
                 "source": source,
             }
         )

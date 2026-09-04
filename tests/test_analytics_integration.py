@@ -60,6 +60,15 @@ class TestSummarizePlayerAgainstGraphQLData:
         stat = summarize_player("Player Two", matches)
         assert (stat.matches_played, stat.wins, stat.losses) == (1, 0, 1)
 
+    def test_on_break_and_break_and_run_totals_are_summed_from_real_data(self, tmp_path):
+        db = _db_with_one_match_ingested(tmp_path)
+        one = summarize_player("Player One", player_match_history(db, "501"))
+        two = summarize_player("Player Two", player_match_history(db, "502"))
+        assert one.total_eight_break_and_runs == 1
+        assert one.total_eight_on_breaks == 0
+        assert two.total_eight_on_breaks == 1
+        assert two.total_nine_on_snaps == 0  # 8-ball match -- nothing to sum
+
     def test_recent_form_reads_the_correct_result(self, tmp_path):
         db = _db_with_one_match_ingested(tmp_path)
         matches = player_match_history(db, "501")

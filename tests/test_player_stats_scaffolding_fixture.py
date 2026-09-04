@@ -65,6 +65,46 @@ class TestEightBallStatsRow:
         assert row["display_name"] == ""
         assert row["alias_id"] is None
 
+    def test_nine_ball_on_snap_break_and_run_mini_slam_and_skunk_totals(self):
+        """The fixture's one `players` entry is a NineBallPlayer -- these
+        come from that list, not the EightBallStats/NineBallStats lifetime
+        aggregate block above, so this is real coverage of a separate code
+        path (_sum_typed_player_stats), not a duplicate of the matches_won
+        assertions above."""
+        row = eight_ball_stats_row(EIGHT_BALL_STATS)
+        assert row["nine_ball_on_break_count"] == 3
+        assert row["nine_ball_break_and_runs"] == 1
+        assert row["nine_ball_mini_slams"] == 0
+        assert row["nine_ball_skunks"] == 2
+
+    def test_eight_ball_run_stats_are_none_when_the_fixture_has_no_eight_ball_player_entry(self):
+        """The fixture's `players` list has a NineBallPlayer entry only --
+        None (not 0) distinguishes "never played this format" from a real
+        zero count."""
+        row = eight_ball_stats_row(EIGHT_BALL_STATS)
+        assert row["eight_ball_on_break_count"] is None
+        assert row["eight_ball_break_and_runs"] is None
+        assert row["eight_ball_rackless"] is None
+        assert row["eight_ball_mini_slams"] is None
+
+    def test_sums_across_multiple_sessions_of_the_same_format(self):
+        """`players` is a list of one entry per (session, format) -- two
+        sessions of 8-ball must sum, not overwrite each other."""
+        alias = {
+            "id": 1, "displayName": "Two Seasons",
+            "players": [
+                {"id": 1, "__typename": "EightBallPlayer", "eightOnBreaks": 2,
+                 "eightBallBreakAndRuns": 1, "rackless": 0, "miniSlams": 1},
+                {"id": 2, "__typename": "EightBallPlayer", "eightOnBreaks": 3,
+                 "eightBallBreakAndRuns": 0, "rackless": 1, "miniSlams": 0},
+            ],
+        }
+        row = eight_ball_stats_row(alias)
+        assert row["eight_ball_on_break_count"] == 5
+        assert row["eight_ball_break_and_runs"] == 1
+        assert row["eight_ball_rackless"] == 1
+        assert row["eight_ball_mini_slams"] == 1
+
 
 class TestTeamStatRows:
     def test_one_row_per_past_and_current_team(self):

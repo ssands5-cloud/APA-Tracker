@@ -116,6 +116,10 @@ def _player_stats_dataframe(db: Session) -> pd.DataFrame:
                 "PPM": player.ppm,
                 "PA": player.pa,
                 "Avg Points": stat.avg_points,
+                "8-Ball On Breaks": stat.total_eight_on_breaks,
+                "8-Ball Break & Runs": stat.total_eight_break_and_runs,
+                "9-Ball On Snaps": stat.total_nine_on_snaps,
+                "9-Ball Break & Runs": stat.total_nine_break_and_runs,
                 "Source": source,
             }
         )
@@ -138,6 +142,11 @@ def _career_stats_dataframe(db: Session) -> pd.DataFrame:
                 "Defensive Shot Avg": row.defensive_shot_avg,
                 "Matches (Last 2 Yrs)": row.match_count_last_two_yrs,
                 "Last Played": row.last_played,
+                "On Breaks": row.on_break_count,
+                "Break & Runs": row.break_and_runs,
+                "Mini Slams": row.mini_slams,
+                "Rackless": row.rackless,
+                "Skunks": row.skunks,
             }
             for row in career_stats(db)
         ]

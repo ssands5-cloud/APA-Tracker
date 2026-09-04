@@ -505,6 +505,15 @@ def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
                     "points_earned": points_earned,
                     "forfeited": bool(score.get("matchForfeited")),
                     "incomplete": bool(score.get("incompleteMatch")),
+                    # Real per-match COUNTS, not booleans -- confirmed against
+                    # a real fixture (eightBallWins=2 in a single match, since
+                    # a match is a race across multiple racks). Exactly one of
+                    # each eight_/nine_ pair is ever non-null, same as
+                    # points_earned above.
+                    "eight_on_break": score.get("eightOnBreak"),
+                    "eight_break_and_run": score.get("eightBallBreakAndRun"),
+                    "nine_on_snap": score.get("nineOnSnap"),
+                    "nine_break_and_run": score.get("nineBallBreakAndRun"),
                 }
             )
     return rows
@@ -679,12 +688,47 @@ def fetch_eight_ball_stats(config: dict, alias_id: int) -> dict[str, Any]:
     return payload.get("alias") or {}
 
 
+def _sum_typed_player_stats(players: list[dict], typename: str, fields: list[str]) -> dict[str, Any]:
+    """Sum one or more numeric fields across every entry of `alias.players`
+    (GET_EIGHT_BALL_STATS_QUERY) matching a given GraphQL fragment type --
+    `players` is a list of one entry per (session, format) the alias
+    played, not a single lifetime total, so this is what turns it into
+    one. None (not 0) for a field if the alias has no entry of that
+    format at all -- a real 0 must stay distinguishable from "never
+    played this format", same convention as this module's average_*-style
+    helpers elsewhere in the codebase.
+    """
+    totals: dict[str, Any] = {field: None for field in fields}
+    for player in players or []:
+        player = player or {}
+        if player.get("__typename") != typename:
+            continue
+        for field in fields:
+            value = player.get(field)
+            if value is None:
+                continue
+            totals[field] = (totals[field] or 0) + value
+    return totals
+
+
 def eight_ball_stats_row(alias: dict[str, Any]) -> dict[str, Any]:
     """Flatten one alias's lifetime stats into one row -- both formats side
     by side, since a player can have a lifetime record in either or both.
+
+    The on-break/break-and-run/mini-slam/rackless/skunk counts come from
+    `alias.players`, not the `EightBallStats`/`NineBallStats` lifetime
+    aggregates above -- see _sum_typed_player_stats' docstring for why
+    that needs summing here rather than reading a single field.
     """
     eight = (alias.get("EightBallStats") or [{}])[0] or {}
     nine = (alias.get("NineBallStats") or [{}])[0] or {}
+    players = alias.get("players") or []
+    eight_totals = _sum_typed_player_stats(
+        players, "EightBallPlayer", ["eightOnBreaks", "eightBallBreakAndRuns", "rackless", "miniSlams"]
+    )
+    nine_totals = _sum_typed_player_stats(
+        players, "NineBallPlayer", ["nineOnSnaps", "nineBallBreakAndRuns", "miniSlams", "skunks"]
+    )
     return {
         "alias_id": alias.get("id"),
         "display_name": alias.get("displayName") or "",
@@ -694,12 +738,20 @@ def eight_ball_stats_row(alias: dict[str, Any]) -> dict[str, Any]:
         "eight_ball_defensive_shot_avg": eight.get("defensiveShotAvg"),
         "eight_ball_match_count_for_last_two_yrs": eight.get("matchCountForLastTwoYrs"),
         "eight_ball_last_played": eight.get("lastPlayed"),
+        "eight_ball_on_break_count": eight_totals["eightOnBreaks"],
+        "eight_ball_break_and_runs": eight_totals["eightBallBreakAndRuns"],
+        "eight_ball_rackless": eight_totals["rackless"],
+        "eight_ball_mini_slams": eight_totals["miniSlams"],
         "nine_ball_matches_won": nine.get("matchesWon"),
         "nine_ball_matches_played": nine.get("matchesPlayed"),
         "nine_ball_cla": nine.get("CLA"),
         "nine_ball_defensive_shot_avg": nine.get("defensiveShotAvg"),
         "nine_ball_match_count_for_last_two_yrs": nine.get("matchCountForLastTwoYrs"),
         "nine_ball_last_played": nine.get("lastPlayed"),
+        "nine_ball_on_break_count": nine_totals["nineOnSnaps"],
+        "nine_ball_break_and_runs": nine_totals["nineBallBreakAndRuns"],
+        "nine_ball_mini_slams": nine_totals["miniSlams"],
+        "nine_ball_skunks": nine_totals["skunks"],
     }
 
 

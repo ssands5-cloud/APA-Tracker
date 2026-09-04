@@ -194,12 +194,16 @@ class TestCareerStatsAndTeamHistory:
             "eight_ball_matches_won": 64, "eight_ball_matches_played": 129,
             "eight_ball_cla": 1, "eight_ball_defensive_shot_avg": 1.26,
             "eight_ball_match_count_for_last_two_yrs": 123, "eight_ball_last_played": "2026-08-31",
+            "eight_ball_on_break_count": 30, "eight_ball_break_and_runs": 5,
+            "eight_ball_rackless": 2, "eight_ball_mini_slams": 1,
         })
         document = _export(db, tmp_path)
         assert document["career_stats"] == [{
             "player": "Paul Smith", "format": "EIGHT", "matches_won": 64,
             "matches_played": 129, "cla": 1, "defensive_shot_avg": 1.26,
             "match_count_last_two_yrs": 123, "last_played": "2026-08-31",
+            "on_break_count": 30, "break_and_runs": 5, "mini_slams": 1,
+            "rackless": 2, "skunks": None,
         }]
 
     def test_team_history_row_shape(self, db, tmp_path):

@@ -174,6 +174,17 @@ class PlayerMatch(Base):
     pa = Column(Float)
     points_earned = Column(Float)
     result = Column(String)
+    # Real, captured MATCH_DETAIL_QUERY score-row fields (parser/apa_graphql.py)
+    # -- not booleans: an APA match is a race across multiple racks, so these
+    # are per-match COUNTS (confirmed against a real fixture: eightBallWins=2
+    # in one match). Only ingest_match_scores populates these -- the other
+    # two ingest paths (ingest_player_matches, ingest_match_roster) have no
+    # source for them. Exactly one of the eight_/nine_ pair is ever non-null
+    # for a given row, same convention as points_earned above.
+    eight_on_break = Column(Integer)
+    eight_break_and_run = Column(Integer)
+    nine_on_snap = Column(Integer)
+    nine_break_and_run = Column(Integer)
 
     player = relationship("Player", back_populates="matches")
     match = relationship("Match", back_populates="player_matches")
@@ -202,6 +213,23 @@ class PlayerCareerStats(Base):
     defensive_shot_avg = Column(Float)
     match_count_last_two_yrs = Column(Integer)
     last_played = Column(String)  # stored as delivered text, same convention as match_date elsewhere
+    # Real, captured GET_EIGHT_BALL_STATS_QUERY fields (parser/apa_graphql.py),
+    # from `alias.players` -- a LIST of one entry per (session, format) the
+    # alias played, not a single lifetime total the way matchesWon/CLA/etc.
+    # above are. scraper.graphql_scraper.eight_ball_stats_row sums this list
+    # per format before it reaches here, so what lands in each column IS the
+    # lifetime total, just derived rather than a single ready-made API field.
+    # on_break_count/break_and_runs/mini_slams are named generically since
+    # both formats report an equivalent stat (8-ball's "on break" is
+    # 9-ball's "on snap") under this one shared column; rackless is
+    # EIGHT-only and skunks is NINE-only -- null on the other format's row,
+    # same convention as cla/defensive_shot_avg being format-agnostic names
+    # for a per-format-row value.
+    on_break_count = Column(Integer)
+    break_and_runs = Column(Integer)
+    mini_slams = Column(Integer)
+    rackless = Column(Integer)
+    skunks = Column(Integer)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     player = relationship("Player", back_populates="career_stats")
