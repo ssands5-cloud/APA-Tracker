@@ -152,6 +152,7 @@ class TestExcelExportSeesLiveData:
         record = dict(zip(header, alex))
 
         assert record["Player"] == "Alex R."
+        assert record["Team"] == "Chalk It Up"
         # The regression: roster-sourced players used to export as 0-0.
         assert record["Matches"] == 10
         assert record["Wins"] == 8

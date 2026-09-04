@@ -109,3 +109,32 @@ class TestSeededData:
         wb = _export(seeded_db, tmp_path)
         assert wb["Standings"].max_row == 2  # header + 1 team
         assert wb["Player Stats"].max_row == 2  # header + 1 player
+
+    def test_player_stats_shows_which_team_the_row_is_for(self, seeded_db, tmp_path):
+        """A player on two teams during a season legitimately gets two rows
+        here -- without a Team column that looked like an unexplained
+        duplicate. Real report from Paul: seeing his own name twice, which
+        turned out to be exactly this, not a bug."""
+        wb = _export(seeded_db, tmp_path)
+        rows = [[c.value for c in r] for r in wb["Player Stats"].iter_rows()]
+        header, paul = rows[0], rows[1]
+        record = dict(zip(header, paul))
+        assert record["Team"] == "Mark It Up"
+
+    def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
+        """ingest_match_scores() never assigns a team (only upsert_roster()
+        does) -- a player known only from a scoresheet has no team to show."""
+        upsert_team(db, "T1", "Chalk It Up")
+        upsert_team(db, "T2", "Rack Attack")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Chalk It Up", away_team_name="Rack Attack",
+                     status="COMPLETED", home_score=6, away_score=3)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P9", "player_name": "Opponent Guy", "team_id": "T2",
+             "result": "L", "points_earned": 3},
+        ])
+        wb = _export(db, tmp_path)
+        rows = [[c.value for c in r] for r in wb["Player Stats"].iter_rows()]
+        record = dict(zip(rows[0], rows[1]))
+        # An empty string round-trips through openpyxl as a blank cell (None).
+        assert not record["Team"]

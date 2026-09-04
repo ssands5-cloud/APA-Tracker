@@ -177,6 +177,7 @@ def _player_stats(db: Session) -> list[dict]:
         records.append(
             {
                 "player": stat.player_name,
+                "team": player.team.name if player.team else "",
                 "skill_level": player.skill_level,
                 "matches": played,
                 "wins": wins,

@@ -65,6 +65,16 @@ def _player_stats_dataframe(db: Session) -> pd.DataFrame:
     History wins where present, roster totals fill in otherwise, and "Source"
     says which -- so a zero is never ambiguous between "played none" and "this
     path carries no match detail".
+
+    "Team" is the player's current roster team (Player.team, set by
+    upsert_roster()) -- blank for a player only ever seen via a match
+    scoresheet, since ingest_match_scores() never assigns a team. A player
+    on two of the account's teams during a season can legitimately appear
+    as two separate rows here, one per team; without this column that
+    looked like an unexplained duplicate. If two rows for the same name
+    ever show the SAME team, that's not a real multi-team split -- it means
+    two different external_ids got assigned to one real person, a separate
+    bug worth chasing.
     """
     records = []
     for player in all_players(db):
@@ -85,6 +95,7 @@ def _player_stats_dataframe(db: Session) -> pd.DataFrame:
         records.append(
             {
                 "Player": stat.player_name,
+                "Team": player.team.name if player.team else "",
                 "Skill Level": player.skill_level,
                 "Matches": played,
                 "Wins": wins,

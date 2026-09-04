@@ -39,7 +39,7 @@ REQUIRED_MATCH_KEYS = {
 }
 
 REQUIRED_PLAYER_STATS_KEYS = {
-    "player", "skill_level", "matches", "wins", "losses", "win_pct",
+    "player", "team", "skill_level", "matches", "wins", "losses", "win_pct",
     "ppm", "pa", "avg_points", "source",
 }
 
@@ -122,6 +122,22 @@ class TestShape:
         document = _export(seeded_db, tmp_path)
         sources = {row["source"] for row in document["player_stats"]}
         assert sources == {"match history"}
+
+    def test_player_stats_team_is_blank_when_never_rostered(self, seeded_db, tmp_path):
+        """seeded_db's Alice/Bob only ever go through ingest_match_scores(),
+        which doesn't assign a team -- only upsert_roster() does."""
+        document = _export(seeded_db, tmp_path)
+        teams = {row["team"] for row in document["player_stats"]}
+        assert teams == {""}
+
+    def test_player_stats_team_reflects_the_roster_a_player_is_on(self, db, tmp_path):
+        """A player on two of the account's teams during a season shows up
+        as two rows here, one per team -- the "team" field is what makes
+        that a legible split instead of a mystery duplicate."""
+        team = upsert_team(db, "T1", "Mark It Up")
+        upsert_player(db, "3349374", "Paul Smith", team)
+        document = _export(db, tmp_path)
+        assert document["player_stats"][0]["team"] == "Mark It Up"
 
     def test_match_scores_are_keyed_by_the_matchs_external_id(self, seeded_db, tmp_path):
         document = _export(seeded_db, tmp_path)
