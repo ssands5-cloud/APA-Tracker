@@ -200,9 +200,12 @@ class TestFormatAndSessionDimensions:
         rows = build_matchups(db)
         by_format = {r["format"]: r for r in rows}
 
-        assert by_format["EIGHT_BALL"]["volatility"] == 0
+        assert by_format["EIGHT_BALL"]["volatility"] == 0.0
         assert by_format["EIGHT_BALL"]["trend"] == "stable"
-        assert by_format["NINE_BALL"]["volatility"] == 2  # 5->6, 6->5
+        # P2: a rate, not a count -- 2 changes (5->6, 6->5) across the 2
+        # transitions those 3 readings offer, so the level moved on every
+        # opportunity it had.
+        assert by_format["NINE_BALL"]["volatility"] == 1.0
         assert by_format["EIGHT_BALL"]["confidence_score"] > by_format["NINE_BALL"]["confidence_score"]
 
 

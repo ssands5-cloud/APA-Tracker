@@ -45,7 +45,7 @@ score = 50
        + reliability * win_swing               # head-to-head record, damped by n/(n+3) reliability
        + weight * skill_swing                  # opponent-skill bonus, damped by the older sample_size_weight
        + trend_modifier(trend)                 # +5 up / -5 down / 0 stable or no data -- NOT damped
-       - volatility_penalty(vol)               # 3 points per real change (now capped at 3 changes) -- NOT damped
+       - volatility_penalty(vol)               # up to 15, scaled by the normalized volatility RATE -- NOT damped
 clamped to [0, 100]
 ```
 
@@ -84,13 +84,28 @@ clamped to [0, 100]
   recomputed: a player trending up gets a small boost across every
   matchup, one trending down a small penalty.
 - **Volatility** is also about the player, not the pair, but P2
-  normalized it specifically for this engine (`windowed_volatility`):
-  only the last 5 skill-level readings in this (format, session) group
-  count, and the result is capped at 3 changes. This is deliberately
-  *different* from the whole-history, uncapped count the Skill Level tab
-  itself shows (`skill_level_volatility`) — a bouncy stretch from early
-  in the season shouldn't keep penalizing every matchup forever once the
-  player has settled down.
+  normalized it specifically for this engine
+  (`normalized_volatility`). Only the last 5 skill-level readings in
+  this (format, session) group count, and the result is a **rate**, not
+  a count:
+
+  ```
+  volatility        = changes / valid_transitions
+  valid_transitions = window_length - 1
+  ```
+
+  where `window_length` is how many readings are actually present, not
+  the nominal window size. Dividing by the number of *opportunities to
+  change* is the point: two changes across three readings means the
+  level moved every single time it could (`1.0`), while two changes
+  across five means it held more often than not (`0.5`). A raw count
+  reports both as "2" and cannot tell those players apart. The rate is
+  bounded at 1.0 by construction, which is why the old cap is gone.
+
+  This is deliberately *different* from the whole-history, uncapped
+  count the Skill Level tab itself shows (`skill_level_volatility`) — a
+  bouncy stretch from early in the season shouldn't keep penalizing
+  every matchup forever once the player has settled down.
 - **No history yet** → score is `50` (neutral), not a guess in either
   direction.
 
@@ -120,8 +135,10 @@ documented components:
 
 - **Sample size** — `sample_size_weight(n) * 100`: 0 at zero games, 100 at
   `FULL_CONFIDENCE_GAMES` or more.
-- **Volatility** — `100 - 15 * volatility`, floored at 0: the same per-
-  change cost `volatility_penalty` charges the score itself.
+- **Volatility** — `100 * (1 - rate)`, clamped to [0, 100]: a player who
+  never moved scores 100 here, one who moved on every opportunity scores
+  0. Same normalized instability `volatility_penalty` charges the score
+  itself.
 - **Trend stability** — `stable` is trusted most (100); a trend actively
   moving (`up` or `down`) means the player's true current level is a
   moving target, not a settled one (70); `no data` is a genuine unknown,
