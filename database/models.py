@@ -463,3 +463,66 @@ class PlayerH2HAdvantage(Base):
 
     player = relationship("Player", foreign_keys=[player_id])
     opponent = relationship("Player", foreign_keys=[opponent_id])
+
+
+class PlayerTrend(Base):
+    """One row per (player, format): how a player has been trending lately.
+
+    Built by analytics.player_trends over the most recent matches in that
+    format -- points earned, skill-level movement, and a documented heuristic
+    for how likely the league is to re-rate them.
+
+    Every field is derived from real captured data (PlayerMatch.points_earned
+    and .skill_level, format from the joined Match). Nothing here is
+    projected from assumptions about play that was never recorded: there are
+    no innings and no defensive-shot figures in this project, and none are
+    invented for trends either.
+
+    Several columns are deliberately NULLABLE and will be NULL on a thin
+    history rather than defaulted:
+
+      * trend_slope / trend_strength need at least MIN_MATCHES_FOR_TREND
+        points -- a "trend" through one or two matches is a line through
+        noise.
+      * volatility_last_20 and sl_stability need at least two readings; a
+        single match has no spread, which is not the same as zero spread.
+      * hot_cold_flag is NULL when the player has too little history to sit
+        in a quartile honestly.
+
+    Upserted on (player_id, format): always-current, not snapshotted.
+    """
+
+    __tablename__ = "player_trends"
+    __table_args__ = (
+        UniqueConstraint("player_id", "format", name="uq_player_trends_format"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    format = Column(String)
+
+    # How many matches actually went into the window -- not the window SIZE.
+    # With a 20-match window and 4 matches played, this reads 4, and every
+    # figure below is only as strong as that number.
+    matches_considered = Column(Integer)
+
+    avg_points_last_20 = Column(Float)
+    # Population standard deviation of points earned across the window.
+    volatility_last_20 = Column(Float)
+    # Least-squares slope of points earned against match order: points per
+    # match. Positive means improving.
+    trend_slope = Column(Float)
+    # |slope| normalised to 0.0-1.0 against a documented full-scale constant.
+    trend_strength = Column(Float)
+    # VARIANCE of skill level across the window. 0.0 means the level never
+    # moved; higher means less stable. Named for the concept, stored as the
+    # raw variance -- see docs/player_trends.md.
+    sl_stability = Column(Float)
+    # "hot" / "cold" / "steady", or NULL when there is too little history.
+    hot_cold_flag = Column(String)
+    # 0.0-1.0, from a documented heuristic over the player's OWN observed
+    # skill-level movement and current form. Not a fitted model and not a
+    # league projection -- see docs/player_trends.md.
+    projected_sl_change_probability = Column(Float)
+
+    player = relationship("Player", foreign_keys=[player_id])
