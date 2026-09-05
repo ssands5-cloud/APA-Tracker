@@ -333,10 +333,11 @@ class PlayerMatchup(Base):
     stat this API has ever returned (checked every captured query --
     parser/apa_graphql.py), and "defensive shots" only exists as a
     career-wide average (PlayerCareerStats.defensive_shot_avg), never
-    per-opponent -- there's nothing to average per matchup. Rather than
-    invent numbers for either, avg_points_earned and
-    avg_opponent_skill_level stand in: real, per-opponent, and actually in
-    the data. See docs/matchups.md.
+    per-opponent -- there's nothing to average per matchup. Under Option 1,
+    both fields are therefore omitted entirely rather than estimated,
+    synthesized, or replaced with proxy values. avg_points_earned and
+    avg_opponent_skill_level are separate real metrics supported directly
+    by the captured data. See docs/matchups.md.
 
     Upserted in place on (player_id, opponent_id), like PlayerCareerStats:
     always-current, not a value worth snapshotting per run.

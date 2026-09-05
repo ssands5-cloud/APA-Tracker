@@ -215,9 +215,12 @@ The original spec for this feature asked for "average innings" and
   (`PlayerCareerStats.defensive_shot_avg`, from `getEightBallStats`), never
   per-opponent — there's nothing to average per matchup.
 
-Rather than invent numbers for either, `avg_points_earned` and
-`avg_opponent_skill_level` stand in: real, per-opponent, and actually
-present in the data.
+Under Option 1, neither field is produced. No placeholder, proxy,
+estimate, synthetic value, or fabricated substitute is used.
+
+`avg_points_earned` and `avg_opponent_skill_level` are separate metrics
+supported directly by real captured matchup data. They do not represent,
+approximate, or substitute for innings or defensive shots.
 
 ## A known limitation, inherited rather than new
 
