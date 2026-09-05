@@ -27,7 +27,11 @@ from analytics.matchups import (
     volatility_penalty,
     weighted_win_rate,
 )
-from database.models import PlayerHeadToHead
+from analytics.skill_level_trends import (
+    normalized_volatility,
+    skill_level_volatility,
+)
+from database.models import Match, PlayerHeadToHead, PlayerMatch
 
 
 def _game(result, points=None, opponent_skill_level=None, own_skill_level=None):
@@ -299,14 +303,83 @@ class TestTrendModifier:
 
 
 class TestVolatilityPenalty:
-    def test_zero_volatility_is_no_penalty(self):
-        assert volatility_penalty(0) == 0
+    """P2: the input is now a normalized RATE in [0.0, 1.0] from
+    skill_level_trends.normalized_volatility, not a raw change count."""
 
-    def test_scales_with_changes(self):
-        assert volatility_penalty(2) == 6
+    def test_zero_volatility_is_no_penalty(self):
+        assert volatility_penalty(0.0) == 0
+
+    def test_a_change_on_every_opportunity_pays_the_full_penalty(self):
+        assert volatility_penalty(1.0) == 15
+
+    def test_scales_with_the_rate(self):
+        assert volatility_penalty(0.5) == 8
+        assert volatility_penalty(0.2) == 3
 
     def test_caps_so_one_wild_player_cant_zero_the_score_alone(self):
+        """A stale raw count from a caller that missed the P2 change must
+        still not blow past the documented ceiling."""
         assert volatility_penalty(50) == 15
+
+
+def _reading(skill_level, week=None):
+    """A PlayerMatch carrying just a skill level -- same shape
+    tests/test_skill_level_trends.py builds, so the volatility rates here
+    come from the real function rather than hand-written floats."""
+    row = PlayerMatch(player_id=1, skill_level=skill_level)
+    if week is not None:
+        row.match = Match(week=week)
+    return row
+
+
+class TestSameNormalizedRateScoresEquivalently:
+    """P2's second headline requirement: two players whose skill level moved
+    a DIFFERENT number of times over DIFFERENT history lengths, but at the
+    same normalized rate, must be scored identically -- the rate is the
+    whole input, the raw count is not.
+
+    Under the old capped-count implementation these two scored differently
+    (1 change vs 2), which is precisely the bug normalization fixes.
+    """
+
+    ONE_CHANGE_IN_THREE_READINGS = [_reading(5), _reading(5), _reading(6)]
+    TWO_CHANGES_IN_FIVE_READINGS = [
+        _reading(5), _reading(5), _reading(6), _reading(6), _reading(5),
+    ]
+
+    def test_the_two_histories_have_different_raw_change_counts(self):
+        assert skill_level_volatility(self.ONE_CHANGE_IN_THREE_READINGS) == 1
+        assert skill_level_volatility(self.TWO_CHANGES_IN_FIVE_READINGS) == 2
+
+    def test_but_they_normalize_to_the_same_rate(self):
+        assert normalized_volatility(self.ONE_CHANGE_IN_THREE_READINGS) == 0.5
+        assert normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS) == 0.5
+
+    def test_the_same_rate_yields_the_same_matchup_score(self):
+        rows = [_game("W")] * FULL_CONFIDENCE_GAMES
+        a = normalized_volatility(self.ONE_CHANGE_IN_THREE_READINGS)
+        b = normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS)
+        assert matchup_score(rows, "stable", a) == matchup_score(rows, "stable", b)
+
+    def test_the_same_rate_yields_the_same_confidence_score(self):
+        rows = [_game("W")] * FULL_CONFIDENCE_GAMES
+        a = normalized_volatility(self.ONE_CHANGE_IN_THREE_READINGS)
+        b = normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS)
+        assert confidence_score(rows, "stable", a) == confidence_score(rows, "stable", b)
+
+    def test_the_same_rate_costs_the_same_penalty(self):
+        a = normalized_volatility(self.ONE_CHANGE_IN_THREE_READINGS)
+        b = normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS)
+        assert volatility_penalty(a) == volatility_penalty(b)
+
+    def test_a_different_rate_still_scores_differently(self):
+        """The equivalence above must come from the rate matching, not from
+        the score having stopped responding to volatility at all."""
+        rows = [_game("W")] * FULL_CONFIDENCE_GAMES
+        half = normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS)
+        every_time = normalized_volatility([_reading(5), _reading(6), _reading(5)])
+        assert every_time != half
+        assert matchup_score(rows, "stable", every_time) < matchup_score(rows, "stable", half)
 
 
 class TestSampleSizeWeight:
@@ -368,7 +441,7 @@ class TestConfidenceScore:
     def test_volatility_costs_confidence(self):
         rows = [_game("W")] * FULL_CONFIDENCE_GAMES
         calm = confidence_score(rows, "stable", 0)
-        volatile = confidence_score(rows, "stable", 5)
+        volatile = confidence_score(rows, "stable", 1.0)
         assert volatile < calm
 
     def test_a_small_sample_costs_confidence_even_with_a_stable_trend(self):

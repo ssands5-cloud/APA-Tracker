@@ -12,8 +12,8 @@ from analytics.skill_level_trends import (
     SkillLevelChange,
     skill_level_changes,
     skill_level_trend,
+    normalized_volatility,
     skill_level_volatility,
-    windowed_volatility,
 )
 from database.models import Match, PlayerMatch
 
@@ -82,19 +82,31 @@ class TestSkillLevelVolatility:
         assert skill_level_volatility(matches) == 3
 
 
-class TestWindowedVolatility:
-    """P2: the Matchup Advantage Engine's own normalized volatility --
-    windowed to the last 5 readings, capped at 3. Deliberately a separate
-    function from skill_level_volatility (see its own docstring) rather
-    than a change to it, so the unrelated Skill Level History summary
-    (ui/export_json.py) keeps its whole-history, uncapped count."""
+class TestNormalizedVolatility:
+    """P2: the Matchup Advantage Engine's own volatility, normalized to a
+    RATE -- changes divided by valid transitions (window_length - 1) over
+    the last 5 readings. Deliberately a separate function from
+    skill_level_volatility (see its own docstring) rather than a change to
+    it, so the unrelated Skill Level History summary (ui/export_json.py)
+    keeps its whole-history, uncapped count."""
 
     def test_no_changes_is_zero(self):
-        assert windowed_volatility([_reading(5), _reading(5)]) == 0
+        assert normalized_volatility([_reading(5), _reading(5)]) == 0.0
 
-    def test_within_the_window_matches_the_plain_count(self):
-        matches = [_reading(5), _reading(6), _reading(5)]
-        assert windowed_volatility(matches) == 2
+    def test_a_change_on_every_opportunity_is_one(self):
+        """Three readings give two transitions; both moved."""
+        assert normalized_volatility([_reading(5), _reading(6), _reading(5)]) == 1.0
+
+    def test_rate_is_changes_over_valid_transitions(self):
+        """Five readings, two changes, four transitions -> 0.5."""
+        matches = [_reading(5), _reading(5), _reading(6), _reading(6), _reading(5)]
+        assert normalized_volatility(matches) == 0.5
+
+    def test_a_single_reading_offers_no_transition_to_measure(self):
+        """Absence of evidence, not evidence of stability -- but there is no
+        rate to report, and dividing by zero is not an option."""
+        assert normalized_volatility([_reading(5)]) == 0.0
+        assert normalized_volatility([]) == 0.0
 
     def test_only_looks_at_the_last_five_readings(self):
         """Six readings with an old change (5->6) followed by five steady
@@ -102,16 +114,52 @@ class TestWindowedVolatility:
         must not count, unlike skill_level_volatility's whole-history 1."""
         matches = [_reading(5), _reading(6)] + [_reading(6)] * 4
         assert skill_level_volatility(matches) == 1
-        assert windowed_volatility(matches) == 0
+        assert normalized_volatility(matches) == 0.0
 
-    def test_is_capped_at_three_even_with_more_real_changes_in_the_window(self):
-        """Five readings, four consecutive changes (5-6-5-6-5) -- more
-        than the cap, so this must clamp to 3 rather than reporting 4."""
+    def test_readings_without_a_skill_level_leave_the_rate_alone(self):
+        """A None reading is skipped on BOTH sides of the ratio. Counting it
+        in the denominator only would silently dilute a real 1.0 to 0.5."""
+        matches = [_reading(5), _reading(None), _reading(6)]
+        assert normalized_volatility(matches) == 1.0
+
+    def test_window_is_configurable(self):
+        matches = [_reading(5), _reading(6), _reading(5), _reading(6), _reading(5)]
+        assert normalized_volatility(matches) == 1.0
+        assert normalized_volatility(matches, window=3) == 1.0
+
+    def test_the_rate_is_bounded_at_one_so_no_cap_is_needed(self):
+        """The old implementation clamped a raw count at 3. A rate cannot
+        exceed 1.0 by construction, which is what retired the cap."""
         matches = [_reading(5), _reading(6), _reading(5), _reading(6), _reading(5)]
         assert skill_level_volatility(matches) == 4
-        assert windowed_volatility(matches) == 3
+        assert normalized_volatility(matches) == 1.0
 
-    def test_window_and_cap_are_configurable(self):
-        matches = [_reading(5), _reading(6), _reading(5), _reading(6), _reading(5)]
-        assert windowed_volatility(matches, window=3) == 2
-        assert windowed_volatility(matches, window=5, cap=2) == 2
+
+class TestSameChangeCountDifferentHistoryLength:
+    """P2's headline requirement: an identical raw change count must NOT
+    produce an identical volatility once history length differs. This is
+    exactly what the old capped-count implementation could not express --
+    it reported a flat 2 for both players below."""
+
+    TWO_CHANGES_IN_THREE_READINGS = [_reading(5), _reading(6), _reading(5)]
+    TWO_CHANGES_IN_FIVE_READINGS = [
+        _reading(5), _reading(5), _reading(6), _reading(6), _reading(5),
+    ]
+
+    def test_both_histories_really_do_have_the_same_raw_change_count(self):
+        assert skill_level_volatility(self.TWO_CHANGES_IN_THREE_READINGS) == 2
+        assert skill_level_volatility(self.TWO_CHANGES_IN_FIVE_READINGS) == 2
+
+    def test_the_same_raw_count_normalizes_to_different_rates(self):
+        short = normalized_volatility(self.TWO_CHANGES_IN_THREE_READINGS)
+        long = normalized_volatility(self.TWO_CHANGES_IN_FIVE_READINGS)
+        assert short == 1.0  # 2 changes / 2 transitions
+        assert long == 0.5   # 2 changes / 4 transitions
+        assert short != long
+
+    def test_the_shorter_history_is_the_more_volatile_one(self):
+        """Two changes across two opportunities is unsettled every time;
+        two across four is steadier than not."""
+        assert normalized_volatility(self.TWO_CHANGES_IN_THREE_READINGS) > normalized_volatility(
+            self.TWO_CHANGES_IN_FIVE_READINGS
+        )

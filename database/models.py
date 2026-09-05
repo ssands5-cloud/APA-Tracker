@@ -377,7 +377,9 @@ class PlayerMatchup(Base):
     # looked overall", not "did a skill-gap win earn a bonus".
     sl_delta = Column(Float)
     trend = Column(String)
-    volatility = Column(Integer)
+    # P2: a normalized rate in [0.0, 1.0], not a change count -- Integer
+    # here would silently truncate every partial rate to 0.
+    volatility = Column(Float)
     matchup_score = Column(Integer)
     confidence_score = Column(Integer)
     format = Column(String)
