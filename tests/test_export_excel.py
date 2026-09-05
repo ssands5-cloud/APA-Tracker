@@ -28,6 +28,9 @@ from ui.export_excel import export_to_excel
 
 EXPECTED_SHEETS = {
     "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History", "Matchups",
+    # Head-to-Head Advantage Engine (docs/head_to_head.md) -- its own
+    # sheet, alongside Matchups rather than replacing it.
+    "Head-to-Head",
 }
 
 

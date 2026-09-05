@@ -11,6 +11,7 @@ from database.models import (
     Match,
     Player,
     PlayerCareerStats,
+    PlayerH2HAdvantage,
     PlayerHeadToHead,
     PlayerMatch,
     PlayerMatchup,
@@ -261,3 +262,16 @@ def matchups_with_neutral_fill(db: Session) -> list[dict]:
                 }
             )
     return rows
+
+
+def head_to_head_advantage(db: Session) -> list[PlayerH2HAdvantage]:
+    """Every Head-to-Head Advantage pairing, strongest matchup first.
+
+    Ordered so the sheet and the demo tab open on the pairings a captain
+    most wants to see, without either of them having to sort.
+    """
+    return (
+        db.query(PlayerH2HAdvantage)
+        .order_by(PlayerH2HAdvantage.matchup_score.desc().nullslast())
+        .all()
+    )

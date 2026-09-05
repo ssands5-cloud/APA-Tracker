@@ -147,7 +147,7 @@ class TestExcelExportSeesLiveData:
         workbook = openpyxl.load_workbook(path)
         assert workbook.sheetnames == [
             "Standings", "Player Stats", "Career Stats", "Team History",
-            "Skill Level History", "Matchups",
+            "Skill Level History", "Matchups", "Head-to-Head",
         ]
 
         rows = [[cell.value for cell in row] for row in workbook["Player Stats"].iter_rows()]

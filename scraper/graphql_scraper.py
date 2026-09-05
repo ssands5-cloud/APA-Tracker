@@ -577,6 +577,10 @@ def _head_to_head_row(match_id: str, own_score: dict, opponent_score: dict) -> d
         "opponent_skill_level": opponent_score.get("skillLevel"),
         "result": own_score.get("winLoss"),
         "points_earned": points_earned,
+        # The 9-ball BALL count, distinct from points_earned above (which
+        # carries match points for whichever format applies). Null on 8-ball
+        # rows -- there is no such figure there.
+        "nine_ball_points": own_score.get("nineBallPoints"),
     }
 
 

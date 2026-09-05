@@ -14,6 +14,7 @@ from database.models import (
     Match,
     Player,
     PlayerCareerStats,
+    PlayerH2HAdvantage,
     PlayerHeadToHead,
     PlayerMatch,
     PlayerMatchup,
@@ -558,6 +559,7 @@ def ingest_head_to_head(db: Session, match_id, rows: list[dict]) -> int:
                 opponent_id=opponent.id,
                 own_skill_level=_to_int(row.get("own_skill_level")),
                 opponent_skill_level=_to_int(row.get("opponent_skill_level")),
+                nine_ball_points=_to_int(row.get("nine_ball_points")),
                 result=_normalize_result(row.get("result")),
                 points_earned=_to_float(row.get("points_earned")),
                 format=match.format,
@@ -677,3 +679,60 @@ def _normalize_result(value) -> Optional[str]:
     """
     normalized = str(value or "").strip().upper()
     return normalized if normalized in ("W", "L") else None
+
+
+def ingest_h2h_advantage(db: Session, rows: list[dict]) -> int:
+    """Upsert Head-to-Head Advantage rows, keyed on
+    (player_id, opponent_id, format, session_name).
+
+    Upsert rather than snapshot, matching PlayerMatchup: these are
+    always-current derived values, not history worth keeping a run-by-run
+    trail of. Rows whose player or opponent cannot be resolved are skipped
+    rather than guessed at.
+
+    Deliberately does NOT touch player_matchups -- the Matchup Advantage
+    Engine owns that table, and both are rebuilt from the same
+    PlayerHeadToHead rows.
+    """
+    written = 0
+    for row in rows:
+        player = db.query(Player).filter_by(external_id=str(row["player_id"])).one_or_none()
+        opponent = db.query(Player).filter_by(external_id=str(row["opponent_id"])).one_or_none()
+        if player is None or opponent is None:
+            logger.warning(
+                "Skipping head-to-head advantage for unknown player/opponent %s vs %s",
+                row["player_id"], row["opponent_id"],
+            )
+            continue
+
+        fields = {
+            "total_matches": row.get("total_matches"),
+            "wins": row.get("wins"),
+            "losses": row.get("losses"),
+            "sl_delta": row.get("sl_delta"),
+            "trend_modifier": row.get("trend_modifier"),
+            "matchup_score": row.get("matchup_score"),
+            "win_probability": row.get("win_probability"),
+            "expected_points": row.get("expected_points"),
+            "expected_balls": row.get("expected_balls"),
+        }
+
+        existing = db.query(PlayerH2HAdvantage).filter_by(
+            player_id=player.id, opponent_id=opponent.id,
+            format=row.get("format"), session_name=row.get("session_name"),
+        ).one_or_none()
+
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(PlayerH2HAdvantage(
+                player_id=player.id, opponent_id=opponent.id,
+                format=row.get("format"), session_name=row.get("session_name"),
+                **fields,
+            ))
+        written += 1
+
+    db.commit()
+    logger.info("Ingested %d head-to-head advantage row(s)", written)
+    return written

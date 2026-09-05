@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
 from database.queries import (
+    head_to_head_advantage,
     all_players,
     career_stats,
     latest_standings,
@@ -35,6 +36,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     team_history_df = _team_history_dataframe(db)
     skill_level_history_df = _skill_level_history_dataframe(db)
     matchups_df = _matchups_dataframe(db)
+    head_to_head_df = _head_to_head_dataframe(db)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -43,6 +45,8 @@ def export_to_excel(db: Session, config: dict) -> str:
         team_history_df.to_excel(writer, sheet_name="Team History", index=False)
         skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
         matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
+        head_to_head_df.to_excel(writer, sheet_name="Head-to-Head", index=False)
+        _format_head_to_head(writer, head_to_head_df)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -233,3 +237,88 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
             for row in matchups_with_neutral_fill(db)
         ]
     )
+
+
+# --- Head-to-Head Advantage Engine -------------------------------------------
+
+# Same two-sided rule the demo tab uses (ui/tabs/matchups.py): a pairing has
+# to score well AND be probable before it is highlighted, so a 1-0 fluke or a
+# skill mismatch the player keeps losing cannot turn the cell green.
+H2H_RECOMMEND_SCORE = 60
+H2H_RECOMMEND_PROBABILITY = 0.60
+H2H_AVOID_SCORE = 40
+H2H_AVOID_PROBABILITY = 0.40
+
+
+def _head_to_head_dataframe(db: Session) -> pd.DataFrame:
+    """The Head-to-Head Advantage Engine's table, one row per pairing.
+
+    Straight out of player_h2h_advantage -- nothing is recomputed here, so
+    the sheet cannot disagree with the database or the demo tab. Innings and
+    per-opponent defensive shots are absent because APA does not expose
+    them; see docs/head_to_head.md.
+    """
+    return pd.DataFrame(
+        [
+            {
+                "Player": row.player.name if row.player else "",
+                "Opponent": row.opponent.name if row.opponent else "",
+                "Format": row.format or "",
+                "Session": row.session_name or "",
+                "Games": row.total_matches,
+                "Wins": row.wins,
+                "Losses": row.losses,
+                "SL Delta": row.sl_delta,
+                "Trend Modifier": row.trend_modifier,
+                "Matchup Score": row.matchup_score,
+                "Win Probability": row.win_probability,
+                "Expected Points": row.expected_points,
+                "Expected Balls": row.expected_balls,
+            }
+            for row in head_to_head_advantage(db)
+        ]
+    )
+
+
+def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, and colour the score green or
+    red so a captain can scan the sheet without reading numbers.
+
+    Conditional formatting is applied to Matchup Score rather than to a
+    separate tag column: the score is the thing being judged, and colouring
+    it in place keeps the sheet one column narrower.
+    """
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    sheet = writer.sheets["Head-to-Head"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    score_range = f"J2:J{last_row}"  # Matchup Score
+    sheet.conditional_formatting.add(
+        score_range,
+        CellIsRule(operator="greaterThanOrEqual", formula=[str(H2H_RECOMMEND_SCORE)],
+                   fill=PatternFill("solid", fgColor="C6EFCE"),
+                   font=Font(color="006100", bold=True)),
+    )
+    sheet.conditional_formatting.add(
+        score_range,
+        CellIsRule(operator="lessThanOrEqual", formula=[str(H2H_AVOID_SCORE)],
+                   fill=PatternFill("solid", fgColor="FFC7CE"),
+                   font=Font(color="9C0006", bold=True)),
+    )
+
+    # Win Probability reads as a percentage, not a bare 0.73.
+    for row in sheet.iter_rows(min_row=2, min_col=11, max_col=11):
+        for cell in row:
+            cell.number_format = "0%"
+
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)

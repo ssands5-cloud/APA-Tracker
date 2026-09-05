@@ -305,6 +305,11 @@ class PlayerHeadToHead(Base):
     own_skill_level = Column(Integer)
     opponent_skill_level = Column(Integer)
     result = Column(String)
+    # Real captured field (MATCH_DETAIL_QUERY score row `nineBallPoints`) --
+    # the 9-ball BALL count, distinct from points_earned, which carries match
+    # points (eightBallMatchPointsEarned / nineBallMatchPointsEarned). NULL on
+    # 8-ball rows, where there is no such thing.
+    nine_ball_points = Column(Integer)
     points_earned = Column(Float)
     # Copied from Match.format/Match.session_name at ingestion (P1-4) --
     # not part of the unique constraint above, since a given match_id
@@ -387,6 +392,71 @@ class PlayerMatchup(Base):
     volatility = Column(Integer)
     matchup_score = Column(Integer)
     confidence_score = Column(Integer)
+    format = Column(String)
+    session_name = Column(String)
+
+    player = relationship("Player", foreign_keys=[player_id])
+    opponent = relationship("Player", foreign_keys=[opponent_id])
+
+
+class PlayerH2HAdvantage(Base):
+    """One row per (player, opponent): the Head-to-Head Advantage Engine's
+    output -- record, skill-level context, a trend-adjusted matchup score,
+    and three forward-looking estimates (win probability, expected 8-ball
+    points, expected 9-ball balls).
+
+    Deliberately SEPARATE from PlayerMatchup rather than an extension of it.
+    PlayerMatchup is the Matchup Advantage Engine's aggregate and is read by
+    Captain's Edge, the workbook, the demo and the pipeline; this table adds
+    the probabilistic layer without disturbing any of that. Both are derived
+    from the same PlayerHeadToHead rows, so they cannot disagree about the
+    underlying games.
+
+    Two fields the original ask wanted are absent on purpose, not pending:
+    APA exposes no per-opponent INNINGS at all, and defensive shots only as a
+    lifetime average (PlayerCareerStats.defensive_shot_avg), never per
+    opponent. Inventing either would be the one thing this project has
+    consistently refused to do. See docs/head_to_head.md, "Unavailable APA
+    Fields".
+
+    Upserted in place on (player_id, opponent_id, format, session_name) --
+    always-current, like PlayerMatchup, not snapshotted per run.
+    """
+
+    __tablename__ = "player_h2h_advantage"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "opponent_id", "format", "session_name",
+            name="uq_player_h2h_advantage_pair",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    opponent_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+
+    total_matches = Column(Integer)
+    wins = Column(Integer)
+    losses = Column(Integer)
+
+    # Mean (opponent_skill_level - own_skill_level): positive means the
+    # player has been giving up skill level. Same sign convention as
+    # PlayerMatchup.sl_delta.
+    sl_delta = Column(Float)
+    # The numeric +5 / -5 / 0 from analytics.matchups.trend_modifier, stored
+    # so the sheet can show WHY a score moved, not just that it did.
+    trend_modifier = Column(Integer)
+    matchup_score = Column(Integer)
+
+    # 0.0-1.0. Logistic over skill-level advantage and the observed record,
+    # the latter weighted by sample size -- see analytics/head_to_head.py.
+    win_probability = Column(Float)
+    # Format-specific and mutually exclusive: an 8-ball pairing has no ball
+    # count, a 9-ball pairing has no match-point estimate. NULL means "not
+    # this format", never "zero".
+    expected_points = Column(Float)
+    expected_balls = Column(Float)
+
     format = Column(String)
     session_name = Column(String)
 
