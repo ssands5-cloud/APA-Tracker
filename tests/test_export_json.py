@@ -76,7 +76,7 @@ def seeded_db(db):
     )
     ingest_standings(
         db,
-        [{"team_name": "Chalk It Up", "rank": 1, "wins": None, "losses": None, "points": 142}],
+        [{"team_name": "Chalk It Up", "rank": 1, "points": 142}],
     )
     return db
 
@@ -112,7 +112,7 @@ class TestShape:
     def test_standings_row_shape(self, seeded_db, tmp_path):
         document = _export(seeded_db, tmp_path)
         assert document["standings"] == [
-            {"rank": 1, "team_name": "Chalk It Up", "wins": None, "losses": None, "points": 142.0,
+            {"rank": 1, "team_name": "Chalk It Up", "points": 142.0,
              "captured_at": document["standings"][0]["captured_at"]}
         ]
 

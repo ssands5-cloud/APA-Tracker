@@ -55,8 +55,6 @@ def _standings_dataframe(db: Session) -> pd.DataFrame:
             {
                 "Rank": r.rank,
                 "Team": r.team_name,
-                "Wins": r.wins,
-                "Losses": r.losses,
                 "Points": r.points,
                 "As Of": r.captured_at,
             }

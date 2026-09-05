@@ -183,27 +183,13 @@ class TestStandingsRows:
         assert row["rank"] == 3
         assert row["points"] == 57
 
-    def test_wins_and_losses_derived_from_scored_matches(self):
-        """The fixture's single scored match is a 3-2 home win."""
+    def test_fallback_row_carries_no_win_loss_keys(self):
+        """Standings has no win/loss record in either path. The fallback used
+        to derive one from scored matches; it no longer reports one, so the
+        single-team and whole-division paths emit the same row shape."""
         row = standings_rows(TEAM_DATA)[0]
-        assert (row["wins"], row["losses"]) == (1, 0)
-
-    def test_no_scored_matches_yields_none_not_zero_zero(self):
-        data = {
-            "team": TEAM_DATA["team"],
-            "schedule": [{"id": 1, "isScored": False, "home": {"id": 13082948, "name": "Chalk It Up"},
-                          "away": {"id": 2, "name": "Rack Attack"}}],
-        }
-        row = standings_rows(data)[0]
-        assert row["wins"] is None and row["losses"] is None, "unplayed is not 0-0"
-
-    def test_byes_are_not_counted_as_results(self):
-        data = {
-            "team": TEAM_DATA["team"],
-            "schedule": [{"id": 1, "isBye": True, "isScored": True,
-                          "home": {"id": 13082948, "name": "Chalk It Up"}, "away": None}],
-        }
-        assert standings_rows(data)[0]["wins"] is None
+        assert "wins" not in row
+        assert "losses" not in row
 
     def test_no_team_means_no_snapshot(self):
         assert standings_rows({}) == []
@@ -239,12 +225,12 @@ class TestDivisionStandingsRows:
         assert ours["rank"] == 3
         assert ours["points"] == 57
 
-    def test_wins_and_losses_are_none_not_guessed(self):
-        """This endpoint doesn't return them; APA ranks on session points.
-        A derived number here would look authoritative and be wrong."""
+    def test_standings_rows_carry_no_win_loss_keys(self):
+        """This endpoint doesn't return them; APA ranks on session points, so
+        Standings carries no such column at all."""
         for row in division_standings_rows(DIVISION_STANDINGS):
-            assert row["wins"] is None
-            assert row["losses"] is None
+            assert "wins" not in row
+            assert "losses" not in row
 
     def test_missing_or_empty_division_yields_no_rows(self):
         assert division_standings_rows({}) == []

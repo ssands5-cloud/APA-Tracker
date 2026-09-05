@@ -243,7 +243,7 @@ document.getElementById("standings").append(
     el("div", { class: "sub" },
       "From ", el("span", { class: "field-name" }, "DIVISION_STANDINGS_QUERY"),
       " (real operation name is misspelled on the live API: ", el("span", { class: "field-name" }, "divsionStandings"),
-      "). Wins/Losses are intentionally blank — the API ranks by cumulative points, not a maintained win/loss record."),
+      "). Standings carries no Wins/Losses columns — the API ranks by cumulative points, not a maintained win/loss record."),
     table(
       [{ label: "Rank", num: true }, { label: "Team" }, { label: "Points", num: true }, { label: "Pts Last Wk", num: true }, { label: "" }],
       DIVISION_STANDINGS.map((t) => el("tr", { class: t.id === TEAM.id ? "highlight" : "" },

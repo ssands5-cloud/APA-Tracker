@@ -237,10 +237,10 @@ def fetch_division_standings(config: dict, division_id=None) -> dict[str, Any]:
 def division_standings_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
     """One row per team in the division, from the real standings query.
 
-    `rank` and `points` come straight from the API. `wins` and `losses` stay
-    None: this endpoint does not return them at all -- APA ranks by
-    cumulative session points, not a maintained win/loss record -- and a
-    guessed count is worse than an honest gap.
+    `rank` and `points` come straight from the API. There is no win/loss
+    record here: APA ranks by cumulative session points, and this endpoint
+    does not return wins or losses at all, so Standings does not carry those
+    columns.
     """
     rows = []
     for team in division.get("teams") or []:
@@ -249,8 +249,6 @@ def division_standings_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "team_name": team.get("name") or "",
                 "rank": team.get("standing"),
-                "wins": None,
-                "losses": None,
                 "points": team.get("sessionTotalPoints"),
             }
         )
@@ -383,40 +381,20 @@ def standings_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     API's own numbers. This is the fallback for when it isn't -- our own rank
     and points, derived from our own schedule, when no other team is visible.
 
-    Rank and points come straight from the API. Wins and losses are derived,
-    by comparing the two sides' totals on matches the API marks scored, and
-    stay None when nothing is scored yet -- an unplayed season is not 0-0.
+    Rank and points come straight from the API. Standings carries no win/loss
+    columns -- APA ranks by cumulative session points, and the division
+    standings endpoint does not report a win/loss record -- so this fallback
+    reports the same shape rather than a locally derived one the division
+    path could not match.
     """
     identity = team_row(data)
     if not identity["team_name"]:
         return []
 
-    our_id = identity["team_id"]
-    wins = losses = 0
-    counted = 0
-    for row in schedule_rows(data):
-        if row["is_bye"]:
-            continue
-        home_points, away_points = match_score(row)
-        if home_points is None or away_points is None or home_points == away_points:
-            continue
-        we_are_home = row["home_team_id"] == our_id
-        if not we_are_home and row["away_team_id"] != our_id:
-            continue
-        our_points = home_points if we_are_home else away_points
-        their_points = away_points if we_are_home else home_points
-        counted += 1
-        if our_points > their_points:
-            wins += 1
-        else:
-            losses += 1
-
     return [
         {
             "team_name": identity["team_name"],
             "rank": identity["standing"],
-            "wins": wins if counted else None,
-            "losses": losses if counted else None,
             "points": (data.get("points") or {}).get("sessionTotalPoints"),
         }
     ]

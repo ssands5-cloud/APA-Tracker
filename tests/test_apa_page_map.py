@@ -40,7 +40,7 @@ class TestKeysStillInUseArePresent:
             assert key in MATCH_PAGE
 
     def test_standings_page_is_intact(self):
-        assert STANDINGS_PAGE["columns"] == ["rank", "team_name", "wins", "losses", "points"]
+        assert STANDINGS_PAGE["columns"] == ["rank", "team_name", "points"]
 
 
 class TestDocstringDoesNotOverclaim:

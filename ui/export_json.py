@@ -88,8 +88,6 @@ def _standings(db: Session) -> list[dict]:
         {
             "rank": r.rank,
             "team_name": r.team_name,
-            "wins": r.wins,
-            "losses": r.losses,
             "points": r.points,
             "captured_at": r.captured_at,
         }
