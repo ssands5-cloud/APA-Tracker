@@ -69,9 +69,13 @@ def seeded_db(db):
         db, "M1",
         [
             {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5,
-             "result": "W", "points_earned": 6},
+             "result": "W", "points_earned": 6,
+             "eight_on_break": 2, "eight_break_and_run": 1,
+             "nine_on_snap": 3, "nine_break_and_run": 1},
             {"player_id": "P2", "player_name": "Bob", "team_id": "T2", "skill_level": 4,
-             "result": "L", "points_earned": 3},
+             "result": "L", "points_earned": 3,
+             "eight_on_break": 0, "eight_break_and_run": 0,
+             "nine_on_snap": 1, "nine_break_and_run": 0},
         ],
     )
     ingest_standings(
@@ -108,6 +112,25 @@ class TestShape:
         assert match["home_score"] == 18
         assert match["away_score"] == 12
         assert match["is_finalized"] is True
+
+    def test_per_match_break_and_run_fields_export_exact_values(self, seeded_db, tmp_path):
+        """The four real per-match counts, seeded through ingest_match_scores
+        and asserted by exact value -- not merely present, and not summed into
+        a player aggregate. A zero must survive as 0, distinct from null."""
+        document = _export(seeded_db, tmp_path)
+        rows = {r["player"]: r for r in document["match_scores"]["M1"]}
+
+        alice = rows["Alice"]
+        assert alice["eight_on_break"] == 2
+        assert alice["eight_break_and_run"] == 1
+        assert alice["nine_on_snap"] == 3
+        assert alice["nine_break_and_run"] == 1
+
+        bob = rows["Bob"]
+        assert bob["eight_on_break"] == 0
+        assert bob["eight_break_and_run"] == 0
+        assert bob["nine_on_snap"] == 1
+        assert bob["nine_break_and_run"] == 0
 
     def test_standings_row_shape(self, seeded_db, tmp_path):
         document = _export(seeded_db, tmp_path)

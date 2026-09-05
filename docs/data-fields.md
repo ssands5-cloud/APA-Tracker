@@ -60,7 +60,16 @@ All columns **Raw**, from `TeamStat`.
 
 ## Skill Level History sheet
 
-All columns **Raw** — a direct read of `PlayerMatch.skill_level` per match, already written by the scoresheet ingest path. `Source` is a constant label (`"scoresheet"`), not a computed value.
+Every reading is **Raw** — a direct read of `PlayerMatch.skill_level` per
+match, already written by the scoresheet ingest path.
+
+`Source` is **Derived (a label, not a number)**: both exporters
+(`ui/export_excel.py::_skill_level_history_dataframe` and
+`ui/export_json.py::_skill_level_history`) emit `"scoresheet"` when the row
+carries a `result`, and `"roster"` otherwise. It is not a constant. The
+distinction matters: a reading attached to a scored match is corroborated by
+that scoresheet, whereas a reading with no result is a roster-side value the
+scoresheet has not yet confirmed.
 
 ## Matchups sheet
 

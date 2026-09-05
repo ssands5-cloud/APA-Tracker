@@ -112,6 +112,12 @@ def _match_scores(db: Session) -> dict[str, list[dict]]:
                 "skill_level": row.skill_level,
                 "result": row.result,
                 "points_earned": row.points_earned,
+                # Real per-match counts persisted by ingest_match_scores from
+                # MATCH_DETAIL_QUERY -- not aggregates, not derived here.
+                "eight_on_break": row.eight_on_break,
+                "eight_break_and_run": row.eight_break_and_run,
+                "nine_on_snap": row.nine_on_snap,
+                "nine_break_and_run": row.nine_break_and_run,
             }
         )
     return document
