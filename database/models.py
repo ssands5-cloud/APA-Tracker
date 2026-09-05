@@ -117,8 +117,6 @@ class StandingsSnapshot(Base):
     captured_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     team_name = Column(String, nullable=False)
     rank = Column(Integer)
-    wins = Column(Integer)
-    losses = Column(Integer)
     points = Column(Float)
 
 

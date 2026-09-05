@@ -41,12 +41,13 @@ class TestDivisionStandingsRows:
         rows = {r["team_name"]: r for r in division_standings_rows(DIVISION)}
         assert rows["Side Pocket Squad"]["rank"] == rows["Corner Pocket"]["rank"] == 3
 
-    def test_wins_and_losses_are_none_not_guessed(self):
-        """The real query does not return a win/loss record -- APA ranks by
-        cumulative points. A guess here would be worse than the honest gap."""
+    def test_standings_rows_carry_no_win_loss_keys(self):
+        """Standings does not carry a win/loss record at all -- APA ranks by
+        cumulative points and the query returns no such field, so the keys are
+        absent rather than present-and-empty."""
         for row in division_standings_rows(DIVISION):
-            assert row["wins"] is None
-            assert row["losses"] is None
+            assert "wins" not in row
+            assert "losses" not in row
 
     def test_a_bye_team_still_gets_a_row(self):
         rows = {r["team_name"]: r for r in division_standings_rows(DIVISION)}
@@ -76,5 +77,5 @@ class TestIngestionEndToEnd:
             by_name = {s.team_name: s for s in snapshots}
             assert by_name["Chalk It Up"].rank == 1
             assert by_name["Chalk It Up"].points == 142
-            assert by_name["Chalk It Up"].wins is None
+            assert not hasattr(by_name["Chalk It Up"], "wins")
             assert by_name["Bye Week"].points == 0

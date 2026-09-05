@@ -45,8 +45,6 @@ def ingest_standings(db: Session, standings: list[dict], captured_at: Optional[d
                 captured_at=now,
                 team_name=row.get("team_name", ""),
                 rank=_to_int(row.get("rank")),
-                wins=_to_int(row.get("wins")),
-                losses=_to_int(row.get("losses")),
                 points=_to_float(row.get("points")),
             )
         )

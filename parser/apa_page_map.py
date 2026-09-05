@@ -37,7 +37,7 @@ LOGIN_FORM = {
 STANDINGS_PAGE = {
     "table_selector": "table.standings",
     "row_selector": "tbody tr",
-    "columns": ["rank", "team_name", "wins", "losses", "points"],
+    "columns": ["rank", "team_name", "points"],
 }
 
 TEAM_PAGE = {

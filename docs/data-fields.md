@@ -1,14 +1,11 @@
 # Data fields: what's real, what's derived, what we don't fabricate
 
 This is the single source of truth for where every exported column
-actually comes from. It exists because an outside audit assumed some
-columns were fabricated placeholders when they weren't (Standings'
-Wins/Losses -- see below) and, separately, because it's genuinely useful
-to know at a glance which columns are raw API values versus computed
-here. "Gate A" of the workbook-redesign work (see the project's own
-notes on that) is scoped to fixing this file to match code, not the
-other way around: this doc is corrected against `git grep`-able
-evidence, never asserted from memory.
+actually comes from: which columns are raw API values, which are
+computed here, and which the API simply doesn't provide. "Gate A" of
+the workbook-redesign work (see the project's own notes on that) is
+scoped to keeping this file matched to code: this doc is corrected
+against `git grep`-able evidence, never asserted from memory.
 
 Legend:
 - **Raw** — copied straight from a captured GraphQL field, no math.
@@ -24,18 +21,19 @@ Legend:
 | Rank | Raw | `division.teams[].standing` (`DIVISION_STANDINGS_QUERY`) |
 | Team | Raw | `division.teams[].name` |
 | Points | Raw | `division.teams[].sessionTotalPoints` |
-| Wins / Losses | **None (honest gap)**, in the normal multi-division path | `division_standings_rows()` sets these to `None` explicitly, with a comment stating why: *"this endpoint does not return them at all -- APA ranks by cumulative session points, not a maintained win/loss record -- and a guessed count is worse than an honest gap."* They render as blank cells, not zeros or fabricated numbers. |
-| Wins / Losses (single-team fallback only) | Derived | The older, single-team-only path (`standings_rows()`, used only when no division id is configured) computes these by comparing our own team's points against the opponent's on every match the API marks scored. This IS a real derivation from real per-match data — not a placeholder — and is documented as such in the function's own docstring. It also stays `None` until at least one match is scored. |
 | As Of | Derived | The sync's own capture timestamp, not an API field. |
 
-**Correcting a specific audit claim:** an outside review flagged
-Standings' Wins/Losses as fake/placeholder data to be dropped. Checked
-against the actual code (`scraper/graphql_scraper.py:division_standings_rows`
-and `:standings_rows`): neither path fabricates a number. One honestly
-returns `None` because the field doesn't exist upstream; the other
-derives real wins/losses from real scored match results. Nothing was
-removed as a result of that claim -- the column already behaves exactly
-as "don't fabricate" would require.
+**Wins / Losses are not Standings columns.** APA ranks by cumulative
+session points and `DIVISION_STANDINGS_QUERY` returns no win/loss
+record, so the Standings sheet, its JSON export, and the
+`standings_snapshots` table carry no such field. Both scraper paths
+(`division_standings_rows()` and the single-team `standings_rows()`
+fallback) emit the same three-column shape: team, rank, points.
+
+A team-level win/loss record is still computable from real per-match
+results — `analytics/team_stats.py` does exactly that from `PlayerMatch`
+rows — but it is a match-history derivation, not a standings field, and
+is reported there rather than on this sheet.
 
 ## Player Stats sheet
 
@@ -62,7 +60,16 @@ All columns **Raw**, from `TeamStat`.
 
 ## Skill Level History sheet
 
-All columns **Raw** — a direct read of `PlayerMatch.skill_level` per match, already written by the scoresheet ingest path. `Source` is a constant label (`"scoresheet"`), not a computed value.
+Every reading is **Raw** — a direct read of `PlayerMatch.skill_level` per
+match, already written by the scoresheet ingest path.
+
+`Source` is **Derived (a label, not a number)**: both exporters
+(`ui/export_excel.py::_skill_level_history_dataframe` and
+`ui/export_json.py::_skill_level_history`) emit `"scoresheet"` when the row
+carries a `result`, and `"roster"` otherwise. It is not a constant. The
+distinction matters: a reading attached to a scored match is corroborated by
+that scoresheet, whereas a reading with no result is a roster-side value the
+scoresheet has not yet confirmed.
 
 ## Matchups sheet
 

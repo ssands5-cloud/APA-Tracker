@@ -122,6 +122,18 @@ class TestSeededData:
         assert wb["Standings"].max_row == 2  # header + 1 team
         assert wb["Player Stats"].max_row == 2  # header + 1 player
 
+    def test_standings_sheet_has_no_win_loss_columns(self, seeded_db, tmp_path):
+        """APA ranks by cumulative session points and the standings query
+        returns no win/loss record, so the sheet carries no such column.
+        Player Stats keeps its own Wins/Losses -- those come from real
+        per-match history and are a different sheet entirely."""
+        wb = _export(seeded_db, tmp_path)
+        header = [c.value for c in next(wb["Standings"].iter_rows())]
+        assert "Wins" not in header
+        assert "Losses" not in header
+        assert header == ["Rank", "Team", "Points", "As Of"]
+        assert "Wins" in [c.value for c in next(wb["Player Stats"].iter_rows())]
+
     def test_player_stats_shows_which_team_the_row_is_for(self, seeded_db, tmp_path):
         """A player on two teams during a season legitimately gets two rows
         here -- without a Team column that looked like an unexplained
