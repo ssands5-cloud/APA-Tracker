@@ -287,9 +287,16 @@ class PlayerHeadToHead(Base):
     """
 
     __tablename__ = "player_head_to_head"
-    __table_args__ = (
-        UniqueConstraint("player_id", "match_id", name="uq_player_head_to_head_match"),
-    )
+    # NO unique constraint on (player_id, match_id): a player can legitimately
+    # play more than one game in a single match, and each game is its own row
+    # with its own opponent, result and points. Confirmed against a real
+    # scoresheet -- match 51007724, where Rob Stegall lost to Paul Smith and
+    # beat Shiloh Schieck in the same match.
+    #
+    # The constraint was left over from an earlier upsert-by-key design that
+    # ingest_head_to_head has since replaced with per-match delete-then-insert
+    # (see its docstring), so nothing depends on it any more -- it only
+    # rejected real data.
 
     id = Column(Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)

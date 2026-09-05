@@ -110,10 +110,17 @@ def resolve_db_path(explicit: Optional[str] = None) -> Path:
     tried: list[Path] = []
 
     if explicit:
+        # An explicit --db that does not exist is an error, not an invitation
+        # to quietly use a different database. Falling through here meant a
+        # typo'd path silently reported on whatever happened to be in
+        # data/apa_tracker.db.
         path = Path(explicit)
         if path.is_file():
             return path
-        tried.append(path)
+        raise NoDatabaseError(
+            f"No database at the path given: {path}\n"
+            "Check the --db argument, or omit it to use the configured database."
+        )
 
     configured = _configured_db_path()
     if configured is not None:
