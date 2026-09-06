@@ -463,3 +463,72 @@ class PlayerH2HAdvantage(Base):
 
     player = relationship("Player", foreign_keys=[player_id])
     opponent = relationship("Player", foreign_keys=[opponent_id])
+
+
+class PlayerTrend(Base):
+    """One row per (player, format): how a player's SKILL LEVEL has been
+    moving lately, per the finalized Player Trend Analyzer spec.
+
+    The subject of the trend metrics is skill level, not points earned:
+    volatility is the sample standard deviation (ddof=1) of SL over the last
+    20 matches, and trend_slope is a least-squares fit in SL units per match
+    over the player's WHOLE history in that format. Those two spans differ
+    deliberately -- see docs/player_trends.md.
+
+    avg_points_last_20 is the one points-based figure, kept as descriptive
+    context alongside the SL trend rather than as an input to it.
+
+    Every field is derived from real captured data (PlayerMatch.skill_level
+    and .points_earned, format from the joined Match). No innings and no
+    defensive-shot figures exist in this project (APA does not expose them),
+    and none are invented for trends either.
+
+    NULL is meaningful throughout and is never replaced by a fabricated
+    zero. Per the spec's minimum-evidence rules:
+
+      * trend_slope        -- NULL below 2 SL observations
+      * volatility_last_20 -- NULL below 2 SL observations in the window
+      * sl_stability       -- NULL whenever volatility is NULL
+      * hot_cold_flag      -- NULL below 5 observations, or without
+                              volatility; "neutral" means observed and
+                              unremarkable, which is a different fact
+      * projected_sl_change_probability -- NULL below 5 observations, or
+                              without volatility
+
+    Upserted on (player_id, format): always-current, not snapshotted.
+    """
+
+    __tablename__ = "player_trends"
+    __table_args__ = (
+        UniqueConstraint("player_id", "format", name="uq_player_trends_format"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    format = Column(String)
+
+    # SL observations in the volatility window -- not the window SIZE. With a
+    # 20-match window and 4 matches played this reads 4, and every gated
+    # figure below is only as strong as that number.
+    matches_considered = Column(Integer)
+
+    avg_points_last_20 = Column(Float)
+    # Sample stddev (ddof=1) of SKILL LEVEL over the last 20 matches.
+    volatility_last_20 = Column(Float)
+    # Least-squares slope of SL vs match order, SL units per match, over the
+    # full history. Positive means the skill level is climbing.
+    trend_slope = Column(Float)
+    # |tanh(4 * slope)|. The one metric the governing spec does not define --
+    # flagged as such in analytics/player_trends.py and the docs.
+    trend_strength = Column(Float)
+    # 1 / (1 + volatility). 1.0 is perfectly stable, approaching 0.0 as the
+    # skill level swings. NOT a variance -- see the spec's §2.
+    sl_stability = Column(Float)
+    # "hot" / "cold" / "neutral", or NULL for insufficient evidence.
+    hot_cold_flag = Column(String)
+    # 0.0-1.0 from the spec's documented heuristic. Upward SL pressure only:
+    # the clamp floors a downward trend at 0.0, and direction lives in
+    # trend_slope. Not a fitted model and not APA's own projection.
+    projected_sl_change_probability = Column(Float)
+
+    player = relationship("Player", foreign_keys=[player_id])

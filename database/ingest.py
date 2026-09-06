@@ -19,6 +19,7 @@ from database.models import (
     PlayerMatch,
     PlayerMatchup,
     PlayerTeamHistory,
+    PlayerTrend,
     StandingsSnapshot,
     Team,
 )
@@ -735,4 +736,48 @@ def ingest_h2h_advantage(db: Session, rows: list[dict]) -> int:
 
     db.commit()
     logger.info("Ingested %d head-to-head advantage row(s)", written)
+    return written
+
+
+def ingest_player_trends(db: Session, rows: list[dict]) -> int:
+    """Upsert Player Trend rows, keyed on (player_id, format).
+
+    Always-current derived values, like PlayerMatchup and
+    PlayerH2HAdvantage -- not history worth a run-by-run trail. A row whose
+    player cannot be resolved is skipped rather than guessed at.
+
+    NULLs are written through as NULLs: the spec is explicit that an
+    insufficient-evidence metric must not be coerced to zero.
+    """
+    written = 0
+    for row in rows:
+        player = db.query(Player).filter_by(external_id=str(row["player_id"])).one_or_none()
+        if player is None:
+            logger.warning("Skipping trend row for unknown player %s", row["player_id"])
+            continue
+
+        fields = {
+            "matches_considered": row.get("matches_considered"),
+            "avg_points_last_20": row.get("avg_points_last_20"),
+            "volatility_last_20": row.get("volatility_last_20"),
+            "trend_slope": row.get("trend_slope"),
+            "trend_strength": row.get("trend_strength"),
+            "sl_stability": row.get("sl_stability"),
+            "hot_cold_flag": row.get("hot_cold_flag"),
+            "projected_sl_change_probability": row.get("projected_sl_change_probability"),
+        }
+
+        existing = db.query(PlayerTrend).filter_by(
+            player_id=player.id, format=row.get("format")
+        ).one_or_none()
+
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(PlayerTrend(player_id=player.id, format=row.get("format"), **fields))
+        written += 1
+
+    db.commit()
+    logger.info("Ingested %d player trend row(s)", written)
     return written

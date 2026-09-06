@@ -31,6 +31,8 @@ EXPECTED_SHEETS = {
     # Head-to-Head Advantage Engine (docs/head_to_head.md) -- its own
     # sheet, alongside Matchups rather than replacing it.
     "Head-to-Head",
+    # Player Trend Analyzer (docs/player_trends.md) -- its own sheet.
+    "Player Trends",
 }
 
 

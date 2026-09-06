@@ -148,6 +148,7 @@ class TestExcelExportSeesLiveData:
         assert workbook.sheetnames == [
             "Standings", "Player Stats", "Career Stats", "Team History",
             "Skill Level History", "Matchups", "Head-to-Head",
+            "Player Trends",
         ]
 
         rows = [[cell.value for cell in row] for row in workbook["Player Stats"].iter_rows()]

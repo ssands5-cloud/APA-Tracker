@@ -13,6 +13,7 @@ from database.models import (
     PlayerCareerStats,
     PlayerH2HAdvantage,
     PlayerHeadToHead,
+    PlayerTrend,
     PlayerMatch,
     PlayerMatchup,
     PlayerTeamHistory,
@@ -273,5 +274,19 @@ def head_to_head_advantage(db: Session) -> list[PlayerH2HAdvantage]:
     return (
         db.query(PlayerH2HAdvantage)
         .order_by(PlayerH2HAdvantage.matchup_score.desc().nullslast())
+        .all()
+    )
+
+
+def player_trends(db: Session) -> list[PlayerTrend]:
+    """Every player trend, steepest upward slope first.
+
+    NULL slopes (too little history for a trend) sort last rather than
+    reading as zero, so the sheet and the tab both open on the players
+    actually moving.
+    """
+    return (
+        db.query(PlayerTrend)
+        .order_by(PlayerTrend.trend_slope.desc().nullslast())
         .all()
     )

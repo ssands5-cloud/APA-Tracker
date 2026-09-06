@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
 from database.queries import (
+    player_trends,
     head_to_head_advantage,
     all_players,
     career_stats,
@@ -37,6 +38,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     skill_level_history_df = _skill_level_history_dataframe(db)
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
+    player_trends_df = _player_trends_dataframe(db)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -47,6 +49,8 @@ def export_to_excel(db: Session, config: dict) -> str:
         matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
         head_to_head_df.to_excel(writer, sheet_name="Head-to-Head", index=False)
         _format_head_to_head(writer, head_to_head_df)
+        player_trends_df.to_excel(writer, sheet_name="Player Trends", index=False)
+        _format_player_trends(writer, player_trends_df)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -319,6 +323,87 @@ def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
     for row in sheet.iter_rows(min_row=2, min_col=11, max_col=11):
         for cell in row:
             cell.number_format = "0%"
+
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
+
+
+# --- Player Trend Analyzer ---------------------------------------------------
+
+# Spec §7: NULL is displayed as "No data", never as 0 and never as a blank
+# cell that could be read as zero.
+TRENDS_NO_DATA = "No data"
+
+
+def _player_trends_dataframe(db: Session) -> pd.DataFrame:
+    """The Player Trend Analyzer's table, one row per (player, format).
+
+    Straight out of player_trends -- nothing is recomputed here, so the sheet
+    cannot disagree with the database or the demo tab.
+
+    NULLs become the literal string "No data" per the spec. That makes the
+    affected columns mixed-type, which is the intended trade: a captain
+    reading the sheet must never mistake "not enough history" for "zero".
+    Slope and volatility keep their numeric values wherever they exist.
+    """
+    def shown(value):
+        return TRENDS_NO_DATA if value is None else value
+
+    return pd.DataFrame(
+        [
+            {
+                "Player": row.player.name if row.player else "",
+                "Format": row.format or "",
+                "Matches": shown(row.matches_considered),
+                "Avg Points": shown(row.avg_points_last_20),
+                "Slope (SL/match)": shown(row.trend_slope),
+                "Strength": shown(row.trend_strength),
+                "Volatility": shown(row.volatility_last_20),
+                "SL Stability": shown(row.sl_stability),
+                "Trend": shown(row.hot_cold_flag),
+                "SL Change Probability": shown(row.projected_sl_change_probability),
+            }
+            for row in player_trends(db)
+        ]
+    )
+
+
+def _format_player_trends(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, and colour the Trend cell
+    green for hot and red for cold. Neutral is left unhighlighted, per spec.
+    """
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    sheet = writer.sheets["Player Trends"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    trend_range = f"I2:I{last_row}"  # Trend
+    for text, fill_colour, font_colour in (
+        ("hot", "C6EFCE", "006100"),
+        ("cold", "FFC7CE", "9C0006"),
+    ):
+        sheet.conditional_formatting.add(
+            trend_range,
+            CellIsRule(operator="equal", formula=[f'"{text}"'],
+                       fill=PatternFill("solid", fgColor=fill_colour),
+                       font=Font(color=font_colour, bold=True)),
+        )
+
+    # Probability as a percentage -- but only on the real numbers. A "No
+    # data" cell formatted as a percentage would render as text anyway; the
+    # format is applied per-cell so the string cells are left alone.
+    for row in sheet.iter_rows(min_row=2, min_col=10, max_col=10):
+        for cell in row:
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0.0%"
 
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
