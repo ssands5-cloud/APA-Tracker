@@ -39,7 +39,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
     player_trends_df = _player_trends_dataframe(db)
-    captains_edge_df = _captains_edge_dataframe()
+    captains_edge_df = _captains_edge_dataframe(config)
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -453,20 +453,28 @@ LINEUP_COLUMNS = [
 ]
 
 
-def _captains_edge_dataframe() -> pd.DataFrame:
-    """The recommended lineup, read from exports/captains_edge.json.
+def _captains_edge_dataframe(config: dict | None = None) -> pd.DataFrame:
+    """The recommended lineup, read from exports/captains_edge.json (or
+    `config["export"]["captains_edge_json_path"]`, when set).
 
     Reads the decision document rather than recomputing: the ranking is the
     builder's output, and a second computation here could disagree with the
     JSON and the HTML tab about the same player.
 
     An absent document yields an empty sheet rather than an error -- the
-    workbook is built before the decision JSON on a first run.
+    workbook is built before the decision JSON on a first run. The config
+    override exists so a hermetic test (or a build redirected via
+    pipeline.exports.configured_exports_dir) can point this at a scratch
+    path instead of silently reading whatever real document happens to sit
+    in the real project's exports/ -- see tests/test_captains_decision.py's
+    TestCaptainsEdgeSheet, which used to do exactly that.
     """
     import json
-    from pathlib import Path as _Path
 
-    document_path = _Path(__file__).resolve().parent.parent / "exports" / "captains_edge.json"
+    override = ((config or {}).get("export") or {}).get("captains_edge_json_path")
+    document_path = Path(override) if override else (
+        Path(__file__).resolve().parent.parent / "exports" / "captains_edge.json"
+    )
     if not document_path.is_file():
         return pd.DataFrame(columns=EDGE_COLUMNS)
 

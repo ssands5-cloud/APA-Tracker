@@ -15,7 +15,10 @@ import json
 
 import pytest
 from openpyxl import load_workbook
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
+from database.models import Base, Player, PlayerH2HAdvantage, PlayerTrend, Team
 from analytics.captains_edge import (
     CONFIDENCE_BASE,
     Bounds,
@@ -283,11 +286,86 @@ class TestRationale:
 # =============================================================================
 
 class TestDecisionDocument:
+    """`_document`/`_db_path` build a real, hermetic SQLite file under
+    `tmp_path` -- same convention as tests/test_build_lineups.py's `db_path`
+    fixture, since Captain's Edge and the Lineup Optimizer are documented
+    siblings reading the same derived tables (player_h2h_advantage,
+    player_trends).
+
+    Previously called `resolve_db_path()` with no explicit path, which
+    silently fell through to the real, gitignored project database --
+    passing locally only because that file happened to exist on disk from
+    prior scraping. A clean checkout (any fresh clone, or CI) has no such
+    file, and every test in this class failed with NoDatabaseError there --
+    caught by actually checking CI status, not by local runs, which could
+    never have surfaced it.
+    """
+
+    def _db_path(self, tmp_path):
+        """Built once per `tmp_path` -- a test that calls `_document` more
+        than once (test_rebuilding_is_idempotent, in particular) must get
+        the SAME seeded database back both times, not a second attempt to
+        insert the same rows into it."""
+        path = tmp_path / "apa.db"
+        if path.exists():
+            return path
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as db:
+            own_team = Team(external_id="T1", name="Chalk It Up")
+            opponent_team = Team(external_id="T2", name="Corner Pockets")
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=own_team)
+            alex = Player(external_id="P2", name="Alex", skill_level=4, team=own_team)
+            bob = Player(external_id="P3", name="Bob", skill_level=5, team=opponent_team)
+            carol = Player(external_id="P4", name="Carol", skill_level=6, team=opponent_team)
+            db.add_all([own_team, opponent_team, alice, alex, bob, carol])
+            db.flush()
+
+            db.add_all([
+                PlayerH2HAdvantage(
+                    player_id=alice.id, opponent_id=bob.id, matchup_score=90,
+                    win_probability=0.90, expected_points=3.0, format="8-Ball Open",
+                    session_name="Summer 2026",
+                ),
+                PlayerH2HAdvantage(
+                    player_id=alice.id, opponent_id=carol.id, matchup_score=80,
+                    win_probability=0.80, expected_points=2.0, format="8-Ball Open",
+                    session_name="Summer 2026",
+                ),
+                PlayerH2HAdvantage(
+                    player_id=alex.id, opponent_id=bob.id, matchup_score=85,
+                    win_probability=0.85, expected_points=2.5, format="8-Ball Open",
+                    session_name="Summer 2026",
+                ),
+                PlayerH2HAdvantage(
+                    player_id=alex.id, opponent_id=carol.id, matchup_score=70,
+                    win_probability=0.70, expected_points=1.0, format="8-Ball Open",
+                    session_name="Summer 2026",
+                ),
+            ])
+            db.add_all([
+                PlayerTrend(
+                    player_id=alice.id, format="8-ball", session_name="Summer 2026",
+                    sample_size=8, current_skill_level=5, regression_slope=0.05,
+                    volatility=0.2, sl_stability=0.83, hot_cold_flag="HOT",
+                ),
+                PlayerTrend(
+                    player_id=alex.id, format="8-ball", session_name="Summer 2026",
+                    sample_size=6, current_skill_level=4, regression_slope=-0.02,
+                    volatility=0.3, sl_stability=0.77, hot_cold_flag="NEUTRAL",
+                ),
+            ])
+            db.commit()
+
+        engine.dispose()
+        return path
+
     def _document(self, tmp_path):
         from scripts.build_captains_edge import build_decision_document, connect_read_only
         from scripts.build_captains_edge import resolve_db_path
 
-        connection = connect_read_only(resolve_db_path())
+        connection = connect_read_only(resolve_db_path(str(self._db_path(tmp_path))))
         try:
             return build_decision_document(connection)
         finally:
@@ -323,14 +401,14 @@ class TestDecisionDocument:
     def test_the_file_is_rewritten_whole_so_stale_lineups_cannot_survive(self, tmp_path):
         """Pruning by full replacement: a team that no longer has pairings
         must not linger from a previous build."""
-        from scripts.build_captains_edge import resolve_db_path, write_decision_json
+        from scripts.build_captains_edge import write_decision_json
 
         path = tmp_path / "captains_edge.json"
         path.write_text(json.dumps({
             "lineups": [{"team_id": "GONE", "team_name": "Disbanded", "players": []}]
         }), encoding="utf-8")
 
-        write_decision_json(str(resolve_db_path()), path)
+        write_decision_json(str(self._db_path(tmp_path)), path)
         rebuilt = json.loads(path.read_text(encoding="utf-8"))
         assert all(l["team_id"] != "GONE" for l in rebuilt["lineups"])
 
@@ -405,19 +483,59 @@ class TestCaptainsEdgeTab:
 # =============================================================================
 
 class TestCaptainsEdgeSheet:
+    """`_sheet` used to open the REAL configured database
+    (`load_config("apa_config.yaml")` -> the real, gitignored
+    `data/apa_tracker.db`) and read the real, gitignored
+    `exports/captains_edge.json` -- ui.export_excel._captains_edge_dataframe
+    hardcoded that path relative to its own file, with no config override,
+    so a clean checkout has no such document and every one of these tests
+    silently exercised the EMPTY-sheet branch instead of the real
+    conditional-formatting/auto-filter code they're named for. Passed
+    locally only because both real files happened to already exist with
+    real content; failed in CI, where neither does. `ui.export_excel`
+    gained a `config["export"]["captains_edge_json_path"]` override (same
+    shape as pipeline.exports.configured_exports_dir) specifically so this
+    could be made hermetic instead of reaching into the real project tree.
+    """
+
     def _sheet(self, tmp_path):
+        return self._workbook(tmp_path)["Captain's Edge"]
+
+    def _workbook(self, tmp_path):
+        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from database.engine import create_db_engine
-        from scheduler.graphql_sync import load_config
+        from database.models import Base
         from ui.export_excel import export_to_excel
 
-        config = load_config("apa_config.yaml")
-        with Session(create_db_engine(config)) as db:
-            path = export_to_excel(
-                db, {"export": {"excel_output_path": str(tmp_path / "wb.xlsx")}}
-            )
-        return load_workbook(path)["Captain's Edge"]
+        db_path = tmp_path / "apa.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+        Base.metadata.create_all(engine)
+
+        document_path = tmp_path / "captains_edge.json"
+        document_path.write_text(json.dumps({
+            "lineups": [{
+                "team_id": "T1", "team_name": "Chalk It Up",
+                "players": [
+                    {"player_name": "Alice", "opponent_name": "Bob",
+                     "matchup_score": 0.9, "risk_factor": 0.7, "confidence": 0.8,
+                     "recommended_order": 1, "rationale": "High win probability."},
+                    {"player_name": "Alex", "opponent_name": "Carol",
+                     "matchup_score": None, "risk_factor": None, "confidence": None,
+                     "recommended_order": None, "rationale": "No matchup history."},
+                ],
+            }],
+        }), encoding="utf-8")
+
+        config = {
+            "export": {
+                "excel_output_path": str(tmp_path / "wb.xlsx"),
+                "captains_edge_json_path": str(document_path),
+            },
+        }
+        with Session(engine) as db:
+            path = export_to_excel(db, config)
+        return load_workbook(path)
 
     def test_headers_match_the_spec_order(self, tmp_path):
         sheet = self._sheet(tmp_path)
@@ -440,18 +558,7 @@ class TestCaptainsEdgeSheet:
         assert str(HIGH_RISK) in formulas
 
     def test_the_other_sheets_still_ship(self, tmp_path):
-        from sqlalchemy.orm import Session
-
-        from database.engine import create_db_engine
-        from scheduler.graphql_sync import load_config
-        from ui.export_excel import export_to_excel
-
-        config = load_config("apa_config.yaml")
-        with Session(create_db_engine(config)) as db:
-            path = export_to_excel(
-                db, {"export": {"excel_output_path": str(tmp_path / "wb.xlsx")}}
-            )
-        names = load_workbook(path).sheetnames
+        names = self._workbook(tmp_path).sheetnames
         assert "Matchups" in names
         assert "Head-to-Head" in names
         assert "Player Trends" in names
