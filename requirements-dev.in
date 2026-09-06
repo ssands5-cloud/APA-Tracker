@@ -1,0 +1,6 @@
+# Dev/test-only dependencies, hand-edited. `requirements-dev.txt` is the
+# fully-pinned lockfile GENERATED from this file -- see
+# docs/reproducible_builds.md.
+
+-r requirements.in
+pytest>=9.0,<10.0

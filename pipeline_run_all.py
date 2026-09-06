@@ -13,6 +13,11 @@ Usage:
     python pipeline_run_all.py                # everything
     python pipeline_run_all.py --skip-scrape  # reuse existing fixtures
     python pipeline_run_all.py --skip-tests
+    python pipeline_run_all.py --skip-scrape --skip-tests \
+        --fixtures tests/fixtures/sample_pipeline \
+        --config tests/fixtures/ci_pipeline_config.yaml
+        # CI mode: no live login, writes into ci-build/ only.
+        # See docs/reproducible_builds.md.
 """
 
 import env_loader  # noqa: F401,E402  -- loads .env before anything else
@@ -47,6 +52,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-scrape", action="store_true",
                         help="reuse the fixtures already on disk")
     parser.add_argument("--skip-tests", action="store_true")
+    parser.add_argument(
+        "--fixtures",
+        help="fixture root to pass through to `python -m pipeline` "
+             "(default: scraper/sanitized_fixtures). Lets --skip-scrape be "
+             "pointed at a small committed sample tree instead of the real, "
+             "gitignored scrape output -- see tests/fixtures/sample_pipeline "
+             "and docs/reproducible_builds.md's CI-mode section.",
+    )
+    parser.add_argument(
+        "--config",
+        help="config file to pass through to `python -m pipeline` (default: "
+             "apa_config.yaml). Paired with --fixtures to also redirect the "
+             "database and every export away from data/ and exports/ -- see "
+             "tests/fixtures/ci_pipeline_config.yaml.",
+    )
     args = parser.parse_args(argv)
 
     # 1. Scrape the live league into fixtures. Owns its own process because it
@@ -58,8 +78,12 @@ def main(argv: list[str] | None = None) -> int:
             "1. Scrape APA league data")
 
     # 2-4. Fixtures -> SQLite -> workbook / demo JSON / Captain's Edge.
-    run([sys.executable, "-m", "pipeline"],
-        "2. Ingest fixtures, rebuild matchups, write exports")
+    pipeline_cmd = [sys.executable, "-m", "pipeline"]
+    if args.fixtures:
+        pipeline_cmd += ["--fixtures", args.fixtures]
+    if args.config:
+        pipeline_cmd += ["--config", args.config]
+    run(pipeline_cmd, "2. Ingest fixtures, rebuild matchups, write exports")
 
     # 5. Prove the tree still holds together.
     if not args.skip_tests:

@@ -42,8 +42,8 @@ def stub_exporters(monkeypatch):
     monkeypatch.setattr(
         exports,
         "write_tabs",
-        lambda _db: calls.append(("analysis tabs", None))
-        or (exports.EXPORTS_DIR / "analysis_tabs.html"),
+        lambda _db, out_dir=None: calls.append(("analysis tabs", None))
+        or ((out_dir or exports.EXPORTS_DIR) / "analysis_tabs.html"),
     )
     return calls
 
@@ -123,6 +123,44 @@ def test_lineup_output_outside_repository_exports_is_rejected(
 
     with pytest.raises(ValueError, match="must be under"):
         exports.run({"database": {"path": "unused.db"}}, engine)
+
+
+class TestConfiguredExportsDir:
+    def test_defaults_to_the_module_constant(self):
+        assert exports.configured_exports_dir({}) == exports.EXPORTS_DIR
+        assert exports.configured_exports_dir({"export": {}}) == exports.EXPORTS_DIR
+
+    def test_a_relative_override_resolves_under_project_root(self):
+        assert (
+            exports.configured_exports_dir({"export": {"exports_dir": "scratch/out"}})
+            == exports.PROJECT_ROOT / "scratch" / "out"
+        )
+
+    def test_an_absolute_override_is_used_as_is(self, tmp_path):
+        assert exports.configured_exports_dir({"export": {"exports_dir": str(tmp_path)}}) == tmp_path
+
+
+def test_export_dir_override_redirects_every_builder_not_just_the_workbook(
+    monkeypatch, engine, stub_exporters, tmp_path
+):
+    """The gap this closes: export_to_excel/export_to_json already honoured
+    config["export"]["*_output_path"], but Captain's Edge, the Lineup
+    Optimizer and the analysis tabs page always wrote to the real project's
+    exports/ regardless of config -- so a caller (a CI run, a build
+    verification script) could not fully redirect output without
+    monkeypatching pipeline.exports' module globals directly."""
+    calls = stub_exporters
+    _captains_builder(monkeypatch, calls)
+    _lineup_builder(monkeypatch, calls)
+
+    scratch = tmp_path / "scratch-exports"
+    config = {"database": {"path": "unused.db"}, "export": {"exports_dir": str(scratch)}}
+    written = exports.run(config, engine, captains=True)
+
+    assert calls[2] == ("captains", scratch)
+    assert calls[3] == ("lineups", scratch)
+    lineup_output = next(path for label, path in written if label == "lineups json")
+    assert Path(lineup_output).parent == scratch
 
 
 def test_missing_lineup_database_skips_only_lineup_artifact(

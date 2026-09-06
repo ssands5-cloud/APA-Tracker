@@ -50,10 +50,13 @@ If `py -0` shows only 3.14 installed, get 3.12 with `winget install
 Python.Python.3.12` (or the installer from python.org), then create the
 venv from that version specifically: `py -3.12 -m venv venv`.
 
-1. Install dependencies:
+1. Install dependencies (fully pinned -- see
+   [docs/reproducible_builds.md](docs/reproducible_builds.md) for how these
+   are generated and verified, and `playwright install chromium` for the
+   scraper's actual browser binary):
 
    ```
-   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 
 2. Copy `.env.example` to `.env` and fill in your league portal login:

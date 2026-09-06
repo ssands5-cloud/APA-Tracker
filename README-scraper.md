@@ -13,8 +13,10 @@ python pipeline_run_all.py             # step 1 is the scraper
 See [docs/full_pipeline_integration.md](docs/full_pipeline_integration.md)
 for what "the pipeline" means end-to-end, what's now actually verified by an
 integration test with nothing stubbed (real fixtures through every real
-export) plus a determinism check, and what real gaps remain (dependency
-pinning; `pipeline_run_all.py` itself isn't run as a real subprocess in CI).
+export) plus a determinism check, and
+[docs/reproducible_builds.md](docs/reproducible_builds.md) for the pinned
+lockfile, the from-scratch build/verification script, and the CI mode that
+runs `pipeline_run_all.py` itself as a real subprocess without a live login.
 
 ## Login flow
 

@@ -79,6 +79,33 @@ class TestSkipFlags:
         assert recorded_calls[0][0] == [sys.executable, "-m", "pipeline"]
 
 
+class TestFixturesPassthrough:
+    """--fixtures lets --skip-scrape point at a small committed sample tree
+    (tests/fixtures/sample_pipeline) instead of the real, gitignored scrape
+    output -- the mechanism CI uses to prove pipeline_run_all.py itself
+    works as a real subprocess without a live login."""
+
+    def test_fixtures_flag_is_forwarded_to_the_pipeline_step(self, recorded_calls):
+        pipeline_run_all.main(["--skip-scrape", "--skip-tests", "--fixtures", "some/dir"])
+        assert recorded_calls[0][0] == [sys.executable, "-m", "pipeline", "--fixtures", "some/dir"]
+
+    def test_omitting_fixtures_leaves_the_pipeline_step_using_its_own_default(self, recorded_calls):
+        pipeline_run_all.main(["--skip-scrape", "--skip-tests"])
+        assert recorded_calls[0][0] == [sys.executable, "-m", "pipeline"]
+
+    def test_config_flag_is_forwarded_alongside_fixtures(self, recorded_calls):
+        pipeline_run_all.main([
+            "--skip-scrape", "--skip-tests",
+            "--fixtures", "tests/fixtures/sample_pipeline",
+            "--config", "tests/fixtures/ci_pipeline_config.yaml",
+        ])
+        assert recorded_calls[0][0] == [
+            sys.executable, "-m", "pipeline",
+            "--fixtures", "tests/fixtures/sample_pipeline",
+            "--config", "tests/fixtures/ci_pipeline_config.yaml",
+        ]
+
+
 class TestFailurePropagation:
     def test_a_failing_step_stops_the_chain_and_exits_with_its_code(self, monkeypatch):
         """If ingest/export fails, the test suite must never run against a

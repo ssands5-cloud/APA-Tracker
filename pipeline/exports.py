@@ -32,6 +32,24 @@ def configured_db_path(config: dict[str, Any]) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def configured_exports_dir(config: dict[str, Any]) -> Path:
+    """Where the read-only builders (Captain's Edge, Lineup Optimizer) and
+    the analysis tabs page write, in addition to the workbook/JSON paths
+    `config["export"]` already controls.
+
+    Defaults to the module-level `EXPORTS_DIR` (the real project's
+    `exports/`) exactly as before this existed -- only a caller that sets
+    `export.exports_dir` in its config changes anything, which is what lets
+    a CI or build-verification run redirect every artifact into a scratch
+    directory without monkeypatching module globals.
+    """
+    override = (config.get("export") or {}).get("exports_dir")
+    if not override:
+        return EXPORTS_DIR
+    path = Path(override)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[tuple[str, str]]:
     """Write every artifact. Returns (label, path) for each."""
     written: list[tuple[str, str]] = []
@@ -49,7 +67,7 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
     from scripts.build_captains_edge import NoDatabaseError, build
 
     db_path = configured_db_path(config)
-    exports_dir = EXPORTS_DIR
+    exports_dir = configured_exports_dir(config)
     try:
         html_path, xlsx_path = build(str(db_path), str(exports_dir))
     except NoDatabaseError as exc:
@@ -94,7 +112,7 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
             append_lineup_optimizer_sheet(workbook_path, lineup_path)
 
     with Session(engine) as db:
-        written.append(("analysis tabs", str(write_tabs(db))))
+        written.append(("analysis tabs", str(write_tabs(db, out_dir=exports_dir))))
 
     return written
 

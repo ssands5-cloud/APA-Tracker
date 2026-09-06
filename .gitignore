@@ -6,6 +6,17 @@ logs/
 __pycache__/
 *.pyc
 
+# Scratch database/exports written by the CI-mode pipeline smoke test
+# (tests/fixtures/ci_pipeline_config.yaml) and the reproducible-build
+# script -- never the real project's data/ or exports/, but still not
+# something to commit.
+ci-build/
+build/
+
+# scripts/reproducible_build.py's scratch venv and build-manifest output.
+.build-venv/
+dist/
+
 # Local scratch state from agent tooling; not part of the project.
 .superpowers/
 

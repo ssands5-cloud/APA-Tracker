@@ -1,0 +1,24 @@
+# Direct runtime dependencies, hand-edited. `requirements.txt` is the
+# fully-pinned lockfile GENERATED from this file -- never edit that one by
+# hand; see docs/reproducible_builds.md.
+#
+# Upper bounds cap at the next MAJOR version: a minor/patch release is
+# assumed backward-compatible per semver, a major release is not. This is a
+# maintenance-burden tradeoff, not a correctness requirement -- tighten any
+# of these to a minor-version cap (e.g. `pandas>=3.0,<3.1`) if a library's
+# history shows breaking changes within a major version.
+#
+# playwright and python-dotenv were previously missing from this file
+# entirely, even though scraper/full_auto_scrape.py and env_loader.py (the
+# latter imported by nearly every entry point) import them directly -- a
+# fresh clone running `pip install -r requirements.txt` alone could not
+# actually run the scraper. Added here as real, direct dependencies.
+
+requests>=2.34,<3.0
+beautifulsoup4>=4.15,<5.0
+PyYAML>=6.0,<7.0
+SQLAlchemy>=2.0,<3.0
+pandas>=3.0,<4.0
+openpyxl>=3.1,<4.0
+playwright>=1.62,<2.0
+python-dotenv>=1.2,<2.0

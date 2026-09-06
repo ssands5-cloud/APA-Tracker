@@ -1,0 +1,13 @@
+# Config for the CI-mode smoke test: `pipeline_run_all.py --skip-scrape
+# --fixtures tests/fixtures/sample_pipeline --config
+# tests/fixtures/ci_pipeline_config.yaml`. Points the database and every
+# export at a scratch directory that is gitignored and never the real
+# project's data/ or exports/ -- see docs/reproducible_builds.md.
+
+database:
+  path: "ci-build/pipeline_ci.db"
+
+export:
+  excel_output_path: "ci-build/exports/apa_stats.xlsx"
+  json_output_path: "ci-build/exports/apa_data.json"
+  exports_dir: "ci-build/exports"

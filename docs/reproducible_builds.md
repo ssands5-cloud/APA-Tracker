@@ -1,0 +1,156 @@
+# Reproducible Builds
+
+How to install the exact environment that produced a given commit's test
+results and exports, how to verify it, and what still isn't covered.
+
+```
+requirements.in / requirements-dev.in    hand-edited, with upper bounds
+requirements.txt / requirements-dev.txt  pip-compile's fully pinned lock -- GENERATED, never hand-edited
+scripts/reproducible_build.py            fresh venv -> install -> verify -> test -> pipeline -> manifest
+tests/fixtures/sample_pipeline/          committed 2-team fixture tree for CI mode
+tests/fixtures/ci_pipeline_config.yaml   redirects the CI-mode pipeline run into ci-build/
+```
+
+## Install the pinned environment
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate           # PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+```
+
+`requirements-dev.txt` already includes everything in `requirements.txt`
+(it's compiled from `requirements-dev.in`, which starts with
+`-r requirements.in`) -- one install, exact versions, including the
+transitive dependencies (`numpy`, `greenlet`, `pyee`, ...) pip-compile
+resolved alongside them. To actually run the scraper, also run
+`playwright install chromium` once -- the Python package alone doesn't
+carry the browser binary it drives.
+
+### Why this exists
+
+Before this pass, `requirements.txt` used lower bounds only
+(`pandas>=2.0`) with no upper bound and no lockfile, and was missing two
+packages entirely: `playwright` and `python-dotenv`, both real, direct
+imports (`scraper/full_auto_scrape.py`; `env_loader.py`, which nearly
+every entry point imports first). A fresh clone running
+`pip install -r requirements.txt` could not actually run the scraper, and
+nothing pinned *when* `pip install` ran to *what* got installed -- the
+project was, at the time this was found, already running on `pandas==3.0.5`
+(a major-version jump from the `>=2.0` floor) purely by chance of when it
+happened to be installed.
+
+### Updating a pinned version
+
+Edit `requirements.in` (or `requirements-dev.in`), then regenerate:
+
+```bash
+pip install pip-tools
+pip-compile --resolver=backtracking --strip-extras -o requirements.txt requirements.in
+pip-compile --resolver=backtracking --strip-extras -o requirements-dev.txt requirements-dev.in
+```
+
+Never hand-edit `requirements.txt` / `requirements-dev.txt` directly --
+the next `pip-compile` run will silently overwrite it, and a hand
+edit that isn't reflected in the `.in` file is a change nobody can see
+coming. Upper bounds cap at the next MAJOR version by default (a
+minor/patch release is assumed backward-compatible per semver); tighten
+any individual package to a minor-version cap in the `.in` file if its
+real-world history says otherwise.
+
+## Verify the pinned environment actually reproduces the tested state
+
+```bash
+python scripts/reproducible_build.py
+```
+
+Six steps, any failure stops the build immediately:
+
+1. Create a fresh virtual environment (`.build-venv/` by default --
+   never the interpreter this script itself is running under).
+2. Install `requirements-dev.txt` into it.
+3. Diff the venv's actual `pip freeze` against the lockfile's pins --
+   proves what was asked for is what got installed, not "close enough".
+4. Run the full test suite through that venv's own interpreter. This
+   already includes the determinism check
+   (`tests/test_full_pipeline_integration.py::TestFullPipelineDeterminism`)
+   -- there's no separate ad hoc comparison here duplicating it.
+5. Run the real pipeline (real fixtures if `scraper/sanitized_fixtures/`
+   has any, else the committed sample tree -- see "CI mode" below) and
+   confirm every declared artifact actually exists on disk.
+6. Write `dist/BUILD_INFO.json` -- see "Versioning artifacts" below.
+
+The venv is deleted afterward unless `--keep-venv` is passed. Both `.build-venv/`
+and `dist/` are gitignored; a run against real fixtures also regenerates
+the real `exports/` in place (the same thing `python -m pipeline` does),
+which is correct, not a side effect to route around.
+
+## CI mode
+
+CI cannot scrape: step 1 of `pipeline_run_all.py` is a real login and
+consent flow against a live third-party site (README-scraper.md), and
+running that unattended would mean either flaky failures on a UI change or
+credentials sitting in a CI secret for a browser-automation login flow --
+neither is worth it for what this step needs to prove.
+
+```bash
+python pipeline_run_all.py --skip-scrape --skip-tests \
+  --fixtures tests/fixtures/sample_pipeline \
+  --config tests/fixtures/ci_pipeline_config.yaml
+```
+
+`--fixtures` (forwarded to `python -m pipeline`) points the ingest at
+`tests/fixtures/sample_pipeline/` -- a small, committed, synthetic
+two-team/one-match tree in the scraper's real documented layout, not real
+league data. `--config` points the database and every export at
+`ci-build/` (gitignored) via `tests/fixtures/ci_pipeline_config.yaml`,
+so this can never write into the real `data/` or `exports/`. This exact
+command is what `.github/workflows/tests.yml` runs as a dedicated step,
+proving `pipeline_run_all.py` itself works as a real subprocess -- not
+just its orchestration logic (`tests/test_pipeline_run_all.py`, mocked)
+or the ingest/export functions called directly in-process
+(`tests/test_full_pipeline_integration.py`).
+
+`pipeline.exports.configured_exports_dir` is what makes `--config` able to
+redirect *every* artifact this way: previously only the workbook and demo
+JSON honoured `config["export"]`, while Captain's Edge, the Lineup
+Optimizer and the analysis tabs page always wrote to the real project's
+`exports/` regardless of config. Setting `export.exports_dir` in a config
+file now redirects all of them.
+
+## Versioning artifacts
+
+`scripts/reproducible_build.py`'s `dist/BUILD_INFO.json` is the answer to
+"what produced this workbook": the git commit (and whether the tree was
+dirty -- a build from uncommitted changes says so, since nobody else can
+reproduce it), the Python version and platform, every pinned dependency's
+exact resolved version, which fixtures were used, and the list of
+artifacts written. This is deliberately a manifest written alongside the
+existing exports, not a new artifact-store or release-packaging system --
+appropriate for what this project actually needs, not a general solution
+for a much larger team.
+
+To compare two builds: regenerate `BUILD_INFO.json` for each commit and
+diff them. A different `dependencies` block for the same commit means the
+lockfile changed (or wasn't actually used) between builds -- exactly the
+drift this whole pass exists to catch.
+
+## What this does not cover
+
+- **Hashes are not pinned** (no `--generate-hashes` on the pip-compile
+  invocations). Hash pinning adds real supply-chain protection (a
+  compromised package version with the right version number but different
+  contents would still install) at the cost of a much longer, harder-to-
+  skim lockfile and more friction on every regeneration. Worth adding if
+  that threat model matters more than it currently does for a solo
+  project's own tooling.
+- **Cross-platform verification is real but partial.** `scripts/reproducible_build.py`
+  and the exact pins were verified on Windows/Python 3.12 (this project's
+  primary environment). `.github/workflows/tests.yml` installs the same
+  `requirements-dev.txt` fresh on Ubuntu across Python 3.12 and 3.13 on
+  every push -- that CI run is what actually confirms the pins resolve
+  and install cleanly cross-platform, not an offline claim made here.
+- **The scraper itself has no automated integration test** -- see
+  [docs/full_pipeline_integration.md](full_pipeline_integration.md)'s own
+  "What this does NOT cover" for why, and for what full-pipeline coverage
+  means separately from the reproducibility question this document covers.

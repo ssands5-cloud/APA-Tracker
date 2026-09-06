@@ -68,22 +68,15 @@ by "successfully" running the test suite, or a captain-facing export).
 
 ## What this does NOT cover — real, disclosed gaps
 
-- **`pipeline_run_all.py` is not run as a real subprocess in CI.** The new
-  tests prove its own orchestration logic is correct (mocked) and prove the
-  pieces it calls work correctly together end-to-end (the integration test,
-  calling the same functions directly). Nothing runs the literal script
-  start-to-finish in CI, because step 1 is a real login against a live
-  third-party site and must not run unattended in CI.
-- **Dependencies are not pinned.** `requirements.txt` uses `>=` lower
-  bounds only (`pandas>=2.0`, `openpyxl>=3.1`, ...), no upper bounds and no
-  lockfile. Two installs months apart can resolve different versions of a
-  library the exports depend on for formatting — a real gap in
-  "reproducible builds" as usually meant, distinct from the output
-  *determinism* verified above (which only checks two runs against the
-  *same* installed environment). Deliberately not fixed in this pass: a
-  lockfile or pinned upper bounds is a real workflow change (what a
-  contributor runs to update a dependency) that deserves a decision, not a
-  unilateral change bundled into an integration-testing pass.
+- **Resolved:** `pipeline_run_all.py` now runs as a real subprocess in CI
+  (`--skip-scrape --fixtures tests/fixtures/sample_pipeline`), and
+  dependencies are fully pinned via a pip-compile lockfile with a
+  from-scratch reproducible-build script to verify it. See
+  [docs/reproducible_builds.md](reproducible_builds.md) for both — it
+  covers what "the pipeline runs in CI" and "the environment is
+  reproducible" mean as two related but distinct questions, and what still
+  isn't covered by either (hash pinning; full cross-platform verification
+  beyond what CI itself confirms on push).
 - **The scraper itself (`scraper/full_auto_scrape.py`) has no automated
   integration test** — it drives a real browser against a real login. Its
   contract is documented in README-scraper.md; verifying it stays a manual

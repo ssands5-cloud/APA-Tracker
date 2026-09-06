@@ -38,8 +38,32 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # requirements-dev.txt is pip-compile's fully pinned lock for
+          # requirements-dev.in, which itself pulls in requirements.in --
+          # installing it alone already covers every runtime + dev
+          # dependency at the exact version tested locally. See
+          # docs/reproducible_builds.md.
           pip install -r requirements-dev.txt
 
       - name: Run test suite
         run: python -m pytest tests/ -v
+
+      - name: CI-mode full pipeline smoke test (no live scrape, no credentials)
+        # Proves pipeline_run_all.py itself works as a real subprocess, not
+        # just its orchestration logic (mocked in
+        # tests/test_pipeline_run_all.py) or the ingest/export functions
+        # called directly in-process (tests/test_full_pipeline_integration.py).
+        # --skip-scrape + --fixtures points it at a small committed sample
+        # tree instead of a live login; --config redirects the database and
+        # every export into ci-build/, never the real data/ or exports/. See
+        # docs/reproducible_builds.md's "CI mode" section.
+        run: |
+          python pipeline_run_all.py --skip-scrape --skip-tests \
+            --fixtures tests/fixtures/sample_pipeline \
+            --config tests/fixtures/ci_pipeline_config.yaml
+          test -s ci-build/exports/apa_stats.xlsx
+          test -s ci-build/exports/apa_data.json
+          test -s ci-build/exports/captains_edge.html
+          test -s ci-build/exports/lineups.json
+          test -s ci-build/exports/analysis_tabs.html
+          echo "CI-mode pipeline run produced every expected artifact."
