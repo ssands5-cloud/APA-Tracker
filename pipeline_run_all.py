@@ -42,12 +42,12 @@ def run(cmd: list[str], label: str) -> None:
         sys.exit(result.returncode)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--skip-scrape", action="store_true",
                         help="reuse the fixtures already on disk")
     parser.add_argument("--skip-tests", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # 1. Scrape the live league into fixtures. Owns its own process because it
     #    drives a browser and completes an interactive consent step.

@@ -10,6 +10,12 @@ python scraper/full_auto_scrape.py     # scraper only
 python pipeline_run_all.py             # step 1 is the scraper
 ```
 
+See [docs/full_pipeline_integration.md](docs/full_pipeline_integration.md)
+for what "the pipeline" means end-to-end, what's now actually verified by an
+integration test with nothing stubbed (real fixtures through every real
+export) plus a determinism check, and what real gaps remain (dependency
+pinning; `pipeline_run_all.py` itself isn't run as a real subprocess in CI).
+
 ## Login flow
 
 Three steps, in this order. Skipping any one of them yields a run that looks
