@@ -198,7 +198,11 @@ Optimizer` Excel sheet. Team identity is resolved by ID first and by an
 unambiguous player name only when the upstream ID spaces do not join;
 unresolved rows are
 reported rather than mixed into an invented opponent bucket. See
-`docs/lineup_optimizer.md` for the payload contract and limitations.
+`docs/lineup_optimizer.md` for the payload contract and limitations, and
+`docs/prediction_validation.md` for how well its `win_probability` input
+actually predicts real recorded outcomes (run
+`python scripts/validate_predictions.py` to refresh it against the current
+database).
 
 **Where every column comes from** — `docs/data-fields.md` is the single
 source of truth for which exported columns are raw API values, which are

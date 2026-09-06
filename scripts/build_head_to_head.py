@@ -31,13 +31,18 @@ from scheduler.graphql_sync import load_config
 logger = logging.getLogger(__name__)
 
 
-def _ordered_rows(db: Session) -> list[PlayerHeadToHead]:
+def ordered_rows(db: Session) -> list[PlayerHeadToHead]:
     """Every head-to-head game, oldest first.
 
     Order matters: the trend reads the player's first skill level against
     their last, so an unordered list yields a meaningless trend. Sorted by
     the match's week then its id, since match_date is stored as delivered
     text and does not sort reliably.
+
+    Public (not module-private) so other callers needing the exact same
+    chronological order -- scripts/validate_predictions.py's walk-forward
+    backtest, in particular -- reuse this instead of re-deriving it. Two
+    orderings of the same rows would be a silent source of drift.
     """
     rows = db.query(PlayerHeadToHead).all()
     return sorted(
@@ -48,6 +53,23 @@ def _ordered_rows(db: Session) -> list[PlayerHeadToHead]:
             r.id,
         ),
     )
+
+
+def group_by_pairing(
+    rows: list[PlayerHeadToHead],
+) -> dict[tuple[int, int, Optional[str], Optional[str]], list[PlayerHeadToHead]]:
+    """Bucket already-ordered rows into (player_id, opponent_id, format,
+    session_name) groups, preserving each group's internal order.
+
+    Rows with no resolved player or opponent id are dropped -- the same
+    guard build_rows() applied inline before this was extracted.
+    """
+    groups: dict[tuple, list[PlayerHeadToHead]] = defaultdict(list)
+    for row in rows:
+        if row.player_id is None or row.opponent_id is None:
+            continue
+        groups[(row.player_id, row.opponent_id, row.format, row.session_name)].append(row)
+    return groups
 
 
 def _baselines(rows: list[PlayerHeadToHead]) -> dict[tuple[int, str], float]:
@@ -69,18 +91,13 @@ def _baselines(rows: list[PlayerHeadToHead]) -> dict[tuple[int, str], float]:
 
 def build_rows(db: Session) -> list[dict[str, Any]]:
     """One evaluated pairing per (player, opponent, format, session)."""
-    rows = _ordered_rows(db)
+    rows = ordered_rows(db)
     if not rows:
         logger.warning("No head-to-head rows in the database -- nothing to build.")
         return []
 
     baselines = _baselines(rows)
-
-    groups: dict[tuple, list[PlayerHeadToHead]] = defaultdict(list)
-    for row in rows:
-        if row.player_id is None or row.opponent_id is None:
-            continue
-        groups[(row.player_id, row.opponent_id, row.format, row.session_name)].append(row)
+    groups = group_by_pairing(rows)
 
     built: list[dict[str, Any]] = []
     for (player_id, opponent_id, fmt, session), pair_rows in groups.items():

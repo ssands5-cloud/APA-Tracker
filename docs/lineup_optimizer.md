@@ -149,5 +149,12 @@ rows are intentionally omitted from assignments and called out in
 `resolution_warnings`.  Unifying those upstream ID spaces is a separate
 ingest change with a wider blast radius.
 
-The optimizer has not yet been evaluated against actual match outcomes.  It
-is a transparent decision aid, not a fitted probability model.
+The optimizer itself has not been evaluated end-to-end against actual match
+outcomes -- there is no historical record of *which lineup a captain actually
+played* to compare it against, only who ended up facing whom. Its `Wij`
+input (`win_probability`) has been: see
+[docs/prediction_validation.md](prediction_validation.md) for the real
+numbers, real caveats, and what is still unvalidated (the historical-record
+term has zero rematches to check against yet; the season-scoped `Sij` input
+is not covered at all). It remains a transparent decision aid, not a fitted
+probability model.
