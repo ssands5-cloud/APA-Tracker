@@ -39,6 +39,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
     player_trends_df = _player_trends_dataframe(db)
+    captains_edge_df = _captains_edge_dataframe()
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -51,6 +52,8 @@ def export_to_excel(db: Session, config: dict) -> str:
         _format_head_to_head(writer, head_to_head_df)
         player_trends_df.to_excel(writer, sheet_name="Player Trends", index=False)
         _format_player_trends(writer, player_trends_df)
+        captains_edge_df.to_excel(writer, sheet_name="Captain's Edge", index=False)
+        _format_captains_edge(writer, captains_edge_df)
 
     logger.info("Exported workbook to %s", output_path)
     return str(output_path)
@@ -424,3 +427,103 @@ def _format_player_trends(writer, frame: pd.DataFrame) -> None:
 
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
+
+
+# --- Captain's Decision Engine ----------------------------------------------
+
+EDGE_NO_DATA = "No data"
+EDGE_HIGH_CONFIDENCE = 0.70
+EDGE_HIGH_RISK = 0.50
+
+EDGE_COLUMNS = [
+    "Player", "Opponent", "Matchup Score", "Risk", "Confidence",
+    "Recommended Order", "Rationale",
+]
+
+
+def _captains_edge_dataframe() -> pd.DataFrame:
+    """The recommended lineup, read from exports/captains_edge.json.
+
+    Reads the decision document rather than recomputing: the ranking is the
+    builder's output, and a second computation here could disagree with the
+    JSON and the HTML tab about the same player.
+
+    An absent document yields an empty sheet rather than an error -- the
+    workbook is built before the decision JSON on a first run.
+    """
+    import json
+    from pathlib import Path as _Path
+
+    document_path = _Path(__file__).resolve().parent.parent / "exports" / "captains_edge.json"
+    if not document_path.is_file():
+        return pd.DataFrame(columns=EDGE_COLUMNS)
+
+    try:
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Could not read %s -- Captain's Edge sheet left empty", document_path)
+        return pd.DataFrame(columns=EDGE_COLUMNS)
+
+    def shown(value):
+        return EDGE_NO_DATA if value is None else value
+
+    records = []
+    for lineup in document.get("lineups") or []:
+        for player in lineup.get("players") or []:
+            records.append({
+                "Player": player.get("player_name") or "",
+                "Opponent": shown(player.get("opponent_name")),
+                "Matchup Score": shown(player.get("matchup_score")),
+                "Risk": shown(player.get("risk_factor")),
+                "Confidence": shown(player.get("confidence")),
+                "Recommended Order": shown(player.get("recommended_order")),
+                "Rationale": player.get("rationale") or "",
+            })
+
+    records.sort(key=lambda r: (r["Recommended Order"] == EDGE_NO_DATA,
+                                r["Recommended Order"] if isinstance(
+                                    r["Recommended Order"], int) else 0))
+    return pd.DataFrame(records, columns=EDGE_COLUMNS)
+
+
+def _format_captains_edge(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, and colour high confidence
+    green and high risk red.
+
+    The two are independent signals applied to different columns, so a
+    player can carry both -- a strong run on an unsettled skill level is
+    exactly the call worth flagging twice.
+    """
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    sheet = writer.sheets["Captain's Edge"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    confidence_letter = get_column_letter(EDGE_COLUMNS.index("Confidence") + 1)
+    sheet.conditional_formatting.add(
+        f"{confidence_letter}2:{confidence_letter}{last_row}",
+        CellIsRule(operator="greaterThanOrEqual", formula=[str(EDGE_HIGH_CONFIDENCE)],
+                   fill=PatternFill("solid", fgColor="C6EFCE"),
+                   font=Font(color="006100", bold=True)),
+    )
+    risk_letter = get_column_letter(EDGE_COLUMNS.index("Risk") + 1)
+    sheet.conditional_formatting.add(
+        f"{risk_letter}2:{risk_letter}{last_row}",
+        CellIsRule(operator="greaterThanOrEqual", formula=[str(EDGE_HIGH_RISK)],
+                   fill=PatternFill("solid", fgColor="FFC7CE"),
+                   font=Font(color="9C0006", bold=True)),
+    )
+
+    widths = {"Rationale": 62, "Player": 20, "Opponent": 20}
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = widths.get(
+            name, max(len(str(name)) + 4, 12)
+        )

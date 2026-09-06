@@ -40,6 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_DIR = PROJECT_ROOT / "exports"
 HTML_NAME = "captains_edge.html"
 XLSX_NAME = "captains_edge.xlsx"
+JSON_NAME = "captains_edge.json"
 
 # Where the database might live, in the order we look. The configured path
 # wins; the rest are fallbacks for a checkout whose apa_config.yaml has not
@@ -428,10 +429,11 @@ def build(db_path: Optional[str] = None, out_dir: Optional[str] = None,
     html_path.write_text(render_html(payload), encoding="utf-8")
 
     xlsx_path = write_workbook(payload, directory / XLSX_NAME)
+    json_path = write_decision_json(str(resolved), directory / JSON_NAME)
 
     logger.info(
-        "Wrote %s and %s (%d players, %d pairings, %d games)",
-        html_path.name, xlsx_path.name, len(payload["players"]),
+        "Wrote %s, %s and %s (%d players, %d pairings, %d games)",
+        html_path.name, xlsx_path.name, json_path.name, len(payload["players"]),
         len(payload["matchups"]), len(payload["head_to_head"]),
     )
     return html_path, xlsx_path
@@ -848,3 +850,174 @@ _APP_TEMPLATE = r"""<!DOCTYPE html>
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --- Captain's Decision Engine ----------------------------------------------
+#
+# The cheat-sheet above REPORTS what the engines computed. This part DECIDES:
+# it ranks a team's players into a playing order using analytics.captains_edge.
+#
+# Bolted onto this builder rather than given its own script because the spec
+# names this path, and because one command producing html + xlsx + json keeps
+# the three views of Captain's Edge from drifting apart.
+
+
+def _decision_rows(connection) -> tuple[list[dict], dict[str, dict]]:
+    """(pairings, trends-by-player-id) for the decision engine.
+
+    Pairings come from player_h2h_advantage -- win_probability,
+    expected_points and expected_balls live there, NOT on player_matchups,
+    despite the spec naming analytics.matchups as their source.
+    """
+    pairings = []
+    if _table_exists(connection, "player_h2h_advantage"):
+        pairings = [dict(row) for row in connection.execute(
+            """
+            SELECT p.external_id AS player_id, p.name AS player_name,
+                   p.team_id      AS team_pk,
+                   o.external_id AS opponent_id, o.name AS opponent_name,
+                   o.team_id      AS opponent_team_pk,
+                   a.win_probability, a.expected_points, a.expected_balls,
+                   a.matchup_score AS engine_matchup_score,
+                   a.format, a.session_name
+            FROM player_h2h_advantage a
+            JOIN players p ON p.id = a.player_id
+            JOIN players o ON o.id = a.opponent_id
+            """
+        ).fetchall()]
+
+    trends: dict[str, dict] = {}
+    if _table_exists(connection, "player_trends"):
+        for row in connection.execute(
+            """
+            SELECT p.external_id AS player_id, t.volatility, t.sl_stability,
+                   t.regression_slope, t.hot_cold_flag, t.format
+            FROM player_trends t JOIN players p ON p.id = t.player_id
+            """
+        ).fetchall():
+            record = dict(row)
+            # One trend row per player per (format, session); the decision
+            # engine is format-agnostic, so the first is kept and any second
+            # is ignored rather than silently averaged into a number that
+            # describes neither format.
+            trends.setdefault(record["player_id"], record)
+
+    return pairings, trends
+
+
+def build_decision_document(connection) -> dict[str, Any]:
+    """The Captain's Decision Engine's full output, ready to serialise."""
+    from analytics.captains_edge import compute_bounds, lineup_recommendation
+
+    pairings, trends = _decision_rows(connection)
+    bounds = compute_bounds(pairings)
+
+    by_team, resolution, unresolved = _group_by_team(connection, pairings)
+
+    team_names = {}
+    if _table_exists(connection, "teams"):
+        team_names = {row["id"]: row["name"]
+                      for row in connection.execute("SELECT id, name FROM teams")}
+
+    lineups = []
+    for team_pk, team_pairings in sorted(by_team.items(), key=lambda kv: str(kv[0])):
+        entries = lineup_recommendation(team_pairings, trends, bounds)
+        lineups.append({
+            "team_id": str(team_pk),
+            "team_name": team_names.get(team_pk, ""),
+            "roster_resolution": resolution,
+            "players": [vars(entry).copy() for entry in entries],
+        })
+
+    return {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "pairings_considered": len(pairings),
+        "players_with_trends": len(trends),
+        "roster_resolution": resolution,
+        "unresolved_rostered_players": unresolved,
+        "normalization": {
+            "expected_points": {"low": bounds.expected_points.low,
+                                "high": bounds.expected_points.high},
+            "expected_balls": {"low": bounds.expected_balls.low,
+                               "high": bounds.expected_balls.high},
+        },
+        "lineups": lineups,
+    }
+
+
+def write_decision_json(db_path: str, path: Path) -> Path:
+    """Write exports/captains_edge.json.
+
+    Rewritten in full each run rather than merged: the document is derived
+    entirely from current rows, so a stale lineup for a team that no longer
+    has pairings must not survive. That is the pruning requirement -- a whole
+    file replaced is a cleaner guarantee than row-by-row deletion.
+    """
+    connection = connect_read_only(Path(db_path))
+    try:
+        document = build_decision_document(connection)
+    finally:
+        connection.close()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
+    return path
+
+
+# Team membership and pairings live in DIFFERENT id spaces, and this is a
+# real pre-existing defect rather than a quirk of this engine:
+#
+#   roster ingest   keys players on member.id      (Paul Smith -> 3349374)
+#   scoresheets     key players on a per-format id (Paul Smith -> 92612611,
+#                                                   and again -> 92828300)
+#
+# So the same human exists as several Player rows and a team_id join returns
+# NOTHING -- verified: 14 rostered players, 72 with pairings, zero overlap by
+# id. ui/export_excel.py's _player_stats_dataframe docstring predicted exactly
+# this ("two different external_ids got assigned to one real person, a
+# separate bug worth chasing"); it is now happening to 30 names.
+#
+# Fixing the id spaces is an ingest change with wide blast radius and is NOT
+# in this module's scope. Until then a lineup is resolved by NAME, which is
+# reported in the document so no reader mistakes it for an id join.
+RESOLUTION_BY_ID = "team_id"
+RESOLUTION_BY_NAME = "player_name (id spaces do not join -- see docs/captains_edge.md)"
+
+
+def _group_by_team(connection, pairings: list[dict]) -> tuple[dict, str, list[str]]:
+    """(pairings grouped by team pk, how it was resolved, unresolved names).
+
+    Prefers a real team_id join. Falls back to matching on player name, and
+    only for a name that is UNAMBIGUOUS among rostered players -- two
+    different people sharing a name would otherwise have one person's form
+    attached to the other's lineup slot, which is worse than omitting them.
+    """
+    by_team: dict[Any, list[dict]] = {}
+    for pairing in pairings:
+        team_pk = pairing.get("team_pk")
+        if team_pk is not None:
+            by_team.setdefault(team_pk, []).append(pairing)
+    if by_team:
+        return by_team, RESOLUTION_BY_ID, []
+
+    if not _table_exists(connection, "players"):
+        return {}, RESOLUTION_BY_ID, []
+
+    # name -> team pk, only where the name maps to exactly one rostered team.
+    counts: dict[str, set] = {}
+    for row in connection.execute(
+        "SELECT name, team_id FROM players WHERE team_id IS NOT NULL"
+    ):
+        counts.setdefault(row["name"], set()).add(row["team_id"])
+
+    by_name = {name: teams.pop() for name, teams in counts.items() if len(teams) == 1}
+    ambiguous = sorted(name for name, teams in counts.items() if len(teams) > 1)
+
+    for pairing in pairings:
+        team_pk = by_name.get(pairing.get("player_name"))
+        if team_pk is not None:
+            by_team.setdefault(team_pk, []).append(pairing)
+
+    matched = {p.get("player_name") for group in by_team.values() for p in group}
+    unresolved = sorted((set(by_name) - matched) | set(ambiguous))
+    return by_team, RESOLUTION_BY_NAME, unresolved

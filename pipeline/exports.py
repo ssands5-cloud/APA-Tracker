@@ -76,16 +76,35 @@ def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
     should not have to juggle two documents. No external resources, so it
     opens from a file:// URL with no server and no internet.
     """
+    import json
+
+    from ui.tabs import captains_edge as edge_tab
     from ui.tabs import matchups, trends
 
     directory = out_dir or (PROJECT_ROOT / "exports")
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / TABS_NAME
 
-    body = "\n".join([
+    sections = [
         matchups.build(db, title="Head-to-Head"),
         trends.build(db, title="Player Trends"),
-    ])
+    ]
+
+    # The Captain's Edge builder writes the decision document just before
+    # this runs. An absent one means a first build, not an error -- the tab
+    # is simply omitted rather than rendering an empty promise.
+    decision_path = PROJECT_ROOT / "exports" / "captains_edge.json"
+    if decision_path.is_file():
+        try:
+            document = json.loads(decision_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Could not read %s -- Captain's Edge tab skipped",
+                           decision_path)
+        else:
+            # First: it is the answer, the others are the working.
+            sections.insert(0, edge_tab.build(document, title="Captain's Edge"))
+
+    body = "\n".join(sections)
     shell = (
         '<!DOCTYPE html>\n'
         '<html lang="en"><head><meta charset="utf-8">'

@@ -33,6 +33,8 @@ EXPECTED_SHEETS = {
     "Head-to-Head",
     # Player Trend Analyzer (docs/player_trends.md) -- its own sheet.
     "Player Trends",
+    # Captain's Decision Engine (docs/captains_edge.md).
+    "Captain's Edge",
 }
 
 

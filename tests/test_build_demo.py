@@ -34,7 +34,7 @@ def test_build_demo_produces_a_readable_workbook(tmp_path, monkeypatch):
     wb = openpyxl.load_workbook(workbook_path)
     assert set(wb.sheetnames) == {
         "Standings", "Player Stats", "Career Stats", "Team History",
-        "Skill Level History", "Matchups", "Head-to-Head", "Player Trends",
+        "Skill Level History", "Matchups", "Head-to-Head", "Player Trends", "Captain's Edge",
     }
 
     standings = wb["Standings"]
