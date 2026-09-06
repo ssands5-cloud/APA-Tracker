@@ -132,11 +132,14 @@ actually captured 56.
 
 ## Known gaps
 
-- Steps 2–6 of `pipeline_run_all.py` still point at `pipeline/` and `demo/`
-  modules that do not exist (audit finding C3). Only step 1 — this scraper —
-  currently runs.
-- `scraper/pipeline_run_all.py` is a duplicate of the root
-  `pipeline_run_all.py`, differing only in how `ROOT` is derived. One should
-  go.
+- Resolved: `pipeline_run_all.py` now calls `python -m pipeline` directly for
+  ingest and exports (the old audit finding C3 — five imaginary
+  `pipeline/`/`demo/` files — no longer applies), and the duplicate
+  `scraper/pipeline_run_all.py` has been removed. The root file is the single
+  end-to-end entry point: scrape → ingest → exports → tests.
 - Caps are `MAX_TEAMS=12`, `MAX_DIVISIONS=12`, `MAX_MATCHES=40`. Raise them
   for a full-season sweep.
+- The Lineup Optimizer (`analytics/lineup_optimizer.py`) is a transparent
+  decision aid, not a fitted probability model — it has not yet been
+  evaluated against actual match outcomes. See
+  [`docs/lineup_optimizer.md`](docs/lineup_optimizer.md#missing-data-and-current-limitations).
