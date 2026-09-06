@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from analytics.head_to_head import EIGHT_BALL, NINE_BALL, evaluate
 from database.engine import create_db_engine
-from database.ingest import ingest_h2h_advantage
+from database.ingest import ingest_h2h_advantage, prune_h2h_advantage_not_in
 from database.models import PlayerHeadToHead
 from scheduler.graphql_sync import load_config
 
@@ -124,14 +124,15 @@ def build_rows(db: Session) -> list[dict[str, Any]]:
 
 
 def run(config_path: str = "apa_config.yaml") -> int:
-    """Build and store every pairing. Returns the number of rows written."""
+    """Build, store, and prune every pairing. Returns rows written."""
     config = load_config(config_path)
     engine = create_db_engine(config)
     with Session(engine) as db:
+        valid_keys = set(group_by_pairing(ordered_rows(db)))
         rows = build_rows(db)
-        if not rows:
-            return 0
-        return ingest_h2h_advantage(db, rows)
+        written = ingest_h2h_advantage(db, rows) if rows else 0
+        prune_h2h_advantage_not_in(db, valid_keys)
+        return written
 
 
 def main() -> int:

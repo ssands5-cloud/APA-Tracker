@@ -1,7 +1,7 @@
 """
-Weekly refresh job: full re-pull of standings and the team's roster, plus a
-fresh Excel export. Meant to catch anything the lighter daily_sync misses
-(new players, corrected results, schedule changes), and forces a fresh
+Weekly refresh job: full re-pull of standings and the team's roster, followed
+by the same derived-table reconciliation and complete export set as the daily
+job. Meant to catch anything the lighter HTML path misses and forces a fresh
 login rather than reusing a cached session.
 
 Run manually with `python -m scheduler.weekly_refresh`, or schedule it
@@ -17,10 +17,10 @@ from sqlalchemy.orm import Session
 from auth.session_manager import SessionManager
 from database.ingest import ingest_standings, upsert_roster, upsert_team
 from database.engine import create_db_engine
+from pipeline.refresh import finalize
 from scheduler.daily_sync import load_config
 from scraper.league_scraper import fetch_standings
 from scraper.team_scraper import fetch_roster
-from ui.export_excel import export_to_excel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def run(config_path: str = "apa_config.yaml") -> None:
         roster = fetch_roster(http_session, config)
         upsert_roster(db, team, roster)
 
-        export_to_excel(db, config)
+    finalize(config, engine, export=True)
 
     logger.info("Weekly refresh complete")
 

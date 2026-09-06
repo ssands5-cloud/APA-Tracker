@@ -17,11 +17,9 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from analytics.matchup_builder import build_matchups
 from database.ingest import (
     ingest_head_to_head,
     ingest_match_scores,
-    ingest_matchups,
     ingest_player_team_history,
 )
 from database.models import Player
@@ -33,6 +31,7 @@ from scraper.graphql_scraper import (
 )
 
 from pipeline.fixtures import FixtureStore
+from pipeline.refresh import rebuild_analytics, rebuild_matchups
 
 logger = logging.getLogger(__name__)
 
@@ -147,55 +146,19 @@ def _resolve_alias_owner(db: Session, store: FixtureStore, alias_id: str,
     return None
 
 
-def rebuild_matchups(db: Session) -> int:
-    """Recompute every pairing from what was just ingested.
-
-    The engine is untouched: this calls ``analytics.matchup_builder`` and
-    stores what it returns. Captain's Edge reads those rows and never
-    recomputes them, so both views always agree.
-    """
-    rows = build_matchups(db)
-    return ingest_matchups(db, rows)
-
-
-def rebuild_analytics(db: Session) -> dict[str, int]:
-    """Rebuild the derived analytics tables that sit on top of the ingested
-    rows: Head-to-Head Advantage and Player Trends.
-
-    Part of the pipeline rather than left to be run by hand. Both read
-    player_head_to_head / player_matches, so after any ingest they are stale
-    until rebuilt -- and a rebuilt database left them EMPTY, which showed up
-    as an analysis tab reporting "no pairings yet" on a database that had
-    106 of them.
-
-    Imported inside the function: the builders import the engine and config,
-    and pulling that in at module scope would make this module unimportable
-    in the unit tests that exercise ingest alone.
-    """
-    from database.ingest import ingest_h2h_advantage, ingest_player_trends
-    from database.ingest import prune_player_trends_not_in
-    from scripts.build_head_to_head import build_rows as build_h2h_rows
-    from scripts.build_player_trends import build_rows as build_trend_rows
-    from scripts.build_player_trends import grouped_history
-
-    h2h_rows = build_h2h_rows(db)
-    trend_rows = build_trend_rows(db)
-
-    counts = {
-        "h2h_advantage": ingest_h2h_advantage(db, h2h_rows) if h2h_rows else 0,
-        "player_trends": ingest_player_trends(db, trend_rows) if trend_rows else 0,
-    }
-    counts["trends_pruned"] = prune_player_trends_not_in(db, set(grouped_history(db)))
-    return counts
-
-
-def run(db: Session, store: FixtureStore) -> dict[str, int]:
+def run(
+    db: Session,
+    store: FixtureStore,
+    *,
+    refresh_derived: bool = True,
+) -> dict[str, int]:
     """Full fixture -> database pass, in dependency order."""
     counts: dict[str, int] = {}
     counts.update(ingest_teams(db, store))
     counts.update(ingest_matches(db, store))
     counts["team_history"] = ingest_team_history(db, store)
-    counts["matchups"] = rebuild_matchups(db)
-    # After the raw rows and matchups: both derived tables read from them.
-    counts.update(rebuild_analytics(db))
+    if refresh_derived:
+        counts["matchups"] = rebuild_matchups(db)
+        # After the raw rows and matchups: both derived tables read from them.
+        counts.update(rebuild_analytics(db))
     return counts

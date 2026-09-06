@@ -149,7 +149,12 @@ def config_path(tmp_path, monkeypatch):
 
 
 class TestLiveSyncMatchupRebuild:
-    def test_run_all_teams_ingests_h2h_and_rebuilds_matchups_end_to_end(self, tmp_path, config_path):
+    def test_run_all_teams_refreshes_the_complete_production_pipeline(
+        self, tmp_path, config_path, monkeypatch
+    ):
+        import pipeline.exports as pipeline_exports
+
+        monkeypatch.setattr(pipeline_exports, "EXPORTS_DIR", tmp_path / "exports")
         with patch("requests.post", _fake_post):
             counts = run_all_teams(str(config_path), export=True)
 
@@ -158,6 +163,8 @@ class TestLiveSyncMatchupRebuild:
         # build_matchups(db) ran (not mocked -- this is its real return value's
         # length, upserted into player_matchups by run_all_teams itself)
         assert counts["matchups"] > 0
+        assert counts["h2h_advantage"] > 0
+        assert counts["player_trends"] > 0
 
         db_path = tmp_path / "data" / "test_apa_tracker.db"
         assert db_path.exists()
@@ -166,9 +173,13 @@ class TestLiveSyncMatchupRebuild:
         conn = sqlite3.connect(db_path)
         h2h_count = conn.execute("SELECT COUNT(*) FROM player_head_to_head").fetchone()[0]
         matchup_count = conn.execute("SELECT COUNT(*) FROM player_matchups").fetchone()[0]
+        advantage_count = conn.execute("SELECT COUNT(*) FROM player_h2h_advantage").fetchone()[0]
+        trend_count = conn.execute("SELECT COUNT(*) FROM player_trends").fetchone()[0]
         conn.close()
         assert h2h_count > 0
         assert matchup_count > 0
+        assert advantage_count > 0
+        assert trend_count > 0
 
         # the Excel Matchups sheet contains at least one real row
         workbook_path = tmp_path / "exports" / "test_apa_stats.xlsx"
@@ -180,6 +191,10 @@ class TestLiveSyncMatchupRebuild:
         first_row = dict(zip(header, [c.value for c in matchups_sheet[2]]))
         assert first_row["Player"]
         assert first_row["Opponent"]
+        assert wb["Head-to-Head"].max_row > 1
+        assert wb["Player Trends"].max_row > 1
+        assert wb["Captain's Edge"].max_row > 1
+        assert wb["Lineup Optimizer"].max_row > 1
 
         # the JSON export contains at least one real matchup pair
         json_path = tmp_path / "exports" / "test_apa_data.json"
@@ -188,6 +203,43 @@ class TestLiveSyncMatchupRebuild:
         assert document["matchups"], "JSON export's matchups key must not be empty"
         assert document["matchups"][0]["player"]
         assert document["matchups"][0]["opponent"]
+
+        # Every captain-facing artifact comes from the same committed run.
+        output = tmp_path / "exports"
+        for name in (
+            "captains_edge.html",
+            "captains_edge.xlsx",
+            "captains_edge.json",
+            "lineups.json",
+            "analysis_tabs.html",
+            "refresh_manifest.json",
+        ):
+            assert (output / name).is_file(), name
+
+        tabs = (output / "analysis_tabs.html").read_text(encoding="utf-8")
+        assert "Lineup Optimizer" in tabs
+        assert "Captain&#x27;s Edge" in tabs
+
+        manifest = json.loads((output / "refresh_manifest.json").read_text())
+        assert manifest["run_id"]
+        assert manifest["derived_counts"]["h2h_advantage"] == counts["h2h_advantage"]
+        labels = {artifact["label"] for artifact in manifest["artifacts"]}
+        assert {
+            "workbook", "demo json", "captains html", "captains xlsx",
+            "captains json", "lineups json", "analysis tabs",
+        } <= labels
+        assert all(artifact["exists"] for artifact in manifest["artifacts"])
+
+    def test_no_export_still_refreshes_derived_tables_without_writing_files(
+        self, tmp_path, config_path
+    ):
+        with patch("requests.post", _fake_post):
+            counts = run_all_teams(str(config_path), export=False)
+
+        assert counts["matchups"] > 0
+        assert counts["h2h_advantage"] > 0
+        assert counts["player_trends"] > 0
+        assert not (tmp_path / "exports").exists()
 
     def test_an_unmocked_operation_fails_loudly_not_silently(self, config_path):
         """Confirms _fake_post's dispatcher itself is a real gate, not a

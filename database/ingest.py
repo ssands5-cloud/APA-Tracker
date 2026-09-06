@@ -793,6 +793,33 @@ def ingest_h2h_advantage(db: Session, rows: list[dict]) -> int:
     logger.info("Ingested %d head-to-head advantage row(s)", written)
     return written
 
+
+def prune_h2h_advantage_not_in(
+    db: Session,
+    valid_keys: set[tuple[int, int, Optional[str], Optional[str]]],
+) -> int:
+    """Delete Head-to-Head Advantage rows with no remaining raw evidence.
+
+    ``ingest_head_to_head`` reconciles a corrected scoresheet by replacing
+    every raw row for that match.  If the correction removes the final game
+    for a pairing, an upsert-only rebuild never sees that now-absent key and
+    would otherwise leave a stale recommendation behind.  An empty valid set
+    deliberately removes every derived row.
+    """
+    removed = 0
+    for row in db.query(PlayerH2HAdvantage).all():
+        key = (row.player_id, row.opponent_id, row.format, row.session_name)
+        if key not in valid_keys:
+            db.delete(row)
+            removed += 1
+    if removed:
+        db.commit()
+        logger.info(
+            "Pruned %d stale head-to-head advantage row(s) with no remaining evidence",
+            removed,
+        )
+    return removed
+
 def ingest_player_trends(db: Session, rows: list[dict]) -> int:
     """Upsert Player Trend rows, keyed on (player_id, format, session_name).
 

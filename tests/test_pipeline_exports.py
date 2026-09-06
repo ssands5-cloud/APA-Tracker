@@ -30,7 +30,7 @@ def stub_exporters(monkeypatch):
     monkeypatch.setattr(
         exports,
         "export_to_excel",
-        lambda _db, _config: calls.append(("workbook", None))
+        lambda _db, _config, **kwargs: calls.append(("workbook", kwargs))
         or str(exports.EXPORTS_DIR / "workbook.xlsx"),
     )
     monkeypatch.setattr(
@@ -42,7 +42,9 @@ def stub_exporters(monkeypatch):
     monkeypatch.setattr(
         exports,
         "write_tabs",
-        lambda _db: calls.append(("analysis tabs", None))
+        lambda _db, _out_dir=None, **kwargs: calls.append(
+            ("analysis tabs", {"out_dir": _out_dir, **kwargs})
+        )
         or (exports.EXPORTS_DIR / "analysis_tabs.html"),
     )
     return calls
@@ -80,16 +82,26 @@ def test_captains_path_builds_lineups_in_repository_exports(
     config = {"database": {"path": "unused.db"}}
     written = exports.run(config, engine, captains=True)
 
-    assert calls[:2] == [("workbook", None), ("demo json", None)]
-    assert calls[-1] == ("analysis tabs", None)
+    assert calls[:4] == [
+        ("captains", exports.EXPORTS_DIR),
+        ("lineups", exports.EXPORTS_DIR),
+        ("workbook", {
+            "captains_edge_path": exports.EXPORTS_DIR / "captains_edge.json",
+            "include_captains_edge": True,
+        }),
+        ("demo json", None),
+    ]
+    assert calls[-1] == ("analysis tabs", {
+        "out_dir": exports.EXPORTS_DIR,
+        "include_captains_edge": True,
+        "include_lineup": True,
+    })
     assert [label for label, _ in written] == [
-        "workbook", "demo json", "captains html", "captains xlsx",
+        "workbook", "demo json", "captains html", "captains xlsx", "captains json",
         "lineups json", "analysis tabs",
     ]
     lineup_output = next(path for label, path in written if label == "lineups json")
     assert Path(lineup_output).parent == exports.EXPORTS_DIR
-    assert calls[2] == ("captains", exports.EXPORTS_DIR)
-    assert calls[3] == ("lineups", exports.EXPORTS_DIR)
 
 
 def test_no_captains_does_not_import_or_build_lineups(
@@ -106,8 +118,21 @@ def test_no_captains_does_not_import_or_build_lineups(
 
     written = exports.run({}, engine, captains=False)
 
-    assert [label for label, _ in written] == ["workbook", "demo json"]
-    assert calls == [("workbook", None), ("demo json", None)]
+    assert [label for label, _ in written] == [
+        "workbook", "demo json", "analysis tabs",
+    ]
+    assert calls == [
+        ("workbook", {
+            "captains_edge_path": exports.EXPORTS_DIR / "captains_edge.json",
+            "include_captains_edge": False,
+        }),
+        ("demo json", None),
+        ("analysis tabs", {
+            "out_dir": exports.EXPORTS_DIR,
+            "include_captains_edge": False,
+            "include_lineup": False,
+        }),
+    ]
 
 
 def test_lineup_output_outside_repository_exports_is_rejected(
@@ -144,6 +169,11 @@ def test_missing_lineup_database_skips_only_lineup_artifact(
     written = exports.run({"database": {"path": "unused.db"}}, engine)
 
     assert [label for label, _ in written] == [
-        "workbook", "demo json", "captains html", "captains xlsx", "analysis tabs",
+        "workbook", "demo json", "captains html", "captains xlsx", "captains json",
+        "analysis tabs",
     ]
-    assert calls[-1] == ("analysis tabs", None)
+    assert calls[-1] == ("analysis tabs", {
+        "out_dir": exports.EXPORTS_DIR,
+        "include_captains_edge": True,
+        "include_lineup": False,
+    })

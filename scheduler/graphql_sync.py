@@ -27,7 +27,6 @@ from datetime import datetime
 import yaml
 from sqlalchemy.orm import Session
 
-from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from database.ingest import (
     ingest_eight_ball_stats,
@@ -40,6 +39,7 @@ from database.ingest import (
     upsert_team,
 )
 from database.models import Player
+from pipeline.refresh import finalize
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
@@ -64,8 +64,6 @@ from scraper.graphql_scraper import (
     team_stat_rows,
     viewer_matches_rows,
 )
-from ui.export_excel import export_to_excel
-from ui.export_json import export_to_json
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -370,30 +368,24 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         counts["career_stats"] = career_stats_count
         counts["team_history"] = team_history_count
 
-        # Matchup Advantage Engine -- aggregates the head-to-head rows just
-        # ingested above (in the scoreboard loop) into player_matchups.
-        # Must run after that ingestion and before export, or the Excel/
-        # JSON "Matchups" sheet/key would always be empty on a real sync:
-        # scripts/build_matchups.py existing as a separate, manually-run
-        # script was the actual gap -- nothing wired this into the live
-        # sync itself.
-        matchup_rows = build_matchups(db)
-        counts["matchups"] = len(matchup_rows)
-
-        if export:
-            path = export_to_excel(db, config)
-            logger.info("Excel export written to %s", path)
-            json_path = export_to_json(db, config)
-            logger.info("JSON export written to %s", json_path)
+    # Reopen the committed database through the same production boundary as
+    # the fixture pipeline.  This refreshes every derived table before any
+    # read-only captain builder or export can observe the run.
+    derived, artifacts = finalize(config, engine, export=export)
+    counts.update(derived)
+    for label, path in artifacts:
+        logger.info("%s written to %s", label.capitalize(), path)
 
     logger.info(
         "All-teams sync complete: %d team(s), %d roster entries, %d standings row(s) "
         "across their divisions, %d/%d matches new (%d byes, %d not yet scored), "
         "%d player scoresheet row(s) across every scored match, %d career stat "
-        "format(s), %d team-history row(s), %d matchup(s) computed",
+        "format(s), %d team-history row(s), %d matchup(s), %d head-to-head "
+        "advantage row(s), %d player trend row(s) computed",
         counts["teams"], counts["roster"], counts["standings"], counts["matches_new"],
         counts["matches_seen"], counts["byes"], counts["unscored"], counts["scoresheet_rows"],
         counts["career_stats"], counts["team_history"], counts["matchups"],
+        counts["h2h_advantage"], counts["player_trends"],
     )
     return counts
 
@@ -440,11 +432,11 @@ def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, 
 
     with Session(engine) as db:
         counts = ingest_team_data(db, data)
-        if export:
-            path = export_to_excel(db, config)
-            logger.info("Excel export written to %s", path)
-            json_path = export_to_json(db, config)
-            logger.info("JSON export written to %s", json_path)
+
+    derived, artifacts = finalize(config, engine, export=export)
+    counts.update(derived)
+    for label, path in artifacts:
+        logger.info("%s written to %s", label.capitalize(), path)
 
     logger.info(
         "Sync complete: %d roster entries, %d/%d matches new (%d byes, %d not yet scored)",
@@ -460,7 +452,11 @@ def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="apa_config.yaml")
-    parser.add_argument("--no-export", action="store_true", help="Skip the Excel export")
+    parser.add_argument(
+        "--no-export",
+        action="store_true",
+        help="Skip all files while still rebuilding every derived table",
+    )
     parser.add_argument(
         "--single-team", action="store_true",
         help="Sync only apa_config.yaml's configured team.team_id (the original, "

@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from pipeline.fixtures import FixtureStore
 from pipeline.ingest import run as ingest_run
+from pipeline.refresh import finalize
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     engine = create_db_engine(config)
 
     with Session(engine) as db:
-        counts = ingest_run(db, store)
+        counts = ingest_run(db, store, refresh_derived=False)
+
+    # The same committed-row boundary used by scheduled/live production.
+    derived, written = finalize(
+        config,
+        engine,
+        export=not args.ingest_only,
+        captains=not args.no_captains,
+    )
+    counts.update(derived)
 
     print("\nIngest complete:")
     for key in sorted(counts):
@@ -59,10 +69,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.ingest_only:
         return 0
-
-    from pipeline.exports import run as export_run
-
-    written = export_run(config, engine, captains=not args.no_captains)
     print("\nExports written:")
     for label, path in written:
         print(f"  {label:16} {path}")

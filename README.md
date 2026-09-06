@@ -83,8 +83,8 @@ venv from that version specifically: `py -3.12 -m venv venv`.
 ## Running it
 
 ```
-python -m scheduler.daily_sync      # standings + roster + new match results
-python -m scheduler.weekly_refresh  # full refresh + Excel export
+python -m scheduler.daily_sync      # all-team live sync when a token is present
+python -m scheduler.weekly_refresh  # full HTML refresh + complete export set
 ```
 
 Wire either of those into Windows Task Scheduler (or cron, if running under
@@ -108,12 +108,14 @@ $env:APA_ACCESS_TOKEN = "<access token from your current APA session>"
 account plays on* -- no `team.team_id`/`division_id` config needed -- and
 for each one: the team itself, its roster, every match (schedule and
 score), the division standings, and a full per-player scoresheet for every
-match that's actually been played. All of it writes to SQLite; the Excel
-workbook and a JSON export refresh afterward:
+match that's actually been played. All of it writes to SQLite. The shared
+production refresh then reconciles the Matchup, Head-to-Head Advantage, and
+Player Trend tables before publishing the workbook, JSON, Captain's Edge,
+Lineup Optimizer, analysis page, and a final hashed completion manifest:
 
 ```powershell
-python -m scheduler.graphql_sync                 # every team, sync + Excel export
-python -m scheduler.graphql_sync --no-export      # every team, sync only
+python -m scheduler.graphql_sync                 # every team + complete refresh
+python -m scheduler.graphql_sync --no-export      # sync + analytics, no files
 python -m scheduler.graphql_sync --single-team    # only apa_config.yaml's team.team_id (the original, narrower path)
 ```
 
@@ -121,6 +123,10 @@ No page needs clicking through for any of this -- it's direct API calls
 once the token above is set. If the token has expired (they don't last
 long) the run stops with a message saying exactly that, rather than a
 traceback; get a fresh one and set the env var again.
+
+The scheduled token-backed daily job uses this same all-team path. See
+[`docs/production_refresh.md`](docs/production_refresh.md) for ordering,
+failure behavior, and the `refresh_manifest.json` contract.
 
 Player *career* stats (lifetime record per format, plus cross-season team
 history — "how has this player done across seasons," not just this match)

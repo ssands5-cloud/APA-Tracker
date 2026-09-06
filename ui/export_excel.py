@@ -27,7 +27,13 @@ from database.queries import (
 logger = logging.getLogger(__name__)
 
 
-def export_to_excel(db: Session, config: dict) -> str:
+def export_to_excel(
+    db: Session,
+    config: dict,
+    captains_edge_path: str | Path | None = None,
+    *,
+    include_captains_edge: bool = True,
+) -> str:
     output_path = Path(config["export"]["excel_output_path"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -39,7 +45,11 @@ def export_to_excel(db: Session, config: dict) -> str:
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
     player_trends_df = _player_trends_dataframe(db)
-    captains_edge_df = _captains_edge_dataframe()
+    captains_edge_df = (
+        _captains_edge_dataframe(captains_edge_path)
+        if include_captains_edge
+        else pd.DataFrame(columns=EDGE_COLUMNS)
+    )
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         standings_df.to_excel(writer, sheet_name="Standings", index=False)
@@ -440,11 +450,10 @@ EDGE_COLUMNS = [
     "Recommended Order", "Rationale",
 ]
 
-# The Lineup Optimizer is built after this workbook is initially written (the
-# builder uses a separate read-only SQLite connection).  The pipeline appends
-# this sheet once ``exports/lineups.json`` exists; keeping the column contract
-# here makes the Excel view agree with the JSON and HTML views without asking
-# the ORM session to read a file it cannot yet know about.
+# The Lineup Optimizer uses a separate read-only SQLite connection.  The
+# pipeline builds its JSON before this workbook and appends the solved sheet
+# afterward; keeping the column contract here makes the Excel view agree with
+# the JSON and HTML views.
 LINEUP_SHEET = "Lineup Optimizer"
 LINEUP_COLUMNS = [
     "Team", "Opponent Team", "Format", "Session", "Player", "Opponent",
@@ -453,7 +462,9 @@ LINEUP_COLUMNS = [
 ]
 
 
-def _captains_edge_dataframe() -> pd.DataFrame:
+def _captains_edge_dataframe(
+    document_path: str | Path | None = None,
+) -> pd.DataFrame:
     """The recommended lineup, read from exports/captains_edge.json.
 
     Reads the decision document rather than recomputing: the ranking is the
@@ -466,7 +477,11 @@ def _captains_edge_dataframe() -> pd.DataFrame:
     import json
     from pathlib import Path as _Path
 
-    document_path = _Path(__file__).resolve().parent.parent / "exports" / "captains_edge.json"
+    document_path = (
+        _Path(document_path)
+        if document_path is not None
+        else _Path(__file__).resolve().parent.parent / "exports" / "captains_edge.json"
+    )
     if not document_path.is_file():
         return pd.DataFrame(columns=EDGE_COLUMNS)
 
@@ -589,11 +604,10 @@ def append_lineup_optimizer_sheet(
 ) -> str:
     """Append/replace the Lineup Optimizer sheet in an existing workbook.
 
-    The workbook is produced before the read-only lineup builder in the normal
-    pipeline.  This small post-process keeps that ordering intact while
-    ensuring a captain opening Excel sees the same solved assignments as the
-    JSON and HTML artifacts.  The operation is idempotent: a rerun replaces a
-    prior sheet rather than accumulating duplicate tabs.
+    The read-only lineup builder runs before the workbook in the normal
+    pipeline.  This post-process ensures a captain opening Excel sees the same
+    solved assignments as the JSON and HTML artifacts.  The operation is
+    idempotent: a rerun replaces a prior sheet rather than accumulating tabs.
     """
 
     import json

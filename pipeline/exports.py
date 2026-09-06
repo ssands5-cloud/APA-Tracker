@@ -1,11 +1,9 @@
-"""Database -> deliverables.
+"""Committed database -> one coherent set of deliverables.
 
-The workbook and demo JSON come from the existing exporters. Captain's Edge
-is built last and separately, because it opens the database **read-only** by
-path rather than sharing this session -- see
-``scripts.build_captains_edge``. That means it must run after the ingest
-session has committed, or it would read a database that does not yet contain
-the rows it is meant to report.
+The read-only captain builders run before the workbook so its Captain's Edge
+sheet is generated from the decision JSON produced by this same refresh, not
+from the previous run.  ``pipeline.refresh.finalize`` guarantees the ingest
+session has already committed before entering here.
 """
 
 from __future__ import annotations
@@ -32,61 +30,75 @@ def configured_db_path(config: dict[str, Any]) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def engine_db_path(config: dict[str, Any], engine: Engine) -> Path:
+    """Return the database file the active engine actually opened.
+
+    A relative config path is resolved by SQLAlchemy against the process
+    working directory.  Re-resolving it against this module's directory can
+    silently point read-only builders at a different database when a
+    scheduler is launched from Task Scheduler or a test temp directory.
+    """
+    database = engine.url.database
+    if database and database != ":memory:":
+        return Path(database).resolve()
+    return configured_db_path(config)
+
+
 def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[tuple[str, str]]:
     """Write every artifact. Returns (label, path) for each."""
-    written: list[tuple[str, str]] = []
+    db_path = engine_db_path(config, engine)
+    exports_dir = EXPORTS_DIR
+    captain_artifacts: list[tuple[str, str]] = []
+    lineup_path: Path | None = None
+    captain_ready = False
 
+    if captains:
+        # Both builders open SQLite read-only by path.  Build their documents
+        # first so every downstream view consumes this run's decisions.
+        from scripts.build_captains_edge import JSON_NAME, NoDatabaseError, build
+
+        try:
+            html_path, xlsx_path = build(str(db_path), str(exports_dir))
+        except NoDatabaseError as exc:
+            logger.warning("Captain's Edge skipped: %s", str(exc).splitlines()[0])
+        else:
+            captain_ready = True
+            captain_artifacts.extend([
+                ("captains html", str(html_path)),
+                ("captains xlsx", str(xlsx_path)),
+                ("captains json", str(exports_dir / JSON_NAME)),
+            ])
+
+            import importlib
+
+            build_lineups = importlib.import_module("scripts.build_lineups")
+            lineup_no_database_error = getattr(
+                build_lineups, "NoDatabaseError", NoDatabaseError
+            )
+            try:
+                lineup_result = build_lineups.build(str(db_path), str(exports_dir))
+            except lineup_no_database_error as exc:
+                logger.warning("Lineup Optimizer skipped: %s", str(exc).splitlines()[0])
+            else:
+                lineup_path = _lineup_output_path(lineup_result, exports_dir)
+                captain_artifacts.append(("lineups json", str(lineup_path)))
+
+    written: list[tuple[str, str]] = []
     with Session(engine) as db:
-        written.append(("workbook", export_to_excel(db, config)))
+        written.append((
+            "workbook",
+            export_to_excel(
+                db,
+                config,
+                captains_edge_path=exports_dir / "captains_edge.json",
+                include_captains_edge=captain_ready,
+            ),
+        ))
         written.append(("demo json", export_to_json(db, config)))
 
-    if not captains:
-        return written
+    written.extend(captain_artifacts)
 
-    # Imported here rather than at module scope: scripts/ is a sibling
-    # package and this keeps the workbook exports usable even if the
-    # Captain's Edge builder is unavailable.
-    from scripts.build_captains_edge import NoDatabaseError, build
-
-    db_path = configured_db_path(config)
-    exports_dir = EXPORTS_DIR
-    try:
-        html_path, xlsx_path = build(str(db_path), str(exports_dir))
-    except NoDatabaseError as exc:
-        logger.warning("Captain's Edge skipped: %s", str(exc).splitlines()[0])
-        return written
-
-    written.append(("captains html", str(html_path)))
-    written.append(("captains xlsx", str(xlsx_path)))
-
-    # The whole captain-facing export is intentionally built in one place,
-    # after ingest has committed and after Captain's Edge has read the same
-    # database.  Lineup Optimizer is a separate artifact because it solves a
-    # one-to-one assignment, while Captain's Edge still ranks each player
-    # independently.  Keep the import lazy so --no-captains remains a true
-    # fast path and does not require this optional builder to be importable.
-    # import_module consults sys.modules directly, which keeps this lazy
-    # boundary easy to stub in orchestration tests even if another test has
-    # already imported the real builder package.
-    import importlib
-
-    build_lineups = importlib.import_module("scripts.build_lineups")
-
-    lineup_no_database_error = getattr(
-        build_lineups, "NoDatabaseError", NoDatabaseError
-    )
-    try:
-        lineup_result = build_lineups.build(str(db_path), str(exports_dir))
-    except lineup_no_database_error as exc:
-        logger.warning("Lineup Optimizer skipped: %s", str(exc).splitlines()[0])
-    else:
-        lineup_path = _lineup_output_path(lineup_result, exports_dir)
-        written.append(("lineups json", str(lineup_path)))
-        # export_to_excel runs before the read-only builders so its existing
-        # Captain's Edge contract remains unchanged.  Once lineups.json is
-        # available, append the solved card to that same workbook; tests that
-        # stub the workbook path (rather than creating a real file) simply
-        # exercise the JSON/HTML path and skip this optional post-process.
+    if lineup_path is not None:
         workbook_path = Path(written[0][1]) if written else None
         if workbook_path is not None and workbook_path.is_file():
             from ui.export_excel import append_lineup_optimizer_sheet
@@ -94,7 +106,15 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
             append_lineup_optimizer_sheet(workbook_path, lineup_path)
 
     with Session(engine) as db:
-        written.append(("analysis tabs", str(write_tabs(db))))
+        written.append((
+            "analysis tabs",
+            str(write_tabs(
+                db,
+                exports_dir,
+                include_captains_edge=captain_ready,
+                include_lineup=lineup_path is not None,
+            )),
+        ))
 
     return written
 
@@ -127,7 +147,13 @@ def _lineup_output_path(result: Any, exports_dir: Path) -> Path:
 TABS_NAME = "analysis_tabs.html"
 
 
-def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
+def write_tabs(
+    db: Session,
+    out_dir: Path | None = None,
+    *,
+    include_captains_edge: bool = True,
+    include_lineup: bool = True,
+) -> Path:
     """Render the Head-to-Head and Player Trends tabs into one openable page.
 
     Deliberately one file with both: they answer the same question from two
@@ -156,7 +182,7 @@ def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
     # the one-to-one card is the answer, while Captain's Edge is the
     # independent per-player working view beneath it.
     lineup_path = directory / "lineups.json"
-    if lineup_path.is_file():
+    if include_lineup and lineup_path.is_file():
         try:
             lineup_document = json.loads(lineup_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -168,7 +194,7 @@ def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
     # this runs. An absent one means a first build, not an error -- the tab
     # is simply omitted rather than rendering an empty promise.
     decision_path = directory / "captains_edge.json"
-    if decision_path.is_file():
+    if include_captains_edge and decision_path.is_file():
         try:
             document = json.loads(decision_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
