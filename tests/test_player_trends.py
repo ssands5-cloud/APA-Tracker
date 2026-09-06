@@ -1,15 +1,22 @@
 """Tests for the Player Trend Analyzer.
 
-Every assertion here traces to the finalized governing spec: the ddof=1
-volatility, the 1/(1+sigma) stability, the absolute hot/cold thresholds, the
-probability formula and its constants, and the minimum-evidence table. Where
-a value is checked numerically it is cross-checked against an independent
-computation (statistics.stdev, or the formula written out longhand) rather
-than against a number this implementation happened to produce.
+Covers every case the governing spec's test list names: regression (rising,
+falling, flat, a known irregular slope, insufficient data), volatility (known
+fixture, exactly 20, more than 20 with older excluded, insufficient data),
+stability (0, 1, None), hot/cold (boundaries, neutral, insufficient
+evidence), probability (positive, negative, zero, high volatility,
+insufficient evidence), the builder (persistence, idempotency, stale
+pruning), the UI (headers, sorting, formatting, "No data") and Excel
+(headers, formatting, conditional formatting).
+
+Numeric assertions are cross-checked against an independent computation --
+``statistics.stdev``, or the formula written longhand -- rather than against
+numbers this implementation happened to produce.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 import statistics
 
@@ -19,237 +26,270 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from analytics.player_trends import (
+    COLD,
     COLD_SLOPE_MAX,
+    HOT,
     HOT_SLOPE_MIN,
-    MIN_OBSERVATIONS_FLAG,
-    MIN_OBSERVATIONS_PROBABILITY,
+    MIN_SAMPLE_SIZE_CLASSIFICATION,
+    NEUTRAL,
     PROBABILITY_SAMPLE_CAP,
     STABLE_VOLATILITY_MAX,
     VOLATILITY_WINDOW,
     evaluate,
     hot_cold_flag,
+    normalize_format,
     projected_sl_change_probability,
-    rolling_window,
+    regression_slope,
     sl_stability,
-    trend_slope,
-    trend_strength,
     volatility,
 )
-from database.ingest import ingest_player_trends
+from database.ingest import ingest_player_trends, prune_player_trends_not_in
 from database.models import Base, Match, Player, PlayerMatch, PlayerTrend
-from scripts.build_player_trends import build_rows, grouped_history
-from ui.tabs.trends import NO_DATA, load_rows, render, row_class
+from scripts.build_player_trends import build_rows, grouped_history, run
+from ui.tabs.trends import COLUMNS, NO_DATA, load_rows, render, row_class
 
 
-# --- spec §1: volatility -----------------------------------------------------
+# =============================================================================
+# Regression slope
+# =============================================================================
 
-class TestVolatility:
-    def test_it_is_the_SAMPLE_standard_deviation(self):
-        """ddof=1, cross-checked against the standard library rather than
-        against our own output."""
-        levels = [4, 4, 5, 5, 6]
-        assert volatility(levels) == pytest.approx(statistics.stdev(levels), abs=1e-4)
+class TestRegressionSlope:
+    def test_rising(self):
+        assert regression_slope([4, 5, 6]) == pytest.approx(1.0)
 
-    def test_it_is_not_the_population_standard_deviation(self):
-        """The two differ, and picking the wrong one would silently shift
-        every stability and probability downstream."""
-        levels = [4, 6]
-        assert volatility(levels) != pytest.approx(statistics.pstdev(levels), abs=1e-4)
+    def test_falling(self):
+        assert regression_slope([6, 5, 4]) == pytest.approx(-1.0)
 
-    def test_an_unchanged_skill_level_has_zero_spread(self):
-        assert volatility([5, 5, 5]) == 0.0
+    def test_flat(self):
+        assert regression_slope([5, 5, 5, 5]) == 0.0
 
-    def test_one_reading_is_null_not_zero(self):
-        """Spec: do not fabricate zeros. One match has no spread, which is a
-        different fact from zero spread."""
-        assert volatility([5]) is None
-        assert volatility([]) is None
-
-    def test_missing_skill_levels_are_excluded_not_treated_as_zero(self):
-        assert volatility([5, None, 5]) == 0.0
-
-
-# --- spec §2: stability ------------------------------------------------------
-
-class TestStability:
-    def test_it_is_the_inverse_of_one_plus_volatility(self):
-        assert sl_stability(0.0) == 1.0
-        assert sl_stability(1.0) == 0.5
-        assert sl_stability(0.5477) == pytest.approx(1 / 1.5477, abs=1e-4)
-
-    def test_it_falls_as_volatility_rises(self):
-        assert sl_stability(0.2) > sl_stability(0.9)
-
-    def test_no_volatility_means_no_stability(self):
-        """Stability derived from no observed spread would assert steadiness
-        that was never measured."""
-        assert sl_stability(None) is None
-
-
-# --- spec §5: regression -----------------------------------------------------
-
-class TestTrendSlope:
-    def test_a_flat_history_has_zero_slope(self):
-        assert trend_slope([5, 5, 5, 5]) == 0.0
-
-    def test_a_rising_skill_level_has_a_positive_slope(self):
-        assert trend_slope([4, 5, 6]) == pytest.approx(1.0)
-
-    def test_a_falling_skill_level_has_a_negative_slope(self):
-        assert trend_slope([6, 5, 4]) == pytest.approx(-1.0)
-
-    def test_it_matches_least_squares_computed_longhand(self):
-        ys = [4, 4, 5, 5, 6, 6]
+    def test_irregular_known_slope(self):
+        """Cross-checked against least squares written longhand, not against
+        this implementation's own output."""
+        ys = [4, 4, 5, 5, 6, 6, 6]
         n = len(ys)
         xs = list(range(1, n + 1))
         expected = ((n * sum(x * y for x, y in zip(xs, ys)) - sum(xs) * sum(ys))
                     / (n * sum(x * x for x in xs) - sum(xs) ** 2))
-        assert trend_slope(ys) == pytest.approx(expected, abs=1e-6)
+        assert regression_slope(ys) == pytest.approx(expected, abs=1e-6)
+
+    def test_insufficient_data(self):
+        assert regression_slope([5]) is None
+        assert regression_slope([]) is None
 
     def test_two_observations_are_enough(self):
-        """Spec §6 sets the minimum at 2, not 3."""
-        assert trend_slope([4, 5]) is not None
+        assert regression_slope([4, 5]) == pytest.approx(1.0)
 
-    def test_one_observation_is_null(self):
-        assert trend_slope([5]) is None
-        assert trend_slope([]) is None
+    def test_missing_levels_are_excluded_not_zeroed(self):
+        assert regression_slope([4, None, 6]) == pytest.approx(regression_slope([4, 6]))
 
     def test_it_is_not_capped_at_the_volatility_window(self):
-        """Spec §5: the slope uses ALL matches, while volatility uses the
-        last 20. A long steady history followed by a climb must not read the
-        same as the climb alone."""
+        """The slope uses ALL observations; volatility uses the last 20.
+        A long flat history then a jump must not read as the jump alone."""
         long_history = [3] * 30 + [7]
-        assert trend_slope(long_history) != trend_slope(rolling_window(long_history))
+        assert regression_slope(long_history) != regression_slope(long_history[-20:])
 
 
-class TestTrendStrength:
-    def test_it_is_zero_for_a_flat_trend(self):
-        assert trend_strength(0.0) == 0.0
+# =============================================================================
+# Volatility
+# =============================================================================
 
-    def test_it_is_direction_agnostic(self):
-        assert trend_strength(0.3) == trend_strength(-0.3)
+class TestVolatility:
+    def test_known_fixture(self):
+        levels = [4, 4, 5, 5, 6]
+        assert volatility(levels) == pytest.approx(statistics.stdev(levels), abs=1e-6)
 
-    def test_it_stays_within_zero_and_one(self):
-        assert 0.0 <= trend_strength(50.0) <= 1.0
+    def test_it_is_sample_not_population(self):
+        """ddof=1. The two differ materially at small n, and picking the
+        wrong one would shift every stability and probability downstream."""
+        levels = [4, 6]
+        assert volatility(levels) == pytest.approx(statistics.stdev(levels), abs=1e-6)
+        assert volatility(levels) != pytest.approx(statistics.pstdev(levels), abs=1e-6)
 
-    def test_it_is_null_without_a_slope(self):
-        assert trend_strength(None) is None
+    def test_exactly_twenty_observations(self):
+        levels = [4, 5] * 10
+        assert len(levels) == VOLATILITY_WINDOW
+        assert volatility(levels) == pytest.approx(statistics.stdev(levels), abs=1e-6)
+
+    def test_more_than_twenty_excludes_the_older_ones(self):
+        """A settled recent stretch must not be dragged by ancient history."""
+        older_noise = [2, 7] * 10          # wildly volatile, 20 observations
+        recent_calm = [5] * VOLATILITY_WINDOW
+        assert volatility(older_noise + recent_calm) == 0.0
+
+    def test_the_window_is_the_last_twenty_exactly(self):
+        levels = list(range(1, 31))
+        assert volatility(levels) == pytest.approx(
+            statistics.stdev(levels[-VOLATILITY_WINDOW:]), abs=1e-6
+        )
+
+    def test_insufficient_data(self):
+        assert volatility([5]) is None
+        assert volatility([]) is None
+
+    def test_an_unchanged_level_has_zero_spread(self):
+        assert volatility([5, 5, 5]) == 0.0
 
 
-# --- spec §3: hot / cold -----------------------------------------------------
+# =============================================================================
+# SL stability
+# =============================================================================
 
-class TestHotColdFlag:
-    def test_a_steady_climb_is_hot(self):
-        assert hot_cold_flag(HOT_SLOPE_MIN, 0.2, 10) == "hot"
+class TestStability:
+    def test_volatility_zero(self):
+        assert sl_stability(0.0) == 1.0
 
-    def test_a_steady_decline_is_cold(self):
-        assert hot_cold_flag(COLD_SLOPE_MAX, 0.2, 10) == "cold"
+    def test_volatility_one(self):
+        assert sl_stability(1.0) == 0.5
 
-    def test_a_climb_with_erratic_skill_levels_is_not_hot(self):
-        """Both conditions are required: a steep slope through a volatile
+    def test_volatility_none(self):
+        assert sl_stability(None) is None
+
+    def test_it_falls_as_volatility_rises(self):
+        assert sl_stability(0.2) > sl_stability(0.9)
+
+    def test_it_matches_the_formula(self):
+        assert sl_stability(0.5477) == pytest.approx(1 / 1.5477, abs=1e-6)
+
+
+# =============================================================================
+# Hot / Cold / Neutral
+# =============================================================================
+
+class TestHotCold:
+    def test_boundary_values_are_inclusive(self):
+        assert hot_cold_flag(HOT_SLOPE_MIN, STABLE_VOLATILITY_MAX, 5) == HOT
+        assert hot_cold_flag(COLD_SLOPE_MAX, STABLE_VOLATILITY_MAX, 5) == COLD
+
+    def test_just_inside_the_boundary_is_neutral(self):
+        assert hot_cold_flag(HOT_SLOPE_MIN - 0.001, 0.1, 10) == NEUTRAL
+        assert hot_cold_flag(COLD_SLOPE_MAX + 0.001, 0.1, 10) == NEUTRAL
+
+    def test_volatility_just_over_the_ceiling_is_neutral(self):
+        """Both conditions are required: a steep slope through an erratic
         skill level is noise, not a trend."""
-        assert hot_cold_flag(0.5, STABLE_VOLATILITY_MAX + 0.01, 10) == "neutral"
+        assert hot_cold_flag(0.5, STABLE_VOLATILITY_MAX + 0.001, 10) == NEUTRAL
 
-    def test_a_shallow_slope_is_neutral(self):
-        assert hot_cold_flag(0.01, 0.1, 10) == "neutral"
+    def test_neutral(self):
+        assert hot_cold_flag(0.0, 0.1, 10) == NEUTRAL
 
-    def test_thresholds_are_inclusive(self):
-        assert hot_cold_flag(HOT_SLOPE_MIN, STABLE_VOLATILITY_MAX, 10) == "hot"
-        assert hot_cold_flag(COLD_SLOPE_MAX, STABLE_VOLATILITY_MAX, 10) == "cold"
+    def test_insufficient_sample_is_null_not_neutral(self):
+        """NULL and NEUTRAL are different claims: unmeasured versus measured
+        and unremarkable."""
+        assert hot_cold_flag(0.5, 0.1, MIN_SAMPLE_SIZE_CLASSIFICATION - 1) is None
 
-    def test_too_little_evidence_is_null_not_neutral(self):
-        """Spec §6: below 5 observations there is no flag. "Neutral" would
-        claim an observation that was never made."""
-        assert hot_cold_flag(0.5, 0.1, MIN_OBSERVATIONS_FLAG - 1) is None
-
-    def test_no_volatility_means_no_flag(self):
+    def test_missing_volatility_is_null(self):
         assert hot_cold_flag(0.5, None, 10) is None
 
+    def test_the_flag_values_are_uppercase(self):
+        assert hot_cold_flag(0.5, 0.1, 10) == "HOT"
+        assert hot_cold_flag(-0.5, 0.1, 10) == "COLD"
+        assert hot_cold_flag(0.0, 0.1, 10) == "NEUTRAL"
 
-# --- spec §4: projected probability ------------------------------------------
+
+# =============================================================================
+# Projected SL-change probability
+# =============================================================================
 
 class TestProjectedProbability:
-    def test_it_matches_the_spec_formula_longhand(self):
+    def test_positive_slope(self):
         slope, sigma, n = 0.3, 0.2, 10
         expected = 0.5 * math.tanh(4 * slope) * (1 - sigma) * (n / 20)
         assert projected_sl_change_probability(slope, sigma, n) == pytest.approx(
-            expected, abs=1e-4
+            expected, abs=1e-6
         )
 
-    def test_a_bigger_sample_raises_it(self):
-        few = projected_sl_change_probability(0.3, 0.2, 5)
-        many = projected_sl_change_probability(0.3, 0.2, 20)
-        assert many > few
+    def test_negative_slope_clamps_to_zero(self):
+        """The heuristic describes UPWARD pressure only; direction lives in
+        regression_slope, stored beside it."""
+        assert projected_sl_change_probability(-0.5, 0.2, 10) == 0.0
 
-    def test_higher_volatility_damps_it(self):
+    def test_slope_zero(self):
+        assert projected_sl_change_probability(0.0, 0.2, 10) == 0.0
+
+    def test_high_volatility_damps_it(self):
         calm = projected_sl_change_probability(0.3, 0.1, 10)
         erratic = projected_sl_change_probability(0.3, 0.6, 10)
         assert erratic < calm
 
-    def test_the_sample_term_is_capped_at_twenty(self):
+    def test_volatility_above_one_clamps_to_zero_not_negative(self):
+        assert projected_sl_change_probability(0.5, 1.8, 10) == 0.0
+
+    def test_insufficient_evidence(self):
+        assert projected_sl_change_probability(
+            0.5, 0.1, MIN_SAMPLE_SIZE_CLASSIFICATION - 1
+        ) is None
+        assert projected_sl_change_probability(None, 0.1, 10) is None
+        assert projected_sl_change_probability(0.5, None, 10) is None
+
+    def test_the_sample_term_caps_at_twenty(self):
         at_cap = projected_sl_change_probability(0.3, 0.2, PROBABILITY_SAMPLE_CAP)
         beyond = projected_sl_change_probability(0.3, 0.2, PROBABILITY_SAMPLE_CAP * 5)
         assert at_cap == beyond
 
-    def test_a_downward_trend_clamps_to_zero(self):
-        """The heuristic describes upward pressure; direction lives in
-        trend_slope, which is stored beside it."""
-        assert projected_sl_change_probability(-0.5, 0.2, 10) == 0.0
-
-    def test_volatility_above_one_clamps_to_zero_not_negative(self):
-        assert projected_sl_change_probability(0.5, 1.8, 10) == 0.0
-
     def test_it_stays_within_zero_and_one(self):
-        value = projected_sl_change_probability(50.0, 0.0, 20)
-        assert 0.0 <= value <= 1.0
-
-    def test_too_little_evidence_is_null(self):
-        assert projected_sl_change_probability(
-            0.5, 0.1, MIN_OBSERVATIONS_PROBABILITY - 1
-        ) is None
-
-    def test_no_volatility_means_no_probability(self):
-        assert projected_sl_change_probability(0.5, None, 10) is None
+        assert 0.0 <= projected_sl_change_probability(50.0, 0.0, 20) <= 1.0
 
 
-# --- spec §6: minimum evidence, end to end -----------------------------------
+# =============================================================================
+# Format normalisation
+# =============================================================================
+
+class TestFormatNormalisation:
+    def test_captured_names_map_to_the_spec_values(self):
+        assert normalize_format("8-Ball Open") == "8-ball"
+        assert normalize_format("9-Ball Open") == "9-ball"
+
+    def test_an_unrecognised_format_is_left_alone(self):
+        """Forcing it into a bucket would label a division as something it
+        may not be."""
+        assert normalize_format("Masters Doubles") == "Masters Doubles"
+        assert normalize_format(None) is None
+
+
+# =============================================================================
+# evaluate()
+# =============================================================================
 
 class TestEvaluate:
-    def test_a_single_match_yields_only_what_one_match_supports(self):
-        result = evaluate(points=[2.0], skill_levels=[5], player_id="P1")
-        assert result.matches_considered == 1
-        assert result.avg_points_last_20 == 2.0
-        assert result.volatility_last_20 is None
-        assert result.trend_slope is None
+    def test_it_reports_the_most_recent_skill_level(self):
+        result = evaluate([4, 4, 5], player_id="P1", format_="8-Ball Open",
+                          session_name="Fall 2026")
+        assert result.current_skill_level == 5
+        assert result.format == "8-ball"
+        assert result.session_name == "Fall 2026"
+
+    def test_a_single_observation_yields_only_what_it_supports(self):
+        result = evaluate([5], player_id="P1")
+        assert result.sample_size == 1
+        assert result.current_skill_level == 5
+        assert result.regression_slope is None
+        assert result.volatility is None
         assert result.sl_stability is None
         assert result.hot_cold_flag is None
         assert result.projected_sl_change_probability is None
 
-    def test_four_matches_give_a_slope_but_no_flag_or_probability(self):
-        """The exact shape of this project's real data: enough for a slope,
-        short of the 5 the flag and probability require."""
-        result = evaluate(points=[1.0] * 4, skill_levels=[4, 4, 5, 5], player_id="P1")
-        assert result.trend_slope is not None
-        assert result.volatility_last_20 is not None
+    def test_four_observations_give_a_slope_but_no_classification(self):
+        """The exact shape of this project's real data."""
+        result = evaluate([4, 4, 5, 5], player_id="P1")
+        assert result.regression_slope is not None
+        assert result.volatility is not None
         assert result.hot_cold_flag is None
         assert result.projected_sl_change_probability is None
 
-    def test_five_matches_unlock_the_gated_metrics(self):
-        result = evaluate(points=[1.0] * 5, skill_levels=[4, 4, 5, 5, 5],
-                          player_id="P1", format_="8-Ball Open")
+    def test_five_observations_unlock_the_gated_metrics(self):
+        result = evaluate([4, 4, 5, 5, 5], player_id="P1")
         assert result.hot_cold_flag is not None
         assert result.projected_sl_change_probability is not None
 
-    def test_volatility_is_windowed_but_the_slope_is_not(self):
-        """Spec §1 vs §5. A history longer than the window must show the two
-        spans diverging."""
-        levels = [3] * 25 + [7] * 3
-        result = evaluate(points=[1.0] * 28, skill_levels=levels, player_id="P1")
-        assert result.matches_considered == VOLATILITY_WINDOW
-        assert result.trend_slope == trend_slope(levels)
+    def test_sample_size_counts_the_window_not_the_whole_history(self):
+        result = evaluate([5] * 30, player_id="P1")
+        assert result.sample_size == VOLATILITY_WINDOW
 
 
-# --- database ----------------------------------------------------------------
+# =============================================================================
+# Database + builder
+# =============================================================================
 
 @pytest.fixture
 def db(tmp_path):
@@ -259,173 +299,351 @@ def db(tmp_path):
         yield session
 
 
+_match_counter = itertools.count(1)
+
+
+def _add_match(db, player, week, level, fmt="8-Ball Open", session="Fall 2026"):
+    """Add one match and the player's row in it.
+
+    external_id comes from a module-level counter: Match.external_id is
+    UNIQUE, and deriving it from (format, session, week) collided the moment
+    two players shared a week.
+    """
+    match = Match(external_id=f"M{next(_match_counter)}", week=week, format=fmt,
+                  session_name=session, home_team_id="T1", away_team_id="T2")
+    db.add(match)
+    db.flush()
+    db.add(PlayerMatch(player_id=player.id, match_id=match.id,
+                       skill_level=level, points_earned=2.0, result="W"))
+    return match
+
+
 @pytest.fixture
 def seeded(db):
-    """One player with five 8-ball matches and a climbing skill level."""
+    """One player, five 8-ball matches in one session, climbing skill level."""
     player = Player(external_id="P1", name="Alice", skill_level=5)
     db.add(player)
     db.flush()
-
     for week, level in enumerate([4, 4, 5, 5, 5], start=1):
-        match = Match(external_id=f"M{week}", week=week, format="8-Ball Open",
-                      session_name="Fall 2026", home_team_id="T1", away_team_id="T2")
-        db.add(match)
-        db.flush()
-        db.add(PlayerMatch(player_id=player.id, match_id=match.id,
-                           skill_level=level, points_earned=2.0, result="W"))
+        _add_match(db, player, week, level)
     db.commit()
     return db
 
 
-class TestDatabaseTable:
+class TestSchema:
     def test_the_table_has_exactly_the_specified_columns(self):
         columns = {c.name for c in PlayerTrend.__table__.columns}
         assert columns == {
-            "id", "player_id", "format", "matches_considered",
-            "avg_points_last_20", "volatility_last_20", "trend_slope",
-            "trend_strength", "sl_stability", "hot_cold_flag",
-            "projected_sl_change_probability",
+            "id", "player_id", "format", "session_name", "sample_size",
+            "current_skill_level", "regression_slope", "volatility",
+            "sl_stability", "hot_cold_flag", "projected_sl_change_probability",
         }
 
-    def test_nulls_are_stored_as_nulls_not_zeros(self, db):
-        player = Player(external_id="P9", name="Thin", skill_level=5)
-        db.add(player)
-        db.commit()
-        ingest_player_trends(db, [{
-            "player_id": "P9", "format": "8-Ball Open", "matches_considered": 1,
-            "avg_points_last_20": 2.0, "volatility_last_20": None,
-            "trend_slope": None, "trend_strength": None, "sl_stability": None,
-            "hot_cold_flag": None, "projected_sl_change_probability": None,
-        }])
-        row = db.query(PlayerTrend).one()
-        assert row.volatility_last_20 is None
-        assert row.hot_cold_flag is None
-        assert row.projected_sl_change_probability is None
+    def test_the_unique_key_is_player_format_session(self):
+        unique = [c for c in PlayerTrend.__table__.constraints
+                  if c.__class__.__name__ == "UniqueConstraint"]
+        assert len(unique) == 1
+        assert {c.name for c in unique[0].columns} == {
+            "player_id", "format", "session_name"
+        }
 
-    def test_it_upserts_rather_than_duplicating(self, seeded):
-        rows = build_rows(seeded)
-        ingest_player_trends(seeded, rows)
-        ingest_player_trends(seeded, rows)
-        assert seeded.query(PlayerTrend).count() == len(rows)
+    def test_there_is_an_index_on_format_and_session(self):
+        indexes = {tuple(sorted(c.name for c in i.columns))
+                   for i in PlayerTrend.__table__.indexes}
+        assert ("format", "session_name") in indexes
 
-    def test_an_unknown_player_is_skipped_not_guessed(self, seeded):
-        assert ingest_player_trends(seeded, [{
-            "player_id": "GHOST", "format": "8-Ball Open", "matches_considered": 5,
-        }]) == 0
+    def test_the_required_columns_are_not_nullable(self):
+        table = PlayerTrend.__table__
+        for name in ("player_id", "format", "session_name", "sample_size",
+                     "current_skill_level"):
+            assert not table.c[name].nullable, name
 
 
-class TestBuilder:
-    def test_it_groups_by_player_and_format(self, seeded):
-        groups = grouped_history(seeded)
-        assert len(groups) == 1
-        assert list(groups)[0][1] == "8-Ball Open"
-
-    def test_it_orders_history_chronologically(self, seeded):
-        """Order is load-bearing: the regression reads against match order."""
-        matches = list(grouped_history(seeded).values())[0]
-        assert [m.skill_level for m in matches] == [4, 4, 5, 5, 5]
-
-    def test_it_builds_one_row_per_player_format(self, seeded):
+class TestBuilderPersistence:
+    def test_it_writes_a_row_per_player_format_session(self, seeded):
         rows = build_rows(seeded)
         assert len(rows) == 1
-        assert rows[0]["player_id"] == "P1"
-        assert rows[0]["matches_considered"] == 5
-        assert rows[0]["trend_slope"] == pytest.approx(0.3, abs=1e-6)
+        row = rows[0]
+        assert row["player_id"] == "P1"
+        assert row["format"] == "8-ball"
+        assert row["session_name"] == "Fall 2026"
+        assert row["sample_size"] == 5
+        assert row["current_skill_level"] == 5
+        assert row["regression_slope"] == pytest.approx(0.3, abs=1e-6)
 
-    def test_a_match_with_no_format_is_skipped_not_guessed(self, db):
+    def test_the_row_persists_to_the_table(self, seeded):
+        ingest_player_trends(seeded, build_rows(seeded))
+        stored = seeded.query(PlayerTrend).one()
+        assert stored.format == "8-ball"
+        assert stored.sample_size == 5
+        assert stored.current_skill_level == 5
+
+    def test_separate_sessions_produce_separate_rows(self, db):
+        player = Player(external_id="P1", name="Alice")
+        db.add(player)
+        db.flush()
+        for week, level in enumerate([4, 5], start=1):
+            _add_match(db, player, week, level, session="Fall 2026")
+        for week, level in enumerate([5, 6], start=1):
+            _add_match(db, player, week, level, session="Summer 2026")
+        db.commit()
+
+        rows = build_rows(db)
+        assert {r["session_name"] for r in rows} == {"Fall 2026", "Summer 2026"}
+
+    def test_separate_formats_produce_separate_rows(self, db):
+        player = Player(external_id="P1", name="Alice")
+        db.add(player)
+        db.flush()
+        for week, level in enumerate([4, 5], start=1):
+            _add_match(db, player, week, level, fmt="8-Ball Open")
+        for week, level in enumerate([5, 6], start=1):
+            _add_match(db, player, week, level, fmt="9-Ball Open")
+        db.commit()
+
+        assert {r["format"] for r in build_rows(db)} == {"8-ball", "9-ball"}
+
+    def test_a_match_without_a_format_or_session_is_skipped(self, db):
         player = Player(external_id="P2", name="Bob")
         db.add(player)
         db.flush()
         match = Match(external_id="MX", week=1, home_team_id="T1", away_team_id="T2")
         db.add(match)
         db.flush()
-        db.add(PlayerMatch(player_id=player.id, match_id=match.id,
-                           skill_level=5, points_earned=2.0))
+        db.add(PlayerMatch(player_id=player.id, match_id=match.id, skill_level=5))
         db.commit()
         assert build_rows(db) == []
 
-    def test_an_empty_database_builds_nothing_rather_than_failing(self, db):
+    def test_an_empty_database_builds_nothing(self, db):
         assert build_rows(db) == []
 
 
-# --- UI ----------------------------------------------------------------------
+class TestBuilderIdempotency:
+    def test_rebuilding_updates_rather_than_duplicating(self, seeded):
+        rows = build_rows(seeded)
+        ingest_player_trends(seeded, rows)
+        ingest_player_trends(seeded, rows)
+        assert seeded.query(PlayerTrend).count() == 1
+
+    def test_values_are_identical_across_rebuilds(self, seeded):
+        ingest_player_trends(seeded, build_rows(seeded))
+        first = seeded.query(PlayerTrend).one()
+        snapshot = (first.sample_size, first.regression_slope, first.volatility,
+                    first.sl_stability, first.hot_cold_flag)
+        ingest_player_trends(seeded, build_rows(seeded))
+        second = seeded.query(PlayerTrend).one()
+        assert (second.sample_size, second.regression_slope, second.volatility,
+                second.sl_stability, second.hot_cold_flag) == snapshot
+
+    def test_an_unknown_player_is_skipped_not_guessed(self, seeded):
+        assert ingest_player_trends(seeded, [{
+            "player_id": "GHOST", "format": "8-ball", "session_name": "Fall 2026",
+            "sample_size": 5, "current_skill_level": 5,
+        }]) == 0
+
+
+class TestStalePruning:
+    def test_an_aggregate_whose_matches_vanished_is_removed(self, seeded):
+        """Without pruning an aggregate outlives its evidence and keeps being
+        reported as current."""
+        ingest_player_trends(seeded, build_rows(seeded))
+        assert seeded.query(PlayerTrend).count() == 1
+
+        seeded.query(PlayerMatch).delete()
+        seeded.commit()
+
+        removed = prune_player_trends_not_in(seeded, set(grouped_history(seeded)))
+        assert removed == 1
+        assert seeded.query(PlayerTrend).count() == 0
+
+    def test_live_aggregates_survive_pruning(self, seeded):
+        ingest_player_trends(seeded, build_rows(seeded))
+        removed = prune_player_trends_not_in(seeded, set(grouped_history(seeded)))
+        assert removed == 0
+        assert seeded.query(PlayerTrend).count() == 1
+
+    def test_only_the_stale_group_is_pruned(self, db):
+        player = Player(external_id="P1", name="Alice")
+        db.add(player)
+        db.flush()
+        for week, level in enumerate([4, 5], start=1):
+            _add_match(db, player, week, level, fmt="8-Ball Open")
+        nine = [_add_match(db, player, week, level, fmt="9-Ball Open")
+                for week, level in enumerate([5, 6], start=1)]
+        db.commit()
+        ingest_player_trends(db, build_rows(db))
+        assert db.query(PlayerTrend).count() == 2
+
+        # Remove only the 9-ball history.
+        for match in nine:
+            db.query(PlayerMatch).filter_by(match_id=match.id).delete()
+        db.commit()
+
+        prune_player_trends_not_in(db, set(grouped_history(db)))
+        remaining = db.query(PlayerTrend).all()
+        assert len(remaining) == 1
+        assert remaining[0].format == "8-ball"
+
+
+class TestNullPersistence:
+    def test_nulls_are_stored_as_nulls_not_zeros(self, db):
+        player = Player(external_id="P9", name="Thin")
+        db.add(player)
+        db.flush()
+        _add_match(db, player, 1, 5)
+        db.commit()
+
+        ingest_player_trends(db, build_rows(db))
+        row = db.query(PlayerTrend).one()
+        assert row.sample_size == 1
+        assert row.current_skill_level == 5
+        assert row.regression_slope is None
+        assert row.volatility is None
+        assert row.sl_stability is None
+        assert row.hot_cold_flag is None
+        assert row.projected_sl_change_probability is None
+
+
+# =============================================================================
+# UI
+# =============================================================================
 
 class TestTrendsTab:
-    def test_hot_and_cold_rows_are_highlighted(self):
-        assert row_class({"hot_cold_flag": "hot"}) == "hot"
-        assert row_class({"hot_cold_flag": "cold"}) == "cold"
+    def test_the_headers_match_the_spec_order(self):
+        assert [label for _, label, _ in COLUMNS] == [
+            "Player", "Format", "Session", "Sample Size", "Current SL",
+            "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
+            "Projected SL Change Probability",
+        ]
 
-    def test_neutral_and_unmeasured_rows_are_not(self):
-        assert row_class({"hot_cold_flag": "neutral"}) == ""
+    def test_hot_and_cold_are_highlighted(self):
+        assert row_class({"hot_cold_flag": "HOT"}) == "hot"
+        assert row_class({"hot_cold_flag": "COLD"}) == "cold"
+
+    def test_neutral_and_unmeasured_are_not_highlighted(self):
+        assert row_class({"hot_cold_flag": "NEUTRAL"}) == ""
         assert row_class({"hot_cold_flag": None}) == ""
 
-    def test_nulls_render_as_no_data_never_as_zero(self, seeded):
-        ingest_player_trends(seeded, build_rows(seeded))
-        html = render(load_rows(seeded))
-        assert NO_DATA in html
+    def test_nulls_render_as_no_data(self, db):
+        player = Player(external_id="P9", name="Thin")
+        db.add(player)
+        db.flush()
+        _add_match(db, player, 1, 5)
+        db.commit()
+        ingest_player_trends(db, build_rows(db))
+        assert NO_DATA in render(load_rows(db))
 
-    def test_it_renders_the_player_and_a_table(self, seeded):
+    def test_numeric_formatting(self, seeded):
         ingest_player_trends(seeded, build_rows(seeded))
         html = render(load_rows(seeded))
-        assert "Alice" in html
-        assert "<table" in html
+        assert "+0.3000" in html          # signed slope, 4dp
+        assert "0.5477" in html           # volatility, 4dp
+
+    def test_rows_sort_by_slope_descending(self, db):
+        for external_id, name, levels in (
+            ("P1", "Riser", [4, 5, 6]),
+            ("P2", "Faller", [6, 5, 4]),
+        ):
+            player = Player(external_id=external_id, name=name)
+            db.add(player)
+            db.flush()
+            for week, level in enumerate(levels, start=1):
+                _add_match(db, player, week, level)
+        db.commit()
+        ingest_player_trends(db, build_rows(db))
+
+        rows = load_rows(db)
+        assert [r["player_name"] for r in rows] == ["Riser", "Faller"]
+
+    def test_it_is_sortable_client_side(self, seeded):
+        ingest_player_trends(seeded, build_rows(seeded))
+        html = render(load_rows(seeded))
+        assert "addEventListener" in html
+        assert NO_DATA in html or "localeCompare" in html
 
     def test_it_carries_no_external_resources(self, seeded):
         """It has to open at a venue with no internet."""
         ingest_player_trends(seeded, build_rows(seeded))
         html = render(load_rows(seeded))
-        assert "http://" not in html
-        assert "https://" not in html
+        assert "http://" not in html and "https://" not in html
 
     def test_an_empty_tab_explains_what_to_run(self):
         assert "build_player_trends" in render([])
 
 
-# --- Excel -------------------------------------------------------------------
+# =============================================================================
+# Excel
+# =============================================================================
 
 class TestExcelSheet:
-    def _workbook(self, db, tmp_path):
+    def _sheet(self, db, tmp_path):
         from ui.export_excel import export_to_excel
 
-        return load_workbook(export_to_excel(
+        path = export_to_excel(
             db, {"export": {"excel_output_path": str(tmp_path / "wb.xlsx")}}
-        ))
+        )
+        return load_workbook(path)["Player Trends"]
 
-    def test_the_sheet_exists_with_every_field(self, seeded, tmp_path):
+    def test_headers_match_the_spec_order(self, seeded, tmp_path):
         ingest_player_trends(seeded, build_rows(seeded))
-        sheet = self._workbook(seeded, tmp_path)["Player Trends"]
-        header = [c.value for c in next(sheet.iter_rows(max_row=1))]
-        assert header == ["Player", "Format", "Matches", "Avg Points",
-                          "Slope (SL/match)", "Strength", "Volatility",
-                          "SL Stability", "Trend", "SL Change Probability"]
+        sheet = self._sheet(seeded, tmp_path)
+        assert [c.value for c in next(sheet.iter_rows(max_row=1))] == [
+            "Player", "Format", "Session", "Sample Size", "Current SL",
+            "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
+            "Projected SL Change Probability",
+        ]
 
-    def test_headers_freeze_and_filter(self, seeded, tmp_path):
+    def test_the_header_is_frozen_and_filtered(self, seeded, tmp_path):
         ingest_player_trends(seeded, build_rows(seeded))
-        sheet = self._workbook(seeded, tmp_path)["Player Trends"]
+        sheet = self._sheet(seeded, tmp_path)
         assert sheet.freeze_panes == "A2"
         assert sheet.auto_filter.ref is not None
 
-    def test_hot_and_cold_are_colour_coded(self, seeded, tmp_path):
+    def test_hot_and_cold_are_conditionally_formatted(self, seeded, tmp_path):
         ingest_player_trends(seeded, build_rows(seeded))
-        sheet = self._workbook(seeded, tmp_path)["Player Trends"]
+        sheet = self._sheet(seeded, tmp_path)
         formulas = [rule.formula[0]
                     for rules in sheet.conditional_formatting
                     for rule in rules.rules]
-        assert '"hot"' in formulas
-        assert '"cold"' in formulas
+        assert '"HOT"' in formulas
+        assert '"COLD"' in formulas
+
+    def test_the_probability_column_is_a_percentage(self, seeded, tmp_path):
+        ingest_player_trends(seeded, build_rows(seeded))
+        sheet = self._sheet(seeded, tmp_path)
+        header = [c.value for c in next(sheet.iter_rows(max_row=1))]
+        column = header.index("Projected SL Change Probability") + 1
+        cell = sheet.cell(row=2, column=column)
+        assert isinstance(cell.value, (int, float))
+        assert cell.number_format == "0.0%"
 
     def test_slope_and_volatility_stay_numeric(self, seeded, tmp_path):
-        """Spec §7: numeric, not strings -- otherwise the sheet cannot sort
-        or chart them."""
         ingest_player_trends(seeded, build_rows(seeded))
-        sheet = self._workbook(seeded, tmp_path)["Player Trends"]
+        sheet = self._sheet(seeded, tmp_path)
         header = [c.value for c in next(sheet.iter_rows(max_row=1))]
         row = dict(zip(header, [c.value for c in list(sheet.iter_rows(min_row=2))[0]]))
-        assert isinstance(row["Slope (SL/match)"], (int, float))
+        assert isinstance(row["Regression Slope"], (int, float))
         assert isinstance(row["Volatility"], (int, float))
 
+    def test_nulls_render_as_no_data(self, db, tmp_path):
+        player = Player(external_id="P9", name="Thin")
+        db.add(player)
+        db.flush()
+        _add_match(db, player, 1, 5)
+        db.commit()
+        ingest_player_trends(db, build_rows(db))
+
+        sheet = self._sheet(db, tmp_path)
+        header = [c.value for c in next(sheet.iter_rows(max_row=1))]
+        row = dict(zip(header, [c.value for c in list(sheet.iter_rows(min_row=2))[0]]))
+        assert row["Volatility"] == NO_DATA
+        assert row["Hot/Cold"] == NO_DATA
+
     def test_the_other_sheets_still_ship(self, seeded, tmp_path):
-        """Adding a sheet must not disturb the existing engines'."""
-        names = self._workbook(seeded, tmp_path).sheetnames
-        assert "Matchups" in names
-        assert "Head-to-Head" in names
+        from ui.export_excel import export_to_excel
+
+        path = export_to_excel(
+            seeded, {"export": {"excel_output_path": str(tmp_path / "wb.xlsx")}}
+        )
+        names = load_workbook(path).sheetnames
+        assert "Matchups" in names and "Head-to-Head" in names

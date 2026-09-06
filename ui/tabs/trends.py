@@ -5,16 +5,17 @@ every other view here it is a REPORTER: it displays what
 ``analytics.player_trends`` computed and never recalculates, so the tab, the
 workbook and the database cannot disagree.
 
-Display rules come from the governing spec (§7):
+Display rules come from the spec:
 
-  * NULL renders as "No data" -- never as 0, and never as an empty cell that
-    could be mistaken for zero
-  * probability renders as a percentage
-  * hot is highlighted green, cold red, neutral not at all
-  * slope and volatility stay numeric
+  * NULL renders as "No data" -- never 0, never a blank cell that could be
+    read as zero
+  * HOT is highlighted green, COLD red, NEUTRAL not at all
+  * slope, volatility and stability are numerically formatted
+  * every column sorts, and "No data" always sorts last
 
-Output is a self-contained HTML fragment with no external resources, so it
-embeds in the demo or opens on its own from a file:// URL.
+Self-contained HTML with no external resources, so it embeds in the demo or
+opens on its own from a file:// URL -- a captain's laptop at a venue may
+have no internet.
 """
 
 from __future__ import annotations
@@ -26,29 +27,29 @@ from sqlalchemy.orm import Session
 
 from database.models import Player, PlayerTrend
 
-# Spec §7: NULL is displayed, not hidden. "No data" and "0.00" are different
-# claims, and a blank cell reads as the latter.
 NO_DATA = "No data"
 
+# (key, header, numeric) -- header order is part of the spec.
 COLUMNS = (
     ("player_name", "Player", False),
     ("format", "Format", False),
-    ("matches_considered", "Matches", True),
-    ("avg_points_last_20", "Avg Points", True),
-    ("trend_slope", "Slope (SL/match)", True),
-    ("trend_strength", "Strength", True),
-    ("volatility_last_20", "Volatility", True),
+    ("session_name", "Session", False),
+    ("sample_size", "Sample Size", True),
+    ("current_skill_level", "Current SL", True),
+    ("regression_slope", "Regression Slope", True),
+    ("volatility", "Volatility", True),
     ("sl_stability", "SL Stability", True),
-    ("hot_cold_flag", "Trend", False),
-    ("projected_sl_change_probability", "SL Change", True),
+    ("hot_cold_flag", "Hot/Cold", False),
+    ("projected_sl_change_probability", "Projected SL Change Probability", True),
 )
 
 
-def load_rows(db: Session, format_: Optional[str] = None) -> list[dict[str, Any]]:
+def load_rows(db: Session, format_: Optional[str] = None,
+              session_name: Optional[str] = None) -> list[dict[str, Any]]:
     """Trends as plain dicts, player names resolved, steepest climb first.
 
     NULL slopes sort last rather than as zero -- a player with too little
-    history has not "not moved", they are simply unmeasured.
+    history has not "not moved", they are unmeasured.
     """
     rows = []
     for trend, player in db.query(PlayerTrend, Player).join(
@@ -56,28 +57,34 @@ def load_rows(db: Session, format_: Optional[str] = None) -> list[dict[str, Any]
     ).all():
         if format_ and trend.format != format_:
             continue
+        if session_name and trend.session_name != session_name:
+            continue
         rows.append({
             "player_name": player.name,
             "player_id": player.external_id,
             "format": trend.format,
-            "matches_considered": trend.matches_considered,
-            "avg_points_last_20": trend.avg_points_last_20,
-            "trend_slope": trend.trend_slope,
-            "trend_strength": trend.trend_strength,
-            "volatility_last_20": trend.volatility_last_20,
+            "session_name": trend.session_name,
+            "sample_size": trend.sample_size,
+            "current_skill_level": trend.current_skill_level,
+            "regression_slope": trend.regression_slope,
+            "volatility": trend.volatility,
             "sl_stability": trend.sl_stability,
             "hot_cold_flag": trend.hot_cold_flag,
             "projected_sl_change_probability": trend.projected_sl_change_probability,
         })
-    rows.sort(key=lambda r: (r["trend_slope"] is None, -(r["trend_slope"] or 0)))
+    rows.sort(key=lambda r: (r["regression_slope"] is None, -(r["regression_slope"] or 0)))
     return rows
 
 
 def row_class(row: dict[str, Any]) -> str:
-    """Highlight class for a row. Neutral and NULL are both unhighlighted --
-    "observed and unremarkable" and "not enough evidence" should not shout."""
+    """Highlight class. NEUTRAL and NULL are both unhighlighted -- "measured
+    and unremarkable" and "not enough evidence" should neither shout."""
     flag = row.get("hot_cold_flag")
-    return flag if flag in ("hot", "cold") else ""
+    if flag == "HOT":
+        return "hot"
+    if flag == "COLD":
+        return "cold"
+    return ""
 
 
 def _cell(row: dict[str, Any], key: str) -> str:
@@ -86,18 +93,16 @@ def _cell(row: dict[str, Any], key: str) -> str:
         return NO_DATA
     if key == "projected_sl_change_probability":
         return f"{value * 100:.1f}%"
-    if key == "trend_slope":
-        # Signed: the direction is the point of this column.
+    if key == "regression_slope":
+        # Signed: direction is the point of this column.
         return f"{value:+.4f}"
-    if key in ("volatility_last_20", "sl_stability", "trend_strength", "avg_points_last_20"):
-        return f"{value:.4f}" if key != "avg_points_last_20" else f"{value:.2f}"
-    if key == "hot_cold_flag":
-        return escape(str(value))
+    if key in ("volatility", "sl_stability"):
+        return f"{value:.4f}"
     return escape(str(value))
 
 
 def render(rows: Sequence[dict[str, Any]], title: str = "Player Trends") -> str:
-    """A self-contained, sortable HTML fragment. No external resources."""
+    """A self-contained, sortable HTML fragment."""
     if not rows:
         return (
             f'<section class="trends-tab"><h2>{escape(title)}</h2>'
@@ -120,13 +125,13 @@ def render(rows: Sequence[dict[str, Any]], title: str = "Player Trends") -> str:
         for row in rows
     )
 
-    hot = sum(1 for r in rows if r.get("hot_cold_flag") == "hot")
-    cold = sum(1 for r in rows if r.get("hot_cold_flag") == "cold")
+    hot = sum(1 for r in rows if r.get("hot_cold_flag") == "HOT")
+    cold = sum(1 for r in rows if r.get("hot_cold_flag") == "COLD")
     unmeasured = sum(1 for r in rows if r.get("hot_cold_flag") is None)
 
     return f"""<section class="trends-tab">
 <h2>{escape(title)}</h2>
-<p class="trends-note">{len(rows)} player-format row(s) · {hot} hot · {cold} cold ·
+<p class="trends-note">{len(rows)} row(s) · {hot} hot · {cold} cold ·
 {unmeasured} without enough history to classify. Click any column to sort.
 Skill-level trends come from the Player Trend Analyzer, not from this page.</p>
 <style>
@@ -167,6 +172,7 @@ Skill-level trends come from the Player Trend Analyzer, not from this page.</p>
 
 
 def build(db: Session, format_: Optional[str] = None,
+          session_name: Optional[str] = None,
           title: str = "Player Trends") -> str:
     """Query and render in one call."""
-    return render(load_rows(db, format_), title)
+    return render(load_rows(db, format_, session_name), title)

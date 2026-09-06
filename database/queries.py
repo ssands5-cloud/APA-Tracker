@@ -277,16 +277,14 @@ def head_to_head_advantage(db: Session) -> list[PlayerH2HAdvantage]:
         .all()
     )
 
-
 def player_trends(db: Session) -> list[PlayerTrend]:
     """Every player trend, steepest upward slope first.
 
-    NULL slopes (too little history for a trend) sort last rather than
-    reading as zero, so the sheet and the tab both open on the players
-    actually moving.
+    NULL slopes (too little history) sort last rather than reading as zero,
+    so the sheet and the tab open on the players actually moving.
     """
     return (
         db.query(PlayerTrend)
-        .order_by(PlayerTrend.trend_slope.desc().nullslast())
+        .order_by(PlayerTrend.regression_slope.desc().nullslast())
         .all()
     )

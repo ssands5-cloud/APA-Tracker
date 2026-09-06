@@ -466,69 +466,72 @@ class PlayerH2HAdvantage(Base):
 
 
 class PlayerTrend(Base):
-    """One row per (player, format): how a player's SKILL LEVEL has been
-    moving lately, per the finalized Player Trend Analyzer spec.
+    """One row per (player, format, session): how a player's SKILL LEVEL has
+    been moving within that session.
 
-    The subject of the trend metrics is skill level, not points earned:
-    volatility is the sample standard deviation (ddof=1) of SL over the last
-    20 matches, and trend_slope is a least-squares fit in SL units per match
-    over the player's WHOLE history in that format. Those two spans differ
-    deliberately -- see docs/player_trends.md.
+    Implements the governing Player Trend Analyzer spec. Volatility is the
+    sample standard deviation (ddof=1) of SL over the last 20 observations;
+    regression_slope is a least-squares fit in SL units per match. Points
+    earned are not an input to any of it.
 
-    avg_points_last_20 is the one points-based figure, kept as descriptive
-    context alongside the SL trend rather than as an input to it.
+    Every field derives from real captured data (PlayerMatch.skill_level,
+    with format and session from the joined Match). This project holds no
+    innings and no defensive-shot figures -- APA does not expose them -- and
+    none are invented here.
 
-    Every field is derived from real captured data (PlayerMatch.skill_level
-    and .points_earned, format from the joined Match). No innings and no
-    defensive-shot figures exist in this project (APA does not expose them),
-    and none are invented for trends either.
+    NULL means insufficient evidence and is never a fabricated zero. That
+    distinction is load-bearing: `volatility = NULL` means fewer than two
+    observations so no spread was measurable, while `volatility = 0.0` means
+    several observations and a level that genuinely never moved. Per spec:
 
-    NULL is meaningful throughout and is never replaced by a fabricated
-    zero. Per the spec's minimum-evidence rules:
+      * regression_slope -- NULL below 2 SL observations
+      * volatility       -- NULL below 2 SL observations in the last 20
+      * sl_stability     -- NULL whenever volatility is NULL
+      * hot_cold_flag    -- NULL when sample_size < 5 or volatility is NULL
+                            ('NEUTRAL' means measured and unremarkable,
+                            which is a different fact)
+      * projected_sl_change_probability -- same gate as hot_cold_flag
 
-      * trend_slope        -- NULL below 2 SL observations
-      * volatility_last_20 -- NULL below 2 SL observations in the window
-      * sl_stability       -- NULL whenever volatility is NULL
-      * hot_cold_flag      -- NULL below 5 observations, or without
-                              volatility; "neutral" means observed and
-                              unremarkable, which is a different fact
-      * projected_sl_change_probability -- NULL below 5 observations, or
-                              without volatility
-
-    Upserted on (player_id, format): always-current, not snapshotted.
+    Upserted on (player_id, format, session_name): always-current, not
+    snapshotted. The builder prunes rows whose underlying matches are gone.
     """
 
     __tablename__ = "player_trends"
     __table_args__ = (
-        UniqueConstraint("player_id", "format", name="uq_player_trends_format"),
+        UniqueConstraint(
+            "player_id", "format", "session_name",
+            name="uq_player_trends_player_format_session",
+        ),
+        Index("ix_player_trends_format_session", "format", "session_name"),
     )
 
     id = Column(Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
-    format = Column(String)
+    # Normalised to '8-ball' / '9-ball' per spec. The captured data says
+    # '8-Ball Open' / '9-Ball Open'; analytics.player_trends.normalize_format
+    # does the mapping and leaves anything unrecognised untouched rather than
+    # forcing it into a bucket it may not belong in.
+    format = Column(String, nullable=False)
+    session_name = Column(String, nullable=False)
 
-    # SL observations in the volatility window -- not the window SIZE. With a
-    # 20-match window and 4 matches played this reads 4, and every gated
-    # figure below is only as strong as that number.
-    matches_considered = Column(Integer)
+    # SL observations in the last-20 window -- not the window SIZE. Every
+    # gated metric below is only as strong as this number.
+    sample_size = Column(Integer, nullable=False)
+    # The player's most recent skill level in this (format, session).
+    current_skill_level = Column(Integer, nullable=False)
 
-    avg_points_last_20 = Column(Float)
-    # Sample stddev (ddof=1) of SKILL LEVEL over the last 20 matches.
-    volatility_last_20 = Column(Float)
     # Least-squares slope of SL vs match order, SL units per match, over the
-    # full history. Positive means the skill level is climbing.
-    trend_slope = Column(Float)
-    # |tanh(4 * slope)|. The one metric the governing spec does not define --
-    # flagged as such in analytics/player_trends.py and the docs.
-    trend_strength = Column(Float)
-    # 1 / (1 + volatility). 1.0 is perfectly stable, approaching 0.0 as the
-    # skill level swings. NOT a variance -- see the spec's §2.
+    # session's full history. Positive means the level is climbing.
+    regression_slope = Column(Float)
+    # Sample stddev (ddof=1) of SL over the last 20 observations.
+    volatility = Column(Float)
+    # 1 / (1 + volatility). 1.0 is perfectly stable. NOT a variance.
     sl_stability = Column(Float)
-    # "hot" / "cold" / "neutral", or NULL for insufficient evidence.
+    # 'HOT' / 'COLD' / 'NEUTRAL', or NULL for insufficient evidence.
     hot_cold_flag = Column(String)
     # 0.0-1.0 from the spec's documented heuristic. Upward SL pressure only:
     # the clamp floors a downward trend at 0.0, and direction lives in
-    # trend_slope. Not a fitted model and not APA's own projection.
+    # regression_slope. Not a fitted model, not APA's own projection.
     projected_sl_change_probability = Column(Float)
 
     player = relationship("Player", foreign_keys=[player_id])

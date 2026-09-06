@@ -327,24 +327,31 @@ def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
 
-
 # --- Player Trend Analyzer ---------------------------------------------------
 
-# Spec §7: NULL is displayed as "No data", never as 0 and never as a blank
-# cell that could be read as zero.
+# Spec: NULL is displayed as "No data", never 0 and never a blank cell that
+# could be read as zero.
 TRENDS_NO_DATA = "No data"
+
+# Header order is part of the spec.
+TRENDS_COLUMNS = [
+    "Player", "Format", "Session", "Sample Size", "Current SL",
+    "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
+    "Projected SL Change Probability",
+]
 
 
 def _player_trends_dataframe(db: Session) -> pd.DataFrame:
-    """The Player Trend Analyzer's table, one row per (player, format).
+    """The Player Trend Analyzer's table, one row per (player, format,
+    session).
 
-    Straight out of player_trends -- nothing is recomputed here, so the sheet
+    Straight out of player_trends -- nothing is recomputed, so the sheet
     cannot disagree with the database or the demo tab.
 
-    NULLs become the literal string "No data" per the spec. That makes the
-    affected columns mixed-type, which is the intended trade: a captain
-    reading the sheet must never mistake "not enough history" for "zero".
-    Slope and volatility keep their numeric values wherever they exist.
+    NULLs become the literal string "No data" per spec. That makes those
+    columns mixed-type, which is the intended trade: a captain must never
+    mistake "not enough history" for "zero". Slope, volatility and stability
+    keep their numeric values wherever they exist.
     """
     def shown(value):
         return TRENDS_NO_DATA if value is None else value
@@ -354,23 +361,29 @@ def _player_trends_dataframe(db: Session) -> pd.DataFrame:
             {
                 "Player": row.player.name if row.player else "",
                 "Format": row.format or "",
-                "Matches": shown(row.matches_considered),
-                "Avg Points": shown(row.avg_points_last_20),
-                "Slope (SL/match)": shown(row.trend_slope),
-                "Strength": shown(row.trend_strength),
-                "Volatility": shown(row.volatility_last_20),
+                "Session": row.session_name or "",
+                "Sample Size": row.sample_size,
+                "Current SL": row.current_skill_level,
+                "Regression Slope": shown(row.regression_slope),
+                "Volatility": shown(row.volatility),
                 "SL Stability": shown(row.sl_stability),
-                "Trend": shown(row.hot_cold_flag),
-                "SL Change Probability": shown(row.projected_sl_change_probability),
+                "Hot/Cold": shown(row.hot_cold_flag),
+                "Projected SL Change Probability": shown(
+                    row.projected_sl_change_probability
+                ),
             }
             for row in player_trends(db)
-        ]
+        ],
+        columns=TRENDS_COLUMNS,
     )
 
 
 def _format_player_trends(writer, frame: pd.DataFrame) -> None:
-    """Freeze the header, filter every column, and colour the Trend cell
-    green for hot and red for cold. Neutral is left unhighlighted, per spec.
+    """Freeze the header, filter every column, colour Hot green and Cold red,
+    and render the probability as a percentage.
+
+    NEUTRAL is left unhighlighted per spec -- only the actionable states
+    draw the eye.
     """
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Font, PatternFill
@@ -385,22 +398,26 @@ def _format_player_trends(writer, frame: pd.DataFrame) -> None:
     last_row = len(frame) + 1
     sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
 
-    trend_range = f"I2:I{last_row}"  # Trend
+    flag_column = TRENDS_COLUMNS.index("Hot/Cold") + 1
+    flag_range = (f"{get_column_letter(flag_column)}2:"
+                  f"{get_column_letter(flag_column)}{last_row}")
     for text, fill_colour, font_colour in (
-        ("hot", "C6EFCE", "006100"),
-        ("cold", "FFC7CE", "9C0006"),
+        ("HOT", "C6EFCE", "006100"),
+        ("COLD", "FFC7CE", "9C0006"),
     ):
         sheet.conditional_formatting.add(
-            trend_range,
+            flag_range,
             CellIsRule(operator="equal", formula=[f'"{text}"'],
                        fill=PatternFill("solid", fgColor=fill_colour),
                        font=Font(color=font_colour, bold=True)),
         )
 
-    # Probability as a percentage -- but only on the real numbers. A "No
-    # data" cell formatted as a percentage would render as text anyway; the
-    # format is applied per-cell so the string cells are left alone.
-    for row in sheet.iter_rows(min_row=2, min_col=10, max_col=10):
+    # Percentage format applied per-cell: a "No data" string formatted as a
+    # percentage would still render as text, so only the real numbers are
+    # touched.
+    probability_column = TRENDS_COLUMNS.index("Projected SL Change Probability") + 1
+    for row in sheet.iter_rows(min_row=2, min_col=probability_column,
+                               max_col=probability_column):
         for cell in row:
             if isinstance(cell.value, (int, float)):
                 cell.number_format = "0.0%"

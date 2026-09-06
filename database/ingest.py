@@ -738,16 +738,14 @@ def ingest_h2h_advantage(db: Session, rows: list[dict]) -> int:
     logger.info("Ingested %d head-to-head advantage row(s)", written)
     return written
 
-
 def ingest_player_trends(db: Session, rows: list[dict]) -> int:
-    """Upsert Player Trend rows, keyed on (player_id, format).
+    """Upsert Player Trend rows, keyed on (player_id, format, session_name).
 
-    Always-current derived values, like PlayerMatchup and
-    PlayerH2HAdvantage -- not history worth a run-by-run trail. A row whose
-    player cannot be resolved is skipped rather than guessed at.
+    Always-current derived values -- not history worth a run-by-run trail. A
+    row whose player cannot be resolved is skipped rather than guessed at.
 
     NULLs are written through as NULLs: the spec is explicit that an
-    insufficient-evidence metric must not be coerced to zero.
+    insufficient-evidence metric must never be coerced to zero.
     """
     written = 0
     for row in rows:
@@ -757,27 +755,53 @@ def ingest_player_trends(db: Session, rows: list[dict]) -> int:
             continue
 
         fields = {
-            "matches_considered": row.get("matches_considered"),
-            "avg_points_last_20": row.get("avg_points_last_20"),
-            "volatility_last_20": row.get("volatility_last_20"),
-            "trend_slope": row.get("trend_slope"),
-            "trend_strength": row.get("trend_strength"),
+            "sample_size": row.get("sample_size"),
+            "current_skill_level": row.get("current_skill_level"),
+            "regression_slope": row.get("regression_slope"),
+            "volatility": row.get("volatility"),
             "sl_stability": row.get("sl_stability"),
             "hot_cold_flag": row.get("hot_cold_flag"),
             "projected_sl_change_probability": row.get("projected_sl_change_probability"),
         }
 
         existing = db.query(PlayerTrend).filter_by(
-            player_id=player.id, format=row.get("format")
+            player_id=player.id,
+            format=row.get("format"),
+            session_name=row.get("session_name"),
         ).one_or_none()
 
         if existing:
             for key, value in fields.items():
                 setattr(existing, key, value)
         else:
-            db.add(PlayerTrend(player_id=player.id, format=row.get("format"), **fields))
+            db.add(PlayerTrend(
+                player_id=player.id,
+                format=row.get("format"),
+                session_name=row.get("session_name"),
+                **fields,
+            ))
         written += 1
 
     db.commit()
     logger.info("Ingested %d player trend row(s)", written)
     return written
+
+
+def prune_player_trends_not_in(db: Session, valid_keys: set) -> int:
+    """Delete aggregates whose underlying matches no longer exist.
+
+    `valid_keys` is the set of (player_id, format, session_name) the builder
+    just produced, using the DATABASE player id. Anything else is stale: a
+    match reconciled away, a corrected scoresheet, a player moved off a
+    session. Without this an aggregate outlives its evidence and keeps being
+    reported as current -- the same reason prune_matchups_not_in exists.
+    """
+    removed = 0
+    for row in db.query(PlayerTrend).all():
+        if (row.player_id, row.format, row.session_name) not in valid_keys:
+            db.delete(row)
+            removed += 1
+    if removed:
+        db.commit()
+        logger.info("Pruned %d stale player trend row(s)", removed)
+    return removed
