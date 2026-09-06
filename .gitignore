@@ -25,3 +25,8 @@ scraper/scoresheets/
 
 # Log file written by scraper/full_apa_scrape.py.
 scraper/full_apa_scrape.log
+
+# Local environments, test caches, and generated fixture archives.
+venv*/
+.pytest_cache/
+scraper/sanitized_fixtures.zip
