@@ -143,11 +143,29 @@ does not prevent the earlier workbook/JSON exports from completing.
 as zero, and the neutral defaults are never serialized as observed evidence.
 Confidence and risk remain `null` until a matching Trend row has enough data.
 
-The current ingest contains both roster and scoresheet player identities.  A
-name fallback is safe only when that name maps to one roster team; unresolved
-rows are intentionally omitted from assignments and called out in
-`resolution_warnings`.  Unifying those upstream ID spaces is a separate
-ingest change with a wider blast radius.
+**Resolved**, mostly: roster ingest (`upsert_roster`) only ever runs for the
+small set of teams actually scraped, so anyone who only ever showed up as an
+opponent previously had no `team_id` at all -- checked against a real fixture
+run, this was not an edge case, it was 72 of 72 distinct head-to-head
+players. `ingest_match_scores` already captures a real per-row `team_id`
+(used for the `opponent` field); `database.ingest.backfill_player_team` now
+also writes it onto `Player.team_id`, but ONLY when nothing is known yet --
+never overwriting an existing assignment. Re-running the pipeline against
+the current fixtures took team resolution in `scripts/build_lineups.py`
+from 100% name-fallback to 106/106 rows resolved by `team_id`; the
+`player_name` fallback (and `resolution_warnings` for a name mapping to more
+than one team, or none) remains in place as a safety net, not the primary
+mechanism.
+
+What this does NOT solve: a real player can legitimately turn out on more
+than one team in a season (confirmed in
+`TestTwoMatchLinkedRowsSharingDateAndOpponentName`,
+tests/test_ingest.py -- the same person on an 8-ball team and a 9-ball
+team). `Player.team_id` is a single column and cannot represent both;
+`backfill_player_team` deliberately keeps whichever team it saw first rather
+than flipping on every ingest. Modelling true multi-team membership would be
+a real schema change (a join table, keyed by format/session) -- a
+genuinely separate, wider-blast-radius piece of work, not yet started.
 
 The optimizer itself has not been evaluated end-to-end against actual match
 outcomes -- there is no historical record of *which lineup a captain actually

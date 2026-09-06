@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 import database.ingest as ingest_module
 from database.ingest import (
+    backfill_player_team,
     ingest_eight_ball_stats,
     ingest_head_to_head,
     ingest_match,
@@ -84,6 +85,123 @@ class TestTwoMatchLinkedRowsSharingDateAndOpponentName:
         assert len(rows) == 2
         assert rows[0].match_id != rows[1].match_id
         assert {r.opponent for r in rows} == {"Mark It Up"}
+
+
+class TestPlayerTeamBackfillFromScoresheet:
+    """players.team_id previously stayed NULL for anyone who only ever
+    appeared on a scoresheet -- roster ingest only runs for the small set
+    of teams actually scraped, so an opponent (or a not-yet-rostered
+    teammate) had no team at all. A real fixture run confirmed this was not
+    an edge case: 72 of 72 distinct head-to-head players had team_id IS
+    NULL. ingest_match_scores already extracts a real team_id/team_name per
+    scoresheet row (used for the `opponent` field); these tests cover
+    backfill_player_team, the small addition that also writes it onto
+    Player.team_id when nothing is known yet.
+    """
+
+    def test_ingest_match_scores_backfills_a_previously_unteamed_player(self, db):
+        upsert_team(db, "T1", "Brunch Ballers (8-Ball)")
+        upsert_team(db, "OPP1", "Mark It Up")
+        ingest_match(
+            db, match_id="M1", home_team_id="T1", away_team_id="OPP1",
+            home_team_name="Brunch Ballers (8-Ball)", away_team_name="Mark It Up",
+            match_date="2026-09-01", week=1,
+        )
+        ingest_match_scores(
+            db, "M1",
+            [{"player_id": "P1", "player_name": "Alice", "team_id": "T1", "result": "W"}],
+        )
+        player = db.query(Player).filter_by(external_id="P1").one()
+        assert player.team_id is not None
+        assert player.team.external_id == "T1"
+
+    def test_never_overwrites_a_player_already_on_a_team(self, db):
+        """The real scenario TestTwoMatchLinkedRowsSharingDateAndOpponentName
+        models: the same real person plays for two different teams across
+        two different matches. team_id is a single column and cannot
+        represent both -- filling it in once, and never flipping it to
+        "whichever match was ingested last", is the safe choice."""
+        upsert_team(db, "T1", "Brunch Ballers (8-Ball)")
+        upsert_team(db, "T2", "Brunch Ballers (9-Ball)")
+        ingest_match(
+            db, match_id="M1", home_team_id="T1", away_team_id="OPP1",
+            home_team_name="Brunch Ballers (8-Ball)", away_team_name="Mark It Up",
+            match_date="2026-09-01", week=1,
+        )
+        ingest_match(
+            db, match_id="M2", home_team_id="T2", away_team_id="OPP2",
+            home_team_name="Brunch Ballers (9-Ball)", away_team_name="Mark It Up",
+            match_date="2026-09-01", week=1,
+        )
+        ingest_match_scores(db, "M1", [{"player_id": "P1", "player_name": "Alice", "team_id": "T1"}])
+        ingest_match_scores(db, "M2", [{"player_id": "P1", "player_name": "Alice", "team_id": "T2"}])
+
+        player = db.query(Player).filter_by(external_id="P1").one()
+        assert player.team.external_id == "T1"
+
+    def test_a_scoresheet_entry_with_no_team_id_leaves_team_unset(self, db):
+        ingest_match(
+            db, match_id="M1", home_team_id="T1", away_team_id="OPP1",
+            home_team_name="Home", away_team_name="Away",
+            match_date="2026-09-01", week=1,
+        )
+        ingest_match_scores(db, "M1", [{"player_id": "P1", "player_name": "Alice"}])
+        player = db.query(Player).filter_by(external_id="P1").one()
+        assert player.team_id is None
+
+    def test_both_sides_of_a_head_to_head_pairing_end_up_with_a_real_team(self, db):
+        """The end-to-end shape pipeline/ingest.py actually runs: one
+        combined ingest_match_scores() call across both home and away
+        scoresheet rows, then ingest_head_to_head() reusing the same
+        Player rows. Both the home player and the away opponent should
+        come out of this with a real team_id -- not just the "own" side,
+        and not a name-matched guess."""
+        upsert_team(db, "T1", "Brunch Ballers")
+        upsert_team(db, "OPP1", "Mark It Up")
+        ingest_match(
+            db, match_id="M1", home_team_id="T1", away_team_id="OPP1",
+            home_team_name="Brunch Ballers", away_team_name="Mark It Up",
+            match_date="2026-09-01", week=1,
+        )
+        ingest_match_scores(
+            db, "M1",
+            [
+                {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "result": "W"},
+                {"player_id": "P2", "player_name": "Bob", "team_id": "OPP1", "result": "L"},
+            ],
+        )
+        ingest_head_to_head(
+            db, "M1",
+            [{
+                "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+                "opponent_id": "P2", "opponent_name": "Bob",
+                "own_skill_level": 5, "opponent_skill_level": 5, "result": "W",
+            }],
+        )
+
+        alice = db.query(Player).filter_by(external_id="P1").one()
+        bob = db.query(Player).filter_by(external_id="P2").one()
+        assert alice.team.external_id == "T1"
+        assert bob.team.external_id == "OPP1"
+
+
+class TestBackfillPlayerTeamDirectly:
+    def test_fills_in_a_missing_team(self, db):
+        player = upsert_player(db, "P1", "Alice")
+        backfill_player_team(db, player, "T1", "Brunch Ballers")
+        assert player.team.external_id == "T1"
+        assert player.team.name == "Brunch Ballers"
+
+    def test_does_nothing_without_a_team_id(self, db):
+        player = upsert_player(db, "P1", "Alice")
+        backfill_player_team(db, player, None, None)
+        assert player.team_id is None
+
+    def test_does_nothing_when_a_team_is_already_set(self, db):
+        team = upsert_team(db, "T1", "Brunch Ballers")
+        player = upsert_player(db, "P1", "Alice", team)
+        backfill_player_team(db, player, "T2", "Some Other Team")
+        assert player.team.external_id == "T1"
 
 
 class TestIngestStandingsSharedTimestamp:

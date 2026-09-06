@@ -126,10 +126,30 @@ class TestShape:
         sources = {row["source"] for row in document["player_stats"]}
         assert sources == {"match history"}
 
-    def test_player_stats_team_is_blank_when_never_rostered(self, seeded_db, tmp_path):
+    def test_player_stats_team_is_backfilled_from_the_scoresheet_even_when_never_rostered(
+        self, seeded_db, tmp_path
+    ):
         """seeded_db's Alice/Bob only ever go through ingest_match_scores(),
-        which doesn't assign a team -- only upsert_roster() does."""
+        never upsert_roster() -- but ingest_match_scores() itself backfills
+        Player.team_id from the real team_id on each scoresheet entry (see
+        database.ingest.backfill_player_team), so "never rostered" no
+        longer means "no team known"."""
         document = _export(seeded_db, tmp_path)
+        teams = {row["team"] for row in document["player_stats"]}
+        assert teams == {"Chalk It Up", "Rack Attack"}
+
+    def test_player_stats_team_is_blank_when_the_scoresheet_carries_no_team_id_either(
+        self, db, tmp_path
+    ):
+        """The genuinely-no-evidence case: neither a roster ingest nor a
+        scoresheet team_id ever named a team for this player. Blank, not a
+        guess."""
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                      home_team_name="Chalk It Up", away_team_name="Rack Attack", week=1)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "result": "W", "points_earned": 6},
+        ])
+        document = _export(db, tmp_path)
         teams = {row["team"] for row in document["player_stats"]}
         assert teams == {""}
 

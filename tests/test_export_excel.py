@@ -213,9 +213,12 @@ class TestSeededData:
         assert bob_carol["Has History"] == "No"
         assert bob_carol["Matches Played"] == 0
 
-    def test_player_never_rostered_shows_a_blank_team_not_a_crash(self, db, tmp_path):
-        """ingest_match_scores() never assigns a team (only upsert_roster()
-        does) -- a player known only from a scoresheet has no team to show."""
+    def test_player_never_rostered_still_shows_the_scoresheets_own_team(self, db, tmp_path):
+        """A player known only from a scoresheet (never upsert_roster()) is
+        not team-less: ingest_match_scores() backfills Player.team_id from
+        the real team_id each scoresheet entry carries (see
+        database.ingest.backfill_player_team) whenever nothing is known
+        yet."""
         upsert_team(db, "T1", "Chalk It Up")
         upsert_team(db, "T2", "Rack Attack")
         ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
@@ -223,6 +226,21 @@ class TestSeededData:
                      status="COMPLETED", home_score=6, away_score=3)
         ingest_match_scores(db, "M1", [
             {"player_id": "P9", "player_name": "Opponent Guy", "team_id": "T2",
+             "result": "L", "points_earned": 3},
+        ])
+        wb = _export(db, tmp_path)
+        rows = [[c.value for c in r] for r in wb["Player Stats"].iter_rows()]
+        record = dict(zip(rows[0], rows[1]))
+        assert record["Team"] == "Rack Attack"
+
+    def test_player_with_no_team_id_anywhere_shows_a_blank_team_not_a_crash(self, db, tmp_path):
+        """The genuinely-no-evidence case: no roster ingest, and the
+        scoresheet entry itself carries no team_id. Blank, not a guess."""
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Chalk It Up", away_team_name="Rack Attack",
+                     status="COMPLETED", home_score=6, away_score=3)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P9", "player_name": "Opponent Guy",
              "result": "L", "points_earned": 3},
         ])
         wb = _export(db, tmp_path)

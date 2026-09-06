@@ -83,6 +83,56 @@ def upsert_player(db: Session, player_id: str, player_name: str, team: Optional[
     return player
 
 
+def backfill_player_team(
+    db: Session, player: Player, team_external_id: Optional[str], team_name: Optional[str]
+) -> None:
+    """Fill in `player.team` from real scoresheet evidence, but ONLY when
+    nothing is known yet -- never overwrite an existing assignment.
+
+    `team_external_id` here is the real per-row team id captured on a
+    scoresheet entry (`match_player_scores()`'s `team_id`), the same id
+    space `upsert_team` already keys teams on -- not a guess, not a name
+    match. It exists for every scoresheet player, which is exactly the
+    population `players.team_id` is otherwise never populated for: roster
+    ingest (`upsert_roster`) only ever runs for the small set of teams
+    whose rosters were actually scraped, so anyone who only ever appears as
+    an opponent -- the overwhelming majority of real players in this data,
+    72 of 72 distinct head-to-head players as of the pass that added this
+    -- previously had no `team_id` at all, forcing
+    scripts/build_lineups.py's `_resolve_team` to fall back to matching on
+    `player_name`, which only works when that name happens to be unique
+    across every rostered team.
+
+    Deliberately NOT unconditional: a real player can legitimately turn out
+    on more than one team (see
+    TestTwoMatchLinkedRowsSharingDateAndOpponentName in tests/test_ingest.py
+    -- the same real person on an 8-ball team AND a 9-ball team). `team_id`
+    is a single column and cannot represent both; overwriting on every
+    ingest would make it flip to "whichever match was processed last"
+    rather than anything meaningful. Filling it in only once, the first
+    time real evidence exists, is the safe subset of "unify the ID spaces"
+    that doesn't require modelling multi-team membership -- see
+    docs/lineup_optimizer.md's "Missing data and current limitations".
+
+    Looks the team up directly rather than going through `upsert_team` when
+    it already exists: `upsert_team` unconditionally overwrites `Team.name`
+    on every call, which is exactly right for its own callers (roster/team
+    ingestion, which always has a fresh authoritative name) but was, here,
+    silently blanking an already-good team name back to "" on every
+    scoresheet row that happened not to carry one -- caught by a real
+    fixture test (test_export_json.py's `seeded_db`) asserting on team
+    names. A team is only ever CREATED here, with whatever name is
+    available, never renamed.
+    """
+    if player.team_id is not None or not team_external_id:
+        return
+    team = db.query(Team).filter_by(external_id=team_external_id).one_or_none()
+    if team is None:
+        team = upsert_team(db, team_external_id, team_name or "")
+    player.team = team
+    db.commit()
+
+
 def upsert_roster(db: Session, team: Team, roster: list[dict]) -> int:
     """Update team roster with player stats."""
     count = 0
@@ -311,10 +361,15 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
         own_team_id = entry.get("team_id")
         if own_team_id == match.home_team_id:
             opponent = match.away_team_name
+            own_team_name = entry.get("team_name") or match.home_team_name
         elif own_team_id == match.away_team_id:
             opponent = match.home_team_name
+            own_team_name = entry.get("team_name") or match.away_team_name
         else:
             opponent = None
+            own_team_name = entry.get("team_name")
+
+        backfill_player_team(db, player, own_team_id, own_team_name)
 
         fields = {
             "match_date": match.match_date,
