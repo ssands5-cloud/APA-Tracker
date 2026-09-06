@@ -55,4 +55,49 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
 
     written.append(("captains html", str(html_path)))
     written.append(("captains xlsx", str(xlsx_path)))
+
+    with Session(engine) as db:
+        written.append(("analysis tabs", str(write_tabs(db))))
+
     return written
+
+
+# Both analysis tabs render self-contained fragments. Without this they were
+# renderers nothing called: fully tested, and producing no file anyone could
+# open. A tab that ships no artifact is not delivered.
+TABS_NAME = "analysis_tabs.html"
+
+
+def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
+    """Render the Head-to-Head and Player Trends tabs into one openable page.
+
+    Deliberately one file with both: they answer the same question from two
+    directions -- who to play, and who is moving -- and a captain at a venue
+    should not have to juggle two documents. No external resources, so it
+    opens from a file:// URL with no server and no internet.
+    """
+    from ui.tabs import matchups, trends
+
+    directory = out_dir or (PROJECT_ROOT / "exports")
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / TABS_NAME
+
+    body = "\n".join([
+        matchups.build(db, title="Head-to-Head"),
+        trends.build(db, title="Player Trends"),
+    ])
+    shell = (
+        '<!DOCTYPE html>\n'
+        '<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        "<title>APA Analysis</title>"
+        "<style>body{margin:0;padding:20px;background:#f5f6f8;color:#15171c;"
+        "font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;}"
+        "section{background:#fff;border:1px solid #e2e5ea;border-radius:10px;"
+        "padding:16px;margin-bottom:18px;overflow-x:auto;}h2{margin:0 0 4px;font-size:16px;}"
+        "</style></head><body>\n"
+        f"{body}\n"
+        "</body></html>"
+    )
+    path.write_text(shell, encoding="utf-8")
+    return path
