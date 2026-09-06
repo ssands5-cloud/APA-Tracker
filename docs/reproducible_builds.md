@@ -144,12 +144,20 @@ drift this whole pass exists to catch.
   skim lockfile and more friction on every regeneration. Worth adding if
   that threat model matters more than it currently does for a solo
   project's own tooling.
-- **Cross-platform verification is real but partial.** `scripts/reproducible_build.py`
-  and the exact pins were verified on Windows/Python 3.12 (this project's
-  primary environment). `.github/workflows/tests.yml` installs the same
-  `requirements-dev.txt` fresh on Ubuntu across Python 3.12 and 3.13 on
-  every push -- that CI run is what actually confirms the pins resolve
-  and install cleanly cross-platform, not an offline claim made here.
+- **Cross-platform verification**: `scripts/reproducible_build.py` was run
+  end-to-end on Windows/Python 3.12 (this project's primary environment).
+  `.github/workflows/tests.yml` installs the same `requirements-dev.txt`
+  fresh and runs the full suite plus the CI-mode pipeline smoke test on
+  Ubuntu across Python 3.12 and 3.13 on every push -- confirmed green on
+  both after this pass (run
+  [34043915386](https://github.com/ssands5-cloud/APA-Tracker/actions/runs/34043915386),
+  commit `c88eb2e`), not an offline claim made here. That same CI check is
+  also what caught two real hermeticity bugs this pass fixed
+  (`tests/test_captains_decision.py` silently reading the real, gitignored
+  `data/apa_tracker.db` and `exports/captains_edge.json` instead of a
+  hermetic fixture) -- CI had actually been red since before this pass
+  started (commit `2200380`), which nothing had checked until this pass
+  specifically went looking.
 - **The scraper itself has no automated integration test** -- see
   [docs/full_pipeline_integration.md](full_pipeline_integration.md)'s own
   "What this does NOT cover" for why, and for what full-pipeline coverage
