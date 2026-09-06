@@ -2,7 +2,7 @@
 
     python -m pipeline                 # ingest + every export
     python -m pipeline --ingest-only   # stop after the database
-    python -m pipeline --no-captains   # skip the Captain's Edge artifacts
+    python -m pipeline --no-captains   # skip Captain's Edge and lineup artifacts
 
 Step 1 of the whole run (the scrape itself) is deliberately NOT here --
 `scraper/full_auto_scrape.py` is contract-bound and owns that. This starts

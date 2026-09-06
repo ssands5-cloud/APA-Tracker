@@ -1,0 +1,710 @@
+"""Build one-to-one lineup recommendations from derived APA analytics.
+
+This is the reporter/builder for :mod:`analytics.lineup_optimizer`.  It reads
+the already-computed ``player_h2h_advantage`` and ``player_trends`` tables,
+resolves each pairing to an own-team/opponent-team matchup, and writes the
+optimizer's whole-lineup assignment to ``exports/lineups.json``.
+
+The database is opened with SQLite's ``mode=ro`` URI.  This script therefore
+cannot create tables, migrate the database, or accidentally change the source
+rows while producing an export.  Missing evidence stays ``null`` in the
+payload; the optimizer's neutral defaults are used only for its internal
+objective arithmetic and are never written as observed measurements.
+
+Rows whose team identity cannot be resolved unambiguously are retained in the
+raw ``pairings`` list with a resolution status and warning, but are not put
+into a lineup.  In particular, an unknown opponent team is never replaced by
+an invented "unknown" bucket: doing that would mix unrelated opponents into
+one assignment problem.
+
+Usage::
+
+    python scripts/build_lineups.py
+    python scripts/build_lineups.py --db path/to/apa.db
+    python scripts/build_lineups.py --out-dir exports
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import math
+import os
+import sqlite3
+import sys
+import tempfile
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+# ``python scripts/build_lineups.py`` is a documented operator command.  In
+# that direct-file mode Python puts only ``scripts/`` on sys.path, so the
+# sibling ``analytics`` package would otherwise be unimportable.  Module mode
+# (``python -m scripts.build_lineups``) already has the project root present;
+# this conditional keeps both entry points equivalent without changing the
+# import path for callers.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from analytics.captains_edge import confidence as calculate_confidence
+from analytics.captains_edge import risk_factor as calculate_risk_factor
+from analytics.lineup_optimizer import PairingCandidate, solve_lineup_assignment
+from analytics.player_trends import normalize_format
+from scripts.build_captains_edge import (
+    NoDatabaseError,
+    PROJECT_ROOT,
+    connect_read_only,
+    resolve_db_path,
+)
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_OUT_DIR = PROJECT_ROOT / "exports"
+JSON_NAME = "lineups.json"
+SCHEMA_VERSION = 1
+
+
+def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
+    """Return whether a source table is present without mutating SQLite."""
+
+    row = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone()
+    return row is not None
+
+
+def _columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    """Read a table's columns for a graceful response to older databases."""
+
+    try:
+        return {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+    except sqlite3.Error:
+        return set()
+
+
+def _warn(warnings: list[str], message: str) -> None:
+    """Append a warning once, keeping the JSON deterministic and readable."""
+
+    if message not in warnings:
+        warnings.append(message)
+
+
+def fetch_pairing_rows(
+    connection: sqlite3.Connection,
+    warnings: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
+    """Fetch raw H2H pairing rows and roster identity metadata.
+
+    ``player_h2h_advantage.matchup_score`` is stored on a 0..100 scale.  The
+    raw value is preserved as ``matchup_score``; ``build_payload`` adds a
+    separate normalized ``matchup_score_normalized`` field for the pure
+    optimizer, whose contract is 0..1.  No values are filled in here.
+    """
+
+    local_warnings = warnings if warnings is not None else []
+    required_h2h = {
+        "player_id", "opponent_id", "matchup_score", "win_probability",
+        "format", "session_name", "expected_points", "expected_balls",
+    }
+    if not _table_exists(connection, "player_h2h_advantage"):
+        _warn(local_warnings, "player_h2h_advantage is unavailable; no pairing rows were read.")
+        return []
+    if not _table_exists(connection, "players"):
+        _warn(local_warnings, "players is unavailable; no pairing rows were read.")
+        return []
+    if not required_h2h.issubset(_columns(connection, "player_h2h_advantage")):
+        _warn(
+            local_warnings,
+            "player_h2h_advantage has an older/incomplete schema; no pairing rows were read.",
+        )
+        return []
+
+    if not {"id", "external_id", "name", "team_id"}.issubset(
+        _columns(connection, "players")
+    ):
+        _warn(local_warnings, "players has an older/incomplete schema; no pairing rows were read.")
+        return []
+
+    if _table_exists(connection, "teams"):
+        team_columns = ", t.name AS team_name, ot.name AS opponent_team_name"
+        team_joins = (
+            "LEFT JOIN teams t ON t.id = p.team_id "
+            "LEFT JOIN teams ot ON ot.id = o.team_id"
+        )
+    else:
+        team_columns = ", NULL AS team_name, NULL AS opponent_team_name"
+        team_joins = ""
+        _warn(local_warnings, "teams is unavailable; team names will be blank where IDs exist.")
+
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT
+                p.id          AS player_pk,
+                p.external_id AS player_id,
+                p.name        AS player_name,
+                p.team_id     AS team_pk,
+                o.id          AS opponent_pk,
+                o.external_id AS opponent_id,
+                o.name        AS opponent_name,
+                o.team_id     AS opponent_team_pk
+                {team_columns},
+                a.matchup_score,
+                a.win_probability,
+                a.expected_points,
+                a.expected_balls,
+                a.format,
+                a.session_name
+            FROM player_h2h_advantage a
+            JOIN players p ON p.id = a.player_id
+            JOIN players o ON o.id = a.opponent_id
+            {team_joins}
+            ORDER BY COALESCE(p.name, ''), COALESCE(o.name, ''),
+                     COALESCE(a.format, ''), COALESCE(a.session_name, '')
+            """
+        ).fetchall()
+    except sqlite3.Error as exc:
+        _warn(local_warnings, f"Could not read player_h2h_advantage: {exc}.")
+        return []
+
+    return [dict(row) for row in rows]
+
+
+def fetch_trends(
+    connection: sqlite3.Connection,
+    warnings: Optional[list[str]] = None,
+) -> dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]]:
+    """Fetch trend rows keyed by database player, normalized format, session."""
+
+    local_warnings = warnings if warnings is not None else []
+    if not _table_exists(connection, "player_trends"):
+        _warn(local_warnings, "player_trends is unavailable; confidence and risk remain null.")
+        return {}
+    if not _table_exists(connection, "players"):
+        _warn(local_warnings, "players is unavailable; player trends cannot be joined.")
+        return {}
+
+    required_trends = {
+        "player_id", "format", "session_name", "regression_slope", "volatility",
+        "sl_stability", "hot_cold_flag",
+    }
+    if not required_trends.issubset(_columns(connection, "player_trends")):
+        _warn(local_warnings, "player_trends has an older/incomplete schema; trends were ignored.")
+        return {}
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT p.id AS player_pk, p.external_id AS player_id,
+                   t.format, t.session_name, t.regression_slope, t.volatility,
+                   t.sl_stability, t.hot_cold_flag
+            FROM player_trends t
+            JOIN players p ON p.id = t.player_id
+            ORDER BY p.id, COALESCE(t.format, ''), COALESCE(t.session_name, '')
+            """
+        ).fetchall()
+    except sqlite3.Error as exc:
+        _warn(local_warnings, f"Could not read player_trends: {exc}.")
+        return {}
+
+    trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]] = {}
+    for row in rows:
+        record = dict(row)
+        key = (
+            record["player_pk"],
+            normalize_format(record.get("format")),
+            record.get("session_name"),
+        )
+        # The ORM declares this key unique.  setdefault keeps a malformed old
+        # database deterministic without silently averaging unlike rows.
+        trends.setdefault(key, record)
+    return trends
+
+
+def _normalized_matchup_score(
+    raw: Any,
+    warnings: list[str],
+    context: str,
+) -> Optional[float]:
+    """Convert the stored 0..100 score to optimizer's 0..1 scale.
+
+    Invalid values are treated as missing, never clamped into a plausible
+    score.  That keeps an upstream data defect visible in the export.
+    """
+
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        _warn(warnings, f"Invalid matchup_score for {context}; it remains null.")
+        return None
+    if not math.isfinite(value) or not 0.0 <= value <= 100.0:
+        _warn(warnings, f"Invalid matchup_score for {context}; it remains null.")
+        return None
+    return round(value / 100.0, 6)
+
+
+def _bounded_probability(
+    raw: Any,
+    warnings: list[str],
+    context: str,
+) -> Optional[float]:
+    """Validate the H2H probability without turning bad data into evidence."""
+
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        _warn(warnings, f"Invalid win_probability for {context}; it remains null.")
+        return None
+    if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+        _warn(warnings, f"Invalid win_probability for {context}; it remains null.")
+        return None
+    return round(value, 6)
+
+
+def _name_team_map(connection: sqlite3.Connection) -> dict[str, set[Any]]:
+    """Map a roster name to all team IDs carrying that exact name."""
+
+    if not _table_exists(connection, "players"):
+        return {}
+    try:
+        rows = connection.execute(
+            "SELECT name, team_id FROM players WHERE name IS NOT NULL AND team_id IS NOT NULL"
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    mapping: dict[str, set[Any]] = defaultdict(set)
+    for row in rows:
+        mapping[row["name"]].add(row["team_id"])
+    return dict(mapping)
+
+
+def _team_names(connection: sqlite3.Connection) -> dict[Any, str]:
+    if not _table_exists(connection, "teams"):
+        return {}
+    try:
+        rows = connection.execute("SELECT id, name FROM teams").fetchall()
+    except sqlite3.Error:
+        return {}
+    return {row["id"]: row["name"] or "" for row in rows}
+
+
+def _resolve_team(
+    row: dict[str, Any],
+    *,
+    side: str,
+    name_to_teams: dict[str, set[Any]],
+    team_names: dict[Any, str],
+) -> str:
+    """Resolve one side as ``team_id``, ``player_name`` or ``unresolved``."""
+
+    pk_key = "team_pk" if side == "player" else "opponent_team_pk"
+    name_key = "player_name" if side == "player" else "opponent_name"
+    method_key = "team_resolution" if side == "player" else "opponent_team_resolution"
+    name_output_key = "team_name" if side == "player" else "opponent_team_name"
+
+    if row.get(pk_key) is not None:
+        row[method_key] = "team_id"
+        if not row.get(name_output_key):
+            row[name_output_key] = team_names.get(row[pk_key], "")
+        return "team_id"
+
+    candidates = name_to_teams.get(row.get(name_key), set())
+    if len(candidates) == 1:
+        resolved_pk = next(iter(candidates))
+        row[pk_key] = resolved_pk
+        row[method_key] = "player_name"
+        row[name_output_key] = team_names.get(resolved_pk, "")
+        return "player_name"
+
+    row[method_key] = "ambiguous_name" if len(candidates) > 1 else "unresolved"
+    return row[method_key]
+
+
+def _resolve_rows(
+    connection: sqlite3.Connection,
+    rows: list[dict[str, Any]],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    """Annotate rows and return only rows safe to put in an assignment group."""
+
+    name_to_teams = _name_team_map(connection)
+    team_names = _team_names(connection)
+    eligible: list[dict[str, Any]] = []
+    skipped_team = 0
+    skipped_context = 0
+    skipped_identity = 0
+
+    for row in rows:
+        row["lineup_eligible"] = False
+        if row.get("player_pk") is None or row.get("opponent_pk") is None:
+            skipped_identity += 1
+            row["lineup_skip_reason"] = "missing database identity"
+            continue
+        own = _resolve_team(
+            row, side="player", name_to_teams=name_to_teams, team_names=team_names
+        )
+        opponent = _resolve_team(
+            row, side="opponent", name_to_teams=name_to_teams, team_names=team_names
+        )
+        if own not in {"team_id", "player_name"} or opponent not in {
+            "team_id", "player_name"
+        }:
+            skipped_team += 1
+            row["lineup_skip_reason"] = "team identity unresolved"
+            continue
+        if not row.get("format") or not row.get("session_name"):
+            skipped_context += 1
+            row["lineup_skip_reason"] = "format or session missing"
+            continue
+        row["lineup_eligible"] = True
+        eligible.append(row)
+
+    if skipped_identity:
+        _warn(warnings, f"{skipped_identity} pairing row(s) lacked a database identity and were skipped.")
+    if skipped_team:
+        _warn(
+            warnings,
+            f"{skipped_team} pairing row(s) lacked an unambiguous own or opponent team; "
+            "they were retained but not assigned.",
+        )
+    if skipped_context:
+        _warn(
+            warnings,
+            f"{skipped_context} pairing row(s) lacked format/session context and were skipped.",
+        )
+    return eligible
+
+
+def _trend_signals(
+    player_pk: int,
+    format_name: Optional[str],
+    session_name: Optional[str],
+    trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
+) -> tuple[Optional[float], Optional[float], bool]:
+    """Return (risk, confidence, trend_row_was_found) for one player slot."""
+
+    trend = trends.get((player_pk, normalize_format(format_name), session_name))
+    if trend is None:
+        return None, None, False
+    return (
+        calculate_risk_factor(trend.get("volatility"), trend.get("sl_stability")),
+        calculate_confidence(trend.get("regression_slope"), trend.get("hot_cold_flag")),
+        True,
+    )
+
+
+def _candidate(
+    source: Optional[dict[str, Any]],
+    player: dict[str, Any],
+    opponent: dict[str, Any],
+    *,
+    format_name: str,
+    session_name: str,
+    trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
+    warnings: list[str],
+) -> PairingCandidate:
+    player_id = str(player["player_id"])
+    opponent_id = str(opponent["opponent_id"])
+    context = f"{player.get('player_name', '')} vs {opponent.get('opponent_name', '')}"
+    risk, confidence, _ = _trend_signals(
+        player["player_pk"], format_name, session_name, trends
+    )
+    if source is None:
+        # This is an absent H2H edge, not a fabricated measurement.  The
+        # optimizer can still complete a lineup using neutral defaults; the
+        # serialized assignment marks source_pairing=false and warns.
+        return PairingCandidate(
+            player_id=player_id,
+            player_name=player["player_name"] or "",
+            opponent_id=opponent_id,
+            opponent_name=opponent["opponent_name"] or "",
+            matchup_score=None,
+            win_probability=None,
+            confidence=confidence,
+            risk_factor=risk,
+        )
+
+    return PairingCandidate(
+        player_id=player_id,
+        player_name=source["player_name"] or "",
+        opponent_id=str(source["opponent_id"]),
+        opponent_name=source["opponent_name"] or "",
+        matchup_score=_normalized_matchup_score(
+            source.get("matchup_score"), warnings, context
+        ),
+        win_probability=_bounded_probability(
+            source.get("win_probability"), warnings, context
+        ),
+        confidence=confidence,
+        risk_factor=risk,
+    )
+
+
+def _resolution_label(rows: list[dict[str, Any]]) -> str:
+    methods = {
+        row.get("team_resolution") for row in rows
+    } | {
+        row.get("opponent_team_resolution") for row in rows
+    }
+    methods.discard(None)
+    if methods == {"team_id"}:
+        return "team_id"
+    if methods == {"player_name"}:
+        return "player_name"
+    return "mixed"
+
+
+def _lineup_for_group(
+    rows: list[dict[str, Any]],
+    trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """Build one assignment document for a resolved team/format/session group."""
+
+    first = rows[0]
+    format_name = first["format"]
+    session_name = first["session_name"]
+
+    players_by_key: dict[int, dict[str, Any]] = {}
+    opponents_by_key: dict[int, dict[str, Any]] = {}
+    source_by_pair: dict[tuple[int, int], dict[str, Any]] = {}
+    for row in rows:
+        players_by_key.setdefault(row["player_pk"], row)
+        opponents_by_key.setdefault(row["opponent_pk"], row)
+        source_by_pair.setdefault((row["player_pk"], row["opponent_pk"]), row)
+
+    players = sorted(
+        players_by_key.values(),
+        key=lambda row: ((row.get("player_name") or "").casefold(), str(row["player_pk"])),
+    )
+    opponents = sorted(
+        opponents_by_key.values(),
+        key=lambda row: (
+            (row.get("opponent_name") or "").casefold(), str(row["opponent_pk"])
+        ),
+    )
+    player_names = [row.get("player_name") or "" for row in players]
+    opponent_names = [row.get("opponent_name") or "" for row in opponents]
+
+    matrix: list[list[PairingCandidate]] = []
+    missing_edges = 0
+    for player in players:
+        cells: list[PairingCandidate] = []
+        for opponent in opponents:
+            source = source_by_pair.get((player["player_pk"], opponent["opponent_pk"]))
+            if source is None:
+                missing_edges += 1
+            cells.append(
+                _candidate(
+                    source,
+                    player,
+                    opponent,
+                    format_name=format_name,
+                    session_name=session_name,
+                    trends=trends,
+                    warnings=warnings,
+                )
+            )
+        matrix.append(cells)
+
+    if missing_edges:
+        _warn(
+            warnings,
+            f"{missing_edges} possible pairing edge(s) in {first.get('team_name') or first.get('team_pk')} "
+            f"vs {first.get('opponent_team_name') or first.get('opponent_team_pk')} "
+            f"({format_name}, {session_name}) have no H2H row; neutral defaults may be used.",
+        )
+
+    solution = solve_lineup_assignment(matrix, player_names, opponent_names)
+    assignments: list[dict[str, Any]] = []
+    for entry in solution.assignments:
+        serialized = vars(entry).copy()
+        source = source_by_pair.get(
+            next(
+                (
+                    key
+                    for key, value in source_by_pair.items()
+                    if str(value.get("player_id")) == entry.player_id
+                    and str(value.get("opponent_id")) == entry.opponent_id
+                ),
+                (None, None),
+            )
+        )
+        serialized["source_pairing"] = source is not None
+        serialized["matchup_score_raw"] = source.get("matchup_score") if source else None
+        serialized["format"] = format_name
+        serialized["session_name"] = session_name
+        assignments.append(serialized)
+
+    return {
+        "team_id": str(first["team_pk"]),
+        "team_name": first.get("team_name") or "",
+        "opponent_team_id": str(first["opponent_team_pk"]),
+        "opponent_team_name": first.get("opponent_team_name") or "",
+        "format": format_name,
+        "session_name": session_name,
+        "roster_resolution": _resolution_label(rows),
+        "pairing_rows": len(rows),
+        "players_considered": len(players),
+        "opponents_considered": len(opponents),
+        "assignments": assignments,
+        "unassigned_players": solution.unassigned_players,
+        "unassigned_opponents": solution.unassigned_opponents,
+        "objective_total": solution.objective_total,
+        "total_risk": solution.total_risk,
+        "total_confidence": solution.total_confidence,
+        "tie_break_applied": solution.tie_break_applied,
+    }
+
+
+def build_payload(
+    connection: sqlite3.Connection,
+    source_db: str = "",
+) -> dict[str, Any]:
+    """Build the complete JSON-serializable lineup document."""
+
+    warnings: list[str] = []
+    pairings = fetch_pairing_rows(connection, warnings)
+    trends = fetch_trends(connection, warnings)
+
+    for row in pairings:
+        # Keep the source identity separate from any safe name-based
+        # resolution below.  A reader can therefore see exactly what the
+        # database supplied and why a resolved lineup may use a different
+        # team_pk value.
+        row["team_pk_raw"] = row.get("team_pk")
+        row["opponent_team_pk_raw"] = row.get("opponent_team_pk")
+        row["matchup_score_normalized"] = _normalized_matchup_score(
+            row.get("matchup_score"),
+            warnings,
+            f"{row.get('player_name', '')} vs {row.get('opponent_name', '')}",
+        )
+        row["win_probability_validated"] = _bounded_probability(
+            row.get("win_probability"),
+            warnings,
+            f"{row.get('player_name', '')} vs {row.get('opponent_name', '')}",
+        )
+        risk, confidence, found = _trend_signals(
+            row["player_pk"], row.get("format"), row.get("session_name"), trends
+        )
+        row["risk_factor"] = risk
+        row["confidence"] = confidence
+        row["trend_available"] = found
+
+    eligible = _resolve_rows(connection, pairings, warnings)
+    grouped: dict[tuple[Any, Any, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in eligible:
+        grouped[
+            (row["team_pk"], row["opponent_team_pk"], row["format"], row["session_name"])
+        ].append(row)
+
+    lineups = [
+        _lineup_for_group(group, trends, warnings)
+        for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
+    ]
+
+    if pairings:
+        trendless = sum(1 for row in pairings if not row.get("trend_available"))
+        if trendless:
+            _warn(
+                warnings,
+                f"{trendless} pairing row(s) have no matching player trend for their format/session; "
+                "confidence and risk_factor remain null.",
+            )
+
+    source = str(Path(source_db).resolve()) if source_db else ""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "source_db": source,
+        "pairing_rows": len(pairings),
+        "pairings": pairings,
+        "players_with_trends": len({key[0] for key in trends}),
+        "eligible_pairing_rows": len(eligible),
+        "lineups": lineups,
+        "resolution_warnings": warnings,
+    }
+
+
+def write_lineups_json(payload: dict[str, Any], path: Path | str) -> Path:
+    """Atomically replace a prior lineup export with ``payload``."""
+
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(payload, handle, indent=2, ensure_ascii=False, default=str)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    return destination
+
+
+def build(db_path: Optional[str] = None, out_dir: Optional[str] = None) -> Path:
+    """Read the source database and atomically write ``lineups.json``."""
+
+    resolved = resolve_db_path(db_path)
+    logger.info("Reading %s", resolved)
+    connection = connect_read_only(resolved)
+    try:
+        payload = build_payload(connection, source_db=str(resolved))
+    finally:
+        connection.close()
+
+    directory = Path(out_dir) if out_dir else DEFAULT_OUT_DIR
+    output = write_lineups_json(payload, directory / JSON_NAME)
+    logger.info(
+        "Wrote %s (%d pairing rows, %d lineup(s))",
+        output,
+        payload["pairing_rows"],
+        len(payload["lineups"]),
+    )
+    return output
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(description="Build one-to-one APA lineups.")
+    parser.add_argument("--db", help="path to the SQLite database")
+    parser.add_argument("--out-dir", help=f"output directory (default: {DEFAULT_OUT_DIR})")
+    args = parser.parse_args()
+    try:
+        output = build(args.db, args.out_dir)
+    except NoDatabaseError as exc:
+        print(f"\n{exc}\n")
+        return 1
+    print(f"\nOpen lineup export: {output}\n")
+    return 0
+
+
+# Small, discoverable aliases for callers that use the plural noun from the
+# artifact name.  ``build`` remains the canonical CLI/pipeline entry point.
+fetch_pairings = fetch_pairing_rows
+write_json = write_lineups_json
+build_lineups = build
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

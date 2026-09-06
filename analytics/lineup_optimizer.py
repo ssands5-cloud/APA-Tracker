@@ -83,10 +83,22 @@ def pairing_score(matchup_score: Optional[float], win_probability: Optional[floa
     if it were a real measurement would violate this project's standing
     non-fabrication policy. See docs/lineup_optimizer.md.
     """
-    Sij = matchup_score if matchup_score is not None else NEUTRAL_DEFAULT
-    Wij = win_probability if win_probability is not None else NEUTRAL_DEFAULT
-    ECi = effective_confidence(confidence)
-    RPi = risk_penalty(risk_factor)
+    def unit_or_neutral(value: Optional[float], label: str) -> float:
+        if value is None:
+            return NEUTRAL_DEFAULT
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be a finite value between 0 and 1") from exc
+        if not math.isfinite(numeric) or not 0.0 <= numeric <= 1.0:
+            raise ValueError(f"{label} must be a finite value between 0 and 1")
+        return numeric
+
+    Sij = unit_or_neutral(matchup_score, "matchup_score")
+    Wij = unit_or_neutral(win_probability, "win_probability")
+    ECi = unit_or_neutral(confidence, "confidence")
+    ERi = unit_or_neutral(risk_factor, "risk_factor")
+    RPi = 1.0 - ERi
     return round(
         WEIGHT_MATCHUP_SCORE * Sij
         + WEIGHT_WIN_PROBABILITY * Wij
@@ -229,6 +241,21 @@ def solve_lineup_assignment(
     if m == 0 or n == 0:
         return LineupSolution([], list(players), list(opponents), 0.0, 0.0, 0.0, False)
 
+    if len(matrix) != m:
+        raise ValueError(
+            f"Lineup matrix has {len(matrix)} row(s) for {m} player(s)."
+        )
+    for i, row in enumerate(matrix):
+        if len(row) != n:
+            raise ValueError(
+                f"Lineup matrix row {i} has {len(row)} cell(s); expected {n}."
+            )
+        if any(candidate is None for candidate in row):
+            raise ValueError(
+                "Lineup matrix cells must be PairingCandidate instances; "
+                "use a candidate with null signals for an unobserved edge."
+            )
+
     r = min(m, n)
     larger = max(m, n)
     permutation_count = math.perm(larger, r)
@@ -280,7 +307,16 @@ def solve_lineup_assignment(
     assigned_opponents = {j for _, j in best_pairs}
 
     entries = []
-    rank_order = sorted(best_pairs, key=lambda pair: -matrix[pair[0]][pair[1]].score)
+    rank_order = sorted(
+        best_pairs,
+        key=lambda pair: (
+            -matrix[pair[0]][pair[1]].score,
+            players[pair[0]],
+            opponents[pair[1]],
+            matrix[pair[0]][pair[1]].player_id,
+            matrix[pair[0]][pair[1]].opponent_id,
+        ),
+    )
     for rank, (i, j) in enumerate(rank_order, start=1):
         candidate = matrix[i][j]
         entries.append(AssignmentEntry(

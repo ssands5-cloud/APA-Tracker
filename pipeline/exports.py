@@ -23,6 +23,8 @@ from ui.export_json import export_to_json
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+EXPORTS_DIR = PROJECT_ROOT / "exports"
+LINEUPS_JSON_NAME = "lineups.json"
 
 
 def configured_db_path(config: dict[str, Any]) -> Path:
@@ -47,8 +49,9 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
     from scripts.build_captains_edge import NoDatabaseError, build
 
     db_path = configured_db_path(config)
+    exports_dir = EXPORTS_DIR
     try:
-        html_path, xlsx_path = build(str(db_path), str(PROJECT_ROOT / "exports"))
+        html_path, xlsx_path = build(str(db_path), str(exports_dir))
     except NoDatabaseError as exc:
         logger.warning("Captain's Edge skipped: %s", str(exc).splitlines()[0])
         return written
@@ -56,10 +59,66 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
     written.append(("captains html", str(html_path)))
     written.append(("captains xlsx", str(xlsx_path)))
 
+    # The whole captain-facing export is intentionally built in one place,
+    # after ingest has committed and after Captain's Edge has read the same
+    # database.  Lineup Optimizer is a separate artifact because it solves a
+    # one-to-one assignment, while Captain's Edge still ranks each player
+    # independently.  Keep the import lazy so --no-captains remains a true
+    # fast path and does not require this optional builder to be importable.
+    # import_module consults sys.modules directly, which keeps this lazy
+    # boundary easy to stub in orchestration tests even if another test has
+    # already imported the real builder package.
+    import importlib
+
+    build_lineups = importlib.import_module("scripts.build_lineups")
+
+    lineup_no_database_error = getattr(
+        build_lineups, "NoDatabaseError", NoDatabaseError
+    )
+    try:
+        lineup_result = build_lineups.build(str(db_path), str(exports_dir))
+    except lineup_no_database_error as exc:
+        logger.warning("Lineup Optimizer skipped: %s", str(exc).splitlines()[0])
+    else:
+        lineup_path = _lineup_output_path(lineup_result, exports_dir)
+        written.append(("lineups json", str(lineup_path)))
+        # export_to_excel runs before the read-only builders so its existing
+        # Captain's Edge contract remains unchanged.  Once lineups.json is
+        # available, append the solved card to that same workbook; tests that
+        # stub the workbook path (rather than creating a real file) simply
+        # exercise the JSON/HTML path and skip this optional post-process.
+        workbook_path = Path(written[0][1]) if written else None
+        if workbook_path is not None and workbook_path.is_file():
+            from ui.export_excel import append_lineup_optimizer_sheet
+
+            append_lineup_optimizer_sheet(workbook_path, lineup_path)
+
     with Session(engine) as db:
         written.append(("analysis tabs", str(write_tabs(db))))
 
     return written
+
+
+def _lineup_output_path(result: Any, exports_dir: Path) -> Path:
+    """Validate the builder's artifact path before reporting it.
+
+    ``scripts.build_lineups.build`` returns the JSON path when it writes an
+    artifact.  The fallback keeps the pipeline compatible with a builder that
+    returns ``None`` after successfully writing its conventional filename,
+    while the containment check prevents a future path/configuration mistake
+    from making the pipeline advertise or create an output outside this
+    repository's export directory.
+    """
+    path = Path(result) if result is not None else exports_dir / LINEUPS_JSON_NAME
+    export_root = exports_dir.resolve()
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(export_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"Lineup Optimizer output must be under {export_root}: {path}"
+        ) from exc
+    return path
 
 
 # Both analysis tabs render self-contained fragments. Without this they were
@@ -79,6 +138,7 @@ def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
     import json
 
     from ui.tabs import captains_edge as edge_tab
+    from ui.tabs import lineup_optimizer as lineup_tab
     from ui.tabs import matchups, trends
 
     directory = out_dir or (PROJECT_ROOT / "exports")
@@ -90,10 +150,24 @@ def write_tabs(db: Session, out_dir: Path | None = None) -> Path:
         trends.build(db, title="Player Trends"),
     ]
 
+    # Lineup Optimizer writes its versioned document just before this runs.
+    # An absent one means a first build, not an error -- the tab is simply
+    # omitted rather than rendering an empty promise.  It is inserted first:
+    # the one-to-one card is the answer, while Captain's Edge is the
+    # independent per-player working view beneath it.
+    lineup_path = directory / "lineups.json"
+    if lineup_path.is_file():
+        try:
+            lineup_document = json.loads(lineup_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Could not read %s -- Lineup Optimizer tab skipped", lineup_path)
+        else:
+            sections.insert(0, lineup_tab.build(lineup_document, title="Lineup Optimizer"))
+
     # The Captain's Edge builder writes the decision document just before
     # this runs. An absent one means a first build, not an error -- the tab
     # is simply omitted rather than rendering an empty promise.
-    decision_path = PROJECT_ROOT / "exports" / "captains_edge.json"
+    decision_path = directory / "captains_edge.json"
     if decision_path.is_file():
         try:
             document = json.loads(decision_path.read_text(encoding="utf-8"))

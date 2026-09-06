@@ -19,10 +19,12 @@ results in a small SQLite database, and exporting summaries to Excel.
   tools -- `matchup_insights.py` (older, simpler: compares two players'
   own overall win %, not specific to each other) and `matchups.py`, the
   Matchup Advantage Engine (real head-to-head record against one specific
-  opponent -- see docs/matchups.md).
+  opponent -- see docs/matchups.md), plus the Captain's Edge decision and
+  one-to-one Lineup Optimizer (`lineup_optimizer.py`).
 - `scheduler/` — the two jobs meant to actually run on a schedule
   (`daily_sync.py`, `weekly_refresh.py`).
-- `ui/` — Excel (`export_excel.py`) and JSON (`export_json.py`) exports.
+- `ui/` — Excel (`export_excel.py`) and JSON (`export_json.py`) exports plus
+  self-contained analysis tabs.
   `dashboard_stub.py` marks where a real *interactive* (Streamlit/Flask)
   dashboard would go later — separate from the static demo page below.
 - `scripts/` — offline, fixture-driven demo build: `build_demo.py` runs the
@@ -183,6 +185,20 @@ export's `matchups` key, and the demo's "Matchups" tab (recommended
 opponents / opponents to be cautious of, per player). Full write-up,
 including the score formula and what it deliberately leaves out,
 in `docs/matchups.md`.
+
+**Lineup Optimizer** — converts independent Captain's Edge picks into a legal
+whole-lineup assignment. `analytics/lineup_optimizer.py` evaluates every
+one-to-one player/opponent assignment exactly, then applies risk, confidence,
+and deterministic tie-breaks. `scripts/build_lineups.py` reads the persisted
+Head-to-Head Advantage and Player Trend rows read-only, keeps missing evidence
+as `null`, and atomically rewrites `exports/lineups.json`. It runs
+automatically from `python -m pipeline` after the other captain-facing
+exports; the same JSON is rendered in the analysis page and a `Lineup
+Optimizer` Excel sheet. Team identity is resolved by ID first and by an
+unambiguous player name only when the upstream ID spaces do not join;
+unresolved rows are
+reported rather than mixed into an invented opponent bucket. See
+`docs/lineup_optimizer.md` for the payload contract and limitations.
 
 **Where every column comes from** — `docs/data-fields.md` is the single
 source of truth for which exported columns are raw API values, which are

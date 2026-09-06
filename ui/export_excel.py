@@ -440,6 +440,18 @@ EDGE_COLUMNS = [
     "Recommended Order", "Rationale",
 ]
 
+# The Lineup Optimizer is built after this workbook is initially written (the
+# builder uses a separate read-only SQLite connection).  The pipeline appends
+# this sheet once ``exports/lineups.json`` exists; keeping the column contract
+# here makes the Excel view agree with the JSON and HTML views without asking
+# the ORM session to read a file it cannot yet know about.
+LINEUP_SHEET = "Lineup Optimizer"
+LINEUP_COLUMNS = [
+    "Team", "Opponent Team", "Format", "Session", "Player", "Opponent",
+    "Matchup Score", "Win Probability", "Confidence", "Risk", "Final Score",
+    "Rank", "Source Pairing", "Rationale",
+]
+
 
 def _captains_edge_dataframe() -> pd.DataFrame:
     """The recommended lineup, read from exports/captains_edge.json.
@@ -527,3 +539,108 @@ def _format_captains_edge(writer, frame: pd.DataFrame) -> None:
         sheet.column_dimensions[get_column_letter(index)].width = widths.get(
             name, max(len(str(name)) + 4, 12)
         )
+
+
+def lineup_optimizer_rows(document: dict) -> list[dict]:
+    """Flatten a Lineup Optimizer JSON document for the Excel sheet.
+
+    ``None`` is shown as the literal ``No data``.  The optimizer's neutral
+    defaults are an internal arithmetic detail and must never appear as if
+    they were observed measurements in a captain-facing workbook.
+    """
+
+    no_data = "No data"
+
+    def shown(value):
+        return no_data if value is None else value
+
+    rows: list[dict] = []
+    for lineup in document.get("lineups") or []:
+        for assignment in lineup.get("assignments") or []:
+            rows.append({
+                "Team": lineup.get("team_name") or lineup.get("team_id") or "",
+                "Opponent Team": lineup.get("opponent_team_name") or lineup.get("opponent_team_id") or "",
+                "Format": lineup.get("format") or "",
+                "Session": lineup.get("session_name") or "",
+                "Player": assignment.get("player_name") or "",
+                "Opponent": assignment.get("opponent_name") or no_data,
+                # Raw stored score, not the normalized/internal score.
+                "Matchup Score": shown(assignment.get("matchup_score_raw")),
+                "Win Probability": shown(assignment.get("win_probability")),
+                "Confidence": shown(assignment.get("confidence")),
+                "Risk": shown(assignment.get("risk_factor")),
+                "Final Score": shown(assignment.get("final_score")),
+                "Rank": shown(assignment.get("lineup_rank")),
+                "Source Pairing": "Yes" if assignment.get("source_pairing") else "No",
+                "Rationale": assignment.get("rationale") or "",
+            })
+
+    rows.sort(key=lambda row: (
+        row["Team"], row["Opponent Team"], row["Format"], row["Session"],
+        row["Rank"] == no_data,
+        row["Rank"] if isinstance(row["Rank"], int) else 0,
+    ))
+    return rows
+
+
+def append_lineup_optimizer_sheet(
+    workbook_path: str | Path,
+    document_path: str | Path,
+) -> str:
+    """Append/replace the Lineup Optimizer sheet in an existing workbook.
+
+    The workbook is produced before the read-only lineup builder in the normal
+    pipeline.  This small post-process keeps that ordering intact while
+    ensuring a captain opening Excel sees the same solved assignments as the
+    JSON and HTML artifacts.  The operation is idempotent: a rerun replaces a
+    prior sheet rather than accumulating duplicate tabs.
+    """
+
+    import json
+
+    from openpyxl import load_workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    workbook_file = Path(workbook_path)
+    document_file = Path(document_path)
+    document = json.loads(document_file.read_text(encoding="utf-8"))
+    rows = lineup_optimizer_rows(document)
+
+    workbook = load_workbook(workbook_file)
+    if LINEUP_SHEET in workbook.sheetnames:
+        del workbook[LINEUP_SHEET]
+    sheet = workbook.create_sheet(LINEUP_SHEET)
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F3864")
+    sheet.append(LINEUP_COLUMNS)
+    for cell in sheet[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(vertical="center")
+    for row in rows:
+        sheet.append([row[column] for column in LINEUP_COLUMNS])
+
+    sheet.freeze_panes = "A2"
+    last_column = get_column_letter(len(LINEUP_COLUMNS))
+    sheet.auto_filter.ref = f"A1:{last_column}{max(sheet.max_row, 1)}"
+
+    probability_column = LINEUP_COLUMNS.index("Win Probability") + 1
+    for cells in sheet.iter_rows(
+        min_row=2, min_col=probability_column, max_col=probability_column
+    ):
+        for cell in cells:
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0%"
+
+    widths = {"Rationale": 62, "Team": 20, "Opponent Team": 20,
+              "Player": 20, "Opponent": 20}
+    for index, name in enumerate(LINEUP_COLUMNS, start=1):
+        width = widths.get(name, max(len(name) + 4, 12))
+        if rows:
+            width = max(width, min(max(len(str(row[name])) for row in rows) + 2, 42))
+        sheet.column_dimensions[get_column_letter(index)].width = width
+
+    workbook.save(workbook_file)
+    return str(workbook_file)

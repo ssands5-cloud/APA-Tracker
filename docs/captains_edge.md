@@ -185,10 +185,10 @@ python -m pipeline    # ingest, rebuild engines, then all exports
 - **Name-based roster resolution is a workaround, not a design.** It is
   correct for the 12 rostered players whose names are unambiguous, and it
   omits the rest rather than guessing.
-- **Opponent assignment is not a matching problem.** Each player is given
-  their own best opponent independently, so two players can be recommended
-  against the *same* opponent. A real lineup card assigns each opponent once;
-  solving that properly is an assignment problem (Hungarian algorithm or
-  similar) and is not what this engine does.
+- **Opponent assignment is intentionally independent here.** Each player is
+  given their own best opponent, so two players can be recommended against the
+  *same* opponent. A real lineup card assigns each opponent once; the separate
+  Lineup Optimizer now solves that whole-card assignment exactly and writes
+  `exports/lineups.json` (see `docs/lineup_optimizer.md`).
 - **No validation against outcomes.** Nothing here has been checked against
   whether the recommended lineup actually won.
