@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import scripts.reproducible_build as reproducible_build
 
 
@@ -76,6 +78,81 @@ class TestVenvPython:
     def test_posix_path_shape(self, monkeypatch, tmp_path):
         monkeypatch.setattr(reproducible_build.os, "name", "posix")
         assert reproducible_build.venv_python(tmp_path) == tmp_path / "bin" / "python"
+
+
+class TestSupportedPython:
+    def test_supported_versions(self):
+        assert reproducible_build.python_is_supported((3, 12, 10))
+        assert reproducible_build.python_is_supported((3, 13, 7))
+
+    def test_unsupported_versions(self):
+        assert not reproducible_build.python_is_supported((3, 11, 9))
+        assert not reproducible_build.python_is_supported((3, 14, 3))
+
+
+class TestProjectChildPath:
+    def test_relative_path_resolves_under_repository(self, monkeypatch, tmp_path):
+        root = tmp_path / "repo"
+        root.mkdir()
+        monkeypatch.setattr(reproducible_build, "ROOT", root)
+
+        assert reproducible_build.project_child_path("scratch", "--venv-dir") == root / "scratch"
+
+    def test_repository_root_is_rejected(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(reproducible_build, "ROOT", tmp_path)
+
+        with pytest.raises(ValueError, match="repository root"):
+            reproducible_build.project_child_path(".", "--venv-dir")
+
+    def test_path_outside_repository_is_rejected(self, monkeypatch, tmp_path):
+        root = tmp_path / "repo"
+        root.mkdir()
+        monkeypatch.setattr(reproducible_build, "ROOT", root)
+
+        with pytest.raises(ValueError, match="inside the repository"):
+            reproducible_build.project_child_path(str(tmp_path / "elsewhere"), "--out-dir")
+
+
+class TestPathsOverlap:
+    def test_equal_or_nested_paths_overlap(self, tmp_path):
+        assert reproducible_build.paths_overlap(tmp_path / "a", tmp_path / "a")
+        assert reproducible_build.paths_overlap(tmp_path / "a", tmp_path / "a" / "b")
+
+    def test_sibling_paths_do_not_overlap(self, tmp_path):
+        assert not reproducible_build.paths_overlap(tmp_path / "a", tmp_path / "b")
+
+
+class TestReplaceableBuildVenv:
+    def test_plain_directory_is_not_replaceable(self, tmp_path):
+        assert not reproducible_build.is_replaceable_build_venv(tmp_path)
+
+    def test_marker_identifies_a_build_venv(self, tmp_path):
+        (tmp_path / reproducible_build.BUILD_VENV_MARKER).write_text("marker")
+        assert reproducible_build.is_replaceable_build_venv(tmp_path)
+
+    def test_legacy_default_venv_shape_is_replaceable(self, monkeypatch, tmp_path):
+        (tmp_path / "pyvenv.cfg").write_text("home = test")
+        interpreter = tmp_path / "bin" / "python"
+        interpreter.parent.mkdir()
+        interpreter.touch()
+        monkeypatch.setattr(reproducible_build.os, "name", "posix")
+        monkeypatch.setattr(reproducible_build, "DEFAULT_VENV_DIR", tmp_path)
+
+        assert reproducible_build.is_replaceable_build_venv(tmp_path)
+
+    def test_unmarked_non_default_venv_is_not_replaceable(self, monkeypatch, tmp_path):
+        ordinary_venv = tmp_path / "venv"
+        ordinary_venv.mkdir()
+        (ordinary_venv / "pyvenv.cfg").write_text("home = test")
+        interpreter = ordinary_venv / "bin" / "python"
+        interpreter.parent.mkdir()
+        interpreter.touch()
+        monkeypatch.setattr(reproducible_build.os, "name", "posix")
+        monkeypatch.setattr(
+            reproducible_build, "DEFAULT_VENV_DIR", tmp_path / ".build-venv"
+        )
+
+        assert not reproducible_build.is_replaceable_build_venv(ordinary_venv)
 
 
 class TestRealLockfileHasNoDriftAgainstItself:

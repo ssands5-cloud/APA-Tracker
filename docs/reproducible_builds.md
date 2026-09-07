@@ -75,15 +75,31 @@ Six steps, any failure stops the build immediately:
    already includes the determinism check
    (`tests/test_full_pipeline_integration.py::TestFullPipelineDeterminism`)
    -- there's no separate ad hoc comparison here duplicating it.
-5. Run the real pipeline (real fixtures if `scraper/sanitized_fixtures/`
-   has any, else the committed sample tree -- see "CI mode" below) and
-   confirm every declared artifact actually exists on disk.
+5. Clear `ci-build/`, run the real pipeline against the committed sample
+   tree (or the repository-local tree explicitly supplied with `--fixtures`),
+   and confirm every declared artifact actually exists on disk. Ignored
+   local scrape output is never selected implicitly, and stale files cannot
+   satisfy the artifact check.
 6. Write `dist/BUILD_INFO.json` -- see "Versioning artifacts" below.
 
-The venv is deleted afterward unless `--keep-venv` is passed. Both `.build-venv/`
-and `dist/` are gitignored; a run against real fixtures also regenerates
-the real `exports/` in place (the same thing `python -m pipeline` does),
-which is correct, not a side effect to route around.
+The venv is deleted afterward unless `--keep-venv` is passed. Both
+`.build-venv/` and `dist/` are gitignored. Build scratch paths are required
+to remain below the repository root, the venv and manifest directories may
+not overlap, and the script refuses unsupported Python versions before it
+deletes or creates anything. An existing venv directory must also carry the
+build marker. The standard `pyvenv.cfg` plus interpreter shape is accepted
+only for the documented default `.build-venv/`, preserving older runs without
+making an ordinary developer venv replaceable. Use Python 3.12 or 3.13.
+
+To verify a different repository-local fixture tree without allowing local
+state to change the default build:
+
+```bash
+python scripts/reproducible_build.py --fixtures scraper/sanitized_fixtures
+```
+
+Outputs still go to the isolated `ci-build/` directory; the selected fixture
+path is recorded in `dist/BUILD_INFO.json`.
 
 ## CI mode
 

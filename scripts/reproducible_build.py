@@ -3,6 +3,7 @@
     python scripts/reproducible_build.py
     python scripts/reproducible_build.py --venv-dir .build-venv --out-dir dist
     python scripts/reproducible_build.py --keep-venv   # skip deleting it afterward
+    python scripts/reproducible_build.py --fixtures path/to/repository-local/fixtures
 
 What "works on my machine" vs. "works on any machine, forever" actually
 means here: this script does not trust the interpreter it happens to be
@@ -20,8 +21,8 @@ Steps:
     2. Install pinned dependencies (requirements-dev.txt)
     3. Verify the installed versions match the lockfile exactly
     4. Run the full test suite
-    5. Run the real pipeline (real fixtures if present, else the committed
-       CI sample tree) and confirm every artifact was written
+    5. Run the real pipeline against the committed CI sample tree in a clean
+       scratch directory and confirm every expected artifact was written
     6. Write BUILD_INFO.json -- the artifact this whole thing is FOR: proof
        of exactly what commit, what interpreter, and what dependency
        versions produced a given set of exports (see docs/reproducible_builds.md,
@@ -41,6 +42,7 @@ import shutil
 import subprocess
 import sys
 import venv
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -51,7 +53,19 @@ DEFAULT_VENV_DIR = ROOT / ".build-venv"
 DEFAULT_OUT_DIR = ROOT / "dist"
 SAMPLE_FIXTURES = ROOT / "tests" / "fixtures" / "sample_pipeline"
 CI_CONFIG = ROOT / "tests" / "fixtures" / "ci_pipeline_config.yaml"
-REAL_FIXTURES = ROOT / "scraper" / "sanitized_fixtures"
+CI_BUILD_DIR = ROOT / "ci-build"
+
+SUPPORTED_PYTHON = {(3, 12), (3, 13)}
+EXPECTED_ARTIFACTS = {
+    "analysis_tabs.html",
+    "apa_data.json",
+    "apa_stats.xlsx",
+    "captains_edge.html",
+    "captains_edge.json",
+    "captains_edge.xlsx",
+    "lineups.json",
+}
+BUILD_VENV_MARKER = ".apa-reproducible-build-venv"
 
 
 def step(label: str) -> None:
@@ -67,6 +81,60 @@ def venv_python(venv_dir: Path) -> Path:
     bin_dir = "Scripts" if os.name == "nt" else "bin"
     exe = "python.exe" if os.name == "nt" else "python"
     return venv_dir / bin_dir / exe
+
+
+def project_child_path(raw_path: str, option: str) -> Path:
+    """Resolve a CLI path and require it to be a child of this repository.
+
+    The build deletes its virtual-environment directory before and after a
+    run.  Rejecting the repository root and every path outside it turns a
+    mistyped ``--venv-dir`` into a clear error instead of a recursive delete
+    aimed at unrelated work.
+    """
+    path = Path(raw_path)
+    resolved = (path if path.is_absolute() else ROOT / path).resolve()
+    root = ROOT.resolve()
+    if resolved == root:
+        raise ValueError(
+            f"{option} must be a child directory of {root}, "
+            "not the repository root"
+        )
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{option} must stay inside the repository: {resolved}") from exc
+    return resolved
+
+
+def python_is_supported(version: Sequence[int] = sys.version_info) -> bool:
+    """Whether ``version`` belongs to the project's supported build matrix."""
+    return tuple(version[:2]) in SUPPORTED_PYTHON
+
+
+def paths_overlap(left: Path, right: Path) -> bool:
+    """True when either path contains the other (including equality)."""
+    left = left.resolve()
+    right = right.resolve()
+    return left == right or left in right.parents or right in left.parents
+
+
+def is_replaceable_build_venv(path: Path) -> bool:
+    """Whether an existing directory is safe for this script to replace.
+
+    The marker covers environments made by this version.  The structural
+    fallback admits only the documented default ``.build-venv`` from before
+    the marker existed; a normal developer venv passed by mistake fails
+    closed instead of being deleted.
+    """
+    if not path.is_dir():
+        return False
+    if (path / BUILD_VENV_MARKER).is_file():
+        return True
+    return (
+        path.resolve() == DEFAULT_VENV_DIR.resolve()
+        and (path / "pyvenv.cfg").is_file()
+        and venv_python(path).is_file()
+    )
 
 
 def run_in_venv(venv_dir: Path, args: list[str], label: str, cwd: Optional[Path] = None) -> None:
@@ -123,21 +191,60 @@ def main(argv: Optional[list[str]] = None) -> int:
                          help=f"where to write BUILD_INFO.json (default: {DEFAULT_OUT_DIR})")
     parser.add_argument("--keep-venv", action="store_true",
                          help="do not delete the venv when the build finishes")
+    parser.add_argument(
+        "--fixtures",
+        default=str(SAMPLE_FIXTURES),
+        help="fixture tree to ingest (default: the committed CI sample tree)",
+    )
     args = parser.parse_args(argv)
 
-    venv_dir = Path(args.venv_dir)
-    out_dir = Path(args.out_dir)
+    if not python_is_supported():
+        fail(
+            f"Python {sys.version_info.major}.{sys.version_info.minor} is unsupported; "
+            "run this build with Python 3.12 or 3.13"
+        )
+
+    try:
+        venv_dir = project_child_path(args.venv_dir, "--venv-dir")
+        out_dir = project_child_path(args.out_dir, "--out-dir")
+        fixtures_dir = project_child_path(args.fixtures, "--fixtures")
+        ci_build_dir = project_child_path(str(CI_BUILD_DIR), "CI build directory")
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    if paths_overlap(venv_dir, out_dir):
+        parser.error("--venv-dir and --out-dir must not overlap")
+    if paths_overlap(venv_dir, fixtures_dir):
+        parser.error("--venv-dir must not overlap --fixtures")
+    if paths_overlap(out_dir, fixtures_dir):
+        parser.error("--out-dir must not overlap --fixtures")
+    if paths_overlap(venv_dir, ci_build_dir):
+        parser.error("--venv-dir must not overlap the CI build directory")
+    if paths_overlap(out_dir, ci_build_dir):
+        parser.error("--out-dir must not overlap the CI build directory")
+    if paths_overlap(fixtures_dir, ci_build_dir):
+        parser.error("--fixtures must not overlap the CI build directory")
 
     if not LOCKFILE.is_file():
         fail(f"{LOCKFILE} does not exist -- run pip-compile first (see docs/reproducible_builds.md)")
+    if not fixtures_dir.is_dir() or not any(fixtures_dir.rglob("*.json")):
+        fail(f"fixture tree has no JSON fixtures: {fixtures_dir}")
 
     # 1. Fresh venv -- deleted first if a stale one is left over from a
     #    previous run, so "fresh" is not aspirational.
     step("1. Create a fresh virtual environment")
     if venv_dir.exists():
+        if not is_replaceable_build_venv(venv_dir):
+            fail(
+                f"refusing to delete {venv_dir}: it is not a recognized "
+                "reproducible-build virtual environment"
+            )
         shutil.rmtree(venv_dir)
     print(f"Creating venv at {venv_dir}")
     venv.EnvBuilder(with_pip=True).create(venv_dir)
+    (venv_dir / BUILD_VENV_MARKER).write_text(
+        "Created by scripts/reproducible_build.py\n", encoding="utf-8"
+    )
 
     # 2. Install pinned dependencies -- the lockfile only, nothing implied
     #    by whatever happens to already be on this machine.
@@ -167,31 +274,30 @@ def main(argv: Optional[list[str]] = None) -> int:
     #    here rather than duplicated as a separate ad hoc comparison).
     run_in_venv(venv_dir, ["-m", "pytest", "tests/", "-q"], "4. Run the full test suite")
 
-    # 5. Run the real pipeline. Prefers a real scrape if one exists on this
-    #    machine; falls back to the committed sample fixtures so this step
-    #    never fails on a fresh clone that has never scraped anything --
-    #    the whole point is "works on any machine", including one that has
-    #    never touched the live site.
+    # 5. Run the real pipeline against an explicitly selected fixture tree.
+    #    The committed sample is the default on every machine; ignored local
+    #    scrape state is never selected merely because it happens to exist.
+    #    Clear the documented scratch directory first so a stale artifact
+    #    cannot make an incomplete run look successful.
     step("5. Run the full pipeline and confirm every artifact is produced")
-    used_real_fixtures = REAL_FIXTURES.is_dir() and any(REAL_FIXTURES.rglob("*.json"))
-    if used_real_fixtures:
-        print(f"Using real fixtures at {REAL_FIXTURES}")
-        pipeline_args = ["-m", "pipeline"]
-        exports_dir = ROOT / "exports"
-    else:
-        # ci_pipeline_config.yaml's paths are resolved relative to the
-        # REPO root by pipeline.exports.configured_exports_dir regardless
-        # of this subprocess's cwd, so the fallback build always lands in
-        # <repo>/ci-build/ -- the same place the CI smoke test uses.
-        print(f"No real fixtures found -- using the committed sample tree at {SAMPLE_FIXTURES}")
-        pipeline_args = ["-m", "pipeline", "--fixtures", str(SAMPLE_FIXTURES), "--config", str(CI_CONFIG)]
-        exports_dir = ROOT / "ci-build" / "exports"
+    if ci_build_dir.exists():
+        shutil.rmtree(ci_build_dir)
+    print(f"Using fixtures at {fixtures_dir}")
+    pipeline_args = [
+        "-m", "pipeline", "--fixtures", str(fixtures_dir),
+        "--config", str(CI_CONFIG),
+    ]
+    exports_dir = ci_build_dir / "exports"
     result = subprocess.run([str(venv_python(venv_dir)), *pipeline_args], cwd=str(ROOT))
     if result.returncode != 0:
         fail(f"pipeline run exited {result.returncode}")
     produced = sorted(p.name for p in exports_dir.glob("*")) if exports_dir.is_dir() else []
-    if not produced:
-        fail(f"pipeline run reported success but {exports_dir} has no files")
+    missing = sorted(EXPECTED_ARTIFACTS.difference(produced))
+    if missing:
+        fail(
+            "pipeline run reported success but did not produce: "
+            + ", ".join(missing)
+        )
     print(f"Artifacts in {exports_dir}: {', '.join(produced)}")
 
     # 6. Build manifest: what commit, what interpreter, what exact
@@ -209,7 +315,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         },
         "dependencies": pinned,
         "lockfile": str(LOCKFILE.relative_to(ROOT)),
-        "fixtures_used": "real" if used_real_fixtures else "sample",
+        "fixtures_used": str(fixtures_dir.relative_to(ROOT)),
         "exports_dir": str(exports_dir),
         "artifacts": produced,
     }
