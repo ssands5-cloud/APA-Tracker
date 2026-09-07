@@ -64,6 +64,8 @@ jobs:
           test -s ci-build/exports/apa_stats.xlsx
           test -s ci-build/exports/apa_data.json
           test -s ci-build/exports/captains_edge.html
+          test -s ci-build/exports/captains_edge.json
+          test -s ci-build/exports/captains_edge.xlsx
           test -s ci-build/exports/lineups.json
           test -s ci-build/exports/analysis_tabs.html
           echo "CI-mode pipeline run produced every expected artifact."
