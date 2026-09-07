@@ -13,6 +13,7 @@ installed.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -140,6 +141,80 @@ class TestVenvPython:
     def test_posix_path_shape(self, monkeypatch, tmp_path):
         monkeypatch.setattr(reproducible_build.os, "name", "posix")
         assert reproducible_build.venv_python(tmp_path) == tmp_path / "bin" / "python"
+
+
+class TestReproducibleSubprocessEnvironment:
+    def test_removes_python_and_pytest_overrides_but_preserves_install_access(self):
+        source = {
+            "PATH": "system-path",
+            "PYTHONHOME": "contaminated-home",
+            "pythonpath": "contaminated-imports",
+            "PYTEST_ADDOPTS": "--collect-only",
+            "PyTeSt_Plugins": "ambient_plugin",
+            "PYTHONNOUSERSITE": "0",
+            "PIP_INDEX_URL": "https://packages.example/simple",
+            "HTTPS_PROXY": "https://proxy.example",
+            "PIP_CERT": "C:/certificates/corporate.pem",
+        }
+
+        cleaned = reproducible_build.reproducible_subprocess_environment(source)
+
+        assert not {
+            key for key in cleaned
+            if key.upper() in {"PYTHONHOME", "PYTHONPATH"}
+            or key.upper().startswith("PYTEST_")
+        }
+        assert cleaned["PYTHONNOUSERSITE"] == "1"
+        assert cleaned["PATH"] == source["PATH"]
+        assert cleaned["PIP_INDEX_URL"] == source["PIP_INDEX_URL"]
+        assert cleaned["HTTPS_PROXY"] == source["HTTPS_PROXY"]
+        assert cleaned["PIP_CERT"] == source["PIP_CERT"]
+
+    def test_ambient_collect_only_cannot_skip_the_build_test_run(
+        self, monkeypatch, tmp_path
+    ):
+        marker = tmp_path / "test-ran"
+        test_file = tmp_path / "test_marker.py"
+        test_file.write_text(
+            "from pathlib import Path\n"
+            f"def test_executes(): Path({str(marker)!r}).write_text('yes')\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PYTEST_ADDOPTS", "--collect-only")
+        monkeypatch.setattr(
+            reproducible_build, "venv_python", lambda _venv_dir: Path(sys.executable)
+        )
+
+        reproducible_build.run_in_venv(
+            tmp_path,
+            ["-m", "pytest", str(test_file), "-q"],
+            "Run marker regression",
+            cwd=tmp_path,
+        )
+
+        assert marker.read_text(encoding="utf-8") == "yes"
+
+    def test_ambient_pythonpath_cannot_load_sitecustomize(
+        self, monkeypatch, tmp_path
+    ):
+        marker = tmp_path / "sitecustomize-loaded"
+        ambient = tmp_path / "ambient"
+        ambient.mkdir()
+        (ambient / "sitecustomize.py").write_text(
+            "from pathlib import Path\n"
+            f"Path({str(marker)!r}).write_text('loaded')\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PYTHONPATH", str(ambient))
+        monkeypatch.setattr(
+            reproducible_build, "venv_python", lambda _venv_dir: Path(sys.executable)
+        )
+
+        reproducible_build.run_in_venv(
+            tmp_path, ["-c", "pass"], "Ignore ambient PYTHONPATH", cwd=tmp_path
+        )
+
+        assert not marker.exists()
 
 
 class TestSupportedPython:

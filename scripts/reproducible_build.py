@@ -89,6 +89,21 @@ def venv_python(venv_dir: Path) -> Path:
     return venv_dir / bin_dir / exe
 
 
+def reproducible_subprocess_environment(
+    source: Optional[dict[str, str]] = None,
+) -> dict[str, str]:
+    """Copy required host settings without inheriting Python/test overrides."""
+    environment = dict(os.environ if source is None else source)
+    for key in list(environment):
+        normalized = key.upper()
+        if normalized in {"PYTHONHOME", "PYTHONPATH", "PYTHONNOUSERSITE"}:
+            del environment[key]
+        elif normalized.startswith("PYTEST_"):
+            del environment[key]
+    environment["PYTHONNOUSERSITE"] = "1"
+    return environment
+
+
 def project_child_path(raw_path: str, option: str) -> Path:
     """Resolve a CLI path and require it to be a child of this repository.
 
@@ -145,7 +160,11 @@ def is_replaceable_build_venv(path: Path) -> bool:
 
 def run_in_venv(venv_dir: Path, args: list[str], label: str, cwd: Optional[Path] = None) -> None:
     step(label)
-    result = subprocess.run([str(venv_python(venv_dir)), *args], cwd=str(cwd or ROOT))
+    result = subprocess.run(
+        [str(venv_python(venv_dir)), *args],
+        cwd=str(cwd or ROOT),
+        env=reproducible_subprocess_environment(),
+    )
     if result.returncode != 0:
         fail(f"{label} exited {result.returncode}")
 
@@ -184,7 +203,11 @@ def parse_lockfile_pins(lockfile: Path) -> dict[str, str]:
 def installed_versions(venv_dir: Path) -> dict[str, str]:
     result = subprocess.run(
         [str(venv_python(venv_dir)), "-m", "pip", "freeze"],
-        cwd=str(ROOT), capture_output=True, text=True, check=True,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+        env=reproducible_subprocess_environment(),
     )
     versions: dict[str, str] = {}
     for line in result.stdout.splitlines():
@@ -325,7 +348,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--config", str(CI_CONFIG),
     ]
     exports_dir = ci_build_dir / "exports"
-    result = subprocess.run([str(venv_python(venv_dir)), *pipeline_args], cwd=str(ROOT))
+    result = subprocess.run(
+        [str(venv_python(venv_dir)), *pipeline_args],
+        cwd=str(ROOT),
+        env=reproducible_subprocess_environment(),
+    )
     if result.returncode != 0:
         fail(f"pipeline run exited {result.returncode}")
     produced = sorted(p.name for p in exports_dir.glob("*")) if exports_dir.is_dir() else []

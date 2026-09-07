@@ -100,6 +100,14 @@ build marker. The standard `pyvenv.cfg` plus interpreter shape is accepted
 only for the documented default `.build-venv/`, preserving older runs without
 making an ordinary developer venv replaceable. Use Python 3.12 or 3.13.
 
+Commands run through the fresh environment receive a copy of the host
+environment with `PYTHONHOME`, `PYTHONPATH`, and every `PYTEST_*` override
+removed; `PYTHONNOUSERSITE=1` is enforced. This prevents ambient import paths,
+plugins, or options such as `PYTEST_ADDOPTS=--collect-only` from changing what
+the build executes. Package-index, proxy, certificate, `PATH`, and operating
+system variables remain available so authenticated or corporate installs keep
+working.
+
 To verify a different repository-local fixture tree without allowing local
 state to change the default build:
 
