@@ -137,11 +137,13 @@ file now redirects all of them.
 ## Versioning artifacts
 
 `scripts/reproducible_build.py`'s `dist/BUILD_INFO.json` is the answer to
-"what produced this workbook": the git commit (and whether the tree was
-dirty -- a build from uncommitted changes says so, since nobody else can
-reproduce it), the Python version and platform, every pinned dependency's
-exact resolved version, which fixtures were used, and the list of
-artifacts written. This is deliberately a manifest written alongside the
+"what produced this workbook": the project's own release version (see
+[docs/versioning.md](versioning.md); `null` when no `VERSION` file exists
+yet), the git commit (and whether the tree was dirty -- a build from
+uncommitted changes says so, since nobody else can reproduce it), the
+Python version and platform, every pinned dependency's exact resolved
+version, which fixtures were used, and the list of artifacts written. This
+is deliberately a manifest written alongside the
 existing exports, not a new artifact-store or release-packaging system --
 appropriate for what this project actually needs, not a general solution
 for a much larger team.

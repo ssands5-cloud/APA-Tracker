@@ -12,6 +12,7 @@ installed.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -88,6 +89,38 @@ class TestSupportedPython:
     def test_unsupported_versions(self):
         assert not reproducible_build.python_is_supported((3, 11, 9))
         assert not reproducible_build.python_is_supported((3, 14, 3))
+
+
+class TestReadVersion:
+    def test_reads_the_stripped_contents_of_the_version_file(self, monkeypatch, tmp_path):
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("1.0.0-rc1\n", encoding="utf-8")
+        monkeypatch.setattr(reproducible_build, "VERSION_FILE", version_file)
+
+        assert reproducible_build.read_version() == "1.0.0-rc1"
+
+    def test_missing_version_file_is_none_not_an_error(self, monkeypatch, tmp_path):
+        """A repo without a VERSION file yet (or one checked out before this
+        existed) must still be able to build -- version is real release
+        metadata this manifest reports when available, not a build
+        requirement."""
+        monkeypatch.setattr(reproducible_build, "VERSION_FILE", tmp_path / "VERSION")
+
+        assert reproducible_build.read_version() is None
+
+    def test_a_blank_version_file_is_none_not_an_empty_string(self, monkeypatch, tmp_path):
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("   \n", encoding="utf-8")
+        monkeypatch.setattr(reproducible_build, "VERSION_FILE", version_file)
+
+        assert reproducible_build.read_version() is None
+
+    def test_the_committed_version_file_is_a_real_semver_string(self):
+        """The actual repo-root VERSION file this project ships, not a
+        fixture -- catches it going missing or unparseable."""
+        version = reproducible_build.read_version()
+        assert version is not None
+        assert re.match(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$", version), version
 
 
 class TestProjectChildPath:

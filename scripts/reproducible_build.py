@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parent.parent
+VERSION_FILE = ROOT / "VERSION"
 LOCKFILE = ROOT / "requirements-dev.txt"
 DEFAULT_VENV_DIR = ROOT / ".build-venv"
 DEFAULT_OUT_DIR = ROOT / "dist"
@@ -183,6 +184,17 @@ def git_info() -> dict[str, object]:
     return {"commit": commit or None, "dirty": dirty, "branch": branch or None}
 
 
+def read_version() -> Optional[str]:
+    """The project's own release version from the repo-root VERSION file
+    (e.g. "1.0.0-rc1"), or None if that file doesn't exist yet -- release
+    metadata the manifest reports when available, not something this
+    script requires to build. See docs/versioning.md."""
+    if not VERSION_FILE.is_file():
+        return None
+    version = VERSION_FILE.read_text(encoding="utf-8").strip()
+    return version or None
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--venv-dir", default=str(DEFAULT_VENV_DIR),
@@ -306,6 +318,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": 1,
+        "apa_tracker_version": read_version(),
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "git": git_info(),
         "python": {
@@ -335,6 +348,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Removed {venv_dir} (pass --keep-venv to keep it)")
 
     print("\n=== Reproducible build completed successfully ===")
+    print(f"Version: {manifest['apa_tracker_version'] or '(no VERSION file)'}")
     print(f"Commit:  {manifest['git']['commit']}")
     print(f"Python:  {manifest['python']['version']}")
     print(f"Manifest: {manifest_path}")
