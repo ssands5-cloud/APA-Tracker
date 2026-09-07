@@ -44,16 +44,28 @@ class TestParseLockfilePins:
         )
         assert reproducible_build.parse_lockfile_pins(lockfile) == {"pandas": "3.0.5"}
 
-    def test_skips_a_requirements_include_line(self, tmp_path):
+    def test_rejects_a_requirements_include_the_manifest_cannot_audit(self, tmp_path):
         lockfile = write_lockfile(tmp_path, "-r requirements.in\npytest==9.1.1\n")
-        assert reproducible_build.parse_lockfile_pins(lockfile) == {"pytest": "9.1.1"}
+        with pytest.raises(ValueError, match=r"line 1.*exact name==version pin"):
+            reproducible_build.parse_lockfile_pins(lockfile)
 
-    def test_skips_a_line_with_no_pin_at_all(self, tmp_path):
-        """A malformed or unpinned line must never be silently treated as
-        "no constraint" -- it's dropped from the comparison entirely rather
-        than accidentally matching anything installed."""
-        lockfile = write_lockfile(tmp_path, "pandas>=3.0\nrequests==2.34.2\n")
-        assert reproducible_build.parse_lockfile_pins(lockfile) == {"requests": "2.34.2"}
+    @pytest.mark.parametrize(
+        "requirement",
+        [
+            "pandas>=3.0",
+            "pandas~=3.0",
+            "pandas",
+            "pandas @ https://example.invalid/archive.whl",
+            "pandas==3.*",
+            "--index-url https://example.invalid/simple",
+            "pandas==3.0.5 \\",
+        ],
+    )
+    def test_rejects_a_line_with_no_exact_pin(self, tmp_path, requirement):
+        """An unpinned requirement must not escape manifest verification."""
+        lockfile = write_lockfile(tmp_path, f"{requirement}\nrequests==2.34.2\n")
+        with pytest.raises(ValueError, match=r"line 1.*exact name==version pin"):
+            reproducible_build.parse_lockfile_pins(lockfile)
 
     def test_normalizes_name_case_and_underscores(self, tmp_path):
         """pip freeze and a hand-written lockfile can disagree on case and
@@ -61,14 +73,63 @@ class TestParseLockfilePins:
         pyyaml, typing_extensions vs typing-extensions) -- both sides of
         the comparison must normalize the same way or every such package
         would falsely report as mismatched."""
-        lockfile = write_lockfile(tmp_path, "PyYAML==6.0.3\ntyping_extensions==4.16.0\n")
+        lockfile = write_lockfile(
+            tmp_path,
+            "PyYAML==6.0.3\ntyping_extensions==4.16.0\ndemo.pkg==1.0\n",
+        )
         assert reproducible_build.parse_lockfile_pins(lockfile) == {
-            "pyyaml": "6.0.3", "typing-extensions": "4.16.0",
+            "pyyaml": "6.0.3", "typing-extensions": "4.16.0", "demo-pkg": "1.0",
         }
 
-    def test_empty_file_yields_no_pins(self, tmp_path):
+    def test_rejects_an_empty_lockfile(self, tmp_path):
         lockfile = write_lockfile(tmp_path, "")
-        assert reproducible_build.parse_lockfile_pins(lockfile) == {}
+        with pytest.raises(ValueError, match="contains no exact pins"):
+            reproducible_build.parse_lockfile_pins(lockfile)
+
+    def test_rejects_duplicate_normalized_package_names(self, tmp_path):
+        lockfile = write_lockfile(
+            tmp_path,
+            "typing_extensions==4.16.0\ntyping-extensions==4.16.0\n",
+        )
+        with pytest.raises(ValueError, match=r"line 2.*duplicates.*typing-extensions"):
+            reproducible_build.parse_lockfile_pins(lockfile)
+
+
+def test_invalid_lockfile_fails_before_an_existing_build_venv_is_removed(
+    monkeypatch, tmp_path
+):
+    root = tmp_path / "repo"
+    root.mkdir()
+    lockfile = write_lockfile(root, "pandas>=3.0\n")
+    fixtures = root / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "sample.json").write_text("{}", encoding="utf-8")
+    venv_dir = root / ".build-venv"
+    venv_dir.mkdir()
+    marker = venv_dir / reproducible_build.BUILD_VENV_MARKER
+    marker.write_text("keep", encoding="utf-8")
+
+    monkeypatch.setattr(reproducible_build, "ROOT", root)
+    monkeypatch.setattr(reproducible_build, "LOCKFILE", lockfile)
+    monkeypatch.setattr(reproducible_build, "CI_BUILD_DIR", root / "ci-build")
+    monkeypatch.setattr(reproducible_build, "python_is_supported", lambda: True)
+    monkeypatch.setattr(
+        reproducible_build.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("invalid lockfile started a subprocess"),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        reproducible_build.main(
+            [
+                "--venv-dir", str(venv_dir),
+                "--out-dir", str(root / "dist"),
+                "--fixtures", str(fixtures),
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 class TestVenvPython:

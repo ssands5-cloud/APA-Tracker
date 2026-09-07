@@ -64,13 +64,22 @@ real-world history says otherwise.
 python scripts/reproducible_build.py
 ```
 
+Before these six steps, the script validates that the lock contains at
+least one package and that every active line is one exact `name==version`
+pin. Includes, ranges, URLs, environment markers, wildcard versions and
+unsupported directives fail closed before an existing build environment
+is removed or any install starts. This intentionally matches the current
+flattened, no-hash `pip-compile` output; if that format changes, the parser
+and its tests must be updated deliberately in the same change.
+
 Six steps, any failure stops the build immediately:
 
 1. Create a fresh virtual environment (`.build-venv/` by default --
    never the interpreter this script itself is running under).
 2. Install `requirements-dev.txt` into it.
-3. Diff the venv's actual `pip freeze` against the lockfile's pins --
-   proves what was asked for is what got installed, not "close enough".
+3. Check every lockfile pin against the venv's actual `pip freeze` --
+   proves each locked application dependency was installed at its exact
+   requested version, not "close enough".
 4. Run the full test suite through that venv's own interpreter. This
    already includes the determinism check
    (`tests/test_full_pipeline_integration.py::TestFullPipelineDeterminism`)

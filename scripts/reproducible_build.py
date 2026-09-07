@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +68,10 @@ EXPECTED_ARTIFACTS = {
     "lineups.json",
 }
 BUILD_VENV_MARKER = ".apa-reproducible-build-venv"
+EXACT_PIN = re.compile(
+    r"([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
+    r"==([A-Za-z0-9][A-Za-z0-9._!+-]*)"
+)
 
 
 def step(label: str) -> None:
@@ -145,17 +150,34 @@ def run_in_venv(venv_dir: Path, args: list[str], label: str, cwd: Optional[Path]
         fail(f"{label} exited {result.returncode}")
 
 
+def normalize_package_name(name: str) -> str:
+    """Normalize a distribution name the same way on both comparison sides."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def parse_lockfile_pins(lockfile: Path) -> dict[str, str]:
-    """{normalized package name: version} for every `name==version` line."""
+    """Return every exact pin, rejecting lock syntax we cannot verify."""
     pins: dict[str, str] = {}
-    for line in lockfile.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(
+        lockfile.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         line = line.split(" #", 1)[0].strip()  # drop the "# via ..." trailer
-        if not line or line.startswith("#") or line.startswith("-r "):
+        if not line or line.startswith("#"):
             continue
-        if "==" not in line:
-            continue
-        name, version = line.split("==", 1)
-        pins[name.strip().lower().replace("_", "-")] = version.strip()
+        match = EXACT_PIN.fullmatch(line)
+        if match is None:
+            raise ValueError(
+                f"{lockfile}: line {line_number} is not an exact name==version pin"
+            )
+        name, version = match.groups()
+        normalized_name = normalize_package_name(name)
+        if normalized_name in pins:
+            raise ValueError(
+                f"{lockfile}: line {line_number} duplicates the pin for {normalized_name}"
+            )
+        pins[normalized_name] = version
+    if not pins:
+        raise ValueError(f"{lockfile} contains no exact pins")
     return pins
 
 
@@ -169,7 +191,7 @@ def installed_versions(venv_dir: Path) -> dict[str, str]:
         if "==" not in line:
             continue
         name, version = line.split("==", 1)
-        versions[name.strip().lower().replace("_", "-")] = version.strip()
+        versions[normalize_package_name(name.strip())] = version.strip()
     return versions
 
 
@@ -239,6 +261,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if not LOCKFILE.is_file():
         fail(f"{LOCKFILE} does not exist -- run pip-compile first (see docs/reproducible_builds.md)")
+    try:
+        pinned = parse_lockfile_pins(LOCKFILE)
+    except (OSError, ValueError) as exc:
+        fail(f"invalid lockfile: {exc}")
     if not fixtures_dir.is_dir() or not any(fixtures_dir.rglob("*.json")):
         fail(f"fixture tree has no JSON fixtures: {fixtures_dir}")
 
@@ -267,7 +293,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     # 3. Verify versions -- what got installed must be EXACTLY what the
     #    lockfile pinned, not "close enough".
     step("3. Verify installed versions match the lockfile")
-    pinned = parse_lockfile_pins(LOCKFILE)
     installed = installed_versions(venv_dir)
     mismatches = {
         name: (version, installed.get(name))
