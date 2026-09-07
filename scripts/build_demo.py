@@ -72,7 +72,11 @@ def _load(name: str) -> dict:
 
 
 def main() -> None:
-    db_file = _project_root / DEMO_DB_PATH
+    # All paths in DEMO_CONFIG are intentionally relative to the caller's
+    # working directory. Resolve the cleanup/reporting path the same way so
+    # a temp-directory smoke test cannot delete an ignored repository-local
+    # demo database while building a different database under tmp_path.
+    db_file = Path(DEMO_DB_PATH).resolve()
     if db_file.exists():
         db_file.unlink()
         logger.info("Removed previous demo database at %s", db_file)

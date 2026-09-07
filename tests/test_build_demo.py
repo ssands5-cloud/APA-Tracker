@@ -30,6 +30,9 @@ def test_build_demo_produces_a_readable_workbook(tmp_path, monkeypatch):
 
     workbook_path = tmp_path / "exports" / "demo_apa_stats.xlsx"
     assert workbook_path.exists()
+    database_path = tmp_path / "data" / "demo_apa_tracker.db"
+    assert database_path.exists()
+    assert f"Demo database written to {database_path}" in result.stdout
 
     wb = openpyxl.load_workbook(workbook_path)
     assert set(wb.sheetnames) == {
