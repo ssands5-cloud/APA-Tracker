@@ -25,6 +25,7 @@ directly below by snapshotting the real directory before and after.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -248,6 +249,7 @@ class TestFullPipelineDeterminism:
 
     VOLATILE_JSON_KEYS = {"generated_at", "captured_at", "source_db"}
     VOLATILE_COLUMN_HEADERS = {"as of"}
+    VOLATILE_HTML_TIMESTAMP = re.compile(r'("generated_at"\s*:\s*")[^"]*(")')
 
     @classmethod
     def _strip_volatile_json(cls, obj):
@@ -273,6 +275,26 @@ class TestFullPipelineDeterminism:
             out[name] = rows
         return out
 
+    @classmethod
+    def _stable_html(cls, path: Path) -> str:
+        """Remove only the documented wall-clock field from rendered HTML."""
+        text = path.read_text(encoding="utf-8")
+        return cls.VOLATILE_HTML_TIMESTAMP.sub(r"\1<TIMESTAMP>\2", text)
+
+    def test_html_comparison_ignores_the_generated_timestamp_only(self, tmp_path):
+        left = tmp_path / "left.html"
+        right = tmp_path / "right.html"
+        left.write_text(
+            '<script>{"generated_at": "2026-09-06 23:59", "player": "Alice"}</script>',
+            encoding="utf-8",
+        )
+        right.write_text(
+            '<script>{"generated_at": "2026-09-07 00:00", "player": "Alice"}</script>',
+            encoding="utf-8",
+        )
+
+        assert self._stable_html(left) == self._stable_html(right)
+
     def test_two_runs_of_the_same_fixtures_produce_the_same_artifacts(self, tmp_path, monkeypatch):
         first = run_full_pipeline(tmp_path, monkeypatch, name="run1")
         second = run_full_pipeline(tmp_path, monkeypatch, name="run2")
@@ -283,7 +305,7 @@ class TestFullPipelineDeterminism:
             assert left == right, f"{label} differs between two runs of identical input"
 
         for label in ("captains html", "analysis tabs"):
-            assert first[label].read_text(encoding="utf-8") == second[label].read_text(encoding="utf-8"), (
+            assert self._stable_html(first[label]) == self._stable_html(second[label]), (
                 f"{label} differs between two runs of identical input"
             )
 
