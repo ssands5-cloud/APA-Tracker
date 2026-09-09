@@ -35,7 +35,14 @@ scheduler:
   weekly_refresh_hour: 5
 
 export:
-  excel_output_path: "exports/apa_stats.xlsx"
+  # Renamed from "apa_stats.xlsx" -- a never-before-used filename so any
+  # prior copy Excel might have cached (Trusted Documents, MRU, Protected
+  # View state) under the old name/path is guaranteed irrelevant to this
+  # one. Does not itself change workbook content, table/validation/
+  # autofilter logic, or analytics -- see ui/export_excel.py and
+  # tests/test_export_excel.py::TestGeneratedFileOpensWithoutRepair for
+  # the real, byte-level fix and its regression coverage.
+  excel_output_path: "exports/apa_stats_fresh.xlsx"
   json_output_path: "exports/apa_data.json"
 
 logging:
