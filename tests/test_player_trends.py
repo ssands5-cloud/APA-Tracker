@@ -587,10 +587,14 @@ class TestExcelSheet:
     def test_headers_match_the_spec_order(self, seeded, tmp_path):
         ingest_player_trends(seeded, build_rows(seeded))
         sheet = self._sheet(seeded, tmp_path)
+        # "Trend Icon" is appended after the governing spec's own ten
+        # columns, not inserted into them -- a directional glyph derived
+        # entirely from Hot/Cold (see ui.export_excel.trend_icon), not a
+        # change to this documented order.
         assert [c.value for c in next(sheet.iter_rows(max_row=1))] == [
             "Player", "Format", "Session", "Sample Size", "Current SL",
             "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
-            "Projected SL Change Probability",
+            "Projected SL Change Probability", "Trend Icon",
         ]
 
     def test_the_header_is_frozen_and_filtered(self, seeded, tmp_path):

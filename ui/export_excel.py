@@ -48,6 +48,7 @@ def export_to_excel(db: Session, config: dict) -> str:
         team_history_df.to_excel(writer, sheet_name="Team History", index=False)
         skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
         matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
+        _format_matchups(writer, matchups_df)
         head_to_head_df.to_excel(writer, sheet_name="Head-to-Head", index=False)
         _format_head_to_head(writer, head_to_head_df)
         player_trends_df.to_excel(writer, sheet_name="Player Trends", index=False)
@@ -210,6 +211,16 @@ def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
     )
 
 
+# Matchups sheet: Win Rate colour zones (0..1, an unweighted historical
+# fraction -- see analytics.matchups.head_to_head_win_rate). The original ask
+# named "win probability", but this sheet has no modelled probability field;
+# the Head-to-Head sheet's own Win Probability column is the literal match
+# for that, and already has its own Matchup-Score-based colouring
+# (H2H_RECOMMEND_SCORE/H2H_AVOID_SCORE above) -- these are independent.
+MATCHUPS_WIN_RATE_HIGH = 0.65
+MATCHUPS_WIN_RATE_LOW = 0.45
+
+
 def _matchups_dataframe(db: Session) -> pd.DataFrame:
     """Matchup Advantage Engine: one row per (player, opponent), from
     analytics.matchups via scripts/build_matchups.py, PLUS a neutral-50
@@ -244,6 +255,90 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
             for row in matchups_with_neutral_fill(db)
         ]
     )
+
+
+def _format_matchups(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, wrap the sheet in an Excel
+    Table (so a dropdown sourced from it auto-expands as rows are added on
+    a later run), add a Data Validation dropdown restricting Column A
+    ("Player") to real names from that Table, and colour Win Rate
+    green/yellow/red.
+
+    The original ask's dropdown source was "Players!A:A" / "Opponents!A:A"
+    -- sheets that don't exist in this workbook, which has one whole-league
+    Matchups view rather than a your-roster/opponent-roster split. Using
+    this sheet's own Player column via a Table's structured reference gets
+    the same real, auto-expanding, always-current effect without inventing
+    sheets nothing else here populates.
+
+    Column A already carries a real name on every row from the pipeline --
+    a dropdown doesn't change those, only what a future manual edit in that
+    column can be replaced with.
+    """
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    sheet = writer.sheets["Matchups"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    full_range = f"A1:{last_column}{last_row}"
+    sheet.auto_filter.ref = full_range
+
+    table = Table(displayName="Matchups_Table", ref=full_range)
+    table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+    sheet.add_table(table)
+
+    validation = DataValidation(type="list", formula1="=Matchups_Table[Player]", allow_blank=True)
+    validation.error = "Choose a player already on this sheet, or leave blank."
+    validation.errorTitle = "Unknown player"
+    sheet.add_data_validation(validation)
+    validation.add(f"A2:A{last_row}")
+
+    win_rate_column = list(frame.columns).index("Win Rate") + 1
+    win_rate_letter = get_column_letter(win_rate_column)
+    win_rate_range = f"{win_rate_letter}2:{win_rate_letter}{last_row}"
+
+    # Spec boundary note: the ask's "Yellow 0.45-0.65" and "Red <= 0.45"
+    # both include 0.45. Resolved by giving Green and Red stopIfTrue, so
+    # exactly 0.65 is Green-only (>= 0.65 stops before Yellow's inclusive
+    # upper bound can also match) and exactly 0.45 is Yellow-only (Red is
+    # strictly < 0.45), with no cell ever matching two colours at once.
+    sheet.conditional_formatting.add(
+        win_rate_range,
+        CellIsRule(operator="greaterThanOrEqual", formula=[str(MATCHUPS_WIN_RATE_HIGH)],
+                   stopIfTrue=True,
+                   fill=PatternFill("solid", fgColor="C6EFCE"),
+                   font=Font(color="006100", bold=True)),
+    )
+    sheet.conditional_formatting.add(
+        win_rate_range,
+        CellIsRule(operator="lessThan", formula=[str(MATCHUPS_WIN_RATE_LOW)],
+                   stopIfTrue=True,
+                   fill=PatternFill("solid", fgColor="FFC7CE"),
+                   font=Font(color="9C0006", bold=True)),
+    )
+    sheet.conditional_formatting.add(
+        win_rate_range,
+        CellIsRule(operator="between",
+                   formula=[str(MATCHUPS_WIN_RATE_LOW), str(MATCHUPS_WIN_RATE_HIGH)],
+                   fill=PatternFill("solid", fgColor="FFEB9C"),
+                   font=Font(color="9C6500", bold=True)),
+    )
+
+    for row in sheet.iter_rows(min_row=2, min_col=win_rate_column, max_col=win_rate_column):
+        for cell in row:
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0%"
+
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
 
 
 # --- Head-to-Head Advantage Engine -------------------------------------------
@@ -336,12 +431,39 @@ def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
 # could be read as zero.
 TRENDS_NO_DATA = "No data"
 
-# Header order is part of the spec.
+# Header order is part of the spec. "Trend Icon" is appended after it, not
+# inserted into it -- an addition, not a change to that documented contract.
 TRENDS_COLUMNS = [
     "Player", "Format", "Session", "Sample Size", "Current SL",
     "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
     "Projected SL Change Probability",
 ]
+TRENDS_ICON_COLUMN = "Trend Icon"
+
+# A directional glyph driven ENTIRELY by the Hot/Cold flag already computed
+# by analytics.player_trends.hot_cold_flag (HOT_SLOPE_MIN/COLD_SLOPE_MAX,
+# gated by volatility and sample size) -- not a second, independent
+# threshold on Regression Slope. A naive "slope >= +0.10" rule would
+# disagree with real rows: that engine's real HOT floor is +0.05, gated by
+# volatility <= 0.40 and sample_size >= 5, so a slope of 0.07 at high
+# volatility is real NEUTRAL, not HOT. Two arrows on the same row telling a
+# captain different things would be worse than one.
+TREND_ICON_UP = "▲"       # HOT
+TREND_ICON_FLAT = "▶"     # NEUTRAL -- a measured, unremarkable trend
+TREND_ICON_DOWN = "▼"     # COLD
+
+
+def trend_icon(hot_cold_flag) -> str:
+    """TREND_ICON_UP/FLAT/DOWN for a real HOT/NEUTRAL/COLD flag; TRENDS_NO_DATA
+    (never an icon) when the flag itself is unknown -- "no evidence yet" must
+    never be drawn as the same flat arrow as "measured and unremarkable"."""
+    if hot_cold_flag == "HOT":
+        return TREND_ICON_UP
+    if hot_cold_flag == "COLD":
+        return TREND_ICON_DOWN
+    if hot_cold_flag == "NEUTRAL":
+        return TREND_ICON_FLAT
+    return TRENDS_NO_DATA
 
 
 def _player_trends_dataframe(db: Session) -> pd.DataFrame:
@@ -374,10 +496,11 @@ def _player_trends_dataframe(db: Session) -> pd.DataFrame:
                 "Projected SL Change Probability": shown(
                     row.projected_sl_change_probability
                 ),
+                TRENDS_ICON_COLUMN: trend_icon(row.hot_cold_flag),
             }
             for row in player_trends(db)
         ],
-        columns=TRENDS_COLUMNS,
+        columns=TRENDS_COLUMNS + [TRENDS_ICON_COLUMN],
     )
 
 
@@ -410,6 +533,24 @@ def _format_player_trends(writer, frame: pd.DataFrame) -> None:
     ):
         sheet.conditional_formatting.add(
             flag_range,
+            CellIsRule(operator="equal", formula=[f'"{text}"'],
+                       fill=PatternFill("solid", fgColor=fill_colour),
+                       font=Font(color=font_colour, bold=True)),
+        )
+
+    # Trend Icon: coloured the same way as Hot/Cold, since it's the same
+    # flag rendered as a glyph -- the two columns must never look like they
+    # disagree. TRENDS_NO_DATA gets no colour: a real "no evidence yet" is
+    # not the same as measured-and-flat.
+    icon_column = len(frame.columns)  # TRENDS_ICON_COLUMN is always the last column
+    icon_range = (f"{get_column_letter(icon_column)}2:"
+                  f"{get_column_letter(icon_column)}{last_row}")
+    for text, fill_colour, font_colour in (
+        (TREND_ICON_UP, "C6EFCE", "006100"),
+        (TREND_ICON_DOWN, "FFC7CE", "9C0006"),
+    ):
+        sheet.conditional_formatting.add(
+            icon_range,
             CellIsRule(operator="equal", formula=[f'"{text}"'],
                        fill=PatternFill("solid", fgColor=fill_colour),
                        font=Font(color=font_colour, bold=True)),

@@ -23,8 +23,17 @@ from database.ingest import (
     upsert_player,
     upsert_team,
 )
-from database.models import Base
-from ui.export_excel import export_to_excel
+from database.models import Base, Player, PlayerTrend
+from ui.export_excel import (
+    MATCHUPS_WIN_RATE_HIGH,
+    MATCHUPS_WIN_RATE_LOW,
+    TREND_ICON_DOWN,
+    TREND_ICON_FLAT,
+    TREND_ICON_UP,
+    TRENDS_NO_DATA,
+    export_to_excel,
+    trend_icon,
+)
 
 EXPECTED_SHEETS = {
     "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History", "Matchups",
@@ -185,6 +194,58 @@ class TestSeededData:
             "Player One", "Player Four", 3, 0.667, 5.0, 5.0, 4.0, 1.0, "up", 1, 72, 63, None, None, "Yes",
         ]
 
+    def test_dropdown_and_table_auto_expand_with_the_real_row_count(self, db, tmp_path):
+        """Column A's dropdown is sourced from this sheet's own Table
+        (Players!A:A doesn't exist in this workbook -- see
+        _format_matchups's docstring), so it must reference the Table by
+        name via a structured reference, not a fixed range, or it goes
+        stale the moment a new pairing is added on a later run."""
+        upsert_player(db, "501", "Player One")
+        upsert_player(db, "601", "Player Four")
+        ingest_matchups(db, [{
+            "player_id": "501", "opponent_id": "601", "matches_played": 3,
+            "win_rate": 0.667, "avg_points_earned": 5.0,
+            "avg_opponent_skill_level": 5.0, "avg_own_skill_level": 4.0, "sl_delta": 1.0,
+            "trend": "up", "volatility": 1, "matchup_score": 72, "confidence_score": 63,
+        }])
+        wb = _export(db, tmp_path)
+        ws = wb["Matchups"]
+
+        assert "Matchups_Table" in ws.tables
+        assert ws.tables["Matchups_Table"].ref == "A1:O2"
+
+        [validation] = ws.data_validations.dataValidation
+        assert validation.type == "list"
+        assert validation.formula1 == "=Matchups_Table[Player]"
+        assert "A2:A2" in str(validation.sqref) or "A2" in str(validation.sqref)
+
+    def test_win_rate_colour_zone_boundaries(self, db, tmp_path):
+        """Exactly 0.65 is Green-only and exactly 0.45 is Yellow-only --
+        the spec's own "Yellow 0.45-0.65" / "Red <= 0.45" overlap at 0.45,
+        resolved by giving Green/Red priority (stopIfTrue) over Yellow.
+        See _format_matchups's docstring for the exact resolution."""
+        upsert_player(db, "501", "Player One")
+        upsert_player(db, "601", "Player Two")
+        ingest_matchups(db, [{
+            "player_id": "501", "opponent_id": "601", "matches_played": 1,
+            "win_rate": 0.5, "matchup_score": 50, "confidence_score": 50,
+        }])
+        wb = _export(db, tmp_path)
+        ws = wb["Matchups"]
+
+        rules = {
+            (rule.operator, tuple(rule.formula)): rule
+            for rules in ws.conditional_formatting
+            for rule in rules.rules
+        }
+        green = rules[("greaterThanOrEqual", (str(MATCHUPS_WIN_RATE_HIGH),))]
+        red = rules[("lessThan", (str(MATCHUPS_WIN_RATE_LOW),))]
+        yellow = rules[("between", (str(MATCHUPS_WIN_RATE_LOW), str(MATCHUPS_WIN_RATE_HIGH)))]
+
+        assert green.stopIfTrue
+        assert red.stopIfTrue
+        assert not yellow.stopIfTrue
+
     def test_a_known_pair_with_no_history_gets_a_neutral_fifty_row(self, db, tmp_path):
         """P1-8: two players who've each played someone, but never each
         other, must still show up in the sheet, marked "No" under Has
@@ -248,3 +309,49 @@ class TestSeededData:
         record = dict(zip(rows[0], rows[1]))
         # An empty string round-trips through openpyxl as a blank cell (None).
         assert not record["Team"]
+
+
+class TestTrendIcon:
+    """trend_icon() is driven entirely by the already-computed Hot/Cold
+    flag (analytics.player_trends.hot_cold_flag), never a second,
+    independent numeric threshold -- see the function's own docstring for
+    why a naive slope cutoff would disagree with real rows."""
+
+    def test_hot_is_the_up_arrow(self):
+        assert trend_icon("HOT") == TREND_ICON_UP
+
+    def test_cold_is_the_down_arrow(self):
+        assert trend_icon("COLD") == TREND_ICON_DOWN
+
+    def test_neutral_is_the_flat_arrow(self):
+        assert trend_icon("NEUTRAL") == TREND_ICON_FLAT
+
+    def test_missing_evidence_is_no_data_not_an_arrow(self):
+        """A real NEUTRAL (measured, unremarkable) must never look like the
+        same thing as "not enough history yet" -- only a real flag gets a
+        directional glyph at all."""
+        assert trend_icon(None) == TRENDS_NO_DATA
+
+    def test_an_unrecognized_flag_is_no_data_not_a_guess(self):
+        assert trend_icon("something-unexpected") == TRENDS_NO_DATA
+
+
+class TestTrendIconInWorkbook:
+    def test_a_real_hot_row_shows_the_up_arrow_in_the_last_column(self, db, tmp_path):
+        player = upsert_player(db, "P1", "Alice")
+        db.add(PlayerTrend(
+            player_id=player.id, format="8-ball", session_name="Fall 2026",
+            sample_size=8, current_skill_level=5, regression_slope=0.08,
+            volatility=0.2, sl_stability=0.83, hot_cold_flag="HOT",
+            projected_sl_change_probability=0.6,
+        ))
+        db.commit()
+
+        wb = _export(db, tmp_path)
+        ws = wb["Player Trends"]
+        headers = [c.value for c in ws[1]]
+        assert headers[-1] == "Trend Icon"
+
+        row = dict(zip(headers, [c.value for c in ws[2]]))
+        assert row["Hot/Cold"] == "HOT"
+        assert row["Trend Icon"] == TREND_ICON_UP
