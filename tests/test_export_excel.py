@@ -7,6 +7,9 @@ workbook produced, not just that export_to_excel() didn't raise.
 
 from __future__ import annotations
 
+import zipfile
+from xml.etree import ElementTree as ET
+
 import openpyxl
 import pytest
 from sqlalchemy import create_engine
@@ -231,7 +234,15 @@ class TestSeededData:
 
         [validation] = ws.data_validations.dataValidation
         assert validation.type == "list"
-        assert validation.formula1 == "=Matchups_Table[Player]"
+        # No leading "=" -- that's an Excel-dialog typing convention, not
+        # part of the stored value. openpyxl writes formula1 into the
+        # saved XML verbatim; a leading "=" there produces a formula1
+        # Excel itself can't parse and triggers its "repair" prompt on
+        # open (confirmed by inspecting a real generated .xlsx as a zip --
+        # see TestGeneratedFileOpensWithoutRepair below for the regression
+        # test against the actual saved bytes, not just this round-tripped
+        # object).
+        assert validation.formula1 == "Matchups_Table[Player]"
         assert "A2:A2" in str(validation.sqref) or "A2" in str(validation.sqref)
 
     def test_risk_band_column_and_colours(self, db, tmp_path):
@@ -566,3 +577,189 @@ class TestTrendIconInWorkbook:
         assert row["Hot/Cold"] == "HOT"
         assert row["Trend Icon"] == TREND_ICON_UP
         assert row["Trend Score"] == round(0.08 / (0.2 + 0.05), 4)
+
+
+OOXML_MAIN_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+OOXML_PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+OOXML_DOC_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+
+
+class TestGeneratedFileOpensWithoutRepair:
+    """Real regression tests against the SAVED FILE'S OWN BYTES -- not the
+    openpyxl object model tests elsewhere in this file already exercise.
+
+    Real bug found by inspecting a generated .xlsx as a zip after Excel
+    reported it needed repair: ui.export_excel wrote the Matchups sheet's
+    dropdown as `formula1="=Matchups_Table[Player]"`. openpyxl stores
+    formula1 into the saved XML verbatim -- the leading "=" is a
+    convention of Excel's OWN dialog UI, not part of the stored value --
+    so the saved file carried a `<formula1>` Excel itself can't parse.
+    Every existing test in this file round-trips through
+    `openpyxl.load_workbook()`, which reads that same malformed string
+    back into the very same object attribute without complaining, so
+    nothing here could have caught it: TestSeededData and friends check
+    that the WORKBOOK MODEL looks right, not that the bytes Excel actually
+    opens are well-formed. These tests read the zip directly instead.
+    """
+
+    @pytest.fixture
+    def seeded_db(self, db):
+        """Populates enough real data that every sheet with a Table,
+        autoFilter, conditional formatting, or data validation actually
+        gets one -- an empty Matchups sheet, in particular, never reaches
+        the code path that adds its DataValidation at all (see
+        ui.export_excel._format_matchups's `if frame.empty: return`), so
+        a fixture with no real matchup rows would let this exact class of
+        bug through undetected.
+        """
+        team = upsert_team(db, "T1", "Mark It Up")
+        opponent = upsert_team(db, "T2", "Rack Attack")
+        alice = upsert_player(db, "P1", "Alice", team)
+        upsert_player(db, "P2", "Bob", opponent)
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     status="COMPLETED", home_score=18, away_score=16,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1",
+             "skill_level": 5, "result": "W", "points_earned": 6},
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T2",
+             "skill_level": 5, "result": "L", "points_earned": 3},
+        ])
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 5, "result": "W",
+        }])
+        ingest_matchups(db, [{
+            "player_id": "P1", "opponent_id": "P2", "matches_played": 1,
+            "win_rate": 1.0, "avg_points_earned": 6.0,
+            "avg_opponent_skill_level": 5.0, "avg_own_skill_level": 5.0,
+            "sl_delta": 0.0, "trend": "up", "volatility": 0,
+            "matchup_score": 72, "confidence_score": 63,
+        }])
+        ingest_standings(db, [{"team_name": "Mark It Up", "rank": 1, "points": 45}])
+        db.add(PlayerTrend(
+            player_id=alice.id, format="8-ball", session_name="Fall 2026",
+            sample_size=8, current_skill_level=5, regression_slope=0.08,
+            volatility=0.2, sl_stability=0.83, hot_cold_flag="HOT",
+            projected_sl_change_probability=0.6,
+        ))
+        db.commit()
+        return db
+
+    def _saved_zip(self, seeded_db, tmp_path):
+        config = {"export": {"excel_output_path": str(tmp_path / "out.xlsx")}}
+        path = export_to_excel(seeded_db, config)
+        return zipfile.ZipFile(path)
+
+    def test_every_part_is_well_formed_xml(self, seeded_db, tmp_path):
+        """The most basic thing Excel's strict parser checks: a malformed
+        or truncated node in ANY part fails the whole file to open."""
+        zf = self._saved_zip(seeded_db, tmp_path)
+        for name in zf.namelist():
+            if name.endswith((".xml", ".rels")):
+                ET.fromstring(zf.read(name))  # raises ET.ParseError if malformed
+
+    def test_no_data_validation_formula_carries_a_leading_equals_sign(self, seeded_db, tmp_path):
+        """The exact real bug this class of test exists to catch -- see
+        this class's own docstring."""
+        zf = self._saved_zip(seeded_db, tmp_path)
+        checked_any = False
+        for name in zf.namelist():
+            if not name.startswith("xl/worksheets/sheet"):
+                continue
+            root = ET.fromstring(zf.read(name))
+            for formula_tag in ("formula1", "formula2"):
+                for node in root.iter(f"{OOXML_MAIN_NS}{formula_tag}"):
+                    checked_any = True
+                    assert not (node.text or "").startswith("="), (
+                        f"{name}'s <{formula_tag}> stores a leading '=': {node.text!r} "
+                        "-- that's an Excel-dialog typing convention, not part of the "
+                        "value openpyxl should persist."
+                    )
+        assert checked_any, "fixture produced no dataValidation to check -- test would pass vacuously"
+
+    def test_every_table_ref_matches_its_sheets_autofilter_ref(self, seeded_db, tmp_path):
+        """A Table whose `ref` disagrees with its own sheet's `autoFilter`
+        range is exactly the kind of internal inconsistency Excel's
+        strict parser rejects.
+
+        Which SHEET owns a given `xl/tables/tableN.xml` is only knowable
+        from that sheet's own `_rels` file (a table's number and its
+        owning sheet's number are independent -- table1.xml can belong to
+        sheet8.xml, say) -- never by matching the two numbers in the file
+        names, which happened to coincide the first time this test was
+        written and is not a real invariant.
+        """
+        zf = self._saved_zip(seeded_db, tmp_path)
+        names = zf.namelist()
+        table_names = {n for n in names if n.startswith("xl/tables/table")}
+        assert table_names, "fixture produced no real Table to check -- test would pass vacuously"
+
+        table_to_sheet: dict[str, str] = {}
+        for rels_name in names:
+            if not rels_name.startswith("xl/worksheets/_rels/"):
+                continue
+            sheet_name = "xl/worksheets/" + rels_name.rsplit("/", 1)[1].removesuffix(".rels")
+            for rel in ET.fromstring(zf.read(rels_name)).iter(f"{OOXML_PACKAGE_REL_NS}Relationship"):
+                target = rel.get("Target").lstrip("/")
+                if target in table_names:
+                    table_to_sheet[target] = sheet_name
+
+        assert set(table_to_sheet) == table_names, (
+            f"table(s) with no owning sheet found via _rels: {table_names - set(table_to_sheet)}"
+        )
+        for table_name, sheet_name in table_to_sheet.items():
+            table_ref = ET.fromstring(zf.read(table_name)).get("ref")
+            sheet_root = ET.fromstring(zf.read(sheet_name))
+            autofilter = sheet_root.find(f"{OOXML_MAIN_NS}autoFilter")
+            assert autofilter is not None, f"{sheet_name} has a Table but no autoFilter"
+            assert autofilter.get("ref") == table_ref, (
+                f"{table_name}'s table ref {table_ref!r} != {sheet_name}'s autoFilter ref "
+                f"{autofilter.get('ref')!r}"
+            )
+
+    def test_every_relationship_target_actually_exists_in_the_archive(self, seeded_db, tmp_path):
+        """A `.rels` part pointing at a file that isn't in the zip is a
+        broken reference Excel refuses to silently ignore."""
+        zf = self._saved_zip(seeded_db, tmp_path)
+        names = set(zf.namelist())
+        rels_files = [n for n in names if n.endswith(".rels")]
+        assert rels_files
+        for rels_name in rels_files:
+            base_dir = rels_name.split("_rels/")[0]
+            root = ET.fromstring(zf.read(rels_name))
+            for rel in root.iter(f"{OOXML_PACKAGE_REL_NS}Relationship"):
+                target = rel.get("Target")
+                if target.startswith("/"):
+                    resolved = target.lstrip("/")
+                else:
+                    resolved = (base_dir + target).replace("./", "")
+                assert resolved in names, f"{rels_name} points at missing part {target!r}"
+
+    def test_every_tablepart_reference_resolves_to_a_real_relationship(self, seeded_db, tmp_path):
+        """A `<tableParts>` entry whose r:id has no matching Relationship
+        in that sheet's own `_rels` file is a dangling reference."""
+        zf = self._saved_zip(seeded_db, tmp_path)
+        names = set(zf.namelist())
+        checked_any = False
+        for name in names:
+            if not name.startswith("xl/worksheets/sheet") or name.endswith(".rels"):
+                continue
+            sheet_root = ET.fromstring(zf.read(name))
+            table_parts = sheet_root.find(f"{OOXML_MAIN_NS}tableParts")
+            if table_parts is None:
+                continue
+            sheet_number = name.replace("xl/worksheets/sheet", "").replace(".xml", "")
+            rels_name = f"xl/worksheets/_rels/sheet{sheet_number}.xml.rels"
+            assert rels_name in names, f"{name} declares tableParts but has no {rels_name}"
+            rel_ids = {
+                rel.get("Id")
+                for rel in ET.fromstring(zf.read(rels_name)).iter(f"{OOXML_PACKAGE_REL_NS}Relationship")
+            }
+            for part in table_parts.iter(f"{OOXML_MAIN_NS}tablePart"):
+                checked_any = True
+                r_id = part.get(f"{OOXML_DOC_REL_NS}id")
+                assert r_id in rel_ids, f"{name}'s tablePart r:id={r_id!r} has no matching relationship"
+        assert checked_any, "fixture produced no tableParts to check -- test would pass vacuously"

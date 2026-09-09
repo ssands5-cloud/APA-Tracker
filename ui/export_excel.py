@@ -501,7 +501,14 @@ def _format_matchups(writer, frame: pd.DataFrame) -> None:
     table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
     sheet.add_table(table)
 
-    validation = DataValidation(type="list", formula1="=Matchups_Table[Player]", allow_blank=True)
+    # No leading "=" -- formula1 is stored verbatim into <formula1> in the
+    # saved XML (confirmed by inspecting a real generated .xlsx as a zip).
+    # A leading "=" is a convention of Excel's OWN dialog UI, not part of
+    # the stored value; writing it into the XML produces a formula1 Excel
+    # can't parse (effectively "==Matchups_Table[Player]"), which is
+    # exactly what triggered Excel's "we found a problem with some
+    # content" repair prompt on this workbook.
+    validation = DataValidation(type="list", formula1="Matchups_Table[Player]", allow_blank=True)
     validation.error = "Choose a player already on this sheet, or leave blank."
     validation.errorTitle = "Unknown player"
     sheet.add_data_validation(validation)

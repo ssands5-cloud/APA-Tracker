@@ -263,10 +263,15 @@ The Excel "Matchups" sheet carries three things the demo tab doesn't:
 
 - **A dropdown on Column A** ("Player"), sourced from the sheet's own data
   wrapped in a real Excel Table (`Matchups_Table`) via a structured
-  reference (`=Matchups_Table[Player]`), so it auto-expands as new pairings
-  are added on a later run. Every cell already carries a real name from
-  the pipeline; the dropdown only constrains what a future manual edit can
-  be replaced with.
+  reference (`Matchups_Table[Player]`, stored with no leading `=` — that's
+  a convention of Excel's own dialog UI, not part of the value openpyxl
+  persists; a leading `=` in the saved XML produced a `<formula1>` Excel
+  itself couldn't parse and triggered its "repair" prompt on open — a real
+  bug found and fixed after Excel reported this workbook needed repair,
+  see `tests/test_export_excel.py::TestGeneratedFileOpensWithoutRepair`),
+  so it auto-expands as new pairings are added on a later run. Every cell
+  already carries a real name from the pipeline; the dropdown only
+  constrains what a future manual edit can be replaced with.
 - **Win Rate colour zones** — green ≥ 0.65, yellow 0.45–0.65, red < 0.45
   (`ui.export_excel.MATCHUPS_WIN_RATE_HIGH`/`MATCHUPS_WIN_RATE_LOW`). Win
   Rate, not Matchup Score: this sheet has no modelled win *probability*
