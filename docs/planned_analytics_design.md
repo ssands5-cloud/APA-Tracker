@@ -1,4 +1,4 @@
-# Planned: Clutch Rating and Numeric Trend Score (design only, not built)
+# Planned: Trend Score and Close-Match Win Rate (design only, not built)
 
 Not implemented yet, on purpose. Both need a real, agreed definition
 before any code — the "do not invent fields" rule that blocked Clutch
@@ -6,7 +6,14 @@ Rating and Break/Run Rate as *export* columns applies just as much to a
 freshly-computed one: a plausible-looking formula nobody signed off on is
 still a fabricated number once it has a column header.
 
-## Numeric Trend Score — straightforward, both real inputs already exist
+**Neither needs a new upstream export or a new pipeline stage.** Both are
+computable entirely from fields already ingested today
+(`analytics/player_trends.py`'s output; `Match`/`PlayerHeadToHead` rows).
+That's the answer to "what upstream fields are needed": none — the
+constraint on both is definitional (what should the number mean), not
+data availability.
+
+## Trend Score — finalized definition
 
 `analytics/player_trends.py` already computes, per (player, format,
 session):
@@ -15,67 +22,81 @@ session):
   session's full history
 - `volatility` — sample stddev (ddof=1) of SL over the last 20
   observations
+- `hot_cold_flag` — `HOT` requires `slope >= 0.05`, `volatility <= 0.40`,
+  `sample_size >= 5`; `COLD` the mirror; else `NEUTRAL`; `None` below
+  `sample_size >= 2`
 
-A numeric trend score would be a **blend of these two already-real
-fields**, not a new raw measurement. The obvious shape is a
-signal-to-noise ratio:
+Trend Score is a blend of the first two, not a new raw measurement:
 
 ```
-trend_score = regression_slope / (volatility + epsilon)
+trend_score = regression_slope / (volatility + 0.05)
 ```
 
-(`epsilon` a small constant, e.g. 0.05, so a slope with `volatility == 0`
-doesn't divide by zero or produce an artificially extreme score). A
-climbing player with a stable skill level scores higher than one climbing
-just as fast but bouncing around — which matches `hot_cold_flag`'s own
-existing gate (`HOT` requires `volatility <= 0.40`, not slope alone).
+`0.05` (not a fitted value, a heuristic floor): real observed volatility
+in this project's own fixtures runs roughly 0.2-0.7 once a player has
+enough history to compute it at all, so a floor this small only matters
+when volatility is nearly zero (a genuinely rock-steady player), where it
+keeps the ratio finite without materially damping the signal at any
+realistic real volatility level.
 
-Open question before building it: should this respect the SAME gates
-`hot_cold_flag` uses (`sample_size >= 5`), returning `None` below them, or
-report a continuous number regardless of sample size with confidence
-communicated separately? The Trend Icon work earlier explicitly avoided a
-second ungated threshold disagreeing with `hot_cold_flag` — this needs the
-same discipline: whatever ships must never imply more certainty than
-`hot_cold_flag` already claims for the same row.
+**Gate closed**: yes, reuse `hot_cold_flag`'s own gate — return `None`
+whenever `hot_cold_flag` is `None` (today: `sample_size < 2`, or
+`volatility` unavailable). A continuous score for a row `hot_cold_flag`
+itself refuses to call HOT/COLD/NEUTRAL would claim more confidence than
+this project's own tested classifier already claims for that same row —
+the exact mistake the Trend Icon work upstream of this doc was built to
+avoid.
 
-## Clutch Rating — the harder one; real data is more limited than it looks
+## Close-Match Win Rate (the metric earlier drafts called "Clutch Rating")
 
-The intuitive definition — "performs well when it matters" — needs a
-real signal for *what mattered*, and the honest answer is APA's captured
-data gives partial, not full, support:
+Renamed on purpose, and finalized as the name here: this measures a real,
+narrow thing — win rate specifically in close team matches — not poise or
+pressure performance in general, and should never be labeled more strongly
+than what it actually is.
 
-- **Not available at all**: which individual game within a team match was
-  the deciding one, or the score at the time a given game was played.
-  `matchPositionNumber` is a fixed roster-position assignment, not
-  temporal sequence — there is no real field that says "this was the
-  match-deciding rack."
-- **Available**: the team match's own final margin
-  (`Match.home_score`/`away_score`) and which individual games a specific
-  player won or lost within that match (`PlayerHeadToHead`/`PlayerMatch`).
+**What's real and what isn't**: APA's captured data has no field for which
+individual game within a team match was the deciding one, or the score at
+the time a given game was played (`matchPositionNumber` is a fixed
+roster-position assignment, not temporal sequence). What IS real: the team
+match's own final margin (`Match.home_score`/`away_score`) and which
+individual games a specific player won or lost within that match
+(`PlayerHeadToHead`/`PlayerMatch`).
 
-The defensible proxy this supports: **win rate in team matches that were
-close**, e.g. decided by 1-2 points, versus the player's overall win rate.
-A player who wins a higher share of their individual games specifically in
-close team matches has a real, measurable tendency — genuinely computed
-from real events — but it is a proxy for "performs in tight matches," not
-a measurement of poise or pressure performance, and should be labeled as
-exactly that (`"Close-Match Win Rate"`, not `"Clutch Rating"`, unless
-there's a firm reason to claim the stronger label).
+**Close-match threshold, checked against this project's own real data,
+not picked blind**: the 14 decided team matches in the current database
+have margins `[2, 2, 2, 4, 5, 6, 6, 8, 9, 10, 14, 14, 21, 28]` (median 8).
+**Margin <= 4** is the finalized threshold — it captures the bottom
+quartile of real matches actually played (4 of 14) without being so tight
+it only ever matches a single-point squeaker. Stated as a heuristic, not a
+fitted one, the same way `MATCHUPS_RISK_SL_GAP`/`HOT_SLOPE_MIN` are
+elsewhere in this project — and flagged as genuinely provisional: 14
+matches is a small sample, and 8-ball/9-ball divisions may play to
+different point totals, which could argue for a per-format threshold once
+there's enough data in each to check that separately rather than guess.
 
-Open questions before building it:
-- What margin counts as "close"? (a real threshold to pick and document,
-  same as `MATCHUPS_RISK_SL_GAP` or `HOT_SLOPE_MIN` elsewhere in this
-  project — a judgment call, not a fitted number, and should say so)
-- Minimum sample size before reporting anything (a player with one close
-  match played has no real signal yet)
-- Whether to shrink toward the player's overall win rate the way
-  `analytics.head_to_head._expected_value` already shrinks a thin pairing
-  toward a baseline, so one close-match fluke can't read as a real pattern
+**Minimum sample, finalized**: `>= 3` close matches played before
+reporting anything; `None` below that, the same "no data" convention as
+`volatility`/`regression_slope`.
+
+**Shrinkage, finalized**: reuse the existing `analytics.matchups.
+reliability_weight(n) = n / (n + 3)` curve — the same shrinkage this
+project already uses for a thin head-to-head record — rather than invent a
+second one. At the `n >= 3` floor above, a close-match win rate is
+weighted `3/6 = 0.5` toward the player's overall win rate; it only
+approaches full weight past roughly 10 close matches played, which a
+single season is unlikely to reach for most players. That's intentional:
+a small, real pattern should read as tentative, not asserted.
+
+```
+shrunk_close_match_win_rate =
+    reliability_weight(n) * close_match_win_rate
+    + (1 - reliability_weight(n)) * overall_win_rate
+```
 
 ## Not started
 
-No code for either yet. Confirm the open questions above (particularly
-Clutch Rating's proxy definition and label) before this becomes an
-analytics module and an export column, the same order every other real
-metric in this project was built in: spec first, formula documented,
-*then* wired into a sheet.
+No code for either yet. Both definitions above are finalized and ready to
+implement on request — this doc is the spec, not a placeholder for one.
+Building either still follows this project's usual order: analytics module
+with its own tests first, then wired into an export column, never the
+reverse.
