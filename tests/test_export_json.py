@@ -26,13 +26,13 @@ from database.ingest import (
     upsert_player,
     upsert_team,
 )
-from database.models import Base
+from database.models import Base, PlayerTrend
 from ui.export_json import export_to_json
 
 REQUIRED_TOP_LEVEL_KEYS = {
     "generated_at", "teams", "matches", "standings", "player_stats",
     "match_scores", "career_stats", "team_history", "skill_level_history",
-    "skill_level_summary", "matchups",
+    "skill_level_summary", "matchups", "player_trends", "close_match_stats",
 }
 
 REQUIRED_MATCH_KEYS = {
@@ -198,6 +198,8 @@ class TestEmptyDatabase:
         assert document["skill_level_history"] == []
         assert document["skill_level_summary"] == []
         assert document["matchups"] == []
+        assert document["player_trends"] == []
+        assert document["close_match_stats"] == []
 
     def test_generated_at_is_always_present(self, db, tmp_path):
         document = _export(db, tmp_path)
@@ -325,6 +327,94 @@ class TestMatchups:
             "sl_delta": 1.0, "trend": "up", "volatility": 1, "matchup_score": 72, "confidence_score": 63,
             "format": None, "session_name": None, "has_history": True,
         }]
+
+class TestPlayerTrends:
+    """Previously not exported here at all -- the demo tab reads
+    player_trends straight from the database instead of this JSON. Real,
+    already-computed fields, plus trend_score (analytics.player_trends.
+    trend_score), itself a pure function of two of this row's own fields."""
+
+    def test_a_real_trend_row_shape_including_the_derived_trend_score(self, db, tmp_path):
+        player = upsert_player(db, "P1", "Alice")
+        db.add(PlayerTrend(
+            player_id=player.id, format="8-ball", session_name="Fall 2026",
+            sample_size=8, current_skill_level=5, regression_slope=0.08,
+            volatility=0.2, sl_stability=0.83, hot_cold_flag="HOT",
+            projected_sl_change_probability=0.6,
+        ))
+        db.commit()
+
+        document = _export(db, tmp_path)
+        assert document["player_trends"] == [{
+            "player": "Alice", "format": "8-ball", "session_name": "Fall 2026",
+            "sample_size": 8, "current_skill_level": 5, "regression_slope": 0.08,
+            "volatility": 0.2, "sl_stability": 0.83, "hot_cold_flag": "HOT",
+            "projected_sl_change_probability": 0.6,
+            "trend_score": round(0.08 / (0.2 + 0.05), 4),
+        }]
+
+    def test_insufficient_evidence_is_a_real_null_not_a_fabricated_score(self, db, tmp_path):
+        player = upsert_player(db, "P1", "Alice")
+        db.add(PlayerTrend(
+            player_id=player.id, format="8-ball", session_name="Fall 2026",
+            sample_size=1, current_skill_level=5, regression_slope=None,
+            volatility=None, sl_stability=None, hot_cold_flag=None,
+            projected_sl_change_probability=None,
+        ))
+        db.commit()
+
+        document = _export(db, tmp_path)
+        [row] = document["player_trends"]
+        assert row["hot_cold_flag"] is None
+        assert row["trend_score"] is None
+
+
+class TestCloseMatchStats:
+    """Same population, same shrinkage, same close_match_band function as
+    ui.export_excel's Close_Match_Stats sheet -- see
+    analytics/close_match_performance.py."""
+
+    def test_a_real_players_shrunk_rate_and_band(self, db, tmp_path):
+        """Perfect in close matches, poor overall -- the shrunk rate should
+        land above the overall rate (real shrinkage), earning "Strong"."""
+        upsert_player(db, "P1", "Alice")
+        upsert_player(db, "P2", "Bob")
+        for i in range(3):
+            match_id = f"CLOSE{i}"
+            ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
+                         home_team_name="Home", away_team_name="Away",
+                         status="COMPLETED", home_score=18, away_score=16)
+            ingest_head_to_head(db, match_id, [{
+                "match_id": match_id, "player_id": "P1", "player_name": "Alice",
+                "opponent_id": "P2", "opponent_name": "Bob",
+                "own_skill_level": 5, "opponent_skill_level": 5, "result": "W",
+            }])
+        for i in range(7):
+            match_id = f"BLOWOUT{i}"
+            ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
+                         home_team_name="Home", away_team_name="Away",
+                         status="COMPLETED", home_score=25, away_score=5)
+            ingest_head_to_head(db, match_id, [{
+                "match_id": match_id, "player_id": "P1", "player_name": "Alice",
+                "opponent_id": "P2", "opponent_name": "Bob",
+                "own_skill_level": 5, "opponent_skill_level": 5, "result": "L",
+            }])
+
+        document = _export(db, tmp_path)
+        [row] = document["close_match_stats"]
+        assert row["player"] == "Alice"
+        assert row["overall_matches_played"] == 10
+        assert row["close_matches_played"] == 3
+        assert row["close_win_rate"] == 1.0
+        assert row["overall_win_rate"] == 0.3
+        assert row["shrunk_win_rate"] > row["overall_win_rate"]
+        assert row["close_match_band"] == "Strong"
+
+    def test_a_player_never_seen_in_head_to_head_is_not_listed(self, db, tmp_path):
+        upsert_player(db, "P9", "Never Played Anyone")
+        document = _export(db, tmp_path)
+        assert document["close_match_stats"] == []
+
 
 class TestMatchupNeutralFill:
     """P1-8: a known player with no head-to-head history against a

@@ -128,6 +128,36 @@ Two consequences worth stating plainly:
 
 `NULL` when slope or volatility is `NULL`, or `sample_size < 5`.
 
+## Trend Score
+
+Added later than the rest of this table — see
+`docs/planned_analytics_design.md` for how it was specced before it was
+built. A single signed number blending direction and steadiness:
+
+```
+trend_score = regression_slope / (volatility + 0.05)
+```
+
+`0.05` is a heuristic floor, not a fitted value: real observed volatility
+in this project's data runs roughly 0.2-0.7 once a player has enough
+history to compute it at all, so the floor only matters when volatility is
+nearly zero, where it keeps the ratio finite without materially damping
+the signal at any realistic volatility level.
+
+**Gated on `hot_cold_flag` being non-`NULL` for the same inputs** — not a
+second, independently-derived condition. Concretely: `NULL` below
+`sample_size = 5`, or when volatility itself is unknown, the exact same
+gate `hot_cold_flag` already uses. This is deliberate: a continuous score
+for a row `hot_cold_flag` itself refuses to classify would claim more
+confidence than this project's own tested classifier already claims for
+that row.
+
+Rendered as the `Trend Icon` column's numeric sibling (`ui/export_excel.py`),
+never as a second, independently-thresholded arrow — `Trend Icon` is
+already driven by `hot_cold_flag` alone, and a second arrow with its own
+cutoff on `trend_score`'s scale would risk disagreeing with it for the
+exact reason described above.
+
 ## Minimum evidence
 
 | Metric | Minimum observations | If insufficient |

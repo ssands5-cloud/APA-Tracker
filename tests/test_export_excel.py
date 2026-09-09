@@ -23,6 +23,7 @@ from database.ingest import (
     upsert_player,
     upsert_team,
 )
+from analytics.close_match_performance import CLOSE_MATCH_BAND_MARGIN, close_match_band
 from database.models import Base, Player, PlayerTrend
 from ui.export_excel import (
     MATCHUPS_WIN_RATE_HIGH,
@@ -43,6 +44,9 @@ EXPECTED_SHEETS = {
     # excluded (clutch rating, numeric trend score, break/run rate,
     # defensive-shot rate -- none are real fields anywhere in this project).
     "Team_Stats",
+    # Close-Match Win Rate -- docs/planned_analytics_design.md -- one row
+    # per player with at least one real head-to-head game.
+    "Close_Match_Stats",
     "Matchups",
     # Head-to-Head Advantage Engine (docs/head_to_head.md) -- its own
     # sheet, alongside Matchups rather than replacing it.
@@ -399,6 +403,74 @@ class TestHeadToHeadRiskBandFormatting:
         assert f"AND({score_letter}2<=40,{probability_letter}2<=0.4)" in formulas
 
 
+class TestCloseMatchStatsSheet:
+    def _seed_close_and_blowout_games(self, db):
+        upsert_player(db, "P1", "Alice")
+        upsert_player(db, "P2", "Bob")
+        for i in range(3):
+            match_id = f"CLOSE{i}"
+            ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
+                         home_team_name="Home", away_team_name="Away",
+                         status="COMPLETED", home_score=18, away_score=16)
+            ingest_head_to_head(db, match_id, [{
+                "match_id": match_id, "player_id": "P1", "player_name": "Alice",
+                "opponent_id": "P2", "opponent_name": "Bob",
+                "own_skill_level": 5, "opponent_skill_level": 5, "result": "W",
+            }])
+        for i in range(7):
+            match_id = f"BLOWOUT{i}"
+            ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
+                         home_team_name="Home", away_team_name="Away",
+                         status="COMPLETED", home_score=25, away_score=5)
+            ingest_head_to_head(db, match_id, [{
+                "match_id": match_id, "player_id": "P1", "player_name": "Alice",
+                "opponent_id": "P2", "opponent_name": "Bob",
+                "own_skill_level": 5, "opponent_skill_level": 5, "result": "L",
+            }])
+
+    def test_real_columns_and_a_strong_band(self, db, tmp_path):
+        self._seed_close_and_blowout_games(db)
+        wb = _export(db, tmp_path)
+        ws = wb["Close_Match_Stats"]
+        headers = [c.value for c in ws[1]]
+        assert headers == [
+            "Player", "Overall Matches", "Overall Win Rate", "Close Matches",
+            "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
+        ]
+        row = dict(zip(headers, [c.value for c in ws[2]]))
+        assert row["Player"] == "Alice"
+        assert row["Overall Matches"] == 10
+        assert row["Close Matches"] == 3
+        assert row["Close Win Rate"] == 1.0
+        # Shrunk rate sits between the perfect close record and the poor
+        # overall one -- real shrinkage, not a face-value 1.0.
+        assert 0.0 < row["Close-Match Win Rate (Shrunk)"] < 1.0
+        assert row["Close-Match Band"] == close_match_band(
+            row["Close-Match Win Rate (Shrunk)"], row["Overall Win Rate"]
+        )
+
+    def test_a_player_never_seen_in_head_to_head_is_not_listed(self, db, tmp_path):
+        upsert_player(db, "P9", "Never Played Anyone")
+        wb = _export(db, tmp_path)
+        names = [row[0] for row in wb["Close_Match_Stats"].iter_rows(min_row=2, values_only=True)]
+        assert "Never Played Anyone" not in names
+
+
+class TestCloseMatchBand:
+    def test_a_rate_well_above_overall_is_strong(self):
+        assert close_match_band(0.8, 0.8 - CLOSE_MATCH_BAND_MARGIN - 0.01) == "Strong"
+
+    def test_a_rate_well_below_overall_is_struggles(self):
+        assert close_match_band(0.4, 0.4 + CLOSE_MATCH_BAND_MARGIN + 0.01) == "Struggles"
+
+    def test_a_rate_close_to_overall_is_even(self):
+        assert close_match_band(0.5, 0.5) == "Even"
+
+    def test_missing_either_rate_is_unknown_not_a_guess(self):
+        assert close_match_band(None, 0.5) == "Unknown"
+        assert close_match_band(0.5, None) == "Unknown"
+
+
 class TestTeamStatsSheet:
     def test_real_columns_and_values_for_a_decided_home_win(self, db, tmp_path):
         home = upsert_team(db, "T1", "Mark It Up")
@@ -471,7 +543,7 @@ class TestTrendIcon:
 
 
 class TestTrendIconInWorkbook:
-    def test_a_real_hot_row_shows_the_up_arrow_in_the_last_column(self, db, tmp_path):
+    def test_a_real_hot_row_shows_the_up_arrow_and_a_real_trend_score(self, db, tmp_path):
         player = upsert_player(db, "P1", "Alice")
         db.add(PlayerTrend(
             player_id=player.id, format="8-ball", session_name="Fall 2026",
@@ -484,8 +556,10 @@ class TestTrendIconInWorkbook:
         wb = _export(db, tmp_path)
         ws = wb["Player Trends"]
         headers = [c.value for c in ws[1]]
-        assert headers[-1] == "Trend Icon"
+        # Trend Score is appended after Trend Icon, not in place of it.
+        assert headers[-2:] == ["Trend Icon", "Trend Score"]
 
         row = dict(zip(headers, [c.value for c in ws[2]]))
         assert row["Hot/Cold"] == "HOT"
         assert row["Trend Icon"] == TREND_ICON_UP
+        assert row["Trend Score"] == round(0.08 / (0.2 + 0.05), 4)

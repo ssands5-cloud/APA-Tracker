@@ -198,6 +198,36 @@ def hot_cold_flag(slope: Optional[float], sigma: Optional[float],
     return NEUTRAL
 
 
+TREND_SCORE_VOLATILITY_FLOOR = 0.05
+"""Not a fitted value -- a heuristic floor. Real observed volatility in
+this project's own data runs roughly 0.2-0.7 once a player has enough
+history to compute it at all, so a floor this small only matters when
+volatility is nearly zero (a genuinely rock-steady player), where it keeps
+the ratio finite without materially damping the signal at any realistic
+real volatility level. See docs/planned_analytics_design.md."""
+
+
+def trend_score(slope: Optional[float], sigma: Optional[float],
+                sample_size: int) -> Optional[float]:
+    """regression_slope / (volatility + TREND_SCORE_VOLATILITY_FLOOR) -- a
+    single signed number combining direction (slope) and steadiness
+    (volatility): a player climbing steadily scores higher than one
+    climbing just as fast but bouncing around.
+
+    Gated on hot_cold_flag(...) being non-None for the SAME inputs, not a
+    second, independently-derived condition -- this can never claim more
+    confidence than the real, tested classifier already claims for the
+    same row (the exact discipline the Trend Icon column already applies:
+    see ui.export_excel.trend_icon). Concretely: None below sample_size=5,
+    or when volatility itself is unknown.
+    """
+    if hot_cold_flag(slope, sigma, sample_size) is None:
+        return None
+    if slope is None:
+        return None
+    return round(slope / (sigma + TREND_SCORE_VOLATILITY_FLOOR), 4)
+
+
 def projected_sl_change_probability(slope: Optional[float], sigma: Optional[float],
                                     sample_size: int) -> Optional[float]:
     """Transparent heuristic, not a learned model:

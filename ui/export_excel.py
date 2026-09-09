@@ -11,7 +11,9 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from analytics.close_match_performance import close_match_band, close_match_performance
 from analytics.player_stats import summarize_player
+from analytics.player_trends import trend_score
 from analytics.team_stats import (
     average_skill_level,
     opponent_strength_index,
@@ -19,6 +21,7 @@ from analytics.team_stats import (
 )
 from database.models import PlayerHeadToHead
 from database.queries import (
+    all_head_to_head,
     player_trends,
     head_to_head_advantage,
     all_matches,
@@ -45,6 +48,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     team_history_df = _team_history_dataframe(db)
     skill_level_history_df = _skill_level_history_dataframe(db)
     team_stats_df = _team_stats_dataframe(db)
+    close_match_stats_df = _close_match_stats_dataframe(db)
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
     player_trends_df = _player_trends_dataframe(db)
@@ -58,6 +62,8 @@ def export_to_excel(db: Session, config: dict) -> str:
         skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
         team_stats_df.to_excel(writer, sheet_name="Team_Stats", index=False)
         _format_team_stats(writer, team_stats_df)
+        close_match_stats_df.to_excel(writer, sheet_name="Close_Match_Stats", index=False)
+        _format_close_match_stats(writer, close_match_stats_df)
         matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
         _format_matchups(writer, matchups_df)
         head_to_head_df.to_excel(writer, sheet_name="Head-to-Head", index=False)
@@ -286,6 +292,95 @@ def _format_team_stats(writer, frame: pd.DataFrame) -> None:
         for cell in row:
             if isinstance(cell.value, (int, float)):
                 cell.number_format = "0.0%"
+
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
+
+
+# --- Close-Match Win Rate -- docs/planned_analytics_design.md ---------------
+# close_match_band/CLOSE_MATCH_BAND_MARGIN live in analytics/close_match_
+# performance.py, not here -- ui.export_json needs the exact same
+# categorisation, and importing one shared function beats defining it
+# twice and risking the workbook and the JSON document disagreeing about
+# the same player's band.
+
+CLOSE_MATCH_STATS_COLUMNS = [
+    "Player", "Overall Matches", "Overall Win Rate", "Close Matches",
+    "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
+]
+
+
+def _close_match_stats_dataframe(db: Session) -> pd.DataFrame:
+    """One row per player who has at least one real PlayerHeadToHead game
+    -- a player never involved in a scored head-to-head has nothing to
+    report here, the same reasoning the Matchups sheet already applies.
+    Sorted by name for a deterministic row order (see
+    tests/test_full_pipeline_integration.py's determinism check), not
+    whatever order a dict of player ids happens to iterate in.
+    """
+    from collections import defaultdict
+
+    rows_by_player: dict[int, list[PlayerHeadToHead]] = defaultdict(list)
+    for row in all_head_to_head(db):
+        if row.player_id is not None:
+            rows_by_player[row.player_id].append(row)
+
+    records = []
+    for rows in rows_by_player.values():
+        player = rows[0].player
+        result = close_match_performance(rows)
+        records.append({
+            "Player": player.name if player else "",
+            "Overall Matches": result.overall_matches_played,
+            "Overall Win Rate": result.overall_win_rate,
+            "Close Matches": result.close_matches_played,
+            "Close Win Rate": result.close_win_rate,
+            "Close-Match Win Rate (Shrunk)": result.shrunk_win_rate,
+            "Close-Match Band": close_match_band(result.shrunk_win_rate, result.overall_win_rate),
+        })
+    frame = pd.DataFrame(records, columns=CLOSE_MATCH_STATS_COLUMNS)
+    return frame.sort_values("Player", kind="stable").reset_index(drop=True)
+
+
+def _format_close_match_stats(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, render the two rate columns
+    as percentages, and colour Close-Match Band the same way Risk Band and
+    Trend Icon already are -- one consistent green/yellow/red vocabulary
+    across the workbook rather than a new one per sheet."""
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    sheet = writer.sheets["Close_Match_Stats"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    for name in ("Overall Win Rate", "Close-Match Win Rate (Shrunk)"):
+        column = CLOSE_MATCH_STATS_COLUMNS.index(name) + 1
+        for row in sheet.iter_rows(min_row=2, min_col=column, max_col=column):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = "0.0%"
+
+    band_column = CLOSE_MATCH_STATS_COLUMNS.index("Close-Match Band") + 1
+    band_letter = get_column_letter(band_column)
+    band_range = f"{band_letter}2:{band_letter}{last_row}"
+    for text, fill_colour, font_colour in (
+        ("Strong", "C6EFCE", "006100"),
+        ("Even", "FFEB9C", "9C6500"),
+        ("Struggles", "FFC7CE", "9C0006"),
+    ):
+        sheet.conditional_formatting.add(
+            band_range,
+            CellIsRule(operator="equal", formula=[f'"{text}"'],
+                       fill=PatternFill("solid", fgColor=fill_colour),
+                       font=Font(color=font_colour, bold=True)),
+        )
 
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
@@ -587,6 +682,7 @@ TRENDS_COLUMNS = [
     "Projected SL Change Probability",
 ]
 TRENDS_ICON_COLUMN = "Trend Icon"
+TRENDS_SCORE_COLUMN = "Trend Score"
 
 # A directional glyph driven ENTIRELY by the Hot/Cold flag already computed
 # by analytics.player_trends.hot_cold_flag (HOT_SLOPE_MIN/COLD_SLOPE_MAX,
@@ -645,10 +741,13 @@ def _player_trends_dataframe(db: Session) -> pd.DataFrame:
                     row.projected_sl_change_probability
                 ),
                 TRENDS_ICON_COLUMN: trend_icon(row.hot_cold_flag),
+                TRENDS_SCORE_COLUMN: shown(
+                    trend_score(row.regression_slope, row.volatility, row.sample_size)
+                ),
             }
             for row in player_trends(db)
         ],
-        columns=TRENDS_COLUMNS + [TRENDS_ICON_COLUMN],
+        columns=TRENDS_COLUMNS + [TRENDS_ICON_COLUMN, TRENDS_SCORE_COLUMN],
     )
 
 
@@ -690,7 +789,7 @@ def _format_player_trends(writer, frame: pd.DataFrame) -> None:
     # flag rendered as a glyph -- the two columns must never look like they
     # disagree. TRENDS_NO_DATA gets no colour: a real "no evidence yet" is
     # not the same as measured-and-flat.
-    icon_column = len(frame.columns)  # TRENDS_ICON_COLUMN is always the last column
+    icon_column = list(frame.columns).index(TRENDS_ICON_COLUMN) + 1
     icon_range = (f"{get_column_letter(icon_column)}2:"
                   f"{get_column_letter(icon_column)}{last_row}")
     for text, fill_colour, font_colour in (

@@ -17,9 +17,12 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from analytics.close_match_performance import close_match_band, close_match_performance
 from analytics.player_stats import summarize_player
+from analytics.player_trends import trend_score
 from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
 from database.queries import (
+    all_head_to_head,
     all_matches,
     all_players,
     all_teams,
@@ -28,6 +31,7 @@ from database.queries import (
     match_scores,
     matchups_with_neutral_fill,
     player_match_history,
+    player_trends,
     skill_level_history,
     team_history,
 )
@@ -51,6 +55,8 @@ def export_to_json(db: Session, config: dict) -> str:
         "skill_level_history": _skill_level_history(db),
         "skill_level_summary": _skill_level_summary(db),
         "matchups": _matchups(db),
+        "player_trends": _player_trends(db),
+        "close_match_stats": _close_match_stats(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -268,3 +274,61 @@ def _matchups(db: Session) -> list[dict]:
     yet (P1-8) -- database.queries.matchups_with_neutral_fill already
     returns exactly this shape, so nothing to remap here."""
     return matchups_with_neutral_fill(db)
+
+
+def _player_trends(db: Session) -> list[dict]:
+    """The Player Trend Analyzer's real, already-computed rows (nothing
+    recomputed except trend_score, itself a pure function of two of this
+    row's own real fields -- see analytics.player_trends.trend_score),
+    plus trend_score itself. Previously not exported here at all -- the
+    demo tab reads player_trends straight from the database instead; this
+    brings the JSON export in line with what the Excel sheet and the tab
+    already show.
+    """
+    rows = []
+    for row in player_trends(db):
+        rows.append({
+            "player": row.player.name if row.player else "",
+            "format": row.format,
+            "session_name": row.session_name,
+            "sample_size": row.sample_size,
+            "current_skill_level": row.current_skill_level,
+            "regression_slope": row.regression_slope,
+            "volatility": row.volatility,
+            "sl_stability": row.sl_stability,
+            "hot_cold_flag": row.hot_cold_flag,
+            "projected_sl_change_probability": row.projected_sl_change_probability,
+            "trend_score": trend_score(row.regression_slope, row.volatility, row.sample_size),
+        })
+    return rows
+
+
+def _close_match_stats(db: Session) -> list[dict]:
+    """Close-Match Win Rate -- docs/planned_analytics_design.md. One row
+    per player with at least one real PlayerHeadToHead game (same
+    population, same shape, as ui.export_excel's Close_Match_Stats sheet
+    -- close_match_band is the SAME shared function, so the two can never
+    disagree about a player's band). Sorted by name for a deterministic
+    row order.
+    """
+    from collections import defaultdict
+
+    rows_by_player: dict[int, list] = defaultdict(list)
+    for row in all_head_to_head(db):
+        if row.player_id is not None:
+            rows_by_player[row.player_id].append(row)
+
+    records = []
+    for rows in rows_by_player.values():
+        player = rows[0].player
+        result = close_match_performance(rows)
+        records.append({
+            "player": player.name if player else "",
+            "overall_matches_played": result.overall_matches_played,
+            "overall_win_rate": result.overall_win_rate,
+            "close_matches_played": result.close_matches_played,
+            "close_win_rate": result.close_win_rate,
+            "shrunk_win_rate": result.shrunk_win_rate,
+            "close_match_band": close_match_band(result.shrunk_win_rate, result.overall_win_rate),
+        })
+    return sorted(records, key=lambda r: r["player"])

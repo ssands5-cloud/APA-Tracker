@@ -1,10 +1,13 @@
-# Planned: Trend Score and Close-Match Win Rate (design only, not built)
+# Design history: Trend Score and Close-Match Win Rate
 
-Not implemented yet, on purpose. Both need a real, agreed definition
-before any code — the "do not invent fields" rule that blocked Clutch
-Rating and Break/Run Rate as *export* columns applies just as much to a
-freshly-computed one: a plausible-looking formula nobody signed off on is
-still a fabricated number once it has a column header.
+**Both are now built** — this doc is kept as the record of how they were
+specced *before* any code, not a statement that they're still pending.
+Current docs: `docs/player_trends.md`'s "Trend Score" section and
+`docs/close_match_performance.md`. The discipline below (finalize the
+definition first, then implement) is why neither shipped with a
+plausible-looking formula nobody had signed off on — the "do not invent
+fields" rule that blocked Clutch Rating and Break/Run Rate as *export*
+columns applies just as much to a freshly-computed one.
 
 **Neither needs a new upstream export or a new pipeline stage.** Both are
 computable entirely from fields already ingested today
@@ -93,10 +96,13 @@ shrunk_close_match_win_rate =
     + (1 - reliability_weight(n)) * overall_win_rate
 ```
 
-## Not started
+## Built, following the order below
 
-No code for either yet. Both definitions above are finalized and ready to
-implement on request — this doc is the spec, not a placeholder for one.
-Building either still follows this project's usual order: analytics module
-with its own tests first, then wired into an export column, never the
-reverse.
+Both were implemented in exactly the order this doc's own closing note
+called for: an analytics module with its own tests first
+(`analytics/player_trends.trend_score`;
+`analytics/close_match_performance.py`), then wired into `ui/export_json.py`
+and `ui/export_excel.py`. See `docs/player_trends.md` and
+`docs/close_match_performance.md` for the current, maintained
+documentation — this file is the design history, not the source of truth
+for behavior going forward.

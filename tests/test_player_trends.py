@@ -34,6 +34,7 @@ from analytics.player_trends import (
     NEUTRAL,
     PROBABILITY_SAMPLE_CAP,
     STABLE_VOLATILITY_MAX,
+    TREND_SCORE_VOLATILITY_FLOOR,
     VOLATILITY_WINDOW,
     evaluate,
     hot_cold_flag,
@@ -41,6 +42,7 @@ from analytics.player_trends import (
     projected_sl_change_probability,
     regression_slope,
     sl_stability,
+    trend_score,
     volatility,
 )
 from database.ingest import ingest_player_trends, prune_player_trends_not_in
@@ -185,6 +187,43 @@ class TestHotCold:
         assert hot_cold_flag(0.5, 0.1, 10) == "HOT"
         assert hot_cold_flag(-0.5, 0.1, 10) == "COLD"
         assert hot_cold_flag(0.0, 0.1, 10) == "NEUTRAL"
+
+
+# =============================================================================
+# Trend Score -- docs/planned_analytics_design.md
+# =============================================================================
+
+class TestTrendScore:
+    def test_matches_the_documented_formula(self):
+        slope, sigma, n = 0.3, 0.2, 10
+        expected = round(slope / (sigma + TREND_SCORE_VOLATILITY_FLOOR), 4)
+        assert trend_score(slope, sigma, n) == expected
+
+    def test_a_negative_slope_yields_a_negative_score(self):
+        assert trend_score(-0.3, 0.2, 10) < 0
+
+    def test_gated_on_hot_cold_flag_not_a_second_condition(self):
+        """Any input combination hot_cold_flag refuses to classify must
+        also refuse a trend_score -- checked by construction (same gate
+        function), not by re-deriving the same thresholds a second time
+        and risking them drifting apart."""
+        assert hot_cold_flag(0.5, 0.1, MIN_SAMPLE_SIZE_CLASSIFICATION - 1) is None
+        assert trend_score(0.5, 0.1, MIN_SAMPLE_SIZE_CLASSIFICATION - 1) is None
+
+    def test_missing_volatility_is_none(self):
+        assert trend_score(0.5, None, 10) is None
+
+    def test_a_volatile_player_scores_lower_than_a_steady_one_at_the_same_slope(self):
+        """Direction alone isn't the whole signal -- climbing steadily
+        should score higher than climbing just as fast while bouncing
+        around, the same distinction hot_cold_flag's own volatility gate
+        makes."""
+        steady = trend_score(0.3, 0.1, 10)
+        volatile = trend_score(0.3, STABLE_VOLATILITY_MAX, 10)
+        assert steady > volatile
+
+    def test_zero_volatility_does_not_raise_or_blow_up(self):
+        assert trend_score(0.3, 0.0, 10) == round(0.3 / TREND_SCORE_VOLATILITY_FLOOR, 4)
 
 
 # =============================================================================
@@ -587,14 +626,16 @@ class TestExcelSheet:
     def test_headers_match_the_spec_order(self, seeded, tmp_path):
         ingest_player_trends(seeded, build_rows(seeded))
         sheet = self._sheet(seeded, tmp_path)
-        # "Trend Icon" is appended after the governing spec's own ten
-        # columns, not inserted into them -- a directional glyph derived
-        # entirely from Hot/Cold (see ui.export_excel.trend_icon), not a
-        # change to this documented order.
+        # "Trend Icon" and "Trend Score" are appended after the governing
+        # spec's own ten columns, not inserted into them -- a directional
+        # glyph derived entirely from Hot/Cold (see ui.export_excel.trend_icon)
+        # and a signal-to-noise blend of Regression Slope/Volatility (see
+        # analytics.player_trends.trend_score), not a change to this
+        # documented order.
         assert [c.value for c in next(sheet.iter_rows(max_row=1))] == [
             "Player", "Format", "Session", "Sample Size", "Current SL",
             "Regression Slope", "Volatility", "SL Stability", "Hot/Cold",
-            "Projected SL Change Probability", "Trend Icon",
+            "Projected SL Change Probability", "Trend Icon", "Trend Score",
         ]
 
     def test_the_header_is_frozen_and_filtered(self, seeded, tmp_path):

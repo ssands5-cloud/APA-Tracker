@@ -147,7 +147,7 @@ class TestExcelExportSeesLiveData:
         workbook = openpyxl.load_workbook(path)
         assert workbook.sheetnames == [
             "Standings", "Player Stats", "Career Stats", "Team History",
-            "Skill Level History", "Team_Stats", "Matchups", "Head-to-Head",
+            "Skill Level History", "Team_Stats", "Close_Match_Stats", "Matchups", "Head-to-Head",
             "Player Trends", "Captain's Edge",
         ]
 
