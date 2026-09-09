@@ -21,6 +21,7 @@ from analytics.close_match_performance import close_match_band, close_match_perf
 from analytics.player_stats import summarize_player
 from analytics.player_trends import trend_score
 from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
+from database.models import Team
 from database.queries import (
     all_head_to_head,
     all_matches,
@@ -57,6 +58,9 @@ def export_to_json(db: Session, config: dict) -> str:
         "matchups": _matchups(db),
         "player_trends": _player_trends(db),
         "close_match_stats": _close_match_stats(db),
+        "team_roster": _team_roster(db, config),
+        "opponent_rosters": _opponent_rosters(db, config),
+        "schedule": _schedule(db, config),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -332,3 +336,98 @@ def _close_match_stats(db: Session) -> list[dict]:
             "close_match_band": close_match_band(result.shrunk_win_rate, result.overall_win_rate),
         })
     return sorted(records, key=lambda r: r["player"])
+
+
+def _configured_team_id(config: dict) -> str:
+    """The real, already-configured 'your team' id (apa_config.yaml's
+    team.team_id) -- not a fabricated concept. Verified against the real
+    database before this was built: the shipped config's team_id
+    (13082948) resolves to a genuine Team row this project's own account
+    actually plays on. Blank if unconfigured -- never a guessed default."""
+    return str((config.get("team") or {}).get("team_id") or "")
+
+
+def _roster_rows(team: Team) -> list[dict]:
+    return [
+        {"player": p.name, "player_id": p.external_id, "skill_level": p.skill_level}
+        for p in team.players
+    ]
+
+
+def _team_roster(db: Session, config: dict) -> list[dict]:
+    """The configured team's real roster only (Team.players, the same
+    real relationship every other per-team view already uses) -- empty,
+    not guessed, when no team is configured or it matches no real Team row.
+    """
+    team_id = _configured_team_id(config)
+    if not team_id:
+        return []
+    team = db.query(Team).filter_by(external_id=team_id).one_or_none()
+    return _roster_rows(team) if team is not None else []
+
+
+def _schedule(db: Session, config: dict) -> list[dict]:
+    """Real schedule rows for the configured team only: week, date,
+    opponent team, your player, opponent player, both real skill levels,
+    result, and the real match margin -- from Match + PlayerHeadToHead,
+    the same real sources Close_Match_Stats and Matchups already use.
+
+    Deliberately OMITS racks, notes, a "clutch" flag, and a "break/run"
+    flag: none of these are real fields anywhere in this project's
+    captured data (see docs/close_match_performance.md and
+    docs/head_to_head.md's "Unavailable APA Fields"). Margin IS real and
+    included, since it's already used for close-match detection elsewhere
+    (analytics.close_match_performance.is_close_match).
+
+    Empty when no team is configured, or it matches no real Team row --
+    "your schedule" has no meaning without a real "you".
+    """
+    team_external_id = _configured_team_id(config)
+    if not team_external_id:
+        return []
+    team = db.query(Team).filter_by(external_id=team_external_id).one_or_none()
+    if team is None:
+        return []
+
+    rows = []
+    for row in all_head_to_head(db):
+        if row.player is None or row.player.team_id != team.id:
+            continue
+        match = row.match
+        if match is None:
+            continue
+        if match.home_team_id == team_external_id:
+            opponent_team_name = match.away_team_name
+        elif match.away_team_id == team_external_id:
+            opponent_team_name = match.home_team_name
+        else:
+            opponent_team_name = None
+        margin = None
+        if match.home_score is not None and match.away_score is not None:
+            margin = abs(match.home_score - match.away_score)
+        rows.append({
+            "week": match.week,
+            "date": match.match_date,
+            "opponent_team": opponent_team_name,
+            "your_player": row.player.name if row.player else "",
+            "your_player_sl": row.own_skill_level,
+            "opponent_player": row.opponent.name if row.opponent else "",
+            "opponent_player_sl": row.opponent_skill_level,
+            "result": row.result,
+            "match_margin": margin,
+        })
+    return sorted(rows, key=lambda r: (r["week"] or 0, r["your_player"] or "", r["opponent_player"] or ""))
+
+
+def _opponent_rosters(db: Session, config: dict) -> list[dict]:
+    """Every OTHER real team's roster, per team -- "opponent" is defined
+    relative to the configured team_id, the same real distinction
+    _team_roster uses. If no team is configured, every real team is
+    listed here (there is no "yours" to exclude), rather than guessing.
+    """
+    team_id = _configured_team_id(config)
+    return [
+        {"team": team.name, "team_id": team.external_id, "roster": _roster_rows(team)}
+        for team in all_teams(db)
+        if team.external_id != team_id
+    ]

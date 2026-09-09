@@ -26,13 +26,14 @@ from database.ingest import (
     upsert_player,
     upsert_team,
 )
-from database.models import Base, PlayerTrend
+from database.models import Base, PlayerTrend, Team
 from ui.export_json import export_to_json
 
 REQUIRED_TOP_LEVEL_KEYS = {
     "generated_at", "teams", "matches", "standings", "player_stats",
     "match_scores", "career_stats", "team_history", "skill_level_history",
     "skill_level_summary", "matchups", "player_trends", "close_match_stats",
+    "team_roster", "opponent_rosters", "schedule",
 }
 
 REQUIRED_MATCH_KEYS = {
@@ -367,6 +368,100 @@ class TestPlayerTrends:
         [row] = document["player_trends"]
         assert row["hot_cold_flag"] is None
         assert row["trend_score"] is None
+
+
+class TestTeamRosterAndOpponentRosters:
+    """apa_config.yaml's team.team_id is a real, already-configured value
+    (verified against the real database before this was built: it
+    resolves to a genuine Team row this project's own account plays on) --
+    not a fabricated "your team" concept. See ui.export_json._configured_team_id.
+    """
+
+    def _export_as(self, db, tmp_path, team_id):
+        config = {
+            "export": {"json_output_path": str(tmp_path / "demo.json")},
+            "team": {"team_id": team_id},
+        }
+        export_to_json(db, config)
+        return json.loads((tmp_path / "demo.json").read_text())
+
+    def test_team_roster_lists_only_the_configured_teams_real_players(self, db, tmp_path):
+        mine = upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Margin of Error")
+        alice = upsert_player(db, "P1", "Alice", mine)
+        alice.skill_level = 5
+        upsert_player(db, "P2", "Bob", db.query(Team).filter_by(external_id="T2").one())
+        db.commit()
+
+        document = self._export_as(db, tmp_path, "T1")
+        assert document["team_roster"] == [{"player": "Alice", "player_id": "P1", "skill_level": 5}]
+
+    def test_opponent_rosters_lists_every_other_real_team_per_team(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        opponent = upsert_team(db, "T2", "Margin of Error")
+        upsert_player(db, "P2", "Bob", opponent)
+        db.commit()
+
+        document = self._export_as(db, tmp_path, "T1")
+        assert document["opponent_rosters"] == [{
+            "team": "Margin of Error", "team_id": "T2",
+            "roster": [{"player": "Bob", "player_id": "P2", "skill_level": None}],
+        }]
+        assert "Mark It Up" not in [r["team"] for r in document["opponent_rosters"]]
+
+    def test_no_team_configured_yields_an_empty_roster_not_a_guess(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        document = self._export_as(db, tmp_path, "")
+        assert document["team_roster"] == []
+
+
+class TestSchedule:
+    """Real fields only: week, date, opponent team, your player, opponent
+    player, both real skill levels, result, and match margin -- NOT racks,
+    notes, or the clutch/break-run flags an earlier draft asked for, none
+    of which are real fields (see docs/close_match_performance.md)."""
+
+    def _export_as(self, db, tmp_path, team_id):
+        config = {
+            "export": {"json_output_path": str(tmp_path / "demo.json")},
+            "team": {"team_id": team_id},
+        }
+        export_to_json(db, config)
+        return json.loads((tmp_path / "demo.json").read_text())
+
+    def test_a_real_scheduled_game_from_the_configured_teams_side(self, db, tmp_path):
+        mine = upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Margin of Error")
+        upsert_player(db, "P1", "Alice", mine)
+        db.commit()
+
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=3,
+                     match_date="2026-09-01")
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 6, "result": "W",
+        }])
+
+        document = self._export_as(db, tmp_path, "T1")
+        [row] = document["schedule"]
+        assert row == {
+            "week": 3, "date": "2026-09-01", "opponent_team": "Margin of Error",
+            "your_player": "Alice", "your_player_sl": 5,
+            "opponent_player": "Bob", "opponent_player_sl": 6,
+            "result": "W", "match_margin": 2.0,
+        }
+        assert "racks" not in row
+        assert "notes" not in row
+        assert "clutch_flag" not in row
+        assert "break_run_flag" not in row
+
+    def test_no_team_configured_yields_an_empty_schedule(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        document = self._export_as(db, tmp_path, "")
+        assert document["schedule"] == []
 
 
 class TestCloseMatchStats:
