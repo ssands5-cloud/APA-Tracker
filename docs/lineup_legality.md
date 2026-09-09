@@ -28,11 +28,37 @@ them somewhere this check didn't find.
 
 ## What's implemented
 
-`check_lineup_legality(skill_levels)` — the 5-player, 23-cap case only.
-Returns `None` (never a guessed answer) unless given exactly 5 real,
-non-null skill levels: an incomplete lineup selection has no legality
-verdict, and a missing skill level is never treated as 0, which would
-understate the real total and could call an actually-illegal lineup legal.
+`check_lineup_legality(players)` — the 5-player, 23-cap case, plus
+duplicate-player rejection. `players` is one `(player_id, skill_level)`
+pair per lineup slot — player identity is required alongside skill level
+so a lineup naming the same real player twice can be caught; a real
+review of an earlier commit found the function only ever saw bare skill
+levels, with no identity to compare, so a duplicate silently passed as
+long as the skill-level math worked out.
+
+Returns `None` (never a guessed answer) unless given exactly 5 slots, each
+with both a real player id and a real skill level: an incomplete lineup
+selection has no legality verdict, and a missing skill level is never
+treated as 0, which would understate the real total and could call an
+actually-illegal lineup legal. A well-formed lineup (5 real players, 5
+real skill levels) that repeats a player DOES get a real verdict — never
+`None` — with `has_duplicate_players=True` and `is_legal=False`
+regardless of the skill total, since it isn't a real lineup to begin with.
+
+## In the JSON export
+
+`ui/export_json.py` exports two real, related things:
+
+- `lineup_legality_rule` — the sourced rule metadata itself (`lineup_size`,
+  both real skill-level caps, the source URL), always present.
+- `lineup_legality` — one row per (match, team) where this project has
+  captured exactly 5 real `PlayerMatch` rows (player + skill level, from
+  that match's own scoresheet) for that team in that match, with the
+  computed verdict. These check ACTUAL fielded lineups from already-played
+  matches, retroactively — never a hypothetical or invented lineup. There
+  is no real "selected upcoming lineup" concept anywhere in this project's
+  captured data, and fabricating one to populate this differently would
+  violate this project's no-fabrication rule.
 
 ## What's recorded but not decided yet
 

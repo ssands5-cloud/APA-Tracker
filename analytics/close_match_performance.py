@@ -42,8 +42,10 @@ which could argue for a per-format threshold once there's enough data in
 each to check that separately. See docs/planned_analytics_design.md."""
 
 CLOSE_MATCH_MIN_SAMPLE = 3
-"""Fewer close matches than this and there is no real signal yet --
-None, not a guess, same as volatility/regression_slope elsewhere."""
+"""Fewer DISTINCT close matches (by match_id, not PlayerHeadToHead rows --
+see CloseMatchPerformance's own docstring for why those can differ) than
+this and there is no real signal yet -- None, not a guess, same as
+volatility/regression_slope elsewhere."""
 
 
 def _is_win(result) -> Optional[bool]:
@@ -59,9 +61,27 @@ def _is_win(result) -> Optional[bool]:
 
 
 def is_close_match(match: Optional[Match]) -> bool:
-    """True only for a real, decided, close result -- an unscored match or
-    a missing Match row is never treated as close."""
-    if match is None or match.home_score is None or match.away_score is None:
+    """True only for a real, decided, CONFIRMED, close result.
+
+    Excludes, in order: a missing Match row; a bye (no real opponent to be
+    close against); a match that isn't scored, or is scored but not yet
+    `is_finalized` (per Match's own docstring, "is_finalized marks a
+    result the league has confirmed; is_scored alone can still change" --
+    an unconfirmed score is not decided evidence yet); a missing score on
+    either side; and a tie (not a decided result either way, the same
+    guard analytics.team_stats.team_match_record already applies to what
+    counts as decided for Team_Stats -- now applied here too, so the two
+    can never disagree about which matches are real, decided results).
+    """
+    if match is None:
+        return False
+    if match.is_bye:
+        return False
+    if not match.is_scored or not match.is_finalized:
+        return False
+    if match.home_score is None or match.away_score is None:
+        return False
+    if match.home_score == match.away_score:
         return False
     return abs(match.home_score - match.away_score) <= CLOSE_MATCH_MARGIN
 
@@ -69,12 +89,27 @@ def is_close_match(match: Optional[Match]) -> bool:
 @dataclass
 class CloseMatchPerformance:
     """One player's real close-match record, and the shrunk estimate
-    derived from it. `close_matches_played` and `overall_matches_played`
-    count recognised-result games only, the same convention every other
-    win-rate figure in this project uses.
+    derived from it.
+
+    `close_matches_played` counts DISTINCT real team matches (by
+    match_id), not PlayerHeadToHead rows -- a player can legitimately play
+    more than one individual game within a single team match (confirmed
+    against a real scoresheet: match 51007724, where Rob Stegall played
+    two different opponents in the same match; see PlayerHeadToHead's own
+    docstring in database/models.py). Counting rows would let one close
+    team match masquerade as several independent pieces of evidence.
+    `close_games_played` is the row count, kept separately since
+    `close_win_rate` is genuinely a per-game rate (each game is a real,
+    independent result) -- only the SAMPLE-SIZE gate (is there enough
+    evidence to trust this at all) needs distinct matches.
+
+    `overall_matches_played` counts recognised-result games (rows), the
+    same convention every other win-rate figure in this project uses --
+    the overall baseline was never the thing under dispute here.
     """
 
     close_matches_played: int
+    close_games_played: int
     close_win_rate: Optional[float]
     overall_matches_played: int
     overall_win_rate: Optional[float]
@@ -87,8 +122,9 @@ def close_match_performance(rows: Sequence[PlayerHeadToHead]) -> CloseMatchPerfo
     baseline both come from this same list.
 
     `shrunk_win_rate` is None whenever either input it needs is missing:
-    fewer than CLOSE_MATCH_MIN_SAMPLE close matches, or no overall win
-    rate to shrink toward at all (no recognised results of any kind).
+    fewer than CLOSE_MATCH_MIN_SAMPLE DISTINCT close matches, or no
+    overall win rate to shrink toward at all (no recognised results of any
+    kind).
     """
     recognized = [r for r in rows if _is_win(r.result) is not None]
     overall_n = len(recognized)
@@ -96,17 +132,19 @@ def close_match_performance(rows: Sequence[PlayerHeadToHead]) -> CloseMatchPerfo
     overall_win_rate = round(overall_wins / overall_n, 3) if overall_n else None
 
     close = [r for r in recognized if is_close_match(r.match)]
-    close_n = len(close)
+    close_games = len(close)
+    close_matches = len({r.match_id for r in close})
     close_wins = sum(1 for r in close if _is_win(r.result))
-    close_win_rate = round(close_wins / close_n, 3) if close_n else None
+    close_win_rate = round(close_wins / close_games, 3) if close_games else None
 
     shrunk_win_rate = None
-    if close_n >= CLOSE_MATCH_MIN_SAMPLE and overall_win_rate is not None:
-        weight = reliability_weight(close_n)
+    if close_matches >= CLOSE_MATCH_MIN_SAMPLE and overall_win_rate is not None:
+        weight = reliability_weight(close_matches)
         shrunk_win_rate = round(weight * close_win_rate + (1 - weight) * overall_win_rate, 3)
 
     return CloseMatchPerformance(
-        close_matches_played=close_n,
+        close_matches_played=close_matches,
+        close_games_played=close_games,
         close_win_rate=close_win_rate,
         overall_matches_played=overall_n,
         overall_win_rate=overall_win_rate,

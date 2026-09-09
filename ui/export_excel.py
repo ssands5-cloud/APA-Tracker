@@ -306,7 +306,7 @@ def _format_team_stats(writer, frame: pd.DataFrame) -> None:
 
 CLOSE_MATCH_STATS_COLUMNS = [
     "Player", "Overall Matches", "Overall Win Rate", "Close Matches",
-    "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
+    "Close Games", "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
 ]
 
 
@@ -334,6 +334,7 @@ def _close_match_stats_dataframe(db: Session) -> pd.DataFrame:
             "Overall Matches": result.overall_matches_played,
             "Overall Win Rate": result.overall_win_rate,
             "Close Matches": result.close_matches_played,
+            "Close Games": result.close_games_played,
             "Close Win Rate": result.close_win_rate,
             "Close-Match Win Rate (Shrunk)": result.shrunk_win_rate,
             "Close-Match Band": close_match_band(result.shrunk_win_rate, result.overall_win_rate),

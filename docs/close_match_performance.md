@@ -22,14 +22,26 @@ temporal sequence). What IS real: the team match's own final margin
 player won or lost within that match (`PlayerHeadToHead`). This module
 uses only those two — no new upstream export, no new pipeline stage.
 
+## A close match is a real, decided, CONFIRMED result
+
+`is_close_match` excludes, in order: a missing `Match` row; a bye (no real
+opponent to be close against); a match that isn't `is_scored`, or is
+scored but not yet `is_finalized` (an unconfirmed score is not decided
+evidence yet — the same guard `analytics.team_stats.team_match_record`
+already applies); a missing score on either side; and a tie (not a
+decided result either way). A real review of an earlier commit found this
+wasn't fully enforced — byes, unscored/unfinalized matches, and ties could
+still register as "close" — before this was tightened.
+
 ## The numbers
 
 | Field | Meaning |
 |---|---|
-| `close_matches_played` | recognised-result games in matches decided by `CLOSE_MATCH_MARGIN` (4) points or fewer |
-| `close_win_rate` | raw win rate in those games only; `None` below `CLOSE_MATCH_MIN_SAMPLE` (3) |
+| `close_matches_played` | DISTINCT real team matches (by `match_id`, not `PlayerHeadToHead` rows) decided by `CLOSE_MATCH_MARGIN` (4) points or fewer — the sample-size gate counts matches, not games, so playing several games within one close team match can't masquerade as several independent pieces of evidence |
+| `close_games_played` | the raw row count within those same close matches — kept separately because `close_win_rate` is genuinely a per-game rate; only the sample-size gate needs distinct matches |
+| `close_win_rate` | raw win rate across `close_games_played`; `None` below `CLOSE_MATCH_MIN_SAMPLE` (3) DISTINCT close matches |
 | `overall_matches_played` / `overall_win_rate` | the same player's real record across ALL their head-to-head games — the baseline, from the same population, not a different source |
-| `shrunk_win_rate` | `close_win_rate` pulled toward `overall_win_rate`, weighted by `analytics.matchups.reliability_weight(n) = n / (n + 3)` — the same shrinkage curve this project already uses for a thin head-to-head record, not a second formula |
+| `shrunk_win_rate` | `close_win_rate` pulled toward `overall_win_rate`, weighted by `analytics.matchups.reliability_weight(close_matches_played) = n / (n + 3)` — the same shrinkage curve this project already uses for a thin head-to-head record, not a second formula |
 | `close_match_band` | `"Strong"` / `"Even"` / `"Struggles"` / `"Unknown"` — `shrunk_win_rate` compared to the player's own `overall_win_rate`, not a league-wide bar (see `CLOSE_MATCH_BAND_MARGIN`, 10 percentage points) |
 
 `close_match_band` lives in `analytics/close_match_performance.py` and is

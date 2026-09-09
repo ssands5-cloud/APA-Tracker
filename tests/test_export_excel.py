@@ -411,7 +411,8 @@ class TestCloseMatchStatsSheet:
             match_id = f"CLOSE{i}"
             ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
                          home_team_name="Home", away_team_name="Away",
-                         status="COMPLETED", home_score=18, away_score=16)
+                         status="COMPLETED", home_score=18, away_score=16,
+                         is_scored=True, is_finalized=True)
             ingest_head_to_head(db, match_id, [{
                 "match_id": match_id, "player_id": "P1", "player_name": "Alice",
                 "opponent_id": "P2", "opponent_name": "Bob",
@@ -421,7 +422,8 @@ class TestCloseMatchStatsSheet:
             match_id = f"BLOWOUT{i}"
             ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
                          home_team_name="Home", away_team_name="Away",
-                         status="COMPLETED", home_score=25, away_score=5)
+                         status="COMPLETED", home_score=25, away_score=5,
+                         is_scored=True, is_finalized=True)
             ingest_head_to_head(db, match_id, [{
                 "match_id": match_id, "player_id": "P1", "player_name": "Alice",
                 "opponent_id": "P2", "opponent_name": "Bob",
@@ -435,12 +437,13 @@ class TestCloseMatchStatsSheet:
         headers = [c.value for c in ws[1]]
         assert headers == [
             "Player", "Overall Matches", "Overall Win Rate", "Close Matches",
-            "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
+            "Close Games", "Close Win Rate", "Close-Match Win Rate (Shrunk)", "Close-Match Band",
         ]
         row = dict(zip(headers, [c.value for c in ws[2]]))
         assert row["Player"] == "Alice"
         assert row["Overall Matches"] == 10
         assert row["Close Matches"] == 3
+        assert row["Close Games"] == 3
         assert row["Close Win Rate"] == 1.0
         # Shrunk rate sits between the perfect close record and the poor
         # overall one -- real shrinkage, not a face-value 1.0.

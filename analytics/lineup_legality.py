@@ -29,6 +29,14 @@ function here decides "should this team fall back to 4 players" -- that is
 a captain decision (which player to sit, not just how many) genuinely
 harder than the 5-player check, and is left for a follow-up with its own
 tests once actually needed.
+
+**Duplicate players**: APA's skill-level cap says nothing about player
+identity, but a lineup that names the same real player in two slots isn't
+a real lineup at all -- a person can't play two positions on their own
+team's card in the same match. This was missed in an earlier pass (the
+function only ever saw bare skill levels, with no identity to compare),
+caught in a real review of that commit. Player identity is now a required
+part of the input specifically so this can be checked.
 """
 
 from __future__ import annotations
@@ -48,30 +56,57 @@ module docstring."""
 
 LINEUP_SIZE = 5
 
+LINEUP_LEGALITY_SOURCE_URL = "https://rules.poolplayers.com/general-rules/team-skill-level-limit/"
+
 
 @dataclass(frozen=True)
 class LineupLegality:
     skill_total: int
     limit: int
     is_legal: bool
+    has_duplicate_players: bool
+    """True when the same real player identity appears in more than one
+    slot. A duplicate always makes `is_legal` False regardless of
+    `skill_total` -- it isn't a real lineup to begin with, independent of
+    the skill-level math."""
 
 
-def check_lineup_legality(skill_levels: Sequence[Optional[int]]) -> Optional[LineupLegality]:
-    """The real 23-Rule check for a standard 5-player lineup.
+def check_lineup_legality(
+    players: Sequence[tuple[object, Optional[int]]]
+) -> Optional[LineupLegality]:
+    """The real 23-Rule check for a standard 5-player lineup, plus
+    duplicate-player rejection.
 
-    None (not a guessed answer) when `skill_levels` isn't exactly
-    LINEUP_SIZE real, non-null values -- an incomplete or malformed
-    lineup selection has no legality verdict, not a default "legal" or
-    "illegal" one. Never silently treats a missing player's skill level
-    as 0, which would understate the real total.
+    `players` is one `(player_id, skill_level)` pair per lineup slot.
+    `player_id` just needs to be a stable real identifier for that player
+    (an external id or an internal database id -- whichever the caller
+    already has); it is only ever compared for equality, never displayed
+    or interpreted.
+
+    Returns None (never a guessed verdict) unless given exactly
+    LINEUP_SIZE slots, each with both a real player id and a real skill
+    level -- an incomplete or malformed lineup selection has no legality
+    verdict, not a default "legal" or "illegal" one. Never silently treats
+    a missing player's skill level as 0, which would understate the real
+    total.
+
+    A lineup that IS well-formed (5 real players, 5 real skill levels) but
+    names the same player twice gets a real verdict, not None -- it's
+    `is_legal=False` with `has_duplicate_players=True`, distinguishing
+    "malformed/incomplete selection" from "well-formed but illegal because
+    of a repeated player".
     """
-    if len(skill_levels) != LINEUP_SIZE:
+    if len(players) != LINEUP_SIZE:
         return None
-    if any(level is None for level in skill_levels):
+    if any(player_id is None or skill_level is None for player_id, skill_level in players):
         return None
-    total = sum(skill_levels)
+
+    player_ids = [player_id for player_id, _ in players]
+    has_duplicate_players = len(set(player_ids)) != len(player_ids)
+    total = sum(skill_level for _, skill_level in players)
     return LineupLegality(
         skill_total=total,
         limit=TEAM_SKILL_LEVEL_LIMIT_5,
-        is_legal=total <= TEAM_SKILL_LEVEL_LIMIT_5,
+        is_legal=(total <= TEAM_SKILL_LEVEL_LIMIT_5) and not has_duplicate_players,
+        has_duplicate_players=has_duplicate_players,
     )

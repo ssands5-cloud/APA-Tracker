@@ -18,6 +18,13 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from analytics.close_match_performance import close_match_band, close_match_performance
+from analytics.lineup_legality import (
+    LINEUP_LEGALITY_SOURCE_URL,
+    LINEUP_SIZE,
+    TEAM_SKILL_LEVEL_LIMIT_4,
+    TEAM_SKILL_LEVEL_LIMIT_5,
+    check_lineup_legality,
+)
 from analytics.player_stats import summarize_player
 from analytics.player_trends import trend_score
 from analytics.skill_level_trends import skill_level_changes, skill_level_trend, skill_level_volatility
@@ -61,6 +68,8 @@ def export_to_json(db: Session, config: dict) -> str:
         "team_roster": _team_roster(db, config),
         "opponent_rosters": _opponent_rosters(db, config),
         "schedule": _schedule(db, config),
+        "lineup_legality_rule": _lineup_legality_rule(),
+        "lineup_legality": _lineup_legality(db),
     }
 
     output_path.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
@@ -331,6 +340,7 @@ def _close_match_stats(db: Session) -> list[dict]:
             "overall_matches_played": result.overall_matches_played,
             "overall_win_rate": result.overall_win_rate,
             "close_matches_played": result.close_matches_played,
+            "close_games_played": result.close_games_played,
             "close_win_rate": result.close_win_rate,
             "shrunk_win_rate": result.shrunk_win_rate,
             "close_match_band": close_match_band(result.shrunk_win_rate, result.overall_win_rate),
@@ -347,23 +357,77 @@ def _configured_team_id(config: dict) -> str:
     return str((config.get("team") or {}).get("team_id") or "")
 
 
-def _roster_rows(team: Team) -> list[dict]:
-    return [
-        {"player": p.name, "player_id": p.external_id, "skill_level": p.skill_level}
-        for p in team.players
+def _match_scoped_team_ids(db: Session) -> dict[tuple[int, int], str]:
+    """(player_id, match_id) -> the real team external_id that player was
+    actually on IN THAT MATCH -- PlayerMatch.team_id, captured directly
+    from that match's own roster/scoresheet (ingest_match_roster /
+    ingest_match_scores), never Player.team_id.
+
+    Player.team_id is a single "first real team ever seen, never updated"
+    label (see ingest.backfill_player_team's own docstring for why it
+    can't move once set) -- fine as a rough default elsewhere, but wrong
+    for a real player who has since played matches for a DIFFERENT real
+    team: every one of that player's later matches would misreport their
+    old team forever. PlayerMatch.team_id has no such problem -- it's
+    recorded fresh, per match, from that match's own real roster/scoresheet.
+
+    Built from database.queries.match_scores() -- the same real "every
+    PlayerMatch row tied to a specific match" population _match_scores()
+    above already exports -- so this never introduces a second notion of
+    what counts as a match-linked PlayerMatch row.
+    """
+    lookup: dict[tuple[int, int], str] = {}
+    for pm in match_scores(db):
+        if pm.team_id and pm.player_id is not None and pm.match_id is not None:
+            lookup[(pm.player_id, pm.match_id)] = pm.team_id
+    return lookup
+
+
+def _roster_rows_from_matches(db: Session, team_external_id: str) -> list[dict]:
+    """Real players confirmed on this team from match-level evidence only:
+    every distinct player with at least one real PlayerMatch row whose own
+    team_id (captured per match, from that match's own roster/scoresheet)
+    equals this team's real external id -- NOT Team.players / Player.team_id
+    (see _match_scoped_team_ids's docstring for why that label is wrong for
+    a player who has since moved to a different real team: they'd still
+    show up on their OLD team's roster forever, and never on their new
+    one).
+
+    skill_level comes from that same PlayerMatch row (that team's own real
+    scoresheet/roster entry), not Player.skill_level -- Player.skill_level
+    is only ever set by a roster ingest (upsert_roster), and the majority
+    of real players here are never rostered at all, only ever seen via a
+    scoresheet (see backfill_player_team's own docstring: "72 of 72
+    distinct head-to-head players" had no roster ingest) -- Player.skill_level
+    would be None for them forever. match_scores() is ordered by
+    (match_id, id), so the LAST row per player here is that player's most
+    recently ingested real entry for this team; ties/out-of-order backfills
+    aren't otherwise resolved, since PlayerMatch carries no real
+    chronological field to break them with (match_date is delivered text
+    of inconsistent format -- see Match's own docstring).
+    """
+    latest_by_player = {}
+    for pm in match_scores(db):
+        if pm.team_id == team_external_id and pm.player_id is not None and pm.player is not None:
+            latest_by_player[pm.player_id] = pm
+    rows = [
+        {"player": pm.player.name, "player_id": pm.player.external_id, "skill_level": pm.skill_level}
+        for pm in latest_by_player.values()
     ]
+    return sorted(rows, key=lambda r: r["player"])
 
 
 def _team_roster(db: Session, config: dict) -> list[dict]:
-    """The configured team's real roster only (Team.players, the same
-    real relationship every other per-team view already uses) -- empty,
-    not guessed, when no team is configured or it matches no real Team row.
+    """The configured team's real roster only, from match-level evidence
+    (see _roster_rows_from_matches) -- empty, not guessed, when no team is
+    configured or it matches no real Team row.
     """
     team_id = _configured_team_id(config)
     if not team_id:
         return []
-    team = db.query(Team).filter_by(external_id=team_id).one_or_none()
-    return _roster_rows(team) if team is not None else []
+    if db.query(Team).filter_by(external_id=team_id).one_or_none() is None:
+        return []
+    return _roster_rows_from_matches(db, team_id)
 
 
 def _schedule(db: Session, config: dict) -> list[dict]:
@@ -381,17 +445,28 @@ def _schedule(db: Session, config: dict) -> list[dict]:
 
     Empty when no team is configured, or it matches no real Team row --
     "your schedule" has no meaning without a real "you".
+
+    Which side of a head-to-head row belongs to the configured team is
+    resolved MATCH BY MATCH, from real PlayerMatch.team_id evidence for
+    that exact (player, match) pair -- never from Player.team_id, a
+    single "first real team ever seen, never updated" label that gets a
+    real multi-team player's later matches wrong (see
+    _match_scoped_team_ids's docstring). A head-to-head row with no
+    matching PlayerMatch evidence for that match is excluded, not
+    guessed at.
     """
     team_external_id = _configured_team_id(config)
     if not team_external_id:
         return []
-    team = db.query(Team).filter_by(external_id=team_external_id).one_or_none()
-    if team is None:
+    if db.query(Team).filter_by(external_id=team_external_id).one_or_none() is None:
         return []
 
+    match_team_ids = _match_scoped_team_ids(db)
     rows = []
     for row in all_head_to_head(db):
-        if row.player is None or row.player.team_id != team.id:
+        if row.player_id is None or row.match_id is None:
+            continue
+        if match_team_ids.get((row.player_id, row.match_id)) != team_external_id:
             continue
         match = row.match
         if match is None:
@@ -422,12 +497,87 @@ def _schedule(db: Session, config: dict) -> list[dict]:
 def _opponent_rosters(db: Session, config: dict) -> list[dict]:
     """Every OTHER real team's roster, per team -- "opponent" is defined
     relative to the configured team_id, the same real distinction
-    _team_roster uses. If no team is configured, every real team is
-    listed here (there is no "yours" to exclude), rather than guessing.
+    _team_roster uses. Each roster is built from the same match-level
+    evidence (_roster_rows_from_matches), not Team.players/Player.team_id.
+    If no team is configured, every real team is listed here (there is no
+    "yours" to exclude), rather than guessing.
     """
     team_id = _configured_team_id(config)
     return [
-        {"team": team.name, "team_id": team.external_id, "roster": _roster_rows(team)}
+        {
+            "team": team.name,
+            "team_id": team.external_id,
+            "roster": _roster_rows_from_matches(db, team.external_id),
+        }
         for team in all_teams(db)
         if team.external_id != team_id
     ]
+
+
+def _lineup_legality_rule() -> dict:
+    """The real, sourced 23-Rule metadata itself (analytics.lineup_legality)
+    -- not a computed check. Exported unconditionally, independent of
+    whether any real match has enough evidence for a computed verdict
+    (_lineup_legality below), so a consumer always knows what the rule
+    actually is."""
+    return {
+        "lineup_size": LINEUP_SIZE,
+        "skill_level_limit_5_player": TEAM_SKILL_LEVEL_LIMIT_5,
+        "skill_level_limit_4_player": TEAM_SKILL_LEVEL_LIMIT_4,
+        "source": LINEUP_LEGALITY_SOURCE_URL,
+    }
+
+
+def _lineup_legality(db: Session) -> list[dict]:
+    """Real, historical lineup-legality checks against the 23-Rule -- one
+    row per (match, team) where this project has captured exactly
+    LINEUP_SIZE real PlayerMatch rows (a real player id plus a real skill
+    level, from that match's own scoresheet/roster) for that team in that
+    match.
+
+    These are ACTUAL fielded lineups from already-played matches, checked
+    retroactively -- never a hypothetical or invented lineup. There is no
+    real "selected upcoming lineup" concept anywhere in this project's
+    captured data (see docs/lineup_legality.md); fabricating one to give
+    this a bigger row count would violate this project's no-fabrication
+    rule. A team match with fewer or more than 5 real player rows captured
+    for one side (a forfeit, an incomplete scoresheet, a 4-player fallback)
+    has no verdict here, the same as check_lineup_legality's own None case
+    -- not guessed at.
+
+    Grouped by (PlayerMatch.match_id, PlayerMatch.team_id) from
+    database.queries.match_scores() -- the same real, already-defined
+    per-match PlayerMatch population _match_scores()/_match_scoped_team_ids
+    above already use.
+    """
+    by_match_team: dict[tuple[int, str], list] = {}
+    for pm in match_scores(db):
+        if pm.team_id and pm.match_id is not None:
+            by_match_team.setdefault((pm.match_id, pm.team_id), []).append(pm)
+
+    rows = []
+    for (_db_match_id, team_external_id), player_matches in by_match_team.items():
+        players = [(pm.player_id, pm.skill_level) for pm in player_matches]
+        legality = check_lineup_legality(players)
+        if legality is None:
+            continue
+
+        match = player_matches[0].match
+        if match is not None and match.home_team_id == team_external_id:
+            team_name = match.home_team_name
+        elif match is not None and match.away_team_id == team_external_id:
+            team_name = match.away_team_name
+        else:
+            team_name = player_matches[0].team_name
+
+        rows.append({
+            "match_id": match.external_id if match else None,
+            "week": match.week if match else None,
+            "team_id": team_external_id,
+            "team_name": team_name,
+            "skill_total": legality.skill_total,
+            "limit": legality.limit,
+            "is_legal": legality.is_legal,
+            "has_duplicate_players": legality.has_duplicate_players,
+        })
+    return sorted(rows, key=lambda r: (r["week"] or 0, r["team_id"] or "", r["match_id"] or ""))

@@ -34,6 +34,7 @@ REQUIRED_TOP_LEVEL_KEYS = {
     "match_scores", "career_stats", "team_history", "skill_level_history",
     "skill_level_summary", "matchups", "player_trends", "close_match_stats",
     "team_roster", "opponent_rosters", "schedule",
+    "lineup_legality_rule", "lineup_legality",
 }
 
 REQUIRED_MATCH_KEYS = {
@@ -375,6 +376,13 @@ class TestTeamRosterAndOpponentRosters:
     (verified against the real database before this was built: it
     resolves to a genuine Team row this project's own account plays on) --
     not a fabricated "your team" concept. See ui.export_json._configured_team_id.
+
+    Rosters are built from real match-level evidence (PlayerMatch.team_id,
+    captured per match from that match's own scoresheet -- see
+    ui.export_json._match_scoped_team_ids), NOT Player.team_id/Team.players
+    -- so seeding here goes through ingest_match_scores, the same real path
+    that evidence actually comes from, rather than upsert_player(..., team),
+    which only ever sets the single, never-updated Player.team_id label.
     """
 
     def _export_as(self, db, tmp_path, team_id):
@@ -386,21 +394,33 @@ class TestTeamRosterAndOpponentRosters:
         return json.loads((tmp_path / "demo.json").read_text())
 
     def test_team_roster_lists_only_the_configured_teams_real_players(self, db, tmp_path):
-        mine = upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T1", "Mark It Up")
         upsert_team(db, "T2", "Margin of Error")
-        alice = upsert_player(db, "P1", "Alice", mine)
-        alice.skill_level = 5
-        upsert_player(db, "P2", "Bob", db.query(Team).filter_by(external_id="T2").one())
-        db.commit()
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5,
+             "result": "W", "points_earned": 6},
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T2", "skill_level": 4,
+             "result": "L", "points_earned": 3},
+        ])
 
         document = self._export_as(db, tmp_path, "T1")
         assert document["team_roster"] == [{"player": "Alice", "player_id": "P1", "skill_level": 5}]
 
     def test_opponent_rosters_lists_every_other_real_team_per_team(self, db, tmp_path):
         upsert_team(db, "T1", "Mark It Up")
-        opponent = upsert_team(db, "T2", "Margin of Error")
-        upsert_player(db, "P2", "Bob", opponent)
-        db.commit()
+        upsert_team(db, "T2", "Margin of Error")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T2",
+             "result": "L", "points_earned": 3},
+        ])
 
         document = self._export_as(db, tmp_path, "T1")
         assert document["opponent_rosters"] == [{
@@ -414,12 +434,53 @@ class TestTeamRosterAndOpponentRosters:
         document = self._export_as(db, tmp_path, "")
         assert document["team_roster"] == []
 
+    def test_a_multi_team_player_is_attributed_to_every_real_team_they_actually_played_for(
+        self, db, tmp_path
+    ):
+        """The exact scenario Player.team_id cannot represent (see
+        ingest.backfill_player_team's own docstring): the same real player
+        plays a match for T1, then a later match for T3. Both real
+        rosters must show them -- neither is guessed, both come from real,
+        separate PlayerMatch rows."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T3", "Cue the Chaos")
+
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5,
+             "result": "W", "points_earned": 6},
+        ])
+
+        ingest_match(db, match_id="M2", home_team_id="T3", away_team_id="T2",
+                     home_team_name="Cue the Chaos", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M2", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T3", "skill_level": 6,
+             "result": "W", "points_earned": 6},
+        ])
+
+        roster_t1 = self._export_as(db, tmp_path, "T1")["team_roster"]
+        roster_t3 = self._export_as(db, tmp_path, "T3")["team_roster"]
+        assert [r["player"] for r in roster_t1] == ["Alice"]
+        assert [r["player"] for r in roster_t3] == ["Alice"]
+
 
 class TestSchedule:
     """Real fields only: week, date, opponent team, your player, opponent
     player, both real skill levels, result, and match margin -- NOT racks,
     notes, or the clutch/break-run flags an earlier draft asked for, none
-    of which are real fields (see docs/close_match_performance.md)."""
+    of which are real fields (see docs/close_match_performance.md).
+
+    Which side of a head-to-head row belongs to the configured team is
+    resolved from real, match-level PlayerMatch.team_id evidence (see
+    ui.export_json._match_scoped_team_ids), not Player.team_id -- so
+    seeding here goes through ingest_match_scores for the row's own
+    player, the same real path that evidence actually comes from.
+    """
 
     def _export_as(self, db, tmp_path, team_id):
         config = {
@@ -430,15 +491,17 @@ class TestSchedule:
         return json.loads((tmp_path / "demo.json").read_text())
 
     def test_a_real_scheduled_game_from_the_configured_teams_side(self, db, tmp_path):
-        mine = upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T1", "Mark It Up")
         upsert_team(db, "T2", "Margin of Error")
-        upsert_player(db, "P1", "Alice", mine)
-        db.commit()
 
         ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
                      home_team_name="Mark It Up", away_team_name="Margin of Error",
                      status="COMPLETED", home_score=18, away_score=16, week=3,
-                     match_date="2026-09-01")
+                     match_date="2026-09-01", is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1",
+             "result": "W", "points_earned": 6},
+        ])
         ingest_head_to_head(db, "M1", [{
             "match_id": "M1", "player_id": "P1", "player_name": "Alice",
             "opponent_id": "P2", "opponent_name": "Bob",
@@ -463,6 +526,73 @@ class TestSchedule:
         document = self._export_as(db, tmp_path, "")
         assert document["schedule"] == []
 
+    def test_a_head_to_head_row_with_no_matching_scoresheet_evidence_is_excluded(
+        self, db, tmp_path
+    ):
+        """A head-to-head row exists (ingest_head_to_head ran) but the
+        matching per-match scoresheet evidence (ingest_match_scores) never
+        did for this player -- no real evidence ties them to the
+        configured team for THIS match, so the row must be excluded, not
+        guessed at from the match's own home/away ids."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T2", "Margin of Error")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=3,
+                     match_date="2026-09-01", is_scored=True, is_finalized=True)
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 6, "result": "W",
+        }])
+
+        document = self._export_as(db, tmp_path, "T1")
+        assert document["schedule"] == []
+
+    def test_a_multi_team_player_is_attributed_per_match_not_by_their_first_team(
+        self, db, tmp_path
+    ):
+        """The exact bug a real audit caught in a previous commit: filtering
+        on Player.team_id (a single, never-updated "first team ever seen"
+        label) would keep crediting every one of this player's later
+        matches to their OLD team. Real per-match PlayerMatch evidence
+        must decide it match by match instead."""
+        upsert_team(db, "T1", "Mark It Up")
+        upsert_team(db, "T3", "Cue the Chaos")
+
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=1,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1",
+             "result": "W", "points_earned": 6},
+        ])
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 6, "result": "W",
+        }])
+
+        ingest_match(db, match_id="M2", home_team_id="T3", away_team_id="T2",
+                     home_team_name="Cue the Chaos", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=2,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M2", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T3",
+             "result": "L", "points_earned": 3},
+        ])
+        ingest_head_to_head(db, "M2", [{
+            "match_id": "M2", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 6, "result": "L",
+        }])
+
+        schedule_t1 = self._export_as(db, tmp_path, "T1")["schedule"]
+        schedule_t3 = self._export_as(db, tmp_path, "T3")["schedule"]
+        assert [r["week"] for r in schedule_t1] == [1]
+        assert [r["week"] for r in schedule_t3] == [2]
+
 
 class TestCloseMatchStats:
     """Same population, same shrinkage, same close_match_band function as
@@ -478,7 +608,8 @@ class TestCloseMatchStats:
             match_id = f"CLOSE{i}"
             ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
                          home_team_name="Home", away_team_name="Away",
-                         status="COMPLETED", home_score=18, away_score=16)
+                         status="COMPLETED", home_score=18, away_score=16,
+                         is_scored=True, is_finalized=True)
             ingest_head_to_head(db, match_id, [{
                 "match_id": match_id, "player_id": "P1", "player_name": "Alice",
                 "opponent_id": "P2", "opponent_name": "Bob",
@@ -488,7 +619,8 @@ class TestCloseMatchStats:
             match_id = f"BLOWOUT{i}"
             ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
                          home_team_name="Home", away_team_name="Away",
-                         status="COMPLETED", home_score=25, away_score=5)
+                         status="COMPLETED", home_score=25, away_score=5,
+                         is_scored=True, is_finalized=True)
             ingest_head_to_head(db, match_id, [{
                 "match_id": match_id, "player_id": "P1", "player_name": "Alice",
                 "opponent_id": "P2", "opponent_name": "Bob",
@@ -500,6 +632,7 @@ class TestCloseMatchStats:
         assert row["player"] == "Alice"
         assert row["overall_matches_played"] == 10
         assert row["close_matches_played"] == 3
+        assert row["close_games_played"] == 3
         assert row["close_win_rate"] == 1.0
         assert row["overall_win_rate"] == 0.3
         assert row["shrunk_win_rate"] > row["overall_win_rate"]
@@ -589,6 +722,93 @@ class TestMatchupNeutralFill:
         assert written == 0
         document = _export(db, tmp_path)
         assert document["matchups"] == []
+
+
+class TestLineupLegalityExport:
+    """analytics.lineup_legality's real, sourced 23-Rule check, applied
+    retroactively to ACTUAL fielded lineups from already-played matches --
+    never a hypothetical or invented lineup (see ui.export_json._lineup_legality's
+    own docstring for why there is no real "selected upcoming lineup" data
+    to check instead).
+    """
+
+    def _export(self, db, tmp_path):
+        config = {"export": {"json_output_path": str(tmp_path / "demo.json")}}
+        export_to_json(db, config)
+        return json.loads((tmp_path / "demo.json").read_text())
+
+    def test_lineup_legality_rule_is_always_present_with_the_real_sourced_constants(
+        self, db, tmp_path
+    ):
+        document = self._export(db, tmp_path)
+        assert document["lineup_legality_rule"] == {
+            "lineup_size": 5,
+            "skill_level_limit_5_player": 23,
+            "skill_level_limit_4_player": 19,
+            "source": "https://rules.poolplayers.com/general-rules/team-skill-level-limit/",
+        }
+
+    def test_a_real_five_player_lineup_at_the_cap_is_legal(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=3,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5, "result": "W"},
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T1", "skill_level": 5, "result": "W"},
+            {"player_id": "P3", "player_name": "Carl", "team_id": "T1", "skill_level": 5, "result": "L"},
+            {"player_id": "P4", "player_name": "Dana", "team_id": "T1", "skill_level": 4, "result": "L"},
+            {"player_id": "P5", "player_name": "Eve", "team_id": "T1", "skill_level": 4, "result": "W"},
+        ])
+
+        document = self._export(db, tmp_path)
+        [row] = document["lineup_legality"]
+        assert row == {
+            "match_id": "M1", "week": 3, "team_id": "T1", "team_name": "Mark It Up",
+            "skill_total": 23, "limit": 23, "is_legal": True, "has_duplicate_players": False,
+        }
+
+    def test_a_real_five_player_lineup_over_the_cap_is_illegal(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=3,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5, "result": "W"},
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T1", "skill_level": 5, "result": "W"},
+            {"player_id": "P3", "player_name": "Carl", "team_id": "T1", "skill_level": 5, "result": "L"},
+            {"player_id": "P4", "player_name": "Dana", "team_id": "T1", "skill_level": 5, "result": "L"},
+            {"player_id": "P5", "player_name": "Eve", "team_id": "T1", "skill_level": 4, "result": "W"},
+        ])
+
+        document = self._export(db, tmp_path)
+        [row] = document["lineup_legality"]
+        assert row["skill_total"] == 24
+        assert row["is_legal"] is False
+        assert row["has_duplicate_players"] is False
+
+    def test_a_team_with_fewer_than_five_real_rows_this_match_has_no_verdict(self, db, tmp_path):
+        """A forfeit/incomplete scoresheet or a real 4-player fallback --
+        not enough real evidence for a 5-player verdict, so no row, never
+        a guess."""
+        upsert_team(db, "T1", "Mark It Up")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Margin of Error",
+                     status="COMPLETED", home_score=18, away_score=16, week=3,
+                     is_scored=True, is_finalized=True)
+        ingest_match_scores(db, "M1", [
+            {"player_id": "P1", "player_name": "Alice", "team_id": "T1", "skill_level": 5, "result": "W"},
+            {"player_id": "P2", "player_name": "Bob", "team_id": "T1", "skill_level": 5, "result": "W"},
+        ])
+
+        document = self._export(db, tmp_path)
+        assert document["lineup_legality"] == []
+
+    def test_no_real_matches_yields_an_empty_list_not_a_guess(self, db, tmp_path):
+        document = self._export(db, tmp_path)
+        assert document["lineup_legality"] == []
 
 
 class TestFileIsValidJson:
