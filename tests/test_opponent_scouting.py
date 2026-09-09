@@ -25,6 +25,10 @@ def row(opponent_pk=1, opponent_id="O1", opponent_name="Bob", opponent_team_pk=1
 
 
 class TestSummarizeOpponent:
+    def test_an_empty_rows_list_raises_a_clear_error_not_an_indexerror(self):
+        with pytest.raises(ValueError, match="at least one"):
+            summarize_opponent([], opponent_volatility=None)
+
     def test_averages_real_matchup_score_and_win_probability(self):
         rows = [
             row(matchup_score=80, win_probability=0.8),

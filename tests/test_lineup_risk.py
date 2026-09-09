@@ -80,6 +80,15 @@ class TestAnchorStabilityScore:
         # Same win probability -- the calmer player (lower risk_factor) anchors.
         assert anchor_stability_score(assignments)[1] == "Zoe"
 
+    def test_a_missing_risk_factor_sorts_last_among_tied_win_probabilities(self):
+        assignments = [
+            FakeAssignment("NoRiskData", modeled_win_probability=0.7, risk_factor=None),
+            FakeAssignment("KnownCalm", modeled_win_probability=0.7, risk_factor=0.2),
+        ]
+        # A real, known risk_factor beats an unknown one on the same tie --
+        # never assumed to be equal to or better than real evidence.
+        assert anchor_stability_score(assignments)[1] == "KnownCalm"
+
     def test_a_full_tie_breaks_lexicographically(self):
         assignments = [
             FakeAssignment("Zoe", modeled_win_probability=0.7, risk_factor=0.5),

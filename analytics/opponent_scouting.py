@@ -88,7 +88,14 @@ def summarize_opponent(
     from that row's contribution to the average, never treated as 0 or a
     guessed value; an opponent with zero usable rows for a given signal
     gets None for it, not a fabricated average.
+
+    Raises ValueError for an empty `rows` -- there is no real opponent
+    identity to report on at all, a real caller error (summarize_opponents
+    never constructs a group this way) rather than a silent, confusing
+    IndexError.
     """
+    if not rows:
+        raise ValueError("summarize_opponent requires at least one real pairing row")
     first = rows[0]
     matchup_scores = [
         float(row["matchup_score"]) for row in rows if row.get("matchup_score") is not None

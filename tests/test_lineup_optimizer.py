@@ -210,9 +210,17 @@ class TestSolveLineupAssignment:
         with pytest.raises(ValueError, match="null signals"):
             solve_lineup_assignment([[None]], ["P1"], ["O1"])
 
-    @pytest.mark.parametrize("field", ["matchup_score", "win_probability", "confidence", "risk_factor"])
+    @pytest.mark.parametrize("field", [
+        "matchup_score", "win_probability", "confidence", "risk_factor", "modeled_win_probability",
+    ])
     def test_invalid_unit_inputs_are_rejected(self, field):
-        values = {name: 0.5 for name in ("matchup_score", "win_probability", "confidence", "risk_factor")}
+        values = {
+            name: 0.5
+            for name in (
+                "matchup_score", "win_probability", "confidence", "risk_factor",
+                "modeled_win_probability",
+            )
+        }
         values[field] = 1.1
         with pytest.raises(ValueError, match="between 0 and 1"):
             pairing_score(**values)

@@ -67,50 +67,74 @@ was, via `team_roster`/`opponent_rosters`.
 **Nothing new needed upstream.** Both are buildable now; the remaining
 work is layout ("visual cards": borders, shading, bold headers), not data.
 
-## Lineup Simulator — PARTIALLY UNBLOCKED
+## Lineup Simulator — MOSTLY UNBLOCKED (updated)
 
-Both of its original blockers are closed: the legality rule exists (see
-above) and the per-team roster split exists (`team_roster`/`opponent_rosters`),
-so "Your lineup" / "Opponent lineup" dropdowns have real data to populate
-from.
+All three of its original blockers are now real and shipped:
 
-**What's still genuinely open**: `Expected Win Probability` /
-`Expected Rack Differential` for a CHOSEN 5-player-vs-5-player combination
-needs its own aggregation formula over the real, already-computed
-per-pair `PlayerMatchup` data (win rate, `matchup_score`, `confidence_score`)
-— e.g., how five individual pairwise matchups combine into one team-level
-expected outcome is a real design question, not a re-export of an
-existing field. This is the same kind of step Trend Score and Close-Match
-Win Rate each needed — a formula checked against real data and finalized
-— before implementation, not assumed from a plausible-sounding name. Not
-started; should not be guessed at.
+- The legality rule exists (`analytics.lineup_legality`, with
+  duplicate-player rejection).
+- The per-team roster split exists (`team_roster`/`opponent_rosters`).
+- The "aggregation formula" gap this section originally called out --
+  "how five individual pairwise matchups combine into one team-level
+  expected outcome" -- is now real and shipped, checked against this
+  project's own real data first: `analytics.win_probability` computes a
+  real, transparent per-PAIRING win probability (SLDelta/WR_SL/WR_H2H/
+  Volatility), and `analytics.lineup_risk` already aggregates exactly
+  five such pairings into one team-level summary (Upset Risk Index,
+  Anchor Stability Score, Lineup Volatility Load, Danger Matchup Count,
+  Lineup Risk Score). See `docs/win_probability.md` and
+  `docs/lineup_risk.md`.
 
-Choosing a HYPOTHETICAL combination of real, real rostered players to
-simulate is not itself a fabrication concern — that's what a simulator is
-for — as long as every number the simulation displays traces back to real,
-already-computed pairwise data, the same discipline this project already
-applies everywhere else.
+**What's still genuinely open**: both of those real functions currently
+take the OPTIMIZER'S OWN solved assignment as input
+(`scripts.build_lineups._lineup_for_group` calls them right after
+`solve_lineup_assignment` returns) -- neither has been wired to accept an
+arbitrary, HYPOTHETICAL 5-player-vs-5-player combination a captain picks
+by hand instead of the solver's own pick. The math already generalizes
+(neither `compute_win_probability` nor `compute_lineup_risk` requires its
+input to have come from the solver specifically), but the
+combination-selection interface itself -- letting a captain choose
+"Your lineup" / "Opponent lineup" from dropdowns and get a real,
+non-solver-picked projection back -- has not been built. A real, scoped
+remaining piece of work, not a re-discovery.
 
-## Captain Summary — PARTIALLY UNBLOCKED
+## Captain Summary — a related but DIFFERENT real sheet now exists
 
-Downstream of the above: `Recommended Starter/Mid/Anchor` and
-`Avoid_List`/`Target_List` need Next_Match's matchup grid (buildable now,
-see above); `Legal Lineups` needs the confirmed 23-rule (done); `Optimal
-Lineup` needs the Lineup Simulator's combination search, which is blocked
-on the same win-probability aggregation formula described above. Nothing
-new to add here beyond what's already listed — this sheet is purely a
-rollup of the others, and inherits their status.
+`Captains_Edge_Summary` (see `docs/captains_edge_summary.md`) now ships a
+real rollup of Top Strongest Pairings, Top Danger Matchups, Best Anchor
+Candidates, and Highest-Risk Lineups -- covering some of the same real
+ground this section originally described (`Recommended ... Anchor`,
+`Avoid_List`-style danger flags) using data already available TODAY
+(every solved lineup across the whole league), not the one specific
+upcoming match Next_Match would provide.
 
-## What's NOT blocked (cumulative)
+This is NOT the same feature this section originally scoped: a genuine
+`Next_Match`-scoped Captain Summary (one upcoming opponent,
+`Recommended Starter/Mid/Anchor` and `Avoid_List`/`Target_List` for THAT
+match specifically, `Optimal Lineup` from the Lineup Simulator once its
+own remaining gap above is closed) is still real, still useful, and
+still not built. `Captains_Edge_Summary` closes the "is there a rollup of
+real danger/anchor/risk data" gap; it doesn't replace the
+one-upcoming-match-scoped version this section first asked for.
+
+## What's NOT blocked (cumulative, updated)
 
 Everything previously shipped (Team_Stats, Matchups' Risk Band,
 Head-to-Head's two-signal highlighting, Trend Score, Close-Match Win Rate)
 plus the real, match-scoped `schedule[]`/`team_roster[]`/`opponent_rosters[]`
-exports and the real, sourced 23-Rule check (`lineup_legality_rule` /
-`lineup_legality`) are all shipped, real, and usable as building blocks
-today. Of the six deferred features, four (Schedule_History, Next_Match,
-Player Cards, Opponent Cards) now need no new upstream data at all — only
-a scoping decision on which to build first. Lineup Simulator and Captain
-Summary need one more real step first: designing and verifying a
-5-player-combination win-probability formula, the same rigor every other
-formula in this project has gotten.
+exports, the real, sourced 23-Rule check (`lineup_legality_rule` /
+`lineup_legality`), the real per-pairing win-probability model
+(`analytics.win_probability`), and the real team-level lineup-risk
+aggregation (`analytics.lineup_risk`) are all shipped, real, and usable
+as building blocks today.
+
+Of the six originally deferred features: Schedule_History, Next_Match,
+Player Cards, and Opponent Cards need no new upstream data at all -- only
+a scoping decision on which to build first. The 5-player-combination
+aggregation formula Lineup Simulator and Captain Summary were both
+waiting on is now real and shipped (see "Lineup Simulator" above) --
+their remaining gap is a combination-selection interface for a
+HYPOTHETICAL lineup, not a missing formula. A real, differently-scoped
+`Captains_Edge_Summary` sheet already ships some of Captain Summary's
+original intent using data available today, across the whole league
+rather than one upcoming match -- see `docs/captains_edge_summary.md`.

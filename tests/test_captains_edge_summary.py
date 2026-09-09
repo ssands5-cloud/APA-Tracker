@@ -85,6 +85,22 @@ class TestTopDangerMatchups:
         result = top_danger_matchups(opponents)
         assert [o["opponent_name"] for o in result] == ["RealEvidence", "NoEvidence"]
 
+    def test_equal_win_probability_breaks_the_tie_on_higher_real_volatility(self):
+        opponents = [
+            opponent("LessVolatile", 0.3, 0.2, True),
+            opponent("MoreVolatile", 0.3, 0.8, True),
+        ]
+        result = top_danger_matchups(opponents)
+        assert [o["opponent_name"] for o in result] == ["MoreVolatile", "LessVolatile"]
+
+    def test_a_missing_volatility_never_wins_a_tie_over_a_real_value(self):
+        opponents = [
+            opponent("KnownVolatility", 0.3, 0.5, True),
+            opponent("UnknownVolatility", 0.3, None, True),
+        ]
+        result = top_danger_matchups(opponents)
+        assert [o["opponent_name"] for o in result] == ["KnownVolatility", "UnknownVolatility"]
+
     def test_empty_input_is_empty(self):
         assert top_danger_matchups([]) == []
 
