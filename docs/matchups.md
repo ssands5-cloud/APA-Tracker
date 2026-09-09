@@ -256,3 +256,25 @@ tracking, just now visible in a new place.
    neutral 50/0-confidence rather than being left off the sheet, so "no
    data" and "an even matchup" never look the same as "we don't know this
    pair exists" -- the last of those used to be silent absence.
+
+## Excel-only additions
+
+The Excel "Matchups" sheet carries three things the demo tab doesn't:
+
+- **A dropdown on Column A** ("Player"), sourced from the sheet's own data
+  wrapped in a real Excel Table (`Matchups_Table`) via a structured
+  reference (`=Matchups_Table[Player]`), so it auto-expands as new pairings
+  are added on a later run. Every cell already carries a real name from
+  the pipeline; the dropdown only constrains what a future manual edit can
+  be replaced with.
+- **Win Rate colour zones** — green ≥ 0.65, yellow 0.45–0.65, red < 0.45
+  (`ui.export_excel.MATCHUPS_WIN_RATE_HIGH`/`MATCHUPS_WIN_RATE_LOW`). Win
+  Rate, not Matchup Score: this sheet has no modelled win *probability*
+  field (that's Head-to-Head's own `Win Probability` column, which has its
+  own recommend/avoid highlighting — see docs/head_to_head.md).
+- **Risk Band** (`ui.export_excel.matchup_risk_band`) — Low/Medium/High/
+  Unknown from SL Delta and Win Rate together. A NEW, documented heuristic,
+  not a real APA field: High needs only one bad signal (a losing record,
+  or giving up 2+ skill levels); Low needs both a strong record AND no
+  skill disadvantage. A pairing with no real history (`Has History` = No)
+  is Unknown, not a guessed colour.

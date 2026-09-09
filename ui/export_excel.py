@@ -12,10 +12,18 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from analytics.player_stats import summarize_player
+from analytics.team_stats import (
+    average_skill_level,
+    opponent_strength_index,
+    team_match_record,
+)
+from database.models import PlayerHeadToHead
 from database.queries import (
     player_trends,
     head_to_head_advantage,
+    all_matches,
     all_players,
+    all_teams,
     career_stats,
     latest_standings,
     matchups_with_neutral_fill,
@@ -36,6 +44,7 @@ def export_to_excel(db: Session, config: dict) -> str:
     career_stats_df = _career_stats_dataframe(db)
     team_history_df = _team_history_dataframe(db)
     skill_level_history_df = _skill_level_history_dataframe(db)
+    team_stats_df = _team_stats_dataframe(db)
     matchups_df = _matchups_dataframe(db)
     head_to_head_df = _head_to_head_dataframe(db)
     player_trends_df = _player_trends_dataframe(db)
@@ -47,6 +56,8 @@ def export_to_excel(db: Session, config: dict) -> str:
         career_stats_df.to_excel(writer, sheet_name="Career Stats", index=False)
         team_history_df.to_excel(writer, sheet_name="Team History", index=False)
         skill_level_history_df.to_excel(writer, sheet_name="Skill Level History", index=False)
+        team_stats_df.to_excel(writer, sheet_name="Team_Stats", index=False)
+        _format_team_stats(writer, team_stats_df)
         matchups_df.to_excel(writer, sheet_name="Matchups", index=False)
         _format_matchups(writer, matchups_df)
         head_to_head_df.to_excel(writer, sheet_name="Head-to-Head", index=False)
@@ -211,6 +222,75 @@ def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
     )
 
 
+# --- Team_Stats ---------------------------------------------------------
+
+TEAM_STATS_COLUMNS = [
+    "Team Name", "Matches Played", "Matches Won", "Matches Lost", "Win %",
+    "Home Record", "Away Record", "Average SL", "Opponent Strength Index",
+]
+
+
+def _team_stats_dataframe(db: Session) -> pd.DataFrame:
+    """One row per team: a real win/loss record derived from Match rows
+    (analytics.team_stats.team_match_record), the roster's own average
+    skill level (average_skill_level), and the mean skill level of
+    opponents this team's players have actually faced
+    (opponent_strength_index, from real PlayerHeadToHead rows).
+
+    Deliberately excludes Clutch Rating, a numeric Trend Score, Break/Run
+    Rate and Defensive Shot Rate -- none of those are real fields anywhere
+    in this project; see analytics/team_stats.py's module docstring.
+    """
+    matches = all_matches(db)
+    rows = []
+    for team in all_teams(db):
+        record = team_match_record(matches, team.external_id)
+        h2h_rows = (
+            db.query(PlayerHeadToHead)
+            .filter(PlayerHeadToHead.player_id.in_([p.id for p in team.players]))
+            .all()
+            if team.players else []
+        )
+        rows.append({
+            "Team Name": team.name,
+            "Matches Played": record.matches_played,
+            "Matches Won": record.wins,
+            "Matches Lost": record.losses,
+            "Win %": record.win_percentage,
+            "Home Record": record.home_record,
+            "Away Record": record.away_record,
+            "Average SL": average_skill_level(team.players),
+            "Opponent Strength Index": opponent_strength_index(h2h_rows),
+        })
+    return pd.DataFrame(rows, columns=TEAM_STATS_COLUMNS)
+
+
+def _format_team_stats(writer, frame: pd.DataFrame) -> None:
+    """Freeze the header, filter every column, and render Win % as a
+    percentage -- the same treatment every other sheet gets. No colour
+    zones: a team's own win rate isn't a matchup being judged the way a
+    single pairing's is on Matchups/Head-to-Head."""
+    from openpyxl.utils import get_column_letter
+
+    sheet = writer.sheets["Team_Stats"]
+    sheet.freeze_panes = "A2"
+    if frame.empty:
+        return
+
+    last_column = get_column_letter(len(frame.columns))
+    last_row = len(frame) + 1
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    win_pct_column = TEAM_STATS_COLUMNS.index("Win %") + 1
+    for row in sheet.iter_rows(min_row=2, min_col=win_pct_column, max_col=win_pct_column):
+        for cell in row:
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0.0%"
+
+    for index, name in enumerate(frame.columns, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
+
+
 # Matchups sheet: Win Rate colour zones (0..1, an unweighted historical
 # fraction -- see analytics.matchups.head_to_head_win_rate). The original ask
 # named "win probability", but this sheet has no modelled probability field;
@@ -219,6 +299,35 @@ def _skill_level_history_dataframe(db: Session) -> pd.DataFrame:
 # (H2H_RECOMMEND_SCORE/H2H_AVOID_SCORE above) -- these are independent.
 MATCHUPS_WIN_RATE_HIGH = 0.65
 MATCHUPS_WIN_RATE_LOW = 0.45
+
+# Risk Band: a NEW, transparent heuristic combining SL Delta and Win Rate
+# into one label -- not a real APA field and not fitted to any data. The
+# threshold below is a documented judgment call, the same kind FULL_
+# CONFIDENCE_GAMES is in analytics/matchups.py, not a statistically derived
+# cutoff. SL Delta is the existing opponent-minus-own column already on
+# this sheet (positive = giving up skill level) -- this is a new way of
+# reading it, not a second, duplicate column.
+MATCHUPS_RISK_SL_GAP = 2
+
+
+def matchup_risk_band(sl_delta: float | None, win_rate: float | None) -> str:
+    """"Low" / "Medium" / "High" / "Unknown" for one Matchups row.
+
+    High needs only one bad signal (a losing record, OR giving up
+    MATCHUPS_RISK_SL_GAP+ skill levels) -- either alone is worth flagging.
+    Low needs BOTH a strong record AND no skill disadvantage, the same
+    both-signals-must-agree shape ui.tabs.matchups.classify() already uses
+    for Head-to-Head's Risk Band below, even though the two sheets read
+    different real fields (this one has no win_probability to reuse that
+    function directly on).
+    """
+    if sl_delta is None or win_rate is None:
+        return "Unknown"
+    if win_rate <= MATCHUPS_WIN_RATE_LOW or sl_delta >= MATCHUPS_RISK_SL_GAP:
+        return "High"
+    if win_rate >= MATCHUPS_WIN_RATE_HIGH and sl_delta <= 0:
+        return "Low"
+    return "Medium"
 
 
 def _matchups_dataframe(db: Session) -> pd.DataFrame:
@@ -251,6 +360,7 @@ def _matchups_dataframe(db: Session) -> pd.DataFrame:
                 "Format": row["format"],
                 "Session": row["session_name"],
                 "Has History": "Yes" if row["has_history"] else "No",
+                "Risk Band": matchup_risk_band(row["sl_delta"], row["win_rate"]),
             }
             for row in matchups_with_neutral_fill(db)
         ]
@@ -337,6 +447,24 @@ def _format_matchups(writer, frame: pd.DataFrame) -> None:
             if isinstance(cell.value, (int, float)):
                 cell.number_format = "0%"
 
+    # Risk Band: text match, same colours as Win Rate's own zones so the
+    # two columns read as one consistent signal rather than a second,
+    # differently-coloured scale.
+    risk_column = list(frame.columns).index("Risk Band") + 1
+    risk_letter = get_column_letter(risk_column)
+    risk_range = f"{risk_letter}2:{risk_letter}{last_row}"
+    for text, fill_colour, font_colour in (
+        ("Low", "C6EFCE", "006100"),
+        ("Medium", "FFEB9C", "9C6500"),
+        ("High", "FFC7CE", "9C0006"),
+    ):
+        sheet.conditional_formatting.add(
+            risk_range,
+            CellIsRule(operator="equal", formula=[f'"{text}"'],
+                       fill=PatternFill("solid", fgColor=fill_colour),
+                       font=Font(color=font_colour, bold=True)),
+        )
+
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)
 
@@ -383,14 +511,19 @@ def _head_to_head_dataframe(db: Session) -> pd.DataFrame:
 
 
 def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
-    """Freeze the header, filter every column, and colour the score green or
-    red so a captain can scan the sheet without reading numbers.
-
-    Conditional formatting is applied to Matchup Score rather than to a
-    separate tag column: the score is the thing being judged, and colouring
-    it in place keeps the sheet one column narrower.
+    """Freeze the header, filter every column, and colour Matchup Score
+    green or red -- but only when Win Probability agrees, using the exact
+    two-sided rule ui.tabs.matchups.classify() already uses for the demo
+    tab (H2H_RECOMMEND_SCORE/PROBABILITY, H2H_AVOID_SCORE/PROBABILITY
+    above), so the workbook and the tab can never flag the same pairing
+    differently. This is the Risk Band the SL-gap-and-win-rate request
+    asked to add to this sheet: conditional formatting applied to Matchup
+    Score in place rather than a separate column, per this sheet's existing
+    design (one column narrower); "SL Delta" is already a real column here
+    -- one of classify()'s two real inputs (score) is already computed
+    from it, so it is not a third, independent signal being ignored.
     """
-    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.formatting.rule import FormulaRule
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -403,24 +536,39 @@ def _format_head_to_head(writer, frame: pd.DataFrame) -> None:
     last_row = len(frame) + 1
     sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
 
-    score_range = f"J2:J{last_row}"  # Matchup Score
+    score_column = list(frame.columns).index("Matchup Score") + 1
+    probability_column = list(frame.columns).index("Win Probability") + 1
+    score_letter = get_column_letter(score_column)
+    probability_letter = get_column_letter(probability_column)
+    score_range = f"{score_letter}2:{score_letter}{last_row}"
+
+    # A formula rule, not two independent CellIsRules: a plain "Matchup
+    # Score >= 60" cell rule has no way to also require a DIFFERENT
+    # column's value in the same row.
     sheet.conditional_formatting.add(
         score_range,
-        CellIsRule(operator="greaterThanOrEqual", formula=[str(H2H_RECOMMEND_SCORE)],
-                   fill=PatternFill("solid", fgColor="C6EFCE"),
-                   font=Font(color="006100", bold=True)),
+        FormulaRule(
+            formula=[f"AND({score_letter}2>={H2H_RECOMMEND_SCORE},"
+                     f"{probability_letter}2>={H2H_RECOMMEND_PROBABILITY})"],
+            fill=PatternFill("solid", fgColor="C6EFCE"),
+            font=Font(color="006100", bold=True),
+        ),
     )
     sheet.conditional_formatting.add(
         score_range,
-        CellIsRule(operator="lessThanOrEqual", formula=[str(H2H_AVOID_SCORE)],
-                   fill=PatternFill("solid", fgColor="FFC7CE"),
-                   font=Font(color="9C0006", bold=True)),
+        FormulaRule(
+            formula=[f"AND({score_letter}2<={H2H_AVOID_SCORE},"
+                     f"{probability_letter}2<={H2H_AVOID_PROBABILITY})"],
+            fill=PatternFill("solid", fgColor="FFC7CE"),
+            font=Font(color="9C0006", bold=True),
+        ),
     )
 
     # Win Probability reads as a percentage, not a bare 0.73.
-    for row in sheet.iter_rows(min_row=2, min_col=11, max_col=11):
+    for row in sheet.iter_rows(min_row=2, min_col=probability_column, max_col=probability_column):
         for cell in row:
-            cell.number_format = "0%"
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = "0%"
 
     for index, name in enumerate(frame.columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = max(len(str(name)) + 4, 12)

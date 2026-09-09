@@ -32,11 +32,18 @@ from ui.export_excel import (
     TREND_ICON_UP,
     TRENDS_NO_DATA,
     export_to_excel,
+    matchup_risk_band,
     trend_icon,
 )
 
 EXPECTED_SHEETS = {
-    "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History", "Matchups",
+    "Standings", "Player Stats", "Career Stats", "Team History", "Skill Level History",
+    # Team_Stats: real, currently-computable team aggregates only -- see
+    # analytics/team_stats.py's module docstring for what's deliberately
+    # excluded (clutch rating, numeric trend score, break/run rate,
+    # defensive-shot rate -- none are real fields anywhere in this project).
+    "Team_Stats",
+    "Matchups",
     # Head-to-Head Advantage Engine (docs/head_to_head.md) -- its own
     # sheet, alongside Matchups rather than replacing it.
     "Head-to-Head",
@@ -187,11 +194,15 @@ class TestSeededData:
         assert headers == [
             "Player", "Opponent", "Matches Played", "Win Rate", "Avg Points Earned",
             "Avg Opponent Skill Level", "Avg Own Skill Level", "SL Delta", "Trend", "Volatility",
-            "Matchup Score", "Confidence Score", "Format", "Session", "Has History",
+            "Matchup Score", "Confidence Score", "Format", "Session", "Has History", "Risk Band",
         ]
         row = [c.value for c in ws[2]]
+        # win_rate=0.667 clears MATCHUPS_WIN_RATE_HIGH, but sl_delta=1.0 is
+        # a real (if modest) skill disadvantage, so Low's "AND sl_delta<=0"
+        # doesn't hold -- Medium, not Low. See matchup_risk_band's docstring.
         assert row == [
-            "Player One", "Player Four", 3, 0.667, 5.0, 5.0, 4.0, 1.0, "up", 1, 72, 63, None, None, "Yes",
+            "Player One", "Player Four", 3, 0.667, 5.0, 5.0, 4.0, 1.0, "up", 1, 72, 63, None, None,
+            "Yes", "Medium",
         ]
 
     def test_dropdown_and_table_auto_expand_with_the_real_row_count(self, db, tmp_path):
@@ -212,12 +223,34 @@ class TestSeededData:
         ws = wb["Matchups"]
 
         assert "Matchups_Table" in ws.tables
-        assert ws.tables["Matchups_Table"].ref == "A1:O2"
+        assert ws.tables["Matchups_Table"].ref == "A1:P2"
 
         [validation] = ws.data_validations.dataValidation
         assert validation.type == "list"
         assert validation.formula1 == "=Matchups_Table[Player]"
         assert "A2:A2" in str(validation.sqref) or "A2" in str(validation.sqref)
+
+    def test_risk_band_column_and_colours(self, db, tmp_path):
+        upsert_player(db, "501", "Player One")
+        upsert_player(db, "601", "Player Two")
+        ingest_matchups(db, [{
+            "player_id": "501", "opponent_id": "601", "matches_played": 1,
+            "win_rate": 0.5, "sl_delta": 0.0, "matchup_score": 50, "confidence_score": 50,
+        }])
+        wb = _export(db, tmp_path)
+        ws = wb["Matchups"]
+        headers = [c.value for c in ws[1]]
+        assert headers[-1] == "Risk Band"
+
+        rules = {
+            rule.formula[0]: rule
+            for rules in ws.conditional_formatting
+            for rule in rules.rules
+            if rule.formula and rule.formula[0].startswith('"')
+        }
+        assert '"Low"' in rules and rules['"Low"'].dxf.fill.fgColor.rgb.endswith("C6EFCE")
+        assert '"High"' in rules and rules['"High"'].dxf.fill.fgColor.rgb.endswith("FFC7CE")
+        assert '"Medium"' in rules and rules['"Medium"'].dxf.fill.fgColor.rgb.endswith("FFEB9C")
 
     def test_win_rate_colour_zone_boundaries(self, db, tmp_path):
         """Exactly 0.65 is Green-only and exactly 0.45 is Yellow-only --
@@ -309,6 +342,107 @@ class TestSeededData:
         record = dict(zip(rows[0], rows[1]))
         # An empty string round-trips through openpyxl as a blank cell (None).
         assert not record["Team"]
+
+
+class TestMatchupRiskBand:
+    """matchup_risk_band -- a NEW, documented heuristic (see its own
+    docstring), not a real APA field or a fitted model."""
+
+    def test_a_losing_record_alone_is_high_risk(self):
+        assert matchup_risk_band(sl_delta=0.0, win_rate=0.3) == "High"
+
+    def test_a_big_skill_disadvantage_alone_is_high_risk_even_with_a_good_record(self):
+        assert matchup_risk_band(sl_delta=3.0, win_rate=0.8) == "High"
+
+    def test_a_strong_record_with_no_skill_disadvantage_is_low_risk(self):
+        assert matchup_risk_band(sl_delta=-1.0, win_rate=0.8) == "Low"
+
+    def test_a_strong_record_but_a_real_skill_disadvantage_is_not_low(self):
+        """Both signals must agree for Low -- a good record alone, while
+        still giving up skill level, doesn't clear the bar."""
+        assert matchup_risk_band(sl_delta=1.0, win_rate=0.8) == "Medium"
+
+    def test_an_even_middling_pairing_is_medium(self):
+        assert matchup_risk_band(sl_delta=0.0, win_rate=0.5) == "Medium"
+
+    def test_missing_either_input_is_unknown_not_a_guess(self):
+        assert matchup_risk_band(sl_delta=None, win_rate=0.8) == "Unknown"
+        assert matchup_risk_band(sl_delta=0.0, win_rate=None) == "Unknown"
+
+
+class TestHeadToHeadRiskBandFormatting:
+    def test_the_two_signal_formula_references_the_real_columns(self, db, tmp_path):
+        """A formula-string bug here (the wrong column letter) would fail
+        silently -- Excel just never highlights anything -- so the exact
+        formula is checked directly rather than trusted by inspection."""
+        upsert_player(db, "P1", "Alice")
+        upsert_player(db, "P2", "Bob")
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Home", away_team_name="Away", status="COMPLETED")
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 5, "result": "W",
+        }])
+        from database.ingest import ingest_h2h_advantage
+        from scripts.build_head_to_head import build_rows
+        ingest_h2h_advantage(db, build_rows(db))
+
+        wb = _export(db, tmp_path)
+        ws = wb["Head-to-Head"]
+        headers = [c.value for c in ws[1]]
+        score_letter = chr(ord("A") + headers.index("Matchup Score"))
+        probability_letter = chr(ord("A") + headers.index("Win Probability"))
+
+        formulas = [rule.formula[0] for rules in ws.conditional_formatting for rule in rules.rules]
+        assert f"AND({score_letter}2>=60,{probability_letter}2>=0.6)" in formulas
+        assert f"AND({score_letter}2<=40,{probability_letter}2<=0.4)" in formulas
+
+
+class TestTeamStatsSheet:
+    def test_real_columns_and_values_for_a_decided_home_win(self, db, tmp_path):
+        home = upsert_team(db, "T1", "Mark It Up")
+        away = upsert_team(db, "T2", "Rack Attack")
+        alice = upsert_player(db, "P1", "Alice", home)
+        alice.skill_level = 5
+        bob = upsert_player(db, "P2", "Bob", home)
+        bob.skill_level = 3
+        db.commit()
+
+        ingest_match(db, match_id="M1", home_team_id="T1", away_team_id="T2",
+                     home_team_name="Mark It Up", away_team_name="Rack Attack",
+                     status="COMPLETED", home_score=18, away_score=12)
+        ingest_head_to_head(db, "M1", [{
+            "match_id": "M1", "player_id": "P1", "player_name": "Alice",
+            "opponent_id": "P2", "opponent_name": "Bob",
+            "own_skill_level": 5, "opponent_skill_level": 6, "result": "W",
+        }])
+
+        wb = _export(db, tmp_path)
+        ws = wb["Team_Stats"]
+        headers = [c.value for c in ws[1]]
+        assert headers == [
+            "Team Name", "Matches Played", "Matches Won", "Matches Lost", "Win %",
+            "Home Record", "Away Record", "Average SL", "Opponent Strength Index",
+        ]
+        rows = {r[0]: r for r in ws.iter_rows(min_row=2, values_only=True)}
+
+        home_row = rows["Mark It Up"]
+        assert home_row[1:] == (1, 1, 0, 1.0, "1-0", "0-0", 4.0, 6.0)
+
+        away_row = rows["Rack Attack"]
+        assert away_row[1:5] == (1, 0, 1, 0.0)
+        assert away_row[5:7] == ("0-0", "0-1")
+
+    def test_no_decided_matches_yet_is_none_not_zero(self, db, tmp_path):
+        upsert_team(db, "T1", "Mark It Up")
+        wb = _export(db, tmp_path)
+        ws = wb["Team_Stats"]
+        row = dict(zip([c.value for c in ws[1]], [c.value for c in ws[2]]))
+        assert row["Matches Played"] == 0
+        assert row["Win %"] is None
+        assert row["Average SL"] is None
+        assert row["Opponent Strength Index"] is None
 
 
 class TestTrendIcon:
