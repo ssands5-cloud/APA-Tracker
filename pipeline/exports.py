@@ -97,11 +97,13 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
     win_probability_weights = build_lineups.load_win_probability_weights_from_config(config)
     lineup_risk_weights = build_lineups.load_lineup_risk_weights_from_config(config)
     rationale_toggles = build_lineups.load_rationale_toggles_from_config(config)
+    opponent_scouting_thresholds = build_lineups.load_opponent_scouting_thresholds_from_config(config)
     try:
         lineup_result = build_lineups.build(
             str(db_path), str(exports_dir),
             weights=lineup_weights, win_probability_weights=win_probability_weights,
             lineup_risk_weights=lineup_risk_weights, rationale_toggles=rationale_toggles,
+            opponent_scouting_thresholds=opponent_scouting_thresholds,
         )
     except lineup_no_database_error as exc:
         logger.warning("Lineup Optimizer skipped: %s", str(exc).splitlines()[0])
@@ -115,9 +117,13 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
         # exercise the JSON/HTML path and skip this optional post-process.
         workbook_path = Path(written[0][1]) if written else None
         if workbook_path is not None and workbook_path.is_file():
-            from ui.export_excel import append_lineup_optimizer_sheet
+            from ui.export_excel import (
+                append_lineup_optimizer_sheet,
+                append_opponent_scouting_sheet,
+            )
 
             append_lineup_optimizer_sheet(workbook_path, lineup_path)
+            append_opponent_scouting_sheet(workbook_path, lineup_path)
 
     with Session(engine) as db:
         written.append(("analysis tabs", str(write_tabs(db, out_dir=exports_dir))))

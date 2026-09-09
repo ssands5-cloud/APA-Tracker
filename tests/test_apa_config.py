@@ -130,3 +130,16 @@ class TestRationaleToggles:
         config = _load_config()
         section = config["rationale"]
         assert section["include_lineup_rationale"] == DEFAULT_RATIONALE_TOGGLES.include_lineup_rationale
+
+
+class TestOpponentScoutingThresholds:
+    """analytics/opponent_scouting.py's real "this opponent is dangerous"
+    thresholds -- see docs/opponent_scouting.md."""
+
+    def test_configured_thresholds_match_the_modules_own_defaults(self):
+        from analytics.opponent_scouting import DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+
+        config = _load_config()
+        section = config["opponent_scouting"]
+        assert section["win_probability_danger_threshold"] == DEFAULT_OPPONENT_SCOUTING_THRESHOLDS.win_probability_danger
+        assert section["volatility_danger_threshold"] == DEFAULT_OPPONENT_SCOUTING_THRESHOLDS.volatility_danger

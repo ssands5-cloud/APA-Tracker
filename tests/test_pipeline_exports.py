@@ -61,7 +61,7 @@ def _captains_builder(monkeypatch, calls):
 def _lineup_builder(monkeypatch, calls):
     module = types.ModuleType("scripts.build_lineups")
 
-    def build(_db_path, out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None):
+    def build(_db_path, out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None, opponent_scouting_thresholds=None):
         calls.append(("lineups", Path(out_dir)))
         return Path(out_dir) / "lineups.json"
 
@@ -76,6 +76,7 @@ def _lineup_builder(monkeypatch, calls):
     module.load_win_probability_weights_from_config = lambda config: None
     module.load_lineup_risk_weights_from_config = lambda config: None
     module.load_rationale_toggles_from_config = lambda config: None
+    module.load_opponent_scouting_thresholds_from_config = lambda config: None
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
@@ -128,11 +129,12 @@ def test_lineup_output_outside_repository_exports_is_rejected(
 
     module = types.ModuleType("scripts.build_lineups")
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
-    module.build = lambda _db_path, _out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None: Path("C:/outside.json")
+    module.build = lambda _db_path, _out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None, opponent_scouting_thresholds=None: Path("C:/outside.json")
     module.load_weights_from_config = lambda config: None
     module.load_win_probability_weights_from_config = lambda config: None
     module.load_lineup_risk_weights_from_config = lambda config: None
     module.load_rationale_toggles_from_config = lambda config: None
+    module.load_opponent_scouting_thresholds_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     with pytest.raises(ValueError, match="must be under"):
@@ -167,17 +169,23 @@ def test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder(
         seen["rationale_config"] = config
         return "sentinel-rationale-toggles"
 
-    def build(_db_path, out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None):
+    def load_opponent_scouting_thresholds_from_config(config):
+        seen["opponent_scouting_config"] = config
+        return "sentinel-opponent-scouting-thresholds"
+
+    def build(_db_path, out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None, opponent_scouting_thresholds=None):
         seen["weights"] = weights
         seen["win_probability_weights"] = win_probability_weights
         seen["lineup_risk_weights"] = lineup_risk_weights
         seen["rationale_toggles"] = rationale_toggles
+        seen["opponent_scouting_thresholds"] = opponent_scouting_thresholds
         return Path(out_dir) / "lineups.json"
 
     module.load_weights_from_config = load_weights_from_config
     module.load_win_probability_weights_from_config = load_win_probability_weights_from_config
     module.load_lineup_risk_weights_from_config = load_lineup_risk_weights_from_config
     module.load_rationale_toggles_from_config = load_rationale_toggles_from_config
+    module.load_opponent_scouting_thresholds_from_config = load_opponent_scouting_thresholds_from_config
     module.build = build
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
@@ -189,10 +197,12 @@ def test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder(
     assert seen["win_probability_config"] is config
     assert seen["lineup_risk_config"] is config
     assert seen["rationale_config"] is config
+    assert seen["opponent_scouting_config"] is config
     assert seen["weights"] == "sentinel-weights"
     assert seen["win_probability_weights"] == "sentinel-win-probability-weights"
     assert seen["lineup_risk_weights"] == "sentinel-lineup-risk-weights"
     assert seen["rationale_toggles"] == "sentinel-rationale-toggles"
+    assert seen["opponent_scouting_thresholds"] == "sentinel-opponent-scouting-thresholds"
 
 
 class TestConfiguredExportsDir:
@@ -243,7 +253,7 @@ def test_missing_lineup_database_skips_only_lineup_artifact(
     no_database_error = type("LineupNoDatabaseError", (RuntimeError,), {})
     module.NoDatabaseError = no_database_error
 
-    def fail(_db_path, _out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None):
+    def fail(_db_path, _out_dir, weights=None, win_probability_weights=None, lineup_risk_weights=None, rationale_toggles=None, opponent_scouting_thresholds=None):
         raise no_database_error("database unavailable")
 
     module.build = fail
@@ -251,6 +261,7 @@ def test_missing_lineup_database_skips_only_lineup_artifact(
     module.load_win_probability_weights_from_config = lambda config: None
     module.load_lineup_risk_weights_from_config = lambda config: None
     module.load_rationale_toggles_from_config = lambda config: None
+    module.load_opponent_scouting_thresholds_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     written = exports.run({"database": {"path": "unused.db"}}, engine)

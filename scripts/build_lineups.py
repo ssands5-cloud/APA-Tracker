@@ -61,6 +61,11 @@ from analytics.lineup_risk import (
     LineupRiskWeights,
     compute_lineup_risk,
 )
+from analytics.opponent_scouting import (
+    DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
+    OpponentScoutingThresholds,
+    summarize_opponents,
+)
 from analytics.player_trends import normalize_format
 from analytics.rationale import (
     DEFAULT_RATIONALE_TOGGLES,
@@ -713,6 +718,7 @@ def build_payload(
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
     rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
+    opponent_scouting_thresholds: OpponentScoutingThresholds = DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
 ) -> dict[str, Any]:
     """Build the complete JSON-serializable lineup document."""
 
@@ -770,6 +776,8 @@ def build_payload(
                 "confidence and risk_factor remain null.",
             )
 
+    opponent_scouting = summarize_opponents(eligible, trends, thresholds=opponent_scouting_thresholds)
+
     source = str(Path(source_db).resolve()) if source_db else ""
     return {
         "schema_version": SCHEMA_VERSION,
@@ -782,6 +790,21 @@ def build_payload(
         "players_with_trends": len({key[0] for key in trends}),
         "eligible_pairing_rows": len(eligible),
         "lineups": lineups,
+        "opponent_scouting": [
+            {
+                "opponent_id": entry.opponent_id,
+                "opponent_name": entry.opponent_name,
+                "opponent_team_id": entry.opponent_team_id,
+                "opponent_team_name": entry.opponent_team_name,
+                "times_faced": entry.times_faced,
+                "avg_matchup_score": entry.avg_matchup_score,
+                "avg_win_probability": entry.avg_win_probability,
+                "opponent_volatility": entry.opponent_volatility,
+                "is_danger_matchup": entry.is_danger_matchup,
+                "danger_reasons": entry.danger_reasons,
+            }
+            for entry in opponent_scouting
+        ],
         "resolution_warnings": warnings,
     }
 
@@ -958,6 +981,41 @@ def _configured_rationale_toggles() -> RationaleToggles:
     return load_rationale_toggles_from_config(config)
 
 
+def load_opponent_scouting_thresholds_from_config(
+    config: Optional[dict[str, Any]]
+) -> OpponentScoutingThresholds:
+    """analytics.opponent_scouting's real, optional threshold overrides,
+    from `config`'s own `opponent_scouting` section -- same fallback
+    contract as every other loader in this module."""
+    section = (config or {}).get("opponent_scouting") or {}
+    defaults = DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+    return OpponentScoutingThresholds(
+        win_probability_danger=section.get(
+            "win_probability_danger_threshold", defaults.win_probability_danger
+        ),
+        volatility_danger=section.get(
+            "volatility_danger_threshold", defaults.volatility_danger
+        ),
+    )
+
+
+def _configured_opponent_scouting_thresholds() -> OpponentScoutingThresholds:
+    """apa_config.yaml's own `opponent_scouting` thresholds, for the
+    standalone CLI entry point -- same advisory-never-fatal convention as
+    _configured_weights above."""
+    config_path = PROJECT_ROOT / "apa_config.yaml"
+    if not config_path.is_file():
+        return DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+    try:
+        import yaml  # only needed to read the configured thresholds
+
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:  # pragma: no cover - config is advisory, never required
+        logger.debug("Could not read %s; using default opponent scouting thresholds", config_path)
+        return DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+    return load_opponent_scouting_thresholds_from_config(config)
+
+
 def build(
     db_path: Optional[str] = None,
     out_dir: Optional[str] = None,
@@ -965,6 +1023,7 @@ def build(
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
     rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
+    opponent_scouting_thresholds: OpponentScoutingThresholds = DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
 ) -> Path:
     """Read the source database and atomically write ``lineups.json``."""
 
@@ -977,6 +1036,7 @@ def build(
             win_probability_weights=win_probability_weights,
             lineup_risk_weights=lineup_risk_weights,
             rationale_toggles=rationale_toggles,
+            opponent_scouting_thresholds=opponent_scouting_thresholds,
         )
     finally:
         connection.close()
@@ -1005,6 +1065,7 @@ def main() -> int:
             win_probability_weights=_configured_win_probability_weights(),
             lineup_risk_weights=_configured_lineup_risk_weights(),
             rationale_toggles=_configured_rationale_toggles(),
+            opponent_scouting_thresholds=_configured_opponent_scouting_thresholds(),
         )
     except NoDatabaseError as exc:
         print(f"\n{exc}\n")

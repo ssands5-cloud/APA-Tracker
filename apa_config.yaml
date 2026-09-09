@@ -125,6 +125,15 @@ lineup_risk:
 rationale:
   include_lineup_rationale: true
 
+# analytics/opponent_scouting.py's real "this opponent is dangerous"
+# thresholds (see docs/opponent_scouting.md). Not claimed as empirically
+# fit -- the same real gap every other threshold in this project
+# documents. Missing this section, or a key within it, falls back to
+# these defaults (scripts.build_lineups.load_opponent_scouting_thresholds_from_config).
+opponent_scouting:
+  win_probability_danger_threshold: 0.40
+  volatility_danger_threshold: 0.50
+
 logging:
   level: "INFO"
   file: "logs/apa_tracker.log"

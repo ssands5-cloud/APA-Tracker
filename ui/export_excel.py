@@ -1038,6 +1038,120 @@ def lineup_risk_rows(document: dict) -> list[dict]:
     return rows
 
 
+OPPONENT_SCOUTING_SHEET = "Opponent_Scouting"
+OPPONENT_SCOUTING_COLUMNS = [
+    "Opponent Team", "Opponent Player", "Times Faced",
+    "Avg Matchup Score", "Avg Win Probability", "Opponent Volatility",
+    "Danger Matchup", "Danger Reasons",
+]
+
+
+def opponent_scouting_rows(document: dict) -> list[dict]:
+    """Flatten analytics.opponent_scouting's real, aggregated per-opponent
+    profiles (stored on the lineup document by scripts.build_lineups) for
+    the Opponent_Scouting sheet.
+
+    ``None`` shows as ``No data``, the same convention every other Excel
+    row-builder in this module already uses -- an opponent with no usable
+    matchup_score/win_probability/volatility reading is never shown a
+    fabricated average.
+    """
+
+    no_data = "No data"
+
+    def shown(value):
+        return no_data if value is None else value
+
+    rows: list[dict] = []
+    for entry in document.get("opponent_scouting") or []:
+        rows.append({
+            "Opponent Team": entry.get("opponent_team_name") or entry.get("opponent_team_id") or "",
+            "Opponent Player": entry.get("opponent_name") or "",
+            "Times Faced": entry.get("times_faced") or 0,
+            "Avg Matchup Score": shown(entry.get("avg_matchup_score")),
+            "Avg Win Probability": shown(entry.get("avg_win_probability")),
+            "Opponent Volatility": shown(entry.get("opponent_volatility")),
+            "Danger Matchup": "Yes" if entry.get("is_danger_matchup") else "No",
+            "Danger Reasons": "; ".join(entry.get("danger_reasons") or []),
+        })
+
+    rows.sort(key=lambda row: (row["Opponent Team"], row["Opponent Player"]))
+    return rows
+
+
+def append_opponent_scouting_sheet(
+    workbook_path: str | Path,
+    document_path: str | Path,
+) -> str:
+    """Append/replace the Opponent_Scouting sheet in an existing workbook.
+
+    Same post-process convention as append_lineup_optimizer_sheet: reads
+    the same real lineups.json document the Lineup Optimizer sheet does,
+    written after the workbook itself in the normal pipeline. Idempotent
+    -- a rerun replaces a prior sheet rather than accumulating duplicates.
+    """
+
+    import json
+
+    from openpyxl import load_workbook
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    workbook_file = Path(workbook_path)
+    document_file = Path(document_path)
+    document = json.loads(document_file.read_text(encoding="utf-8"))
+    rows = opponent_scouting_rows(document)
+
+    workbook = load_workbook(workbook_file)
+    if OPPONENT_SCOUTING_SHEET in workbook.sheetnames:
+        del workbook[OPPONENT_SCOUTING_SHEET]
+    sheet = workbook.create_sheet(OPPONENT_SCOUTING_SHEET)
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F3864")
+    sheet.append(OPPONENT_SCOUTING_COLUMNS)
+    for cell in sheet[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(vertical="center")
+    for row in rows:
+        sheet.append([row[column] for column in OPPONENT_SCOUTING_COLUMNS])
+
+    sheet.freeze_panes = "A2"
+    last_column = get_column_letter(len(OPPONENT_SCOUTING_COLUMNS))
+    last_row = max(sheet.max_row, 1)
+    sheet.auto_filter.ref = f"A1:{last_column}{last_row}"
+
+    probability_columns = [
+        OPPONENT_SCOUTING_COLUMNS.index("Avg Win Probability") + 1,
+    ]
+    for column in probability_columns:
+        for cells in sheet.iter_rows(min_row=2, min_col=column, max_col=column):
+            for cell in cells:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = "0%"
+
+    if rows:
+        danger_column = get_column_letter(OPPONENT_SCOUTING_COLUMNS.index("Danger Matchup") + 1)
+        sheet.conditional_formatting.add(
+            f"{danger_column}2:{danger_column}{last_row}",
+            CellIsRule(operator="equal", formula=['"Yes"'],
+                       fill=PatternFill("solid", fgColor="FFC7CE"),
+                       font=Font(color="9C0006", bold=True)),
+        )
+
+    widths = {"Danger Reasons": 62, "Opponent Team": 20, "Opponent Player": 20}
+    for index, name in enumerate(OPPONENT_SCOUTING_COLUMNS, start=1):
+        width = widths.get(name, max(len(name) + 4, 12))
+        if rows:
+            width = max(width, min(max(len(str(row[name])) for row in rows) + 2, 42))
+        sheet.column_dimensions[get_column_letter(index)].width = width
+
+    workbook.save(workbook_file)
+    return str(workbook_file)
+
+
 def append_lineup_optimizer_sheet(
     workbook_path: str | Path,
     document_path: str | Path,

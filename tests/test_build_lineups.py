@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 
 from analytics.lineup_optimizer import DEFAULT_WEIGHTS, LineupWeights
 from analytics.lineup_risk import DEFAULT_LINEUP_RISK_WEIGHTS, LineupRiskWeights
+from analytics.opponent_scouting import (
+    DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
+    OpponentScoutingThresholds,
+)
 from analytics.win_probability import DEFAULT_WIN_PROBABILITY_WEIGHTS, WinProbabilityWeights
 from database.models import Base, Player, PlayerH2HAdvantage, PlayerHeadToHead, PlayerTrend, Team
 from scripts.build_lineups import (
@@ -21,6 +25,7 @@ from scripts.build_lineups import (
     fetch_trends,
     fetch_win_rates_by_skill_level,
     load_lineup_risk_weights_from_config,
+    load_opponent_scouting_thresholds_from_config,
     load_weights_from_config,
     load_win_probability_weights_from_config,
     write_lineups_json,
@@ -452,6 +457,56 @@ class TestLineupRiskInThePayload:
         # danger_threshold=0.99 means every real assignment counts as a
         # danger matchup -- 2 assignments * weight 10.0.
         assert custom_score == pytest.approx(20.0)
+
+
+class TestOpponentScoutingInThePayload:
+    """analytics.opponent_scouting, wired from the same real eligible
+    pairing rows and trends the Lineup Optimizer already fetches -- no new
+    database query, no new artifact type."""
+
+    def test_a_missing_section_falls_back_to_the_original_defaults(self):
+        assert load_opponent_scouting_thresholds_from_config({}) == DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+        assert load_opponent_scouting_thresholds_from_config(None) == DEFAULT_OPPONENT_SCOUTING_THRESHOLDS
+
+    def test_a_partial_override_only_changes_the_keys_it_names(self):
+        thresholds = load_opponent_scouting_thresholds_from_config(
+            {"opponent_scouting": {"win_probability_danger_threshold": 0.25}}
+        )
+        assert thresholds.win_probability_danger == 0.25
+        assert thresholds.volatility_danger == DEFAULT_OPPONENT_SCOUTING_THRESHOLDS.volatility_danger
+
+    def test_a_full_override_matches_every_configured_value(self):
+        thresholds = load_opponent_scouting_thresholds_from_config({
+            "opponent_scouting": {
+                "win_probability_danger_threshold": 0.3,
+                "volatility_danger_threshold": 0.6,
+            }
+        })
+        assert thresholds == OpponentScoutingThresholds(win_probability_danger=0.3, volatility_danger=0.6)
+
+    def test_every_real_opponent_the_lineup_faced_appears_in_scouting(self, connection, db_path):
+        payload = build_payload(connection, source_db=str(db_path))
+        scouted_names = {entry["opponent_name"] for entry in payload["opponent_scouting"]}
+        # db_path's real opponents are Bob and Carol.
+        assert scouted_names == {"Bob", "Carol"}
+
+    def test_a_real_entry_carries_every_expected_key(self, connection, db_path):
+        payload = build_payload(connection, source_db=str(db_path))
+        entry = payload["opponent_scouting"][0]
+        assert set(entry) == {
+            "opponent_id", "opponent_name", "opponent_team_id", "opponent_team_name",
+            "times_faced", "avg_matchup_score", "avg_win_probability",
+            "opponent_volatility", "is_danger_matchup", "danger_reasons",
+        }
+
+    def test_custom_thresholds_change_which_real_opponents_are_flagged(self, connection, db_path):
+        lenient = OpponentScoutingThresholds(win_probability_danger=0.0, volatility_danger=1.1)
+        strict = OpponentScoutingThresholds(win_probability_danger=1.0, volatility_danger=-1.0)
+        lenient_payload = build_payload(connection, source_db=str(db_path), opponent_scouting_thresholds=lenient)
+        strict_payload = build_payload(connection, source_db=str(db_path), opponent_scouting_thresholds=strict)
+
+        assert all(not e["is_danger_matchup"] for e in lenient_payload["opponent_scouting"])
+        assert all(e["is_danger_matchup"] for e in strict_payload["opponent_scouting"])
 
 
 class TestArtifact:
