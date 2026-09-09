@@ -10,74 +10,107 @@ so it isn't done here. This document IS the requested infrastructure: the
 exact gap each feature needs closed, so building it later is a scoping
 decision, not a discovery process.
 
-## Schedule_History
+**Updated after the `schedule[]`/`team_roster[]`/`opponent_rosters[]`
+exports and the real, sourced 23-Rule check shipped** (see
+`docs/close_match_performance.md`, `docs/lineup_legality.md`) — several
+gaps below that were open when this was first written are now closed.
+Each section says which.
 
-Needs a `schedule[]`-shaped export the pipeline doesn't produce.
-`apa_data.json` has `matches[]` (team-level: id, week, home/away
-team+score, status) and `match_scores[]` (per-player scoresheet rows) —
-neither carries `your_player` vs `opponent_player` as a labeled pair, or
-`notes`/`clutch_flag`/`break_run_flag` (the last two don't exist as real
-fields at all — see `docs/close_match_performance.md` on why "which game
-was the decider" isn't captured). A real Schedule_History would need to be
-assembled from `matches[]` + `PlayerHeadToHead`, joined by `match_id` and
-by whichever roster the viewing team belongs to (see Next_Match's gap
-below) — buildable, but as a new query/dataframe, not a re-export of an
-existing shape.
+## Schedule_History — UNBLOCKED
 
-## Next_Match
+The original gap (no `schedule[]`-shaped export existed) is closed.
+`ui/export_json.py`'s `_schedule()` now produces exactly this shape: week,
+date, opponent team, your player, opponent player, both real skill
+levels, result, and real match margin — joined from `Match` +
+`PlayerHeadToHead`, attributed match-by-match via real `PlayerMatch.team_id`
+evidence (not a stale roster label). `notes`/`clutch_flag`/`break_run_flag`
+remain correctly omitted — still not real fields anywhere in this
+project's captured data.
 
-Needs a "your roster" vs "opponent roster" split this workbook does not
-have. Every existing sheet (Player Stats, Matchups, Team_Stats,
-Close_Match_Stats) is whole-league: every real team's players in one
-table, distinguished by a `Team` column, not by "mine" vs "theirs". Making
-Next_Match real requires either (a) a config value naming which
-`Team.external_id` is "yours" for this export run, or (b) a viewer-scoped
-concept threaded through from a real signed-in account context. Neither
-exists today. The matchup grid and colour zones themselves are not the
-blocker — Matchups' existing Risk Band and Win Rate colouring are directly
-reusable once the roster split exists.
+**Nothing new needed upstream.** A real Schedule_History sheet (Excel
+and/or a JSON-consuming view) could be built directly from the existing
+`schedule[]` export.
 
-### The 23-rule legality check specifically
+## Next_Match — UNBLOCKED
 
-Not started, and shouldn't be guessed at. This needs APA's actual,
-current roster-eligibility rule (a real skill-level cap and/or composition
-constraint for a 5-player team lineup) confirmed from the league's own
-published rules or a captured API field — not assumed from the name. The
-charter's own draft formula (`SL_Total <= 23`, "no more than two SL6+",
-"at least one SL3 or below") is exactly the kind of plausible-sounding,
-unverified rule this project's whole approach exists to catch before it
-ships as if authoritative. Confirm the real rule first.
+The original gap (no "your roster" vs "opponent roster" split) is closed:
+`team_roster`/`opponent_rosters` now exist, built from real match-level
+`PlayerMatch.team_id` evidence, keyed off the same `apa_config.yaml`
+`team.team_id` this project already treats as "yours" elsewhere.
 
-## Player Cards / Opponent Cards
+Identifying "the next match" itself is a real, derivable fact, not a new
+upstream field: the earliest-by-week entry in `matches[]` where the
+configured team is `home_team_id`/`away_team_id` and `is_scored` is still
+false. The matchup grid and colour zones are not a blocker either —
+Matchups' existing Risk Band and Win Rate colouring are directly reusable
+once the roster split exists, exactly as originally noted.
 
-Both need "Best Matchup" / "Worst Matchup" per player, which is real and
-already computable (max/min `matchup_score` or `Win Rate` from the
-Matchups sheet's own data, grouped by player) — the layout ("visual
-cards": borders, shading, bold headers) is a formatting task with no data
-gap. The blocker is the "Opponent" half of Opponent Cards, which needs the
-same your-team/opponent-team split Next_Match does; Player Cards alone
-(every real player, whole-league) could be built today without waiting.
+**Nothing new needed upstream.** Buildable now.
 
-## Lineup Simulator
+### The 23-rule legality check specifically — DONE
 
-Needs a legality rule (see Next_Match above) and a per-team roster split
-to populate "Your lineup" vs "Opponent lineup" dropdowns. `Expected Win
-Probability` / `Expected Rack Differential` for a 5-player combination is
-a real, derivable aggregate of already-real Matchups/Head-to-Head data
-once individual pairings are chosen — not a new upstream field — but the
-combination-selection UI itself has no home until the roster split exists.
+No longer a blocker anywhere in this document. `analytics/lineup_legality.py`
+implements the real, sourced Team Skill Level Limit
+(`rules.poolplayers.com/general-rules/team-skill-level-limit/`), including
+duplicate-player rejection, and it's exported as `lineup_legality_rule`
+(the rule itself) and `lineup_legality` (real, retroactive checks against
+actual fielded lineups from already-played matches).
 
-## Captain Summary
+## Player Cards / Opponent Cards — UNBLOCKED
 
-Downstream of everything above: `Recommended Starter/Mid/Anchor`,
-`Avoid_List`/`Target_List` need Next_Match's matchup grid; `Legal Lineups`
-needs the confirmed 23-rule; `Optimal Lineup` needs the Lineup Simulator's
-combination search. Nothing new to add here beyond what's already listed —
-this sheet is purely a rollup of the others.
+Player Cards were never blocked: "Best Matchup" / "Worst Matchup" per
+player is real and already computable (max/min `matchup_score` or win
+rate from `PlayerMatchup`, grouped by player). Opponent Cards' blocker —
+the your-team/opponent-team split — is now closed the same way Next_Match's
+was, via `team_roster`/`opponent_rosters`.
 
-## What's NOT blocked
+**Nothing new needed upstream.** Both are buildable now; the remaining
+work is layout ("visual cards": borders, shading, bold headers), not data.
 
-Everything already shipped tonight (Team_Stats, Matchups' Risk Band,
+## Lineup Simulator — PARTIALLY UNBLOCKED
+
+Both of its original blockers are closed: the legality rule exists (see
+above) and the per-team roster split exists (`team_roster`/`opponent_rosters`),
+so "Your lineup" / "Opponent lineup" dropdowns have real data to populate
+from.
+
+**What's still genuinely open**: `Expected Win Probability` /
+`Expected Rack Differential` for a CHOSEN 5-player-vs-5-player combination
+needs its own aggregation formula over the real, already-computed
+per-pair `PlayerMatchup` data (win rate, `matchup_score`, `confidence_score`)
+— e.g., how five individual pairwise matchups combine into one team-level
+expected outcome is a real design question, not a re-export of an
+existing field. This is the same kind of step Trend Score and Close-Match
+Win Rate each needed — a formula checked against real data and finalized
+— before implementation, not assumed from a plausible-sounding name. Not
+started; should not be guessed at.
+
+Choosing a HYPOTHETICAL combination of real, real rostered players to
+simulate is not itself a fabrication concern — that's what a simulator is
+for — as long as every number the simulation displays traces back to real,
+already-computed pairwise data, the same discipline this project already
+applies everywhere else.
+
+## Captain Summary — PARTIALLY UNBLOCKED
+
+Downstream of the above: `Recommended Starter/Mid/Anchor` and
+`Avoid_List`/`Target_List` need Next_Match's matchup grid (buildable now,
+see above); `Legal Lineups` needs the confirmed 23-rule (done); `Optimal
+Lineup` needs the Lineup Simulator's combination search, which is blocked
+on the same win-probability aggregation formula described above. Nothing
+new to add here beyond what's already listed — this sheet is purely a
+rollup of the others, and inherits their status.
+
+## What's NOT blocked (cumulative)
+
+Everything previously shipped (Team_Stats, Matchups' Risk Band,
 Head-to-Head's two-signal highlighting, Trend Score, Close-Match Win Rate)
-needed none of the above — that's why they were buildable immediately and
-these six are not.
+plus the real, match-scoped `schedule[]`/`team_roster[]`/`opponent_rosters[]`
+exports and the real, sourced 23-Rule check (`lineup_legality_rule` /
+`lineup_legality`) are all shipped, real, and usable as building blocks
+today. Of the six deferred features, four (Schedule_History, Next_Match,
+Player Cards, Opponent Cards) now need no new upstream data at all — only
+a scoping decision on which to build first. Lineup Simulator and Captain
+Summary need one more real step first: designing and verifying a
+5-player-combination win-probability formula, the same rigor every other
+formula in this project has gotten.
