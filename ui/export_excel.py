@@ -1079,6 +1079,94 @@ def opponent_scouting_rows(document: dict) -> list[dict]:
     return rows
 
 
+CAPTAINS_EDGE_SUMMARY_SHEET = "Captains_Edge_Summary"
+STRONGEST_PAIRINGS_TITLE = "Top Strongest Pairings"
+STRONGEST_PAIRINGS_COLUMNS = ["Player", "Opponent", "Matchup Score"]
+DANGER_MATCHUPS_TITLE = "Top Danger Matchups"
+DANGER_MATCHUPS_COLUMNS = ["Opponent Player", "Avg Win Probability", "Opponent Volatility", "Danger Reasons"]
+ANCHOR_CANDIDATES_TITLE = "Best Anchor Candidates"
+ANCHOR_CANDIDATES_COLUMNS = ["Player", "Team", "Opponent Team", "Anchor Stability"]
+HIGH_RISK_LINEUPS_TITLE = "Highest-Risk Lineups"
+HIGH_RISK_LINEUPS_COLUMNS = ["Team", "Opponent Team", "Lineup Risk Score", "Anchor"]
+
+
+def append_captains_edge_summary_sheet(
+    workbook_path: str | Path,
+    document_path: str | Path,
+    n: int = 5,
+) -> str:
+    """Append/replace the Captains_Edge_Summary sheet -- a real rollup of
+    four already-computed real lists (analytics.captains_edge_summary),
+    each as its own small titled block on one sheet. No new computation:
+    every number here already exists in the same real lineups.json this
+    reads. Idempotent -- a rerun replaces the prior sheet.
+    """
+
+    import json
+
+    from openpyxl import load_workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    from analytics.captains_edge_summary import build_captains_edge_summary
+
+    workbook_file = Path(workbook_path)
+    document_file = Path(document_path)
+    document = json.loads(document_file.read_text(encoding="utf-8"))
+    summary = build_captains_edge_summary(document, n=n)
+
+    workbook = load_workbook(workbook_file)
+    if CAPTAINS_EDGE_SUMMARY_SHEET in workbook.sheetnames:
+        del workbook[CAPTAINS_EDGE_SUMMARY_SHEET]
+    sheet = workbook.create_sheet(CAPTAINS_EDGE_SUMMARY_SHEET)
+
+    def shown(value):
+        return "No data" if value is None else value
+
+    def write_block(title: str, columns: list[str], rows: list[list]):
+        title_row = sheet.max_row + 1 if sheet.max_row > 1 else 1
+        sheet.cell(row=title_row, column=1, value=title).font = Font(bold=True, size=13)
+        sheet.append(columns)
+        for cell in sheet[sheet.max_row]:
+            if cell.value is not None:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="1F3864")
+                cell.alignment = Alignment(vertical="center")
+        for row in rows:
+            sheet.append(row)
+        max_col = max(len(columns), 1)
+        for index in range(1, max_col + 1):
+            width = max(len(columns[index - 1]) + 4, 14) if index <= len(columns) else 14
+            sheet.column_dimensions[get_column_letter(index)].width = max(
+                sheet.column_dimensions[get_column_letter(index)].width or 0, width
+            )
+        sheet.append([])  # spacer row before the next block
+
+    write_block(STRONGEST_PAIRINGS_TITLE, STRONGEST_PAIRINGS_COLUMNS, [
+        [p.player_name, p.opponent_name, p.matchup_score] for p in summary.top_strongest_pairings
+    ])
+    write_block(DANGER_MATCHUPS_TITLE, DANGER_MATCHUPS_COLUMNS, [
+        [
+            entry.get("opponent_name") or "",
+            shown(entry.get("avg_win_probability")),
+            shown(entry.get("opponent_volatility")),
+            "; ".join(entry.get("danger_reasons") or []),
+        ]
+        for entry in summary.top_danger_matchups
+    ])
+    write_block(ANCHOR_CANDIDATES_TITLE, ANCHOR_CANDIDATES_COLUMNS, [
+        [c.player_name, c.team_name, c.opponent_team_name, c.anchor_stability_score]
+        for c in summary.best_anchor_candidates
+    ])
+    write_block(HIGH_RISK_LINEUPS_TITLE, HIGH_RISK_LINEUPS_COLUMNS, [
+        [l.team_name, l.opponent_team_name, l.lineup_risk_score, l.anchor_player_name]
+        for l in summary.highest_risk_lineups
+    ])
+
+    workbook.save(workbook_file)
+    return str(workbook_file)
+
+
 def append_opponent_scouting_sheet(
     workbook_path: str | Path,
     document_path: str | Path,

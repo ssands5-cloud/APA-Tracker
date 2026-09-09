@@ -118,12 +118,14 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
         workbook_path = Path(written[0][1]) if written else None
         if workbook_path is not None and workbook_path.is_file():
             from ui.export_excel import (
+                append_captains_edge_summary_sheet,
                 append_lineup_optimizer_sheet,
                 append_opponent_scouting_sheet,
             )
 
             append_lineup_optimizer_sheet(workbook_path, lineup_path)
             append_opponent_scouting_sheet(workbook_path, lineup_path)
+            append_captains_edge_summary_sheet(workbook_path, lineup_path)
 
     with Session(engine) as db:
         written.append(("analysis tabs", str(write_tabs(db, out_dir=exports_dir))))
