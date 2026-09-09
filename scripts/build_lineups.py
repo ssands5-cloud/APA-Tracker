@@ -62,6 +62,11 @@ from analytics.lineup_risk import (
     compute_lineup_risk,
 )
 from analytics.player_trends import normalize_format
+from analytics.rationale import (
+    DEFAULT_RATIONALE_TOGGLES,
+    RationaleToggles,
+    lineup_risk_rationale,
+)
 from analytics.win_probability import (
     DEFAULT_WIN_PROBABILITY_WEIGHTS,
     WinProbabilityWeights,
@@ -583,6 +588,7 @@ def _lineup_for_group(
     win_rates_by_sl: Optional[dict[tuple[int, int], float]] = None,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
+    rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
 ) -> dict[str, Any]:
     """Build one assignment document for a resolved team/format/session group."""
 
@@ -691,6 +697,11 @@ def _lineup_for_group(
             "lineup_volatility_load": risk.lineup_volatility_load,
             "danger_matchup_count": risk.danger_matchup_count,
             "lineup_risk_score": risk.lineup_risk_score,
+            "rationale": (
+                lineup_risk_rationale(risk, lineup_risk_weights)
+                if rationale_toggles.include_lineup_rationale
+                else None
+            ),
         },
     }
 
@@ -701,6 +712,7 @@ def build_payload(
     weights: LineupWeights = DEFAULT_WEIGHTS,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
+    rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
 ) -> dict[str, Any]:
     """Build the complete JSON-serializable lineup document."""
 
@@ -744,7 +756,7 @@ def build_payload(
         _lineup_for_group(
             group, trends, warnings, weights=weights,
             win_rates_by_sl=win_rates_by_sl, win_probability_weights=win_probability_weights,
-            lineup_risk_weights=lineup_risk_weights,
+            lineup_risk_weights=lineup_risk_weights, rationale_toggles=rationale_toggles,
         )
         for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
     ]
@@ -915,12 +927,44 @@ def _configured_lineup_risk_weights() -> LineupRiskWeights:
     return load_lineup_risk_weights_from_config(config)
 
 
+def load_rationale_toggles_from_config(config: Optional[dict[str, Any]]) -> RationaleToggles:
+    """analytics.rationale's real, optional toggles, from `config`'s own
+    `rationale` section -- same fallback contract as the weight loaders
+    above: a missing section, or a missing key within it, falls back to
+    that key's own DEFAULT_RATIONALE_TOGGLES value."""
+    section = (config or {}).get("rationale") or {}
+    defaults = DEFAULT_RATIONALE_TOGGLES
+    return RationaleToggles(
+        include_lineup_rationale=section.get(
+            "include_lineup_rationale", defaults.include_lineup_rationale
+        ),
+    )
+
+
+def _configured_rationale_toggles() -> RationaleToggles:
+    """apa_config.yaml's own `rationale` toggles, for the standalone CLI
+    entry point -- same advisory-never-fatal convention as
+    _configured_weights above."""
+    config_path = PROJECT_ROOT / "apa_config.yaml"
+    if not config_path.is_file():
+        return DEFAULT_RATIONALE_TOGGLES
+    try:
+        import yaml  # only needed to read the configured toggles
+
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:  # pragma: no cover - config is advisory, never required
+        logger.debug("Could not read %s; using default rationale toggles", config_path)
+        return DEFAULT_RATIONALE_TOGGLES
+    return load_rationale_toggles_from_config(config)
+
+
 def build(
     db_path: Optional[str] = None,
     out_dir: Optional[str] = None,
     weights: LineupWeights = DEFAULT_WEIGHTS,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
+    rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
 ) -> Path:
     """Read the source database and atomically write ``lineups.json``."""
 
@@ -932,6 +976,7 @@ def build(
             connection, source_db=str(resolved), weights=weights,
             win_probability_weights=win_probability_weights,
             lineup_risk_weights=lineup_risk_weights,
+            rationale_toggles=rationale_toggles,
         )
     finally:
         connection.close()
@@ -959,6 +1004,7 @@ def main() -> int:
             weights=_configured_weights(),
             win_probability_weights=_configured_win_probability_weights(),
             lineup_risk_weights=_configured_lineup_risk_weights(),
+            rationale_toggles=_configured_rationale_toggles(),
         )
     except NoDatabaseError as exc:
         print(f"\n{exc}\n")

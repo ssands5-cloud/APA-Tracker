@@ -991,7 +991,7 @@ LINEUP_RISK_TITLE = "Lineup Risk"
 LINEUP_RISK_COLUMNS = [
     "Team", "Opponent Team", "Format", "Session",
     "Lineup Risk Score", "Upset Risk Index", "Anchor",
-    "Anchor Stability", "Volatility Load", "Danger Matchups",
+    "Anchor Stability", "Volatility Load", "Danger Matchups", "Rationale",
 ]
 
 
@@ -1029,6 +1029,7 @@ def lineup_risk_rows(document: dict) -> list[dict]:
             "Anchor Stability": shown(risk.get("anchor_stability_score")),
             "Volatility Load": shown(risk.get("lineup_volatility_load")),
             "Danger Matchups": shown(risk.get("danger_matchup_count")),
+            "Rationale": shown(risk.get("rationale")),
         })
 
     rows.sort(key=lambda row: (

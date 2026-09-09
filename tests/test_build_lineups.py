@@ -427,9 +427,11 @@ class TestLineupRiskInThePayload:
         assert set(risk) == {
             "upset_risk_index", "anchor_stability_score", "anchor_player_name",
             "lineup_volatility_load", "danger_matchup_count", "lineup_risk_score",
+            "rationale",
         }
         assert isinstance(risk["danger_matchup_count"], int)
         assert isinstance(risk["lineup_risk_score"], float)
+        assert isinstance(risk["rationale"], str) and risk["rationale"]
         # The db_path fixture's real anchor: Alice and Alex are the two
         # assigned players, and the risk block must name one of them --
         # never a player who isn't in this lineup.

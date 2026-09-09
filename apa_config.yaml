@@ -115,6 +115,16 @@ lineup_risk:
   weight_danger_count: 0.20
   danger_threshold: 0.40
 
+# analytics/rationale.py's toggles -- real, plain-language explanations of
+# already-computed real numbers (see docs/lineup_risk.md and
+# analytics/rationale.py's own module docstring for why per-pairing
+# rationale is NOT duplicated here: it already exists and is already
+# wired into Captain's Edge and the Lineup Optimizer). Missing this
+# section, or the key within it, falls back to including the rationale
+# (scripts.build_lineups.load_rationale_toggles_from_config).
+rationale:
+  include_lineup_rationale: true
+
 logging:
   level: "INFO"
   file: "logs/apa_tracker.log"

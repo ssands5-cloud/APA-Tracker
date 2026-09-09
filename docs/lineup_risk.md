@@ -101,3 +101,17 @@ explaining it. A lineup whose payload has no `lineup_risk` block (an older
 document, written before this existed) is skipped rather than rendered
 with blanks; a present-but-`None` value inside a block shows as `No data`,
 the same convention the pairing table already uses.
+
+## Rationale
+
+Each `lineup_risk` block also carries a real `rationale` sentence --
+`analytics.rationale.lineup_risk_rationale`, a plain-language description
+of the numbers already in the block (the anchor, their stability, the
+danger count, the overall volatility level, the combined score). Not a
+new formula, not a fabricated verdict -- see `analytics/rationale.py`'s
+own module docstring for why per-pairing rationale (already real, already
+shipped in `analytics.captains_edge` and `analytics.lineup_optimizer`)
+isn't duplicated here. Controlled by `apa_config.yaml`'s
+`rationale.include_lineup_rationale` (default `true`); when off, the
+`rationale` key is `None` rather than omitted, so consumers can rely on
+the key always being present.

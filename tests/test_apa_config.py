@@ -116,3 +116,17 @@ class TestLineupRiskWeights:
         assert section["weight_volatility_load"] == DEFAULT_LINEUP_RISK_WEIGHTS.volatility_load
         assert section["weight_danger_count"] == DEFAULT_LINEUP_RISK_WEIGHTS.danger_count
         assert section["danger_threshold"] == DEFAULT_LINEUP_RISK_WEIGHTS.danger_threshold
+
+
+class TestRationaleToggles:
+    """analytics/rationale.py's real toggles -- see docs/lineup_risk.md
+    and analytics/rationale.py's own module docstring for why per-pairing
+    rationale (already real, already shipped elsewhere) isn't duplicated
+    here."""
+
+    def test_configured_toggle_matches_the_modules_own_default(self):
+        from analytics.rationale import DEFAULT_RATIONALE_TOGGLES
+
+        config = _load_config()
+        section = config["rationale"]
+        assert section["include_lineup_rationale"] == DEFAULT_RATIONALE_TOGGLES.include_lineup_rationale
