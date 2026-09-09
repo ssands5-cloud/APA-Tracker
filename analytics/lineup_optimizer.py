@@ -37,6 +37,29 @@ WEIGHT_WIN_PROBABILITY = 0.30
 WEIGHT_CONFIDENCE = 0.15
 WEIGHT_RISK_PENALTY = 0.05
 
+
+@dataclass(frozen=True)
+class LineupWeights:
+    """The objective's four real weights, as an explicit, overridable value
+    instead of module constants baked into the formula.
+
+    Defaults are exactly WEIGHT_MATCHUP_SCORE/WEIGHT_WIN_PROBABILITY/
+    WEIGHT_CONFIDENCE/WEIGHT_RISK_PENALTY above -- using LineupWeights()
+    with no arguments reproduces this module's original, unconfigurable
+    behavior exactly. scripts.build_lineups.load_weights_from_config reads
+    apa_config.yaml's own `lineup_optimizer` section to build a real,
+    non-default instance; this module itself stays config-agnostic (see
+    the module docstring: "Purely derived and purely computational").
+    """
+
+    matchup_score: float = WEIGHT_MATCHUP_SCORE
+    win_probability: float = WEIGHT_WIN_PROBABILITY
+    confidence: float = WEIGHT_CONFIDENCE
+    risk_penalty: float = WEIGHT_RISK_PENALTY
+
+
+DEFAULT_WEIGHTS = LineupWeights()
+
 # A missing input is treated as uninformative, not negative or positive.
 NEUTRAL_DEFAULT = 0.5
 
@@ -65,16 +88,26 @@ def risk_penalty(risk_factor: Optional[float]) -> float:
 
 
 def pairing_score(matchup_score: Optional[float], win_probability: Optional[float],
-                  confidence: Optional[float], risk_factor: Optional[float]) -> float:
+                  confidence: Optional[float], risk_factor: Optional[float],
+                  weights: LineupWeights = DEFAULT_WEIGHTS) -> float:
     """Fij, the per-pairing objective score.
 
-        Fij = 0.50*Sij + 0.30*Wij + 0.15*ECi + 0.05*RPi
+        Fij = weights.matchup_score*Sij + weights.win_probability*Wij
+            + weights.confidence*ECi + weights.risk_penalty*RPi
+
+    `weights` defaults to this module's original, fixed 0.50/0.30/0.15/0.05
+    split (DEFAULT_WEIGHTS) -- passing a real, config-derived LineupWeights
+    (see scripts.build_lineups.load_weights_from_config) is the only thing
+    that changes this from the original behavior.
 
     Every component defaults to neutral (0.5) independently when missing, per
     spec section 4: a pairing is NEVER excluded for lacking data. This always
     returns a float -- a pairing with no evidence at all still scores
-    0.5*0.50 + 0.5*0.30 + 0.5*0.15 + 0.5*0.05 = 0.5, neither favoured nor
-    penalised for being unknown.
+    weights.matchup_score*0.5 + weights.win_probability*0.5 +
+    weights.confidence*0.5 + weights.risk_penalty*0.5, i.e. 0.5 whenever the
+    four weights sum to 1.0 -- neither favoured nor penalised for being
+    unknown. (Weights are not required to sum to 1.0; a config that changes
+    them is responsible for what that implies about the neutral score.)
 
     Note the asymmetry with display: this NEUTRAL-DEFAULTED value is for the
     optimizer's internal arithmetic only. The UI and Excel sheet show the
@@ -100,10 +133,10 @@ def pairing_score(matchup_score: Optional[float], win_probability: Optional[floa
     ERi = unit_or_neutral(risk_factor, "risk_factor")
     RPi = 1.0 - ERi
     return round(
-        WEIGHT_MATCHUP_SCORE * Sij
-        + WEIGHT_WIN_PROBABILITY * Wij
-        + WEIGHT_CONFIDENCE * ECi
-        + WEIGHT_RISK_PENALTY * RPi,
+        weights.matchup_score * Sij
+        + weights.win_probability * Wij
+        + weights.confidence * ECi
+        + weights.risk_penalty * RPi,
         6,
     )
 
@@ -111,7 +144,14 @@ def pairing_score(matchup_score: Optional[float], win_probability: Optional[floa
 @dataclass
 class PairingCandidate:
     """One (my player, opponent) cell in the score matrix -- raw values for
-    display, plus the computed Fij used for optimization."""
+    display, plus the computed Fij used for optimization.
+
+    `weights` defaults to DEFAULT_WEIGHTS (this module's original fixed
+    split) -- every existing caller that never passes it keeps behaving
+    exactly as before. A caller with a real, config-derived LineupWeights
+    (see scripts.build_lineups.load_weights_from_config) passes it here so
+    every cell in a matrix is scored consistently.
+    """
 
     player_id: str
     player_name: str
@@ -121,11 +161,13 @@ class PairingCandidate:
     win_probability: Optional[float]
     confidence: Optional[float]
     risk_factor: Optional[float]
+    weights: LineupWeights = DEFAULT_WEIGHTS
     score: float = field(init=False)
 
     def __post_init__(self):
         self.score = pairing_score(
-            self.matchup_score, self.win_probability, self.confidence, self.risk_factor
+            self.matchup_score, self.win_probability, self.confidence, self.risk_factor,
+            weights=self.weights,
         )
 
 

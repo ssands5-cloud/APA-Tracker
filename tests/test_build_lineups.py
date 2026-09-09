@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from analytics.lineup_optimizer import DEFAULT_WEIGHTS, LineupWeights
 from database.models import Base, Player, PlayerH2HAdvantage, PlayerTrend, Team
 from scripts.build_lineups import (
     build,
@@ -16,6 +17,7 @@ from scripts.build_lineups import (
     connect_read_only,
     fetch_pairing_rows,
     fetch_trends,
+    load_weights_from_config,
     write_lineups_json,
 )
 
@@ -205,6 +207,54 @@ class TestPayload:
         assert payload["pairing_rows"] == 0
         assert payload["lineups"] == []
         assert payload["resolution_warnings"]
+
+
+class TestConfiguredWeights:
+    """apa_config.yaml's real `lineup_optimizer` section, threaded through
+    load_weights_from_config -> build_payload -> the real PairingCandidate
+    matrix -- see docs/lineup_optimizer.md and
+    analytics.lineup_optimizer.LineupWeights."""
+
+    def test_a_missing_section_falls_back_to_the_original_defaults(self):
+        assert load_weights_from_config({}) == DEFAULT_WEIGHTS
+        assert load_weights_from_config(None) == DEFAULT_WEIGHTS
+
+    def test_an_empty_section_falls_back_to_the_original_defaults(self):
+        assert load_weights_from_config({"lineup_optimizer": {}}) == DEFAULT_WEIGHTS
+
+    def test_a_partial_override_only_changes_the_keys_it_names(self):
+        weights = load_weights_from_config({"lineup_optimizer": {"weight_matchup_score": 0.9}})
+        assert weights.matchup_score == 0.9
+        assert weights.win_probability == DEFAULT_WEIGHTS.win_probability
+        assert weights.confidence == DEFAULT_WEIGHTS.confidence
+        assert weights.risk_penalty == DEFAULT_WEIGHTS.risk_penalty
+
+    def test_a_full_override_matches_every_configured_value(self):
+        weights = load_weights_from_config({
+            "lineup_optimizer": {
+                "weight_matchup_score": 0.10,
+                "weight_win_probability": 0.20,
+                "weight_confidence": 0.30,
+                "weight_risk_penalty": 0.40,
+            }
+        })
+        assert weights == LineupWeights(
+            matchup_score=0.10, win_probability=0.20, confidence=0.30, risk_penalty=0.40,
+        )
+
+    def test_custom_weights_reach_the_real_payloads_objective_total(self, connection, db_path):
+        """End-to-end proof the override isn't silently dropped somewhere
+        in build_payload's own matrix construction -- the same real
+        database, scored two different real ways, must disagree."""
+        default_payload = build_payload(connection, source_db=str(db_path))
+        matchup_only = LineupWeights(
+            matchup_score=1.0, win_probability=0.0, confidence=0.0, risk_penalty=0.0,
+        )
+        custom_payload = build_payload(connection, source_db=str(db_path), weights=matchup_only)
+
+        default_total = default_payload["lineups"][0]["objective_total"]
+        custom_total = custom_payload["lineups"][0]["objective_total"]
+        assert custom_total != default_total
 
 
 class TestArtifact:

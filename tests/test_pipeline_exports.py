@@ -61,11 +61,17 @@ def _captains_builder(monkeypatch, calls):
 def _lineup_builder(monkeypatch, calls):
     module = types.ModuleType("scripts.build_lineups")
 
-    def build(_db_path, out_dir):
+    def build(_db_path, out_dir, weights=None):
         calls.append(("lineups", Path(out_dir)))
         return Path(out_dir) / "lineups.json"
 
     module.build = build
+    # Real signature is (config) -> LineupWeights; this stub never inspects
+    # its result (build() above ignores `weights` too), only that
+    # pipeline.exports.run() calls it at all -- see
+    # test_pipeline_exports_lineup_weights.py for the real, config-driven
+    # value.
+    module.load_weights_from_config = lambda config: None
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
@@ -118,11 +124,44 @@ def test_lineup_output_outside_repository_exports_is_rejected(
 
     module = types.ModuleType("scripts.build_lineups")
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
-    module.build = lambda _db_path, _out_dir: Path("C:/outside.json")
+    module.build = lambda _db_path, _out_dir, weights=None: Path("C:/outside.json")
+    module.load_weights_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     with pytest.raises(ValueError, match="must be under"):
         exports.run({"database": {"path": "unused.db"}}, engine)
+
+
+def test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder(
+    monkeypatch, engine, stub_exporters
+):
+    """Not just that build_lineups.build() gets called -- that pipeline.exports.run()
+    actually threads its own real `config` through load_weights_from_config()
+    and hands the RESULT to build(), rather than silently dropping it."""
+    calls = stub_exporters
+    _captains_builder(monkeypatch, calls)
+
+    module = types.ModuleType("scripts.build_lineups")
+    seen: dict[str, object] = {}
+
+    def load_weights_from_config(config):
+        seen["config"] = config
+        return "sentinel-weights"
+
+    def build(_db_path, out_dir, weights=None):
+        seen["weights"] = weights
+        return Path(out_dir) / "lineups.json"
+
+    module.load_weights_from_config = load_weights_from_config
+    module.build = build
+    module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
+    monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
+
+    config = {"database": {"path": "unused.db"}, "lineup_optimizer": {"weight_matchup_score": 0.9}}
+    exports.run(config, engine, captains=True)
+
+    assert seen["config"] is config
+    assert seen["weights"] == "sentinel-weights"
 
 
 class TestConfiguredExportsDir:
@@ -173,10 +212,11 @@ def test_missing_lineup_database_skips_only_lineup_artifact(
     no_database_error = type("LineupNoDatabaseError", (RuntimeError,), {})
     module.NoDatabaseError = no_database_error
 
-    def fail(_db_path, _out_dir):
+    def fail(_db_path, _out_dir, weights=None):
         raise no_database_error("database unavailable")
 
     module.build = fail
+    module.load_weights_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     written = exports.run({"database": {"path": "unused.db"}}, engine)

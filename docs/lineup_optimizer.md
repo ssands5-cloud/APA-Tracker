@@ -41,6 +41,33 @@ as evidence.  A candidate with no source H2H row is retained as an explicit
 missing edge (`source_pairing: false`) so that a sparse matrix does not force
 the builder to invent a matchup.
 
+### The four weights are configurable
+
+`0.50`/`0.30`/`0.15`/`0.05` are `analytics.lineup_optimizer.DEFAULT_WEIGHTS`
+(a `LineupWeights` value) -- the engine itself stays config-agnostic (it
+queries no database, reads no YAML), so `DEFAULT_WEIGHTS` is what every
+existing caller still gets automatically. `apa_config.yaml`'s own
+`lineup_optimizer` section makes them discoverable and overridable without
+changing that default:
+
+```yaml
+lineup_optimizer:
+  weight_matchup_score: 0.50
+  weight_win_probability: 0.30
+  weight_confidence: 0.15
+  weight_risk_penalty: 0.05
+```
+
+`scripts.build_lineups.load_weights_from_config` reads this section (a
+missing section, or any one missing key within it, falls back to that same
+key's original default -- never a partial, silently-wrong formula), builds
+a `LineupWeights`, and threads it through `build_payload` into every
+`PairingCandidate` in the matrix. `pipeline/exports.py` does this
+automatically from the real, already-loaded config on every real run; the
+standalone `python scripts/build_lineups.py` CLI reads `apa_config.yaml`
+directly the same way `scripts.build_captains_edge` already does for its
+own config-driven values.
+
 ## Grouping and identity
 
 An assignment is solved independently for each:

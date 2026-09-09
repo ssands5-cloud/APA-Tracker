@@ -48,3 +48,20 @@ class TestRealExportPaths:
         export's own path is a different, unrelated concern."""
         config = _load_config()
         assert config["export"]["json_output_path"] == "exports/apa_data.json"
+
+
+class TestLineupOptimizerWeights:
+    """The real, already-verified weights from analytics/lineup_optimizer.py
+    (WEIGHT_MATCHUP_SCORE etc.), made discoverable/overridable here without
+    changing the formula's default behavior -- see
+    scripts.build_lineups.load_weights_from_config."""
+
+    def test_configured_weights_match_the_modules_own_defaults(self):
+        from analytics.lineup_optimizer import DEFAULT_WEIGHTS
+
+        config = _load_config()
+        section = config["lineup_optimizer"]
+        assert section["weight_matchup_score"] == DEFAULT_WEIGHTS.matchup_score
+        assert section["weight_win_probability"] == DEFAULT_WEIGHTS.win_probability
+        assert section["weight_confidence"] == DEFAULT_WEIGHTS.confidence
+        assert section["weight_risk_penalty"] == DEFAULT_WEIGHTS.risk_penalty

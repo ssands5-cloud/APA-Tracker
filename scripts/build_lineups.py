@@ -50,7 +50,12 @@ if __package__ in (None, ""):
 
 from analytics.captains_edge import confidence as calculate_confidence
 from analytics.captains_edge import risk_factor as calculate_risk_factor
-from analytics.lineup_optimizer import PairingCandidate, solve_lineup_assignment
+from analytics.lineup_optimizer import (
+    DEFAULT_WEIGHTS,
+    LineupWeights,
+    PairingCandidate,
+    solve_lineup_assignment,
+)
 from analytics.player_trends import normalize_format
 from scripts.build_captains_edge import (
     NoDatabaseError,
@@ -408,6 +413,7 @@ def _candidate(
     session_name: str,
     trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
     warnings: list[str],
+    weights: LineupWeights = DEFAULT_WEIGHTS,
 ) -> PairingCandidate:
     player_id = str(player["player_id"])
     opponent_id = str(opponent["opponent_id"])
@@ -428,6 +434,7 @@ def _candidate(
             win_probability=None,
             confidence=confidence,
             risk_factor=risk,
+            weights=weights,
         )
 
     return PairingCandidate(
@@ -443,6 +450,7 @@ def _candidate(
         ),
         confidence=confidence,
         risk_factor=risk,
+        weights=weights,
     )
 
 
@@ -464,6 +472,7 @@ def _lineup_for_group(
     rows: list[dict[str, Any]],
     trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
     warnings: list[str],
+    weights: LineupWeights = DEFAULT_WEIGHTS,
 ) -> dict[str, Any]:
     """Build one assignment document for a resolved team/format/session group."""
 
@@ -509,6 +518,7 @@ def _lineup_for_group(
                     session_name=session_name,
                     trends=trends,
                     warnings=warnings,
+                    weights=weights,
                 )
             )
         matrix.append(cells)
@@ -566,6 +576,7 @@ def _lineup_for_group(
 def build_payload(
     connection: sqlite3.Connection,
     source_db: str = "",
+    weights: LineupWeights = DEFAULT_WEIGHTS,
 ) -> dict[str, Any]:
     """Build the complete JSON-serializable lineup document."""
 
@@ -605,7 +616,7 @@ def build_payload(
         ].append(row)
 
     lineups = [
-        _lineup_for_group(group, trends, warnings)
+        _lineup_for_group(group, trends, warnings, weights=weights)
         for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
     ]
 
@@ -662,14 +673,56 @@ def write_lineups_json(payload: dict[str, Any], path: Path | str) -> Path:
     return destination
 
 
-def build(db_path: Optional[str] = None, out_dir: Optional[str] = None) -> Path:
+def load_weights_from_config(config: Optional[dict[str, Any]]) -> LineupWeights:
+    """The objective's four real weights, from `config`'s own
+    `lineup_optimizer` section -- real, optional overrides, never required.
+
+    Falls back to DEFAULT_WEIGHTS (analytics.lineup_optimizer's original,
+    fixed 0.50/0.30/0.15/0.05 split) for a missing section entirely, and
+    independently for any one key missing from an otherwise-present
+    section -- a config that only overrides one weight does not silently
+    zero out the other three.  `config` may be None (no config available
+    at all): same fallback, not an error.
+    """
+    section = (config or {}).get("lineup_optimizer") or {}
+    return LineupWeights(
+        matchup_score=section.get("weight_matchup_score", DEFAULT_WEIGHTS.matchup_score),
+        win_probability=section.get("weight_win_probability", DEFAULT_WEIGHTS.win_probability),
+        confidence=section.get("weight_confidence", DEFAULT_WEIGHTS.confidence),
+        risk_penalty=section.get("weight_risk_penalty", DEFAULT_WEIGHTS.risk_penalty),
+    )
+
+
+def _configured_weights() -> LineupWeights:
+    """apa_config.yaml's own `lineup_optimizer` weights, for the standalone
+    CLI entry point -- mirrors _configured_db_path's own convention in
+    scripts.build_captains_edge: a malformed or absent config is advisory,
+    never fatal, and just falls back to DEFAULT_WEIGHTS."""
+    config_path = PROJECT_ROOT / "apa_config.yaml"
+    if not config_path.is_file():
+        return DEFAULT_WEIGHTS
+    try:
+        import yaml  # only needed to read the configured weights
+
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:  # pragma: no cover - config is advisory, never required
+        logger.debug("Could not read %s; using default lineup optimizer weights", config_path)
+        return DEFAULT_WEIGHTS
+    return load_weights_from_config(config)
+
+
+def build(
+    db_path: Optional[str] = None,
+    out_dir: Optional[str] = None,
+    weights: LineupWeights = DEFAULT_WEIGHTS,
+) -> Path:
     """Read the source database and atomically write ``lineups.json``."""
 
     resolved = resolve_db_path(db_path)
     logger.info("Reading %s", resolved)
     connection = connect_read_only(resolved)
     try:
-        payload = build_payload(connection, source_db=str(resolved))
+        payload = build_payload(connection, source_db=str(resolved), weights=weights)
     finally:
         connection.close()
 
@@ -691,7 +744,7 @@ def main() -> int:
     parser.add_argument("--out-dir", help=f"output directory (default: {DEFAULT_OUT_DIR})")
     args = parser.parse_args()
     try:
-        output = build(args.db, args.out_dir)
+        output = build(args.db, args.out_dir, weights=_configured_weights())
     except NoDatabaseError as exc:
         print(f"\n{exc}\n")
         return 1

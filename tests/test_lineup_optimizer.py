@@ -10,8 +10,14 @@ from __future__ import annotations
 import pytest
 
 from analytics.lineup_optimizer import (
+    DEFAULT_WEIGHTS,
     MAX_ASSIGNMENT_PERMUTATIONS,
     NEUTRAL_DEFAULT,
+    WEIGHT_CONFIDENCE,
+    WEIGHT_MATCHUP_SCORE,
+    WEIGHT_RISK_PENALTY,
+    WEIGHT_WIN_PROBABILITY,
+    LineupWeights,
     PairingCandidate,
     build_rationale,
     effective_confidence,
@@ -32,6 +38,7 @@ def candidate(
     risk_factor: float | None = 0.5,
     player_name: str | None = None,
     opponent_name: str | None = None,
+    weights: LineupWeights = DEFAULT_WEIGHTS,
 ) -> PairingCandidate:
     """Create a matrix cell with readable defaults for the tests."""
 
@@ -44,6 +51,7 @@ def candidate(
         win_probability=win_probability,
         confidence=confidence,
         risk_factor=risk_factor,
+        weights=weights,
     )
 
 
@@ -208,6 +216,81 @@ class TestSolveLineupAssignment:
         values[field] = 1.1
         with pytest.raises(ValueError, match="between 0 and 1"):
             pairing_score(**values)
+
+
+class TestLineupWeights:
+    """apa_config.yaml's lineup_optimizer section makes these overridable --
+    see scripts.build_lineups.load_weights_from_config -- but this module
+    itself stays config-agnostic (its own docstring: "Purely derived and
+    purely computational"), so DEFAULT_WEIGHTS must exactly reproduce the
+    module's original, pre-config-driven behavior."""
+
+    def test_default_weights_exactly_match_the_original_module_constants(self):
+        assert DEFAULT_WEIGHTS == LineupWeights(
+            matchup_score=WEIGHT_MATCHUP_SCORE,
+            win_probability=WEIGHT_WIN_PROBABILITY,
+            confidence=WEIGHT_CONFIDENCE,
+            risk_penalty=WEIGHT_RISK_PENALTY,
+        )
+
+    def test_pairing_score_with_no_weights_argument_uses_the_defaults(self):
+        assert pairing_score(0.8, 0.7, 0.6, 0.2) == pairing_score(
+            0.8, 0.7, 0.6, 0.2, weights=DEFAULT_WEIGHTS
+        )
+
+    def test_custom_weights_change_the_score_predictably(self):
+        """A weight moved entirely onto matchup_score alone must make the
+        score depend on nothing else -- proves the override actually
+        reaches the formula, not just that it's accepted."""
+        only_matchup = LineupWeights(
+            matchup_score=1.0, win_probability=0.0, confidence=0.0, risk_penalty=0.0
+        )
+        assert pairing_score(0.8, 0.1, 0.1, 0.9, weights=only_matchup) == 0.8
+        assert pairing_score(0.8, 0.9, 0.9, 0.1, weights=only_matchup) == 0.8
+
+    def test_a_pairing_candidate_uses_default_weights_when_none_given(self):
+        cell = candidate("P1", "O1", matchup_score=0.8, win_probability=0.7,
+                          confidence=0.6, risk_factor=0.2)
+        assert cell.score == pairing_score(0.8, 0.7, 0.6, 0.2)
+
+    def test_a_pairing_candidate_uses_its_own_custom_weights(self):
+        only_matchup = LineupWeights(
+            matchup_score=1.0, win_probability=0.0, confidence=0.0, risk_penalty=0.0
+        )
+        cell = PairingCandidate(
+            player_id="P1", player_name="P1", opponent_id="O1", opponent_name="O1",
+            matchup_score=0.8, win_probability=0.1, confidence=0.1, risk_factor=0.9,
+            weights=only_matchup,
+        )
+        assert cell.score == 0.8
+
+    def test_solve_lineup_assignment_result_reflects_whichever_weights_built_the_matrix(self):
+        """The optimizer itself takes no weights argument -- it only ever
+        sums each cell's already-computed .score -- so a custom weighting
+        must be baked in at matrix-construction time and still change
+        which assignment wins."""
+        favor_matchup_only = LineupWeights(
+            matchup_score=1.0, win_probability=0.0, confidence=0.0, risk_penalty=0.0
+        )
+        players = ["Alice", "Bob"]
+        opponents = ["Xavier", "Yara"]
+        cells = {
+            ("Alice", "Xavier"): {"matchup_score": 0.9, "win_probability": 0.1},
+            ("Alice", "Yara"): {"matchup_score": 0.1, "win_probability": 0.9},
+            ("Bob", "Xavier"): {"matchup_score": 0.1, "win_probability": 0.9},
+            ("Bob", "Yara"): {"matchup_score": 0.9, "win_probability": 0.1},
+        }
+        weighted_matrix = [
+            [candidate(p, o, weights=favor_matchup_only, **cells[(p, o)])
+             for o in opponents]
+            for p in players
+        ]
+        solution = solve_lineup_assignment(weighted_matrix, players, opponents)
+        pairs = {(entry.player_name, entry.opponent_name) for entry in solution.assignments}
+        # Under matchup-only weighting, Alice's real strength is Xavier
+        # (0.9) and Bob's is Yara (0.9) -- the win_probability-heavy
+        # default weighting would have picked the opposite pairing.
+        assert pairs == {("Alice", "Xavier"), ("Bob", "Yara")}
 
 
 class TestRationale:

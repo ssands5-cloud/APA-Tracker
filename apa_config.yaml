@@ -45,6 +45,20 @@ export:
   excel_output_path: "exports/apa_stats_fresh.xlsx"
   json_output_path: "exports/apa_data.json"
 
+# The Lineup Optimizer's real objective weights (analytics/lineup_optimizer.py,
+# docs/lineup_optimizer.md): Fij = weight_matchup_score*matchup_score +
+# weight_win_probability*win_probability + weight_confidence*confidence +
+# weight_risk_penalty*(1 - risk_factor). Values below are the module's
+# original, already-verified defaults -- present here so they're
+# discoverable and overridable, not because the formula or its defaults
+# changed. Missing this whole section, or any one key in it, falls back to
+# these same defaults (scripts.build_lineups.load_weights_from_config).
+lineup_optimizer:
+  weight_matchup_score: 0.50
+  weight_win_probability: 0.30
+  weight_confidence: 0.15
+  weight_risk_penalty: 0.05
+
 logging:
   level: "INFO"
   file: "logs/apa_tracker.log"
