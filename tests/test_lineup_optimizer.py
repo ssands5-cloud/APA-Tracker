@@ -293,6 +293,106 @@ class TestLineupWeights:
         assert pairs == {("Alice", "Xavier"), ("Bob", "Yara")}
 
 
+class TestModeledWinProbability:
+    """analytics.win_probability's computed estimate, threaded through as
+    its own field -- never conflated with the real, H2H-observed
+    win_probability parameter above (see PairingCandidate.modeled_win_probability's
+    own docstring)."""
+
+    def test_defaults_to_none_and_contributes_nothing_to_the_score(self):
+        with_default_weights = candidate(
+            "P1", "O1", matchup_score=0.8, win_probability=0.7, confidence=0.6, risk_factor=0.2,
+        )
+        assert with_default_weights.modeled_win_probability is None
+        # weight_modeled_win_probability defaults to 0.0, so a None here
+        # must produce the exact same score as before this field existed.
+        assert with_default_weights.score == pairing_score(0.8, 0.7, 0.6, 0.2)
+
+    def test_a_real_value_is_stored_and_visible_on_the_candidate(self):
+        cell = PairingCandidate(
+            player_id="P1", player_name="P1", opponent_id="O1", opponent_name="O1",
+            matchup_score=0.5, win_probability=0.5, confidence=0.5, risk_factor=0.5,
+            modeled_win_probability=0.9,
+        )
+        assert cell.modeled_win_probability == 0.9
+
+    def test_a_nonzero_weight_changes_the_score(self):
+        weights = LineupWeights(modeled_win_probability=0.5)
+        high = PairingCandidate(
+            player_id="P1", player_name="P1", opponent_id="O1", opponent_name="O1",
+            matchup_score=0.5, win_probability=0.5, confidence=0.5, risk_factor=0.5,
+            modeled_win_probability=0.95, weights=weights,
+        )
+        low = PairingCandidate(
+            player_id="P1", player_name="P1", opponent_id="O1", opponent_name="O1",
+            matchup_score=0.5, win_probability=0.5, confidence=0.5, risk_factor=0.5,
+            modeled_win_probability=0.05, weights=weights,
+        )
+        assert high.score > low.score
+
+    def test_changing_weight_modeled_win_probability_changes_which_assignment_wins(self):
+        """The same controlled two-player fixture TestSolveLineupAssignment
+        already uses to prove the optimizer solves the WHOLE assignment,
+        not independent best-pairs -- here proving a configured
+        weight_modeled_win_probability alone can flip which pairing wins,
+        even when every other real signal is held identical."""
+        players = ["Alice", "Bob"]
+        opponents = ["Xavier", "Yara"]
+        # matchup_score/win_probability/confidence/risk_factor are IDENTICAL
+        # across all four cells (so the original four-term formula is a
+        # dead tie everywhere, resolved only by the lexicographic
+        # tie-break -- ("Alice","Xavier")+("Bob","Yara") sorts first) --
+        # only modeled_win_probability differs, and it favors the OPPOSITE
+        # pairing, so weight_modeled_win_probability=0 vs >0 can only
+        # possibly agree by the lexicographic tie-break's own coincidence,
+        # not because the modeled signal had no effect.
+        modeled = {
+            ("Alice", "Xavier"): 0.1,
+            ("Alice", "Yara"): 0.9,
+            ("Bob", "Xavier"): 0.9,
+            ("Bob", "Yara"): 0.1,
+        }
+        weights_off = LineupWeights(modeled_win_probability=0.0)
+        weights_on = LineupWeights(modeled_win_probability=1.0)
+
+        def build_matrix(weights):
+            return [
+                [
+                    candidate(p, o, matchup_score=0.5, win_probability=0.5,
+                             confidence=0.5, risk_factor=0.5,
+                             weights=weights)
+                    for o in opponents
+                ]
+                for p in players
+            ]
+
+        # Manually stamp modeled_win_probability onto each cell (candidate()
+        # doesn't take it as a kwarg -- it's not part of the "readable
+        # matrix cell" helper's contract, only PairingCandidate's).
+        def with_modeled(weights):
+            matrix = build_matrix(weights)
+            for i, p in enumerate(players):
+                for j, o in enumerate(opponents):
+                    cell = matrix[i][j]
+                    matrix[i][j] = PairingCandidate(
+                        player_id=cell.player_id, player_name=cell.player_name,
+                        opponent_id=cell.opponent_id, opponent_name=cell.opponent_name,
+                        matchup_score=cell.matchup_score, win_probability=cell.win_probability,
+                        confidence=cell.confidence, risk_factor=cell.risk_factor,
+                        weights=weights, modeled_win_probability=modeled[(p, o)],
+                    )
+            return matrix
+
+        off_solution = solve_lineup_assignment(with_modeled(weights_off), players, opponents)
+        on_solution = solve_lineup_assignment(with_modeled(weights_on), players, opponents)
+
+        off_pairs = {(e.player_name, e.opponent_name) for e in off_solution.assignments}
+        on_pairs = {(e.player_name, e.opponent_name) for e in on_solution.assignments}
+        assert off_pairs == {("Alice", "Xavier"), ("Bob", "Yara")}  # lexicographic default
+        assert on_pairs == {("Alice", "Yara"), ("Bob", "Xavier")}  # flipped by the modeled signal
+        assert off_pairs != on_pairs
+
+
 class TestRationale:
     def test_no_matchup_history_is_explicit(self):
         assert build_rationale(None, None, None, None) == (

@@ -94,8 +94,12 @@ def run(config: dict[str, Any], engine: Engine, captains: bool = True) -> list[t
         build_lineups, "NoDatabaseError", NoDatabaseError
     )
     lineup_weights = build_lineups.load_weights_from_config(config)
+    win_probability_weights = build_lineups.load_win_probability_weights_from_config(config)
     try:
-        lineup_result = build_lineups.build(str(db_path), str(exports_dir), weights=lineup_weights)
+        lineup_result = build_lineups.build(
+            str(db_path), str(exports_dir),
+            weights=lineup_weights, win_probability_weights=win_probability_weights,
+        )
     except lineup_no_database_error as exc:
         logger.warning("Lineup Optimizer skipped: %s", str(exc).splitlines()[0])
     else:

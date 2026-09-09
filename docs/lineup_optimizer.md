@@ -203,3 +203,24 @@ numbers, real caveats, and what is still unvalidated (the historical-record
 term has zero rematches to check against yet; the season-scoped `Sij` input
 is not covered at all). It remains a transparent decision aid, not a fitted
 probability model.
+
+## Win Probability model (a fifth, separate, off-by-default term)
+
+`analytics/win_probability.py` computes a second, MODELED win-probability
+estimate (`MPij`) from SLDelta/WR_SL/WR_H2H/Volatility -- a different kind
+of number from `Wij` above, which is a real, directly OBSERVED rate. The
+two are never conflated: `MPij` lives in its own field
+(`PairingCandidate.modeled_win_probability`) and its own weight
+(`weight_modeled_win_probability`, defaulting to 0.0 so it changes nothing
+until explicitly configured). Full writeup, including what was checked
+against real data before the defaults were picked: `docs/win_probability.md`.
+
+**RaceDifficulty is not implemented in v1.** APA's real "Games Must Win"
+race-to-X charts (8-Ball and 9-Ball) were located and verified against
+`rules.poolplayers.com` -- see `docs/win_probability.md`'s "Race chart
+verification" section for the full transcribed tables and citation -- but
+wiring a race-length signal into the model risks double-counting SLDelta,
+which was not checked before this shipped. `analytics.win_probability.race_difficulty()`
+always returns `0.0`, a documented gap, and will be implemented once that
+overlap question is resolved -- not fabricated from an assumed chart in
+the meantime.

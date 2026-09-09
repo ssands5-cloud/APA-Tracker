@@ -57,6 +57,12 @@ from analytics.lineup_optimizer import (
     solve_lineup_assignment,
 )
 from analytics.player_trends import normalize_format
+from analytics.win_probability import (
+    DEFAULT_WIN_PROBABILITY_WEIGHTS,
+    WinProbabilityWeights,
+    compute_win_probability,
+)
+from analytics.win_probability import sl_delta as compute_sl_delta
 from scripts.build_captains_edge import (
     NoDatabaseError,
     PROJECT_ROOT,
@@ -151,10 +157,12 @@ def fetch_pairing_rows(
                 p.external_id AS player_id,
                 p.name        AS player_name,
                 p.team_id     AS team_pk,
+                p.skill_level AS player_skill_level,
                 o.id          AS opponent_pk,
                 o.external_id AS opponent_id,
                 o.name        AS opponent_name,
-                o.team_id     AS opponent_team_pk
+                o.team_id     AS opponent_team_pk,
+                o.skill_level AS opponent_skill_level
                 {team_columns},
                 a.matchup_score,
                 a.win_probability,
@@ -226,6 +234,59 @@ def fetch_trends(
         # database deterministic without silently averaging unlike rows.
         trends.setdefault(key, record)
     return trends
+
+
+def fetch_win_rates_by_skill_level(
+    connection: sqlite3.Connection,
+    warnings: Optional[list[str]] = None,
+) -> dict[tuple[int, int], float]:
+    """Real WR_SL for analytics.win_probability: for each real player, their
+    win rate across every real, decided (W/L) player_head_to_head game
+    against an opponent of a given skill level -- grouped by the
+    OPPONENT's skill level, not by opponent identity (that's WR_H2H,
+    already covered by the existing, real
+    player_h2h_advantage.win_probability -- see
+    scripts.build_lineups._candidate).
+
+    Keyed by (player_pk, opponent_skill_level) -> win_rate (0..1). A
+    (player, skill level) combination with zero decided games is simply
+    absent from the returned dict -- callers treat a missing key as "no
+    real evidence," never as 0 wins, per docs/win_probability.md.
+    """
+    local_warnings = warnings if warnings is not None else []
+    if not _table_exists(connection, "player_head_to_head"):
+        _warn(local_warnings, "player_head_to_head is unavailable; WR_SL remains null.")
+        return {}
+
+    required = {"player_id", "opponent_skill_level", "result"}
+    if not required.issubset(_columns(connection, "player_head_to_head")):
+        _warn(local_warnings, "player_head_to_head has an older/incomplete schema; WR_SL was ignored.")
+        return {}
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT player_id AS player_pk, opponent_skill_level,
+                   SUM(CASE WHEN result = 'W' THEN 1 ELSE 0 END) AS wins,
+                   SUM(CASE WHEN result IN ('W', 'L') THEN 1 ELSE 0 END) AS decided
+            FROM player_head_to_head
+            WHERE opponent_skill_level IS NOT NULL
+            GROUP BY player_id, opponent_skill_level
+            """
+        ).fetchall()
+    except sqlite3.Error as exc:
+        _warn(local_warnings, f"Could not read player_head_to_head for WR_SL: {exc}.")
+        return {}
+
+    win_rates: dict[tuple[int, int], float] = {}
+    for row in rows:
+        record = dict(row)
+        if not record["decided"]:
+            continue
+        win_rates[(record["player_pk"], record["opponent_skill_level"])] = (
+            record["wins"] / record["decided"]
+        )
+    return win_rates
 
 
 def _normalized_matchup_score(
@@ -404,6 +465,24 @@ def _trend_signals(
     )
 
 
+def _raw_volatility(
+    player_pk: int,
+    format_name: Optional[str],
+    session_name: Optional[str],
+    trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
+) -> Optional[float]:
+    """The real, un-combined player_trends.volatility for one player slot --
+    analytics.win_probability's own Volatility input. Distinct from
+    _trend_signals' `risk` above, which is volatility ALREADY combined with
+    sl_stability (analytics.captains_edge.risk_factor); win_probability
+    wants the raw signal on its own, not that combined one.
+    """
+    trend = trends.get((player_pk, normalize_format(format_name), session_name))
+    if trend is None:
+        return None
+    return trend.get("volatility")
+
+
 def _candidate(
     source: Optional[dict[str, Any]],
     player: dict[str, Any],
@@ -414,6 +493,8 @@ def _candidate(
     trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
     warnings: list[str],
     weights: LineupWeights = DEFAULT_WEIGHTS,
+    win_rates_by_sl: Optional[dict[tuple[int, int], float]] = None,
+    win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
 ) -> PairingCandidate:
     player_id = str(player["player_id"])
     opponent_id = str(opponent["opponent_id"])
@@ -421,10 +502,25 @@ def _candidate(
     risk, confidence, _ = _trend_signals(
         player["player_pk"], format_name, session_name, trends
     )
+    volatility = _raw_volatility(player["player_pk"], format_name, session_name, trends)
+    player_skill_level = player.get("player_skill_level")
+    opponent_skill_level = opponent.get("opponent_skill_level")
+    delta = compute_sl_delta(player_skill_level, opponent_skill_level)
+    wr_sl = None
+    if win_rates_by_sl is not None and opponent_skill_level is not None:
+        wr_sl = win_rates_by_sl.get((player["player_pk"], opponent_skill_level))
+
     if source is None:
         # This is an absent H2H edge, not a fabricated measurement.  The
         # optimizer can still complete a lineup using neutral defaults; the
         # serialized assignment marks source_pairing=false and warns.
+        # WR_H2H (wr_h2h below) has no source here either -- there is no
+        # real per-opponent win rate to read for an edge that doesn't
+        # exist -- compute_win_probability treats it, like every other
+        # missing input, as 0 rather than excluding the pairing.
+        modeled_win_probability = compute_win_probability(
+            delta, wr_sl, None, volatility, weights=win_probability_weights,
+        )
         return PairingCandidate(
             player_id=player_id,
             player_name=player["player_name"] or "",
@@ -435,8 +531,13 @@ def _candidate(
             confidence=confidence,
             risk_factor=risk,
             weights=weights,
+            modeled_win_probability=modeled_win_probability,
         )
 
+    wr_h2h = _bounded_probability(source.get("win_probability"), warnings, context)
+    modeled_win_probability = compute_win_probability(
+        delta, wr_sl, wr_h2h, volatility, weights=win_probability_weights,
+    )
     return PairingCandidate(
         player_id=player_id,
         player_name=source["player_name"] or "",
@@ -445,12 +546,11 @@ def _candidate(
         matchup_score=_normalized_matchup_score(
             source.get("matchup_score"), warnings, context
         ),
-        win_probability=_bounded_probability(
-            source.get("win_probability"), warnings, context
-        ),
+        win_probability=wr_h2h,
         confidence=confidence,
         risk_factor=risk,
         weights=weights,
+        modeled_win_probability=modeled_win_probability,
     )
 
 
@@ -473,6 +573,8 @@ def _lineup_for_group(
     trends: dict[tuple[int, Optional[str], Optional[str]], dict[str, Any]],
     warnings: list[str],
     weights: LineupWeights = DEFAULT_WEIGHTS,
+    win_rates_by_sl: Optional[dict[tuple[int, int], float]] = None,
+    win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
 ) -> dict[str, Any]:
     """Build one assignment document for a resolved team/format/session group."""
 
@@ -519,6 +621,8 @@ def _lineup_for_group(
                     trends=trends,
                     warnings=warnings,
                     weights=weights,
+                    win_rates_by_sl=win_rates_by_sl,
+                    win_probability_weights=win_probability_weights,
                 )
             )
         matrix.append(cells)
@@ -577,12 +681,14 @@ def build_payload(
     connection: sqlite3.Connection,
     source_db: str = "",
     weights: LineupWeights = DEFAULT_WEIGHTS,
+    win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
 ) -> dict[str, Any]:
     """Build the complete JSON-serializable lineup document."""
 
     warnings: list[str] = []
     pairings = fetch_pairing_rows(connection, warnings)
     trends = fetch_trends(connection, warnings)
+    win_rates_by_sl = fetch_win_rates_by_skill_level(connection, warnings)
 
     for row in pairings:
         # Keep the source identity separate from any safe name-based
@@ -616,7 +722,10 @@ def build_payload(
         ].append(row)
 
     lineups = [
-        _lineup_for_group(group, trends, warnings, weights=weights)
+        _lineup_for_group(
+            group, trends, warnings, weights=weights,
+            win_rates_by_sl=win_rates_by_sl, win_probability_weights=win_probability_weights,
+        )
         for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
     ]
 
@@ -693,6 +802,28 @@ def load_weights_from_config(config: Optional[dict[str, Any]]) -> LineupWeights:
     )
 
 
+def load_win_probability_weights_from_config(
+    config: Optional[dict[str, Any]]
+) -> WinProbabilityWeights:
+    """analytics.win_probability's real, optional weight overrides, from
+    `config`'s own `win_probability` section -- same fallback contract as
+    load_weights_from_config above: a missing section, or any one missing
+    key within it, falls back to that key's own DEFAULT_WIN_PROBABILITY_WEIGHTS
+    value, never a guessed one. `config` may be None.
+    """
+    section = (config or {}).get("win_probability") or {}
+    defaults = DEFAULT_WIN_PROBABILITY_WEIGHTS
+    return WinProbabilityWeights(
+        sl_delta=section.get("weight_sl_delta", defaults.sl_delta),
+        wr_sl=section.get("weight_wr_sl", defaults.wr_sl),
+        wr_h2h=section.get("weight_wr_h2h", defaults.wr_h2h),
+        volatility=section.get("weight_volatility", defaults.volatility),
+        logistic_scale=section.get("logistic_scale", defaults.logistic_scale),
+        clamp_min=section.get("clamp_min", defaults.clamp_min),
+        clamp_max=section.get("clamp_max", defaults.clamp_max),
+    )
+
+
 def _configured_weights() -> LineupWeights:
     """apa_config.yaml's own `lineup_optimizer` weights, for the standalone
     CLI entry point -- mirrors _configured_db_path's own convention in
@@ -711,10 +842,28 @@ def _configured_weights() -> LineupWeights:
     return load_weights_from_config(config)
 
 
+def _configured_win_probability_weights() -> WinProbabilityWeights:
+    """apa_config.yaml's own `win_probability` weights, for the standalone
+    CLI entry point -- same advisory-never-fatal convention as
+    _configured_weights above."""
+    config_path = PROJECT_ROOT / "apa_config.yaml"
+    if not config_path.is_file():
+        return DEFAULT_WIN_PROBABILITY_WEIGHTS
+    try:
+        import yaml  # only needed to read the configured weights
+
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:  # pragma: no cover - config is advisory, never required
+        logger.debug("Could not read %s; using default win probability weights", config_path)
+        return DEFAULT_WIN_PROBABILITY_WEIGHTS
+    return load_win_probability_weights_from_config(config)
+
+
 def build(
     db_path: Optional[str] = None,
     out_dir: Optional[str] = None,
     weights: LineupWeights = DEFAULT_WEIGHTS,
+    win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
 ) -> Path:
     """Read the source database and atomically write ``lineups.json``."""
 
@@ -722,7 +871,10 @@ def build(
     logger.info("Reading %s", resolved)
     connection = connect_read_only(resolved)
     try:
-        payload = build_payload(connection, source_db=str(resolved), weights=weights)
+        payload = build_payload(
+            connection, source_db=str(resolved), weights=weights,
+            win_probability_weights=win_probability_weights,
+        )
     finally:
         connection.close()
 
@@ -744,7 +896,11 @@ def main() -> int:
     parser.add_argument("--out-dir", help=f"output directory (default: {DEFAULT_OUT_DIR})")
     args = parser.parse_args()
     try:
-        output = build(args.db, args.out_dir, weights=_configured_weights())
+        output = build(
+            args.db, args.out_dir,
+            weights=_configured_weights(),
+            win_probability_weights=_configured_win_probability_weights(),
+        )
     except NoDatabaseError as exc:
         print(f"\n{exc}\n")
         return 1

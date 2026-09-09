@@ -36,26 +36,35 @@ WEIGHT_MATCHUP_SCORE = 0.50
 WEIGHT_WIN_PROBABILITY = 0.30
 WEIGHT_CONFIDENCE = 0.15
 WEIGHT_RISK_PENALTY = 0.05
+# Off by default (0.0): analytics.win_probability's modeled estimate is a
+# NEW, separate signal from the real, H2H-observed win_probability/Wij
+# term above -- see PairingCandidate.modeled_win_probability's own
+# docstring for why the two are never conflated. Defaulting this to 0.0
+# means every existing caller that never configures it gets the exact
+# original four-term formula, unchanged.
+WEIGHT_MODELED_WIN_PROBABILITY = 0.0
 
 
 @dataclass(frozen=True)
 class LineupWeights:
-    """The objective's four real weights, as an explicit, overridable value
+    """The objective's real weights, as an explicit, overridable value
     instead of module constants baked into the formula.
 
     Defaults are exactly WEIGHT_MATCHUP_SCORE/WEIGHT_WIN_PROBABILITY/
-    WEIGHT_CONFIDENCE/WEIGHT_RISK_PENALTY above -- using LineupWeights()
-    with no arguments reproduces this module's original, unconfigurable
-    behavior exactly. scripts.build_lineups.load_weights_from_config reads
-    apa_config.yaml's own `lineup_optimizer` section to build a real,
-    non-default instance; this module itself stays config-agnostic (see
-    the module docstring: "Purely derived and purely computational").
+    WEIGHT_CONFIDENCE/WEIGHT_RISK_PENALTY/WEIGHT_MODELED_WIN_PROBABILITY
+    above -- using LineupWeights() with no arguments reproduces this
+    module's original, unconfigurable four-term behavior exactly (the
+    fifth term's weight defaults to 0.0). scripts.build_lineups.load_weights_from_config
+    reads apa_config.yaml's own `lineup_optimizer` section to build a
+    real, non-default instance; this module itself stays config-agnostic
+    (see the module docstring: "Purely derived and purely computational").
     """
 
     matchup_score: float = WEIGHT_MATCHUP_SCORE
     win_probability: float = WEIGHT_WIN_PROBABILITY
     confidence: float = WEIGHT_CONFIDENCE
     risk_penalty: float = WEIGHT_RISK_PENALTY
+    modeled_win_probability: float = WEIGHT_MODELED_WIN_PROBABILITY
 
 
 DEFAULT_WEIGHTS = LineupWeights()
@@ -89,25 +98,36 @@ def risk_penalty(risk_factor: Optional[float]) -> float:
 
 def pairing_score(matchup_score: Optional[float], win_probability: Optional[float],
                   confidence: Optional[float], risk_factor: Optional[float],
-                  weights: LineupWeights = DEFAULT_WEIGHTS) -> float:
+                  weights: LineupWeights = DEFAULT_WEIGHTS,
+                  modeled_win_probability: Optional[float] = None) -> float:
     """Fij, the per-pairing objective score.
 
         Fij = weights.matchup_score*Sij + weights.win_probability*Wij
             + weights.confidence*ECi + weights.risk_penalty*RPi
+            + weights.modeled_win_probability*MPij
 
     `weights` defaults to this module's original, fixed 0.50/0.30/0.15/0.05
     split (DEFAULT_WEIGHTS) -- passing a real, config-derived LineupWeights
     (see scripts.build_lineups.load_weights_from_config) is the only thing
-    that changes this from the original behavior.
+    that changes this from the original behavior. `weights.modeled_win_probability`
+    defaults to 0.0, so MPij contributes nothing unless a caller explicitly
+    configures it.
+
+    `modeled_win_probability` (MPij) is analytics.win_probability's
+    computed estimate -- a DIFFERENT, separately-named signal from the
+    real, H2H-observed `win_probability` (Wij) parameter above; see
+    PairingCandidate.modeled_win_probability's own docstring for why the
+    two are never conflated under one name.
 
     Every component defaults to neutral (0.5) independently when missing, per
     spec section 4: a pairing is NEVER excluded for lacking data. This always
     returns a float -- a pairing with no evidence at all still scores
     weights.matchup_score*0.5 + weights.win_probability*0.5 +
-    weights.confidence*0.5 + weights.risk_penalty*0.5, i.e. 0.5 whenever the
-    four weights sum to 1.0 -- neither favoured nor penalised for being
-    unknown. (Weights are not required to sum to 1.0; a config that changes
-    them is responsible for what that implies about the neutral score.)
+    weights.confidence*0.5 + weights.risk_penalty*0.5 +
+    weights.modeled_win_probability*0.5, i.e. 0.5 whenever the weights sum
+    to 1.0 -- neither favoured nor penalised for being unknown. (Weights
+    are not required to sum to 1.0; a config that changes them is
+    responsible for what that implies about the neutral score.)
 
     Note the asymmetry with display: this NEUTRAL-DEFAULTED value is for the
     optimizer's internal arithmetic only. The UI and Excel sheet show the
@@ -132,11 +152,13 @@ def pairing_score(matchup_score: Optional[float], win_probability: Optional[floa
     ECi = unit_or_neutral(confidence, "confidence")
     ERi = unit_or_neutral(risk_factor, "risk_factor")
     RPi = 1.0 - ERi
+    MPij = unit_or_neutral(modeled_win_probability, "modeled_win_probability")
     return round(
         weights.matchup_score * Sij
         + weights.win_probability * Wij
         + weights.confidence * ECi
-        + weights.risk_penalty * RPi,
+        + weights.risk_penalty * RPi
+        + weights.modeled_win_probability * MPij,
         6,
     )
 
@@ -151,6 +173,19 @@ class PairingCandidate:
     exactly as before. A caller with a real, config-derived LineupWeights
     (see scripts.build_lineups.load_weights_from_config) passes it here so
     every cell in a matrix is scored consistently.
+
+    `modeled_win_probability` is analytics.win_probability's computed
+    estimate (a hand-rolled logistic model over sl_delta/wr_sl/wr_h2h/
+    volatility) -- deliberately a SEPARATE field from `win_probability`
+    above, never conflated with it: `win_probability` is a real, directly
+    OBSERVED rate from actual head-to-head history
+    (player_h2h_advantage.win_probability); `modeled_win_probability` is a
+    computed ESTIMATE derived from other real signals. Showing one under
+    the other's name would misrepresent which kind of number a reader is
+    looking at. Defaults to None (and contributes nothing to `score`
+    unless `weights.modeled_win_probability` is configured non-zero) so
+    every existing caller that never computes it keeps behaving exactly
+    as before.
     """
 
     player_id: str
@@ -162,12 +197,13 @@ class PairingCandidate:
     confidence: Optional[float]
     risk_factor: Optional[float]
     weights: LineupWeights = DEFAULT_WEIGHTS
+    modeled_win_probability: Optional[float] = None
     score: float = field(init=False)
 
     def __post_init__(self):
         self.score = pairing_score(
             self.matchup_score, self.win_probability, self.confidence, self.risk_factor,
-            weights=self.weights,
+            weights=self.weights, modeled_win_probability=self.modeled_win_probability,
         )
 
 
@@ -186,6 +222,7 @@ class AssignmentEntry:
     final_score: Optional[float]
     lineup_rank: Optional[int]
     rationale: str
+    modeled_win_probability: Optional[float] = None
 
 
 @dataclass
@@ -374,6 +411,7 @@ def solve_lineup_assignment(
             lineup_rank=rank,
             rationale=build_rationale(candidate.matchup_score, candidate.win_probability,
                                       candidate.confidence, candidate.risk_factor),
+            modeled_win_probability=candidate.modeled_win_probability,
         ))
 
     objective_total = sum(matrix[i][j].score for i, j in best_pairs)

@@ -58,6 +58,36 @@ lineup_optimizer:
   weight_win_probability: 0.30
   weight_confidence: 0.15
   weight_risk_penalty: 0.05
+  # Off by default: analytics.win_probability's MODELED estimate (see the
+  # win_probability section below) is a separate, new signal from the
+  # real, observed weight_win_probability above -- see
+  # analytics.lineup_optimizer.PairingCandidate.modeled_win_probability's
+  # own docstring for why the two are never conflated. 0.0 means every
+  # existing lineup keeps its original four-term score unless this is
+  # explicitly set.
+  weight_modeled_win_probability: 0.0
+
+# analytics/win_probability.py's real objective weights -- a hand-rolled,
+# transparent logistic model, DISTINCT from the Lineup Optimizer's own
+# formula above (see docs/win_probability.md for the full writeup,
+# including what was checked against this project's own real H2H data
+# before picking these defaults, and why RaceDifficulty is a documented
+# v1 gap rather than implemented or fabricated):
+#
+#   z = weight_sl_delta*SLDelta + weight_wr_sl*WR_SL + weight_wr_h2h*WR_H2H
+#       - weight_volatility*Volatility
+#   P(win) = 1 / (1 + e^(-logistic_scale * z)), clamped to [clamp_min, clamp_max]
+#
+# Missing this whole section, or any one key in it, falls back to these
+# same defaults (scripts.build_lineups.load_win_probability_weights_from_config).
+win_probability:
+  weight_sl_delta: 0.15
+  weight_wr_sl: 0.20
+  weight_wr_h2h: 0.30
+  weight_volatility: 0.05
+  logistic_scale: 1.0
+  clamp_min: 0.02
+  clamp_max: 0.98
 
 logging:
   level: "INFO"

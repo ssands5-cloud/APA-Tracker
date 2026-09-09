@@ -10,14 +10,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from analytics.lineup_optimizer import DEFAULT_WEIGHTS, LineupWeights
-from database.models import Base, Player, PlayerH2HAdvantage, PlayerTrend, Team
+from analytics.win_probability import DEFAULT_WIN_PROBABILITY_WEIGHTS, WinProbabilityWeights
+from database.models import Base, Player, PlayerH2HAdvantage, PlayerHeadToHead, PlayerTrend, Team
 from scripts.build_lineups import (
     build,
     build_payload,
     connect_read_only,
     fetch_pairing_rows,
     fetch_trends,
+    fetch_win_rates_by_skill_level,
     load_weights_from_config,
+    load_win_probability_weights_from_config,
     write_lineups_json,
 )
 
@@ -255,6 +258,132 @@ class TestConfiguredWeights:
         default_total = default_payload["lineups"][0]["objective_total"]
         custom_total = custom_payload["lineups"][0]["objective_total"]
         assert custom_total != default_total
+
+
+class TestWinRatesBySkillLevel:
+    """fetch_win_rates_by_skill_level -- WR_SL for analytics.win_probability:
+    real win rate vs opponents sharing a skill level, grouped by that
+    skill level, not by specific opponent identity (that's the existing
+    real win_probability/WR_H2H, unchanged)."""
+
+    @pytest.fixture
+    def db_with_head_to_head(self, tmp_path):
+        path = tmp_path / "h2h.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            team = Team(external_id="T1", name="Chalk It Up")
+            opp_team = Team(external_id="T2", name="Corner Pockets")
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=team)
+            bob = Player(external_id="P2", name="Bob", skill_level=4, team=opp_team)
+            carol = Player(external_id="P3", name="Carol", skill_level=4, team=opp_team)
+            dave = Player(external_id="P4", name="Dave", skill_level=6, team=opp_team)
+            db.add_all([team, opp_team, alice, bob, carol, dave])
+            db.flush()
+
+            from database.models import Match
+            matches = [Match(external_id=f"M{i}", is_scored=True, is_finalized=True) for i in range(4)]
+            db.add_all(matches)
+            db.flush()
+
+            # Alice vs two real SL4 opponents (Bob, Carol): 1 win, 1 loss.
+            # Alice vs one real SL6 opponent (Dave): 1 win.
+            db.add_all([
+                PlayerHeadToHead(player_id=alice.id, opponent_id=bob.id, match_id=matches[0].id,
+                                 own_skill_level=5, opponent_skill_level=4, result="W"),
+                PlayerHeadToHead(player_id=alice.id, opponent_id=carol.id, match_id=matches[1].id,
+                                 own_skill_level=5, opponent_skill_level=4, result="L"),
+                PlayerHeadToHead(player_id=alice.id, opponent_id=dave.id, match_id=matches[2].id,
+                                 own_skill_level=5, opponent_skill_level=6, result="W"),
+            ])
+            db.commit()
+            alice_pk = alice.id  # captured before the session closes below
+        engine.dispose()
+        conn = connect_read_only(path)
+        yield conn, alice_pk
+        conn.close()
+
+    def test_win_rate_is_grouped_by_opponent_skill_level_not_identity(self, db_with_head_to_head):
+        conn, alice_pk = db_with_head_to_head
+        rates = fetch_win_rates_by_skill_level(conn)
+        assert rates[(alice_pk, 4)] == pytest.approx(0.5)  # 1 win / 2 games vs real SL4 opponents
+        assert rates[(alice_pk, 6)] == pytest.approx(1.0)  # 1 win / 1 game vs the real SL6 opponent
+
+    def test_a_skill_level_with_no_real_games_is_absent_not_zero(self, db_with_head_to_head):
+        conn, alice_pk = db_with_head_to_head
+        rates = fetch_win_rates_by_skill_level(conn)
+        assert (alice_pk, 2) not in rates
+
+    def test_no_table_at_all_is_empty_not_an_error(self, tmp_path):
+        path = tmp_path / "empty.db"
+        sqlite3.connect(path).close()
+        conn = connect_read_only(path)
+        try:
+            assert fetch_win_rates_by_skill_level(conn) == {}
+        finally:
+            conn.close()
+
+
+class TestConfiguredWinProbabilityWeights:
+    """apa_config.yaml's real `win_probability` section, threaded through
+    load_win_probability_weights_from_config -> build_payload -> every
+    real PairingCandidate's modeled_win_probability."""
+
+    def test_a_missing_section_falls_back_to_the_original_defaults(self):
+        assert load_win_probability_weights_from_config({}) == DEFAULT_WIN_PROBABILITY_WEIGHTS
+        assert load_win_probability_weights_from_config(None) == DEFAULT_WIN_PROBABILITY_WEIGHTS
+
+    def test_a_partial_override_only_changes_the_keys_it_names(self):
+        weights = load_win_probability_weights_from_config(
+            {"win_probability": {"weight_sl_delta": 0.9}}
+        )
+        assert weights.sl_delta == 0.9
+        assert weights.wr_sl == DEFAULT_WIN_PROBABILITY_WEIGHTS.wr_sl
+        assert weights.wr_h2h == DEFAULT_WIN_PROBABILITY_WEIGHTS.wr_h2h
+        assert weights.volatility == DEFAULT_WIN_PROBABILITY_WEIGHTS.volatility
+        assert weights.logistic_scale == DEFAULT_WIN_PROBABILITY_WEIGHTS.logistic_scale
+        assert weights.clamp_min == DEFAULT_WIN_PROBABILITY_WEIGHTS.clamp_min
+        assert weights.clamp_max == DEFAULT_WIN_PROBABILITY_WEIGHTS.clamp_max
+
+    def test_a_full_override_matches_every_configured_value(self):
+        weights = load_win_probability_weights_from_config({
+            "win_probability": {
+                "weight_sl_delta": 0.1, "weight_wr_sl": 0.2, "weight_wr_h2h": 0.3,
+                "weight_volatility": 0.4, "logistic_scale": 2.0,
+                "clamp_min": 0.05, "clamp_max": 0.95,
+            }
+        })
+        assert weights == WinProbabilityWeights(
+            sl_delta=0.1, wr_sl=0.2, wr_h2h=0.3, volatility=0.4,
+            logistic_scale=2.0, clamp_min=0.05, clamp_max=0.95,
+        )
+
+    def test_modeled_win_probability_appears_on_every_real_assignment(self, connection, db_path):
+        """Alice (SL5) vs Bob (SL5, even) and Alex (SL4) vs Carol (SL6,
+        disadvantaged) -- real skill levels from the db_path fixture --
+        confirms modeled_win_probability is computed and threaded all the
+        way into the real payload, not just accepted and dropped."""
+        payload = build_payload(connection, source_db=str(db_path))
+        assignments = payload["lineups"][0]["assignments"]
+        assert len(assignments) == 2
+        for row in assignments:
+            assert row["modeled_win_probability"] is not None
+            assert 0.0 < row["modeled_win_probability"] < 1.0
+
+    def test_custom_weights_change_the_real_modeled_win_probability(self, connection, db_path):
+        default_payload = build_payload(connection, source_db=str(db_path))
+        sl_only = WinProbabilityWeights(sl_delta=5.0, wr_sl=0.0, wr_h2h=0.0, volatility=0.0)
+        custom_payload = build_payload(
+            connection, source_db=str(db_path), win_probability_weights=sl_only,
+        )
+
+        def by_pair(payload):
+            return {
+                (row["player_name"], row["opponent_name"]): row["modeled_win_probability"]
+                for row in payload["lineups"][0]["assignments"]
+            }
+
+        assert by_pair(default_payload) != by_pair(custom_payload)
 
 
 class TestArtifact:

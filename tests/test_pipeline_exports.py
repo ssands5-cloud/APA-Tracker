@@ -61,17 +61,19 @@ def _captains_builder(monkeypatch, calls):
 def _lineup_builder(monkeypatch, calls):
     module = types.ModuleType("scripts.build_lineups")
 
-    def build(_db_path, out_dir, weights=None):
+    def build(_db_path, out_dir, weights=None, win_probability_weights=None):
         calls.append(("lineups", Path(out_dir)))
         return Path(out_dir) / "lineups.json"
 
     module.build = build
-    # Real signature is (config) -> LineupWeights; this stub never inspects
-    # its result (build() above ignores `weights` too), only that
-    # pipeline.exports.run() calls it at all -- see
-    # test_pipeline_exports_lineup_weights.py for the real, config-driven
-    # value.
+    # Real signatures are (config) -> LineupWeights / WinProbabilityWeights;
+    # this stub never inspects either result (build() above ignores both
+    # `weights` and `win_probability_weights` too), only that
+    # pipeline.exports.run() calls them at all -- see
+    # test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder
+    # for the real, config-driven threading.
     module.load_weights_from_config = lambda config: None
+    module.load_win_probability_weights_from_config = lambda config: None
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
@@ -124,8 +126,9 @@ def test_lineup_output_outside_repository_exports_is_rejected(
 
     module = types.ModuleType("scripts.build_lineups")
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
-    module.build = lambda _db_path, _out_dir, weights=None: Path("C:/outside.json")
+    module.build = lambda _db_path, _out_dir, weights=None, win_probability_weights=None: Path("C:/outside.json")
     module.load_weights_from_config = lambda config: None
+    module.load_win_probability_weights_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     with pytest.raises(ValueError, match="must be under"):
@@ -148,11 +151,17 @@ def test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder(
         seen["config"] = config
         return "sentinel-weights"
 
-    def build(_db_path, out_dir, weights=None):
+    def load_win_probability_weights_from_config(config):
+        seen["win_probability_config"] = config
+        return "sentinel-win-probability-weights"
+
+    def build(_db_path, out_dir, weights=None, win_probability_weights=None):
         seen["weights"] = weights
+        seen["win_probability_weights"] = win_probability_weights
         return Path(out_dir) / "lineups.json"
 
     module.load_weights_from_config = load_weights_from_config
+    module.load_win_probability_weights_from_config = load_win_probability_weights_from_config
     module.build = build
     module.NoDatabaseError = type("LineupNoDatabaseError", (RuntimeError,), {})
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
@@ -161,7 +170,9 @@ def test_run_computes_lineup_weights_from_config_and_passes_them_to_the_builder(
     exports.run(config, engine, captains=True)
 
     assert seen["config"] is config
+    assert seen["win_probability_config"] is config
     assert seen["weights"] == "sentinel-weights"
+    assert seen["win_probability_weights"] == "sentinel-win-probability-weights"
 
 
 class TestConfiguredExportsDir:
@@ -212,11 +223,12 @@ def test_missing_lineup_database_skips_only_lineup_artifact(
     no_database_error = type("LineupNoDatabaseError", (RuntimeError,), {})
     module.NoDatabaseError = no_database_error
 
-    def fail(_db_path, _out_dir, weights=None):
+    def fail(_db_path, _out_dir, weights=None, win_probability_weights=None):
         raise no_database_error("database unavailable")
 
     module.build = fail
     module.load_weights_from_config = lambda config: None
+    module.load_win_probability_weights_from_config = lambda config: None
     monkeypatch.setitem(sys.modules, "scripts.build_lineups", module)
 
     written = exports.run({"database": {"path": "unused.db"}}, engine)
