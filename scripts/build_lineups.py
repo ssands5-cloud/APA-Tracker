@@ -56,6 +56,11 @@ from analytics.lineup_optimizer import (
     PairingCandidate,
     solve_lineup_assignment,
 )
+from analytics.lineup_risk import (
+    DEFAULT_LINEUP_RISK_WEIGHTS,
+    LineupRiskWeights,
+    compute_lineup_risk,
+)
 from analytics.player_trends import normalize_format
 from analytics.win_probability import (
     DEFAULT_WIN_PROBABILITY_WEIGHTS,
@@ -532,6 +537,7 @@ def _candidate(
             risk_factor=risk,
             weights=weights,
             modeled_win_probability=modeled_win_probability,
+            volatility=volatility,
         )
 
     wr_h2h = _bounded_probability(source.get("win_probability"), warnings, context)
@@ -551,6 +557,7 @@ def _candidate(
         risk_factor=risk,
         weights=weights,
         modeled_win_probability=modeled_win_probability,
+        volatility=volatility,
     )
 
 
@@ -575,6 +582,7 @@ def _lineup_for_group(
     weights: LineupWeights = DEFAULT_WEIGHTS,
     win_rates_by_sl: Optional[dict[tuple[int, int], float]] = None,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
+    lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
 ) -> dict[str, Any]:
     """Build one assignment document for a resolved team/format/session group."""
 
@@ -656,6 +664,8 @@ def _lineup_for_group(
         serialized["session_name"] = session_name
         assignments.append(serialized)
 
+    risk = compute_lineup_risk(solution.assignments, weights=lineup_risk_weights)
+
     return {
         "team_id": str(first["team_pk"]),
         "team_name": first.get("team_name") or "",
@@ -674,6 +684,14 @@ def _lineup_for_group(
         "total_risk": solution.total_risk,
         "total_confidence": solution.total_confidence,
         "tie_break_applied": solution.tie_break_applied,
+        "lineup_risk": {
+            "upset_risk_index": risk.upset_risk_index,
+            "anchor_stability_score": risk.anchor_stability_score,
+            "anchor_player_name": risk.anchor_player_name,
+            "lineup_volatility_load": risk.lineup_volatility_load,
+            "danger_matchup_count": risk.danger_matchup_count,
+            "lineup_risk_score": risk.lineup_risk_score,
+        },
     }
 
 
@@ -682,6 +700,7 @@ def build_payload(
     source_db: str = "",
     weights: LineupWeights = DEFAULT_WEIGHTS,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
+    lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
 ) -> dict[str, Any]:
     """Build the complete JSON-serializable lineup document."""
 
@@ -725,6 +744,7 @@ def build_payload(
         _lineup_for_group(
             group, trends, warnings, weights=weights,
             win_rates_by_sl=win_rates_by_sl, win_probability_weights=win_probability_weights,
+            lineup_risk_weights=lineup_risk_weights,
         )
         for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
     ]
@@ -859,11 +879,48 @@ def _configured_win_probability_weights() -> WinProbabilityWeights:
     return load_win_probability_weights_from_config(config)
 
 
+def load_lineup_risk_weights_from_config(config: Optional[dict[str, Any]]) -> LineupRiskWeights:
+    """analytics.lineup_risk's real, optional weight overrides, from
+    `config`'s own `lineup_risk` section -- same fallback contract as
+    load_weights_from_config/load_win_probability_weights_from_config
+    above: a missing section, or any one missing key within it, falls
+    back to that key's own DEFAULT_LINEUP_RISK_WEIGHTS value. `config`
+    may be None.
+    """
+    section = (config or {}).get("lineup_risk") or {}
+    defaults = DEFAULT_LINEUP_RISK_WEIGHTS
+    return LineupRiskWeights(
+        upset_risk=section.get("weight_upset_risk", defaults.upset_risk),
+        anchor_instability=section.get("weight_anchor_instability", defaults.anchor_instability),
+        volatility_load=section.get("weight_volatility_load", defaults.volatility_load),
+        danger_count=section.get("weight_danger_count", defaults.danger_count),
+        danger_threshold=section.get("danger_threshold", defaults.danger_threshold),
+    )
+
+
+def _configured_lineup_risk_weights() -> LineupRiskWeights:
+    """apa_config.yaml's own `lineup_risk` weights, for the standalone CLI
+    entry point -- same advisory-never-fatal convention as
+    _configured_weights above."""
+    config_path = PROJECT_ROOT / "apa_config.yaml"
+    if not config_path.is_file():
+        return DEFAULT_LINEUP_RISK_WEIGHTS
+    try:
+        import yaml  # only needed to read the configured weights
+
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:  # pragma: no cover - config is advisory, never required
+        logger.debug("Could not read %s; using default lineup risk weights", config_path)
+        return DEFAULT_LINEUP_RISK_WEIGHTS
+    return load_lineup_risk_weights_from_config(config)
+
+
 def build(
     db_path: Optional[str] = None,
     out_dir: Optional[str] = None,
     weights: LineupWeights = DEFAULT_WEIGHTS,
     win_probability_weights: WinProbabilityWeights = DEFAULT_WIN_PROBABILITY_WEIGHTS,
+    lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
 ) -> Path:
     """Read the source database and atomically write ``lineups.json``."""
 
@@ -874,6 +931,7 @@ def build(
         payload = build_payload(
             connection, source_db=str(resolved), weights=weights,
             win_probability_weights=win_probability_weights,
+            lineup_risk_weights=lineup_risk_weights,
         )
     finally:
         connection.close()
@@ -900,6 +958,7 @@ def main() -> int:
             args.db, args.out_dir,
             weights=_configured_weights(),
             win_probability_weights=_configured_win_probability_weights(),
+            lineup_risk_weights=_configured_lineup_risk_weights(),
         )
     except NoDatabaseError as exc:
         print(f"\n{exc}\n")

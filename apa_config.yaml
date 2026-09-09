@@ -89,6 +89,32 @@ win_probability:
   clamp_min: 0.02
   clamp_max: 0.98
 
+# analytics/lineup_risk.py's real objective weights -- elevates the
+# Lineup Optimizer's per-PAIRING signals (modeled_win_probability,
+# volatility) to a per-LINEUP summary (see docs/lineup_risk.md):
+#
+#   URI = sum((1 - modeled_win_probability) * volatility) over the lineup
+#   ASS = modeled_win_probability - volatility, for the lineup's anchor
+#         (the assigned player with the highest modeled_win_probability)
+#   LVL = sum(volatility) over the lineup
+#   DMC = count of assignments with modeled_win_probability < danger_threshold
+#   LRS = weight_upset_risk*URI + weight_anchor_instability*(1-ASS)
+#       + weight_volatility_load*LVL + weight_danger_count*DMC
+#
+# A transparent decision-support scalar, not a fitted probability model --
+# there is no historical "which lineup actually won" record to check its
+# ranking against (the same real gap docs/lineup_optimizer.md documents
+# for the optimizer's own combined score), so these are a reasoned,
+# roughly-equal starting split, not claimed as empirically fit. Missing
+# this whole section, or any one key in it, falls back to these same
+# defaults (scripts.build_lineups.load_lineup_risk_weights_from_config).
+lineup_risk:
+  weight_upset_risk: 0.30
+  weight_anchor_instability: 0.30
+  weight_volatility_load: 0.20
+  weight_danger_count: 0.20
+  danger_threshold: 0.40
+
 logging:
   level: "INFO"
   file: "logs/apa_tracker.log"

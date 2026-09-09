@@ -987,6 +987,56 @@ def lineup_optimizer_rows(document: dict) -> list[dict]:
     return rows
 
 
+LINEUP_RISK_TITLE = "Lineup Risk"
+LINEUP_RISK_COLUMNS = [
+    "Team", "Opponent Team", "Format", "Session",
+    "Lineup Risk Score", "Upset Risk Index", "Anchor",
+    "Anchor Stability", "Volatility Load", "Danger Matchups",
+]
+
+
+def lineup_risk_rows(document: dict) -> list[dict]:
+    """Flatten each solved lineup's team-level risk summary
+    (analytics.lineup_risk, stored on the lineup payload by
+    scripts.build_lineups) for the Lineup Optimizer sheet's footer.
+
+    A lineup with no ``lineup_risk`` key at all is skipped entirely rather
+    than rendered with blanks -- that's an older document written before
+    this existed, not a lineup whose risk is genuinely unknown. ``None``
+    inside a present block still shows as ``No data``, the same
+    convention lineup_optimizer_rows above already uses (an empty lineup
+    has no anchor, and that is a real answer, not a zero).
+    """
+
+    no_data = "No data"
+
+    def shown(value):
+        return no_data if value is None else value
+
+    rows: list[dict] = []
+    for lineup in document.get("lineups") or []:
+        risk = lineup.get("lineup_risk")
+        if not risk:
+            continue
+        rows.append({
+            "Team": lineup.get("team_name") or lineup.get("team_id") or "",
+            "Opponent Team": lineup.get("opponent_team_name") or lineup.get("opponent_team_id") or "",
+            "Format": lineup.get("format") or "",
+            "Session": lineup.get("session_name") or "",
+            "Lineup Risk Score": shown(risk.get("lineup_risk_score")),
+            "Upset Risk Index": shown(risk.get("upset_risk_index")),
+            "Anchor": shown(risk.get("anchor_player_name")),
+            "Anchor Stability": shown(risk.get("anchor_stability_score")),
+            "Volatility Load": shown(risk.get("lineup_volatility_load")),
+            "Danger Matchups": shown(risk.get("danger_matchup_count")),
+        })
+
+    rows.sort(key=lambda row: (
+        row["Team"], row["Opponent Team"], row["Format"], row["Session"],
+    ))
+    return rows
+
+
 def append_lineup_optimizer_sheet(
     workbook_path: str | Path,
     document_path: str | Path,
@@ -1045,6 +1095,23 @@ def append_lineup_optimizer_sheet(
         if rows:
             width = max(width, min(max(len(str(row[name])) for row in rows) + 2, 42))
         sheet.column_dimensions[get_column_letter(index)].width = width
+
+    # Footer: each solved lineup's team-level risk summary, BELOW the
+    # per-pairing table and deliberately outside `auto_filter.ref` (set
+    # above from the data rows alone) -- a filter that swept these summary
+    # rows into the same list as the pairings would let a captain
+    # accidentally filter away the very rows explaining the lineup.
+    risk_rows = lineup_risk_rows(document)
+    if risk_rows:
+        sheet.append([])  # one blank spacer row between table and footer
+        title_row = sheet.max_row + 1
+        sheet.cell(row=title_row, column=1, value=LINEUP_RISK_TITLE).font = Font(bold=True)
+        sheet.append(LINEUP_RISK_COLUMNS)
+        for cell in sheet[sheet.max_row]:
+            if cell.value is not None:
+                cell.font = Font(bold=True)
+        for row in risk_rows:
+            sheet.append([row[column] for column in LINEUP_RISK_COLUMNS])
 
     workbook.save(workbook_file)
     return str(workbook_file)

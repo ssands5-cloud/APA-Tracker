@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from analytics.lineup_optimizer import DEFAULT_WEIGHTS, LineupWeights
+from analytics.lineup_risk import DEFAULT_LINEUP_RISK_WEIGHTS, LineupRiskWeights
 from analytics.win_probability import DEFAULT_WIN_PROBABILITY_WEIGHTS, WinProbabilityWeights
 from database.models import Base, Player, PlayerH2HAdvantage, PlayerHeadToHead, PlayerTrend, Team
 from scripts.build_lineups import (
@@ -19,6 +20,7 @@ from scripts.build_lineups import (
     fetch_pairing_rows,
     fetch_trends,
     fetch_win_rates_by_skill_level,
+    load_lineup_risk_weights_from_config,
     load_weights_from_config,
     load_win_probability_weights_from_config,
     write_lineups_json,
@@ -384,6 +386,70 @@ class TestConfiguredWinProbabilityWeights:
             }
 
         assert by_pair(default_payload) != by_pair(custom_payload)
+
+
+class TestLineupRiskInThePayload:
+    """analytics.lineup_risk computed once per solved lineup and stored on
+    the real lineup payload -- no new artifact, no new solver, just an
+    extra key on the block scripts.build_lineups already writes."""
+
+    def test_a_missing_section_falls_back_to_the_original_defaults(self):
+        assert load_lineup_risk_weights_from_config({}) == DEFAULT_LINEUP_RISK_WEIGHTS
+        assert load_lineup_risk_weights_from_config(None) == DEFAULT_LINEUP_RISK_WEIGHTS
+
+    def test_a_partial_override_only_changes_the_keys_it_names(self):
+        weights = load_lineup_risk_weights_from_config(
+            {"lineup_risk": {"weight_upset_risk": 0.9}}
+        )
+        assert weights.upset_risk == 0.9
+        assert weights.anchor_instability == DEFAULT_LINEUP_RISK_WEIGHTS.anchor_instability
+        assert weights.volatility_load == DEFAULT_LINEUP_RISK_WEIGHTS.volatility_load
+        assert weights.danger_count == DEFAULT_LINEUP_RISK_WEIGHTS.danger_count
+        assert weights.danger_threshold == DEFAULT_LINEUP_RISK_WEIGHTS.danger_threshold
+
+    def test_a_full_override_matches_every_configured_value(self):
+        weights = load_lineup_risk_weights_from_config({
+            "lineup_risk": {
+                "weight_upset_risk": 0.1, "weight_anchor_instability": 0.2,
+                "weight_volatility_load": 0.3, "weight_danger_count": 0.4,
+                "danger_threshold": 0.55,
+            }
+        })
+        assert weights == LineupRiskWeights(
+            upset_risk=0.1, anchor_instability=0.2, volatility_load=0.3,
+            danger_count=0.4, danger_threshold=0.55,
+        )
+
+    def test_every_real_lineup_carries_a_complete_risk_block(self, connection, db_path):
+        payload = build_payload(connection, source_db=str(db_path))
+        lineup = payload["lineups"][0]
+        risk = lineup["lineup_risk"]
+        assert set(risk) == {
+            "upset_risk_index", "anchor_stability_score", "anchor_player_name",
+            "lineup_volatility_load", "danger_matchup_count", "lineup_risk_score",
+        }
+        assert isinstance(risk["danger_matchup_count"], int)
+        assert isinstance(risk["lineup_risk_score"], float)
+        # The db_path fixture's real anchor: Alice and Alex are the two
+        # assigned players, and the risk block must name one of them --
+        # never a player who isn't in this lineup.
+        assert risk["anchor_player_name"] in {"Alice", "Alex"}
+
+    def test_custom_weights_change_the_real_lineup_risk_score(self, connection, db_path):
+        default_payload = build_payload(connection, source_db=str(db_path))
+        danger_only = LineupRiskWeights(
+            upset_risk=0.0, anchor_instability=0.0, volatility_load=0.0,
+            danger_count=10.0, danger_threshold=0.99,
+        )
+        custom_payload = build_payload(
+            connection, source_db=str(db_path), lineup_risk_weights=danger_only,
+        )
+        default_score = default_payload["lineups"][0]["lineup_risk"]["lineup_risk_score"]
+        custom_score = custom_payload["lineups"][0]["lineup_risk"]["lineup_risk_score"]
+        assert custom_score != default_score
+        # danger_threshold=0.99 means every real assignment counts as a
+        # danger matchup -- 2 assignments * weight 10.0.
+        assert custom_score == pytest.approx(20.0)
 
 
 class TestArtifact:

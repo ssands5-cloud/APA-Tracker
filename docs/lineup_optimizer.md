@@ -215,6 +215,16 @@ two are never conflated: `MPij` lives in its own field
 until explicitly configured). Full writeup, including what was checked
 against real data before the defaults were picked: `docs/win_probability.md`.
 
+## Lineup Risk Scoring (team-level, on the same sheet)
+
+`analytics/lineup_risk.py` summarises each SOLVED lineup's per-pairing
+signals into five team-level metrics (Upset Risk Index, Anchor Stability
+Score, Lineup Volatility Load, Danger Matchup Count, and the combined
+Lineup Risk Score). Computed after the assignment is chosen, stored on the
+same lineup payload, and rendered as the `Lineup Optimizer` sheet's
+footer -- no new sheet, no new solver, no new artifact. Full writeup:
+`docs/lineup_risk.md`.
+
 **RaceDifficulty is not implemented in v1.** APA's real "Games Must Win"
 race-to-X charts (8-Ball and 9-Ball) were located and verified against
 `rules.poolplayers.com` -- see `docs/win_probability.md`'s "Race chart

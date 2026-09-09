@@ -186,6 +186,13 @@ class PairingCandidate:
     unless `weights.modeled_win_probability` is configured non-zero) so
     every existing caller that never computes it keeps behaving exactly
     as before.
+
+    `volatility` is the real, RAW player_trends.volatility signal --
+    analytics.win_probability already reads this same value to compute
+    `modeled_win_probability` above, but doesn't expose it on its own
+    result. It's carried here, unused by `score`, purely so a downstream
+    team-level consumer (analytics.lineup_risk) can read it back off the
+    solved lineup without re-querying the database a second time.
     """
 
     player_id: str
@@ -198,6 +205,7 @@ class PairingCandidate:
     risk_factor: Optional[float]
     weights: LineupWeights = DEFAULT_WEIGHTS
     modeled_win_probability: Optional[float] = None
+    volatility: Optional[float] = None
     score: float = field(init=False)
 
     def __post_init__(self):
@@ -223,6 +231,7 @@ class AssignmentEntry:
     lineup_rank: Optional[int]
     rationale: str
     modeled_win_probability: Optional[float] = None
+    volatility: Optional[float] = None
 
 
 @dataclass
@@ -412,6 +421,7 @@ def solve_lineup_assignment(
             rationale=build_rationale(candidate.matchup_score, candidate.win_probability,
                                       candidate.confidence, candidate.risk_factor),
             modeled_win_probability=candidate.modeled_win_probability,
+            volatility=candidate.volatility,
         ))
 
     objective_total = sum(matrix[i][j].score for i, j in best_pairs)

@@ -100,3 +100,19 @@ class TestWinProbabilityWeights:
         in analytics.win_probability.race_difficulty()."""
         config = _load_config()
         assert "weight_race_difficulty" not in config["win_probability"]
+
+
+class TestLineupRiskWeights:
+    """analytics/lineup_risk.py's real, team-level risk weights -- see
+    docs/lineup_risk.md."""
+
+    def test_configured_weights_match_the_modules_own_defaults(self):
+        from analytics.lineup_risk import DEFAULT_LINEUP_RISK_WEIGHTS
+
+        config = _load_config()
+        section = config["lineup_risk"]
+        assert section["weight_upset_risk"] == DEFAULT_LINEUP_RISK_WEIGHTS.upset_risk
+        assert section["weight_anchor_instability"] == DEFAULT_LINEUP_RISK_WEIGHTS.anchor_instability
+        assert section["weight_volatility_load"] == DEFAULT_LINEUP_RISK_WEIGHTS.volatility_load
+        assert section["weight_danger_count"] == DEFAULT_LINEUP_RISK_WEIGHTS.danger_count
+        assert section["danger_threshold"] == DEFAULT_LINEUP_RISK_WEIGHTS.danger_threshold
