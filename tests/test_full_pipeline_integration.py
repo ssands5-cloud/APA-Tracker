@@ -12,8 +12,8 @@ Optimizer, out to a real workbook, real JSON, and real HTML.
 
 This module builds a small but realistic two-team, one-match fixture tree in
 exactly the scraper's documented layout (README-scraper.md) and runs the real
-``pipeline.ingest.run`` / ``pipeline.exports.run`` against it -- the same two
-calls ``pipeline/__main__.py`` makes.
+``pipeline.ingest.run`` / ``pipeline.refresh.finalize`` against it -- the same
+committed-row boundary ``pipeline/__main__.py`` uses.
 
 Output is redirected away from the real project ``exports/`` directory by
 monkeypatching ``pipeline.exports.PROJECT_ROOT`` / ``EXPORTS_DIR`` for the
@@ -35,6 +35,7 @@ import pipeline.exports as exports_mod
 from database.engine import create_db_engine
 from pipeline.fixtures import FixtureStore
 from pipeline.ingest import run as ingest_run
+from pipeline.refresh import finalize
 
 REAL_EXPORTS_DIR = exports_mod.PROJECT_ROOT / "exports"
 
@@ -113,7 +114,7 @@ def build_two_team_one_match_fixture_tree(root: Path) -> None:
 def run_full_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str = "run") -> dict[str, Path]:
     """Build the fixture tree under ``tmp_path/name`` and run the real
     ingest + export chain against it, entirely inside ``tmp_path``. Returns
-    {label: path} for every artifact ``pipeline.exports.run`` reports.
+    {label: path} for every artifact the production refresh reports.
     """
     run_root = tmp_path / name
     fixtures_root = run_root / "fixtures"
@@ -130,7 +131,7 @@ def run_full_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
     }
     engine = create_db_engine(config)
     with Session(engine) as db:
-        counts = ingest_run(db, store)
+        counts = ingest_run(db, store, refresh_derived=False)
 
     # write_tabs() and the captains/lineups builders fall back to
     # PROJECT_ROOT/EXPORTS_DIR when not given an explicit directory --
@@ -139,7 +140,8 @@ def run_full_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
     monkeypatch.setattr(exports_mod, "PROJECT_ROOT", run_root)
     monkeypatch.setattr(exports_mod, "EXPORTS_DIR", exports_dir)
 
-    written = exports_mod.run(config, engine, captains=True)
+    derived, written = finalize(config, engine, export=True, captains=True)
+    counts.update(derived)
     result = {label: Path(path) for label, path in written}
     result["_counts"] = counts  # type: ignore[assignment]
     return result
@@ -180,7 +182,7 @@ class TestFullPipelineIntegration:
         labels = {k for k in written if k != "_counts"}
         assert labels == {
             "workbook", "demo json", "captains html", "captains xlsx",
-            "lineups json", "analysis tabs",
+            "captains json", "lineups json", "analysis tabs", "refresh manifest",
         }
         for label, path in written.items():
             if label == "_counts":
@@ -231,10 +233,24 @@ class TestFullPipelineIntegration:
         html = written["analysis tabs"].read_text(encoding="utf-8")
         assert "<title>APA Analysis</title>" in html
         # Both captains_edge.json and lineups.json exist by the time
-        # write_tabs() runs (pipeline.exports.run's ordering), so both
+        # write_tabs() runs (the production refresh's ordering), so both
         # optional sections should be present, not silently omitted.
         assert "Lineup Optimizer" in html
         assert "Captain" in html
+
+    def test_manifest_covers_every_artifact_from_the_completed_run(
+        self, tmp_path, monkeypatch
+    ):
+        written = run_full_pipeline(tmp_path, monkeypatch)
+        manifest = json.loads(written["refresh manifest"].read_text(encoding="utf-8"))
+        assert manifest["run_id"]
+        assert manifest["derived_counts"]["h2h_advantage"] == 2
+        records = {row["label"]: row for row in manifest["artifacts"]}
+        assert set(records) == {
+            label for label in written if label not in {"_counts", "refresh manifest"}
+        }
+        assert all(row["exists"] for row in records.values())
+        assert all(len(row["sha256"]) == 64 for row in records.values())
 
 
 class TestFullPipelineDeterminism:
@@ -277,7 +293,7 @@ class TestFullPipelineDeterminism:
         first = run_full_pipeline(tmp_path, monkeypatch, name="run1")
         second = run_full_pipeline(tmp_path, monkeypatch, name="run2")
 
-        for label in ("demo json", "lineups json"):
+        for label in ("demo json", "captains json", "lineups json"):
             left = self._strip_volatile_json(json.loads(first[label].read_text(encoding="utf-8")))
             right = self._strip_volatile_json(json.loads(second[label].read_text(encoding="utf-8")))
             assert left == right, f"{label} differs between two runs of identical input"

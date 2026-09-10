@@ -5,7 +5,8 @@ verified end-to-end rather than merely asserted.
 
 ```
 pipeline_run_all.py             scrape -> `python -m pipeline` -> test suite
-pipeline/__main__.py            `python -m pipeline`: fixtures -> SQLite -> every export
+pipeline/__main__.py            fixtures -> SQLite -> shared production refresh
+pipeline/refresh.py             reconcile every derived table -> exports -> manifest
 tests/test_pipeline_run_all.py  orchestration: step order, --skip-* flags, failure propagation
 tests/test_full_pipeline_integration.py   real fixtures -> real ingest -> every real exporter
 ```
@@ -15,8 +16,8 @@ tests/test_full_pipeline_integration.py   real fixtures -> real ingest -> every 
 - **`python -m pipeline`** — fixtures already on disk -> SQLite -> every
   export (workbook, demo JSON, Captain's Edge, Lineup Optimizer, analysis
   tabs). Steps: `pipeline.ingest.run` (teams/roster/standings/matches/scores
-  /head-to-head/matchups, then rebuilds Head-to-Head Advantage and Player
-  Trends), then `pipeline.exports.run`.
+  /head-to-head), then `pipeline.refresh.finalize` rebuilds every derived
+  table, publishes every artifact, and writes the completion manifest last.
 - **`pipeline_run_all.py`** — the full chain including the scrape itself:
   shells out to `scraper/full_auto_scrape.py` (a real browser + login + an
   interactive consent step — see [README-scraper.md](../README-scraper.md)),
@@ -34,11 +35,12 @@ Nothing proved the actual command a captain runs works front to back.
 **`tests/test_full_pipeline_integration.py`** now does, with nothing
 stubbed: a small but realistic two-team, one-match fixture tree (in the
 scraper's real documented layout) runs through the real
-`pipeline.ingest.run` and the real `pipeline.exports.run` — Player Trend
+`pipeline.ingest.run` and the real `pipeline.refresh.finalize` — Player Trend
 Analyzer, Head-to-Head Advantage Engine, Captain's Decision Engine and the
-Lineup Optimizer all included — and every one of the six real artifacts
+Lineup Optimizer all included — and every one of the eight reported artifacts
 (workbook, demo JSON, Captain's Edge HTML/XLSX, `lineups.json`, the analysis
-tabs page) is checked for real content: the actual player names, the actual
+tabs page, Captain's Edge JSON, and refresh manifest) is checked for real
+content: the actual player names, the actual
 match result, the actual solved one-to-one assignment. Output is redirected
 into a temp directory for the duration of each test (never the real
 project's `exports/`), which a dedicated test in the same file verifies
@@ -46,14 +48,19 @@ directly by snapshotting the real directory before and after.
 
 **Determinism** — `TestFullPipelineDeterminism` runs the identical fixture
 tree through the identical chain twice, into two independent directories,
-and diffs every artifact. Two fields are excluded because they are
+and diffs every content artifact. Two fields are excluded because they are
 *expected* to vary and are not a determinism bug: a wall-clock ingest
 timestamp (`generated_at` / `captured_at` / the workbook's "As Of" column)
 and an absolute database path recorded for provenance
-(`lineups.json`'s `source_db`). With those two excluded, all six artifacts
-— all ten workbook sheets, both JSON exports, both HTML pages, the
+(`lineups.json`'s `source_db`). With those two excluded, all seven content
+artifacts (everything except the per-run completion manifest)
+— all ten workbook sheets, all three JSON exports, both HTML pages, the
 Captain's Edge workbook — are identical byte-for-byte (HTML/JSON) or
 value-for-value (workbook cells) across the two runs.
+
+The completion manifest is intentionally not deterministic: every successful
+production run gets a new UUID and UTC timestamps. Its own integration check
+instead verifies that it covers every artifact with a real SHA-256 digest.
 
 **`tests/test_pipeline_run_all.py`** — `pipeline_run_all.py` itself had no
 test at all. `main()` gained an optional `argv` parameter (matching
