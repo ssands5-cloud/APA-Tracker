@@ -4,6 +4,8 @@ Common read queries used by the analytics and UI modules.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -103,6 +105,36 @@ def team_history(db: Session) -> list[PlayerTeamHistory]:
         .order_by(PlayerTeamHistory.player_id, PlayerTeamHistory.is_current.desc())
         .all()
     )
+
+
+def canonical_current_roster(
+    db: Session, team_name: str, session_name: Optional[str] = None
+) -> list[PlayerTeamHistory]:
+    """The real, captured current-roster signal for one team (optionally
+    scoped to one session) -- PlayerTeamHistory.is_current, sourced
+    directly from TeamStat's own per-alias is_current field
+    (database.ingest.ingest_player_team_history), refreshed every time
+    that player's TeamStat history is re-ingested.
+
+    Deliberately NOT ui.export_json's team_roster/opponent_rosters, which
+    derive a roster from PlayerMatch participation -- real evidence a
+    player was SEEN PLAYING for a team, not evidence of current
+    membership (Issue #14, open P0 finding as of this writing: that
+    derivation can both omit a real current member who hasn't yet
+    appeared in a captured match and retain a former/occasional player who
+    has). See docs/captain_first_edge_experience.md §12: a historical
+    match participant is only ever presented as "current roster" when
+    THIS function's real signal says so.
+
+    Returns an empty list, not a guess, when no PlayerTeamHistory row for
+    this team (and session, if given) has is_current set -- callers must
+    treat that as an unavailable field (§11's Data Coverage view), not as
+    "this team currently has no roster."
+    """
+    query = db.query(PlayerTeamHistory).filter_by(team_name=team_name, is_current=True)
+    if session_name is not None:
+        query = query.filter_by(session_name=session_name)
+    return query.order_by(PlayerTeamHistory.player_id).all()
 
 
 def skill_level_history(db: Session) -> list[PlayerMatch]:
