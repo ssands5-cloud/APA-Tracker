@@ -454,6 +454,8 @@ class TestIngestPlayerTeamHistory:
         rows = {r.team_name: r for r in db.query(PlayerTeamHistory).filter_by(player_id=player.id)}
         assert rows["Rack Attack"].is_current is False
         assert rows["Chalk It Up"].is_current is True
+        assert rows["Rack Attack"].team_external_id == "13082718"
+        assert rows["Chalk It Up"].team_external_id == "13082948"
 
     def test_rerunning_updates_in_place_not_duplicated(self, db):
         team = upsert_team(db, "T1", "Mark It Up")
@@ -466,6 +468,18 @@ class TestIngestPlayerTeamHistory:
         assert len(rows) == 2
         rack_attack = next(r for r in rows if r.team_name == "Rack Attack")
         assert rack_attack.matches_won == 20
+
+    def test_team_rename_updates_display_name_without_duplicating_identity(self, db):
+        player = upsert_player(db, "3349374", "Paul Smith")
+        ingest_player_team_history(db, player, [self.ROWS[1]])
+        renamed = dict(self.ROWS[1], team_name="Chalk It Up Again")
+
+        ingest_player_team_history(db, player, [renamed])
+
+        rows = db.query(PlayerTeamHistory).filter_by(player_id=player.id).all()
+        assert len(rows) == 1
+        assert rows[0].team_external_id == "13082948"
+        assert rows[0].team_name == "Chalk It Up Again"
 
 
 class TestResultNormalization:

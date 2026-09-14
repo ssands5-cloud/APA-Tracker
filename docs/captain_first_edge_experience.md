@@ -15,21 +15,19 @@ audit doesn't read the mismatch as two competing documents.
 ## 0. Why this exists, and what it is not
 
 Issue #14 is a long, still-open chain of fail-closed audits against this
-project's analytics: an uncalibrated modeled win probability, invented
-danger/rationale thresholds, a roster export that mislabels historical
-match participants as a current roster, a historical-lineup filter that
-doesn't require a played match, and a Trend Score gate that ignores its own
-persisted flag, among others (full list in §13). None of that is corrected
-here. This document does not re-litigate or re-approve any of it.
+project's analytics: an uncalibrated *new* modeled win-probability stack,
+invented danger/rationale thresholds, a roster export that mislabels
+historical participants as a current roster, a historical-lineup filter
+that doesn't require a played match, and a Trend Score gate that ignores
+its own persisted flag, among others (full list in §13). Stage 1 does not
+reuse any of those failed paths.
 
 What this document defines instead is a **second, independent lens** on
-data this project already has real evidence for: not "how good is this
-matchup" (that question is exactly where the fail-closed modeling lives),
-but "how much do we actually know about this matchup, and from what." A
-captain-first view built on that lens can ship real, honest value —
-who we have real history against, who we don't, where the gaps are — without
-waiting on the modeled-probability chain to be corrected, and without
-repeating its mistakes.
+approved inputs: exact-opponent results from authoritative matches and the
+older skill-gap-only model already graded against real recorded outcomes in
+`docs/prediction_validation.md`. It answers "what kind of evidence is
+available for this pairing?" without importing the failed WR_SL/logistic
+stack or inventing a neutral fallback.
 
 ## 1. Tonight's Match — the opening view
 
@@ -68,11 +66,8 @@ every identified opponent player, for the selected format/session. A
 ```
 (our player, opponent player)
   our player  ∈ team roster for the selected team, marked available
-  opponent    ∈ every real, identified player associated with the
-                selected opponent (§12 governs how "associated" is proven
-                and how that's labeled — this does not require proof of
-                CURRENT opponent roster membership to be feasible, only
-                real identity)
+  opponent    ∈ canonical current roster for the selected opponent and
+                session (§12)
   scoped to the selected format + session
 ```
 
@@ -80,36 +75,34 @@ Total feasible pairings = `|available our players| × |identified opponent
 players|`. The matrix always renders exactly that many rows — see §7 and
 §8.
 
-Each row carries, at minimum: both player names, both real skill levels
-(when known — see §11 for when they aren't), the evidence label (§4), the
-observed win rate when one exists (§5), and the evidence count it's based
-on.
+Each row carries, at minimum: both canonical player ids and names, both
+real current-roster skill levels (when known), the evidence label (§4), a
+DIRECT observed win rate/count when one exists, and a separately named
+modeled probability when the approved model has usable inputs (§5).
 
 ## 4. Evidence labels: DIRECT, INDIRECT, UNKNOWN
 
 Every row in the matrix gets exactly one label, computed by
 `analytics/pairing_evidence.py`:
 
-- **DIRECT** — at least one recognized-result (`W`/`L`) real
-  `PlayerHeadToHead` row exists for this *exact* player-vs-opponent pair, in
-  the selected format/session. This is the same recognized-result gate
-  `analytics.matchups.recognized_results` already uses — a row with a
-  missing or unreadable result doesn't count as evidence either way.
-- **INDIRECT** — no DIRECT row exists, but the player has at least one
-  recognized-result row against a *different* real opponent who shares the
-  target opponent's skill level, same format/session. This reuses the same
-  real aggregation `docs/win_probability.md` calls WR_SL
-  (`scripts.build_lineups.fetch_win_rates_by_skill_level`'s grouping, not
-  its output) — a real, transparent, unweighted rate, never blended into a
-  model.
-- **UNKNOWN** — neither of the above. No history against this opponent,
-  and no history against anyone at this opponent's skill level either.
+- **DIRECT** — one or more *distinct matches* supplies a recognized `W`/`L`
+  for this exact player/opponent pair. Both the denormalized H2H row and its
+  parent `Match` must match the selected format/session; the parent match
+  must contain the selected team ids and be scored, finalized, and non-bye.
+  Exact duplicate rows for one match count once; conflicting facts for one
+  match stop the build rather than being averaged.
+- **INDIRECT** — no DIRECT match exists, but both canonical current-roster
+  rows carry a real skill level. The separately displayed probability comes
+  from `analytics.head_to_head.skill_only_win_probability`, the production
+  implementation of the skill-only term validated against 106 recorded
+  outcomes in `docs/prediction_validation.md`. No other opponent's history
+  is pooled into this label.
+- **UNKNOWN** — neither of the above. At least one real model input is
+  missing, so no probability is emitted.
 
-A DIRECT pairing may also have INDIRECT evidence available (games against
-other same-skill-level opponents). It still renders as DIRECT — exact
-opponent evidence outranks same-skill-level evidence for the label — but
-the INDIRECT rate is still carried alongside it as separate descriptive
-context, never averaged into the DIRECT rate.
+DIRECT outranks INDIRECT when exact history exists. A DIRECT row may also
+carry `analytics.head_to_head.win_probability` as a separately named model
+output, but its observed rate is never blended with that model.
 
 No row is ever unlabeled, and no label is ever invented for a fourth case.
 
@@ -118,26 +111,20 @@ No row is ever unlabeled, and no label is ever invented for a fourth case.
 Two different kinds of number exist in this codebase under confusingly
 similar names, and the captain-first views must never blur them:
 
-- **Observed win rate** — a plain count: wins ÷ recognized games, for
-  either a DIRECT pair or (separately, labeled INDIRECT) a same-skill-level
-  group. A fact about what already happened. This is what Tonight's Match
-  and the matrix show.
-- **Modeled win probability** — `analytics.win_probability
-  .compute_win_probability`'s `modeled_win_probability`: a hand-fit
-  logistic estimate, explicitly **FAIL-CLOSED** under Issue #14 (uncalibrated
-  coefficients, unquantified double-counting between inputs, a zero-default
-  bias on missing win-rate features, a placeholder `race_difficulty()` that
-  always returns 0.0). This number does not appear anywhere in the
-  captain-first experience — not shown, not ranked on, not blended into an
-  observed rate — until it is corrected and separately re-audited under
-  Issue #14 (§13).
+- **Observed win rate** — a DIRECT fact: wins ÷ distinct authoritative
+  matches for this exact pair and scope.
+- **Approved modeled win probability** — the older
+  `analytics.head_to_head` model. INDIRECT uses only its validated
+  skill-gap term and only when both current-roster skill levels exist.
+  DIRECT may use the same module's full direct-history-plus-skill path.
+- **Excluded modeled win probability** — `analytics.win_probability
+  .compute_win_probability`, the newer WR_SL/logistic estimate explicitly
+  failed closed under Issue #14. It is not imported, shown, ranked, or
+  blended anywhere in this experience (§13).
 
-Where both exist for other, already-shipped features (e.g.
-`PlayerH2HAdvantage.win_probability` — itself an OBSERVED rate despite its
-field name, per `docs/win_probability.md`'s own note), the captain-first
-views read the real observed data directly out of `PlayerHeadToHead`
-(§4) rather than through a field whose name overloads "probability" for an
-observed rate.
+The payload and UI name observed rates and modeled probabilities in
+different fields and columns. An INDIRECT probability is never described
+as a historical win rate.
 
 ## 6. Neutral fallbacks: displayed as "No data," never as an observed number
 
@@ -149,7 +136,7 @@ intentional choices *for those specific, already-shipped outputs*
 either fallback as if it were a real observed value:
 
 - An UNKNOWN pairing's `observed_win_rate` is `None`, not `0.0`.
-- An UNKNOWN pairing's `indirect_win_rate` is `None`, not `0.0`.
+- An UNKNOWN pairing's `modeled_win_probability` is `None`, not `0.5`.
 - No pairing's evidence rate is ever `50%`/`0.5` as a stand-in for "haven't
   played."
 
@@ -160,9 +147,9 @@ could be mistaken for a real 0% or 50% record.
 ## 7. Every unknown pairing stays visible
 
 An UNKNOWN-labeled row is never dropped, filtered out by default, or
-collapsed into a summary count. A captain scanning the matrix for "who have
-we literally never seen data on, direct or indirect" must be able to find
-every one of those pairings by looking at the matrix itself, not by
+collapsed into a summary count. A captain scanning the matrix for "which
+pairings lack both direct evidence and usable model inputs" must be able to
+find every one of those pairings by looking at the matrix itself, not by
 inferring them from what's missing. Filters (§2, Stage 2) may let a captain
 narrow the view, but the unfiltered matrix is always the complete feasible
 set, UNKNOWN rows included.
@@ -175,12 +162,12 @@ For any computed matrix:
 count(DIRECT) + count(INDIRECT) + count(UNKNOWN) = total feasible pairings
 ```
 
-This is a hard invariant, not a sanity check that's allowed to drift.
-`analytics.pairing_evidence.build_pairing_matrix` raises rather than
-returning a mismatched count — a silently dropped or silently duplicated
-pairing is exactly the class of bug this document exists to make
-impossible to ship unnoticed. Stage 1's tests assert this invariant against
-constructed fixtures directly (see §14).
+This is a hard invariant over pair *identity*, not only arithmetic.
+`analytics.pairing_evidence.build_pairing_matrix` compares classified keys
+against an independently derived feasible-pair set and rejects duplicate
+expected keys, duplicate classified keys, omissions, and unexpected keys.
+One duplicate plus one omission therefore fails even when the totals happen
+to balance.
 
 ## 9. Lineup Lab
 
@@ -189,12 +176,11 @@ tonight's available players, Lineup Lab shows three real, always-present
 lists — never just the first one:
 
 1. **Approved best lineup** — a full player-vs-opponent-position assignment
-   built *only* from §13's approved analytics (DIRECT/INDIRECT observed
-   evidence, real skill levels, the already-shipped, unflagged Matchup
-   Advantage Engine score for pairs that have real head-to-head history).
-   No modeled win probability, no lineup-risk aggregate, no rationale text,
-   no danger flag — none of Issue #14's fail-closed chain — contributes to
-   this selection.
+   built *only* from §13's approved analytics (DIRECT observed evidence,
+   INDIRECT skill-only probability with real inputs, and the older
+   validated `analytics.head_to_head` path). No output from the failed
+   `analytics.win_probability` stack, no lineup-risk aggregate, no rationale
+   text, and no danger flag contributes to this selection.
 2. **Unassigned players** — any available one-of-ours player the approved
    lineup didn't place (a roster larger than the number of positions, or a
    position left open because no defensible assignment exists from approved
@@ -215,8 +201,8 @@ Lineup Lab shows exactly one approved lineup by default. A second
 1. its optimization objective is written down in this document (or a dated
    amendment to it) in plain language — e.g. "minimize UNKNOWN pairings
    fielded" is a legitimate, statable objective; "maximize win probability"
-   is not statable here because the only "win probability" this project has
-   is the fail-closed modeled one (§5);
+   may use only the explicitly approved `analytics.head_to_head` probability
+   (§5), never the failed `analytics.win_probability` stack;
 2. that objective has been checked against this project's own real data the
    same way `docs/win_probability.md`'s weight table or
    `analytics.close_match_performance.CLOSE_MATCH_MARGIN`'s 14-match sample
@@ -239,10 +225,9 @@ I actually trust right now" at a glance:
   side) with a `None` `skill_level` and/or `PlayerHeadToHead
   .own_skill_level`/`opponent_skill_level`, named individually, not just
   counted.
-- **Sample sizes** — recognized-result game counts backing each DIRECT and
-  INDIRECT rate in the matrix (already carried on every `PairingEvidence`
-  row — this view is a coverage-focused re-read of the same counts, not a
-  second computation).
+- **Sample sizes** — distinct authoritative-match counts backing each DIRECT
+  observed rate. INDIRECT rows expose their two real skill inputs and model
+  source, not a fabricated "games" count.
 - **Evidence coverage** — `count(DIRECT)`, `count(INDIRECT)`,
   `count(UNKNOWN)` as both raw counts and percentages of the total feasible
   pairings (§8), so a captain can see "this is a 20%-DIRECT-evidence match"
@@ -277,25 +262,17 @@ mistake.
 
 **Rule:** a player is presented as "current roster" for a team+session in
 any captain-first view *only* when a real `PlayerTeamHistory` row for
-`(player, team_name, session_name)` has `is_current == True` — the actual
-per-alias field TeamStat itself reports
-(`database.ingest.ingest_player_team_history`), refreshed every time that
-player's TeamStat history is re-ingested. This is never inferred from
-`PlayerMatch`/`PlayerHeadToHead` participation.
+`(player_id, team_external_id, division_id, session_name)` has
+`is_current == True`. `team_external_id` is APA's captured immutable team
+id; `team_name` is refreshed display metadata and never an identity key.
+The session is mandatory. If more than one current row remains for the same
+player/team/session, the query fails closed instead of choosing a mutable
+name or skill level by row order.
 
-When no such `PlayerTeamHistory` row exists for a player who does appear in
-the matrix (via real match-participation evidence, or as a name on the
-opposing side of a real head-to-head row), that player is labeled
-**"seen in matches"**, not "current roster," and their roster status is
-listed as an unavailable field in Data Coverage (§11) rather than defaulted
-either way.
-
-This rule governs "our" side identically to the opponent's side — a
-player on our own team is not presented as "current roster" from match
-participation alone either, though in practice `Team.players`
-(`Player.team_id`, refreshed on every real roster ingest via
-`database.ingest.upsert_roster`) is expected to cover our own team far more
-completely than any opponent's.
+This rule governs both sides identically. Historical `PlayerMatch` or
+`PlayerHeadToHead` participation never expands either feasible roster. If a
+canonical current roster is unavailable, Data Coverage says so and the
+matrix remains empty for that side rather than guessing membership.
 
 ## 13. Analytics excluded until corrected and re-audited
 
@@ -325,14 +302,16 @@ before.
 
 ## 14. Stage 1 — evidence-label classification and reconciliation
 
-Scope: `analytics/pairing_evidence.py` (evidence labeling, §4–§8) and one
-new additive query, `database.queries.canonical_current_roster` (§12). No
-HTML, no Excel, no changes to any existing analytics module, no changes to
-the frozen scraper contract (`README-scraper.md`). Tests:
-`tests/test_pairing_evidence.py`, operating on constructed
-`PlayerHeadToHead`/`PlayerTeamHistory` fixtures the same way
-`tests/test_matchups.py` and `tests/test_team_stats.py` already do — no
-network, no live scrape.
+Scope: `analytics/pairing_evidence.py` (database-owned classification and
+exact reconciliation, §4–§8), immutable team identity persisted from the
+existing TeamStat `team_id` field, mandatory session-scoped
+`database.queries.canonical_current_roster` (§12), and one production helper
+extracted from the already validated `analytics.head_to_head` skill term.
+No frozen scraper-contract field or query changes; no HTML or Excel in this
+stage. `tests/test_pairing_evidence.py` exercises the real ORM schema and
+production query path in memory, including invalid match states, distinct
+match ids, cross-scope noise, duplicate/omitted matrix keys, side-specific
+availability, renamed teams, and ambiguous memberships.
 
 ## 15. Stage 2 — captain-first HTML layout
 

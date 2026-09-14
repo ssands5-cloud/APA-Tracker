@@ -504,12 +504,13 @@ def ingest_eight_ball_stats(db: Session, player: Player, stats_row: dict) -> int
 
 
 def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) -> int:
-    """Upsert one row per (team, division, session) from TeamStat.
+    """Upsert one row per (canonical team id, division, session) from TeamStat.
 
     TeamStat's response is the player's COMPLETE history every time, not
     an incremental diff -- upserting on the natural key means a rerun
     refreshes existing rows (a since-updated matches_won/rank, say)
-    instead of accumulating duplicates.
+    instead of accumulating duplicates. The mutable team name is refreshed
+    as display metadata and never participates in identity.
     """
     count = 0
     for row in rows:
@@ -517,7 +518,7 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
             db.query(PlayerTeamHistory)
             .filter_by(
                 player_id=player.id,
-                team_name=row.get("team_name") or "",
+                team_external_id=row.get("team_id") or "",
                 division_id=row.get("division_id") or "",
                 session_name=row.get("session_name") or "",
             )
@@ -525,6 +526,7 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
         )
         fields = {
             "is_current": bool(row.get("is_current")),
+            "team_name": row.get("team_name") or "",
             "is_tournament": bool(row.get("is_tournament")),
             "nick_name": row.get("nick_name") or "",
             "skill_level": _to_int(row.get("skill_level")),
@@ -539,7 +541,7 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
             db.add(
                 PlayerTeamHistory(
                     player_id=player.id,
-                    team_name=row.get("team_name") or "",
+                    team_external_id=row.get("team_id") or "",
                     division_id=row.get("division_id") or "",
                     session_name=row.get("session_name") or "",
                     **fields,

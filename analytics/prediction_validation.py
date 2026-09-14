@@ -44,9 +44,7 @@ from dataclasses import dataclass, replace
 from typing import Callable, Optional, Sequence
 
 from analytics.head_to_head import (
-    MAX_WIN_PROBABILITY,
-    MIN_WIN_PROBABILITY,
-    SL_LOG_ODDS_PER_LEVEL,
+    skill_only_win_probability,
     win_probability,
 )
 from database.models import PlayerHeadToHead
@@ -268,13 +266,12 @@ def skill_only_probability(own_skill_level: float, opponent_skill_level: float) 
     """The same logistic-in-log-odds shape analytics.head_to_head.win_probability
     uses, with the historical-record term dropped entirely -- isolates what
     the posted skill-level gap ALONE would have predicted for this game.
-    Reuses SL_LOG_ODDS_PER_LEVEL from the real model so this can never
-    quietly drift from the constant actually in production.
+    Delegates to the production implementation so the validated path cannot
+    drift from the path Captain's Edge labels INDIRECT.
     """
-    advantage = own_skill_level - opponent_skill_level
-    log_odds = SL_LOG_ODDS_PER_LEVEL * advantage
-    probability = 1 / (1 + math.exp(-log_odds))
-    return min(MAX_WIN_PROBABILITY, max(MIN_WIN_PROBABILITY, probability))
+    probability = skill_only_win_probability(own_skill_level, opponent_skill_level)
+    assert probability is not None  # both inputs are required floats here
+    return probability
 
 
 def score_skill_only(rows: Sequence[PlayerHeadToHead]) -> list[ScoredPrediction]:

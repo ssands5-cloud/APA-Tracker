@@ -4,6 +4,7 @@ Common read queries used by the analytics and UI modules.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Optional
 
 from sqlalchemy import func
@@ -107,14 +108,20 @@ def team_history(db: Session) -> list[PlayerTeamHistory]:
     )
 
 
+class CanonicalRosterError(RuntimeError):
+    """Canonical roster membership is missing an identity invariant."""
+
+
 def canonical_current_roster(
-    db: Session, team_name: str, session_name: Optional[str] = None
+    db: Session, team_external_id: str, session_name: str
 ) -> list[PlayerTeamHistory]:
-    """The real, captured current-roster signal for one team (optionally
-    scoped to one session) -- PlayerTeamHistory.is_current, sourced
-    directly from TeamStat's own per-alias is_current field
-    (database.ingest.ingest_player_team_history), refreshed every time
-    that player's TeamStat history is re-ingested.
+    """The real current roster for one immutable APA team id and session.
+
+    Membership is ``PlayerTeamHistory.is_current``, sourced directly from
+    TeamStat and refreshed whenever that player's history is re-ingested.
+    Both identity dimensions are mandatory: a mutable/non-unique team name
+    is never a key, and omitting the session would merge current memberships
+    from separate sessions.
 
     Deliberately NOT ui.export_json's team_roster/opponent_rosters, which
     derive a roster from PlayerMatch participation -- real evidence a
@@ -126,15 +133,40 @@ def canonical_current_roster(
     match participant is only ever presented as "current roster" when
     THIS function's real signal says so.
 
-    Returns an empty list, not a guess, when no PlayerTeamHistory row for
-    this team (and session, if given) has is_current set -- callers must
-    treat that as an unavailable field (§11's Data Coverage view), not as
-    "this team currently has no roster."
+    Returns an empty list, not a guess, when no canonical current row exists.
+    Raises ``CanonicalRosterError`` when the same player has multiple current
+    rows in the requested scope; silently choosing one skill level or display
+    name would make the result dependent on database row order.
     """
-    query = db.query(PlayerTeamHistory).filter_by(team_name=team_name, is_current=True)
-    if session_name is not None:
-        query = query.filter_by(session_name=session_name)
-    return query.order_by(PlayerTeamHistory.player_id).all()
+    team_external_id = str(team_external_id or "").strip()
+    session_name = str(session_name or "").strip()
+    if not team_external_id:
+        raise ValueError("team_external_id is required for a canonical roster")
+    if not session_name:
+        raise ValueError("session_name is required for a canonical roster")
+
+    rows = (
+        db.query(PlayerTeamHistory)
+        .filter_by(
+            team_external_id=team_external_id,
+            session_name=session_name,
+            is_current=True,
+        )
+        .order_by(PlayerTeamHistory.player_id, PlayerTeamHistory.id)
+        .all()
+    )
+    duplicate_player_ids = sorted(
+        player_id
+        for player_id, count in Counter(row.player_id for row in rows).items()
+        if count > 1
+    )
+    if duplicate_player_ids:
+        raise CanonicalRosterError(
+            "Multiple current roster rows exist for the same player in "
+            f"team {team_external_id!r}, session {session_name!r}: "
+            + ", ".join(str(player_id) for player_id in duplicate_player_ids)
+        )
+    return rows
 
 
 def skill_level_history(db: Session) -> list[PlayerMatch]:

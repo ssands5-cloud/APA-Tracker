@@ -1,251 +1,434 @@
-"""Tests for analytics.pairing_evidence -- the Stage 1 DIRECT/INDIRECT/
-UNKNOWN evidence classifier (docs/captain_first_edge_experience.md §4-§8)
-and database.queries.canonical_current_roster (§12).
-
-Operates on plain PlayerHeadToHead/PlayerTeamHistory rows built directly,
-the same style tests/test_matchups.py and tests/test_team_stats.py already
-use -- pure classification logic tested independently of the database/
-scraper plumbing, plus one small in-memory-SQLite test for the additive
-query.
-"""
+"""Fail-closed tests for the Stage 1 pairing-evidence boundary."""
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from analytics.head_to_head import skill_only_win_probability
 from analytics.pairing_evidence import (
     EvidenceLabel,
+    PairingEvidence,
+    PairingEvidenceError,
+    PairingReconciliationError,
+    build_pairing_evidence_matrix,
     build_pairing_matrix,
-    classify_pairing,
     feasible_pairings,
 )
-from database.models import Base, PlayerHeadToHead, PlayerTeamHistory
-from database.queries import canonical_current_roster
+from database.models import (
+    Base,
+    Match,
+    Player,
+    PlayerHeadToHead,
+    PlayerTeamHistory,
+)
+from database.queries import CanonicalRosterError, canonical_current_roster
 
 
-def _game(result, opponent_skill_level=None, own_skill_level=None):
-    return PlayerHeadToHead(
-        player_id=1, opponent_id=2, match_id=1,
-        result=result, opponent_skill_level=opponent_skill_level,
+SESSION = "Fall 2026"
+FORMAT = "EIGHT"
+OUR_TEAM = "TEAM-OUR"
+OPPONENT_TEAM = "TEAM-THEIRS"
+
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _player(db, external_id: str, name: str) -> Player:
+    row = Player(external_id=external_id, name=name)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _roster(
+    db,
+    player: Player,
+    team_external_id: str,
+    *,
+    skill_level: int | None,
+    session_name: str = SESSION,
+    team_name: str | None = None,
+    division_id: str = "DIV-1",
+    is_current: bool = True,
+) -> PlayerTeamHistory:
+    row = PlayerTeamHistory(
+        player_id=player.id,
+        team_external_id=team_external_id,
+        team_name=team_name or team_external_id,
+        division_id=division_id,
+        session_name=session_name,
+        is_current=is_current,
+        skill_level=skill_level,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _match(
+    db,
+    external_id: str,
+    *,
+    format: str = FORMAT,
+    session_name: str = SESSION,
+    is_scored: bool = True,
+    is_finalized: bool = True,
+    is_bye: bool = False,
+    home_team_id: str = OUR_TEAM,
+    away_team_id: str = OPPONENT_TEAM,
+) -> Match:
+    row = Match(
+        external_id=external_id,
+        home_team_id=home_team_id,
+        away_team_id=away_team_id,
+        format=format,
+        session_name=session_name,
+        is_scored=is_scored,
+        is_finalized=is_finalized,
+        is_bye=is_bye,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _game(
+    db,
+    player: Player,
+    opponent: Player,
+    match: Match,
+    result: str | None,
+    *,
+    format: str | None = None,
+    session_name: str | None = None,
+    own_skill_level: int | None = 5,
+    opponent_skill_level: int | None = 4,
+) -> PlayerHeadToHead:
+    row = PlayerHeadToHead(
+        player_id=player.id,
+        opponent_id=opponent.id,
+        match_id=match.id,
+        result=result,
+        format=match.format if format is None else format,
+        session_name=match.session_name if session_name is None else session_name,
         own_skill_level=own_skill_level,
+        opponent_skill_level=opponent_skill_level,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _seed_pair(db, *, our_skill: int | None = 5, opponent_skill: int | None = 4):
+    player = _player(db, "P-OUR", "Our Player")
+    opponent = _player(db, "P-OPP", "Opponent Player")
+    _roster(db, player, OUR_TEAM, skill_level=our_skill)
+    _roster(db, opponent, OPPONENT_TEAM, skill_level=opponent_skill)
+    return player, opponent
+
+
+def _build(db, **kwargs):
+    return build_pairing_evidence_matrix(
+        db,
+        our_team_external_id=OUR_TEAM,
+        opponent_team_external_id=OPPONENT_TEAM,
+        format=FORMAT,
+        session_name=SESSION,
+        **kwargs,
     )
 
 
-class TestClassifyPairingLabels:
-    def test_a_recognized_direct_row_is_labeled_direct(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[_game("W")], same_skill_level_rows=[],
-        )
-        assert evidence.evidence_label == EvidenceLabel.DIRECT
+class TestAuthoritativeDirectEvidence:
+    def test_finalized_scored_non_bye_result_is_direct(self, db):
+        player, opponent = _seed_pair(db)
+        match = _match(db, "M-1")
+        _game(db, player, opponent, match, "W")
 
-    def test_direct_wins_over_indirect_when_both_exist(self):
-        """Exact-opponent evidence outranks same-skill-level evidence for
-        the label itself (§4), even though the indirect rate is still
-        carried as context -- see test_indirect_rate_is_preserved_alongside_direct."""
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[_game("W")],
-            same_skill_level_rows=[_game("L"), _game("L")],
-        )
-        assert evidence.evidence_label == EvidenceLabel.DIRECT
+        evidence = _build(db).pairings[0]
 
-    def test_only_same_skill_level_evidence_is_labeled_indirect(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[], same_skill_level_rows=[_game("W")],
-        )
-        assert evidence.evidence_label == EvidenceLabel.INDIRECT
+        assert evidence.evidence_label is EvidenceLabel.DIRECT
+        assert evidence.observed_win_rate == 1.0
+        assert evidence.direct_evidence_count == 1
 
-    def test_no_evidence_at_all_is_labeled_unknown(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[], same_skill_level_rows=[],
-        )
-        assert evidence.evidence_label == EvidenceLabel.UNKNOWN
+    @pytest.mark.parametrize(
+        "match_fields",
+        [
+            {"is_scored": False},
+            {"is_finalized": False},
+            {"is_bye": True},
+        ],
+    )
+    def test_non_authoritative_match_state_never_counts_as_direct(self, db, match_fields):
+        player, opponent = _seed_pair(db)
+        match = _match(db, "M-BAD", **match_fields)
+        _game(db, player, opponent, match, "W")
 
-    def test_an_unrecognized_result_does_not_count_as_direct_evidence(self):
-        """A malformed/missing result is not silently a win, a loss, or
-        evidence at all -- same recognized-result gate analytics.matchups
-        already uses."""
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[_game(None), _game("UNKNOWN")], same_skill_level_rows=[],
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.INDIRECT
+        assert evidence.observed_win_rate is None
+        assert evidence.direct_evidence_count == 0
+
+    def test_unrecognized_result_never_counts_as_direct(self, db):
+        player, opponent = _seed_pair(db)
+        _game(db, player, opponent, _match(db, "M-UNKNOWN"), None)
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.INDIRECT
+        assert evidence.direct_evidence_count == 0
+
+    def test_evidence_count_and_rate_use_distinct_matches(self, db):
+        player, opponent = _seed_pair(db)
+        first = _match(db, "M-1")
+        _game(db, player, opponent, first, "W")
+        _game(db, player, opponent, first, "W")
+        _game(db, player, opponent, _match(db, "M-2"), "L")
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.direct_evidence_count == 2
+        assert evidence.observed_win_rate == 0.5
+
+    def test_conflicting_rows_in_one_match_fail_closed(self, db):
+        player, opponent = _seed_pair(db)
+        match = _match(db, "M-CONFLICT")
+        _game(db, player, opponent, match, "W")
+        _game(db, player, opponent, match, "L")
+
+        with pytest.raises(PairingEvidenceError, match="Conflicting"):
+            _build(db)
+
+    def test_format_session_and_exact_opponent_are_owned_by_the_query(self, db):
+        player, opponent = _seed_pair(db)
+        other = _player(db, "P-OTHER", "Other Opponent")
+
+        _game(db, player, other, _match(db, "M-OTHER"), "W")
+        _game(
+            db,
+            player,
+            opponent,
+            _match(db, "M-OLD", session_name="Spring 2026"),
+            "W",
         )
-        assert evidence.evidence_label == EvidenceLabel.UNKNOWN
+        _game(
+            db,
+            player,
+            opponent,
+            _match(db, "M-NINE", format="NINE"),
+            "W",
+        )
+        _game(
+            db,
+            player,
+            opponent,
+            _match(
+                db,
+                "M-OTHER-TEAMS",
+                home_team_id="TEAM-X",
+                away_team_id="TEAM-Y",
+            ),
+            "W",
+        )
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.INDIRECT
         assert evidence.direct_evidence_count == 0
 
 
-class TestNeutralFallbacksAreNoneNotAFabricatedRate:
-    """§6: an UNKNOWN or INDIRECT-only pairing's observed_win_rate is None
-    -- never analytics.matchups' own 0.0/50 fallbacks, which are correct
-    for THEIR already-shipped, already-documented outputs, not this one."""
+class TestIndirectAndUnknownSemantics:
+    def test_no_direct_history_with_real_skill_inputs_is_indirect(self, db):
+        _seed_pair(db, our_skill=5, opponent_skill=4)
 
-    def test_unknown_pairing_has_no_observed_or_indirect_rate(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[], same_skill_level_rows=[],
-        )
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.INDIRECT
         assert evidence.observed_win_rate is None
-        assert evidence.indirect_win_rate is None
-        assert evidence.indirect_skill_level is None
+        assert evidence.modeled_win_probability == skill_only_win_probability(5, 4)
+        assert evidence.model_source == "analytics.head_to_head:validated-skill-only"
 
-    def test_indirect_pairing_has_no_observed_rate_but_a_real_indirect_rate(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[], same_skill_level_rows=[_game("W"), _game("L")],
-        )
+    @pytest.mark.parametrize("our_skill,opponent_skill", [(None, 4), (5, None), (None, None)])
+    def test_missing_model_input_is_unknown_not_neutral(self, db, our_skill, opponent_skill):
+        _seed_pair(db, our_skill=our_skill, opponent_skill=opponent_skill)
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.UNKNOWN
         assert evidence.observed_win_rate is None
-        assert evidence.indirect_win_rate == 0.5
-        assert evidence.indirect_skill_level == 5
+        assert evidence.modeled_win_probability is None
+        assert evidence.model_source is None
 
-    def test_direct_rate_is_a_real_unweighted_win_rate(self):
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[_game("W"), _game("W"), _game("L")],
-            same_skill_level_rows=[],
-        )
-        assert evidence.observed_win_rate == round(2 / 3, 3)
-        assert evidence.direct_evidence_count == 3
+    def test_unrelated_same_skill_history_is_not_an_indirect_proxy(self, db):
+        player, opponent = _seed_pair(db, our_skill=5, opponent_skill=None)
+        other = _player(db, "P-SAME-SL", "Same SL Elsewhere")
+        match = _match(db, "M-SAME-SL")
+        _game(db, player, other, match, "W", opponent_skill_level=4)
 
-    def test_indirect_rate_is_preserved_alongside_direct(self):
-        """A DIRECT pairing still carries its indirect (same-skill-level)
-        rate as separate descriptive context -- never blended into
-        observed_win_rate (§4)."""
-        evidence = classify_pairing(
-            player_id=1, opponent_id=2, opponent_skill_level=5,
-            format="EIGHT", session_name="Fall 2026",
-            direct_rows=[_game("W")],
-            same_skill_level_rows=[_game("L"), _game("L")],
-        )
-        assert evidence.observed_win_rate == 1.0
-        assert evidence.indirect_win_rate == 0.0
-        assert evidence.indirect_evidence_count == 2
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.UNKNOWN
+        assert evidence.modeled_win_probability is None
 
 
-class TestFeasiblePairings:
-    def test_every_combination_is_produced(self):
-        pairs = feasible_pairings(our_player_ids=[1, 2], opponent_player_ids=[10, 20])
-        assert set(pairs) == {(1, 10), (1, 20), (2, 10), (2, 20)}
-
-    def test_unavailable_players_are_excluded_from_either_side(self):
+class TestSideSpecificAvailability:
+    def test_our_unavailability_never_removes_same_id_on_opponent_side(self):
         pairs = feasible_pairings(
-            our_player_ids=[1, 2], opponent_player_ids=[10, 20],
-            unavailable_player_ids={2, 10},
+            our_player_ids=[1, 2],
+            opponent_player_ids=[2, 3],
+            unavailable_our_player_ids={2},
+            unavailable_opponent_player_ids=set(),
         )
-        assert set(pairs) == {(1, 20)}
+        assert pairs == [(1, 2), (1, 3)]
 
-    def test_duplicate_ids_do_not_inflate_the_feasible_count(self):
-        pairs = feasible_pairings(our_player_ids=[1, 1], opponent_player_ids=[10])
-        assert pairs == [(1, 10)]
+    def test_each_side_can_be_filtered_independently(self):
+        pairs = feasible_pairings(
+            our_player_ids=[1, 2],
+            opponent_player_ids=[10, 20],
+            unavailable_our_player_ids={2},
+            unavailable_opponent_player_ids={10},
+        )
+        assert pairs == [(1, 20)]
+
+    def test_unknown_unavailable_id_is_rejected_by_production_builder(self, db):
+        _seed_pair(db)
+        with pytest.raises(PairingEvidenceError, match="not in the canonical roster"):
+            _build(db, unavailable_our_player_ids={999})
 
 
-class TestEvidenceCountReconciliation:
-    """§8: DIRECT + INDIRECT + UNKNOWN must equal total feasible pairings,
-    as a hard invariant, not a soft check."""
+def _evidence(player_id: int, opponent_id: int, label: EvidenceLabel) -> PairingEvidence:
+    return PairingEvidence(
+        player_id=player_id,
+        player_external_id=f"P-{player_id}",
+        player_name=f"Player {player_id}",
+        player_skill_level=5,
+        opponent_id=opponent_id,
+        opponent_external_id=f"P-{opponent_id}",
+        opponent_name=f"Opponent {opponent_id}",
+        opponent_skill_level=4,
+        format=FORMAT,
+        session_name=SESSION,
+        evidence_label=label,
+        observed_win_rate=None,
+        direct_evidence_count=0,
+        modeled_win_probability=None,
+        model_source=None,
+    )
 
-    def test_counts_reconcile_for_a_mixed_matrix(self):
-        pairings = [
-            classify_pairing(1, 10, 5, "EIGHT", "Fall 2026", [_game("W")], []),
-            classify_pairing(1, 20, 5, "EIGHT", "Fall 2026", [], [_game("W")]),
-            classify_pairing(2, 10, 5, "EIGHT", "Fall 2026", [], []),
+
+class TestExactFeasiblePairReconciliation:
+    def test_complete_unique_matrix_reconciles(self):
+        expected = [(1, 10), (1, 20), (2, 10)]
+        rows = [
+            _evidence(1, 10, EvidenceLabel.DIRECT),
+            _evidence(1, 20, EvidenceLabel.INDIRECT),
+            _evidence(2, 10, EvidenceLabel.UNKNOWN),
         ]
-        counts = build_pairing_matrix(pairings)
-        assert counts == {
-            "DIRECT": 1, "INDIRECT": 1, "UNKNOWN": 1,
+        assert build_pairing_matrix(rows, expected) == {
+            "DIRECT": 1,
+            "INDIRECT": 1,
+            "UNKNOWN": 1,
             "total_feasible_pairings": 3,
         }
 
-    def test_an_empty_matrix_reconciles_to_zero(self):
-        assert build_pairing_matrix([]) == {
-            "DIRECT": 0, "INDIRECT": 0, "UNKNOWN": 0,
-            "total_feasible_pairings": 0,
-        }
+    def test_omission_is_rejected(self):
+        with pytest.raises(PairingReconciliationError, match="missing keys"):
+            build_pairing_matrix(
+                [_evidence(1, 10, EvidenceLabel.DIRECT)],
+                [(1, 10), (1, 20)],
+            )
 
-    def test_mismatched_counts_raise_rather_than_silently_reporting(self):
-        """A pairing classified under an unrecognized label would silently
-        break the invariant this function exists to guarantee -- simulated
-        here directly on the returned dict's arithmetic rather than by
-        constructing an invalid EvidenceLabel (the real classifier can
-        only ever produce the three real labels)."""
-        pairings = [
-            classify_pairing(1, 10, 5, "EIGHT", "Fall 2026", [_game("W")], []),
+    def test_duplicate_plus_omission_is_rejected_even_when_totals_match(self):
+        rows = [
+            _evidence(1, 10, EvidenceLabel.DIRECT),
+            _evidence(1, 10, EvidenceLabel.DIRECT),
         ]
-        counts = build_pairing_matrix(pairings)
-        assert counts["DIRECT"] + counts["INDIRECT"] + counts["UNKNOWN"] == counts["total_feasible_pairings"]
+        with pytest.raises(PairingReconciliationError) as excinfo:
+            build_pairing_matrix(rows, [(1, 10), (1, 20)])
+        assert "duplicate classified keys" in str(excinfo.value)
+        assert "missing keys" in str(excinfo.value)
+
+    def test_unexpected_key_is_rejected(self):
+        with pytest.raises(PairingReconciliationError, match="unexpected keys"):
+            build_pairing_matrix(
+                [_evidence(1, 99, EvidenceLabel.UNKNOWN)],
+                [(1, 10)],
+            )
+
+    def test_duplicate_expected_key_is_rejected(self):
+        with pytest.raises(PairingReconciliationError, match="duplicate expected"):
+            build_pairing_matrix(
+                [_evidence(1, 10, EvidenceLabel.UNKNOWN)],
+                [(1, 10), (1, 10)],
+            )
+
+    def test_production_builder_classifies_the_full_cross_product(self, db):
+        ours = [_player(db, f"OUR-{i}", f"Our {i}") for i in range(2)]
+        theirs = [_player(db, f"OPP-{i}", f"Opp {i}") for i in range(3)]
+        for player in ours:
+            _roster(db, player, OUR_TEAM, skill_level=5)
+        for player in theirs:
+            _roster(db, player, OPPONENT_TEAM, skill_level=4)
+
+        matrix = _build(db)
+
+        assert len(matrix.expected_pairings) == 6
+        assert len(matrix.pairings) == 6
+        assert matrix.counts == {
+            "DIRECT": 0,
+            "INDIRECT": 6,
+            "UNKNOWN": 0,
+            "total_feasible_pairings": 6,
+        }
 
 
 class TestCanonicalCurrentRoster:
-    """§12: current-roster membership comes only from the real
-    PlayerTeamHistory.is_current signal, never from match-participation
-    evidence."""
+    def test_immutable_team_id_not_mutable_name_selects_membership(self, db):
+        first = _player(db, "P-1", "First")
+        second = _player(db, "P-2", "Second")
+        _roster(db, first, "TEAM-A", skill_level=4, team_name="Shared Name")
+        _roster(db, second, "TEAM-B", skill_level=5, team_name="Shared Name")
 
-    def _session(self):
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
-        return sessionmaker(bind=engine)()
+        rows = canonical_current_roster(db, "TEAM-A", SESSION)
 
-    def test_only_is_current_rows_are_returned(self):
-        db = self._session()
-        db.add_all([
-            PlayerTeamHistory(
-                player_id=1, team_name="Rack Attack", session_name="Fall 2026",
-                is_current=True,
-            ),
-            PlayerTeamHistory(
-                player_id=2, team_name="Rack Attack", session_name="Fall 2026",
-                is_current=False,
-            ),
-        ])
-        db.commit()
+        assert [row.player_id for row in rows] == [first.id]
 
-        roster = canonical_current_roster(db, "Rack Attack", "Fall 2026")
+    def test_session_scope_is_mandatory_and_exact(self, db):
+        player = _player(db, "P-1", "Player")
+        _roster(db, player, OUR_TEAM, skill_level=4, session_name="Spring 2026")
 
-        assert [row.player_id for row in roster] == [1]
+        assert canonical_current_roster(db, OUR_TEAM, SESSION) == []
+        with pytest.raises(ValueError, match="session_name"):
+            canonical_current_roster(db, OUR_TEAM, "")
 
-    def test_a_team_with_no_current_rows_returns_empty_not_a_guess(self):
-        db = self._session()
-        db.add(PlayerTeamHistory(
-            player_id=1, team_name="Rack Attack", session_name="Fall 2026",
-            is_current=False,
-        ))
-        db.commit()
+    def test_duplicate_current_membership_for_one_player_fails_closed(self, db):
+        player = _player(db, "P-1", "Player")
+        _roster(db, player, OUR_TEAM, skill_level=4, division_id="DIV-A")
+        _roster(db, player, OUR_TEAM, skill_level=5, division_id="DIV-B")
 
-        assert canonical_current_roster(db, "Rack Attack", "Fall 2026") == []
+        with pytest.raises(CanonicalRosterError, match="Multiple current roster rows"):
+            canonical_current_roster(db, OUR_TEAM, SESSION)
 
-    def test_session_scoping_excludes_a_stale_session(self):
-        db = self._session()
-        db.add(PlayerTeamHistory(
-            player_id=1, team_name="Rack Attack", session_name="Spring 2025",
-            is_current=True,
-        ))
-        db.commit()
+    def test_no_current_membership_returns_empty_not_a_guess(self, db):
+        player = _player(db, "P-1", "Player")
+        _roster(db, player, OUR_TEAM, skill_level=4, is_current=False)
 
-        assert canonical_current_roster(db, "Rack Attack", "Fall 2026") == []
+        assert canonical_current_roster(db, OUR_TEAM, SESSION) == []
 
-    def test_omitting_session_returns_every_current_row_for_the_team(self):
-        db = self._session()
-        db.add_all([
-            PlayerTeamHistory(
-                player_id=1, team_name="Rack Attack", session_name="Spring 2025",
-                is_current=True,
-            ),
-            PlayerTeamHistory(
-                player_id=2, team_name="Rack Attack", session_name="Fall 2026",
-                is_current=True,
-            ),
-        ])
-        db.commit()
+    def test_same_player_on_both_sides_is_rejected(self, db):
+        player = _player(db, "P-1", "Player")
+        _roster(db, player, OUR_TEAM, skill_level=4)
+        _roster(db, player, OPPONENT_TEAM, skill_level=4)
 
-        roster = canonical_current_roster(db, "Rack Attack")
-
-        assert {row.player_id for row in roster} == {1, 2}
+        with pytest.raises(PairingEvidenceError, match="both selected teams"):
+            _build(db)

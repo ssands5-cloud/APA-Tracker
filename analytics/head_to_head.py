@@ -136,6 +136,28 @@ def _is_format(rows: Sequence[PlayerHeadToHead], marker: str) -> bool:
 
 # --- the probabilistic layer -------------------------------------------------
 
+def _probability_from_log_odds(log_odds: float) -> float:
+    probability = 1 / (1 + math.exp(-log_odds))
+    return min(MAX_WIN_PROBABILITY, max(MIN_WIN_PROBABILITY, probability))
+
+
+def skill_only_win_probability(
+    own_skill_level: Optional[float],
+    opponent_skill_level: Optional[float],
+) -> Optional[float]:
+    """Validated skill-gap-only probability for a pairing with no history.
+
+    Both inputs must be real posted skill levels. Missing either input
+    returns ``None`` rather than manufacturing an average player. This is
+    the exact skill term graded against recorded outcomes in
+    ``analytics.prediction_validation`` / ``docs/prediction_validation.md``;
+    keeping it here makes the validated implementation the production one.
+    """
+    if own_skill_level is None or opponent_skill_level is None:
+        return None
+    log_odds = SL_LOG_ODDS_PER_LEVEL * (own_skill_level - opponent_skill_level)
+    return _probability_from_log_odds(log_odds)
+
 def win_probability(rows: Sequence[PlayerHeadToHead]) -> Optional[float]:
     """Probability the player wins the next game against this opponent.
 
@@ -179,8 +201,7 @@ def win_probability(rows: Sequence[PlayerHeadToHead]) -> Optional[float]:
         smoothed = (wins + SMOOTHING_WINS) / (n + SMOOTHING_GAMES)
         log_odds += reliability_weight(n) * math.log(smoothed / (1 - smoothed))
 
-    probability = 1 / (1 + math.exp(-log_odds))
-    return round(min(MAX_WIN_PROBABILITY, max(MIN_WIN_PROBABILITY, probability)), 4)
+    return round(_probability_from_log_odds(log_odds), 4)
 
 
 def _expected_value(values: list[float], baseline: Optional[float] = None) -> Optional[float]:

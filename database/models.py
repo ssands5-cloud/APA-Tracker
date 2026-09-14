@@ -238,16 +238,19 @@ class PlayerCareerStats(Base):
 class PlayerTeamHistory(Base):
     """One row per team (past or current) a player's alias has played on,
     from TeamStat -- the cross-season history PlayerMatch has no source
-    for. Upserted on (player_id, team_name, division_id, session_name):
-    TeamStat's response is the complete list every time, not an
-    incremental diff, so a rerun should refresh existing rows rather than
-    accumulate duplicates.
+    for.
+
+    ``team_external_id`` is APA's immutable team identity. ``team_name`` is
+    display metadata only: names can change and are not unique. TeamStat's
+    response is the complete list every time, so a rerun refreshes the row
+    keyed by (player, team id, division, session) rather than accumulating
+    a second membership when a team is renamed.
     """
 
     __tablename__ = "player_team_history"
     __table_args__ = (
         UniqueConstraint(
-            "player_id", "team_name", "division_id", "session_name",
+            "player_id", "team_external_id", "division_id", "session_name",
             name="uq_player_team_history",
         ),
     )
@@ -255,6 +258,11 @@ class PlayerTeamHistory(Base):
     id = Column(Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
     is_current = Column(Boolean, default=False)
+    # Captured as TeamStat.currentTeams[].team.id / pastTeams[].team.id.
+    # Empty means the upstream row did not establish a canonical team; such
+    # a row remains historical source data but can never satisfy the
+    # canonical-current-roster query.
+    team_external_id = Column(String, nullable=False, default="")
     team_name = Column(String)
     division_id = Column(String)
     is_tournament = Column(Boolean, default=False)

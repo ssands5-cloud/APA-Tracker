@@ -1,59 +1,41 @@
-"""
-Pairing Evidence Classifier: labels every feasible player-vs-opponent
-pairing DIRECT, INDIRECT, or UNKNOWN before any captain-first view renders
-it, and keeps the observed win rate that backs a DIRECT/INDIRECT label
-strictly separate from any modeled probability.
+"""Fail-closed evidence classification for the captain-first matrix.
 
-This is the Stage 1 (data-layer) piece of
-docs/captain_first_edge_experience.md (see its §4-§8). It does not touch
-HTML, Excel, the frozen scraper contract, or any analytics module listed in
-that document's §13 exclusion table (analytics.win_probability,
-analytics.lineup_risk, analytics.opponent_scouting, analytics.rationale,
-analytics.season_projection, analytics.captains_edge_summary) -- it reads
-only raw, recognized-result PlayerHeadToHead rows, the same real evidence
-analytics.matchups already scores, through a second, independent lens: not
-"how good is this pairing" but "how much do we actually know about it, and
-from what."
+The production entry point is :func:`build_pairing_evidence_matrix`. It
+owns roster identity and database scoping end to end: immutable APA team
+ids, an explicit session and format, finalized/scored/non-bye matches, and
+the exact target opponent. Callers cannot hand the classifier a bag of
+unverified rows.
 
-Evidence labels
-----------------
-DIRECT   -- at least one recognized-result (W/L) PlayerHeadToHead row
-            exists for this exact (player, opponent) pair, in the given
-            format/session scope. observed_win_rate is the real,
-            unweighted win rate over those rows -- the same definition
-            analytics.matchups.head_to_head_win_rate uses, computed
-            independently here so this module has no import-time
-            dependency on that engine's own neutral-fallback behaviour
-            (see docs/captain_first_edge_experience.md §6).
-INDIRECT -- no direct row exists, but the player has at least one
-            recognized-result row against a DIFFERENT opponent who shares
-            the target opponent's skill level, in the same format/session
-            scope. indirect_win_rate is the real, unweighted win rate over
-            those other-opponent games -- the same real aggregation
-            docs/win_probability.md calls WR_SL, reported here as a
-            labeled, separately-surfaced observed rate, never blended into
-            a single number with the DIRECT case and never called a
-            "probability."
-UNKNOWN  -- neither of the above. No fallback score, no neutral 0.5 or 50,
-            is substituted. observed_win_rate and indirect_win_rate are
-            both None; a caller renders that as "No data", never as a
-            fabricated rate.
+Labels have deliberately narrow meanings:
 
-A pairing with a DIRECT label may still have indirect evidence available
-(games against other same-skill-level opponents); this module still labels
-it DIRECT -- exact-opponent evidence outranks same-skill-level evidence for
-the label -- but indirect_win_rate stays populated alongside it as
-descriptive context, never blended into observed_win_rate.
+``DIRECT``
+    At least one distinct authoritative match contains a recognized W/L
+    result for the exact player/opponent pair in the requested scope.
+``INDIRECT``
+    No DIRECT evidence exists, but both canonical current-roster rows carry
+    real skill levels, so the already validated skill-gap-only model in
+    :mod:`analytics.head_to_head` can produce a probability.
+``UNKNOWN``
+    Neither condition holds. No 0%, 50%, neutral score, or same-skill-level
+    proxy is substituted.
+
+The failed ``analytics.win_probability`` WR_SL/logistic stack is never
+imported or consulted here.
 """
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Collection, Optional, Sequence
 
-from analytics.matchups import _is_win, recognized_results
-from database.models import PlayerHeadToHead
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
+
+from analytics.head_to_head import skill_only_win_probability, win_probability
+from database.models import Match, PlayerHeadToHead, PlayerTeamHistory
+from database.queries import canonical_current_roster
 
 
 class EvidenceLabel(str, Enum):
@@ -62,132 +44,355 @@ class EvidenceLabel(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class PairingEvidenceError(RuntimeError):
+    """Evidence could not be classified without guessing."""
+
+
+class PairingReconciliationError(AssertionError):
+    """The classified matrix differs from the exact feasible-pair set."""
+
+
 @dataclass(frozen=True)
 class PairingEvidence:
     player_id: int
+    player_external_id: str
+    player_name: str
+    player_skill_level: Optional[int]
     opponent_id: int
-    format: Optional[str]
-    session_name: Optional[str]
+    opponent_external_id: str
+    opponent_name: str
+    opponent_skill_level: Optional[int]
+    format: str
+    session_name: str
     evidence_label: EvidenceLabel
-    observed_win_rate: Optional[float]      # DIRECT only; None otherwise -- never 0.0/50 as a stand-in for "no data"
-    direct_evidence_count: int              # recognized DIRECT games; 0 when not DIRECT
-    indirect_win_rate: Optional[float]      # same-skill-level rate, when it exists, regardless of the pairing's own label
-    indirect_evidence_count: int            # recognized same-skill-level games behind indirect_win_rate
-    indirect_skill_level: Optional[int]     # the opponent skill level indirect_win_rate is scoped to; None when there's no indirect evidence
+    observed_win_rate: Optional[float]
+    direct_evidence_count: int
+    modeled_win_probability: Optional[float]
+    model_source: Optional[str]
 
 
-def _observed_win_rate(rows: list[PlayerHeadToHead]) -> Optional[float]:
-    """Wins / recognized games, or None when there are no recognized games
-    -- never 0.0 for "no data". See docs/captain_first_edge_experience.md
-    §6: this module's neutral case is None, not analytics.matchups'
-    documented 0.0/50 fallbacks (those are correct for their own,
-    already-shipped, already-documented outputs, not for this one)."""
-    recognized = recognized_results(rows)
-    if not recognized:
-        return None
-    wins = sum(1 for row in recognized if _is_win(row.result))
-    return round(wins / len(recognized), 3)
+@dataclass(frozen=True)
+class PairingEvidenceMatrix:
+    our_team_external_id: str
+    opponent_team_external_id: str
+    format: str
+    session_name: str
+    expected_pairings: tuple[tuple[int, int], ...]
+    pairings: tuple[PairingEvidence, ...]
+    counts: dict[str, int]
+    our_roster_available: bool
+    opponent_roster_available: bool
 
 
-def classify_pairing(
+def _scope_value(name: str, value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError(f"{name} is required")
+    return normalized
+
+
+def feasible_pairings(
+    our_player_ids: Sequence[int],
+    opponent_player_ids: Sequence[int],
+    unavailable_our_player_ids: Optional[Collection[int]] = None,
+    unavailable_opponent_player_ids: Optional[Collection[int]] = None,
+) -> list[tuple[int, int]]:
+    """Return the exact cross-product after side-specific availability.
+
+    The two unavailable sets are intentionally separate. A value selected
+    on our side can never suppress the same value in an opponent-side id
+    space. Duplicate roster ids collapse deterministically before the
+    product is formed; the canonical roster query separately rejects
+    duplicate membership rows instead of hiding them here.
+    """
+    unavailable_ours = set(unavailable_our_player_ids or ())
+    unavailable_theirs = set(unavailable_opponent_player_ids or ())
+    ours = [
+        player_id
+        for player_id in dict.fromkeys(our_player_ids)
+        if player_id not in unavailable_ours
+    ]
+    theirs = [
+        player_id
+        for player_id in dict.fromkeys(opponent_player_ids)
+        if player_id not in unavailable_theirs
+    ]
+    return [
+        (player_id, opponent_id)
+        for player_id in ours
+        for opponent_id in theirs
+    ]
+
+
+def build_pairing_matrix(
+    pairings: Sequence[PairingEvidence],
+    expected_pairings: Sequence[tuple[int, int]],
+) -> dict[str, int]:
+    """Reconcile classifications against the independently derived set.
+
+    Equality of totals is insufficient: one duplicate plus one omission can
+    keep the arithmetic balanced. This gate therefore rejects duplicate
+    expected keys, duplicate classified keys, missing keys, and unexpected
+    keys before returning label counts.
+    """
+    expected = list(expected_pairings)
+    expected_counts = Counter(expected)
+    duplicate_expected = sorted(
+        key for key, count in expected_counts.items() if count > 1
+    )
+
+    actual = [(row.player_id, row.opponent_id) for row in pairings]
+    actual_counts = Counter(actual)
+    duplicate_actual = sorted(
+        key for key, count in actual_counts.items() if count > 1
+    )
+
+    expected_set = set(expected)
+    actual_set = set(actual)
+    missing = sorted(expected_set - actual_set)
+    unexpected = sorted(actual_set - expected_set)
+    if duplicate_expected or duplicate_actual or missing or unexpected:
+        details = []
+        if duplicate_expected:
+            details.append(f"duplicate expected keys={duplicate_expected}")
+        if duplicate_actual:
+            details.append(f"duplicate classified keys={duplicate_actual}")
+        if missing:
+            details.append(f"missing keys={missing}")
+        if unexpected:
+            details.append(f"unexpected keys={unexpected}")
+        raise PairingReconciliationError(
+            "Pairing matrix does not match the feasible-pair set: "
+            + "; ".join(details)
+        )
+
+    counts = {label.value: 0 for label in EvidenceLabel}
+    for pairing in pairings:
+        counts[pairing.evidence_label.value] += 1
+    counts["total_feasible_pairings"] = len(expected)
+    return counts
+
+
+def _authoritative_direct_rows(
+    db: Session,
+    *,
     player_id: int,
     opponent_id: int,
-    opponent_skill_level: Optional[int],
-    format: Optional[str],
-    session_name: Optional[str],
-    direct_rows: list[PlayerHeadToHead],
-    same_skill_level_rows: list[PlayerHeadToHead],
+    our_team_external_id: str,
+    opponent_team_external_id: str,
+    format: str,
+    session_name: str,
+) -> list[PlayerHeadToHead]:
+    """Fetch exact-pair evidence from authoritative, matching match rows."""
+    rows = (
+        db.query(PlayerHeadToHead)
+        .join(Match, PlayerHeadToHead.match_id == Match.id)
+        .filter(
+            PlayerHeadToHead.player_id == player_id,
+            PlayerHeadToHead.opponent_id == opponent_id,
+            PlayerHeadToHead.format == format,
+            PlayerHeadToHead.session_name == session_name,
+            PlayerHeadToHead.result.in_(("W", "L")),
+            Match.format == format,
+            Match.session_name == session_name,
+            Match.is_scored.is_(True),
+            Match.is_finalized.is_(True),
+            Match.is_bye.is_(False),
+            or_(
+                and_(
+                    Match.home_team_id == our_team_external_id,
+                    Match.away_team_id == opponent_team_external_id,
+                ),
+                and_(
+                    Match.home_team_id == opponent_team_external_id,
+                    Match.away_team_id == our_team_external_id,
+                ),
+            ),
+        )
+        .order_by(Match.match_date, PlayerHeadToHead.match_id, PlayerHeadToHead.id)
+        .all()
+    )
+    return _one_row_per_distinct_match(rows, player_id, opponent_id)
+
+
+def _one_row_per_distinct_match(
+    rows: Sequence[PlayerHeadToHead],
+    player_id: int,
+    opponent_id: int,
+) -> list[PlayerHeadToHead]:
+    """Collapse exact duplicates, rejecting conflicting evidence per match."""
+    by_match: dict[int, list[PlayerHeadToHead]] = defaultdict(list)
+    for row in rows:
+        by_match[row.match_id].append(row)
+
+    distinct: list[PlayerHeadToHead] = []
+    for match_id, match_rows in by_match.items():
+        facts = {
+            (row.result, row.own_skill_level, row.opponent_skill_level)
+            for row in match_rows
+        }
+        if len(facts) > 1:
+            raise PairingEvidenceError(
+                "Conflicting head-to-head evidence exists for one distinct "
+                f"match: player={player_id}, opponent={opponent_id}, "
+                f"match={match_id}"
+            )
+        distinct.append(match_rows[0])
+    return distinct
+
+
+def _observed_win_rate(rows: Sequence[PlayerHeadToHead]) -> Optional[float]:
+    if not rows:
+        return None
+    wins = sum(1 for row in rows if row.result == "W")
+    return round(wins / len(rows), 3)
+
+
+def _classify_pairing(
+    db: Session,
+    *,
+    player: PlayerTeamHistory,
+    opponent: PlayerTeamHistory,
+    our_team_external_id: str,
+    opponent_team_external_id: str,
+    format: str,
+    session_name: str,
 ) -> PairingEvidence:
-    """Classify one feasible pairing.
+    if player.player is None or opponent.player is None:
+        raise PairingEvidenceError("A canonical roster row has no Player identity")
 
-    direct_rows -- every real PlayerHeadToHead row already scoped by the
-    caller to this exact (player_id, opponent_id, format, session_name).
-    This module does not query the database or apply its own scoping --
-    see database.queries.head_to_head_history for the real query.
-
-    same_skill_level_rows -- every real PlayerHeadToHead row for player_id
-    against a DIFFERENT opponent sharing opponent_skill_level, same
-    format/session scope, EXCLUDING opponent_id's own rows (so a DIRECT
-    pairing's own games are never double-counted into its own indirect
-    rate). The caller does this exclusion -- see
-    tests/test_pairing_evidence.py for the exact real-data shape expected.
-    """
-    direct_recognized = recognized_results(direct_rows)
-    indirect_recognized = recognized_results(same_skill_level_rows)
-    indirect_rate = _observed_win_rate(same_skill_level_rows)
-
-    if direct_recognized:
+    direct_rows = _authoritative_direct_rows(
+        db,
+        player_id=player.player_id,
+        opponent_id=opponent.player_id,
+        our_team_external_id=our_team_external_id,
+        opponent_team_external_id=opponent_team_external_id,
+        format=format,
+        session_name=session_name,
+    )
+    if direct_rows:
         label = EvidenceLabel.DIRECT
         observed = _observed_win_rate(direct_rows)
-    elif indirect_recognized:
-        label = EvidenceLabel.INDIRECT
-        observed = None
+        modeled = win_probability(direct_rows)
+        model_source = "analytics.head_to_head:direct-history-and-skill"
     else:
-        label = EvidenceLabel.UNKNOWN
         observed = None
+        modeled = skill_only_win_probability(
+            player.skill_level,
+            opponent.skill_level,
+        )
+        if modeled is None:
+            label = EvidenceLabel.UNKNOWN
+            model_source = None
+        else:
+            label = EvidenceLabel.INDIRECT
+            model_source = "analytics.head_to_head:validated-skill-only"
 
     return PairingEvidence(
-        player_id=player_id,
-        opponent_id=opponent_id,
+        player_id=player.player_id,
+        player_external_id=player.player.external_id,
+        player_name=player.player.name,
+        player_skill_level=player.skill_level,
+        opponent_id=opponent.player_id,
+        opponent_external_id=opponent.player.external_id,
+        opponent_name=opponent.player.name,
+        opponent_skill_level=opponent.skill_level,
         format=format,
         session_name=session_name,
         evidence_label=label,
         observed_win_rate=observed,
-        direct_evidence_count=len(direct_recognized),
-        indirect_win_rate=indirect_rate,
-        indirect_evidence_count=len(indirect_recognized),
-        indirect_skill_level=opponent_skill_level if indirect_recognized else None,
+        direct_evidence_count=len(direct_rows),
+        modeled_win_probability=modeled,
+        model_source=model_source,
     )
 
 
-def feasible_pairings(
-    our_player_ids: list[int],
-    opponent_player_ids: list[int],
-    unavailable_player_ids: Optional[set[int]] = None,
-) -> list[tuple[int, int]]:
-    """Every (player_id, opponent_id) combination across two real player-id
-    lists, minus any player the captain marked unavailable for tonight
-    (docs/captain_first_edge_experience.md §2/§3). This is the complete
-    feasible set every pairing in the matrix must be classified against --
-    see build_pairing_matrix's reconciliation requirement below.
-
-    Duplicate ids in either input collapse via dict.fromkeys (order-
-    preserving): a real roster/id list has no duplicates, but this guards a
-    caller's list either way rather than silently inflating the feasible
-    count with a repeated pair.
-    """
-    unavailable = unavailable_player_ids or set()
-    ours = [pid for pid in dict.fromkeys(our_player_ids) if pid not in unavailable]
-    theirs = [pid for pid in dict.fromkeys(opponent_player_ids) if pid not in unavailable]
-    return [(player_id, opponent_id) for player_id in ours for opponent_id in theirs]
-
-
-def build_pairing_matrix(pairings: list[PairingEvidence]) -> dict[str, int]:
-    """Evidence-count reconciliation
-    (docs/captain_first_edge_experience.md §8): DIRECT + INDIRECT + UNKNOWN
-    must equal the total number of feasible pairings classified. Returns
-    the counts (plus 'total_feasible_pairings'); raises AssertionError if
-    they don't reconcile.
-
-    This is a hard gate, not a soft warning -- a silently dropped or
-    silently duplicated pairing (e.g. a caller who forgot to classify one
-    combination, or classified the same one twice) is exactly the class of
-    bug this module exists to make impossible to ship unnoticed.
-    """
-    counts = {label.value: 0 for label in EvidenceLabel}
-    for pairing in pairings:
-        counts[pairing.evidence_label.value] += 1
-
-    total = len(pairings)
-    reconciled = sum(counts.values())
-    if reconciled != total:
-        raise AssertionError(
-            "Evidence counts do not reconcile: "
-            f"DIRECT({counts[EvidenceLabel.DIRECT.value]}) + "
-            f"INDIRECT({counts[EvidenceLabel.INDIRECT.value]}) + "
-            f"UNKNOWN({counts[EvidenceLabel.UNKNOWN.value]}) = {reconciled}, "
-            f"expected {total} feasible pairings."
+def _validate_unavailable_ids(
+    unavailable_ids: set[int],
+    roster: Sequence[PlayerTeamHistory],
+    side: str,
+) -> None:
+    roster_ids = {row.player_id for row in roster}
+    unknown = sorted(unavailable_ids - roster_ids)
+    if unknown:
+        raise PairingEvidenceError(
+            f"Unavailable {side} player ids are not in the canonical roster: {unknown}"
         )
 
-    counts["total_feasible_pairings"] = total
-    return counts
+
+def build_pairing_evidence_matrix(
+    db: Session,
+    *,
+    our_team_external_id: str,
+    opponent_team_external_id: str,
+    format: str,
+    session_name: str,
+    unavailable_our_player_ids: Optional[Collection[int]] = None,
+    unavailable_opponent_player_ids: Optional[Collection[int]] = None,
+) -> PairingEvidenceMatrix:
+    """Build and reconcile one fully scoped, production-owned matrix."""
+    our_team_external_id = _scope_value(
+        "our_team_external_id", our_team_external_id
+    )
+    opponent_team_external_id = _scope_value(
+        "opponent_team_external_id", opponent_team_external_id
+    )
+    format = _scope_value("format", format)
+    session_name = _scope_value("session_name", session_name)
+    if our_team_external_id == opponent_team_external_id:
+        raise PairingEvidenceError("Our team and opponent team must be different")
+
+    our_roster = canonical_current_roster(
+        db, our_team_external_id, session_name
+    )
+    opponent_roster = canonical_current_roster(
+        db, opponent_team_external_id, session_name
+    )
+
+    overlap = sorted(
+        {row.player_id for row in our_roster}
+        & {row.player_id for row in opponent_roster}
+    )
+    if overlap:
+        raise PairingEvidenceError(
+            "The same canonical player is current on both selected teams: "
+            + ", ".join(str(player_id) for player_id in overlap)
+        )
+
+    unavailable_ours = set(unavailable_our_player_ids or ())
+    unavailable_theirs = set(unavailable_opponent_player_ids or ())
+    _validate_unavailable_ids(unavailable_ours, our_roster, "our")
+    _validate_unavailable_ids(unavailable_theirs, opponent_roster, "opponent")
+
+    expected = feasible_pairings(
+        [row.player_id for row in our_roster],
+        [row.player_id for row in opponent_roster],
+        unavailable_our_player_ids=unavailable_ours,
+        unavailable_opponent_player_ids=unavailable_theirs,
+    )
+    ours_by_id = {row.player_id: row for row in our_roster}
+    theirs_by_id = {row.player_id: row for row in opponent_roster}
+    classified = [
+        _classify_pairing(
+            db,
+            player=ours_by_id[player_id],
+            opponent=theirs_by_id[opponent_id],
+            our_team_external_id=our_team_external_id,
+            opponent_team_external_id=opponent_team_external_id,
+            format=format,
+            session_name=session_name,
+        )
+        for player_id, opponent_id in expected
+    ]
+    counts = build_pairing_matrix(classified, expected)
+    return PairingEvidenceMatrix(
+        our_team_external_id=our_team_external_id,
+        opponent_team_external_id=opponent_team_external_id,
+        format=format,
+        session_name=session_name,
+        expected_pairings=tuple(expected),
+        pairings=tuple(classified),
+        counts=counts,
+        our_roster_available=bool(our_roster),
+        opponent_roster_available=bool(opponent_roster),
+    )
