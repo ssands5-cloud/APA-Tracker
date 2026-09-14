@@ -320,6 +320,53 @@ matrix (§3) rendering every feasible pairing including UNKNOWN rows (§6,
 §7). Reuses Stage 1's classifier as its only source of evidence labels and
 rates. No Lineup Lab, no Data Coverage view yet. No Excel changes.
 
+**Implemented as:** `scripts/build_captain_first_edge.py` (the builder,
+read-only against SQLite the same way `scripts/build_captains_edge.py`
+already is) and `ui/tabs/tonights_match.py` (the renderer), writing
+`exports/captain_first_edge.html`. Real implementation shape, documented
+here rather than left implicit:
+
+- **Team** and **Session** are not free-choice controls today because the
+  data doesn't offer more than one real value for either (one configured
+  team, one real session captured so far); Session still renders as a real
+  `<select>` so a second real session appearing later needs no code change.
+  **Opponent** and **Format** are real `<select>` controls populated only
+  from combinations with an actual scheduled `Match` row. **Availability**
+  is a real per-player checkbox set, one block per side.
+- Every (session, opponent, format) combination with a real scheduled match
+  is classified via `build_pairing_evidence_matrix` AT BUILD TIME (Python),
+  not on demand in the browser -- this project has no server for the static
+  file to call. Switching Opponent/Format/Session in the browser selects
+  among these already-computed real matrices; nothing is reclassified
+  client-side, and the embedded JSON is a direct serialization of Stage 1's
+  own dataclasses (`ui/tabs/tonights_match.py::_matrix_payload`).
+  Availability is the one control that genuinely recomputes in the browser,
+  because unlike the others it doesn't change WHICH evidence applies to a
+  pairing, only which already-classified rows are counted/shown -- toggling
+  a checkbox re-tallies the visible DIRECT/INDIRECT/UNKNOWN counts live, with
+  no server and no re-classification.
+- A combination whose canonical roster could not be resolved (an ambiguous
+  `PlayerTeamHistory` membership, for example) still appears in the Opponent
+  dropdown, with its real `PairingEvidenceError`/`CanonicalRosterError`
+  message shown in place of a matrix -- never silently omitted from the
+  selector (§7's spirit, applied to whole scopes, not just rows).
+- "Show pairings marked unavailable" is the one addition beyond §2's literal
+  list: without it, marking a player unavailable removes their rows from
+  view entirely, which would make it impossible to double check who was
+  excluded and why. Checking it does not affect UNKNOWN visibility, which
+  §7 already guarantees unconditionally.
+
+Tests: `tests/test_tonights_match_tab.py` (payload fidelity, no dropped
+pairings, no external resources, an unavailable scope still offered with
+its real reason) and `tests/test_build_captain_first_edge.py` (real scope
+discovery from `Match` rows, bye/foreign-match exclusion, honest team-name
+fallback, a real end-to-end file write). Manually verified against the
+CI-mode sample fixture (`ci-build/pipeline_ci.db`, built via
+`pipeline_run_all.py --skip-scrape --fixtures tests/fixtures/sample_pipeline`)
+-- that fixture carries no `PlayerTeamHistory` rows, so the real, honest
+output is `total_feasible_pairings: 0` and both rosters marked unavailable,
+not a fabricated example matrix.
+
 ## 16. Stage 3 — Lineup Lab and Data Coverage
 
 Scope: §9–§11, built only on §13's approved analytics. No new objective,

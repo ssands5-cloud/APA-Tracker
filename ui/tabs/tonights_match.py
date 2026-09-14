@@ -1,0 +1,366 @@
+"""Tonight's Match: the captain-first evidence matrix.
+
+Stage 2 of docs/captain_first_edge_experience.md. Renders one or more
+``analytics.pairing_evidence.PairingEvidenceMatrix`` objects (Stage 1's own
+output -- this module recomputes nothing) as one self-contained HTML
+application: real team/session/format/opponent selectors switch between
+precomputed real matrices, and per-player availability checkboxes narrow
+the DISPLAYED rows live, in the browser, with no server and no Python after
+the file is opened.
+
+Every matrix embedded here was built by
+``analytics.pairing_evidence.build_pairing_evidence_matrix`` against a real
+scheduled match between the configured team and a real opponent -- there is
+no client-side re-classification, so the page can never show an evidence
+label the Python classifier did not compute. Availability filtering only
+hides/shows already-classified rows and re-tallies the VISIBLE counts; it
+never changes a pairing's DIRECT/INDIRECT/UNKNOWN label, matching
+docs/captain_first_edge_experience.md's rule that availability narrows the
+feasible set for display, not the evidence itself.
+
+UNKNOWN rows are never hidden by default (§7): the "Show all pairings"
+checkbox controls only whether pairings the captain has marked unavailable
+stay visible for reference, not whether UNKNOWN rows appear.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from html import escape
+from typing import Optional, Sequence
+
+from analytics.pairing_evidence import EvidenceLabel, PairingEvidenceMatrix
+
+COLUMNS = (
+    ("player_name", "Our Player", False),
+    ("player_skill_level", "Our SL", True),
+    ("opponent_name", "Opponent", False),
+    ("opponent_skill_level", "Opp SL", True),
+    ("evidence_label", "Evidence", False),
+    ("observed_win_rate", "Observed Win Rate", True),
+    ("direct_evidence_count", "Direct Matches", True),
+    ("modeled_win_probability", "Modeled Win Prob.", True),
+    ("model_source", "Model Source", False),
+)
+
+
+@dataclass(frozen=True)
+class MatchScope:
+    """One real, selectable (session, opponent, format) combination.
+
+    ``matrix`` is the real computed result, when the canonical rosters on
+    both sides allowed one to be built. ``unavailable_reason`` is set
+    instead, never both -- a combination this page could not evaluate is
+    named honestly, not silently dropped from the selector.
+    """
+
+    session_name: str
+    opponent_team_external_id: str
+    opponent_team_name: str
+    format: str
+    matrix: Optional[PairingEvidenceMatrix]
+    unavailable_reason: Optional[str] = None
+
+
+def _scope_key(session_name: str, opponent_team_external_id: str, format: str) -> str:
+    return json.dumps([session_name, opponent_team_external_id, format])
+
+
+def _label_text(evidence_label: EvidenceLabel) -> str:
+    return evidence_label.value
+
+
+def _cell(pairing, key: str) -> str:
+    value = getattr(pairing, key)
+    if value is None:
+        return "No data"
+    if key == "evidence_label":
+        return _label_text(value)
+    if key in ("observed_win_rate", "modeled_win_probability"):
+        return f"{value * 100:.0f}%"
+    if key == "model_source":
+        return escape(value)
+    return escape(str(value))
+
+
+def _matrix_payload(matrix: PairingEvidenceMatrix) -> dict:
+    """The real, already-classified rows and counts, as plain JSON --
+    the only thing the page's JavaScript reads. No recomputation happens
+    client-side; this is a serialization of Stage 1's own output."""
+    return {
+        "our_team_external_id": matrix.our_team_external_id,
+        "opponent_team_external_id": matrix.opponent_team_external_id,
+        "format": matrix.format,
+        "session_name": matrix.session_name,
+        "our_roster_available": matrix.our_roster_available,
+        "opponent_roster_available": matrix.opponent_roster_available,
+        "counts": matrix.counts,
+        "pairings": [
+            {
+                "player_id": p.player_id,
+                "player_external_id": p.player_external_id,
+                "player_name": p.player_name,
+                "player_skill_level": p.player_skill_level,
+                "opponent_id": p.opponent_id,
+                "opponent_external_id": p.opponent_external_id,
+                "opponent_name": p.opponent_name,
+                "opponent_skill_level": p.opponent_skill_level,
+                "evidence_label": p.evidence_label.value,
+                "observed_win_rate": p.observed_win_rate,
+                "direct_evidence_count": p.direct_evidence_count,
+                "modeled_win_probability": p.modeled_win_probability,
+                "model_source": p.model_source,
+            }
+            for p in matrix.pairings
+        ],
+    }
+
+
+def render(scopes: Sequence[MatchScope], our_team_name: str, title: str = "Tonight's Match") -> str:
+    """A self-contained HTML page. No external resources, no server.
+
+    ``scopes`` is every real (session, opponent, format) combination this
+    build could attempt -- one real scheduled match between the configured
+    team and a real opponent is the only thing that puts a combination in
+    this list. An empty list renders an honest empty state, never a guess.
+    """
+    if not scopes:
+        return (
+            f"<!doctype html><html><head><meta charset=\"utf-8\">"
+            f"<title>{escape(title)}</title></head><body>"
+            f'<section class="tm-empty"><h1>{escape(title)}</h1>'
+            "<p>No real scheduled match was found for the configured team. "
+            "Run the pipeline, then scripts/build_captain_first_edge.py.</p>"
+            "</section></body></html>"
+        )
+
+    sessions = sorted({s.session_name for s in scopes})
+    payload: dict[str, dict] = {}
+    options: list[dict] = []
+    for scope in scopes:
+        key = _scope_key(scope.session_name, scope.opponent_team_external_id, scope.format)
+        options.append({
+            "key": key,
+            "session_name": scope.session_name,
+            "opponent_team_external_id": scope.opponent_team_external_id,
+            "opponent_team_name": scope.opponent_team_name,
+            "format": scope.format,
+            "available": scope.matrix is not None,
+            "unavailable_reason": scope.unavailable_reason,
+        })
+        if scope.matrix is not None:
+            payload[key] = _matrix_payload(scope.matrix)
+
+    header = "".join(
+        f'<th data-key="{key}" class="{"num" if numeric else ""}">{escape(label)}</th>'
+        for key, label, numeric in COLUMNS
+    )
+
+    session_options = "".join(
+        f'<option value="{escape(s)}">{escape(s)}</option>' for s in sessions
+    )
+
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{escape(title)}</title>
+<style>
+body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1c1f24; }}
+h1 {{ margin-bottom: 4px; }}
+.tm-sub {{ color: #666e7a; margin-top: 0; }}
+.tm-controls {{ display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end;
+  margin: 18px 0; padding: 14px; background: #f4f6f8; border-radius: 8px; }}
+.tm-controls label {{ display: block; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .04em; color: #666e7a; margin-bottom: 4px; }}
+.tm-controls select {{ font-size: 14px; padding: 5px 8px; }}
+.tm-counts {{ margin: 10px 0; font-size: 14px; }}
+.tm-counts b {{ font-variant-numeric: tabular-nums; }}
+.tm-unavailable {{ color: #9a3b3b; padding: 14px; background: #fdecec; border-radius: 6px; }}
+table {{ border-collapse: collapse; width: 100%; font-size: 13.5px; margin-top: 10px; }}
+th, td {{ padding: 7px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; white-space: nowrap; }}
+th {{ cursor: pointer; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #666e7a; }}
+td.num, th.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+tr.evidence-DIRECT {{ background: #e6f6ec; }}
+tr.evidence-INDIRECT {{ background: #fff8e1; }}
+tr.evidence-UNKNOWN {{ background: #ffffff; }}
+tr.tm-hidden {{ display: none; }}
+.tm-avail {{ margin: 14px 0; }}
+.tm-avail summary {{ cursor: pointer; font-size: 13px; color: #444b54; }}
+.tm-avail label {{ display: inline-block; margin: 4px 10px 4px 0; font-size: 13px; }}
+.tm-showall label {{ font-size: 13px; margin-left: 6px; }}
+</style>
+</head>
+<body>
+<h1>{escape(title)}</h1>
+<p class="tm-sub">{escape(our_team_name)} -- every real pairing evidence label comes from
+analytics.pairing_evidence; nothing on this page is recomputed in the browser.</p>
+
+<div class="tm-controls">
+  <div>
+    <label>Session</label>
+    <select id="tm-session">{session_options}</select>
+  </div>
+  <div>
+    <label>Opponent</label>
+    <select id="tm-opponent"><option value="">Select opponent&hellip;</option></select>
+  </div>
+  <div>
+    <label>Format</label>
+    <select id="tm-format"><option value="">Select format&hellip;</option></select>
+  </div>
+  <div class="tm-showall">
+    <input type="checkbox" id="tm-showall">
+    <label for="tm-showall">Show pairings marked unavailable</label>
+  </div>
+</div>
+
+<div id="tm-body"><p>Select an opponent and format to see tonight's evidence matrix.</p></div>
+
+<script>
+var TM_OPTIONS = {json.dumps(options)};
+var TM_PAYLOAD = {json.dumps(payload)};
+var TM_COLUMNS = {json.dumps([[k, l, n] for k, l, n in COLUMNS])};
+var tmUnavailable = {{our: {{}}, opp: {{}}}};
+
+function tmFmt(row, key) {{
+  var value = row[key];
+  if (value === null || value === undefined) return "No data";
+  if (key === "observed_win_rate" || key === "modeled_win_probability") {{
+    return Math.round(value * 100) + "%";
+  }}
+  return String(value);
+}}
+
+function tmPopulate(select, values, current) {{
+  select.innerHTML = "";
+  values.forEach(function (v) {{
+    var opt = document.createElement("option");
+    opt.value = v.value;
+    opt.textContent = v.label;
+    if (v.value === current) opt.selected = true;
+    select.appendChild(opt);
+  }});
+}}
+
+function tmRefreshOpponents() {{
+  var session = document.getElementById("tm-session").value;
+  var seen = {{}};
+  var values = [{{value: "", label: "Select opponent\\u2026"}}];
+  TM_OPTIONS.filter(function (o) {{ return o.session_name === session; }})
+    .forEach(function (o) {{
+      if (seen[o.opponent_team_external_id]) return;
+      seen[o.opponent_team_external_id] = true;
+      values.push({{value: o.opponent_team_external_id, label: o.opponent_team_name}});
+    }});
+  tmPopulate(document.getElementById("tm-opponent"), values, "");
+  tmRefreshFormats();
+}}
+
+function tmRefreshFormats() {{
+  var session = document.getElementById("tm-session").value;
+  var opponent = document.getElementById("tm-opponent").value;
+  var values = [{{value: "", label: "Select format\\u2026"}}];
+  TM_OPTIONS.filter(function (o) {{
+    return o.session_name === session && o.opponent_team_external_id === opponent;
+  }}).forEach(function (o) {{ values.push({{value: o.format, label: o.format}}); }});
+  tmPopulate(document.getElementById("tm-format"), values, "");
+  tmRender();
+}}
+
+function tmCurrentOption() {{
+  var session = document.getElementById("tm-session").value;
+  var opponent = document.getElementById("tm-opponent").value;
+  var format = document.getElementById("tm-format").value;
+  if (!opponent || !format) return null;
+  return TM_OPTIONS.filter(function (o) {{
+    return o.session_name === session && o.opponent_team_external_id === opponent && o.format === format;
+  }})[0] || null;
+}}
+
+function tmAvailabilityControls(rows) {{
+  var ours = {{}}, theirs = {{}};
+  rows.forEach(function (r) {{
+    ours[r.player_id] = r.player_name;
+    theirs[r.opponent_id] = r.opponent_name;
+  }});
+  function block(label, ids, side) {{
+    var html = '<details class="tm-avail" open><summary>' + label + ' availability</summary>';
+    Object.keys(ids).forEach(function (id) {{
+      var checked = tmUnavailable[side][id] ? "" : "checked";
+      html += '<label><input type="checkbox" data-side="' + side + '" data-id="' + id +
+        '" ' + checked + ' onchange="tmToggleAvailable(this)"> ' + ids[id] + '</label>';
+    }});
+    return html + '</details>';
+  }}
+  return block("Our", ours, "our") + block("Opponent", theirs, "opp");
+}}
+
+function tmToggleAvailable(el) {{
+  var side = el.getAttribute("data-side");
+  var id = el.getAttribute("data-id");
+  tmUnavailable[side][id] = !el.checked;
+  tmApplyFilters();
+}}
+
+function tmApplyFilters() {{
+  var showAll = document.getElementById("tm-showall").checked;
+  var rows = document.querySelectorAll("#tm-table tbody tr");
+  var counts = {{DIRECT: 0, INDIRECT: 0, UNKNOWN: 0}};
+  rows.forEach(function (tr) {{
+    var pid = tr.getAttribute("data-player-id");
+    var oid = tr.getAttribute("data-opponent-id");
+    var hidden = (!!tmUnavailable.our[pid] || !!tmUnavailable.opp[oid]) && !showAll;
+    tr.classList.toggle("tm-hidden", hidden);
+    if (!hidden) counts[tr.getAttribute("data-label")]++;
+  }});
+  var total = counts.DIRECT + counts.INDIRECT + counts.UNKNOWN;
+  document.getElementById("tm-shown-counts").textContent =
+    "Shown: " + total + " pairing(s) -- " + counts.DIRECT + " DIRECT, " +
+    counts.INDIRECT + " INDIRECT, " + counts.UNKNOWN + " UNKNOWN.";
+}}
+
+function tmRender() {{
+  var body = document.getElementById("tm-body");
+  var option = tmCurrentOption();
+  if (!option) {{
+    body.innerHTML = "<p>Select an opponent and format to see tonight's evidence matrix.</p>";
+    return;
+  }}
+  if (!option.available) {{
+    body.innerHTML = '<p class="tm-unavailable">This matchup could not be evaluated: ' +
+      option.unavailable_reason + '</p>';
+    return;
+  }}
+  var data = TM_PAYLOAD[option.key];
+  tmUnavailable = {{our: {{}}, opp: {{}}}};
+  var header = TM_COLUMNS.map(function (c) {{
+    return '<th class="' + (c[2] ? "num" : "") + '">' + c[1] + '</th>';
+  }}).join("");
+  var body_rows = data.pairings.map(function (r) {{
+    var cells = TM_COLUMNS.map(function (c) {{
+      return '<td class="' + (c[2] ? "num" : "") + '">' + tmFmt(r, c[0]) + '</td>';
+    }}).join("");
+    return '<tr class="evidence-' + r.evidence_label + '" data-player-id="' + r.player_id +
+      '" data-opponent-id="' + r.opponent_id + '" data-label="' + r.evidence_label + '">' +
+      cells + '</tr>';
+  }}).join("");
+  var c = data.counts;
+  body.innerHTML =
+    '<p class="tm-counts">Full matrix: <b>' + c.total_feasible_pairings + '</b> feasible pairing(s) -- ' +
+    '<b>' + c.DIRECT + '</b> DIRECT, <b>' + c.INDIRECT + '</b> INDIRECT, <b>' + c.UNKNOWN + '</b> UNKNOWN.</p>' +
+    '<p id="tm-shown-counts" class="tm-counts"></p>' +
+    tmAvailabilityControls(data.pairings) +
+    '<table id="tm-table"><thead><tr>' + header + '</tr></thead><tbody>' + body_rows + '</tbody></table>';
+  tmApplyFilters();
+}}
+
+document.getElementById("tm-session").addEventListener("change", tmRefreshOpponents);
+document.getElementById("tm-opponent").addEventListener("change", tmRefreshFormats);
+document.getElementById("tm-format").addEventListener("change", tmRender);
+document.getElementById("tm-showall").addEventListener("change", tmApplyFilters);
+tmRefreshOpponents();
+</script>
+</body>
+</html>"""
