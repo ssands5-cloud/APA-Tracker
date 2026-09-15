@@ -114,7 +114,8 @@ cell. It is not a claim about future lineup order or a categorical warning.
 
 The planned immutable `MatchDifficultyCell` carries the matrix pair key, both
 current skill inputs, `current_skill_probability`, `match_difficulty`, evidence
-label, `formula_version = match-difficulty-v1-current-skill`, and a null reason.
+label, direct-match count, `formula_version =
+match-difficulty-v1-current-skill-complement`, and a null reason.
 Its key set must equal the matrix key set even when every numeric value is null.
 
 The heatmap must not use `PlayerVsPlayerSummary.modeled_win_probability`, the
@@ -136,32 +137,30 @@ remain visible through text/border treatment.
 - Each cell exposes the numeric difficulty, source probability, evidence label,
   and pair key through visible/focusable detail, not hover alone.
 
-### Numeric color scale
+### Continuous numeric color scale
 
-The fixed sequential blue scale has numeric bins only:
+The sequential blue scale is continuous over the probability-derived 0–100
+domain. With `t = match_difficulty / 100`, HTML and Excel linearly interpolate
+from RGB `(239, 243, 255)` at 0 to RGB `(8, 81, 156)` at 100 and round each
+channel with `floor(interpolated_channel + 0.5)`. This is deterministic
+presentation, not a set of metric thresholds. It creates no ranges, tiers,
+flags, or categorical labels. The palette version is
+`match-difficulty-blue-linear-v1`.
 
-| Difficulty | Fill |
-| ---: | --- |
-| 0 to <20 | `#eff3ff` |
-| 20 to <40 | `#bdd7e7` |
-| 40 to <60 | `#6baed6` |
-| 60 to <80 | `#3182bd` |
-| 80 to 100 | `#08519c` |
-
-The legend prints the numeric ranges and the formula; it does not name cells
-easy, hard, favorable, dangerous, target, or avoid. Cells display the rounded
-whole-number value while parity uses the raw probability/value. Dark fills use
-white text; light fills use dark text. A text value and accessible label always
-supplement color.
+The legend prints the numeric domain and formula; it does not name cells easy,
+hard, favorable, dangerous, target, or avoid. Cells display the rounded
+whole-number value while parity uses the raw probability/value. Numeric text
+uses a neutral high-contrast badge rather than a difficulty cutoff for text
+color. A text value and accessible label always supplement color.
 
 ### UNKNOWN and missing inputs
 
 If either current skill is missing, `current_skill_probability` and
 `match_difficulty` are null. The cell uses `#f2f2f2`, diagonal hatching, and
-literal `No data`. It is excluded from numeric legend counts and never placed
-at 50. An UNKNOWN evidence label remains UNKNOWN. A DIRECT row can also have a
-null heatmap cell when historical evidence exists but a current skill does not;
-the UI keeps both facts visible.
+literal `No data`. It is excluded from the numeric scale and never placed at
+50. Evidence is independent: a DIRECT, INDIRECT, or UNKNOWN row can be null,
+and an UNKNOWN row with both current skills can be numeric. The UI keeps both
+facts visible.
 
 Heatmap JSON/HTML/Excel parity compares pair key, both skill inputs, raw
 probability, raw difficulty, evidence label, and null reason. The matrix pair
@@ -169,11 +168,12 @@ count is unchanged by heatmap availability.
 
 ### Heatmap architecture, UX, and demo handoff
 
-The matrix builder calls the shared current-skill probability function once per
-canonical pair and emits `MatchDifficultyCell` values beside—not inside—the
-explicit pair summary. The same cells feed the Matrix View script JSON and the
-two planned Excel sheets. HTML/Excel adapters apply only the fixed color bins;
-neither owns analytics.
+The dedicated heatmap adapter consumes the already-built, ordered
+`PlayerVsPlayerExportRow` values, calls the shared current-skill probability
+function once per canonical pair, and emits `MatchDifficultyCell` values
+beside—not inside—the explicit pair summary. The same cells feed the Matrix
+View script JSON and the two planned Excel sheets. HTML/Excel adapters apply
+only the shared continuous palette interpolation; neither owns analytics.
 
 The heatmap is the first visualization in Matrix View. Keyboard users traverse
 row-major canonical pair order, and activating a cell opens that exact pair in
@@ -187,7 +187,8 @@ cell with measurable skills, and one missing-skill `No data` cell. This proves
 that evidence styling and current-skill difficulty are separate dimensions.
 Release validation then reconciles the heatmap key set with the full matrix and
 checks the selected cell against Pair View and Excel. Any missing key,
-history-blended value, 50% null fill, category label, or non-fixed color mapping
+history-blended value, 50% null fill, category label, threshold list, aggregate
+difficulty index, or non-versioned color mapping
 blocks promotion.
 
 ### Current status and exact wiring steps
@@ -198,16 +199,18 @@ Pair/Matrix subviews, and two workbook sheets. It does not yet emit difficulty
 cells or render the heatmap. Completion extends this existing matrix path; it
 does not add another matchup model.
 
-1. Add an immutable `MatchDifficultyCell` and a pure public builder to
-   `analytics/player_vs_player_matrix.py`. The builder accepts the existing
-   `PairingEvidenceMatrix`, calls the shared current-skill-only probability
-   function, and emits exactly one cell per pair in canonical matrix order.
+1. Add immutable `MatchDifficultyCell` / `MatchDifficultyReport` values and a
+   pure public builder to `analytics/match_difficulty_heatmap.py`. The builder
+   accepts the existing ordered `PlayerVsPlayerExportRow` values, calls the
+   shared current-skill-only probability function, and emits exactly one cell
+   per pair in canonical matrix order.
 2. Have `scripts/build_player_vs_player_export.py` build the matrix rows and
    difficulty cells once, assert identical pair-key sets, and pass both to the
    existing renderers.
 3. Extend `ui/tabs/player_vs_player_unified.py` and
    `ui/export_html_player_vs_player.py` with the accessible heatmap and text
-   alternative. They map delivered values to fixed bins only.
+   alternative. They map delivered values to the versioned continuous palette
+   only.
 4. Extend `ui/export_excel_player_vs_player.py` with
    `Match_Difficulty_Heatmap` and `Match_Difficulty_Data`; retain the existing
    `Player_vs_Player` and optional `PvP_Game_History` sheets unchanged.
@@ -217,14 +220,19 @@ does not add another matchup model.
 The public builder signature should remain explicit:
 
 ```python
-build_match_difficulty_cells(
-    matrix: PairingEvidenceMatrix,
-) -> tuple[MatchDifficultyCell, ...]
+build_report(
+    rows: Sequence[PlayerVsPlayerExportRow],
+    *,
+    source_manifest_id: str,
+    source_database_sha256: str,
+    captured_at: str,
+) -> MatchDifficultyReport
 ```
 
-It must not accept history, modeled probability, trend, volatility, custom
-weights, or a threshold. This makes accidental blending impossible at the API
-boundary.
+It must not accept Team Strength, history, modeled probability, trend,
+volatility, custom weights, or a threshold. It produces no row, column, or
+matrix difficulty index. This makes accidental blending impossible at the API
+boundary. `match_difficulty_heatmap.md` is the controlling contract.
 
 ## UNKNOWN and unavailable data
 
@@ -316,9 +324,10 @@ artifact.
 
 This sheet mirrors the HTML grid: our players are rows, opponents are columns,
 and frozen headers include names/external IDs/current skills. Numeric cells hold
-raw 0–100 difficulty values and receive static fills from the same five fixed
-numeric bins. Missing cells contain literal `No data` with gray hatching. The
-fill is presentation only; there is no Excel conditional-format formula.
+raw 0–100 difficulty values and receive static fills from the same versioned
+continuous interpolation as HTML. Missing cells contain literal `No data` with
+gray hatching. The fill is presentation only; there is no Excel
+conditional-format formula or threshold legend.
 
 ### Planned `Match_Difficulty_Data`
 

@@ -9,7 +9,7 @@ the future launcher should call it rather than duplicating exporter logic.
 | Artifact | Builder | Demo role | Required validation |
 | --- | --- | --- | --- |
 | `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and descriptive Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, named single-field ordering, no categorical risk fields, no external requests |
-| `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix, current-skill difficulty heatmap, and anchored explicit-pair details | UNKNOWN visibility, fixed numeric color bins, escaping, stable initial pair order, no renderer math |
+| `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix, descriptive current-skill difficulty heatmap, and anchored explicit-pair details | exact pair-key parity, UNKNOWN/evidence independence, continuous numeric scale without thresholds, escaping, stable initial pair order, no renderer math |
 | `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff, difficulty grid/audit rows, and real game history | openpyxl load, values only, pair/game/heatmap-key parity |
 | Player vs Player JSON document | planned Full Production Demo Builder adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
 | `data_coverage.html` | `scripts/build_data_coverage.py` + `ui/tabs/data_coverage.py` | evidence coverage, missing skills, sample sizes, refresh dates, unavailable fields | escaped/self-contained, zero-total nulls, matrix count parity |
@@ -44,9 +44,11 @@ the future launcher should call it rather than duplicating exporter logic.
 4. Build one Data Coverage report from the matrix plus query-layer
    standings/career refresh timestamps. Render its HTML/XLSX from the identical
    report. Lineup assignment coverage remains a separate manifest check.
-5. Build Team Strength, Season Projection, Trend Analyzer, Opponent Volatility,
-   and current-skill heatmap values from the same locked database/scope. Keep
-   every formula version, raw denominator, join status, and null reason.
+5. Build current-skill heatmap cells from the exact ordered Player-vs-Player
+   rows, then build Team Strength, Season Projection, Trend Analyzer, and
+   Opponent Volatility from the same locked database/scope. Keep every formula
+   version, raw denominator, join status, and null reason. Team Strength is a
+   separate context document and is not an input to heatmap analytics.
 6. Build Captain's Edge and Lineup Optimizer read-only documents. Captain's
    Edge consumes the already-built matrix document for its Opponent Risk
    Profile; it does not rerun analytics.
@@ -94,13 +96,25 @@ indices, nulls, and canonical order.
 Heatmap HTML/script JSON carries one value for every matrix pair key. Its
 difficulty is derived only from the shared current-skill probability; Excel and
 HTML must never substitute the experimental blended probability. Missing skills
-remain null/hatched and do not reduce the matrix denominator.
+remain null/hatched and do not reduce the matrix denominator. HTML and Excel
+use the same deterministic continuous 0–100 palette interpolation, never
+difficulty bands or semantic thresholds. No reliability weight, row/column/
+matrix difficulty index, categorical field, or score-driven order is exported.
+Feasible/numeric/null cell counts must reconcile exactly.
+
+Team Strength may appear beside Matrix View only after run, hash, session, and
+team-ID reconciliation. Its values stay in the independently versioned Team
+Strength document and workbook; they do not appear in
+`Match_Difficulty_Data`, affect the heatmap, or explain a pair value.
 
 Implementation status, exact file ownership, and the required build order for
 the five remaining modules are defined in
 `remaining_analytics_wiring_plan.md`. A renderer may be marked available in the
 manifest only when its immutable source document and every required parity
 surface pass together.
+
+The controlling heatmap metric, UX, palette, workbook, and audit contract is
+`match_difficulty_heatmap.md`.
 
 ## Packaging
 

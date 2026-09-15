@@ -49,8 +49,12 @@ no-data result. It is design-only until the orchestration script exists.
   distinction, median/coverage, exact player-format-session join, and absence
   of pair-specific or categorical-risk claims.
 - Match Difficulty verifies `100 * (1 - current_skill_probability)` from the
-  shared Stage 3 function, all pair keys, fixed numeric color bins, and hatched
-  null cells; the history-blended probability must not affect it.
+  shared validated function, identical ordered matrix keys, feasible/numeric/
+  null count reconciliation, the versioned continuous palette interpolation,
+  and hatched null cells. Tests reject metric thresholds, categorical fields,
+  reliability weights, aggregate difficulty indices, and score-driven order.
+  History, evidence count/class, modeled probability, trend, volatility, and
+  Team Strength must not affect a cell.
 - Live Assistant scope/hash validation, availability re-solve or exact static
   scenario selection, assignment/unassigned/legality reconciliation, note
   template provenance, and separation of captain input from source facts.
@@ -81,8 +85,14 @@ no-data result. It is design-only until the orchestration script exists.
 - Compare Team Strength HTML/XLSX/JSON raw components and denominators; compare
   Season Projection schedule/source-status/probability/expected totals; compare
   Trend/Volatility keys, spans, nulls, and values before rounding.
-- Compare heatmap keys against the complete matrix and verify the Live Assistant
-  references the same immutable documents rather than recalculating them.
+- Compare heatmap keys/raw probabilities/raw complements/null reasons against
+  the complete matrix across analytics, script JSON, HTML, Excel grid, and
+  audit sheet before rounding. Verify that the Live Assistant references the
+  same immutable documents rather than recalculating them.
+- Cross-feature isolation tests vary both Team Strength reports while holding
+  matrix rows constant and prove every heatmap value, count, order, and color
+  is unchanged. A mismatched Team Strength run/hash must hide only the context
+  card, not rewrite or suppress the heatmap.
 - Run Full Production Demo Builder fixture mode twice and compare deterministic
   bundle content. Verify the launcher refuses absent/invalid READY, manifest,
   checksum, or database-hash state.
@@ -129,7 +139,8 @@ artifact is missing without a documented reason, the matrix counts do not
 reconcile, an evidence percentage uses a denominator other than total feasible
 pairings, Pair/Matrix route state is inconsistent, Captain's Edge disagrees
 with the selected row, a categorical opponent-risk field exists, Team Strength
-renormalizes missing components, a heatmap cell uses the blended model, trend
+renormalizes missing components, a heatmap cell uses the blended model or Team
+Strength, any difficulty threshold/weighted aggregate exists, trend
 spans/gates disagree, Season Projection drops a remaining match, the Live
 Assistant mixes run scopes, or the page contains a fabricated fallback. A
 fixture CI run may pass with unavailable rosters when that is the fixture's

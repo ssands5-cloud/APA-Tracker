@@ -1,250 +1,290 @@
 # Match Difficulty Heatmap
 
-**Draft for review.** No design document existed for this module before this
-draft (confirmed by searching every filename variant in `docs/`); nothing here
-has been implemented. It is written to the same rigor as the other analytics
-design docs in this repository (`docs/team_strength.md`,
-`docs/opponent_volatility.md`) and is intended for review by the documentation
-lane before any code is written.
+The Match Difficulty Heatmap is a descriptive visualization inside the unified
+Player vs Player **Matrix View**. It converts the project's validated
+current-skill-only win probability into its algebraic complement for every
+feasible matrix pair. It is not a new prediction model, ranking system, lineup
+selector, or recommendation surface.
 
-The Match Difficulty Heatmap is a proposed grid view over one already-built
-`analytics.pairing_evidence.PairingEvidenceMatrix`: our canonical roster on one
-axis, the opponent's canonical roster on the other, one descriptive difficulty
-value per feasible cell. It introduces no new predictive model. Every number
-it shows already exists and is already validated elsewhere in this project;
-this document composes them into a grid and adds no threshold, category, or
-color tier that is not already established.
+The proposed analytics owner is `analytics/match_difficulty_heatmap.py`. It
+consumes the already-built, canonically ordered rows from
+`analytics/player_vs_player_matrix.py`; it does not query SQLite, rebuild the
+pairing matrix, or read generated exports. HTML and Excel consume the same
+immutable heatmap report and perform no analytics.
 
-## Why this doc is conservative
+## Governing constraints
 
-Two real constraints from Issue #14's own findings bound every choice below:
+1. The sole numeric driver is
+   `analytics.head_to_head.skill_only_win_probability`, using the two current
+   roster skill levels carried by the Player-vs-Player matrix row.
+2. `docs/prediction_validation.md` is the validation record for that driver.
+   The history-blended `win_probability` / `modeled_win_probability` has no
+   held-out rematch validation and is not a heatmap input.
+3. The heatmap creates no thresholds, difficulty bands, categorical flags, or
+   score-driven default order. Words such as easy, hard, danger, favorable,
+   Avoid, and Target are not heatmap outputs.
+4. DIRECT, INDIRECT, and UNKNOWN remain the Stage 1 evidence labels. They are
+   shown separately and never change the numeric difficulty value.
+5. Team Strength is a separate descriptive document. It may appear beside the
+   heatmap as context after scope reconciliation, but it never enters a cell,
+   aggregate, color, order, or recommendation.
 
-- `analytics.head_to_head.win_probability` (the history-blended estimate) is
-  **not validated for ranking or selection** -- `docs/prediction_validation.md`
-  records zero held-out predictions for the DIRECT history term, because every
-  one of the 106 recorded real pairings has met exactly once. This is why
-  Stage 3 Lineup Lab scoring and `analytics/opponent_risk_profile.py` both use
-  only `analytics.head_to_head.skill_only_win_probability`, which IS validated
-  (Brier 0.2416 vs. 0.25 baseline, 56.6% accuracy over the same 106 outcomes).
-  This document follows that same precedent and uses skill-only probability
-  exclusively for the numeric cell value. `modeled_win_probability` is never
-  read, never displayed, and never blended in.
-- No fitted or eyeballed cutoff exists for what counts as "hard" or "easy."
-  Every categorical Avoid/Target/danger/favorable flag proposed elsewhere in
-  this project has been declined for exactly this reason (§13 of
-  `docs/captain_first_edge_experience.md`). This document produces a
-  continuous descriptive number and an evidence label -- never a bucket.
+These constraints are part of the public contract, not presentation advice.
+Any implementation that weakens one of them is a different feature and
+requires a new validation and documentation review.
 
 ## Scope and source contract
 
-| Input | Source | Use | Required guard |
+| Input | Authoritative source | Heatmap use | Required guard |
 | --- | --- | --- | --- |
-| Feasible pairs | `PairingEvidenceMatrix.pairings` | one row per (our player, opponent player) already computed by Stage 1 | exact team/format/session scope already enforced by `build_pairing_evidence_matrix` |
-| Current skill levels | `PairingEvidence.player_skill_level` / `.opponent_skill_level` | the only input to the cell's numeric value | either side missing means the cell has no numeric value -- never a guessed mid skill |
-| Evidence label | `PairingEvidence.evidence_label` | shown beside the number, never folded into it | DIRECT / INDIRECT / UNKNOWN exactly as Stage 1 classified it |
-| DIRECT sample | `PairingEvidence.direct_evidence_count` | shown as context; also the reliability weight's only input | 0 for INDIRECT/UNKNOWN, real count for DIRECT |
-| Team Strength | `analytics.team_strength.TeamStrengthReport` (both teams, already built) | separate summary context alongside the grid, never blended into a cell | each team's own report, own `unavailable_reasons` |
+| Feasible pair rows | ordered `PlayerVsPlayerExportRow` values from `analytics.player_vs_player_matrix.py` | exactly one heatmap cell per matrix pair | pair keys, order, team IDs, format, and session must match the matrix exactly |
+| Current skill levels | `player_skill_level` and `opponent_skill_level` on that row | only numeric inputs | either value missing produces a null cell |
+| Evidence | `evidence_label` and `direct_matches` on that row | visible provenance only | copied unchanged; never used as a weight |
+| Skill-only probability function | `analytics.head_to_head.skill_only_win_probability` | approved probability driver | call the public function; do not duplicate its constants or formula |
+| Team Strength | independently built `TeamStrengthReport` for each team | adjacent, separately labeled context only | same run/team/session scope and source hash; never passed to the heatmap formula owner |
 
-The heatmap owner is the proposed `analytics/match_difficulty_heatmap.py`. It
-accepts an already-built `PairingEvidenceMatrix` and, optionally, both teams'
-already-built `TeamStrengthReport`. It queries nothing, computes no head-to-head
-history itself beyond calling the existing `skill_only_win_probability`
-function, and does not modify `analytics/pairing_evidence.py`,
-`analytics/lineup_lab.py`, or `analytics/opponent_risk_profile.py`.
+A missing current skill does not imply UNKNOWN evidence. DIRECT, INDIRECT, or
+UNKNOWN cells can be null when either current skill is absent. Conversely, an
+UNKNOWN pair with both current skills can have a numeric current-skill value.
+The evidence state and metric-availability state remain independent.
 
-## Cell value
+## Validated descriptive metric
 
-For a feasible pair with both skill levels known:
+For a row with both current skills:
 
 ```text
-difficulty = 100 * (1 - skill_only_win_probability(player_skill_level, opponent_skill_level))
+current_skill_probability =
+    skill_only_win_probability(player_skill_level, opponent_skill_level)
+
+match_difficulty = 100 * (1 - current_skill_probability)
 ```
 
-`skill_only_win_probability` is `analytics.head_to_head`'s own validated
-function (Log5-derived from current skill levels only). Subtracting from 1
-reframes it from "our player's win probability" to "how hard this matchup is
-for our player" on the same validated 0-100 scale -- a relabeling, not a new
-formula. `difficulty` is `None` when either skill level is missing (an
-UNKNOWN-evidence pairing under Stage 1's own classification); it is never
-imputed from a league average or a neutral 50.
+`match_difficulty` is the probability complement expressed on a 0–100 numeric
+scale. It contains no information beyond the validated current-skill-only
+probability: a larger number means only that the shared function assigns the
+selected player a lower current-skill-only win probability. It does not mean
+"hard," "dangerous," "avoid," or any other class or recommendation.
 
-## Evidence label and reliability weight
+When either current skill is missing, both `current_skill_probability` and
+`match_difficulty` are null and `null_reason` names the missing input. Null is
+never converted to 0, 50, a roster average, or a value derived from history.
+Raw analytics values are retained for parity; renderers may round a displayed
+number only after parity checks.
 
-Each cell also carries, unchanged from Stage 1:
-
-- `evidence_label` (DIRECT / INDIRECT / UNKNOWN);
-- `direct_evidence_count` (0 when not DIRECT);
-- `reliability_weight = 1 + direct_evidence_count` -- the same standard
-  weighted-mean weight `analytics/opponent_risk_profile.py` already uses (not
-  a new statistical model): baseline 1 for INDIRECT/UNKNOWN, growing with real
-  recorded history for DIRECT pairs, never reaching zero.
-
-These are descriptive metadata about how much evidence backs the cell. They
-are never multiplied into `difficulty` itself -- the numeric value stays the
-validated skill-only percentage regardless of sample size; the UI shows both
-side by side so a viewer can judge confidence without the module hiding it
-inside a single blended number.
-
-## Roster-level and team-level summaries
-
-For one of our players against the full opponent roster (a row summary):
-
-```text
-row_difficulty_index = reliability-weighted mean of that row's real difficulty values
-                      = sum(reliability_weight_i * difficulty_i) / sum(reliability_weight_i)
-                        over cells with a real (non-null) difficulty_i
-                      = None when no cell in the row has a real difficulty
-```
-
-The same reliability-weighted mean, over all real cells in the matrix, gives a
-`matrix_difficulty_index` -- one descriptive number for "how hard this whole
-matchup looks," always shown alongside its coverage (`real cells / feasible
-cells`) so a thin matrix is never presented as equivalent to a well-evidenced
-one. Column (per-opponent-player) summaries use the same formula across a
-column. All three summaries are optional context; the per-cell grid remains
-the primary, always-visible view and is never hidden behind a summary number.
-
-## Team Strength context (not blended)
-
-Both teams' `TeamStrengthReport.team_strength_index` (and its three
-components) may be shown as a separate summary card beside the grid -- for
-example "Our Team Strength: 62.4 · Opponent Team Strength: 58.1." This is
-purely contextual. It is never averaged, multiplied, or otherwise combined
-with any cell's `difficulty` value or with `matrix_difficulty_index`: Team
-Strength is a team/session-level descriptive index built from entirely
-different real inputs (pooled win rate, score-containment proxy, depth floor)
-and combining it with a pairwise skill-only estimate would be a new,
-unvalidated blended model -- exactly what this project has repeatedly declined
-to invent. A team missing its composite (per `docs/team_strength.md`'s
-all-or-nothing rule) shows `No data` in this card; the grid itself is
-unaffected.
+The heatmap does not calculate reliability weights, row difficulty indices,
+column difficulty indices, matrix difficulty indices, or weighted means. Those
+would introduce new, unvalidated aggregations. Coverage is reported only as
+auditable counts: feasible cells, numeric cells, and null cells.
 
 ## Analytics output
 
 ```text
 MatchDifficultyCell
-  our_player_id, our_player_external_id, our_player_name
-  opponent_player_id, opponent_player_external_id, opponent_player_name
-  our_skill_level, opponent_skill_level
-  difficulty                     # None when either skill level is missing
-  evidence_label
-  direct_evidence_count
-  reliability_weight
+  player_id, player_external_id, player_name, player_skill_level
+  opponent_id, opponent_external_id, opponent_name, opponent_skill_level
+  evidence_label, direct_matches
+  current_skill_probability
+  match_difficulty
+  formula_version, palette_version
+  null_reason
 
 MatchDifficultyReport
-  our_team_external_id, our_team_name
-  opponent_team_external_id, opponent_team_name
+  our_team_external_id, opponent_team_external_id
   format, session_name
-  source_manifest_id, captured_at, formula_version
-  cells[]                        # one per feasible pair, Stage 1 order preserved
-  matrix_difficulty_index, matrix_coverage
-  row_summaries[]                # one per our-roster player: index, coverage
-  column_summaries[]             # one per opponent-roster player: index, coverage
-  our_team_strength_index, opponent_team_strength_index   # context only, Optional
+  source_manifest_id, source_database_sha256, captured_at
+  formula_version
+  cells[]                 # same keys and order as PlayerVsPlayerExportRow
+  feasible_cell_count
+  numeric_cell_count
+  null_cell_count
   unavailable_reasons[]
 ```
 
-Rows are immutable and preserve `PairingEvidenceMatrix.pairings` order. The
-module queries nothing, changes no database state, and imports no UI
-renderer -- the same posture as every analytics module in this project.
+The report is immutable. Its formula version is
+`match-difficulty-v1-current-skill-complement` and its presentation scale is
+`match-difficulty-blue-linear-v1`. It contains no Team Strength values,
+history-blended probability, trend, volatility, observed win rate, reliability
+weight, recommendation, or categorical difficulty field.
 
-## HTML layout
+The implementation boundary should remain narrow:
 
-```text
-section#match-difficulty-heatmap
-├── scope/provenance and descriptive-only notice (quotes the two constraints above)
-├── Team Strength context card (or explicit No data state per side)
-├── matrix summary: matrix_difficulty_index and coverage
-├── figure#match-difficulty-grid
-│   one our-player row × one opponent-player column;
-│   cell shows difficulty (or "No data"), evidence-label glyph, and
-│   direct_evidence_count on hover/focus; a UNKNOWN/INDIRECT cell is visually
-│   distinct from a DIRECT one by pattern, not color-only
-├── table#match-difficulty-rows (row summaries, sortable by one visible column)
-├── table#match-difficulty-columns (column summaries)
-└── formula, source, and unavailable-data disclosure
+```python
+build_report(
+    rows: Sequence[PlayerVsPlayerExportRow],
+    *,
+    source_manifest_id: str,
+    source_database_sha256: str,
+    captured_at: str,
+) -> MatchDifficultyReport
 ```
 
-The grid uses one sequential, colorblind-safe scale over the continuous 0-100
-`difficulty` value -- no traffic-light red/yellow/green, no fixed "danger"
-color, and no cutoff that turns a number into a labeled zone. A `None` cell is
-shown with diagonal hatching and the literal text "No data," never blank and
-never a color that could be misread as a measured low/high value. Every color
-is paired with a legible number so the grid remains legible without color.
+The builder rejects duplicate pair keys or mixed scope. It preserves input
+order and proves `numeric_cell_count + null_cell_count == feasible_cell_count`.
 
-## Excel layout
+## Player-vs-Player Matrix integration
 
-`match_difficulty_heatmap.xlsx` contains values only:
+The heatmap is a Matrix View visualization, not a third subview or a top-level
+tab. The production builder follows this order:
 
-- `Match_Difficulty_Cells`: one row per feasible pair with both player
-  identities, skill levels, `difficulty`, evidence label, direct evidence
-  count, and reliability weight;
-- `Match_Difficulty_Rows`: one row per our-roster player with `row_difficulty_index`
-  and its coverage;
-- `Match_Difficulty_Columns`: one row per opponent-roster player, same shape;
-- `Match_Difficulty_Summary`: one row with `matrix_difficulty_index`,
-  `matrix_coverage`, both teams' Team Strength indices (or blank/`No data`),
-  formula version, scope, and capture time.
+```text
+PairingEvidenceMatrix + exact pair histories
+  → analytics/player_vs_player_matrix.py
+  → ordered PlayerVsPlayerExportRow values
+  → analytics/match_difficulty_heatmap.py
+  → ordered MatchDifficultyCell values with identical pair keys
+  → unified Player vs Player HTML / Excel / script JSON
+```
 
-All sheets freeze headers, use fixed widths, retain IDs as text, and contain
-no formula, macro, hidden helper, external link, or content-dependent
-ordering -- the same convention every other export in this project follows.
-An empty cells sheet (a scope with zero feasible pairs) is still written with
-headers and a zero row count rather than omitted, since "no feasible pairs"
-is itself a real, auditable fact about the scope, distinct from "not built."
+The same matrix rows feed the existing table and Pair View details. Activating
+a heatmap cell opens the exact pair key in Pair View and preserves Matrix View
+filters, axis order, and scroll position. The browser selects existing values;
+it never calls the probability function or computes the complement.
 
-## Current status and wiring contract
+Default axes follow the matrix's canonical player/opponent identity order.
+Presentation controls may sort by visible name or current skill only, with
+nulls last and external ID tie-breaks. Difficulty, evidence class, observed
+record, modeled probability, trend, volatility, and Team Strength do not drive
+default axis order.
 
-Not yet implemented. This document exists to be reviewed before any of the
-following is written:
+## Team Strength integration
 
-| Planned file | Required public responsibility |
+Team Strength remains owned by `analytics/team_strength.py` and its own
+immutable `TeamStrengthReport`. The orchestrator may place two separately
+labeled Team Strength context cards above or beside Matrix View and provide a
+link to the Team Strength tab. Before doing so it must reconcile run ID, source
+database hash, session, and the corresponding team external ID.
+
+The cards retain the Team Strength document's own formula version, component
+denominators, proxy label, null gate, and descriptive-only warning. A missing
+or mismatched report displays `No data` or an unavailable reason; it never
+blocks otherwise valid heatmap cells and never causes the heatmap module to
+substitute a value. Team Strength values are not copied into
+`MatchDifficultyReport` or `Match_Difficulty_Data`; the demo manifest links the
+two independent documents by scope and hash.
+
+## HTML structure
+
+The heatmap extends `section#pvp-matrix-view` in the unified Player vs Player
+tab:
+
+```text
+section#pvp-matrix-view
+├── scope, provenance, validation-status, and descriptive-only notice
+├── region#pvp-team-strength-context
+│   ├── our-team context card or No data
+│   ├── opponent-team context card or No data
+│   └── link to Team Strength evidence
+├── heatmap coverage counts: feasible / numeric / null
+├── figure#pvp-difficulty-heatmap
+│   ├── continuous numeric legend over the fixed 0–100 domain
+│   └── one focusable cell per feasible matrix pair
+├── table#pvp-difficulty-text-alternative
+├── existing evidence-coverage chart and matrix table
+└── formula, validation, source, and unavailable-data disclosures
+```
+
+Each numeric cell prints the displayed value and exposes an accessible label
+with both identities, both current skills, evidence label, raw current-skill
+probability, and raw difficulty. Evidence uses a separate text/icon or border
+pattern. A null cell is gray-hatched and says `No data` with its reason; it is
+not colored at any position on the numeric scale.
+
+The color ramp is continuous and decorative. It uses the fixed probability
+domain, not data quantiles or semantic cutoffs. To make HTML and Excel
+deterministic, both interpolate linearly with `t = match_difficulty / 100`
+between RGB `(239, 243, 255)` at 0 and RGB `(8, 81, 156)` at 100. Each channel
+uses `floor(interpolated_channel + 0.5)`, avoiding language/runtime rounding
+differences. No interval creates a named or behavioral class. Numeric text
+appears on a neutral high-contrast badge, so text color does not require a
+difficulty cutoff. The text-alternative table remains fully usable without
+color.
+
+## Excel structure
+
+The heatmap extends the existing `player_vs_player.xlsx`; it does not create a
+parallel workbook.
+
+### `Match_Difficulty_Heatmap`
+
+Our players are rows and opponents are columns in canonical identity order.
+Frozen row/column headers show names, external IDs, and current skills. Numeric
+cells contain raw 0–100 values and the same continuous, versioned presentation
+color interpolation as HTML. Null cells contain literal `No data` and a null
+reason is available through the paired audit sheet. There are no formulas,
+conditional-format rules, or threshold legends.
+
+### `Match_Difficulty_Data`
+
+One row per feasible pair, in matrix order, with this fixed column sequence:
+
+1. Session
+2. Format
+3. Our Team External ID
+4. Opponent Team External ID
+5. Player ID
+6. Player External ID
+7. Player Name
+8. Player Current SL
+9. Opponent ID
+10. Opponent External ID
+11. Opponent Name
+12. Opponent Current SL
+13. Evidence Label
+14. Direct Matches
+15. Current-Skill Probability
+16. Match Difficulty
+17. Formula Version
+18. Null Reason
+
+IDs remain text. Numeric probability/difficulty values remain numeric. The
+workbook is values-only, macro-free, and contains no external links, hidden
+helpers, volatile values, renderer formulas, Team Strength duplication, or
+content-dependent ordering.
+
+## Validation and audit gates
+
+- For every numeric cell, compare the raw probability with a direct call to
+  `skill_only_win_probability` and the raw difficulty with its exact
+  complement before display rounding.
+- Prove matrix-row keys and heatmap-cell keys are identical, unique, complete,
+  and in the same order.
+- Prove missing skill on either side yields null for every evidence class;
+  prove UNKNOWN with both skills can remain numeric.
+- Prove changing DIRECT history count, evidence label, observed record,
+  modeled probability, trend, volatility, or either Team Strength report does
+  not change any cell value or heatmap ordering.
+- Reject any reliability weight, aggregate difficulty index, threshold list,
+  categorical difficulty field, score-driven default order, or renderer-side
+  metric calculation.
+- Compare analytics, script JSON, HTML, the Excel grid, and the audit sheet by
+  pair key and raw value before rounding or color interpolation.
+- Verify coverage counts reconcile, null reasons survive every surface, HTML
+  is escaped and self-contained, and the workbook opens without repair.
+- Record the formula version, palette version, validation-report version,
+  source hash, pair count, numeric/null counts, and artifact hashes in the demo
+  manifest.
+
+Any parity, scope, validation-status, or audit failure marks the heatmap
+unavailable and blocks a production bundle in which it is required. The system
+does not fall back to the history-blended model, an older artifact, or 50/50.
+
+## Current status and implementation handoff
+
+This document is the reviewed implementation contract. The heatmap analytics,
+Matrix View rendering, Excel sheets, builder registration, manifest fields,
+and tests are not yet implemented.
+
+| Planned file | Responsibility |
 | --- | --- |
-| `analytics/match_difficulty_heatmap.py` | pure `build_report(matrix, our_team_strength=None, opponent_team_strength=None, ...)`; owns the cell formula, reliability weighting, and summary aggregation; imports `skill_only_win_probability` and never `win_probability` |
-| `ui/tabs/match_difficulty_heatmap.py` | render the grid, row/column tables, and Team Strength context card from one immutable report; no recomputation |
-| `ui/export_excel_match_difficulty_heatmap.py` | write the four values-only sheets above |
-| `scripts/build_match_difficulty_heatmap.py` | read-only exact-scope query/reconciliation: builds (or reuses) the real `PairingEvidenceMatrix` via `analytics.pairing_evidence.build_pairing_evidence_matrix` and, when available, both teams' `TeamStrengthReport`, then calls the analytics module once |
-| Captain's Edge / Live Assistant adapters | link to the heatmap by exact run/scope/hash; never re-derive a cell value locally |
+| `analytics/match_difficulty_heatmap.py` | build the immutable cell report from ordered Player-vs-Player matrix rows; own the complement and counts only |
+| `ui/tabs/player_vs_player_unified.py` | render the report inside Matrix View and compose separate Team Strength context without recalculation |
+| `ui/export_html_player_vs_player.py` | include the same Matrix View heatmap/text alternative in the standalone HTML artifact |
+| `ui/export_excel_player_vs_player.py` | add the two values-only heatmap parity sheets to the existing workbook |
+| Player-vs-Player/full-demo builder path | build the matrix once, build the heatmap once, reconcile independent Team Strength scope, and register parity/manifest results |
 
-The standalone command contract mirrors this project's other per-scope
-builders:
-
-```text
-python scripts/build_match_difficulty_heatmap.py --our-team-id ID
-    --opponent-team-id ID --format NAME --session NAME --out-dir PATH
-```
-
-`--our-team-id` defaults to `apa_config.yaml`'s `team.team_id` when omitted,
-matching every other builder in this project. The database is opened
-read-only; the command triggers no scrape and does not mutate
-`PairingEvidenceMatrix`'s own build path.
-
-## Validation strategy
-
-- Pin the cell formula against `skill_only_win_probability`'s own already-pinned
-  examples (`1 - p` at known skill-level pairs).
-- Prove a missing skill level on either side yields `None`, never an imputed
-  average.
-- Prove `reliability_weight` matches `analytics/opponent_risk_profile.py`'s
-  own formula exactly (shared precedent, not a second implementation).
-- Prove row/column/matrix summaries are reliability-weighted means over only
-  real cells, with correct coverage when some cells are `None`.
-- Prove Team Strength context never changes a cell value or a summary index
-  (a cross-feature test, same discipline as `docs/opponent_volatility.md`'s
-  own validation section).
-- Assert no categorical class name (`danger`, `avoid`, `target`, `risk-*`) and
-  no `modeled_win_probability` reference appear anywhere in the HTML or Excel
-  output.
-- Cover zero feasible pairs, an all-UNKNOWN matrix, an all-DIRECT matrix, and
-  hostile player names.
-- Compare analytics, HTML, Excel, and script-JSON row order and raw values
-  before display rounding.
-
-## Demo integration (proposed)
-
-The heatmap opens after Player-vs-Player evidence and before the Live
-Assistant, consistent with the Live Assistant doc's own screen structure,
-which already links to it ("selected Pair View and match-difficulty heatmap
-link"). The presenter shows one DIRECT cell, one UNKNOWN cell, and the
-row/matrix summary's coverage figure to demonstrate that a thin matrix is
-never presented as equivalent to a well-evidenced one.
+The demo opens Matrix View, reads the descriptive-only notice and continuous
+numeric legend, activates one measured cell to open Pair View, returns with
+state intact, and shows both an UNKNOWN-evidence numeric cell and a missing-
+skill `No data` cell when the snapshot contains them. Team Strength is then
+opened as independent evidence, not as an explanation or adjustment of any
+heatmap cell.

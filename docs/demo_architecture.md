@@ -32,7 +32,8 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
  ├─ Player Trends          └─ scripts/build_*           ├─ Data Coverage
  ├─ Season Projection                                  ├─ Team/Season
  ├─ Team Strength analytics                            └─ Live Assistant
- └─ planned Opponent Volatility
+ ├─ planned Opponent Volatility
+ └─ planned Match Difficulty Heatmap
             │                         │                        │
             └─────────────────────────┼────────────────────────┘
                                       ▼
@@ -144,9 +145,16 @@ built documents:
   profile. It is explicitly player/format/session scoped, not pair-specific.
   Its standalone read-only builder and HTML/Excel baseline exist; richer UX,
   provenance, pair/live joins, and full-demo wiring remain.
-- The Match Difficulty Heatmap uses the shared validated current-skill-only
-  function and current matrix skills. It never colors from the experimental
-  history-blended probability.
+- Planned `analytics/match_difficulty_heatmap.py` consumes the canonically
+  ordered `PlayerVsPlayerExportRow` values from the whole-matrix adapter and
+  produces one immutable cell per pair. Its sole numeric field is
+  `100 * (1 - skill_only_win_probability(current skills))`, the algebraic
+  complement of the validated current-skill-only probability. It adds no
+  weights, aggregate difficulty index, cutoff, category, or score-driven
+  order. `docs/match_difficulty_heatmap.md` is the authoritative contract.
+- Team Strength is reconciled as an independent document and may be composed
+  beside Matrix View as descriptive context. It is never passed into the
+  heatmap formula owner and cannot change a cell, color, axis, or status.
 
 The legacy `win_probability`, `lineup_optimizer`, `lineup_risk`,
 `opponent_scouting`, `rationale`, and summary paths remain
@@ -186,6 +194,12 @@ only as the descriptive, assumption-labeled team baseline in its own contract.
   HTML/XLSX without duplicating ingest. Planned
   `exports/html_builder.py` and `exports/excel_builder.py` delegate to the
   existing renderers.
+- The heatmap phase consumes those exact ordered rows once, asserts identical
+  pair keys, and adds the continuous 0–100 visualization plus a text
+  alternative to Matrix View. It adds `Match_Difficulty_Heatmap` and
+  `Match_Difficulty_Data` to the existing Player-vs-Player workbook. The
+  renderer interpolates a shared continuous palette; it does not classify
+  values into difficulty bins.
 - `ui/tabs/data_coverage.py`, `ui/export_excel_data_coverage.py`, and
   `scripts/build_data_coverage.py` consume one `DataCoverageReport` and emit
   `data_coverage.html`/`.xlsx`; unified demo wiring remains planned. Links from
@@ -212,14 +226,17 @@ flowchart LR
     DB --> TR[Player Trend documents]
     DB --> PM[Pairing Evidence Matrix]
     TR --> OV[Opponent Volatility profile]
-    PM --> HM[Current-skill Match Difficulty values]
     PM --> PV[Player-vs-Player Pair/Matrix document]
+    PV --> HM[Validated current-skill complement cells]
+    TS --> TSC[Separate Team Strength context]
+    TSC --> UI
     TS --> LA[Captain's Live Assistant document]
     SP --> LA
     TR --> LA
     OV --> LA
     PV --> LA
     HM --> LA
+    HM --> UI
     LA --> UI[Captain-first HTML and exports]
 ```
 
@@ -303,7 +320,10 @@ The critical invariants are:
 8. Team Strength is null unless offense, defense proxy, and depth are all
    present; HTML/Excel expose each raw denominator and formula version.
 9. Heatmap pair keys equal matrix pair keys. Null current skills remain hatched
-   `No data`, and the experimental blended probability never supplies color.
+   `No data`; DIRECT/INDIRECT/UNKNOWN remain separate evidence facts; the
+   experimental blended probability, history, reliability, trend, volatility,
+   and Team Strength never supply a value, weight, color, or order. The color
+   scale is continuous over 0–100 and defines no difficulty threshold.
 10. Season Projection includes every real remaining match, even when its
     probability is null, and never claims a future player lineup or final rank.
 

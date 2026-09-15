@@ -117,7 +117,7 @@ production bundle once that module is required.
 | Team Strength | composite/components, roster and match evidence, proxy label, null gate, provenance | `Team_Strength`, `Team_Strength_Players`, `Team_Strength_Matches` |
 | Trend Analyzer | summary, delivered trend score, real history chart/table, exact spans/gates | `Trend_Analyzer`, `Trend_History`; retain general `Player Trends` compatibility |
 | Opponent Volatility | median/coverage, neutral numeric plot, complete roster including nulls | `Opponent_Volatility`, `Opponent_Volatility_Players` |
-| Match Difficulty | fixed-bin accessible grid, text alternative, Pair View navigation, UNKNOWN separation | retain existing sheets and add `Match_Difficulty_Heatmap`, `Match_Difficulty_Data` |
+| Match Difficulty | continuous-scale accessible grid, text alternative, Pair View navigation, evidence/null separation, no thresholds or aggregate index | retain existing sheets and add `Match_Difficulty_Heatmap`, `Match_Difficulty_Data` |
 | Live Assistant | offline availability/scenario UI, complete unassigned/UNKNOWN audit, descriptive notes | optional operator-triggered session workbook only; never a build-time inferred result |
 
 All workbooks are values-only, macro-free, without external links, hidden
@@ -143,8 +143,8 @@ selects the newest run, or changes retention state.
 - Team Strength: `team_strength.md`
 - Trend Analyzer: `trend_analyzer.md`
 - Opponent Volatility: `opponent_volatility.md`
-- Heatmap and unified tab: `player_vs_player_matrix.md` and
-  `player_vs_player_html_structure.md`
+- Heatmap: `match_difficulty_heatmap.md`; unified-tab integration:
+  `player_vs_player_matrix.md` and `player_vs_player_html_structure.md`
 - Live Assistant: `captains_live_assistant.md`
 - Orchestration: `full_production_demo_builder.md`
 - Presentation wrapper: `demo_launcher.md`

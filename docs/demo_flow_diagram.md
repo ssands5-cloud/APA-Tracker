@@ -21,10 +21,12 @@ flowchart TD
     K -->|Fail| Z
     K --> LOCK[Lock database hash and reopen read-only]
     LOCK --> L[Build general JSON, XLSX, and analysis tabs]
-    L --> PVPA[Build Player vs Player Matrix and current-skill heatmap cells]
-    PVPA --> EXT[Build Team Strength, Season Projection, and Trend document]
+    L --> PVPA[Build ordered Player vs Player Matrix rows]
+    PVPA --> HM[Build validated current-skill complement cells]
+    L --> EXT[Build Team Strength, Season Projection, and Trend documents]
     EXT --> OV[Build Opponent Volatility profiles]
-    OV --> DCA[Build Lineup Lab and denominated Data Coverage]
+    HM --> DCA[Build Lineup Lab and denominated Data Coverage]
+    OV --> DCA
     DCA --> LIVE[Build Captain's Edge composition and Live Assistant scenarios]
     LIVE --> RENDER[Render all HTML, Excel, and parity JSON]
     RENDER --> N[Check HTML/workbook safety and cross-export parity]
@@ -37,7 +39,8 @@ flowchart TD
     O --> P[Walk through Tonight's Match]
     P --> PVPT[Open unified Player vs Player tab]
     PVPT --> PVPMV[Matrix View: inspect every feasible pair]
-    PVPMV --> PVP[Pair View: inspect one explicit comparison]
+    PVPMV --> HMV[Inspect descriptive heatmap and separate Team Strength context]
+    HMV --> PVP[Activate one cell: inspect exact Pair View]
     PVP --> RISK[Opponent Risk Profile: sourced descriptive ranking]
     RISK --> Q[Lineup Lab]
     Q --> TS[Team Strength evidence and component null gates]
@@ -63,8 +66,9 @@ flowchart TD
    then lock the database hash and reopen it read-only.
 6. Build all immutable documents and artifacts in dependency order, including
    Team Strength, Trend Analyzer, Opponent Volatility, Match Difficulty, and
-   the Live Assistant source/scenarios. Validate containment and cross-renderer
-   parity.
+   the Live Assistant source/scenarios. Heatmap cells come only from ordered
+   Player-vs-Player rows; Team Strength is reconciled beside them but never
+   blended. Validate containment and cross-renderer parity.
 7. Write and revalidate the manifest and checksums, then write READY last. The
    production builder exits without serving or opening a browser.
 8. Run the Unified Launcher against that exact run. It independently verifies
@@ -85,8 +89,9 @@ flowchart TD
     B -->|missing or matrix| C[Matrix View]
     B -->|pair| D{Exact player_id + opponent_id key exists?}
     B -->|unknown value| E[Matrix View + routing error]
-    C --> F[Apply display-only filters or one named sort field]
-    F --> G[Select Details]
+    C --> HM[Read precomputed descriptive heatmap or text alternative]
+    HM --> F[Apply display-only filters or name/current-skill axis order]
+    F --> G[Select Details or activate exact heatmap cell]
     G --> H[Write view=pair + exact IDs; preserve scope/filter/sort]
     H --> D
     D -->|Yes, exactly once| I[Pair View from nested summary]
@@ -101,6 +106,10 @@ display names, calls the database, invokes analytics, drops UNKNOWN rows, or
 constructs a categorical risk label. Back/Forward restores the same subview,
 filters, named sort field, and direction from the immutable snapshot.
 
+The heatmap uses a continuous numeric presentation scale with no classification
+thresholds. Team Strength arrives through its own immutable document and route;
+a scope/hash mismatch hides that context and never changes a heatmap cell.
+
 ## Failure branches
 
 - Authentication failure: stop; do not fall back to a stale database.
@@ -111,6 +120,9 @@ filters, named sort field, and direction from the immutable snapshot.
   do not manufacture a lineup.
 - Matrix or explicit-pair parity failure: stop; do not present HTML and Excel
   that disagree about a pair, label, null, game, or probability.
+- Heatmap key, formula, continuous-palette, coverage-count, or null mismatch:
+  mark the heatmap unavailable; never fall back to weighted history, a
+  threshold category, Team Strength, or 50/50.
 - Extended-module scope/hash/key mismatch: stop; do not combine Team Strength,
   Trend, Volatility, heatmap, or Live Assistant documents from different runs.
 - Missing/invalid manifest, checksum, promotable status, or READY hash: the

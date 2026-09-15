@@ -156,19 +156,23 @@ The heatmap sits between the filters and evidence-coverage chart. Rows are our
 players; columns are opponents. Its cell value is the precomputed
 `100 * (1 - current_skill_probability)` from the shared validated
 `skill_only_win_probability` function and current matrix skill levels. The
-browser only maps delivered values to fixed presentation bins.
+browser only maps delivered values to the shared continuous presentation
+scale.
 
-The sequential numeric legend is 0–<20 `#eff3ff`, 20–<40 `#bdd7e7`, 40–<60
-`#6baed6`, 60–<80 `#3182bd`, and 80–100 `#08519c`. Range labels remain numeric;
-there are no easy/hard, danger/favorable, Avoid/Target, or traffic-light labels.
-The full formula and “current-skill-only baseline” label appear next to the
-legend.
+The sequential numeric legend covers the fixed 0–100 probability domain. With
+`t = match_difficulty / 100`, HTML and Excel linearly interpolate from RGB
+`(239, 243, 255)` to RGB `(8, 81, 156)` and use
+`floor(interpolated_channel + 0.5)` for each channel. The palette version is
+`match-difficulty-blue-linear-v1`. There are no bins, thresholds, easy/hard,
+danger/favorable, Avoid/Target, or traffic-light labels. The full formula and
+“current-skill-only baseline” label appear next to the legend.
 
 Each cell prints a whole-number difficulty value, has an accessible label with
 both player identities/current skills/evidence label/raw source probability,
 and opens the existing Pair View. DIRECT uses a solid outline, INDIRECT a
-dashed outline, and UNKNOWN/missing-skill data a gray hatched `No data` cell.
-The border communicates evidence only; it does not change the fill value.
+dashed outline, and UNKNOWN uses its own text/pattern. Missing-skill data for
+any evidence class uses a gray hatched `No data` cell. The border communicates
+evidence only; it does not change the fill value.
 
 Default axes use canonical player/opponent name and external-ID order. A user
 may sort an axis by its visible name or current skill header, nulls last, with
@@ -178,8 +182,13 @@ previous Pair View selection remains addressable by pair key.
 
 The heatmap never consumes the experimental history-blended
 `modeled_win_probability`. A null current-skill probability remains `No data`,
-not 50, and is excluded from numeric-bin counts. The evidence matrix still
+not 50, and is excluded from numeric counts. The evidence matrix still
 contains every feasible pair, including UNKNOWN.
+
+Team Strength may appear in a separately labeled context region only when its
+independent document matches the run, database hash, session, and team IDs. It
+never changes a heatmap cell, color, order, or availability state; a mismatch
+hides the context card rather than altering the matrix.
 
 Filters hide rows only by explicit user action. Reset restores every row and
 the canonical source order. Sorting is keyboard-operable, declares direction,
@@ -221,9 +230,10 @@ demonstrates that evidence and current-skill difficulty are independent.
 
 Before release, every heatmap pair key and raw value must match the
 `Match_Difficulty_Data` audit sheet, and every grid position must match the
-`Match_Difficulty_Heatmap` sheet. The fixed HTML and Excel fill bins must agree.
-Missing/duplicate keys, a renderer-side formula, a null converted to 50, or any
-categorical difficulty language blocks the unified tab and workbook.
+`Match_Difficulty_Heatmap` sheet. The continuous HTML and Excel interpolation
+must agree. Missing/duplicate keys, a renderer-side formula, a null converted
+to 50, a threshold/category/aggregate difficulty field, or Team Strength
+blending blocks the unified tab and workbook.
 
 The current unified tab already provides Pair View, Matrix View, one safe
 script-JSON envelope, and exact-row Details navigation. Heatmap completion must

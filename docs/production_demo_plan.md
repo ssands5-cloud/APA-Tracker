@@ -63,6 +63,33 @@ and nested games. Null semantics, source tags, structural order, escaping,
 workbook readability, and prohibited formulas/macros/external links are gates.
 Any mismatch blocks presentation.
 
+## Match Difficulty Heatmap integration
+
+Matrix View includes one descriptive heatmap cell for every existing
+`PlayerVsPlayerExportRow`. The planned
+`analytics/match_difficulty_heatmap.py` receives those ordered rows and calls
+only `analytics.head_to_head.skill_only_win_probability` with their current
+roster skills. It exports the algebraic complement
+`100 * (1 - current_skill_probability)` with the source probability, formula
+version, evidence label, and null reason. No history, reliability weight,
+trend, volatility, observed result, modeled probability, or Team Strength value
+enters the formula.
+
+The heatmap is descriptive only. It defines no difficulty threshold, band,
+tier, Avoid/Target flag, default score order, row/column summary, or matrix
+difficulty index. HTML and Excel share one deterministic continuous 0–100
+palette interpolation and retain the numeric text. Missing skills remain
+hatched `No data` for any evidence class; an UNKNOWN-evidence pair with both
+skills may still have a numeric cell.
+
+Activating a cell opens its exact Pair View and returning restores matrix
+state. The existing `player_vs_player.xlsx` gains
+`Match_Difficulty_Heatmap` and `Match_Difficulty_Data`; the audit sheet and
+HTML/script JSON must match by pair key and raw value before rounding. The
+manifest records formula/palette versions, validation version, pair/numeric/
+null counts, and parity status. `match_difficulty_heatmap.md` owns the detailed
+contract.
+
 ## Captain's Edge integration
 
 Captain's Edge consumes the same immutable Player vs Player matrix document; it
@@ -114,6 +141,12 @@ version; the composite is null if any component is unavailable. It is
 descriptive context only and cannot generate a strength tier or alter Lineup
 Lab.
 
+When Team Strength context is displayed beside the Player-vs-Player heatmap,
+the orchestrator first reconciles run ID, database hash, session, and each team
+external ID. The cards retain their own formulas, proxy label, denominators,
+and null gate. They never alter, color, order, or explain a heatmap cell; a
+missing/mismatched Team Strength report hides only that context.
+
 Season Projection then calls the existing `analytics/season_projection.py`
 once for the selected team's real remaining schedule. The demo shows actual
 source win rates/status, raw log5 probability where available, fractional
@@ -145,8 +178,11 @@ authentication or verification failure never falls back to a stale snapshot.
 
 - The analytics split, standalone matrix exporters, and basic unified
   Pair/Matrix tab exist. Persistent route/back state, the full script-JSON
-  envelope, heatmap, Captain's Edge descriptive profile, and production-demo
-  registration remain to be implemented and audited.
+  envelope, the reviewed current-skill-only heatmap contract, Captain's Edge
+  descriptive profile, and production-demo registration remain to be
+  implemented and audited. Heatmap implementation must not add thresholds,
+  reliability weighting, aggregate difficulty indices, or Team Strength
+  blending.
 - A fresh authenticated scrape and regenerated schema are still required for a
   rich production dataset.
 - Data Coverage analytics and standalone renderers exist in the implementation
