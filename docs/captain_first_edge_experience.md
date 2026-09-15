@@ -388,6 +388,30 @@ Scope: §9–§11, built only on §13's approved analytics. No new objective,
 threshold, or heuristic that isn't already written down and validated
 somewhere in this document or a dated amendment to it (§10).
 
+**First pass implemented (analytics only):** the §9 "approved best lineup"
+objective's scoring formula and assignment rule are specified in the dated
+amendment `docs/stage3_lineup_lab_scoring.md` (posted to Issue #14 before
+any code, per §10), and implemented as `analytics/lineup_lab.py`
+(`pairing_score`, `solve`). Mirrors Stage 1's own precedent exactly: pure
+analytics and tests first, HTML wiring as a separate, later increment (the
+same split Stage 1 → Stage 2 already used). `ui/tabs/tonights_match.py`
+does not yet render a Lineup Lab section -- `exports/captain_first_edge.html`
+currently shows the matrix (Stage 2) only. Wiring `analytics.lineup_lab.solve`
+into `scripts/build_captain_first_edge.py` and rendering its result is the
+next real, scoped increment, not done in this pass.
+
+Not yet started: §11 (Data Coverage view) and §9's "Unassigned players" /
+"Unassigned opponents" HTML presentation.
+
+Tests: `tests/test_lineup_lab.py` -- the score (regression-pinned to the
+amendment's §4 worked examples), a fully-scoreable legal lineup, extra
+available players correctly left unassigned, UNKNOWN-only players never
+guessed into a slot, the illegal-max-score-falls-back-to-best-legal
+scenario, no-legal-lineup-exists reporting the best illegal one for
+transparency, the assigned+unassigned reconciliation invariant, and the
+exact-search bound raising rather than hanging on an oversized roster. Full
+suite: 1079 passed, 0 failed (`pytest tests/ -q`).
+
 ## 17. Hard boundaries (all stages)
 
 - The scraper contract (`README-scraper.md`, `scraper/full_auto_scrape.py`,
