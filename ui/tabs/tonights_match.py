@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from html import escape
 from typing import Optional, Sequence
 
+from analytics.lineup_lab import LineupLabResult
 from analytics.pairing_evidence import PairingEvidenceMatrix
 
 COLUMNS = (
@@ -53,6 +54,15 @@ class MatchScope:
     both sides allowed one to be built. ``unavailable_reason`` is set
     instead, never both -- a combination this page could not evaluate is
     named honestly, not silently dropped from the selector.
+
+    ``lineup_result``/``lineup_error`` are independent of the matrix split
+    above and only meaningful when ``matrix`` is set: Stage 3's Lineup Lab
+    (analytics.lineup_lab.solve) can fail on a real matrix that classified
+    fine (an oversized roster exceeding the bounded exact search, for
+    example) without that failure invalidating the matrix itself. The real
+    builder (scripts/build_captain_first_edge.py) always sets exactly one
+    of the two whenever it has a matrix; leaving both unset here (the
+    default) only ever happens in a test that isn't exercising Stage 3.
     """
 
     session_name: str
@@ -61,11 +71,21 @@ class MatchScope:
     format: str
     matrix: Optional[PairingEvidenceMatrix]
     unavailable_reason: Optional[str] = None
+    lineup_result: Optional[LineupLabResult] = None
+    lineup_error: Optional[str] = None
 
     def __post_init__(self) -> None:
         if (self.matrix is None) == (self.unavailable_reason is None):
             raise ValueError(
                 "A match scope must carry exactly one of matrix or unavailable_reason"
+            )
+        if self.matrix is None and (self.lineup_result is not None or self.lineup_error is not None):
+            raise ValueError(
+                "A match scope with no matrix cannot carry a lineup result or error"
+            )
+        if self.lineup_result is not None and self.lineup_error is not None:
+            raise ValueError(
+                "A match scope cannot carry both a lineup result and a lineup error"
             )
 
 
@@ -125,6 +145,58 @@ def _matrix_payload(matrix: PairingEvidenceMatrix) -> dict:
     }
 
 
+def _lineup_payload(scope: MatchScope) -> Optional[dict]:
+    """The real Stage 3 result for one scope, as plain JSON -- or an honest
+    error, or ``None`` when this scope never attempted one (a test scope,
+    or a scope whose matrix itself is unavailable). Computed once at build
+    time for the full current roster on both sides; it is NOT recomputed
+    when the captain toggles availability above (see the "Approved Best
+    Lineup" note rendered with it) -- analytics.lineup_lab.solve's
+    assignment depends on exactly who is available, so silently re-filtering
+    an already-solved lineup client-side could show an assignment that was
+    never actually approved for that narrower roster. Regenerating this
+    file with a real availability selection (see docs/captain_first_edge_experience.md
+    §16) is the honest way to get an availability-aware recommendation
+    today."""
+    if scope.lineup_error is not None:
+        return {"error": scope.lineup_error}
+    if scope.lineup_result is None:
+        return None
+    result = scope.lineup_result
+    return {
+        "assignments": [
+            {
+                "player_id": slot.player_id,
+                "player_name": slot.player_name,
+                "player_skill_level": slot.player_skill_level,
+                "opponent_id": slot.opponent_id,
+                "opponent_name": slot.opponent_name,
+                "opponent_skill_level": slot.opponent_skill_level,
+                "evidence_label": slot.evidence_label.value,
+                "observed_win_rate": slot.observed_win_rate,
+                "direct_evidence_count": slot.direct_evidence_count,
+                "modeled_win_probability": slot.modeled_win_probability,
+                "model_source": slot.model_source,
+                "lineup_score": slot.lineup_score,
+                "lineup_score_source": slot.lineup_score_source,
+            }
+            for slot in result.assignments
+        ],
+        "unassigned_players": [
+            {"player_id": u.player_id, "player_name": u.player_name}
+            for u in result.unassigned_players
+        ],
+        "unassigned_opponents": [
+            {"opponent_id": u.opponent_id, "opponent_name": u.opponent_name}
+            for u in result.unassigned_opponents
+        ],
+        "total_score": result.total_score,
+        "skill_total": result.skill_total,
+        "is_legal": result.is_legal,
+        "blocked_reason": result.blocked_reason,
+    }
+
+
 def render(
     scopes: Sequence[MatchScope],
     our_team_name: str,
@@ -176,6 +248,7 @@ def render(
         })
         if scope.matrix is not None:
             payload[key] = _matrix_payload(scope.matrix)
+            payload[key]["lineup"] = _lineup_payload(scope)
 
     session_options = "".join(
         f'<option value="{escape(s)}">{escape(s)}</option>' for s in sessions
@@ -375,6 +448,58 @@ function tmRosterWarnings(data) {{
   }}).join("") + '</div>';
 }}
 
+function tmLineupSlotRow(slot) {{
+  return '<tr class="evidence-' + tmEsc(slot.evidence_label) + '">' +
+    '<td>' + tmEsc(slot.player_name) + '</td>' +
+    '<td class="num">' + tmEsc(slot.player_skill_level === null ? "No data" : slot.player_skill_level) + '</td>' +
+    '<td>' + tmEsc(slot.opponent_name) + '</td>' +
+    '<td class="num">' + tmEsc(slot.opponent_skill_level === null ? "No data" : slot.opponent_skill_level) + '</td>' +
+    '<td>' + tmEsc(slot.evidence_label) + '</td>' +
+    '<td class="num">' + tmEsc(Math.round(slot.lineup_score * 100) + "%") + '</td>' +
+    '<td class="num">' + tmEsc(slot.observed_win_rate === null ? "No data" : Math.round(slot.observed_win_rate * 100) + "%") + '</td>' +
+    '</tr>';
+}}
+
+function tmRenderLineup(lineup) {{
+  var note = '<p class="tm-sub">Approved Best Lineup -- computed once at build time for the ' +
+    'full current roster on both sides. It does NOT update when you toggle availability above; ' +
+    'regenerate this file with scripts/build_captain_first_edge.py after setting tonight\\'s real ' +
+    'availability to get a recommendation for that narrower roster.</p>';
+  if (!lineup) {{
+    return '<h2>Approved Best Lineup</h2>' + note + '<p>Not computed for this scope.</p>';
+  }}
+  if (lineup.error) {{
+    return '<h2>Approved Best Lineup</h2>' + note +
+      '<p class="tm-unavailable">This lineup could not be computed: ' + tmEsc(lineup.error) + '</p>';
+  }}
+  var header = ['Our Player', 'Our SL', 'Opponent', 'Opp SL', 'Evidence', 'Lineup Score', 'Observed Win Rate']
+    .map(function (label) {{ return '<th>' + tmEsc(label) + '</th>'; }}).join("");
+  var rows = lineup.assignments.map(tmLineupSlotRow).join("");
+  var legality = lineup.is_legal === true ? "Legal (23-Rule)" :
+    lineup.is_legal === false ? "ILLEGAL (23-Rule)" : "Not evaluated";
+  var summary = '<p class="tm-counts">' +
+    (lineup.total_score !== null ? '<b>' + lineup.assignments.length + '</b> of 5 positions filled, total lineup score <b>' +
+      lineup.total_score.toFixed(2) + '</b>, skill total <b>' +
+      (lineup.skill_total === null ? "n/a" : lineup.skill_total) + '</b> -- <b>' + legality + '</b>.'
+      : 'No scoreable pairing exists for this matchup.') +
+    '</p>';
+  var blocked = lineup.blocked_reason
+    ? '<p class="tm-unavailable">' + tmEsc(lineup.blocked_reason) + '</p>' : '';
+  var unassigned = '';
+  if (lineup.unassigned_players.length) {{
+    unassigned += '<p><b>Unassigned players:</b> ' +
+      lineup.unassigned_players.map(function (u) {{ return tmEsc(u.player_name); }}).join(", ") + '</p>';
+  }}
+  if (lineup.unassigned_opponents.length) {{
+    unassigned += '<p><b>Unassigned opponents:</b> ' +
+      lineup.unassigned_opponents.map(function (u) {{ return tmEsc(u.opponent_name); }}).join(", ") + '</p>';
+  }}
+  var table = rows
+    ? '<table><thead><tr>' + header + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    : '';
+  return '<h2>Approved Best Lineup</h2>' + note + summary + blocked + table + unassigned;
+}}
+
 function tmRender() {{
   var body = document.getElementById("tm-body");
   var option = tmCurrentOption();
@@ -407,7 +532,8 @@ function tmRender() {{
     '<b>' + c.DIRECT + '</b> DIRECT, <b>' + c.INDIRECT + '</b> INDIRECT, <b>' + c.UNKNOWN + '</b> UNKNOWN.</p>' +
     '<p id="tm-shown-counts" class="tm-counts"></p>' +
     tmAvailabilityControls(data.pairings) +
-    '<table id="tm-table"><thead><tr>' + header + '</tr></thead><tbody>' + body_rows + '</tbody></table>';
+    '<table id="tm-table"><thead><tr>' + header + '</tr></thead><tbody>' + body_rows + '</tbody></table>' +
+    tmRenderLineup(data.lineup);
   tmApplyFilters();
 }}
 

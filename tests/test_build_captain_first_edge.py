@@ -15,6 +15,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 import scripts.build_captain_first_edge as builder_module
+from analytics.lineup_lab import LineupLabError
 from database.models import Base, Match, Team
 from scripts.build_captain_first_edge import (
     _database_error,
@@ -238,3 +239,44 @@ class TestBuildEndToEnd:
         assert "could not read the configured database" in html
         assert "no such column: player_team_history.team_external_id" in html
         assert "SELECT private_column" not in html
+
+    def test_a_real_scope_carries_a_wired_lineup_result(self, db, tmp_path):
+        _seed_pair(db)
+        _match(db, "M-1")
+        db.add(Team(external_id=OPPONENT_TEAM, name="Corner Pockets"))
+        db.flush()
+
+        out_path = build(db, OUR_TEAM, tmp_path)
+
+        html = out_path.read_text(encoding="utf-8")
+        assert "Approved Best Lineup" in html
+
+
+class TestLineupLabWiring:
+    def test_a_valid_scope_carries_a_real_lineup_result(self, db):
+        _seed_pair(db)
+        _match(db, "M-1")
+
+        [scope] = build_match_scopes(db, OUR_TEAM)
+
+        assert scope.lineup_error is None
+        assert scope.lineup_result is not None
+        # Only one real player on each side -- an honest partial result,
+        # never padded to a fabricated five-player lineup.
+        assert scope.lineup_result.blocked_reason is not None
+        assert "Only 1 of 5" in scope.lineup_result.blocked_reason
+
+    def test_a_lineup_lab_error_is_captured_not_raised(self, db, monkeypatch):
+        _seed_pair(db)
+        _match(db, "M-1")
+
+        def raise_lineup_error(*args, **kwargs):
+            raise LineupLabError("narrow tonight's availability first")
+
+        monkeypatch.setattr(builder_module, "solve_lineup_lab", raise_lineup_error)
+
+        [scope] = build_match_scopes(db, OUR_TEAM)
+
+        assert scope.matrix is not None
+        assert scope.lineup_result is None
+        assert scope.lineup_error == "narrow tonight's availability first"

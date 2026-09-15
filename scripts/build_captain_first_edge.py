@@ -59,6 +59,7 @@ from sqlalchemy.orm import Session
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from analytics.lineup_lab import LineupLabError, solve as solve_lineup_lab
 from analytics.pairing_evidence import PairingEvidenceError, build_pairing_evidence_matrix
 from database.models import Match, Team
 from database.queries import CanonicalRosterError
@@ -148,11 +149,25 @@ def real_match_scopes(db: Session, our_team_external_id: str) -> list[tuple[str,
     return sorted(scopes)
 
 
+def _lineup_lab_for(matrix) -> tuple[Optional[object], Optional[str]]:
+    """analytics.lineup_lab.solve's real result for one real matrix, or its
+    real error -- never both, never silently skipped. Stage 3 (§9): the
+    approved-best-lineup computation can fail on a matrix that classified
+    fine (an oversized available roster exceeding the bounded exact search,
+    for example) without that failure meaning the matrix itself is wrong."""
+    try:
+        return solve_lineup_lab(matrix), None
+    except LineupLabError as exc:
+        return None, str(exc)
+
+
 def build_match_scopes(db: Session, our_team_external_id: str) -> list[MatchScope]:
     """Classify every real scope this database can name. A scope whose
     matrix could not be built (an ambiguous or absent canonical roster) is
     still returned, with its real reason -- see PairingEvidenceError /
-    CanonicalRosterError."""
+    CanonicalRosterError. A scope whose matrix built fine but whose Lineup
+    Lab computation could not (see _lineup_lab_for) still carries the real
+    matrix, with the lineup's own real reason attached instead."""
     scopes = []
     for session_name, opponent_team_external_id, format in real_match_scopes(
         db, our_team_external_id
@@ -166,6 +181,7 @@ def build_match_scopes(db: Session, our_team_external_id: str) -> list[MatchScop
                 format=format,
                 session_name=session_name,
             )
+            lineup_result, lineup_error = _lineup_lab_for(matrix)
             scopes.append(
                 MatchScope(
                     session_name=session_name,
@@ -173,6 +189,8 @@ def build_match_scopes(db: Session, our_team_external_id: str) -> list[MatchScop
                     opponent_team_name=opponent_team_name,
                     format=format,
                     matrix=matrix,
+                    lineup_result=lineup_result,
+                    lineup_error=lineup_error,
                 )
             )
         except (PairingEvidenceError, CanonicalRosterError, ValueError, SQLAlchemyError) as exc:

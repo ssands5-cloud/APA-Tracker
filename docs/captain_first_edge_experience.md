@@ -404,20 +404,54 @@ validation.
 `analytics.lineup_lab.solve` now revalidates the matrix, accepts separate
 per-side unavailability sets and recomputes from scratch, determines the real
 maximum scoreable matching before applying the exact-search bound, and never
-approves a five-player assignment without a real 23-rule verdict. This keeps
-the same Stage 1 → Stage 2 split: analytics and tests first, HTML wiring as a
-separate later increment. `ui/tabs/tonights_match.py` does not yet render
-Lineup Lab, so no unapproved lineup advice is currently captain-facing.
+approves a five-player assignment without a real 23-rule verdict.
 
-Not yet started: §11 (Data Coverage view) and §9's "Unassigned players" /
-"Unassigned opponents" HTML presentation.
+**HTML wiring (§9's "Approved best lineup", "Unassigned players",
+"Unassigned opponents") is now shipped.** `scripts/build_captain_first_edge.py`
+calls `analytics.lineup_lab.solve` once per real scope, for the full current
+roster on both sides (nobody marked unavailable) -- the same "everyone
+current-roster is feasible" baseline `build_pairing_evidence_matrix` already
+uses for the matrix itself. A `LineupLabError` (the bounded exact-search cap,
+concretely) is caught per scope and shown as a real, honest reason instead of
+crashing the build, mirroring the existing `PairingEvidenceError`/
+`CanonicalRosterError` handling for the matrix. `ui/tabs/tonights_match.py`
+renders the result as its own "Approved Best Lineup" section: the filled
+slots with their evidence label and lineup score, the real skill total and
+23-rule verdict, `blocked_reason` when the approved lineup is partial or
+outright unavailable, and the unassigned players/opponents lists -- UNKNOWN
+pairings are never padded into a slot.
+
+**A disclosed limitation, by design, not an oversight:** the Approved Best
+Lineup section is computed once at build time and does **not** recompute
+when the captain toggles the availability checkboxes rendered above it
+(unlike the matrix's own availability filter, which is a pure display-time
+narrowing of already-classified rows -- see §2/Stage 2). Lineup Lab's
+assignment genuinely depends on exactly who is available: removing one
+player can change who else gets matched, so silently re-filtering an
+already-solved lineup client-side could show an assignment that was never
+actually approved for that narrower roster. The page says this plainly next
+to the section, and names the real remedy (`scripts/build_captain_first_edge.py`
+regenerates the file for the availability actually selected). Live,
+in-browser recomputation of the same bounded exact search, or an alternative
+narrower precomputation scheme, is left for a future increment if a captain
+actually needs to change availability inside one browsing session rather
+than by rebuilding the export.
+
+Not yet started: §11 (Data Coverage view).
 
 Tests: `tests/test_lineup_lab.py` -- shared validated scoring for DIRECT and
 INDIRECT, proof that unvalidated DIRECT history cannot change the selection,
 missing-input/UNKNOWN handling, full/partial/blocked legality scenarios,
 side-specific availability, matrix and result reconciliation, and dense
-oversized versus large-sparse exact-search bounds. Full-suite evidence is
-recorded on Issue #14 for the correction commit rather than predicted here.
+oversized versus large-sparse exact-search bounds.
+`tests/test_tonights_match_tab.py`/`tests/test_build_captain_first_edge.py`
+-- the wired Approved Best Lineup section renders a legal result, a lineup
+error, unassigned players/opponents, and the no-recompute disclosure;
+untrusted lineup text cannot break out of the embedded script the same way
+Stage 2's own hardening pass already covers for matrix rows; the builder
+captures a real `LineupLabError` per scope instead of crashing, and a
+one-real-player-per-side fixture produces an honest partial result. Full
+suite: 1097 passed, 0 failed (`pytest tests/ -q`).
 
 ## 17. Hard boundaries (all stages)
 
