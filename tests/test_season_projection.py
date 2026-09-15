@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from analytics.season_projection import (
+    ProbabilitySource,
     log5_win_probability,
     project_remaining_schedule,
     team_volatility_curve,
@@ -98,25 +99,65 @@ class TestProjectRemainingSchedule:
         projection = project_remaining_schedule(matches, our_win_rate=None, opponent_win_rates={})
         assert len(projection.matches) == 1
         assert projection.matches[0].win_probability is None
+        assert projection.matches[0].probability_source is ProbabilitySource.NO_RATE
         assert projection.expected_wins == 0.0
         assert projection.expected_losses == 0.0
-        assert projection.high_upset_risk_matches == []
-
-    def test_high_upset_risk_matches_are_flagged_by_the_real_threshold(self):
-        matches = [remaining_match("M1", "T2"), remaining_match("M2", "T3")]
-        projection = project_remaining_schedule(
-            matches, our_win_rate=0.5, opponent_win_rates={"T2": 0.5, "T3": 0.95},
-            upset_risk_threshold=0.40,
-        )
-        flagged_ids = {p.match_id for p in projection.high_upset_risk_matches}
-        assert "M1" in flagged_ids  # even match -> upset_likelihood 0.5, above threshold
-        assert "M2" not in flagged_ids  # lopsided match -> low upset likelihood
+        assert projection.coverage == 0.0
 
     def test_empty_schedule_is_a_real_zero_projection(self):
         projection = project_remaining_schedule([], our_win_rate=0.6, opponent_win_rates={})
         assert projection.matches == []
         assert projection.expected_wins == 0.0
         assert projection.expected_losses == 0.0
+        assert projection.coverage is None
+
+
+class TestProbabilitySource:
+    def test_both_rates_known_is_both_rates(self):
+        projection = project_remaining_schedule(
+            [remaining_match("M1", "T2")], our_win_rate=0.6, opponent_win_rates={"T2": 0.4},
+        )
+        assert projection.matches[0].probability_source is ProbabilitySource.BOTH_RATES
+
+    def test_only_our_rate_known_is_our_rate_only(self):
+        projection = project_remaining_schedule(
+            [remaining_match("M1", "T9")], our_win_rate=0.7, opponent_win_rates={},
+        )
+        assert projection.matches[0].probability_source is ProbabilitySource.OUR_RATE_ONLY
+
+    def test_only_opponent_rate_known_is_opponent_rate_only(self):
+        projection = project_remaining_schedule(
+            [remaining_match("M1", "T2")], our_win_rate=None, opponent_win_rates={"T2": 0.4},
+        )
+        assert projection.matches[0].probability_source is ProbabilitySource.OPPONENT_RATE_ONLY
+
+    def test_neither_rate_known_is_no_rate(self):
+        projection = project_remaining_schedule(
+            [remaining_match("M1", "T9")], our_win_rate=None, opponent_win_rates={},
+        )
+        assert projection.matches[0].probability_source is ProbabilitySource.NO_RATE
+
+
+class TestCoverage:
+    def test_partial_coverage_reflects_how_many_matches_got_a_real_probability(self):
+        matches = [remaining_match("M1", "T2"), remaining_match("M2", "T9")]
+        projection = project_remaining_schedule(
+            matches, our_win_rate=0.6, opponent_win_rates={"T2": 0.4},
+        )
+        # Both matches actually get a probability here (T9 falls back to
+        # our own rate), so exercise a genuine partial case with our rate
+        # itself unknown and only one opponent resolved.
+        projection = project_remaining_schedule(
+            matches, our_win_rate=None, opponent_win_rates={"T2": 0.4},
+        )
+        assert projection.coverage == pytest.approx(0.5)
+
+    def test_full_coverage_when_every_match_has_a_real_probability(self):
+        matches = [remaining_match("M1", "T2"), remaining_match("M2", "T3")]
+        projection = project_remaining_schedule(
+            matches, our_win_rate=0.6, opponent_win_rates={"T2": 0.4, "T3": 0.6},
+        )
+        assert projection.coverage == pytest.approx(1.0)
 
 
 class TestTeamVolatilityCurve:

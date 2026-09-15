@@ -37,7 +37,23 @@ opponent's strength.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Optional
+
+
+class ProbabilitySource(str, Enum):
+    """Which real rate(s) a match's win_probability actually came from --
+    posted to Issue #14's own audit finding against this module ("the
+    one-side fallback mathematically assumes the missing side is exactly
+    0.5"): the fallback is a documented, disclosed behavior, never an
+    imputed opponent rate silently blended in. Every RemainingMatchProjection
+    carries this so a renderer/reader can tell "both real records used"
+    from "only one side had a real record" from "no real record at all"."""
+
+    BOTH_RATES = "BOTH_RATES"
+    OUR_RATE_ONLY = "OUR_RATE_ONLY"
+    OPPONENT_RATE_ONLY = "OPPONENT_RATE_ONLY"
+    NO_RATE = "NO_RATE"
 
 
 def win_rate(wins: Optional[int], losses: Optional[int]) -> Optional[float]:
@@ -89,7 +105,14 @@ def upset_likelihood(win_probability: Optional[float]) -> Optional[float]:
 
 @dataclass(frozen=True)
 class RemainingMatchProjection:
-    """One real remaining match's real projection."""
+    """One real remaining match's real projection.
+
+    ``probability_source`` names exactly which real rate(s) produced
+    ``win_probability`` -- see ProbabilitySource. A renderer showing
+    OUR_RATE_ONLY/OPPONENT_RATE_ONLY next to the number is the documented
+    fix for the audit finding that a bare fallback number reads as if
+    both sides' real records were used.
+    """
 
     match_id: str
     opponent_team_id: Optional[str]
@@ -97,23 +120,51 @@ class RemainingMatchProjection:
     week: Optional[int]
     win_probability: Optional[float]
     upset_likelihood: Optional[float]
+    probability_source: ProbabilitySource
 
 
 @dataclass(frozen=True)
 class SeasonProjection:
-    """The real remaining schedule's aggregate projection."""
+    """The real remaining schedule's aggregate projection.
+
+    ``coverage`` is the fraction of ``matches`` that received a real
+    ``win_probability`` (a match with no decided-game record on either
+    side does not count) -- ``None`` when there is no remaining schedule
+    at all, never a division by zero.
+
+    No categorical "high upset risk" bucket is produced here: Issue #14's
+    audit found the caller-supplied 0.40 cutoff unfitted to any real APA
+    outcome, and docs/season_projection.md's own design says the demo
+    presents the raw numeric ``upset_likelihood`` per match, not a
+    categorical warning built from an arbitrary threshold. Each
+    RemainingMatchProjection already carries its own real
+    ``upset_likelihood``; a caller wanting a "worst matchups" view sorts
+    on that real number directly rather than this module producing an
+    invented bucket.
+    """
 
     matches: list[RemainingMatchProjection]
     expected_wins: float
     expected_losses: float
-    high_upset_risk_matches: list[RemainingMatchProjection]
+    coverage: Optional[float]
+
+
+def _probability_source(
+    our_win_rate: Optional[float], opponent_win_rate: Optional[float]
+) -> ProbabilitySource:
+    if our_win_rate is not None and opponent_win_rate is not None:
+        return ProbabilitySource.BOTH_RATES
+    if our_win_rate is not None:
+        return ProbabilitySource.OUR_RATE_ONLY
+    if opponent_win_rate is not None:
+        return ProbabilitySource.OPPONENT_RATE_ONLY
+    return ProbabilitySource.NO_RATE
 
 
 def project_remaining_schedule(
     remaining_matches: list[dict[str, Any]],
     our_win_rate: Optional[float],
     opponent_win_rates: dict[str, float],
-    upset_risk_threshold: float = 0.40,
 ) -> SeasonProjection:
     """Project the real remaining schedule.
 
@@ -129,8 +180,8 @@ def project_remaining_schedule(
     A remaining match with no real win_probability at all (neither side
     has any decided games) is still included in `matches` (for real
     schedule visibility) but contributes nothing to `expected_wins`/
-    `expected_losses` and is never flagged as high upset risk -- absence
-    of evidence is not evidence of anything.
+    `expected_losses` and does not count toward `coverage` -- absence of
+    evidence is not evidence of anything.
     """
     projections = []
     for match in remaining_matches:
@@ -144,20 +195,19 @@ def project_remaining_schedule(
             week=match.get("week"),
             win_probability=probability,
             upset_likelihood=upset_likelihood(probability),
+            probability_source=_probability_source(our_win_rate, opponent_rate),
         ))
 
     decided = [p for p in projections if p.win_probability is not None]
     expected_wins = round(sum(p.win_probability for p in decided), 6)
     expected_losses = round(sum(1.0 - p.win_probability for p in decided), 6)
-    high_upset_risk = [
-        p for p in decided if p.upset_likelihood is not None and p.upset_likelihood >= upset_risk_threshold
-    ]
+    coverage = round(len(decided) / len(projections), 6) if projections else None
 
     return SeasonProjection(
         matches=projections,
         expected_wins=expected_wins,
         expected_losses=expected_losses,
-        high_upset_risk_matches=high_upset_risk,
+        coverage=coverage,
     )
 
 
