@@ -8,10 +8,10 @@ the future launcher should call it rather than duplicating exporter logic.
 
 | Artifact | Builder | Demo role | Required validation |
 | --- | --- | --- | --- |
-| `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage view | self-contained HTML, scope/evidence reconciliation, no external requests |
-| `player_vs_player.html` | planned `exports/html_builder.py`, reusing `ui/tabs/player_vs_player.py` | all-pairs index and selected-pair evidence drill-down | UNKNOWN visibility, escaping, stable pair order, no renderer math |
-| `player_vs_player.xlsx` | planned `exports/excel_builder.py` | summary and real chronological game-history handoff | openpyxl load, values only, no placeholder sheets, HTML parity |
-| `player_vs_player.json` | planned `demo.py` export adapter (optional) | versioned parity/source document | pair-key reconciliation, source/status fields, null preservation |
+| `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, nullable flag status, no external requests |
+| `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix plus anchored explicit-pair details | UNKNOWN visibility, escaping, stable initial pair order, no renderer math |
+| `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff plus real game history | openpyxl load, values only, pair/game-key parity |
+| Player vs Player JSON document | planned `demo.py` adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
 | `analysis_tabs.html` | `pipeline.exports.write_tabs` + `ui/tabs/*` | supporting Head-to-Head, Player Trends, and available legacy cards | non-empty sections only when real documents exist |
 | `apa_data.json` | `ui.export_json.export_to_json` | machine-readable general snapshot | valid JSON, expected top-level keys, source timestamps |
 | `apa_stats.xlsx` | `ui.export_excel.export_to_excel` | workbook for captain/operator review | openpyxl load without repair; sheet headers and real rows |
@@ -25,13 +25,17 @@ the future launcher should call it rather than duplicating exporter logic.
 
 1. Ingest and commit the database session.
 2. Build the general JSON/XLSX exports.
-3. Build Captain's Edge and Lineup Optimizer read-only documents.
-4. Append optional workbook sheets only when the source document has real rows.
-5. Write analysis tabs after JSON artifacts exist.
-6. Build each Player vs Player summary, enrich it with the same Stage 1 matrix,
-   and pass one versioned document to both planned renderers.
+3. Obtain the Stage 1 matrix and exact histories, call
+   `analytics.player_vs_player_matrix.build_matrix_export` once, and pass the
+   same rows to the matrix renderers. The HTML renderer delegates explicit
+   details to `ui/tabs/player_vs_player.py` rather than recomputing them.
+4. Build Captain's Edge and Lineup Optimizer read-only documents. Captain's
+   Edge consumes the already-built matrix document for its Opponent Risk
+   Profile; it does not rerun analytics.
+5. Append optional workbook sheets only when the source document has real rows.
+6. Write analysis tabs after JSON artifacts exist.
 7. Build captain-first HTML after the final database and scope set exist.
-8. Validate every path, hash, and Player vs Player cross-renderer value before
+8. Validate every path, hash, flag status, and Player vs Player cross-renderer value before
    presentation.
 
 ## Cross-artifact consistency
@@ -41,9 +45,17 @@ serving) for every artifact. The selected team, opponent, format, and session
 must match across HTML controls, JSON scopes, and workbook rows. Observed win
 rates and modeled probabilities keep distinct labels everywhere. “No data” and
 “unavailable” are display contracts, not missing JSON keys silently interpreted
-as zeros. Player vs Player additionally keeps Stage 1 distinct-match evidence
-separate from `PlayerVsPlayerSummary.total_games` and labels the modeled
-probability and its identical projection alias with the same audit status.
+as zeros. The matrix keeps Stage 1 distinct-match evidence separate from
+`PlayerVsPlayerSummary.total_games`. Its summary rows and embedded explicit
+details label the modeled probability and its identical projection alias with
+the same audit status.
+
+Captain's Edge risk-profile values must match the selected matrix row by key.
+Recommended Avoid/Target fields remain null with
+`UNAVAILABLE_NOT_VALIDATED` until a versioned, approved threshold exists. If a
+future approved flag is present, every artifact must carry the same boolean,
+threshold version, capture time, and availability state. A mismatch blocks the
+bundle.
 
 ## Packaging
 

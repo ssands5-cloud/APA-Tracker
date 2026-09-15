@@ -19,16 +19,20 @@ flowchart TD
     I --> J[Rebuild matchup and trend aggregates]
     J --> K[Run schema, referential, and coverage checks]
     K -->|Fail| Z
-    K --> L[Build JSON, XLSX, Captain's Edge, analysis tabs]
-    L --> PVPA[Summarize each pair and enrich with Stage 1 evidence]
-    PVPA --> PVPE[Render planned Player vs Player HTML and Excel]
-    PVPE --> M[Build captain-first HTML]
+    K --> L[Build general JSON, XLSX, and analysis tabs]
+    L --> PVPA[Build Player vs Player Matrix from Stage 1 plus exact histories]
+    PVPA --> PVPJ[Encode escaped Player vs Player script JSON]
+    PVPJ --> PVPM[Render unified Player vs Player tab and Excel]
+    PVPM --> M[Build Captain's Edge and captain-first HTML from same matrix]
     M --> N[Check manifest, HTML safety, and cross-export parity]
     N -->|Fail| Z
     N --> O[Open static demo index / captain-first page]
     O --> P[Walk through Tonight's Match]
-    P --> PVP[Inspect Player vs Player evidence]
-    PVP --> Q[Lineup Lab]
+    P --> PVPT[Open unified Player vs Player tab]
+    PVPT --> PVPMV[Matrix View: inspect every feasible pair]
+    PVPMV --> PVP[Pair View: inspect one explicit comparison]
+    PVP --> RISK[Opponent Risk Profile and flag status]
+    RISK --> Q[Lineup Lab]
     Q --> DC[Data Coverage when implemented]
     DC --> R[Export review and evidence capture]
     R --> S[Archive manifest and release notes]
@@ -47,12 +51,12 @@ flowchart TD
    because it exists; an older file can lack `player_team_history.team_external_id`.
 5. Ingest and rebuild analytics. Commit timestamps, source IDs, and row counts
    to the run manifest.
-6. Build all artifacts, including the planned Player vs Player document, HTML,
-   and Excel; validate containment and cross-renderer parity before opening a
-   browser.
-7. Present `captain_first_edge.html` first, drill into Player vs Player before
-   Lineup Lab, then show Data Coverage (once implemented), analysis tabs, and
-   workbooks.
+6. Build all artifacts, including the unified Player vs Player tab and matrix
+   workbook from one escaped JSON/source document; validate containment and
+   cross-renderer parity before opening a browser.
+7. Present `captain_first_edge.html` first, open Player vs Player, inspect
+   Matrix View, switch to Pair View, review Opponent Risk Profile status, then
+   show Lineup Lab, Data Coverage, analysis tabs, and workbooks.
 8. Preserve the manifest and checksums as the demo evidence package. Remove
    temporary credentials and browser state; retain only approved outputs.
 
@@ -64,6 +68,6 @@ flowchart TD
 - Stale schema: report the missing model columns and require regeneration.
 - No scoreable Lineup Lab edges: show the matrix and explicit unassigned lists;
   do not manufacture a lineup.
-- Player vs Player parity failure: stop; do not present HTML and Excel that
-  disagree about a pair, label, null, or probability.
+- Matrix or explicit-pair parity failure: stop; do not present HTML and Excel
+  that disagree about a pair, label, null, game, or probability.
 - HTML or artifact validation failure: do not open the page as a “best effort.”

@@ -28,7 +28,8 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
        analytics/               ui/export_json.py        ui/export_excel.py
        raw → derived             scripts/build_*          ui/tabs/*
              │                        │                        │
-             ├─ analytics/player_vs_player.py (separate lane)  │
+             ├─ analytics/player_vs_player.py (explicit pair)  │
+             ├─ analytics/player_vs_player_matrix.py (matrix)  │
              │              │                                  │
              │              ├─ planned exports/html_builder.py │
              │              └─ planned exports/excel_builder.py│
@@ -104,12 +105,16 @@ built documents:
 - `ui/tabs/tonights_match.py` is the static captain-first reporter. Stage 3
   HTML wiring currently includes Lineup Lab; Data Coverage remains a planned
   follow-up.
-- `analytics/player_vs_player.py` supplies a pure exact-pair summary over
+- `analytics/player_vs_player.py` supplies a pure explicit-pair summary over
   chronological `PlayerHeadToHead` rows: recognized-game record, skill delta,
   shared history reliability, last-recorded skill-only probability, full
   modeled probability, whole/recent pair trends, an identical forward
-  projection alias, and the game timeline. A planned `demo.py` adapter combines
-  it with canonical Stage 1 scope/evidence identity. Unsupported innings,
+  projection alias, and the game timeline.
+- `analytics/player_vs_player_matrix.py` is the separate whole-matrix adapter.
+  It accepts one existing `PairingEvidenceMatrix` and a map of already-fetched
+  exact-pair histories, invokes the explicit-pair summary once per feasible
+  pair, and returns stable `PlayerVsPlayerExportRow` values. It performs no SQL
+  and no new analytics. Unsupported innings,
   per-opponent defense, break/run rate, and numeric volatility remain explicit
   gaps; there is no export-layer blended score.
 
@@ -129,13 +134,51 @@ Issue #14 findings are corrected and re-audited.
   `captain_first_edge.html`, which is the production-demo entry view.
 - `pipeline/exports.py` writes `analysis_tabs.html` after the builders, so the
   static tabs see committed JSON documents rather than an uncommitted session.
-- Planned `exports/html_builder.py` and `exports/excel_builder.py` will render
-  the same Player vs Player document as `player_vs_player.html` and
-  `player_vs_player.xlsx`, reusing the separate-lane
-  `ui/tabs/player_vs_player.py` fragment for single-pair HTML. Planned
-  `ui/router.py` adds the drill-down after Tonight's Match; planned `demo.py`
-  orchestrates one analytics build per pair, enriches it with Stage 1 evidence,
-  verifies renderer parity, and registers artifacts without duplicating ingest.
+- Implemented `ui/export_html_player_vs_player.py` and
+  `ui/export_excel_player_vs_player.py` render `player_vs_player.html`/`.xlsx`
+  from the same matrix rows. The HTML reuses `ui/tabs/player_vs_player.py` for
+  each explicit detail.
+- The target UI adds one Player vs Player top-level navigation entry with Pair
+  View and Matrix View subviews. Pair View renders one nested
+  `PlayerVsPlayerSummary`; Matrix View renders the ordered
+  `PlayerVsPlayerExportRow` collection. Existing `ui/tabs` composition owns the
+  shell, while analytics ownership stays in the two separate modules.
+- Planned `ui/router.py` uses one `player-vs-player` route with `view=pair` or
+  `view=matrix`. A pair route also requires both external player IDs and the
+  complete scope. Invalid state fails back to Matrix View with an explanation;
+  it never resolves identity from names.
+- Planned `demo.py` invokes the existing read-only builder once, serializes the
+  ordered rows and nested summaries into escaped `pvp-data` script JSON, and
+  registers/verifies the HTML/XLSX without duplicating ingest. Planned
+  `exports/html_builder.py` and `exports/excel_builder.py` delegate to the
+  existing renderers.
+
+### Unified Player vs Player data flow
+
+```text
+PairingEvidenceMatrix + exact head_to_head_history map
+                │
+                ▼
+analytics/player_vs_player_matrix.py
+                │ ordered PlayerVsPlayerExportRow values
+                ├───────────────┬────────────────────┐
+                ▼               ▼                    ▼
+Matrix View       Pair View selection       Captain's Edge profile
+all rows           one row.summary           selected row + flag status
+                └───────────────┬────────────────────┘
+                        ▼
+          escaped script JSON + ui/tabs shell
+```
+
+The browser reads `script#pvp-data` once, validates its schema version and pair
+keys, and performs presentation-only selection/filtering. It cannot query the
+database, call analytics, fill nulls, or create risk flags.
+
+Captain's Edge references the same selected matrix row for its Opponent Risk
+Profile. Recommended Avoid/Target are nullable delivered fields, not UI
+calculations; they remain unavailable until a versioned threshold is validated
+and approved. Capture time and availability state travel with the row so the
+profile cannot masquerade as a live evaluation.
 
 ## Demo boundary and invariants
 
@@ -152,8 +195,9 @@ The critical invariants are:
 2. Assigned plus unassigned players/opponents equals each side's available
    roster.
 3. A complete five-player Lineup Lab result has a real legality verdict.
-4. Player vs Player HTML and Excel contain the same pair keys and values in the
-   same canonical order, UNKNOWN rows included.
+4. Player vs Player HTML and Excel contain the same matrix pair keys and values
+   in canonical order, UNKNOWN included; each embedded explicit-pair detail
+   matches its source row and chronological game records.
 5. All artifacts in one demo run share one database and one source manifest.
 6. A failed preflight or stale schema stops the run before presentation.
 

@@ -1,228 +1,128 @@
-# Player vs Player export design
+# Player vs Player export integration
 
-Player vs Player is a scope-bound, one-row-per-pair view of the evidence for
-one current-roster player against one current-roster opponent. It is a drill-
-down between Tonight's Match and Lineup Lab: the pairing matrix establishes
-the complete feasible set, Player vs Player explains each pair, and Lineup Lab
-may then use only its separately approved selection inputs.
+`analytics/player_vs_player.py` owns one deliberately selected comparison.
+`analytics/player_vs_player_matrix.py` owns whole-scope composition. The
+implemented export is the whole matrix with the explicit pair fragments
+embedded as drill-down details; the analytics ownership remains separate.
 
-This document is an export-integration plan. A concurrent implementation lane
-now supplies `analytics/player_vs_player.py` and
-`ui/tabs/player_vs_player.py`; this document does not modify them. The named
-`exports/html_builder.py`, `exports/excel_builder.py`, `ui/router.py`, and
-`demo.py` integration points do not yet exist.
+## Architecture and data sources
 
-## Canonical artifacts
+`database.queries.head_to_head_history(db, player_id, opponent_id)` is the
+authoritative chronological game source for an explicit comparison. It returns
+real `PlayerHeadToHead` rows across all available formats/sessions for the two
+IDs; it does not apply the matrix scope. Optional dates come from a query-layer
+`Match.match_date` map because the analytics module does not own database I/O.
 
-- `exports/player_vs_player.html` — self-contained, filterable HTML with every
-  feasible pairing, evidence details, source status, and explicit gaps.
-- `exports/player_vs_player.xlsx` — standalone workbook with a
-  `Player_vs_Player` summary sheet and a real-only `PvP_Game_History` sheet
-  when games exist. A later integration may copy the same materialized rows
-  into `apa_stats.xlsx`, but the production demo should not patch the existing
-  workbook after generation.
-- `exports/player_vs_player.json` — optional versioned interchange document
-  written by the analytics/export boundary and consumed identically by HTML,
-  Excel, routing, and demo orchestration. If implemented, it is the parity
-  oracle for both renderers.
+`analytics/player_vs_player.py::summarize` consumes one exact-pair history and
+returns one `PlayerVsPlayerSummary`. It owns recognized record arithmetic,
+average skill delta, reliability, skill-only/full probabilities, trends,
+projection alias, and `GameRecord` values.
 
-## Analytics document contract
+`analytics/pairing_evidence.py::build_pairing_evidence_matrix` owns current
+roster cross-product, scope identity, DIRECT/INDIRECT/UNKNOWN labels, distinct
+DIRECT-match counts, and observed rates. Then
+`analytics/player_vs_player_matrix.py::build_matrix_export` combines that
+already-built matrix with a caller-supplied history map. It does not query the
+database, rebuild rosters, or create another score.
 
-The current analytics API is deliberately pair-focused and pure:
+`scripts/build_player_vs_player_export.py` is the implemented read-only query
+and assembly boundary. It fetches Stage 1 evidence, exact histories, and real
+dates once, then sends one row sequence to the HTML and Excel renderers.
 
-```text
-database.queries.head_to_head_history(db, player_id, opponent_id)
-  -> chronological list[PlayerHeadToHead]
+This scope asymmetry is visible: the matrix label/rate belong to the selected
+team/opponent/format/session, while the nested explicit comparison is labeled
+all-history and each game retains its own format/session. A renderer must not
+describe the pair summary as selected-format/session history unless a future
+query explicitly filters and records that filter.
 
-analytics.player_vs_player.summarize(rows, player_id, opponent_id,
-                                     recent_games=5, match_dates={...})
-  -> PlayerVsPlayerSummary
-```
+## Artifacts and inputs
 
-`PlayerVsPlayerSummary` contains `player_id`, `opponent_id`, `total_games`,
-`wins`, `losses`, `sl_delta`, `reliability`,
-`modeled_win_probability`, `skill_only_probability`, `trend`, `recent_trend`,
-`next_match_projection`, and the chronological `games` tuple. `GameRecord`
-contains match ID/date, result, both posted skill levels, points, 9-ball balls,
-format, and session.
+The implemented matrix artifacts are:
 
-Because the summary does not own current-roster identity, team/scope identity,
-or Stage 1 evidence labels, a future application adapter in `demo.py` must
-combine it with the selected canonical `PairingEvidenceMatrix`. That adapter
-creates a versioned export document containing names/external IDs, scope,
-`evidence_label`, Stage 1 distinct-match counts/observed rate, the unmodified
-summary, source/validation status, and explicit unavailable-field notes. The
-HTML and Excel builders both consume that same document. Renderers do not query
-the database, recalculate analytics, or fill a null.
+- `exports/player_vs_player.html` — every feasible pair plus an anchored
+  explicit-pair detail for each row;
+- `exports/player_vs_player.xlsx` — the same matrix and its real game history.
 
-## Required analytics behavior
+The export adapter receives the stable `PlayerVsPlayerExportRow` sequence from
+the matrix module. Each row nests one `PlayerVsPlayerSummary`. Renderers do not
+query data or call analytics.
 
-### DIRECT history
+## Analytics consumption
 
-The export's DIRECT label and distinct-match count come from
-`analytics.pairing_evidence`, with its exact player/opponent, team IDs, format,
-session, recognized-result, finalized/scored/non-bye gate. The separate
-`PlayerVsPlayerSummary.games` timeline is the exact-pair chronological game
-history supplied by `database.queries.head_to_head_history` after the adapter
-restricts it to the selected scope.
+The summary supplies DIRECT exact-pair game history and these values:
 
-```text
-direct_matches = Stage 1 distinct authoritative match count
-observed_win_rate = Stage 1 wins / distinct authoritative matches
-total_games = count(recognized exact-pair game rows in PlayerVsPlayerSummary)
-wins + losses = total_games
-```
+- `total_games`, `wins`, and `losses` over recognized game rows;
+- `sl_delta`, the average posted opponent-minus-own skill difference;
+- `reliability`, delegated to `reliability_weight(total_games)`;
+- `skill_only_probability`, labeled **Last recorded skill probability** because
+  it uses the last real game's posted skill levels;
+- `modeled_win_probability`, the existing history-plus-last-recorded-skill
+  result, shown only as experimental context;
+- `trend` and `recent_trend` over the full and recent explicit-pair histories;
+- `next_match_projection`, an exact alias of `modeled_win_probability`, not a
+  schedule-aware forecast;
+- chronological `GameRecord` values.
 
-One team match can contain more than one legitimate game for the same player,
-so `direct_matches` and `total_games` are separately named and must not be
-forced equal. `observed_win_rate` is null outside DIRECT. UNKNOWN or INDIRECT
-is never shown as an observed 0% record.
+The selected matrix row may add Stage 1 evidence label, distinct DIRECT-match
+count, observed rate, current roster skill levels, and team/scope identity.
+Those fields remain attributed to Stage 1 and are not recomputed.
 
-### Reliability weight
+Innings, per-opponent defense average, per-opponent break/run rate, and numeric
+volatility are not produced by the explicit-pair analytics contract. Exports
+show named unavailable disclosures and never substitute a proxy.
 
-The module imports `analytics.matchups.reliability_weight` rather than copying
-the formula:
+## Ordering and no-data rules
 
-```text
-reliability_weight(n) = n / (n + 3)
-```
+Matrix rows keep the module's structural order; game records keep the
+analytics-provided chronological order. A pair is fixed by external IDs plus
+format/session; names never establish identity. A pair with no recognized
+history still produces an honest detail state: 0 games, 0-0 record, zero
+reliability, null probabilities and projection, `no data` trends, and no
+timeline entries.
 
-In the current summary, `n` is `total_games` (recognized game rows), not the
-Stage 1 distinct-match count. The column is therefore labeled “History
-reliability (games).” It is descriptive evidence strength. The export layer
-must not multiply it into another field or create a new blended score.
+If its matrix evidence label is UNKNOWN, that label remains visible. UNKNOWN
+does not become observed 0%, 50%, or a modeled recommendation.
 
-### Skill probability
+Recommended Avoid (`danger_flag`) and Recommended Target (`favorable_flag`)
+are reserved, audit-gated export fields. Current validation does not establish
+a held-out rematch threshold for either flag, so they remain null with status
+`UNAVAILABLE_NOT_VALIDATED`. No renderer may manufacture them from modeled
+probability, trend, volatility, or color.
 
-The current `skill_only_probability` (export label: `skill_prob`) delegates to
-`analytics.head_to_head.skill_only_win_probability` using the two posted skill
-levels on the last real game in the supplied pair history:
+## Deterministic formatting and audit constraints
 
-```text
-log_odds = 0.40 * (last_game_own_skill_level - last_game_opponent_skill_level)
-skill_prob = clamp(sigmoid(log_odds), 0.02, 0.98)
-```
-
-It is null when there is no pair history or either last-game skill level is
-missing. It must be labeled “last recorded skill-gap probability,” not current
-roster probability. This is the production skill-only function graded against
-106 recorded outcomes in `docs/prediction_validation.md`.
-
-### Modeled win probability
-
-`modeled_win_probability` is the existing full
-`analytics.head_to_head.win_probability` supplied by the analytics module, not
-created in a renderer. Its source must be
-`analytics.head_to_head:direct-history-and-skill` and its validation status must
-state that the history term has zero held-out rematch predictions in the
-current validation set. It may be displayed as experimental context, but it
-may not drive ordering, coloring, recommendations, or any additional derived
-projection. The current `next_match_projection` alias may be displayed only
-with the identical experimental status.
-
-The export must never blend `observed_win_rate`, `reliability_weight`,
-`skill_prob`, and `modeled_win_probability` into a new score.
-
-### Innings and defense averages
-
-The analytics summary intentionally has no `avg_innings` or `avg_defense`
-field. Captured APA data exposes no innings at any granularity and no per-match
-or per-opponent defensive-shot measure. The export consumes that absence as a
-named `unavailable-upstream` disclosure and renders “No data”; it does not add
-numeric placeholders. `PlayerCareerStats.defensive_shot_avg` is a real
-lifetime, per-format value but cannot fill a Player vs Player defense average.
-
-### Break/run rate
-
-The analytics summary intentionally has no `break_run_rate`. Captured events
-are player-and-team-match scoped, while a player can face multiple opponents in
-one match. The export renders the module's explicit “not attributable per
-opponent” disclosure and no value. It must not derive a rate in the builder,
-even for apparently unambiguous rows, because that would create an export-only
-analytics rule with no shared contract or audit.
-
-### Volatility and trend analysis
-
-The current summary supplies `trend` (first-versus-last own skill across the
-full pair history) and `recent_trend` (the same rule across the last five games
-by default). It does not supply numeric volatility. The export therefore shows
-the two trends and renders Volatility as “No data — not produced by Player vs
-Player analytics.” It must not join `player_trends.volatility` in a renderer,
-turn the disputed HOT/COLD badge into pair advice, or fold form into a
-probability.
-
-### Next-match projection
-
-The current summary defines:
-
-```text
-next_match_projection = modeled_win_probability
-```
-
-This is an alias of the same value, not a second computation, and the module
-does not inspect the schedule. The export must label it “Forward-looking pair
-projection (history + last recorded skill)” and state that it does not prove
-these players are scheduled to meet. Because the history term lacks held-out
-rematch evidence in the current validation set, it is experimental context and
-not approved lineup advice. It is null when the underlying modeled value is
-null.
-
-## Ordering rules
-
-Default order is structural, never score-driven:
-
-1. upcoming scope date/week, with missing date/week last;
-2. normalized session name, format (`8-ball`, then `9-ball`, then other);
-3. player name case-insensitively, then player external ID;
-4. opponent name case-insensitively, then opponent external ID.
-
-DIRECT, INDIRECT, and UNKNOWN rows keep those positions. User-selected filters
-may narrow the view, but the exported source order and row numbers stay stable.
-Ties never depend on database insertion order.
-
-## UNKNOWN handling
-
-Every canonical feasible pair appears exactly once through the export envelope.
-For an UNKNOWN pair, `summarize([])` produces zero games/wins/losses, zero
-reliability, null probabilities/projection, `no data` trends, and an empty game
-timeline. The row remains in HTML and Excel, carries `evidence_label = UNKNOWN`,
-and explains missing inputs. It is not hidden, assigned a neutral 50%, or
-ranked as if a score existed.
-
-## Deterministic formatting
-
-- UTF-8 HTML and JSON; fixed workbook sheet/table names.
-- ISO-8601 UTC timestamps sourced from the run manifest, not the viewer's clock.
-- Probabilities display to one decimal percent; stored JSON retains the
-  analytics value. Counts are integers and skill deltas use fixed precision.
-- Stable column order, stable sort keys, fixed Excel widths, and no platform-
-  dependent auto-sizing.
-- No volatile formulas, random IDs, locale-dependent dates, or conditional
-  formatting based on the current time.
-- HTML and Excel must show identical row count, pair keys, labels, and numeric
-  values before presentation rounding.
-
-## Audit constraints
-
-- No fabricated values, silent zero defaults, neutral probability fallbacks,
-  proxy innings/defense fields, or export-layer heuristics.
-- No history-plus-skill blending beyond a separately sourced analytics output,
-  and no unvalidated output presented as approved advice.
-- No roster inference from historical participation; both sides come from
-  canonical current `PlayerTeamHistory` rows.
-- No renderer-side SQL or analytics. Any parity mismatch between HTML and
-  Excel fails the demo build.
-- No empty placeholder workbook sheet. If there are no feasible rows, omit the
-  sheet and record the unavailable reason in the manifest; HTML may show the
-  explicit unavailable state.
+- HTML/JSON are UTF-8 and Excel external IDs are stored as text.
+- Current HTML percentages display as whole percentages and reliability/skill
+  delta use three decimals; Excel retains raw numeric values. Parity compares
+  source values before HTML rounding.
+- Captured text is escaped; workbook widths/styles and column order are fixed.
+- No volatile formulas, random identifiers, viewer-clock values, external
+  links, macros, or hidden helper sheets.
+- No fabricated values, heuristic blending, renderer math, name-based joins,
+  or schedule claims.
+- The modeled probability and identical projection alias carry the same
+  experimental validation warning and may not drive recommendations.
+- A future flag requires a versioned threshold specification, named training
+  and holdout cohorts, calibration/decision metrics, approval, and provenance.
+  Until then Captain's Edge may show the risk evidence profile but no
+  Recommended Avoid/Target assertion.
 
 ## Planned wiring
 
 | Module | Responsibility |
 | --- | --- |
-| `analytics/player_vs_player.py` | Existing pure pair summary and chronological game records; no database query |
-| `ui/tabs/player_vs_player.py` | Existing self-contained single-pair HTML fragment; reuse inside the export shell |
-| `exports/html_builder.py` | Planned document-to-HTML shell/index; safe routing and reuse of the existing tab renderer |
-| `exports/excel_builder.py` | Planned export-envelope-to-XLSX renderer; deterministic values and formatting |
-| `ui/router.py` | Add `player-vs-player` navigation and row-level drill-down URLs without recomputation |
-| `demo.py` | Orchestrate one analytics build, feed the identical document to both renderers, verify parity, and register artifacts |
+| `analytics/player_vs_player.py` | Existing pure computation for one explicit pair |
+| `analytics/player_vs_player_matrix.py` | Existing pure whole-matrix composition |
+| `ui/tabs/player_vs_player.py` | Existing explicit-pair HTML fragment |
+| `ui/export_html_player_vs_player.py` | Existing matrix HTML that embeds each explicit fragment |
+| `ui/export_excel_player_vs_player.py` | Existing matrix workbook renderer |
+| `scripts/build_player_vs_player_export.py` | Existing read-only database builder for one scope |
+| `exports/html_builder.py` | Future demo wrapper delegates to the existing HTML renderer |
+| `exports/excel_builder.py` | Future demo wrapper delegates to the existing Excel renderer |
+| `ui/router.py` | Future navigation resolves a matrix scope and row/detail anchor |
+| `demo.py` | Future orchestration invokes the matrix build once and registers/verifies both artifacts |
+
+The whole-matrix renderer must consume only matrix rows. The explicit-pair
+renderer remains independently callable as a component and must never infer or
+rebuild the cross-product. Full matrix details live in
+`player_vs_player_matrix.md`.

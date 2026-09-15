@@ -20,21 +20,52 @@ scraper or analytics logic into a new script.
    equivalent Python entry point. Schema checks happen before any export.
 5. **Build exports** — run `pipeline.exports.run` and
    `scripts/build_captain_first_edge.py` against the same database and output
-   directory. Planned `demo.py` then obtains the Stage 1 matrix, calls
-   `analytics.player_vs_player.summarize` for each canonical pair, enriches the
-   summaries with scope/evidence identity, and gives the identical document to
-   `exports/html_builder.py` and `exports/excel_builder.py`. Do not call a
-   second ingest or open the live database writable.
+   directory. Planned `demo.py` then obtains the Stage 1 matrix and one map of
+   complete exact-pair histories (currently all-history across format/session),
+   calls
+   `analytics.player_vs_player_matrix.build_matrix_export` once, and gives the
+   identical returned rows to the implemented UI export renderers (or future
+   demo wrappers that delegate to them). The HTML renderer reuses the explicit-
+   pair fragment for each row. Do not call `summarize` again in the
+   orchestrator, run a second ingest, or open the live database writable.
 6. **Verify** — run artifact existence/size checks, JSON schema checks,
    workbook-open checks, HTML safety checks, matrix reconciliation, and
-   source-database identity checks. Compare every Player vs Player pair/game
-   key and value across HTML, Excel, and optional JSON before rounding.
+   source-database identity checks. Compare every matrix pair/game key and
+   value across HTML, Excel, and optional JSON before rounding, then verify each
+   embedded explicit-pair detail against its matrix row.
 7. **Present** — write a small local index with links to the static pages and
    open it only after verification. A local HTTP server is optional; `file:`
    links must remain functional.
 8. **Finalize** — write `demo_manifest.json`, checksums, command-line options,
    test results, and a redacted human summary. Keep or clean scratch data only
    according to an explicit flag.
+
+## Unified Player vs Player assembly
+
+After `build_matrix_export`, `demo.py` creates one serializable document with a
+schema version, run/source identity, canonical scope, matrix counts, ordered
+rows, nested pair summaries/games, unavailable-field notes, and risk-flag
+status. It encodes that document with the repository's safe script-JSON helper
+into `<script type="application/json" id="pvp-data">`.
+
+The Player vs Player tab is registered once in the existing `ui/tabs` shell.
+`ui/router.py` sets `view=matrix` for scope-only navigation and `view=pair` plus
+the two external player IDs for a selected comparison. Browser code parses the
+document once and uses pair keys to switch panels. It may filter/sort a display
+copy and draw accessible inline SVG, but it may not call analytics, infer
+missing values, or create Avoid/Target flags.
+
+The Excel renderer receives the same ordered rows directly, not reparsed HTML
+and not browser-mutated state. If a selected pair is materialized in Excel, the
+orchestrator passes its key explicitly and verifies that it exists in the
+matrix.
+
+## Optional production acquisition
+
+A full live demo may prepend the guarded scrape-and-ingest flow specified in
+`scrape_and_ingest_pipeline.md`. It is opt-in, never an implicit fallback, and
+must finish reconciliation and verification before exports start. Fixture mode
+remains the default for CI and never makes a live APA request.
 
 ## Process and idempotency rules
 

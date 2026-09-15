@@ -13,9 +13,17 @@ no-data result. It is design-only until the orchestration script exists.
   detection including `team_external_id`.
 - Pairing labels, distinct-match counting, scope filtering, and exact matrix
   reconciliation.
-- Player vs Player recognized-game arithmetic, history reliability, last-game
-  skill-only probability, identical modeled/projection alias, unavailable
-  innings/defense/break-run/volatility disclosures, and stable pair/game order.
+- Player vs Player Matrix complete row retention, separate distinct-match/game
+  counts, stable structural order, and `rows_for_player` filtering.
+- Explicit Player vs Player recognized-game arithmetic, history reliability,
+  last-game skill-only probability, identical modeled/projection alias,
+  unavailable innings/defense/break-run/volatility disclosures, and stable game
+  order.
+- Unified-tab routing, valid/invalid pair-key selection, back/forward state,
+  Pair/Matrix keyboard behavior, and escaped script-JSON schema validation.
+- Opponent Risk Profile source mapping, build-time/availability labels, and
+  fail-closed Avoid/Target status. Until threshold approval, both flags must be
+  null for every pair.
 - Lineup Lab score, maximum matching, unassigned reconciliation, legality gate,
   and exact-search bound.
 
@@ -25,10 +33,15 @@ no-data result. It is design-only until the orchestration script exists.
 - Assert that every expected artifact is created and loadable.
 - Run the identical input twice into two scratch directories and compare all
   deterministic fields; exclude only documented timestamps and absolute paths.
-- Compare Player vs Player HTML, Excel, and optional JSON by pair/game key and
-  pre-rounding value; assert distinct team-match count is not conflated with
-  recognized game count.
+- Compare Matrix HTML, Excel, and optional JSON by pair/game key and pre-rounding
+  value; assert distinct team-match count is not conflated with recognized game
+  count. Compare each embedded explicit-pair detail with its source matrix row
+  and nested chronological games.
 - Verify all outputs share the same database/config/source manifest.
+- Verify Captain's Edge risk-profile values equal the selected matrix row and
+  that HTML/script JSON/Excel agree on flag status and threshold version.
+- Run the optional scrape-and-ingest CLI entirely against mocked transports and
+  fixtures; assert live network use is impossible in CI.
 
 ### Security and robustness
 
@@ -36,6 +49,8 @@ no-data result. It is design-only until the orchestration script exists.
   fixture rows; assert no HTML/script break-out.
 - Confirm no external network URL or token appears in HTML, JSON, XLSX, logs,
   or the manifest.
+- Exercise token-stdin/environment auth selection, redaction, live/fixture mode
+  exclusivity, output containment, and a hard network-deny guard.
 - Exercise missing roster, ambiguous membership, stale schema, empty history,
   invalid result, conflicting same-match fact, and overlarge assignment paths.
 
@@ -52,6 +67,8 @@ no-data result. It is design-only until the orchestration script exists.
 
 No demo is presented when a required phase fails, the database is stale, an
 artifact is missing without a documented reason, the matrix counts do not
-reconcile, or the page contains a fabricated fallback. A fixture CI run may
+reconcile, Pair/Matrix route state is inconsistent, Captain's Edge disagrees
+with the selected row, an unvalidated risk flag is non-null, or the page
+contains a fabricated fallback. A fixture CI run may
 pass with unavailable rosters when that is the fixture's truthful state; that
 is a guard-path assertion, not evidence that the production snapshot is ready.

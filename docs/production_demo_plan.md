@@ -5,56 +5,93 @@ regenerated database, and a versioned set of static exports. The detailed
 architecture, regeneration, test, release, and walkthrough contracts live in
 the adjacent `demo_*.md` documents.
 
-## Player vs Player section
+## Unified Player vs Player section
 
 ### Placement in the flow
 
-Player vs Player appears after Tonight's Match establishes the real scope and
-before Lineup Lab shows an assignment:
+The whole matrix appears after Tonight's Match establishes the real scope. An
+explicit comparison is opened from one matrix row before Lineup Lab shows an
+assignment:
 
 ```text
-Tonight's Match → Player vs Player → Lineup Lab → Data Coverage → Exports
+Tonight's Match → Player vs Player (Matrix View → Pair View)
+→ Lineup Lab → Data Coverage → Exports
 ```
 
-This order makes the evidence inspectable before the assignment. It does not
-replace the complete pairing matrix or hide UNKNOWN rows.
+This order makes the complete evidence surface inspectable before the
+assignment and gives one pair's history a clear drill-down boundary. UNKNOWN
+rows stay visible in the matrix.
 
 ### Trigger
 
-The captain can open Player vs Player from the primary navigation or from a
-pairing row. A row-level link carries the two external player IDs plus the
-selected team/opponent/format/session scope. `ui/router.py` resolves only
-against the prebuilt analytics document; names are display metadata.
+The captain opens one `player-vs-player` navigation tab from the selected
+Tonight's Match scope. Scope-only navigation opens Matrix View. A row selection
+changes the same route to `view=pair` and carries both external player IDs plus
+team/opponent/format/session. `ui/router.py` resolves only against prebuilt
+matrix rows; names are display metadata.
 
 ### Display
 
-The HTML opens with the full canonical row order and the selected pair's detail
-when launched from a matrix row. It shows Stage 1 DIRECT evidence, the current
-analytics summary's recognized-game record, history reliability, last-recorded
-skill probability, separately labeled experimental model output, whole/recent
-pair trends, named innings/defense/break-run/volatility gaps, and the existing
-forward pair-projection alias. No export-layer combined score exists.
+Matrix View opens in canonical structural order with every feasible pair. Its
+rows come from `analytics/player_vs_player_matrix.py`. Pair View uses the
+selected row's nested `PlayerVsPlayerSummary` from
+`analytics/player_vs_player.py` and shows its recognized-game record, history
+reliability, last-recorded skill probability, separately labeled experimental
+model output, whole/recent trends, named data gaps, and identical projection
+alias. No export-layer combined score exists.
+
+The demo labels the scope split: Stage 1 evidence is selected-format/session,
+while the current explicit summary uses all chronological history returned for
+the two IDs. Individual games retain their real format/session. The UI does not
+imply a filter that the query did not apply.
 
 ### Export
 
-`demo.py` writes `player_vs_player.html`, `player_vs_player.xlsx`, and the
-optional versioned `player_vs_player.json` from the same in-memory document.
-The run manifest records all three hashes and row counts. The demo index links
-the HTML view and workbook download alongside the existing captain-first and
-analysis artifacts.
+`demo.py` registers the implemented `player_vs_player.html` and
+`player_vs_player.xlsx` matrix artifacts from one matrix result. The HTML
+embeds the separately owned explicit-pair fragment at each row's Details
+anchor; the workbook carries all matrix rows and real game history. The
+manifest records both hashes, row counts, and pair keys.
 
 ### Validation
 
-The build verifies pair-key reconciliation, DIRECT result arithmetic, null
-semantics, formula/source tags, stable ordering, HTML escaping, workbook
-readability, no formulas/macros/external links, and HTML/Excel/JSON parity.
+The build first verifies matrix pair-key reconciliation and HTML/Excel parity,
+then verifies each embedded explicit-pair detail against its source matrix row
+and nested games. Null semantics, source tags, structural order, escaping,
+workbook readability, and prohibited formulas/macros/external links are gates.
 Any mismatch blocks presentation.
+
+## Captain's Edge integration
+
+Captain's Edge consumes the same immutable Player vs Player matrix document; it
+does not call either analytics module again. For the currently selected
+opponent/player context it may render an **Opponent Risk Profile** containing
+evidence label, sample counts, observed record/rate, current and last-recorded
+skills, reliability, trends, experimental model status, missing-data notes, and
+a link into Pair View.
+
+`Recommended Avoid` and `Recommended Target` map to reserved `danger_flag` and
+`favorable_flag` fields. At present both are unavailable because the history
+model has no held-out rematch cohort and no approved decision threshold. The
+production demo must show **Not available — threshold not validated**, not
+derive flags from modeled probability, volatility, or an invented cutoff.
+
+A future flag may be displayed only after a reviewed specification records the
+input field, threshold, training/holdout cohorts, calibration and decision
+metrics, version, approval, and effective date. Captain's Edge consumes the
+delivered boolean/status; it never evaluates the threshold in a renderer.
+
+The profile is a build-time snapshot. It changes only on regeneration and may
+be stale after roster, skill, schedule, or availability changes. Availability
+filters may hide an unavailable player from candidate views, but must not erase
+the canonical source row or rewrite its historical evidence. The UI shows the
+capture time and availability state beside the profile.
 
 ## Current blockers
 
-- `analytics/player_vs_player.py` and its single-pair UI reporter are in a
-  separate implementation lane; the export builders, router, and `demo.py`
-  integration are not implemented.
+- The analytics split and standalone matrix exporters exist; the unified tab,
+  router state, script-JSON envelope, Captain's Edge profile, and `demo.py`
+  integration remain to be implemented and audited.
 - A fresh authenticated scrape and regenerated schema are still required for a
   rich production dataset.
 - Data Coverage remains a planned Stage 3 follow-up at the current repository
@@ -67,3 +104,7 @@ Any mismatch blocks presentation.
 - Break/run is captured per team match, not per opponent, and numeric volatility
   is not produced by the current pair analytics contract; both remain explicit
   export gaps.
+- The current matrix HTML needs its numeric-volatility and held-out-rematch
+  disclosures plus keyboard-accessible sorting/responsive containment before
+  release; the workbook needs a documented decision for fields present only in
+  the HTML detail contract.

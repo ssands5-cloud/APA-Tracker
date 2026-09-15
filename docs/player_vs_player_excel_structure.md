@@ -1,92 +1,101 @@
-# Player vs Player Excel structure
+# Unified Player vs Player Excel structure
 
-The canonical workbook is `exports/player_vs_player.xlsx`. Its summary sheet is
-named `Player_vs_Player` with table name `PlayerVsPlayer_Table`; when at least
-one real game exists, a second `PvP_Game_History` sheet preserves the
-`GameRecord` timeline. It contains materialized values only: no formulas,
-macros, external links, or hidden helper sheets.
+The workbook is the offline companion to the unified HTML tab. It contains the
+whole matrix and a materialized selected-pair detail without formulas, macros,
+or a second analytics implementation. The current exporter writes
+`exports/player_vs_player.xlsx`; future demo integration may add the selected
+pair sheet but must preserve the implemented matrix sheets and values.
 
-## Summary column order
+## `Player_vs_Player`
 
-| Column | Header | Type / display |
-| ---: | --- | --- |
-| A | Our Team ID | text |
-| B | Our Team | text |
-| C | Player ID | text |
-| D | Player | text |
-| E | Player Current SL | integer or `No data` |
-| F | Opponent Team ID | text |
-| G | Opponent Team | text |
-| H | Opponent ID | text |
-| I | Opponent | text |
-| J | Opponent Current SL | integer or `No data` |
-| K | Format | text |
-| L | Session | text |
-| M | Evidence | DIRECT / INDIRECT / UNKNOWN |
-| N | Direct Matches | Stage 1 distinct authoritative match count |
-| O | Observed Win Rate | percentage or `No data` |
-| P | Recognized Games | `PlayerVsPlayerSummary.total_games` |
-| Q | Game Wins | integer |
-| R | Game Losses | integer |
-| S | Avg SL Delta | fixed decimal or `No data` |
-| T | History Reliability (Games) | `summary.reliability`, percentage |
-| U | Last Recorded Skill Probability | percentage or `No data` |
-| V | Modeled Win Probability | percentage or `No data` |
-| W | Model Validation Status | text |
-| X | Avg Innings | `No data — unavailable upstream` |
-| Y | Avg Defense | `No data — unavailable per opponent` |
-| Z | Break/Run Rate | `No data — not attributable per opponent` |
-| AA | Pair Trend | up / down / stable / no data |
-| AB | Recent Pair Trend | up / down / stable / no data |
-| AC | Volatility | `No data — not produced by this analytics contract` |
-| AD | Forward Pair Projection | percentage or `No data` |
-| AE | Projection Source | same source/status as modeled probability |
-| AF | Data Notes | semicolon-separated deterministic warnings |
+This is the canonical matrix sheet. It contains one row for every feasible
+pair, including UNKNOWN, in the matrix module's structural order.
 
-`Direct Matches` and `Recognized Games` are deliberately separate. Stage 1
-counts distinct authoritative team matches for evidence classification;
-`PlayerVsPlayerSummary` counts recognized exact-pair game rows, and one team
-match can contain more than one legitimate game.
+| Column | Field | Source / rule |
+| --- | --- | --- |
+| A | `session` | matrix scope |
+| B | `format` | matrix scope |
+| C | `our_team_id` | canonical external team ID, text |
+| D | `opponent_team_id` | canonical external team ID, text |
+| E | `player_id` | canonical internal player ID, integer |
+| F | `player_external_id` | canonical external player ID, text |
+| G | `player_name` | display only |
+| H | `player_skill_level` | current roster SL or blank/No data |
+| I | `opponent_id` | canonical internal opponent ID, integer |
+| J | `opponent_external_id` | canonical external opponent ID, text |
+| K | `opponent_name` | display only |
+| L | `opponent_skill_level` | current roster SL or blank/No data |
+| M | `evidence_label` | DIRECT / INDIRECT / UNKNOWN |
+| N | `direct_matches` | Stage 1 distinct authoritative team matches |
+| O | `win_rate` | Stage 1 observed DIRECT rate; null otherwise |
+| P | `total_games` | recognized exact-pair game rows |
+| Q | `wins` | recognized wins |
+| R | `losses` | recognized losses |
+| S | `sl_delta` | average posted opponent-minus-own SL |
+| T | `reliability` | `n/(n+3)`, using `total_games` |
+| U | `skill_prob` | last-recorded skill-gap probability |
+| V | `modeled_win_probability` | experimental full pair model |
+| W | `model_validation_status` | explicit held-out-rematch status |
+| X | `trend` | full explicit-pair trend |
+| Y | `recent_trend` | recent explicit-pair trend |
+| Z | `next_match_projection` | exact alias of modeled probability |
+| AA | `danger_flag` | boolean only when threshold approved; otherwise null |
+| AB | `favorable_flag` | boolean only when threshold approved; otherwise null |
+| AC | `flag_status` | approved version or `UNAVAILABLE_NOT_VALIDATED` |
+| AD | `data_notes` | deterministic source-gap/disclosure text |
 
-## Game-history sheet
+`danger_flag` and `favorable_flag` are the machine fields behind Recommended
+Avoid and Recommended Target. They are not formulas and must never both be true.
+At the current audit state both remain null and `flag_status` explains why.
+Neither is derived in Excel or inferred from formatting.
 
-`PvP_Game_History` contains Pair Key, Player ID, Opponent ID, Match ID, Match
-Date, Result, Own Posted SL, Opponent Posted SL, Points Earned, 9-Ball Balls,
-Format, and Session. Rows follow the parent summary order and then the
-analytics-provided chronological `games` order. Missing dates remain `No data`;
-they are never generated from insertion time.
+The implemented v1 workbook lacks internal IDs, skill delta, validation-status,
+flag, and disclosure columns. Those are explicit demo-integration deltas. Until
+a separately reviewed renderer change adds them, the manifest must describe the
+omissions and the demo must not claim workbook parity for absent columns.
 
-The detail sheet is omitted when no real game exists. A header-only history
-sheet would imply a delivered dataset where there is none.
+## `Selected_Pair`
 
-## Row and sheet rules
+This optional, materialized sheet mirrors Pair View for the pair selected when
+the demo bundle is built. It contains a two-column field/value table using the
+same fields and values as its `Player_vs_Player` row, followed by the full
+unavailable-data and model-validation disclosures. It contains no lookup
+formulas or dropdown-driven recomputation. If no pair is selected, omit the
+sheet and record that fact in the manifest.
 
-Summary rows follow the canonical structural ordering in
-`player_vs_player_exports.md`; score/probability values never reorder them.
-Every feasible pair has exactly one summary row, including UNKNOWN. External
-IDs are stored as text so Excel cannot convert them to scientific notation or
-dates.
+## `PvP_Game_History`
 
-Freeze panes at `A2`, enable the table filter over real data rows, and use fixed
-documented widths. Header style, row banding, and evidence-label fills are
-constant. UNKNOWN uses a neutral gray fill, but the text label remains the
-authority. No formula or conditional-format rule may substitute for a value
-from the export document.
+Create this sheet only when at least one real `GameRecord` exists. Columns are
+Player ID, Player External ID, Opponent ID, Opponent External ID, Match ID,
+Match Date, Result, Own Posted SL, Opponent Posted SL, Points Earned, 9-Ball
+Balls, Format, and Session. Rows follow parent matrix order and then each
+summary's chronological order.
 
-Probabilities use `0.0%` and skill delta uses `0.000`. Dates retain delivered
-text unless a separately audited normalizer exists. Workbook core properties
-use the run timestamp, not the build machine's local clock, to preserve
-deterministic output.
+The implemented v1 history sheet contains external IDs but not internal IDs;
+adding them is a documented integration enhancement. Missing dates remain null
+and display as `No data`; they are never generated from workbook time.
 
-If the export document has zero feasible pairs, the builder does not create a
-header-only `Player_vs_Player` sheet. It returns an explicit no-data result to
-`demo.py`, which records the reason in the manifest.
+## Ordering and formatting
 
-## Parity checks
+- Initial rows sort by session, format (8-ball, 9-ball, other), player
+  name/external ID, then opponent name/external ID. Scores and flags never
+  affect source order.
+- Freeze the header row, enable filters across real rows, and use fixed column
+  widths. Do not auto-size from captured names.
+- External IDs are text; counts/IDs are integers; raw probabilities are numeric
+  values with deterministic percentage display; `sl_delta` and reliability use
+  three decimals.
+- Null data remains null in cells. A nearby status/note column explains it;
+  numeric zero is reserved for measured zero.
+- Evidence/flag fills are supplemental to literal text and use a fixed palette.
+- There are no volatile formulas, VBA, external links, hidden helper sheets,
+  locale-dependent dates, or current-time conditional formatting.
+- Workbook metadata uses the run-manifest timestamp.
 
-Before release, load the workbook with openpyxl and compare each materialized
-summary and game row with the JSON/HTML source document by stable pair key.
-Values are compared before display rounding. The workbook must open without a
-repair prompt and contain no formulas, VBA, external links, hidden sheets, or
-duplicate pair keys.
+## Validation
 
+Load the workbook with openpyxl and compare pair keys, raw metrics, nulls,
+status fields, and game keys against the script JSON before display rounding.
+Assert no duplicate/missing matrix row, no UNKNOWN suppression, no formula,
+macro, external link, hidden sheet, or repair prompt. When flag status is not
+approved, assert both flag cells are null for every row.

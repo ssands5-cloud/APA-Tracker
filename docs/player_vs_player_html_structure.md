@@ -1,80 +1,176 @@
-# Player vs Player HTML structure
+# Unified Player vs Player HTML structure
 
-The HTML export is a self-contained report generated from the versioned export
-envelope. The existing `ui/tabs/player_vs_player.py` renders one
-`PlayerVsPlayerSummary`; the planned `exports/html_builder.py` wraps those
-fragments in a scope/pair index. It performs presentation-only filtering and
-does not fetch data, call analytics, or recompute probabilities in the browser.
+The target experience is one top-level **Player vs Player** tab with two
+presentation subviews:
 
-## Document outline
+- **Pair View** — one explicit player/opponent comparison owned by
+  `analytics/player_vs_player.py`;
+- **Matrix View** — every feasible pair in the selected scope, owned by
+  `analytics/player_vs_player_matrix.py`.
+
+The subviews share scope, identity, and provenance, but they do not share or
+blend analytics formulas. The current standalone matrix export already embeds
+the existing pair fragment at row anchors; the unified tab formalizes that
+relationship inside the existing `ui/tabs` composition model.
+
+## Page structure
 
 ```text
-main#player-vs-player
+section#player-vs-player-tab
 ├── header#pvp-header
-│   ├── title and selected match scope
-│   ├── capture timestamp / manifest ID
-│   └── validation-status banner
-├── nav#pvp-navigation
-│   ├── Tonight's Match
-│   ├── Player vs Player (current)
-│   ├── Lineup Lab
-│   └── Data Coverage
-├── section#pvp-controls
-│   ├── player filter
-│   ├── opponent filter
-│   ├── evidence-label filter
-│   └── Show all / reset
-├── section#pvp-summary
-│   ├── feasible-pair count
-│   ├── DIRECT / INDIRECT / UNKNOWN counts
-│   └── source and missing-field disclosure
-├── section#pvp-table
-│   └── table#pvp-pairings
-│       └── one row per canonical feasible pair
-├── section#pvp-detail
-│   ├── selected pair identity and scope
-│   ├── recognized-game record and timeline
-│   ├── probabilities kept separate
-│   ├── break/run unavailability disclosure
-│   ├── player-level form context
-│   └── next-match projection / unavailable reason
+│   ├── team / opponent / format / session
+│   ├── capture timestamp and source-manifest ID
+│   └── model-validation and snapshot banners
+├── nav#pvp-subviews (tablist)
+│   ├── button#pvp-pair-tab   "Pair View"
+│   └── button#pvp-matrix-tab "Matrix View"
+├── section#pvp-pair-view (tabpanel)
+│   ├── player and opponent selectors
+│   ├── evidence / record cards
+│   ├── table#pvp-pair-metrics
+│   ├── figure#pvp-game-timeline
+│   ├── table#pvp-game-history
+│   ├── section#pvp-risk-profile
+│   └── unavailable-data disclosure
+├── section#pvp-matrix-view (tabpanel)
+│   ├── player / opponent / evidence filters and Reset
+│   ├── figure#pvp-coverage-chart
+│   ├── table#pvp-matrix-table
+│   └── matrix-level audit disclosure
 └── footer#pvp-provenance
 ```
 
-## Table columns
+Pair View is the default when valid pair IDs are present in the route; Matrix
+View is the default when only a scope is present. Switching subviews changes
+visibility and URL state only. It never refetches data or recalculates a field.
 
-The compact index shows Player, Current Player SL, Opponent, Current Opponent
-SL, Format, Session, Evidence, Distinct Direct Matches, Recognized Games,
-History Reliability, Last Recorded Skill Probability, Experimental Modeled
-Probability, Pair Trend, Recent Pair Trend, and Forward Pair Projection.
+## Routing model
 
-The selected-pair fragment reuses the existing stats table, inline-SVG timeline,
-and chronological games table. Innings, per-opponent defense, break/run rate,
-and numeric volatility remain visible as named unavailable fields in the shell
-disclosure rather than receiving fabricated columns in the analytics summary.
+The future `ui/router.py` owns one navigation entry, `player-vs-player`, with a
+`view` parameter:
 
-## Interaction rules
+```text
+player-vs-player?view=matrix&our_team_id=...&opponent_team_id=...&format=...&session=...
+player-vs-player?view=pair&player_id=...&opponent_id=...&our_team_id=...&opponent_team_id=...&format=...&session=...
+```
 
-- Tonight's Match can link to a pair via stable external IDs and scope values.
-  The router selects that existing row; it never accepts names as identity.
-- Filters hide rows only at the user's request. Reset restores the canonical
-  full order, including every UNKNOWN row.
-- Selecting a row opens its detail panel without changing any metric.
-- Game-history entries preserve the chronological order returned by
-  `head_to_head_history`, with match ID as the deterministic tie-break already
-  applied by the query. Their result and real posted skill readings are visible.
-- Evidence labels use text and accessible descriptions; color is supplemental.
+IDs in the static export may be encoded in fragment state instead of a query
+string. In either form, external IDs plus the complete scope are authoritative;
+names are display metadata. A pair route is valid only when its key exists in
+the already-built matrix. Invalid, ambiguous, or stale state opens Matrix View
+with an explicit error and no guessed selection.
 
-## No-data and safety rules
+Back/forward navigation must restore both subview and selected pair. Selecting
+a matrix row changes the subview to Pair View and focuses the pair heading.
+Returning to Matrix View restores the previous filters and scroll position.
 
-Null displays as “No data,” followed by a concise reason in the detail panel.
-Zero remains numeric zero. For UNKNOWN, the adapter passes an empty row list to
-`summarize`, yielding an honest 0-0 record, zero reliability, null
-probabilities/projection, `no data` trends, and no timeline markers. UNKNOWN
-rows retain the same identity and navigation affordances as DIRECT/INDIRECT.
+## Script JSON contract
 
-All captured text is escaped. Embedded JSON escapes HTML parser delimiters.
-There are no external scripts, fonts, images, or network requests. Controls are
-labelled and keyboard-operable; the table has scoped headers and a descriptive
-caption. At narrow widths the table scrolls horizontally while the summary and
-detail sections remain readable.
+The orchestrator serializes one escaped JSON document into a non-executable
+`<script type="application/json" id="pvp-data">` element. The document contains:
+
+- schema version, run ID, capture time, and source hash;
+- canonical scope and expected pair keys;
+- ordered matrix rows and counts;
+- each row's nested explicit `PlayerVsPlayerSummary` and chronological games;
+- source/model status and unavailable-field disclosures;
+- optional, audit-gated risk flag values plus threshold version/status.
+
+The tab reads this element once with `textContent` and `JSON.parse`. It validates
+the schema version and pair-key uniqueness before enabling controls. Script JSON
+must use the repository's safe serializer so `<`, `>`, `&`, and script-closing
+sequences cannot break out of the element. No captured string is inserted with
+`innerHTML`; DOM text uses `textContent` or server-rendered escaped markup.
+
+The browser may select, filter, sort a copy for display, switch subviews, and
+draw inline SVG from delivered values. It may not query SQLite, fetch a URL,
+call an analytics formula, fill a null, or write a recommendation.
+
+## Pair View
+
+The player and opponent selectors list only canonical matrix identities. The
+selected pair shows:
+
+- evidence label, distinct DIRECT matches, and observed win rate;
+- an explicit label that Stage 1 evidence is selected-scope while the current
+  pair summary is chronological all-history across formats/sessions;
+- current roster skill levels, clearly separated from last-recorded game skills;
+- recognized games, wins/losses, average skill delta, and reliability;
+- last-recorded skill-only probability;
+- experimental modeled win probability and identical projection alias;
+- full-history and recent trends;
+- an **Opponent Risk Profile** panel described below;
+- chronological game history and the existing inline-SVG result timeline.
+
+The metric table never collapses observed rate, reliability, skill probability,
+and modeled probability into one score. The timeline sits below the evidence
+cards and above the game table; it contains one accessible marker per real
+game. Missing dates use match ID, not a generated date.
+
+### Opponent Risk Profile
+
+This panel is a sourced summary, not a new model. It lists evidence class,
+sample counts, observed record, last-recorded skill probability, modeled-value
+validation status, trends, and availability state. `Recommended Avoid` and
+`Recommended Target` are shown only when an approved threshold specification
+names its input, cohort, validation results, version, and effective date.
+
+At the current validation state both flags render **Not available — threshold
+not validated**. They must not be inferred from `modeled_win_probability`,
+volatility, a color, or an arbitrary cutoff. If a future approved flag exists,
+Pair View displays the delivered boolean and threshold version without
+recomputing it.
+
+## Matrix View
+
+The initial table order is structural: session, 8-ball before 9-ball, player
+name/external ID, then opponent name/external ID. The required columns are:
+
+1. Player and current SL
+2. Opponent and current SL
+3. Evidence label
+4. Distinct DIRECT matches
+5. Observed win rate
+6. Recognized games and W-L record
+7. History reliability
+8. Last-recorded skill probability
+9. Modeled win probability (experimental)
+10. Full/recent trend
+11. Recommended Avoid
+12. Recommended Target
+13. Details action
+
+The coverage chart sits above the table and shows counts—not scores—for DIRECT,
+INDIRECT, and UNKNOWN. It is an accessible inline SVG or semantic bar group with
+the numeric counts repeated in text. It never ranks players.
+
+Filters hide rows only by explicit user action. Reset restores every row and
+the canonical source order. Sorting is keyboard-operable, declares direction,
+places `No data` last, and never changes the exported source order. Details
+opens the same row in Pair View.
+
+## UNKNOWN and missing data
+
+UNKNOWN rows remain visible by default. A no-history pair shows 0 games, 0-0,
+zero reliability, null probabilities, `no data` trends, and no timeline
+markers. A missing value displays `No data` plus a reason; a measured zero stays
+numeric zero. There is no 50% fallback.
+
+Innings, per-opponent defense, per-opponent break/run rate, and numeric
+volatility are named unavailable fields. The UI never substitutes lifetime
+defense or differently scoped trend volatility. Missing roster identity blocks
+matrix construction instead of inferring membership from historical play.
+
+## Accessibility, safety, and deterministic formatting
+
+- Subview controls implement tab/tabpanel roles, keyboard arrows, focus
+  management, and visible focus.
+- Tables use captions, scoped headers, and a horizontal overflow container.
+- Evidence and flags use text/icons as well as color.
+- HTML is UTF-8 and self-contained, with no external scripts, fonts, images, or
+  runtime network requests.
+- Percentages display as whole percentages to match the current renderer;
+  reliability and skill delta use three decimals. Parity uses raw values before
+  rounding.
+- IDs, element order, disclosures, and initial row order derive from stable
+  source keys, never random values or the viewer's clock.

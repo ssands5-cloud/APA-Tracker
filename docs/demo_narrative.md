@@ -20,12 +20,29 @@ probability. UNKNOWN means the evidence is insufficient. The total is visibly
 reconciled to the feasible matrix, so the audience sees coverage before a
 recommendation.
 
-## The matrix
+## Unified Player vs Player tab
 
-Show that every feasible pairing remains visible, including UNKNOWN. Change one
-availability toggle and show the counts and rows update for tonight's choice;
-explain that the evidence labels themselves are not recomputed from browser
-guesses.
+Open Player vs Player and choose Matrix View. Show that every feasible pairing
+remains visible, including UNKNOWN. Change one availability toggle and show the
+visible candidate rows update for tonight's choice; explain that the matrix is produced by
+`analytics/player_vs_player_matrix.py`, while the evidence labels themselves
+still come from Stage 1 and are not recomputed from browser guesses.
+
+## Pair View and Opponent Risk Profile
+
+Before discussing the assignment, select one matrix row to switch the same tab
+to Pair View, whose analytics are owned by `analytics/player_vs_player.py`. Show its
+recognized game history, Stage 1 distinct-match evidence, history reliability,
+last-recorded skill-only probability, and the full model/projection alias as
+separate experimental context. Then point to the named unavailable innings,
+defense, break/run, and numeric-volatility fields. The value of this view is as
+much in what it refuses to infer as in the real history it displays.
+
+Then show the same evidence in Captain's Edge's Opponent Risk Profile. Call out
+that it is a build-time snapshot and availability-dependent. Recommended Avoid
+and Recommended Target currently read **Not available — threshold not
+validated**. This is intentional: no arbitrary modeled-probability or
+volatility cutoff is presented as advice.
 
 ## Lineup Lab
 
@@ -35,15 +52,6 @@ displayed but is not silently treated as calibrated selection evidence. The
 solver chooses the largest exact scoreable matching, then shows unassigned
 players and opponents. A complete five-player lineup carries the real 23-rule
 legality verdict; a partial or blocked result is an honest answer.
-
-## Player vs Player drill-down
-
-Before discussing the assignment, open one matrix pair. Show its recognized
-game history, Stage 1 distinct-match evidence, history reliability, last-
-recorded skill-only probability, and the full model/projection alias as separate
-experimental context. Then point to the named unavailable innings, defense,
-break/run, and numeric-volatility fields. The value of this view is as much in
-what it refuses to infer as in the real history it displays.
 
 ## Data Coverage
 

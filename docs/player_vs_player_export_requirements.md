@@ -1,97 +1,84 @@
 # Player vs Player export requirements
 
+## Ownership and presentation split
+
+| Product | Owner | Implemented presentation |
+| --- | --- | --- |
+| Explicit pair comparison | `analytics/player_vs_player.py` | `ui/tabs/player_vs_player.py` fragment embedded at each matrix detail anchor |
+| Whole-matrix drill-down | `analytics/player_vs_player_matrix.py` | `player_vs_player.html` and `player_vs_player.xlsx` |
+
+The pair module answers one explicit comparison. The matrix module composes a
+supplied Stage 1 matrix and supplied exact-pair histories into one stable row
+per feasible pair. Neither renderer owns queries, roster construction,
+analytics formulas, or cross-product logic.
+
 ## Functional requirements
 
-1. Build one versioned analytics document per real team/opponent/format/session
-   scope from canonical current rosters.
-2. Export every feasible player/opponent pair exactly once to HTML and Excel.
-3. Preserve DIRECT, INDIRECT, and UNKNOWN semantics from
-   `analytics.pairing_evidence`.
-4. Provide stable drill-down navigation from Tonight's Match and back to the
-   relevant scope.
-5. Produce identical pair keys and analytics values in both formats.
+1. Build one matrix document for a real team/opponent/format/session scope.
+2. Preserve every feasible pair exactly once, including UNKNOWN.
+3. Open one explicit-pair comparison from a matrix row using stable external
+   IDs plus scope, never names.
+4. Export the matrix to HTML and Excel while preserving the explicit-pair
+   component boundary inside the HTML details.
+5. Keep HTML and Excel matrix rows and games in parity.
 
-## Required analytics outputs
+## Required outputs
 
-- authoritative Stage 1 DIRECT label, distinct-match count, observed rate, and
-  source scope;
-- `PlayerVsPlayerSummary.total_games`/wins/losses and chronological
-  `GameRecord` values from exact-pair history;
-- `summary.reliability`, which is
-  `analytics.matchups.reliability_weight(total_games)`;
-- `skill_prob` mapped from `summary.skill_only_probability`, using the last
-  real game's posted skill levels;
-- separately sourced/status-labeled `modeled_win_probability`;
-- explicit unavailable disclosures for omitted innings, per-opponent defense,
-  break/run rate, and numeric volatility;
-- whole-history and recent pair trend strings;
-- `summary.next_match_projection`, labeled as the same value/status as the
-  modeled probability rather than a schedule-aware computation;
-- warnings, validation status, schema version, and provenance.
+The matrix row consumes its Stage 1 label, distinct-match count, observed rate,
+current identities/skills, and the nested explicit `PlayerVsPlayerSummary`.
+The summary supplies recognized record, average skill delta,
+`reliability_weight`, `skill_only_probability`, `modeled_win_probability`,
+whole/recent trends, `next_match_projection`, and chronological game history.
+
+Exports must disclose that innings, per-opponent defense, per-opponent
+break/run, and numeric volatility are unavailable. They must also disclose
+that the full model/projection history term has no held-out rematch validation.
+The current HTML covers the first three source gaps in its explicit-pair note
+but not numeric volatility or the full held-out-validation statement; these are
+demo-integration blockers, not permission to omit or fabricate values.
+
+The unified export reserves `danger_flag`, `favorable_flag`, `flag_status`, and
+`threshold_version` for Captain's Edge integration. Until a threshold has a
+reviewed specification and held-out evidence, both booleans are null,
+`flag_status = UNAVAILABLE_NOT_VALIDATED`, and no threshold version is claimed.
 
 ## Integrity requirements
 
-- `DIRECT + INDIRECT + UNKNOWN = total feasible pairings`, by identity.
-- `wins + losses = total_games`; distinct DIRECT matches remain a separately
-  named Stage 1 measure and need not equal game count.
-- observed rates exist only for a Stage 1 DIRECT row.
-- reliability uses exactly `total_games/(total_games+3)` inside analytics and
-  is never recomputed by a renderer.
-- `skill_prob` uses the last recorded pair skills and is not mislabeled current.
-- `next_match_projection == modeled_win_probability` exactly, with identical
-  experimental validation status and no claim that a meeting is scheduled.
-- nullable source gaps remain null; zero is reserved for a measured zero.
-- no row is inferred from mutable names or historical participation.
+- Matrix pair keys equal Stage 1 expected pair keys exactly.
+- `DIRECT + INDIRECT + UNKNOWN` equals total feasible pairs.
+- `wins + losses == total_games`; distinct matches need not equal games.
+- Observed rates are not synthesized for INDIRECT or UNKNOWN rows.
+- `skill_only_probability` is labeled as last-recorded, not current-roster.
+- `next_match_projection == modeled_win_probability` and shares its
+  experimental status.
+- Null stays null through the document; `No data` is presentation text only.
+- No metric blend, fallback 50%, score-based ordering, or export-only heuristic
+  is permitted.
 
-## Presentation requirements
+## Integration plan
 
-- HTML is UTF-8, offline, escaped, responsive, and keyboard accessible.
-- Excel is values-only, deterministic, macro-free, and repair-free.
-- UNKNOWN rows are visible by default and show literal `No data` cells.
-- Experimental modeled values are visibly separated from observed facts and
-  approved skill-only projections.
-- Default ordering is structural and deterministic, never “best first.”
+The existing `ui/export_html_player_vs_player.py` and
+`ui/export_excel_player_vs_player.py` accept the tuple of
+`PlayerVsPlayerExportRow`. The HTML renderer delegates each detail to the
+existing pair renderer; the Excel renderer materializes matrix and game rows.
+Future `exports/html_builder.py` and `exports/excel_builder.py` demo integration
+must delegate to these renderers rather than duplicate them. Shared formatting
+helpers may be reused, but analytics and SQL may not.
 
-## Planned module acceptance
+`ui/router.py` adds one Player vs Player navigation entry. It opens Matrix View
+for a scope and resolves Pair View to an existing row/detail key. `demo.py` invokes
+`scripts/build_player_vs_player_export.py` or the same build functions once,
+registers `player_vs_player.html`/`.xlsx`, and validates them. It must not loop
+over `summarize` independently or rebuild the matrix in an exporter.
 
-### `analytics/player_vs_player.py`
+## Acceptance requirements
 
-Already owns the pure pair summary and chronological game values, reusing the
-existing Head-to-Head/Matchups functions. It intentionally owns no SQL, roster
-join, evidence label, innings/defense/break-run metric, or numeric volatility;
-the export adapter must honor that boundary.
-
-### `exports/html_builder.py`
-
-Accepts only the enriched export envelope and render options. It reuses the
-existing `ui.tabs.player_vs_player` pair fragment and emits the shell in
-`player_vs_player_html_structure.md`, with no SQL or model math.
-
-### `exports/excel_builder.py`
-
-Accepts the same document and emits the workbook described in
-`player_vs_player_excel_structure.md`, including a structured no-data return
-instead of a placeholder sheet.
-
-### `ui/router.py`
-
-Registers `player-vs-player` after Tonight's Match and before Lineup Lab. Route
-parameters use external IDs plus format/session; the router validates them
-against the already-built document and never performs a name-based lookup.
-
-### `demo.py`
-
-Calls the analytics build once, serializes the canonical document, sends that
-same object to both builders, registers navigation/artifacts, and runs parity
-checks. A failure in analytics, either renderer, or parity stops the demo
-release. It does not duplicate `pipeline_run_all.py` acquisition/ingest logic.
-
-## Audit and release requirements
-
-- Focused unit tests cover reused formulas, nulls, the break/run
-  non-attribution disclosure, stable ordering, and hostile text.
-- Integration tests compare HTML/Excel/JSON pair identities and values.
-- Fixture CI proves UNKNOWN/no-roster behavior; a fresh authenticated scrape is
-  required for a production-data rehearsal.
-- The implementation commit must be separate from this design commit and must
-  receive an Issue #14 review before any modeled output is called validated.
+- Unit tests cover complete row retention, separate match/game counts, empty
+  history, unavailable disclosures, and structural ordering.
+- Integration tests compare HTML/Excel/JSON by pair and game key before
+  rounding and exercise hostile text.
+- Workbooks load without repair and contain no formulas, macros, hidden sheets,
+  or external links.
+- A parity, identity, provenance, or null-semantics failure blocks the demo.
+- The implementation must be reviewed separately under Issue #14 before an
+  experimental modeled value is described as validated advice.

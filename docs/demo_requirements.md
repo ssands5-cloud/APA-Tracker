@@ -19,6 +19,11 @@ league snapshot required for a production presentation.
 - A writable scratch output directory inside the APA Tracker repository, with
   enough space for raw fixtures, SQLite, HTML, JSON, XLSX, and a manifest.
 
+For a full production run, the optional acquisition phase follows
+`scrape_and_ingest_pipeline.md`: the operator explicitly selects live mode and
+supplies credentials through environment, prompt, browser session, or token
+standard input. CI always selects fixture mode and must be network-denied.
+
 ## Required data
 
 The database must contain, or explicitly report why it does not contain:
@@ -45,9 +50,10 @@ a prompt to apply an ad-hoc migration.
 The run is complete only when the selected output directory contains a manifest
 and the requested artifacts that have real source data:
 
-- `captain_first_edge.html` (Tonight's Match, Lineup Lab, Data Coverage);
-- `player_vs_player.html` and `player_vs_player.xlsx` once their planned
-  builders are implemented, plus optional `player_vs_player.json` parity data;
+- `captain_first_edge.html` (Tonight's Match, Opponent Risk Profile, Lineup Lab,
+  Data Coverage);
+- `player_vs_player.html` and `player_vs_player.xlsx` for the unified Player vs
+  Player tab's Matrix/Pair data, plus optional script-JSON parity data;
 - `analysis_tabs.html` (Captain's Edge/Lineup Optimizer where available,
   Head-to-Head, Player Trends);
 - `apa_data.json` and `apa_stats.xlsx`;
@@ -68,11 +74,18 @@ not a successful deliverable.
   today” unless a real persisted timestamp supports that statement.
 - The walkthrough distinguishes observed rates from modeled probabilities and
   identifies excluded analytics that are not approved captain advice.
+- The unified Player vs Player tab restores Pair/Matrix route state, consumes
+  only the embedded escaped JSON snapshot, and makes no runtime network call.
+- Captain's Edge identifies its Opponent Risk Profile as a build-time snapshot,
+  shows availability status, and keeps Avoid/Target flags unavailable unless a
+  versioned threshold has passed audit.
 
 ## Human acceptance
 
 Before release, a reviewer must be able to select a real scheduled scope,
 change player availability, observe evidence counts reconcile, inspect at least
 one DIRECT/INDIRECT/UNKNOWN row when the snapshot contains them, view Lineup
-Lab unassigned lists, drill into Player vs Player without losing UNKNOWN rows,
-and open both workbooks without repair prompts.
+Lab unassigned lists, open the unified Player vs Player tab, switch between
+Matrix View and Pair View without losing UNKNOWN rows, review the Captain's
+Edge Opponent Risk Profile/flag status, and open all requested workbooks without
+repair prompts.
