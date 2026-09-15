@@ -11,18 +11,18 @@ the future launcher should call it rather than duplicating exporter logic.
 | `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and descriptive Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, named single-field ordering, no categorical risk fields, no external requests |
 | `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix, current-skill difficulty heatmap, and anchored explicit-pair details | UNKNOWN visibility, fixed numeric color bins, escaping, stable initial pair order, no renderer math |
 | `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff, difficulty grid/audit rows, and real game history | openpyxl load, values only, pair/game/heatmap-key parity |
-| Player vs Player JSON document | planned `demo.py` adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
+| Player vs Player JSON document | planned Full Production Demo Builder adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
 | `data_coverage.html` | `scripts/build_data_coverage.py` + `ui/tabs/data_coverage.py` | evidence coverage, missing skills, sample sizes, refresh dates, unavailable fields | escaped/self-contained, zero-total nulls, matrix count parity |
 | `data_coverage.xlsx` | `ui/export_excel_data_coverage.py` | `Data_Coverage` and `Sample_Sizes` sheets | openpyxl load, values only, counts/percentages/timestamps/sample parity |
-| `team_strength.html` | planned Team Strength renderer | offense, defense proxy, depth, composite, and source coverage | formula-version/raw-denominator parity; no strength tiers |
-| `team_strength.xlsx` | planned Team Strength workbook renderer | team summary plus roster/match audit rows | three values-only sheets, exact player/match keys, null composite gate |
-| `season_projection.html` | planned Season Projection renderer over `analytics/season_projection.py` | remaining schedule, log5 baseline, and real standings curve | every schedule row retained, source-status and assumption labels |
-| `season_projection.xlsx` | planned Season Projection workbook renderer | summary, remaining matches, and standings history | values only, log5/expected-total parity, identity-join disclosure |
-| `trend_analyzer.html` | planned Trend Analyzer renderer | slope, volatility, trend score, descriptive indicators, and history chart | exact spans/gates, no extrapolation or recommendation |
-| `trend_analyzer.xlsx` | planned Trend Analyzer workbook renderer | trend summary and chronological skill history | values only, exact player/format/session keys and null gates |
-| `opponent_volatility.html` | planned Opponent Volatility renderer | opponent-team median/coverage and player-level variation | exact scoped join, numeric scale, no categorical risk labels |
-| `opponent_volatility.xlsx` | planned Opponent Volatility renderer | team median/coverage plus all opponent rows | exact transform/median, null retention, no threshold styling |
-| `captains_live_assistant.html` | planned captain-first composition | match-night local state over immutable verified analytics | common run/scope/hash, exact Lineup Lab reconciliation, no hidden score |
+| `team_strength.html` | implemented standalone `scripts/build_team_strength.py` + `ui/tabs/team_strength.py`; production registration pending | offense, defense proxy, depth, composite, and source coverage | formula-version/raw-denominator parity; no strength tiers |
+| `team_strength.xlsx` | implemented standalone `ui/export_excel_team_strength.py`; production registration pending | team summary plus roster/match audit rows | three values-only sheets, exact player/match keys, null composite gate |
+| `season_projection.html` | implemented standalone `scripts/build_season_projection.py` + `ui/tabs/season_projection.py`; production registration pending | remaining schedule, log5 baseline, and real standings curve | every schedule row retained, source-status and assumption labels |
+| `season_projection.xlsx` | implemented standalone `ui/export_excel_season_projection.py`; production registration pending | summary, remaining matches, and standings history | values only, log5/expected-total parity, identity-join disclosure |
+| `trend_analyzer.html` | implemented standalone `scripts/build_trend_analyzer.py` + `ui/tabs/trend_analyzer.py`; richer history/demo wiring pending | slope, volatility, trend score, descriptive indicators, and planned history chart | exact spans/gates, canonical initial order, no extrapolation or recommendation |
+| `trend_analyzer.xlsx` | implemented standalone `ui/export_excel_trend_analyzer.py`; general `Player Trends` sheet remains compatible | trend summary and chronological skill history | values only, exact player/format/session keys and null gates |
+| `opponent_volatility.html` | implemented standalone `scripts/build_opponent_volatility.py` + `ui/tabs/opponent_volatility.py`; richer UX/demo wiring pending | opponent-team median/coverage and player-level variation | exact scoped join, numeric scale, no categorical risk labels |
+| `opponent_volatility.xlsx` | implemented standalone `ui/export_excel_opponent_volatility.py`; production registration pending | team median/coverage plus all opponent rows | exact transform/median, null retention, no threshold styling |
+| `captains_live_assistant.html` | planned `scripts/build_captains_live_assistant.py` + `ui/tabs/captains_live_assistant.py` | match-night local state over immutable verified analytics | common run/scope/hash, exact Lineup Lab reconciliation, no hidden score |
 | `analysis_tabs.html` | `pipeline.exports.write_tabs` + `ui/tabs/*` | supporting Head-to-Head, Player Trends, and available legacy cards | non-empty sections only when real documents exist |
 | `apa_data.json` | `ui.export_json.export_to_json` | machine-readable general snapshot | valid JSON, expected top-level keys, source timestamps |
 | `apa_stats.xlsx` | `ui.export_excel.export_to_excel` | workbook for captain/operator review | openpyxl load without repair; sheet headers and real rows |
@@ -95,6 +95,12 @@ Heatmap HTML/script JSON carries one value for every matrix pair key. Its
 difficulty is derived only from the shared current-skill probability; Excel and
 HTML must never substitute the experimental blended probability. Missing skills
 remain null/hatched and do not reduce the matrix denominator.
+
+Implementation status, exact file ownership, and the required build order for
+the five remaining modules are defined in
+`remaining_analytics_wiring_plan.md`. A renderer may be marked available in the
+manifest only when its immutable source document and every required parity
+surface pass together.
 
 ## Packaging
 

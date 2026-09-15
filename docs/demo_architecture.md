@@ -31,7 +31,7 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
  ├─ Data Coverage          ├─ ui/export_excel.py        ├─ Lineup Lab
  ├─ Player Trends          └─ scripts/build_*           ├─ Data Coverage
  ├─ Season Projection                                  ├─ Team/Season
- ├─ planned Team Strength                              └─ Live Assistant
+ ├─ Team Strength analytics                            └─ Live Assistant
  └─ planned Opponent Volatility
             │                         │                        │
             └─────────────────────────┼────────────────────────┘
@@ -39,8 +39,8 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
                          exports/ (HTML, JSON, XLSX)
                                       │
                                       ▼
-                         planned ui/router.py + demo.py
-                         demo launcher / browser walkthrough
+                         planned ui/router.py + full demo builder
+                         unified launcher / browser walkthrough
 ```
 
 ## Component responsibilities
@@ -127,17 +127,23 @@ built documents:
   orchestrator/manifest responsibilities.
 - `analytics/player_trends.py` owns regression slope, last-20 skill-level
   volatility, stability, the gated descriptive HOT/COLD/NEUTRAL indicator, and
-  `trend_score`. The Trend Analyzer only presents those values.
+  `trend_score`. `analytics/trend_analyzer.py` composes its implemented
+  immutable presentation report and calls the public score function; it does
+  not introduce a second trend formula.
 - `analytics/season_projection.py` owns the existing team-level log5 baseline,
   expected remaining wins/losses, upset-likelihood number, and deduplicated
   standings-history curve. It never simulates a future player lineup.
-- Proposed `analytics/team_strength.py` consumes canonical team/session roster
+- Implemented `analytics/team_strength.py` consumes canonical team/session roster
   records and finalized team scores to produce separately auditable offense,
   defense-proxy, depth, and equal-component strength indices. A missing
-  component makes the composite null.
-- Proposed `analytics/opponent_volatility.py` transforms the existing player
+  component makes the composite null. Its standalone read-only builder and
+  HTML/Excel renderers exist; production provenance, stricter ambiguity/scope
+  guards, and full-demo registration remain planned.
+- Implemented `analytics/opponent_volatility.py` transforms the existing player
   trend volatility to a bounded descriptive index and median opponent-team
   profile. It is explicitly player/format/session scoped, not pair-specific.
+  Its standalone read-only builder and HTML/Excel baseline exist; richer UX,
+  provenance, pair/live joins, and full-demo wiring remain.
 - The Match Difficulty Heatmap uses the shared validated current-skill-only
   function and current matrix skills. It never colors from the experimental
   history-blended probability.
@@ -174,9 +180,10 @@ only as the descriptive, assumption-labeled team baseline in its own contract.
   `view=matrix`. A pair route also requires both external player IDs and the
   complete scope. Invalid state fails back to Matrix View with an explanation;
   it never resolves identity from names.
-- Planned `demo.py` invokes the existing read-only builder once, serializes the
-  ordered rows and nested summaries into escaped `pvp-data` script JSON, and
-  registers/verifies the HTML/XLSX without duplicating ingest. Planned
+- The planned Full Production Demo Builder's Player-vs-Player phase invokes the
+  existing read-only builder once, serializes the ordered rows and nested
+  summaries into escaped `pvp-data` script JSON, and registers/verifies the
+  HTML/XLSX without duplicating ingest. Planned
   `exports/html_builder.py` and `exports/excel_builder.py` delegate to the
   existing renderers.
 - `ui/tabs/data_coverage.py`, `ui/export_excel_data_coverage.py`, and
@@ -184,10 +191,13 @@ only as the descriptive, assumption-labeled team baseline in its own contract.
   `data_coverage.html`/`.xlsx`; unified demo wiring remains planned. Links from
   Player vs Player, Lineup Lab, and Captain's Edge may select an existing
   evidence/missing-skill/sample/gap section but cannot mutate the report.
-- Planned Team Strength and Season Projection renderers produce self-contained
-  HTML and values-only workbooks from one immutable report each. Planned Trend
-  Analyzer and Opponent Volatility views reuse existing trend facts rather than
-  recomputing them.
+- Team Strength now has standalone HTML and a values-only workbook from the
+  implemented immutable report. Season Projection likewise has a
+  standalone read-only builder plus HTML/Excel renderers, with unified-demo
+  provenance and parity still pending. The richer Trend Analyzer likewise has
+  an immutable adapter and standalone HTML/Excel builder; selected-history UX
+  and full-demo wiring remain. Opponent Volatility likewise reuses those trend
+  facts and has standalone HTML/Excel; richer UX and full-demo wiring remain.
 - Planned `scripts/build_full_production_demo.py` coordinates acquisition,
   ingest, document construction, exports, and verification without launching a
   browser. Planned `scripts/run_production_demo.py` is the thin operator
@@ -216,6 +226,10 @@ flowchart LR
 Every arrow passes a versioned immutable document with the same run/scope/hash.
 The Live Assistant coordinates views and local availability state; it does not
 blend a new score or turn descriptive inputs into categorical advice.
+
+The implementation-ready ownership, current status, dependency order, and
+cross-artifact gates for this extended path are consolidated in
+`remaining_analytics_wiring_plan.md`.
 
 ### Unified Player vs Player data flow
 
@@ -264,8 +278,9 @@ the prior filter/sort state rather than constructing a second tab.
 
 ## Demo boundary and invariants
 
-The launcher may create a scratch output directory and a regenerated SQLite
-file, but it must not mutate source code, tests, committed fixtures, or the
+The production builder may create a scratch output directory and regenerated
+SQLite file. The launcher may start only a loopback presentation process after
+verification. Neither may mutate source code, tests, committed fixtures, or the
 user's credential files. Every displayed number must identify a raw field,
 documented aggregation, or approved formula. Missing evidence is rendered as
 “No data” or an unavailable scope; it is never converted to a plausible zero

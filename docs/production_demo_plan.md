@@ -48,8 +48,9 @@ imply a filter that the query did not apply.
 
 ### Export
 
-`demo.py` registers the implemented `player_vs_player.html` and
-`player_vs_player.xlsx` matrix artifacts from one matrix result. The HTML
+The Full Production Demo Builder registers the implemented
+`player_vs_player.html` and `player_vs_player.xlsx` matrix artifacts from one
+matrix result. The HTML
 embeds the separately owned explicit-pair fragment at each row's Details
 anchor; the workbook carries all matrix rows and real game history. The
 manifest records both hashes, row counts, and pair keys.
@@ -142,9 +143,10 @@ authentication or verification failure never falls back to a stale snapshot.
 
 ## Current blockers
 
-- The analytics split and standalone matrix exporters exist; the unified tab,
-  router state, script-JSON envelope, Captain's Edge profile, and `demo.py`
-  integration remain to be implemented and audited.
+- The analytics split, standalone matrix exporters, and basic unified
+  Pair/Matrix tab exist. Persistent route/back state, the full script-JSON
+  envelope, heatmap, Captain's Edge descriptive profile, and production-demo
+  registration remain to be implemented and audited.
 - A fresh authenticated scrape and regenerated schema are still required for a
   rich production dataset.
 - Data Coverage analytics and standalone renderers exist in the implementation
@@ -165,14 +167,28 @@ authentication or verification failure never falls back to a stale snapshot.
 - Data Coverage unified wiring must correct the current zero-pair HTML Total
   row (which prints 100%) and disclose/guard its name-based standings timestamp
   lookup before production presentation.
-- Team Strength analytics/renderers do not yet exist. Its team/session source
-  join, component null gates, and equal-weight formula require implementation
-  and validation before the composite can appear.
-- Season Projection analytics exists, but its verified team-ID/standings join,
-  immutable demo document, HTML/Excel renderers, and parity tests remain to be
-  implemented. The existing 0.40 upset threshold is not fitted advice.
-- Trend Analyzer, Opponent Volatility, heatmap, and Live Assistant composition
-  require implementation and cross-scope tests. None may introduce a hidden
-  recommendation score or categorical opponent-risk flag.
+- Team Strength analytics, exact-team/session read-only builder, HTML,
+  three-sheet workbook, and focused tests exist. Stricter missing-player,
+  mixed-format, and name-only standings guards plus run provenance, contained
+  full-demo registration, and cross-artifact parity remain.
+- Season Projection now has corrected in-place analytics plus a standalone
+  read-only builder and HTML/Excel renderers. Exact mixed-scope rejection,
+  name-only standings ambiguity guards, unified-demo provenance/script JSON,
+  and full-bundle parity remain.
+- Trend formulas, persistence, immutable presentation adapter, canonical
+  dedicated summary, standalone HTML/XLSX builder, JSON, and the general
+  workbook exist. The selected-player history visualization, safe script-JSON
+  routing, run provenance, full-demo registration, and manifest parity remain.
+- Opponent Volatility's pure profile, guarded read-only builder, summary HTML,
+  two-sheet workbook, and focused tests exist; richer accessible plot UX,
+  missing-identity/multi-format guards, provenance, pair/live joins, and
+  full-demo parity remain. Current-skill Match Difficulty cells/heatmap and Live
+  Assistant composition remain to be implemented with cross-scope tests. None
+  may import legacy danger categories, introduce a hidden blended score, or
+  generate categorical opponent advice.
 - The Full Production Demo Builder and Unified Launcher remain design-only;
   they must enforce READY/manifest/hash verification before presentation.
+
+The authoritative implementation order, file ownership, UX handoffs, and
+acceptance gates for these remaining items are consolidated in
+`remaining_analytics_wiring_plan.md`.

@@ -1,11 +1,11 @@
 # Team Strength Analyzer
 
-The Team Strength Analyzer is a proposed, pure analytics document for one
+The Team Strength Analyzer is an implemented, pure analytics document for one
 canonical team/session scope. It combines three transparent, bounded
 descriptive components into `team_strength_index`. It is not an APA statistic,
 a fitted outcome model, a lineup selector, or a strength category.
 
-The planned analytics owner is `analytics/team_strength.py`. Query assembly
+The analytics owner is `analytics/team_strength.py`. Query assembly
 belongs in a read-only builder; HTML and Excel consume the same immutable
 report and perform no math.
 
@@ -116,7 +116,7 @@ lineup recommendations, or color-coded advice.
 
 ## Analytics output
 
-The planned immutable report contains:
+The implemented immutable report contains:
 
 ```text
 TeamStrengthReport
@@ -156,6 +156,56 @@ Roster Evidence, and Match Evidence sections and sort one visible column at a
 time. They cannot recompute a component, renormalize a missing composite, or
 change the exported source order. Back/forward navigation restores section and
 sort state without fetching data.
+
+## Current status and wiring contract
+
+`analytics/team_strength.py`, the standalone read-only builder, HTML fragment,
+three-sheet workbook, and their focused tests are implemented. The analytics
+module is the sole formula owner and returns the immutable
+`TeamStrengthReport` described above. Production-demo provenance, stricter
+scope/identity guards, artifact containment, registration, and cross-artifact
+parity remain; none should reimplement its calculations.
+
+| File | Current responsibility and remaining production work |
+| --- | --- |
+| `ui/tabs/team_strength.py` | implemented `render(report, title="Team Strength") -> str`; add run provenance, safe script JSON/navigation hooks, and Data Coverage routing |
+| `ui/export_excel_team_strength.py` | implemented `build_workbook`/`write_workbook` with the three fixed sheets below; add manifest parity verification |
+| `scripts/build_team_strength.py` | implemented read-only query assembly and HTML/XLSX output for an exact team/session; harden mixed-format, missing-player, standings-ambiguity, and contained-output checks |
+| `pipeline/exports.py` | pending: invoke the adapter once for the selected scope and register both artifacts without reopening the database |
+| full production demo builder | pending: include report, hashes, row counts, formula version, null reasons, and parity results in the run manifest |
+
+The standalone builder assembles the core inputs as follows; production cutover
+must enforce every guard named here:
+
+1. Resolve exactly one `Team` by external ID; a missing/duplicate identity
+   blocks the report.
+2. Join `PlayerTeamHistory` to `Player` for the exact team external ID,
+   session, and `is_current=True`. Canonical roster duplicate detection exists;
+   production must also reject a missing joined player and invalid W/P counts
+   before calling analytics.
+3. Select only finalized, scored, non-bye `Match` rows in the requested
+   session where the team is exactly home or away. Require both scores and
+   orient PF/PA from the selected team.
+4. Resolve standings only as separately labeled context. The standalone builder
+   uses the schema's team name; production must make zero or multiple viable
+   identities unavailable rather than selecting one. Standings never change
+   the index.
+5. Sort source player/match rows canonically, call `build_report` once, and
+   pass that exact object to both renderers.
+
+The standalone command contract is:
+
+```text
+python scripts/build_team_strength.py --db PATH --our-team-id ID
+    --session NAME --out-dir PATH
+```
+
+`--our-team-id` may come from configuration; `--session` is required. The
+standalone builder currently derives format from the first eligible match.
+Production must reject mixed formats or carry only a proven exact format; it
+may not relabel team-session player totals as format-specific. The database is
+opened read-only. The full builder must additionally enforce repository-
+contained new output and must never reuse a stale artifact after failure.
 
 ## HTML layout
 

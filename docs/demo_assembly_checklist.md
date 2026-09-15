@@ -47,8 +47,29 @@
       and direction, places missing values last, and uses canonical identity
       tie-breaks without a composite score.
 - [ ] Confirm assigned/unassigned reconciliation and legality/blocked reason.
+- [ ] Build Team Strength from the exact current roster/session and eligible
+      finalized matches; verify all three components, raw denominators,
+      fifth-player identity, composite null gate, HTML, and three Excel sheets.
+- [ ] Build Trend Analyzer from the already-populated `PlayerTrend` rows and
+      chronological observations; verify spans, delivered `trend_score`,
+      canonical initial order, history view, and two-sheet workbook parity.
+- [ ] Build Opponent Volatility from the exact opponent roster and scoped trend
+      rows; verify transform, median inputs, coverage, complete null rows, and
+      absence of legacy danger categories.
+- [ ] Build one current-skill Match Difficulty cell per matrix pair; verify the
+      fixed-bin HTML/text view and both Excel heatmap sheets use identical keys
+      and raw values.
+- [ ] Build the Live Assistant source/scenario document from reconciled module
+      hashes; verify exact scenario selection, offline behavior, unassigned and
+      UNKNOWN visibility, and no new blended score.
 - [ ] Load every workbook with openpyxl without repair prompts.
-- [ ] Write and verify the redacted manifest and hashes.
+- [ ] Run the Full Production Demo Builder in the selected mode and verify no
+      component renderer was invoked outside its documented phase.
+- [ ] Write and re-read the redacted manifest and checksums, then write READY
+      last and verify its manifest hash.
+- [ ] Run the Unified Launcher against that exact run; verify argument-array
+      forwarding or `--no-build`, loopback-only serving, health-check identity,
+      and no presentation before checksum validation.
 
 ## Rehearsal and release
 

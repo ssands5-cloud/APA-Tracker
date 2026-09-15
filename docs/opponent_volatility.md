@@ -70,6 +70,48 @@ summary can always be audited.
 Missing normalized-format mapping, ambiguous membership, or duplicate trend
 rows fails closed. A trend from another format/session is never substituted.
 
+## Current status and wiring contract
+
+The pure profile, formula/descriptor constants, immutable player/team rows,
+median/coverage behavior, standalone read-only builder, HTML fragment,
+two-sheet workbook, and focused tests are implemented. Production provenance,
+the full accessible plot/interaction, pair/live joins, full-demo registration,
+and cross-artifact parity remain. Existing `analytics/opponent_scouting.py`
+consumes a raw volatility value inside a legacy threshold-based danger model;
+it is a separate legacy product and must not become the formula, descriptor,
+ordering, or color owner for this profile. The dedicated profile keeps the
+numeric transform, evidence state, player rows, and team median independent of
+all danger flags.
+
+| File | Current responsibility or required completion |
+| --- | --- |
+| `analytics/opponent_volatility.py` | implemented pure `build_profile(...)` over canonical roster identities and scoped `PlayerTrend` rows; owns transform, descriptors, median, coverage, and formula version |
+| `ui/tabs/opponent_volatility.py` | implemented summary/list/table baseline without thresholds; add the accessible neutral dot plot, interaction, safe script JSON, and run provenance |
+| `ui/export_excel_opponent_volatility.py` | implemented two values-only sheets from the immutable profile; add manifest parity checks |
+| `scripts/build_opponent_volatility.py` | implemented read-only exact-roster/session query, duplicate-trend guard, and standalone HTML/XLSX output; add missing-player/team guards and production containment/provenance |
+| Player-vs-Player / Live Assistant adapters | join the already-built row/profile by exact opponent external ID, format, session, run, and source hash |
+
+The query boundary starts from current `PlayerTeamHistory` memberships for the
+exact opponent team external ID and session, joins `Player` identity, and then
+requires at most one matching `PlayerTrend` per player/normalized-format/
+session. Every roster player remains in the output even when the trend row is
+absent. Duplicate membership or trend rows block the profile; missing rows
+produce null values and reduce coverage.
+
+The standalone command contract is:
+
+```text
+python scripts/build_opponent_volatility.py --db PATH
+    --opponent-team-id ID --session NAME [--format NAME] --out-dir PATH
+```
+
+The database is read-only, and the command does not trigger trend population,
+fall back across sessions, or accept a display name as identity. When format is
+omitted, production must reject multiple matching format rows for a player
+rather than collapse them. The full builder should build each needed opponent
+profile once, reuse it in all surfaces, and record its player-key set and median
+inputs in the manifest.
+
 ## Player-vs-Player integration
 
 The unified Player-vs-Player tab may join one opponent's volatility profile by

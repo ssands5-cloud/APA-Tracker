@@ -45,6 +45,48 @@ file.
 The builder does not expose `--serve`, `--open`, or browser flags. Presentation
 belongs to the launcher after verification.
 
+## Current status and implementation handoff
+
+`scripts/build_full_production_demo.py` is not yet implemented. The existing
+`scripts/build_demo.py` remains a sanitized-fixture illustration and must not be
+renamed or treated as the production orchestrator: its independent fixtures do
+not form one coherent season scope, and its HTML currently has external font
+references. The production builder is a new coordination boundary over
+existing acquisition, analytics, and export APIs—not a replacement for them.
+
+Implementation must use these final contracts:
+
+- parse exactly one of `--live`, `--fixtures`, or `--verified-run`;
+- resolve config, source, output, and optional scenario paths beneath the
+  canonical repository before any write or network action;
+- create a new run directory and a separate exact temporary subdirectory;
+- complete all database-writing population, including Player Trends, before
+  recording and locking the database hash;
+- construct each immutable analytics document once and inject it into all
+  renderers; never re-read generated HTML/XLSX as an analytics source;
+- write a phase-result record even for a declared optional unavailable feature;
+- finalize checksums, manifest, and READY in that order, with READY last;
+- leave failed runs unpromotable and never open or serve them.
+
+The remaining-module cutover order after database lock is:
+
+```text
+canonical scope and rosters
+  → Player-vs-Player rows + Match Difficulty cells
+  → Team Strength + Season Projection + Trend document
+  → Opponent Volatility profiles
+  → Lineup Lab + Data Coverage
+  → Captain's Edge descriptive composition + Live Assistant source/scenarios
+  → HTML / Excel / JSON
+  → parity, security, manifest, checksums, READY
+```
+
+Team Strength, Trend Analyzer, Opponent Volatility, heatmap, and Live Assistant
+are required demo features once their implementation flag is enabled. Before
+that cutover, the manifest may mark them `not_implemented`; it may not emit a
+plausible placeholder artifact. Once enabled in release configuration, a build
+failure is terminal and cannot be downgraded to optional at runtime.
+
 ## End-to-end flow
 
 ```mermaid
@@ -87,9 +129,9 @@ flowchart TD
 
 ## Exact analytics participants
 
-- `analytics/team_stats.py` and proposed `analytics/team_strength.py`;
+- `analytics/team_stats.py` and implemented `analytics/team_strength.py`;
 - `analytics/season_projection.py`;
-- `analytics/player_trends.py` and proposed
+- `analytics/player_trends.py` and implemented
   `analytics/opponent_volatility.py`;
 - `analytics/pairing_evidence.py`;
 - `analytics/player_vs_player_matrix.py` and
@@ -100,6 +142,13 @@ flowchart TD
 
 Legacy optimizer/scouting outputs may be packaged only under their existing
 warnings and are not inputs to the validated captain-first path.
+
+The module-specific query, renderer, and workbook boundaries are fixed in
+`team_strength.md`, `trend_analyzer.md`, `opponent_volatility.md`,
+`player_vs_player_matrix.md`, and `captains_live_assistant.md`. The consolidated
+dependency and acceptance sequence is in `remaining_analytics_wiring_plan.md`.
+Those documents control over any temptation to import a renderer's private
+helper or derive a missing value in the orchestrator.
 
 ## Output bundle
 

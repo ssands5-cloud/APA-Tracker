@@ -20,6 +20,13 @@ module in the repository is validated.
 - Fresh authenticated data and current-roster TeamStat rows are present.
 - No stale schema or unavailable required scope is hidden.
 - All required artifacts pass the checklist and tests.
+- Team Strength, Trend Analyzer, Opponent Volatility, Match Difficulty, and the
+  Live Assistant are either enabled with complete source/HTML/Excel/manifest
+  parity or explicitly marked not implemented before candidate creation; an
+  enabled failure cannot be downgraded during the run.
+- The Full Production Demo Builder wrote and revalidated the manifest and
+  checksums before READY, and the Unified Launcher independently revalidated
+  that exact run before presentation.
 - The narrative does not call excluded analytics validated advice.
 - Issue #14 comment links the documentation commit and factual test evidence.
 
@@ -29,4 +36,3 @@ If a page, workbook, or data claim is found wrong, withdraw the bundle and
 restore the previous approved bundle. Do not patch a generated artifact by
 hand; regenerate from a corrected source commit and new manifest. Preserve the
 failed manifest and redacted logs for diagnosis.
-

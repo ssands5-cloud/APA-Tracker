@@ -225,6 +225,13 @@ Before release, every heatmap pair key and raw value must match the
 Missing/duplicate keys, a renderer-side formula, a null converted to 50, or any
 categorical difficulty language blocks the unified tab and workbook.
 
+The current unified tab already provides Pair View, Matrix View, one safe
+script-JSON envelope, and exact-row Details navigation. Heatmap completion must
+extend that tab rather than create a third top-level navigation item. Until the
+heatmap cells, keyboard grid/text alternative, URL/back-state restoration, and
+Excel parity sheets are implemented, the Matrix View remains a table-only
+partial implementation and the manifest must report the heatmap unavailable.
+
 ## Accessibility, safety, and deterministic formatting
 
 - Subview controls implement tab/tabpanel roles, keyboard arrows, focus

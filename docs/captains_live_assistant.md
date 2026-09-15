@@ -26,15 +26,58 @@ requests; the existing analytics modules retain their formulas. HTML renders
 the current view, and any audit workbook renders the session document. A run,
 scope, pair-key, or source-hash mismatch fails closed before controls activate.
 
+## Current status and wiring contract
+
+The Live Assistant is not yet implemented. Existing Captain's Edge,
+`analytics/captains_edge_summary.py`, legacy lineup-risk, and opponent-scouting
+outputs remain separate products; their strongest/danger/high-risk rankings do
+not become inputs to this assistant. The assistant composes the verified
+documents listed below and never derives a replacement score.
+
+| Planned file | Required public responsibility |
+| --- | --- |
+| `ui/live_assistant_state.py` | deterministic local state reducer and exact scenario-key generation; no analytics formulas or persistence |
+| `ui/tabs/captains_live_assistant.py` | render the offline controls, candidates, descriptive notes, and provenance from one source/session document |
+| `scripts/build_captains_live_assistant.py` | reconcile immutable source documents and precompute explicitly configured availability scenarios |
+| `ui/export_excel_captains_live_assistant.py` | export an operator-requested local session audit; never modify the build-time workbook |
+| full production demo builder | supply common run/scope/hash documents, register the static source artifact, and verify offline behavior |
+
+The build-time source document contains no mutable availability choice. It
+records canonical rosters, the complete pair matrix and difficulty cells,
+Lineup Lab baseline result, Team Strength, Season Projection context, Trend and
+Opponent Volatility rows, Data Coverage, and the allowlisted static-scenario
+map. Each scenario key is the sorted set of available player external IDs on
+both sides plus exact format/session/team IDs. Missing or duplicate keys fail
+the build.
+
+In an application-hosted mode, a state change may call the existing approved
+Lineup Lab solver with the exact filtered matrix. In the self-contained demo,
+it may select only an exact precomputed scenario. If no scenario matches, the
+assistant displays `Scenario unavailable`, preserves the baseline evidence,
+and does not approximate a lineup.
+
+The standalone build command contract is:
+
+```text
+python scripts/build_captains_live_assistant.py --run-manifest PATH
+    --team-id ID --opponent-team-id ID --session NAME --format NAME
+    --out-dir PATH [--scenario-file PATH]
+```
+
+The input manifest must already be verified, the scenario file is
+repository-contained non-secret configuration, and the builder opens all
+sources read-only. It cannot scrape, rebuild analytics, or accept mismatched
+run IDs/hashes.
+
 ## Inputs
 
 | Input document | Owner | Assistant use |
 | --- | --- | --- |
-| Team Strength report | proposed `analytics/team_strength.py` | team/session context and separately labeled offense, defense proxy, depth, and composite |
+| Team Strength report | `analytics/team_strength.py` | team/session context and separately labeled offense, defense proxy, depth, and composite |
 | Player-vs-Player matrix | `analytics/player_vs_player_matrix.py` | complete feasible pairs, evidence labels, current skills, and nested pair summaries |
 | Explicit pair summary | `analytics/player_vs_player.py` | selected pair history, reliability, probabilities, and game timeline |
 | Player trends | `analytics/player_trends.py` / persisted `PlayerTrend` | slope, sample, trend score, descriptive HOT/COLD/NEUTRAL state |
-| Opponent volatility | proposed `analytics/opponent_volatility.py` | separately scoped opponent SL variation and evidence coverage |
+| Opponent volatility | `analytics/opponent_volatility.py` | separately scoped opponent SL variation and evidence coverage |
 | Lineup Lab result | `analytics/lineup_lab.py` | validated current-skill-only assignment, unassigned lists, and 23-rule state |
 | Data Coverage report | `analytics/data_coverage.py` | missing skills, evidence denominators, samples, freshness, and unavailable fields |
 

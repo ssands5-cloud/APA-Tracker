@@ -1,8 +1,8 @@
 # Demo orchestration plan
 
-Claude can implement the future launcher as a thin orchestrator around existing
-entry points. It should coordinate, validate, and report; it should not copy
-scraper or analytics logic into a new script.
+The production builder is a thin orchestrator around existing entry points. It
+coordinates, validates, and reports; it does not copy scraper or analytics
+logic into a new script. Presentation is a separate launcher responsibility.
 
 ## Phases
 
@@ -12,14 +12,18 @@ scraper or analytics logic into a new script.
 2. **Acquire** — in live mode invoke `scraper/full_auto_scrape.py` as a
    subprocess after the guarded login. In fixture mode validate the supplied
    fixture root and skip network access.
-3. **Manifest** — enumerate fixture files (excluding auth operations), record
+3. **Source manifest** — enumerate fixture files (excluding auth operations), record
    operation names, entity IDs, byte counts, SHA-256 hashes, and capture time.
    Never print response bodies.
 4. **Build database** — write a new SQLite file in the run directory and call
    `python -m pipeline --fixtures ... --config ... --ingest-only` or the
-   equivalent Python entry point. Schema checks happen before any export.
-5. **Build documents and exports** — run `pipeline.exports.run` against the
-   final read-only database. Planned `demo.py` obtains the Stage 1 matrix and
+   equivalent Python entry point. Schema checks happen before any export. Run
+   every required database-writing aggregate builder, including Player Trends,
+   in this phase.
+5. **Lock snapshot** — close writers, record the final database SHA-256, and
+   reopen the database read-only. A later hash change is terminal.
+6. **Build documents and exports** — run `pipeline.exports.run` against the
+   locked read-only database. The production adapter obtains the Stage 1 matrix and
    one map of complete exact-pair histories (currently all-history across
    format/session), calls
    `analytics.player_vs_player_matrix.build_matrix_export` once, obtains the
@@ -33,26 +37,30 @@ scraper or analytics logic into a new script.
    locked database/scope. The HTML renderer reuses the explicit-pair fragment
    for each row. Do not call `summarize` again in the orchestrator, run a second
    ingest, or open the live database writable.
-6. **Verify** — run artifact existence/size checks, JSON schema checks,
+7. **Verify** — run artifact existence/size checks, JSON schema checks,
    workbook-open checks, HTML safety checks, matrix reconciliation, and
    source-database identity checks. Compare every matrix pair/game key and
    value across HTML, Excel, and optional JSON before rounding, then verify each
    embedded explicit-pair detail against its matrix row.
-7. **Present** — write a small local index with links to the static pages and
-   open it only after verification. A local HTTP server is optional; `file:`
-   links must remain functional.
-8. **Finalize** — write `demo_manifest.json`, checksums, command-line options,
-   test results, and a redacted human summary. Keep or clean scratch data only
-   according to an explicit flag.
+8. **Finalize** — write the relative-path index, `demo_manifest.json`,
+   checksums, command-line options, test results, and a redacted human summary;
+   re-read and verify them, then write READY last. The builder stops here and
+   never opens a browser or starts a server.
+
+After successful finalization, the Unified Launcher independently revalidates
+READY, the manifest, hashes, promotable status, and index containment. It may
+then serve the exact run on loopback and open it. This sequencing is mandatory:
+there is no presentation phase inside the builder.
 
 ## Unified Player vs Player assembly
 
-After `build_matrix_export`, `demo.py` creates one serializable document with a
-schema version, run/source identity, canonical scope, matrix counts, ordered
-rows, nested pair summaries/games, unavailable-field notes, and the optional
-named descriptive sort field/direction. It defines no categorical risk fields.
-The orchestrator encodes that document with the repository's safe script-JSON
-helper into `<script type="application/json" id="pvp-data">`.
+After `build_matrix_export`, the production builder's Player-vs-Player adapter
+creates one serializable document with a schema version, run/source identity,
+canonical scope, matrix counts, ordered rows, nested pair summaries/games,
+unavailable-field notes, difficulty cells, and the optional named descriptive
+sort field/direction. It defines no categorical risk fields. The orchestrator
+encodes that document with the repository's safe script-JSON helper into
+`<script type="application/json" id="pvp-data">`.
 
 The Player vs Player tab is registered once in the existing `ui/tabs` shell.
 `ui/router.py` sets `view=matrix` for scope-only navigation and `view=pair` plus

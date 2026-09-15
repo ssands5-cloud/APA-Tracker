@@ -190,6 +190,42 @@ checks the selected cell against Pair View and Excel. Any missing key,
 history-blended value, 50% null fill, category label, or non-fixed color mapping
 blocks promotion.
 
+### Current status and exact wiring steps
+
+The implemented matrix already provides canonical pair identities, current
+skills, evidence labels, explicit-pair summaries, stable ordering, unified
+Pair/Matrix subviews, and two workbook sheets. It does not yet emit difficulty
+cells or render the heatmap. Completion extends this existing matrix path; it
+does not add another matchup model.
+
+1. Add an immutable `MatchDifficultyCell` and a pure public builder to
+   `analytics/player_vs_player_matrix.py`. The builder accepts the existing
+   `PairingEvidenceMatrix`, calls the shared current-skill-only probability
+   function, and emits exactly one cell per pair in canonical matrix order.
+2. Have `scripts/build_player_vs_player_export.py` build the matrix rows and
+   difficulty cells once, assert identical pair-key sets, and pass both to the
+   existing renderers.
+3. Extend `ui/tabs/player_vs_player_unified.py` and
+   `ui/export_html_player_vs_player.py` with the accessible heatmap and text
+   alternative. They map delivered values to fixed bins only.
+4. Extend `ui/export_excel_player_vs_player.py` with
+   `Match_Difficulty_Heatmap` and `Match_Difficulty_Data`; retain the existing
+   `Player_vs_Player` and optional `PvP_Game_History` sheets unchanged.
+5. Register pair counts, heatmap counts, formula version, null counts, sheet
+   names, and artifact hashes in the full-demo manifest.
+
+The public builder signature should remain explicit:
+
+```python
+build_match_difficulty_cells(
+    matrix: PairingEvidenceMatrix,
+) -> tuple[MatchDifficultyCell, ...]
+```
+
+It must not accept history, modeled probability, trend, volatility, custom
+weights, or a threshold. This makes accidental blending impossible at the API
+boundary.
+
 ## UNKNOWN and unavailable data
 
 UNKNOWN rows are first-class rows. They are never dropped, converted to an
@@ -308,7 +344,7 @@ reordering.
 | `exports/html_builder.py` | Future demo integration should delegate to the existing HTML renderer rather than duplicate it |
 | `exports/excel_builder.py` | Future demo integration should delegate to the existing workbook renderer rather than duplicate it |
 | `ui/router.py` | Register one Player vs Player tab; route `view=matrix` to all rows and `view=pair` to one existing row/detail |
-| `demo.py` | Invoke the read-only matrix build once, encode the unified tab document, register artifacts, and verify parity |
+| `scripts/build_full_production_demo.py` Player-vs-Player phase | Invoke the read-only matrix build once, encode the unified tab document, register artifacts, and verify parity |
 
 The cross-module export rules are summarized in
 `player_vs_player_exports.md`. The reusable explicit-pair component is

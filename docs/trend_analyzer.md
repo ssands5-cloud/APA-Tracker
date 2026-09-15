@@ -104,6 +104,47 @@ Client-side controls may filter and visibly sort delivered rows, but cannot
 recalculate slope, change the 20-reading volatility window, extrapolate the
 chart, or convert an unavailable indicator to NEUTRAL.
 
+## Current status and extension wiring
+
+The existing path is retained and extended:
+
+| Surface | Current status | Required completion |
+| --- | --- | --- |
+| `analytics/player_trends.py` | implemented formula owner, including `trend_score` | no duplicate formula; expose constants/version in the presentation document |
+| `scripts/build_player_trends.py` | implemented database population and pruning | run before the demo database is hash-locked; record written/pruned counts |
+| `ui/tabs/trends.py` | implemented self-contained sortable summary table | add delivered `trend_score`, canonical initial ordering, player-history drill-down, provenance, and the planned accessible charts |
+| `ui/export_json.py` | implemented trend rows including `trend_score` | reuse as a parity source; add run/scope metadata in the full bundle envelope |
+| `ui/export_excel.py` | implemented general-workbook `Player Trends` sheet | retain compatibility while the dedicated two-sheet artifact is added |
+| `analytics/trend_analyzer.py` | implemented immutable presentation adapter over persisted fields and the public `trend_score` function | retain `analytics/player_trends.py` as sole formula owner |
+| `scripts/build_trend_analyzer.py` | implemented read-only exact-team/session builder | add run manifest/capture provenance and production output containment |
+| `ui/tabs/trend_analyzer.py` | implemented dedicated summary, trend-score list, table, and limitations | add real selected-player history chart/table, safe script JSON, and demo routing |
+| `ui/export_excel_trend_analyzer.py` | implemented dedicated `Trend_Analyzer` plus available `Trend_History` workbook | finalize empty-history sheet policy and manifest/HTML parity |
+
+The richer Trend Analyzer is an extension of these files, not a parallel trend
+engine. Its builder loads persisted `PlayerTrend` rows and the exact underlying
+chronological observations once, verifies player/format/session keys, and
+passes them to the presentation adapter, which calls only the already-public
+`trend_score`. The HTML and dedicated workbook receive that same immutable
+report.
+
+The current table's slope-first initial order and HOT/COLD row fills are not
+the target demo contract. Production wiring starts in canonical
+format/session/player-name/external-ID order; user sorting is visible and
+reversible. Directional styling is descriptive, includes literal text, and
+must not resemble a lineup recommendation or opponent-risk alert.
+
+The standalone command contract is:
+
+```text
+python scripts/build_trend_analyzer.py --db PATH --our-team-id ID --session NAME
+    [--format NAME] --out-dir PATH
+```
+
+Database population is a separate explicit phase. The standalone export step
+opens the finalized database read-only and must not call
+`scripts/build_player_trends.py`, mutate aggregates, or silently substitute a
+different session/format.
+
 ## HTML charts and tables
 
 The proposed Trend Analyzer section uses:

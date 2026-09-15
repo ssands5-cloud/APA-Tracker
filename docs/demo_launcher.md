@@ -39,6 +39,32 @@ Unknown flags fail; the launcher never forwards them speculatively. Paths are
 resolved and boundary-checked before a child process starts, and repeated flags
 use an explicit parser error rather than last-value-wins behavior.
 
+## Current status and final integration surface
+
+`scripts/run_production_demo.py` is not yet implemented. Existing batch files
+or fixture-demo commands are not the unified launcher contract and must not be
+used as its source of truth. The launcher is a thin process boundary around
+`scripts/build_full_production_demo.py`; it contains no module-specific build
+sequence and never imports scraper, database, analytics, or renderer code.
+
+The final invocation mapping is:
+
+| Launcher input | Builder forwarding | Launcher-only action |
+| --- | --- | --- |
+| `--live`, auth source, config, scope, output policy | forward unchanged as an argument array | stream redacted progress |
+| `--fixtures`, config, scope, output policy | forward unchanged; force network-denied environment | stream redacted progress |
+| `--verified-run` without `--no-build` | request a new verified rebuild directory | optionally serve/open the new run |
+| `--verified-run --no-build` | do not invoke the builder | revalidate and present that exact immutable run |
+| `--serve [--port]` | never forwarded | start loopback server after verification |
+| `--open` | never forwarded | open the verified health-checked URL |
+| `--events PATH` | configure launcher's own JSONL sink | write redacted versioned events only |
+
+The builder must return the resolved run directory through a versioned,
+redacted completion event; ordinary log text is never parsed for paths. The
+launcher confirms that directory is under the canonical run root and that the
+event's run ID/manifest hash match READY before presenting it. Unknown event
+schema versions fail closed.
+
 ## Wrapper flow
 
 ```mermaid
@@ -135,6 +161,11 @@ then may it bind a loopback server. The browser health check must return the
 same run ID and index hash from the verified bundle. The launcher never marks a
 run ready, repairs a manifest, rebuilds a missing export, or substitutes the
 most recent run.
+
+On shutdown, the launcher stops only its own loopback process and closes its
+event stream. It does not delete the verified run, temporary directories owned
+by a failed builder, or any source/database artifact. Retention and cleanup are
+explicit builder/release-policy operations, never launcher side effects.
 
 ## Acceptance tests
 

@@ -10,15 +10,23 @@ the script.
 python scripts/run_production_demo.py
   (--live | --fixtures FIXTURE_ROOT | --verified-run RUN_ROOT)
   [--auth token-env|token-stdin|credentials-env|prompt|browser]
+  [--token-env NAME | --token-stdin]
+  [--username-env NAME --password-env NAME]
   [--config PATH]
-  [--out-dir PATH]
+  [--out PATH]
   [--team-id TEAM_ID]
+  [--opponent-team-id TEAM_ID]
+  [--format NAME]
+  [--session NAME]
+  [--keep-raw]
+  [--fail-on-warning]
   [--serve]
   [--open]
   [--port PORT]
   [--no-build]
   [--keep-run]
-  [--verbose]
+  [--events PATH]
+  [--log-level info|debug]
 ```
 
 Exactly one data source is required. `--no-build` requires `--verified-run`;
@@ -27,7 +35,9 @@ Exactly one data source is required. `--no-build` requires `--verified-run`;
 The default config is
 `apa_config.yaml`; the default output is a unique directory under `demo-runs/`.
 `--team-id` overrides only the display-side configured team and must be a real
-team ID present in the regenerated database.
+team ID present in the regenerated database. Scope overrides are exact filters,
+not labels applied after computation. `--keep-raw` is live-only and does not
+authorize raw captures in a share package.
 
 ## Exit codes
 
@@ -44,26 +54,29 @@ team ID present in the regenerated database.
 
 ## Observable output
 
-Log lines use the stable form `PHASE status message`, where the message may
-contain IDs and relative paths but never tokens or response bodies. The final
-line reports the absolute path of `demo_manifest.json`, the selected scope
-count, and the verified artifact count. A machine-readable `events.jsonl` is
-optional but useful for CI.
+Log lines use the stable redacted form documented in `demo_launcher.md`; a
+message may contain IDs and relative paths but never tokens or response bodies.
+When `--events` is supplied, the launcher writes a versioned JSONL stream. A
+successful builder completion event carries the run ID, repository-contained
+relative run path, manifest hash, selected scope count, and verified artifact
+count. The launcher never parses ordinary log text to discover an artifact.
 
 ## Manifest fields
 
-The manifest contains `run_id`, UTC `started_at`/`finished_at`, repository
-commit, mode, config hash, fixture root hash, database relative path, artifact
-relative paths and hashes, row counts, scope/evidence counts, test command and
-result, and a redacted list of warnings. It must identify a stale/unavailable
-scope without embedding SQL text or secrets.
+The manifest contains schema version, `run_id`, UTC
+`started_at`/`finished_at`, repository commit, mode, config and source hashes,
+database relative path/hash, selected scopes, formula versions, artifact
+relative paths/hashes/row counts, scope/evidence/null counts, parity/security
+gate results, promotable status, test command/result, and a redacted warning
+list. It must identify a stale/unavailable scope without embedding SQL text,
+absolute private paths, or secrets.
 
 ## Server behavior
 
 `--serve` starts a local-only server bound to `127.0.0.1`; it never binds all
 interfaces. The printed URL points to a generated `index.html` with links to
 the captain-first page, analysis tabs, and downloadable artifacts. Without
-`--serve`, the operator opens those files directly. `--open` launches only
-after a health check proves the served run ID and index hash. The complete
-wrapper, logging, and safety contract is in `demo_launcher.md`; builder phases
-are in `full_production_demo_builder.md`.
+`--serve`, the launcher reports the verified index path and does not open it.
+`--open` launches only after a health check proves the served run ID and index
+hash. The complete wrapper, logging, and safety contract is in
+`demo_launcher.md`; builder phases are in `full_production_demo_builder.md`.

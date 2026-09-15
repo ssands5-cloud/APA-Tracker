@@ -54,6 +54,10 @@ no-data result. It is design-only until the orchestration script exists.
 - Live Assistant scope/hash validation, availability re-solve or exact static
   scenario selection, assignment/unassigned/legality reconciliation, note
   template provenance, and separation of captain input from source facts.
+- Isolation tests prove Opponent Volatility never imports legacy
+  opponent-scouting danger categories and the Live Assistant never consumes
+  strongest/danger/high-risk summary rankings as a substitute for its source
+  documents.
 
 ### Pipeline integration
 
@@ -82,6 +86,14 @@ no-data result. It is design-only until the orchestration script exists.
 - Run Full Production Demo Builder fixture mode twice and compare deterministic
   bundle content. Verify the launcher refuses absent/invalid READY, manifest,
   checksum, or database-hash state.
+- Assert database-writing trend population finishes before the builder locks
+  the source hash, and no later analytics/export phase opens SQLite writable.
+- Assert manifest and checksums exist and revalidate before READY is written;
+  interrupt each finalization step and prove the launcher refuses the partial
+  run.
+- Assert the launcher discovers the run only from the versioned completion
+  event or explicit `--verified-run`, never from human log text, directory
+  recency, or a filename glob.
 
 ### Security and robustness
 
