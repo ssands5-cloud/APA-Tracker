@@ -141,20 +141,69 @@ falsely confident near-100% -- the same calibration property
 formula. (Values pinned as a regression test in
 `tests/test_player_vs_player.py::TestFixtureRegression`.)
 
+## The matrix/export layer (built in a later pass)
+
+`analytics/player_vs_player_matrix.py` combines this module's per-pair
+summary with `analytics.pairing_evidence.PairingEvidenceMatrix` for a
+whole scope, one row per feasible pairing (DIRECT/INDIRECT/UNKNOWN alike),
+in a stable structural order (never score-sorted). It does not modify or
+duplicate this module -- see its own docstring for the exact split. Built
+on top of it:
+
+- `ui/export_html_player_vs_player.py` -- one self-contained HTML export
+  for a whole scope: a sortable summary table of every feasible pairing,
+  each row linking to its full detail section (rendered by reusing
+  `ui/tabs/player_vs_player.py::render` directly, not a second
+  implementation).
+- `ui/export_excel_player_vs_player.py` -- a standalone workbook (never a
+  patch to the existing `apa_stats.xlsx`), with a `Player_vs_Player`
+  summary sheet and a `PvP_Game_History` sheet that is omitted entirely
+  when no real game exists anywhere in the scope (never an empty
+  placeholder sheet). Fixed column widths and column order -- no
+  content-derived auto-sizing, so the same real data always produces byte-
+  comparable output.
+- `scripts/build_player_vs_player_export.py` -- the real, read-only
+  (`mode=ro`) database builder tying the three together: resolves real
+  match dates (`Match.match_date`, since `PlayerHeadToHead` has no ORM
+  relationship back to `Match`), fetches each pairing's real
+  `head_to_head_history`, and writes `exports/player_vs_player.html` and
+  `exports/player_vs_player.xlsx`.
+
+**A request for this layer also asked for `danger_flag`/`favorable_flag`
+columns and Captain's Edge "Recommended Avoid/Target" indicators derived
+from `modeled_win_probability`. Neither is implemented.** Per
+`docs/stage3_lineup_lab_scoring.md` §1 (Issue #14's own fail-closed finding
+against the identical value), the DIRECT history term inside
+`modeled_win_probability` has zero held-out rematch predictions in the
+current validation set -- there is no validated basis for a categorical
+danger/favorable/avoid/target judgment on top of it today, and inventing
+one would repeat the exact "unfitted threshold" pattern already fail-closed
+against `analytics.opponent_scouting` (win probability below 0.40 OR
+volatility >= 0.50, both invented and never checked against outcomes). If
+that data-honesty gap closes (real held-out rematches become available and
+a threshold is written down, sourced, and checked against them first, per
+`docs/captain_first_edge_experience.md` §10's rule), this is a real,
+buildable follow-up -- not implemented here as a placeholder or a silently
+lowered bar.
+
 ## Not yet built
 
-Deliberately out of scope for this pass, to keep it a small, reviewable
-stage:
+Deliberately out of scope, to keep this a small, reviewable stage:
 
-- A builder script that queries a real database (`scripts/build_player_vs_player.py`,
-  by the naming convention every other `scripts/build_*.py` in this
-  project follows) and writes a standalone `exports/player_vs_player.html`.
-- Resolving real match dates from `Match.match_date` for the games table
-  (the pure analytics module already accepts a `match_dates` map for
-  this; only the query-and-wire step is missing).
-- Excel export (a `Player_vs_Player` sheet).
-- Wiring this tab into the existing multi-tab demo assembly
-  (`scripts/render_demo_html.py`/`analysis_tabs.html`).
+- Wiring this export into the existing multi-tab demo assembly
+  (`scripts/render_demo_html.py`/`analysis_tabs.html`) or into
+  `exports/captain_first_edge.html`.
+- A combined single-page "Pair View / Matrix View" toggle inside one tab
+  (today, the pair view and the matrix export are two separate real
+  artifacts -- `ui/tabs/player_vs_player.py::render` for one pairing, and
+  `ui/export_html_player_vs_player.py::render_export` for a whole scope,
+  which already embeds every pairing's full detail section inline rather
+  than requiring a toggle to see it).
+- A live-credential scraping/ingestion CLI (`scripts/scrape_and_ingest.py`)
+  -- a real, substantial, security-sensitive undertaking (credential
+  handling, safe error handling, mocked tests) that was requested alongside
+  this work but deliberately not attempted in the same pass as everything
+  above.
 
 ## Audit constraints
 
