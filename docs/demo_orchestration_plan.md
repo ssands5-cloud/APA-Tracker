@@ -46,16 +46,18 @@ scraper or analytics logic into a new script.
 
 After `build_matrix_export`, `demo.py` creates one serializable document with a
 schema version, run/source identity, canonical scope, matrix counts, ordered
-rows, nested pair summaries/games, unavailable-field notes, and risk-flag
-status. It encodes that document with the repository's safe script-JSON helper
-into `<script type="application/json" id="pvp-data">`.
+rows, nested pair summaries/games, unavailable-field notes, and the optional
+named descriptive sort field/direction. It defines no categorical risk fields.
+The orchestrator encodes that document with the repository's safe script-JSON
+helper into `<script type="application/json" id="pvp-data">`.
 
 The Player vs Player tab is registered once in the existing `ui/tabs` shell.
 `ui/router.py` sets `view=matrix` for scope-only navigation and `view=pair` plus
 the two external player IDs for a selected comparison. Browser code parses the
 document once and uses pair keys to switch panels. It may filter/sort a display
 copy and draw accessible inline SVG, but it may not call analytics, infer
-missing values, or create Avoid/Target flags.
+missing values, create categorical risk fields, or blend a hidden ranking
+score.
 
 The Excel renderer receives the same ordered rows directly, not reparsed HTML
 and not browser-mutated state. If a selected pair is materialized in Excel, the

@@ -10,7 +10,7 @@ verification boundaries; it does not duplicate their logic.
 Proposed entry point:
 
 ```powershell
-python scripts/scrape_and_ingest.py --live --config apa_config.yaml --out runs/2026-09-15
+python scripts/scrape_and_ingest.py --live --auth token-env --token-env APA_TOKEN --config apa_config.yaml --out runs/2026-09-15
 ```
 
 For deterministic rehearsal and CI:
@@ -33,9 +33,9 @@ Exactly one acquisition mode is required:
 | `--db PATH` | Optional database path inside the run directory; defaults to `apa.db` |
 | `--live` | Explicit authorization for the production acquisition path |
 | `--fixtures PATH` | Offline acquisition source; mutually exclusive with `--live` |
-| `--credential-source env\|prompt\|browser` | Live authentication mechanism |
-| `--token-env NAME` | Read a short-lived token from the named environment variable |
-| `--token-stdin` | Read a token from standard input without echoing it |
+| `--auth token-env\|token-stdin\|credentials-env\|prompt\|browser` | Required live authentication mechanism; forbidden in fixture mode |
+| `--token-env NAME` | With `--auth token-env`, read a short-lived token from the named environment variable |
+| `--token-stdin` | With `--auth token-stdin`, read exactly one token line from standard input without echoing it |
 | `--username-env NAME` | Environment variable containing the username |
 | `--password-env NAME` | Environment variable containing the password |
 | `--team-id ID` | Optional configured-team override, stored as text |
@@ -44,18 +44,40 @@ Exactly one acquisition mode is required:
 | `--session NAME` | Optional session restriction |
 | `--dry-run` | Validate configuration/auth mechanism/output containment without login or writes |
 | `--keep-raw` | Retain redacted raw captures in the run directory; off by default |
+| `--stop-after capture\|ingest\|verify` | Stop cleanly after the named completed phase; defaults to `verify` |
+| `--request-timeout-seconds N` | Live-request timeout from 5–120 seconds; defaults to 30 |
+| `--max-retries N` | Eligible-read retries after the initial attempt, from 0–5; defaults to 2 |
+| `--log PATH` | Optional redacted log path contained within `--out` |
 | `--verbose` | Emit operation names/counts only, never response bodies or secrets |
 
 Raw values such as `--token VALUE`, `--password VALUE`, or credentials embedded
 in a URL are intentionally unsupported because process lists and shell history
-can expose them. Token, username/password, and browser-session modes are
-mutually exclusive. An environment-variable *name* may be logged; its value may
-not.
+can expose them. Authentication modes are mutually exclusive. An
+environment-variable *name* may be logged; its value may not.
+
+### Argument validation matrix
+
+| Mode | Required | Allowed credential companions | Forbidden |
+| --- | --- | --- | --- |
+| `--live --auth token-env` | `--token-env NAME` | scope, timeout, retry, retention flags | `--token-stdin`, username/password flags, `--fixtures` |
+| `--live --auth token-stdin` | `--token-stdin` and non-interactive stdin | scope, timeout, retry, retention flags | token/username/password environment flags, `--fixtures` |
+| `--live --auth credentials-env` | `--username-env NAME` and `--password-env NAME` | scope, timeout, retry, retention flags | token flags, `--fixtures` |
+| `--live --auth prompt` | interactive terminal | scope, timeout, retry, retention flags | all token/username/password flags, non-interactive execution |
+| `--live --auth browser` | supported local browser/session manager | scope, timeout, retry, retention flags | all token/username/password flags, CI |
+| `--fixtures PATH` | fixture manifest and `--config` | scope, `--stop-after`, `--log` | `--auth`, every credential flag, live timeout/retry flags, all network |
+| `--dry-run` | otherwise valid mode/config/output arguments | path/config/auth-mechanism validation | login, network, output creation, secret reading |
+
+`--stop-after capture` writes only the validated capture/fixture manifest and
+redacted phase status. `--stop-after ingest` additionally writes the fresh
+database but marks it ineligible for export because reconciliation and
+verification have not run. Only `--stop-after verify` can produce a promotable
+run. No mode resumes or appends to a previous run directory.
 
 The command rejects a pre-existing non-empty output directory, a database
 outside the run directory, a fixture/output path outside the canonical APA
 Tracker boundary, an unrecognized origin, or a live request without `--live`.
-It never repairs or appends to an old SQLite file.
+It never repairs or appends to an old SQLite file. Numeric flags reject zero,
+negative, non-integer, and out-of-policy values before authentication.
 
 ## End-to-end flow
 
@@ -100,6 +122,21 @@ flowchart LR
     T --> U[Stop: no export or stale fallback]
 ```
 
+```mermaid
+flowchart TD
+    A[Live request is prepared] --> B{HTTPS host and operation allowlisted?}
+    B -->|No| Z[Stop: acquisition safety failure]
+    B -->|Yes| C[Send with TLS verification and bounded timeout]
+    C --> D{Result}
+    D -->|2xx and valid contract| E[Hash capture and continue]
+    D -->|401/403 or consent required| F[Stop: authentication failure]
+    D -->|429 or eligible 5xx read| G{Retry budget remains?}
+    D -->|redirect outside allowlist, malformed body, other 4xx| Z
+    G -->|Yes| H[Honor bounded Retry-After or deterministic backoff]
+    H --> C
+    G -->|No| I[Stop: acquisition failure]
+```
+
 ### 1. Preflight
 
 Verify canonical repository root/origin, Python/dependencies, config schema,
@@ -113,6 +150,16 @@ Live mode delegates credentials/session state to `auth/` and acquisition to the
 existing full scraper. The operator completes any guarded consent step. The CLI
 records operation name, source entity IDs, HTTP/result status, byte count,
 capture time, and SHA-256—not response bodies—in its normal log.
+
+Live transport accepts HTTPS only and an audited APA hostname/operation
+allowlist from repository configuration. TLS verification cannot be disabled.
+Redirects are revalidated before following; cross-host redirects fail. Every
+request has a bounded timeout and response-size ceiling. Retries apply only to
+idempotent reads after 429 or eligible transient 5xx responses. The retry count
+is finite, `Retry-After` is honored only within the configured cap, and the
+fallback backoff/jitter schedule is deterministic under test. Authentication,
+authorization, consent, parse, and contract errors are never retried as if they
+were transient.
 
 Fixture mode copies or reads only the selected approved fixture tree, verifies
 its manifest/hashes, and installs a transport guard that fails any attempted
@@ -163,6 +210,11 @@ failures. Logs name the category and remediation without exposing payloads.
   usernames, passwords, query parameters, response snippets, and browser-state
   paths.
 - Subprocesses receive argument lists, not interpolated shell strings.
+- Live requests use HTTPS, certificate verification, an APA host/operation
+  allowlist, bounded timeouts, bounded response sizes, and bounded eligible-read
+  retries. Proxy and certificate overrides from the ambient environment are
+  rejected unless an operator-approved deployment profile explicitly owns
+  them.
 - Raw authenticated payloads, cookies, profiles, and `.env` never enter Git or
   a public demo bundle.
 - `--keep-raw` retains captures only inside the run directory under documented
@@ -171,6 +223,35 @@ failures. Logs name the category and remediation without exposing payloads.
   or fixture mode.
 - Cleanup targets only the exact run-created temporary paths and never a
   repository root or broad parent directory.
+- Output, database, log, manifest, fixture, and temporary paths are resolved
+  before use. Symlinks/junctions, `..` traversal, alternate data streams, and
+  case/short-name aliases cannot escape the canonical APA Tracker root or the
+  exact new run directory.
+
+## Exit codes and operator contract
+
+The CLI returns one stable primary category. Detailed phase and operation
+information belongs in the redacted manifest/log, not in an unstable fleet of
+subcodes.
+
+| Code | Category | Meaning |
+| ---: | --- | --- |
+| 0 | success | requested stop phase completed; manifest states whether the run is promotable |
+| 2 | usage/preflight | invalid flags, environment, config, dependency, origin, or contained path |
+| 3 | authentication | credential, consent, session, or authorization failure |
+| 4 | acquisition | exhausted eligible retries, transport failure, rejected redirect, or capture-contract failure |
+| 5 | parse | captured payload cannot be validated/converted by an existing parser contract |
+| 6 | ingest | schema creation, transaction, constraint, or dependency-order failure |
+| 7 | reconciliation | identity, pair-key, count, result, or assignment invariants disagree |
+| 8 | verification | schema/data/focused-test/hash checks fail after reconciliation |
+| 9 | secret safety | suspected secret exposure, unsafe path, redaction failure, or prohibited raw artifact |
+| 130 | interrupted | operator interruption; partial work remains unpromotable |
+
+The first terminal category wins except secret-safety detection, which upgrades
+any in-progress failure to code 9. Normal output contains a run ID, completed
+phase, manifest path when safely available, and remediation category. It never
+echoes secrets, authenticated URLs, headers, cookies, response snippets, or
+credential-file/browser-profile locations.
 
 ## CI policy
 
@@ -188,10 +269,18 @@ artifact hashes, not by committing captured league data.
 ### Unit tests
 
 - argument/mode validation and stable exit codes;
+- every row of the argument validation matrix, including `--dry-run` proving no
+  secret read, directory creation, login, or network call;
 - path containment and non-empty-output rejection;
 - credential-source exclusivity, standard-input behavior, and redaction;
 - manifest hashing/schema and deterministic warning order;
 - phase rollback and fail-closed transitions.
+- HTTPS/host/operation/redirect allowlists, TLS-required behavior, timeout and
+  response-size bounds, and eligible-read-only retry classification;
+- deterministic bounded backoff, capped `Retry-After`, exhausted retry budget,
+  and non-retry of 401/403/consent/parse errors;
+- symlink/junction/traversal/case/short-name path escape attempts and exact-path
+  cleanup targeting.
 
 ### Mocked integration tests
 
@@ -200,6 +289,10 @@ artifact hashes, not by committing captured league data.
 - assert secrets never appear in captured logs/exceptions/subprocess arguments;
 - verify scraper/parser/ingest calls and transaction order without live hits;
 - simulate interruption and prove a partial database cannot be promoted.
+- simulate external redirects, oversized responses, timeouts, 429/5xx retry
+  exhaustion, and a redaction canary in every exception/log field;
+- run every stop phase and assert capture-only/ingest-only outputs are marked
+  unpromotable while a verified result alone becomes export-eligible.
 
 ### Fixture end-to-end tests
 
@@ -211,6 +304,21 @@ artifact hashes, not by committing captured league data.
 - run twice and compare deterministic database facts/manifests after excluding
   explicitly variable run IDs/timestamps;
 - assert the network guard observed zero live attempts.
+- scan the run tree and logs with seeded secret canaries; assert none survive;
+- validate exit code, phase ledger, source hashes, database hash, and
+  promotability state against golden manifests.
+
+### CI enforcement tests
+
+- Start fixture jobs with credential variables removed and loopback/external
+  networking denied at both transport and socket layers.
+- Fail if `--live`, `--auth`, browser automation, DNS, HTTP, or an APA hostname
+  appears in executed CI arguments or observed calls.
+- Verify fixture hashes before parsing and reject unmanifested files.
+- Run hostile-string HTML/script-JSON tests and workbook formula/link/macro
+  scans on downstream demo artifacts built from the verified fixture database.
+- Publish only redacted test reports; never publish raw captures, databases with
+  private league data, browser profiles, or environment dumps.
 
 ### Live smoke test
 

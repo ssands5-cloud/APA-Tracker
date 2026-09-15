@@ -74,7 +74,7 @@ The orchestrator serializes one escaped JSON document into a non-executable
 - ordered matrix rows and counts;
 - each row's nested explicit `PlayerVsPlayerSummary` and chronological games;
 - source/model status and unavailable-field disclosures;
-- optional, audit-gated risk flag values plus threshold version/status.
+- descriptive profile fields and the active presentation sort key/direction.
 
 The tab reads this element once with `textContent` and `JSON.parse`. It validates
 the schema version and pair-key uniqueness before enabling controls. Script JSON
@@ -109,17 +109,22 @@ game. Missing dates use match ID, not a generated date.
 
 ### Opponent Risk Profile
 
-This panel is a sourced summary, not a new model. It lists evidence class,
-sample counts, observed record, last-recorded skill probability, modeled-value
-validation status, trends, and availability state. `Recommended Avoid` and
-`Recommended Target` are shown only when an approved threshold specification
-names its input, cohort, validation results, version, and effective date.
+This panel is a sourced descriptive summary, not a classifier or recommendation
+engine. It lists evidence class, sample counts, observed record,
+last-recorded skill probability, experimental modeled-value status, trends,
+availability, and capture time.
 
-At the current validation state both flags render **Not available — threshold
-not validated**. They must not be inferred from `modeled_win_probability`,
-volatility, a color, or an arbitrary cutoff. If a future approved flag exists,
-Pair View displays the delivered boolean and threshold version without
-recomputing it.
+The profile may display opponents in canonical name/ID order or let the user
+sort by one visible source field at a time. The heading must state the active
+field and direction, for example “Sorted by direct matches, descending —
+descriptive only.” Nulls sort last and ties use canonical opponent name/external
+ID. No composite risk score, hidden weighting, or browser calculation exists.
+
+There are no Recommended Avoid, Recommended Target, danger, favorable, risk-
+tier, traffic-light, or equivalent categorical flags. In particular,
+`modeled_win_probability`, trend, volatility, observed rate, and reliability
+cannot be thresholded into a category. The experimental modeled value may be
+shown as a separately labeled fact but is not the default ranking field.
 
 ## Matrix View
 
@@ -136,9 +141,7 @@ name/external ID, then opponent name/external ID. The required columns are:
 8. Last-recorded skill probability
 9. Modeled win probability (experimental)
 10. Full/recent trend
-11. Recommended Avoid
-12. Recommended Target
-13. Details action
+11. Details action
 
 The coverage chart sits above the table and shows counts—not scores—for DIRECT,
 INDIRECT, and UNKNOWN. It is an accessible inline SVG or semantic bar group with
@@ -176,7 +179,8 @@ filters, and scroll position.
 - Subview controls implement tab/tabpanel roles, keyboard arrows, focus
   management, and visible focus.
 - Tables use captions, scoped headers, and a horizontal overflow container.
-- Evidence and flags use text/icons as well as color.
+- Evidence uses text/icons as well as color; profile rows use no risk-category
+  color coding.
 - HTML is UTF-8 and self-contained, with no external scripts, fonts, images, or
   runtime network requests.
 - Percentages display as whole percentages to match the current renderer;

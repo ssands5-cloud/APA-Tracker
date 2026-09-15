@@ -100,10 +100,12 @@ The current module always discloses:
   assumed absent;
 - per-player sync timestamps finer than the standings/career signals above.
 
-Other feature-specific gaps—per-opponent break/run attribution, numeric
-Player-vs-Player volatility, and unvalidated Avoid/Target flags—remain disclosed
-in their owning views. A future Data Coverage extension may include them only by
-adding explicit fields/tests, not by silently appending renderer text.
+Other feature-specific gaps—per-opponent break/run attribution and numeric
+Player-vs-Player volatility—remain disclosed in their owning views. Categorical
+opponent-risk flags are deliberately outside the product contract, not a
+missing-data field to count or label. A future Data Coverage extension may add
+new factual gaps only through explicit fields and tests, never by silently
+appending renderer text.
 
 ## Data acquisition boundary
 

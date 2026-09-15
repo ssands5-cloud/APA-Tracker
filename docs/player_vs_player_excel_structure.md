@@ -39,18 +39,16 @@ pair, including UNKNOWN, in the matrix module's structural order.
 | X | `trend` | full explicit-pair trend |
 | Y | `recent_trend` | recent explicit-pair trend |
 | Z | `next_match_projection` | exact alias of modeled probability |
-| AA | `danger_flag` | boolean only when threshold approved; otherwise null |
-| AB | `favorable_flag` | boolean only when threshold approved; otherwise null |
-| AC | `flag_status` | approved version or `UNAVAILABLE_NOT_VALIDATED` |
-| AD | `data_notes` | deterministic source-gap/disclosure text |
+| AA | `data_notes` | deterministic source-gap/disclosure text |
 
-`danger_flag` and `favorable_flag` are the machine fields behind Recommended
-Avoid and Recommended Target. They are not formulas and must never both be true.
-At the current audit state both remain null and `flag_status` explains why.
-Neither is derived in Excel or inferred from formatting.
+The workbook intentionally has no `danger_flag`, `favorable_flag`, Avoid,
+Target, risk-tier, or equivalent categorical column. Users may sort/filter by a
+visible descriptive field, but the file does not persist a composite rank or
+recommendation. `modeled_win_probability` remains labeled experimental and is
+not converted into a flag or default ordering rule.
 
 The implemented v1 workbook lacks internal IDs, skill delta, validation-status,
-flag, and disclosure columns. Those are explicit demo-integration deltas. Until
+and disclosure columns. Those are explicit demo-integration deltas. Until
 a separately reviewed renderer change adds them, the manifest must describe the
 omissions and the demo must not claim workbook parity for absent columns.
 
@@ -87,7 +85,8 @@ and display as `No data`; they are never generated from workbook time.
   three decimals.
 - Null data remains null in cells. A nearby status/note column explains it;
   numeric zero is reserved for measured zero.
-- Evidence/flag fills are supplemental to literal text and use a fixed palette.
+- Evidence fills are supplemental to literal text and use a fixed palette. No
+  risk-category conditional formatting is allowed.
 - There are no volatile formulas, VBA, external links, hidden helper sheets,
   locale-dependent dates, or current-time conditional formatting.
 - Workbook metadata uses the run-manifest timestamp.
@@ -97,8 +96,8 @@ and display as `No data`; they are never generated from workbook time.
 Load the workbook with openpyxl and compare pair keys, raw metrics, nulls,
 status fields, and game keys against the script JSON before display rounding.
 Assert no duplicate/missing matrix row, no UNKNOWN suppression, no formula,
-macro, external link, hidden sheet, or repair prompt. When flag status is not
-approved, assert both flag cells are null for every row.
+macro, external link, hidden sheet, or repair prompt. Assert that no categorical
+risk/target/avoid fields or conditional-format rules are present.
 
 ## Data Coverage handoff
 

@@ -32,7 +32,7 @@ flowchart TD
     P --> PVPT[Open unified Player vs Player tab]
     PVPT --> PVPMV[Matrix View: inspect every feasible pair]
     PVPMV --> PVP[Pair View: inspect one explicit comparison]
-    PVP --> RISK[Opponent Risk Profile and flag status]
+    PVP --> RISK[Opponent Risk Profile: sourced descriptive ranking]
     RISK --> Q[Lineup Lab]
     Q --> DC[Data Coverage: denominators, gaps, and source status]
     DC --> R[Export review and evidence capture]
@@ -56,10 +56,34 @@ flowchart TD
    workbook from one escaped JSON/source document; validate containment and
    cross-renderer parity before opening a browser.
 7. Present `captain_first_edge.html` first, open Player vs Player, inspect
-   Matrix View, switch to Pair View, review Opponent Risk Profile status, then
-   show Lineup Lab, Data Coverage, analysis tabs, and workbooks.
+   Matrix View, switch to Pair View, review the descriptive Opponent Risk
+   Profile, then show Lineup Lab, Data Coverage, analysis tabs, and workbooks.
 8. Preserve the manifest and checksums as the demo evidence package. Remove
    temporary credentials and browser state; retain only approved outputs.
+
+## Unified Player vs Player routing flow
+
+```mermaid
+flowchart TD
+    A[Open player-vs-player with complete scope] --> B{view parameter}
+    B -->|missing or matrix| C[Matrix View]
+    B -->|pair| D{Exact player_id + opponent_id key exists?}
+    B -->|unknown value| E[Matrix View + routing error]
+    C --> F[Apply display-only filters or one named sort field]
+    F --> G[Select Details]
+    G --> H[Write view=pair + exact IDs; preserve scope/filter/sort]
+    H --> D
+    D -->|Yes, exactly once| I[Pair View from nested summary]
+    D -->|No or duplicate| E
+    I --> J[Back to Matrix or browser Back]
+    J --> C
+```
+
+The URL is presentation state, not a data source. The router resolves pair
+identity only against the escaped `script#pvp-data` document. It never uses
+display names, calls the database, invokes analytics, drops UNKNOWN rows, or
+constructs a categorical risk label. Back/Forward restores the same subview,
+filters, named sort field, and direction from the immutable snapshot.
 
 ## Failure branches
 

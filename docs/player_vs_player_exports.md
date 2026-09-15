@@ -104,11 +104,12 @@ timeline entries.
 If its matrix evidence label is UNKNOWN, that label remains visible. UNKNOWN
 does not become observed 0%, 50%, or a modeled recommendation.
 
-Recommended Avoid (`danger_flag`) and Recommended Target (`favorable_flag`)
-are reserved, audit-gated export fields. Current validation does not establish
-a held-out rematch threshold for either flag, so they remain null with status
-`UNAVAILABLE_NOT_VALIDATED`. No renderer may manufacture them from modeled
-probability, trend, volatility, or color.
+The export schema contains no danger/favorable, Avoid/Target, or risk-tier
+fields. Opponent Risk Profile ordering is descriptive only: canonical order by
+default, or an explicitly selected visible source column with nulls last and
+canonical tie-breaks. No renderer may manufacture a category or composite
+score from modeled probability, trend, volatility, observed rate, reliability,
+or color.
 
 ## Deterministic formatting and audit constraints
 
@@ -123,10 +124,8 @@ probability, trend, volatility, or color.
   or schedule claims.
 - The modeled probability and identical projection alias carry the same
   experimental validation warning and may not drive recommendations.
-- A future flag requires a versioned threshold specification, named training
-  and holdout cohorts, calibration/decision metrics, approval, and provenance.
-  Until then Captain's Edge may show the risk evidence profile but no
-  Recommended Avoid/Target assertion.
+- Captain's Edge may show and sort the same sourced descriptive fields, but it
+  never emits a Recommended Avoid/Target assertion or categorical proxy.
 
 ## Planned wiring
 

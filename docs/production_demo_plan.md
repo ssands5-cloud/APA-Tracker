@@ -70,16 +70,15 @@ evidence label, sample counts, observed record/rate, current and last-recorded
 skills, reliability, trends, experimental model status, missing-data notes, and
 a link into Pair View.
 
-`Recommended Avoid` and `Recommended Target` map to reserved `danger_flag` and
-`favorable_flag` fields. At present both are unavailable because the history
-model has no held-out rematch cohort and no approved decision threshold. The
-production demo must show **Not available — threshold not validated**, not
-derive flags from modeled probability, volatility, or an invented cutoff.
-
-A future flag may be displayed only after a reviewed specification records the
-input field, threshold, training/holdout cohorts, calibration and decision
-metrics, version, approval, and effective date. Captain's Edge consumes the
-delivered boolean/status; it never evaluates the threshold in a renderer.
+The profile is descriptive only. Its schema and presentation contain no
+`danger_flag`, `favorable_flag`, Recommended Avoid/Target, risk-tier,
+traffic-light, or equivalent categorical field. The default is canonical
+opponent order. An operator may sort by one named visible source field at a
+time; the heading states the field and direction, nulls sort last, and
+canonical opponent name/external ID breaks ties. There is no composite or
+hidden weighting. In particular, experimental `modeled_win_probability`,
+trend, volatility, observed rate, and reliability are never thresholded into a
+category, and the experimental modeled value cannot be the default rank.
 
 The profile is a build-time snapshot. It changes only on regeneration and may
 be stale after roster, skill, schedule, or availability changes. Availability

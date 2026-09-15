@@ -30,7 +30,7 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
              │                        │                        │
              ├─ analytics/player_vs_player.py (explicit pair)  │
              ├─ analytics/player_vs_player_matrix.py (matrix)  │
-             ├─ analytics/data_coverage.py (planned audit view)│
+             ├─ analytics/data_coverage.py (audit document)    │
              │              │                                  │
              │              ├─ planned exports/html_builder.py │
              │              └─ planned exports/excel_builder.py│
@@ -146,11 +146,13 @@ Issue #14 findings are corrected and re-audited.
   `ui/export_excel_player_vs_player.py` render `player_vs_player.html`/`.xlsx`
   from the same matrix rows. The HTML reuses `ui/tabs/player_vs_player.py` for
   each explicit detail.
-- The target UI adds one Player vs Player top-level navigation entry with Pair
-  View and Matrix View subviews. Pair View renders one nested
+- `ui/tabs/player_vs_player_unified.py` implements one Player vs Player fragment
+  with Pair View and Matrix View subviews over the same rows and escaped script
+  JSON. Pair View renders one nested
   `PlayerVsPlayerSummary`; Matrix View renders the ordered
   `PlayerVsPlayerExportRow` collection. Existing `ui/tabs` composition owns the
-  shell, while analytics ownership stays in the two separate modules.
+  shell, while analytics ownership stays in the two separate modules. The full
+  persistent URL/history contract below remains the routing target.
 - Planned `ui/router.py` uses one `player-vs-player` route with `view=pair` or
   `view=matrix`. A pair route also requires both external player IDs and the
   complete scope. Invalid state fails back to Matrix View with an explanation;
@@ -177,7 +179,7 @@ analytics/player_vs_player_matrix.py
                 ├───────────────┬────────────────────┐
                 ▼               ▼                    ▼
 Matrix View       Pair View selection       Captain's Edge profile
-all rows           one row.summary           selected row + flag status
+all rows           one row.summary           selected descriptive facts
                 └───────────────┬────────────────────┘
                         ▼
           escaped script JSON + ui/tabs shell
@@ -185,13 +187,31 @@ all rows           one row.summary           selected row + flag status
 
 The browser reads `script#pvp-data` once, validates its schema version and pair
 keys, and performs presentation-only selection/filtering. It cannot query the
-database, call analytics, fill nulls, or create risk flags.
+database, call analytics, fill nulls, create categorical risk fields, or blend
+a hidden score.
 
 Captain's Edge references the same selected matrix row for its Opponent Risk
-Profile. Recommended Avoid/Target are nullable delivered fields, not UI
-calculations; they remain unavailable until a versioned threshold is validated
-and approved. Capture time and availability state travel with the row so the
-profile cannot masquerade as a live evaluation.
+Profile. It displays sourced facts and may order opponents by one named visible
+field at a time, with nulls last and canonical identity tie-breaks. Its schema
+contains no Avoid/Target, danger/favorable, tier, traffic-light, or other
+categorical risk field, and the browser cannot blend a hidden score. Capture
+time and availability state travel with the row so the profile cannot
+masquerade as a live evaluation.
+
+### Unified-tab routing contract
+
+The `player-vs-player` top-level tab owns both subviews. A scope-only URL or an
+explicit `view=matrix` opens Matrix View. A Details action writes `view=pair`,
+`player_id`, and `opponent_id` while preserving team, opponent-team, format,
+and session scope. The pair key must match exactly one row in the embedded
+snapshot. Missing, duplicate, or out-of-scope IDs return to Matrix View and
+show an inline routing error; display names are never identity inputs.
+
+The router stores the active subview, pair key, matrix filters, named sort field,
+and sort direction in URL state so Back/Forward restores the same presentation.
+It validates all state against `script#pvp-data`, never refetches or recomputes
+analytics, and ignores unknown query keys. A “Back to Matrix” action restores
+the prior filter/sort state rather than constructing a second tab.
 
 ## Demo boundary and invariants
 

@@ -41,8 +41,11 @@
 - [ ] Confirm Matrix HTML/Excel/JSON pair and game parity.
 - [ ] Confirm each embedded explicit-pair detail matches its matrix row.
 - [ ] Confirm Captain's Edge Opponent Risk Profile matches the selected pair,
-      shows capture/availability state, and leaves Avoid/Target null with
-      `UNAVAILABLE_NOT_VALIDATED` until threshold approval.
+      shows capture/availability state, and contains no Avoid/Target, danger,
+      favorable, tier, traffic-light, or equivalent categorical field/style.
+- [ ] Confirm any opponent ordering names one visible descriptive source field
+      and direction, places missing values last, and uses canonical identity
+      tie-breaks without a composite score.
 - [ ] Confirm assigned/unassigned reconciliation and legality/blocked reason.
 - [ ] Load every workbook with openpyxl without repair prompts.
 - [ ] Write and verify the redacted manifest and hashes.

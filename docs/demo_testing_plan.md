@@ -22,8 +22,12 @@ no-data result. It is design-only until the orchestration script exists.
 - Unified-tab routing, valid/invalid pair-key selection, back/forward state,
   Pair/Matrix keyboard behavior, and escaped script-JSON schema validation.
 - Opponent Risk Profile source mapping, build-time/availability labels, and
-  fail-closed Avoid/Target status. Until threshold approval, both flags must be
-  null for every pair.
+  descriptive ordering. Tests assert that any selected sort names one visible
+  source field/direction, places nulls last, and uses canonical identity
+  tie-breaks.
+- Schema and presentation tests assert that Avoid/Target, danger/favorable,
+  risk-tier, traffic-light, and equivalent categorical fields/labels/styles are
+  absent. Modeled probability cannot drive the default order or a composite.
 - Data Coverage missing-skill deduplication/order, matrix count/percentage
   parity, zero-total null behavior, DIRECT-vs-INDIRECT sample semantics,
   timestamp passthrough, fixed unavailable fields, and immutable inputs.
@@ -44,7 +48,8 @@ no-data result. It is design-only until the orchestration script exists.
   and nested chronological games.
 - Verify all outputs share the same database/config/source manifest.
 - Verify Captain's Edge risk-profile values equal the selected matrix row and
-  that HTML/script JSON/Excel agree on flag status and threshold version.
+  that HTML/script JSON/Excel agree on the active descriptive sort field,
+  direction, null placement, and canonical tie-break order.
 - Compare Data Coverage HTML, Excel, script JSON, and manifest by scope and pair
   order; reconcile evidence counts/percentages, missing-skill identities,
   sample sizes, refresh timestamps, and unavailable text before rounding.

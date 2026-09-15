@@ -159,9 +159,7 @@ See `docs/player_vs_player_matrix.md` for the matrix API, HTML/Excel structures,
 export wiring, UNKNOWN handling, and demo integration. See
 `docs/player_vs_player_exports.md` for the explicit-pair export.
 
-**A request for this layer also asked for `danger_flag`/`favorable_flag`
-columns and Captain's Edge "Recommended Avoid/Target" indicators derived
-from `modeled_win_probability`. Neither is implemented.** Per
+**Categorical opponent-risk fields are deliberately excluded.** Per
 `docs/stage3_lineup_lab_scoring.md` §1 (Issue #14's own fail-closed finding
 against the identical value), the DIRECT history term inside
 `modeled_win_probability` has zero held-out rematch predictions in the
@@ -169,17 +167,14 @@ current validation set -- there is no validated basis for a categorical
 danger/favorable/avoid/target judgment on top of it today, and inventing
 one would repeat the exact "unfitted threshold" pattern already fail-closed
 against `analytics.opponent_scouting` (win probability below 0.40 OR
-volatility >= 0.50, both invented and never checked against outcomes). If
-that data-honesty gap closes (real held-out rematches become available and
-a threshold is written down, sourced, and checked against them first, per
-`docs/captain_first_edge_experience.md` §10's rule), this is a real,
-buildable follow-up -- not implemented here as a placeholder or a silently
-lowered bar.
+volatility >= 0.50, both invented and never checked against outcomes).
 
-The unified UX/export design reserves nullable flag fields and specifies their
-fail-closed status in `docs/player_vs_player_html_structure.md` and
-`docs/player_vs_player_excel_structure.md`; reservation is not validation or
-authorization to populate them.
+The unified UX/export contract therefore contains no `danger_flag`,
+`favorable_flag`, Recommended Avoid/Target, risk-tier, traffic-light, or
+equivalent categorical field—not even a nullable placeholder. Captain's Edge
+may present and sort sourced descriptive facts one field at a time, with the
+active field and direction visible, but may not threshold or blend them into a
+recommendation.
 
 ## Not yet built
 

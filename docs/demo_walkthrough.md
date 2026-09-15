@@ -51,8 +51,11 @@ line. Skip this step when a verified fresh database already exists.
 10. Use browser Back/Forward and the subview buttons to confirm route state and
     filters restore without a refetch or recomputation.
 11. Open Captain's Edge Opponent Risk Profile for the same pair. Verify values
-    match Pair View, the capture/availability labels are visible, and Avoid and
-    Target read “Not available — threshold not validated.”
+    match Pair View and the capture/availability labels are visible. If the
+    list is sorted, verify the heading names one visible descriptive field and
+    direction, missing values appear last, and canonical identity breaks ties.
+    Confirm there are no Avoid/Target, danger/favorable, risk-tier,
+    traffic-light, or equivalent categorical labels or colors.
 12. Compare Matrix HTML/XLSX values and verify the selected Pair View matches
     its row and workbook history; inspect both artifact hashes in the manifest.
 13. Open Lineup Lab. Review assignments, unassigned sides, total score, and the

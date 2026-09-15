@@ -79,8 +79,12 @@ not a successful deliverable.
 - The unified Player vs Player tab restores Pair/Matrix route state, consumes
   only the embedded escaped JSON snapshot, and makes no runtime network call.
 - Captain's Edge identifies its Opponent Risk Profile as a build-time snapshot,
-  shows availability status, and keeps Avoid/Target flags unavailable unless a
-  versioned threshold has passed audit.
+  shows availability status, and contains no Avoid/Target, danger/favorable,
+  risk-tier, traffic-light, or equivalent categorical field.
+- Any Opponent Risk Profile ordering names one visible descriptive source field
+  and direction, sorts missing values last, and uses canonical identity
+  tie-breaks. Modeled probability is experimental and cannot be the default
+  rank or an input to a composite rank.
 - Every Data Coverage label percentage uses total feasible pairings as its
   denominator; a zero total produces null label percentages. HTML, Excel, and
   manifest scope/counts/percentages/missing skills/sample rows/timestamps must
@@ -93,6 +97,6 @@ change player availability, observe evidence counts reconcile, inspect at least
 one DIRECT/INDIRECT/UNKNOWN row when the snapshot contains them, view Lineup
 Lab unassigned lists, open the unified Player vs Player tab, switch between
 Matrix View and Pair View without losing UNKNOWN rows, review the Captain's
-Edge Opponent Risk Profile/flag status, and open all requested workbooks without
+Edge descriptive Opponent Risk Profile, and open all requested workbooks without
 repair prompts. The reviewer must also inspect Data Coverage denominators,
 follow one missing-data link, and reconcile its evidence counts with the matrix.

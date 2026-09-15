@@ -8,7 +8,7 @@ the future launcher should call it rather than duplicating exporter logic.
 
 | Artifact | Builder | Demo role | Required validation |
 | --- | --- | --- | --- |
-| `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, nullable flag status, no external requests |
+| `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and descriptive Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, named single-field ordering, no categorical risk fields, no external requests |
 | `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix plus anchored explicit-pair details | UNKNOWN visibility, escaping, stable initial pair order, no renderer math |
 | `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff plus real game history | openpyxl load, values only, pair/game-key parity |
 | Player vs Player JSON document | planned `demo.py` adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
@@ -40,9 +40,8 @@ the future launcher should call it rather than duplicating exporter logic.
 6. Append optional workbook sheets only when the source document has real rows.
 7. Write analysis tabs after JSON artifacts exist.
 8. Build captain-first HTML after the final database and scope set exist.
-9. Validate every path, hash, coverage denominator, flag status, and Player vs
-   Player cross-renderer value before
-   presentation.
+9. Validate every path, hash, coverage denominator, descriptive sort contract,
+   and Player vs Player cross-renderer value before presentation.
 
 ## Cross-artifact consistency
 
@@ -57,11 +56,12 @@ details label the modeled probability and its identical projection alias with
 the same audit status.
 
 Captain's Edge risk-profile values must match the selected matrix row by key.
-Recommended Avoid/Target fields remain null with
-`UNAVAILABLE_NOT_VALIDATED` until a versioned, approved threshold exists. If a
-future approved flag is present, every artifact must carry the same boolean,
-threshold version, capture time, and availability state. A mismatch blocks the
-bundle.
+The export contract has no Recommended Avoid/Target, danger/favorable,
+risk-tier, traffic-light, or equivalent categorical field. When the profile is
+ordered, the artifact records the one visible descriptive source field and
+direction; missing values sort last and canonical opponent identity breaks
+ties. No renderer evaluates a threshold or blends metrics into a hidden score.
+A value or ordering mismatch blocks the bundle.
 
 Data Coverage HTML/XLSX and the manifest must agree on scope,
 DIRECT/INDIRECT/UNKNOWN/total counts, raw percentages, missing-skill identities,

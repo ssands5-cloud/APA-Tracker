@@ -44,10 +44,13 @@ defense, break/run, and numeric-volatility fields. The value of this view is as
 much in what it refuses to infer as in the real history it displays.
 
 Then show the same evidence in Captain's Edge's Opponent Risk Profile. Call out
-that it is a build-time snapshot and availability-dependent. Recommended Avoid
-and Recommended Target currently read **Not available — threshold not
-validated**. This is intentional: no arbitrary modeled-probability or
-volatility cutoff is presented as advice.
+that it is a build-time snapshot and availability-dependent. Rank the rows, if
+useful, by one named visible fact such as DIRECT games, observed win rate, or
+reliability; state the active field and direction. There are no Recommended
+Avoid/Target labels, danger/favorable flags, risk tiers, traffic lights, or
+hidden blended scores. The absence is intentional: experimental modeled
+probability, volatility, and other descriptive facts are never converted into
+advice.
 
 ## Lineup Lab
 

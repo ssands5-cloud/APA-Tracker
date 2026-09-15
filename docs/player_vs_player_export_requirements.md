@@ -37,10 +37,10 @@ The current HTML covers the first three source gaps in its explicit-pair note
 but not numeric volatility or the full held-out-validation statement; these are
 demo-integration blockers, not permission to omit or fabricate values.
 
-The unified export reserves `danger_flag`, `favorable_flag`, `flag_status`, and
-`threshold_version` for Captain's Edge integration. Until a threshold has a
-reviewed specification and held-out evidence, both booleans are null,
-`flag_status = UNAVAILABLE_NOT_VALIDATED`, and no threshold version is claimed.
+The unified export deliberately defines no `danger_flag`, `favorable_flag`,
+Avoid/Target, threshold-version, or equivalent categorical fields. Captain's
+Edge consumes the same descriptive values and may sort by one visible field,
+but it cannot create a composite score or category.
 
 ## Integrity requirements
 
