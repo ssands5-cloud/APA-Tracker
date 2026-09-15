@@ -30,6 +30,17 @@ apa-graphql-requests.json
 # generated output, not source.
 scraper/sanitized_fixtures/
 
+# The same directory name at the REPOSITORY ROOT, which is where the
+# untracked apa_full_scrape.py draft (ignored below) writes. That draft calls
+# its output "sanitized_fixtures" but keeps each GraphQL response's `data`
+# verbatim -- real names and ids, not the type-only shapes
+# scraper/full_apa_scrape.py produces. Only the path under scraper/ was
+# ignored, so a root-level run would have left real identities
+# untracked-but-committable. The directory already exists (created on import)
+# and is currently empty; this closes the path rather than relying on it
+# staying empty.
+/sanitized_fixtures/
+
 # Downloaded scoresheet PDFs from scraper/full_apa_scrape.py -- real league
 # data (not sanitized like the fixtures above), never belongs in the repo.
 scraper/scoresheets/
@@ -41,3 +52,29 @@ scraper/full_apa_scrape.log
 venv*/
 .pytest_cache/
 scraper/sanitized_fixtures.zip
+
+# Windows Explorer folder-customization metadata. Machine-local, never source.
+desktop.ini
+
+# Superseded local Playwright capture draft. Kept out of Git rather than
+# moved under scraper/, because there is no approved implementation in it to
+# move: scraper/full_apa_scrape.py already does this job properly, and this
+# draft is strictly worse on the point that matters. Its
+# sanitize_graphql_response() is a three-key whitelist that passes each
+# response's entire `data` object through untouched, so every real player
+# name and id survives into files it labels "sanitized"; the tracked module's
+# summarize_shape() recursively replaces every value with its type name. The
+# draft also hardcodes one real league/division id and drives the site
+# automatically, which the tracked module deliberately does not do.
+/apa_full_scrape.py
+
+# Local Windows demo launchers. Not promoted to a tracked launcher because
+# docs/demo_launcher.md specifies scripts/run_production_demo.py as a thin
+# boundary around scripts/build_full_production_demo.py (neither implemented
+# yet) and states that existing batch files "are not the unified launcher
+# contract and must not be used as its source of truth". They are also
+# non-portable (absolute path to one machine) and run_full_demo.bat's
+# build_data_coverage.py step fails outright, since that script requires
+# --opponent-team-id/--format/--session.
+/run_demo.bat
+/run_full_demo.bat
