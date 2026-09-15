@@ -10,9 +10,11 @@ tests/test_captains_edge_summary.py and tests/test_lineup_risk.py.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
-from analytics.head_to_head import skill_only_win_probability, win_probability
+from analytics.head_to_head import skill_only_win_probability
 from analytics.lineup_lab import (
     MAX_ASSIGNMENT_ATTEMPTS,
     LineupLabError,
@@ -21,7 +23,6 @@ from analytics.lineup_lab import (
 )
 from analytics.lineup_legality import TEAM_SKILL_LEVEL_LIMIT_5
 from analytics.pairing_evidence import EvidenceLabel, PairingEvidence, PairingEvidenceMatrix
-from database.models import PlayerHeadToHead
 
 
 def _pairing(
@@ -69,46 +70,52 @@ def _matrix(pairings):
 
 
 class TestPairingScore:
-    def test_direct_and_indirect_score_is_their_own_modeled_probability(self):
-        direct = _pairing(1, 10, EvidenceLabel.DIRECT, modeled_win_probability=0.77,
+    def test_direct_and_indirect_use_the_same_validated_current_skill_score(self):
+        direct = _pairing(1, 10, EvidenceLabel.DIRECT, modeled_win_probability=0.99,
                            model_source="analytics.head_to_head:direct-history-and-skill")
-        indirect = _pairing(1, 11, EvidenceLabel.INDIRECT, modeled_win_probability=0.60,
+        indirect = _pairing(1, 11, EvidenceLabel.INDIRECT, modeled_win_probability=0.01,
                              model_source="analytics.head_to_head:validated-skill-only")
-        assert pairing_score(direct) == 0.77
-        assert pairing_score(indirect) == 0.60
+        expected = skill_only_win_probability(5, 4)
+        assert pairing_score(direct) == expected
+        assert pairing_score(indirect) == expected
+
+    def test_unvalidated_direct_history_cannot_change_lineup_selection_score(self):
+        win_history = _pairing(
+            1, 10, EvidenceLabel.DIRECT, observed_win_rate=1.0,
+            direct_evidence_count=10, modeled_win_probability=0.98,
+        )
+        loss_history = _pairing(
+            1, 11, EvidenceLabel.DIRECT, observed_win_rate=0.0,
+            direct_evidence_count=10, modeled_win_probability=0.02,
+        )
+
+        assert pairing_score(win_history) == pairing_score(loss_history)
 
     def test_unknown_scores_none_never_a_neutral_default(self):
         unknown = _pairing(1, 12, EvidenceLabel.UNKNOWN)
         assert pairing_score(unknown) is None
 
+    @pytest.mark.parametrize(
+        "player_skill_level,opponent_skill_level",
+        [(None, 4), (5, None), (None, None)],
+    )
+    def test_missing_current_skill_input_is_unscoreable(
+        self, player_skill_level, opponent_skill_level
+    ):
+        direct = _pairing(
+            1,
+            10,
+            EvidenceLabel.DIRECT,
+            player_skill_level=player_skill_level,
+            opponent_skill_level=opponent_skill_level,
+            modeled_win_probability=0.9,
+        )
+        assert pairing_score(direct) is None
+
     def test_regression_against_the_documented_worked_examples(self):
-        """Pinned to docs/stage3_lineup_lab_scoring.md §4 -- a future change
-        to analytics.head_to_head's constants that silently shifts these
-        values should fail this test, not slip into Stage 3 unnoticed."""
-        indirect_score = skill_only_win_probability(5, 4)
-        assert round(indirect_score, 3) == 0.599
-
-        def game(result):
-            return PlayerHeadToHead(
-                player_id=1, opponent_id=2, match_id=1, result=result,
-                own_skill_level=5, opponent_skill_level=4,
-                format="8-Ball Open", session_name="Fall 2026",
-            )
-
-        one_win = win_probability([game("W")])
-        one_loss = win_probability([game("L")])
-        strong_record = win_probability([game("W")] * 8 + [game("L")] * 2)
-
-        assert round(one_win, 3) == 0.639
-        assert round(one_loss, 3) == 0.556
-        assert round(strong_record, 3) == 0.776
-
-        # A single game never overreacts far past the skill-only baseline in
-        # either direction -- the calibration property the amendment claims.
-        assert abs(one_win - indirect_score) < 0.05
-        assert abs(one_loss - indirect_score) < 0.05
-        # A real 10-game sample is allowed to move the estimate much further.
-        assert strong_record - indirect_score > 0.15
+        assert round(skill_only_win_probability(5, 4), 3) == 0.599
+        assert round(skill_only_win_probability(6, 3), 3) == 0.769
+        assert skill_only_win_probability(6, 4) > skill_only_win_probability(5, 4)
 
 
 class TestFullyScoreableLineup:
@@ -126,7 +133,7 @@ class TestFullyScoreableLineup:
         assert result.unassigned_opponents == ()
         assert result.is_legal is True
         assert result.skill_total == 20
-        assert result.total_score == pytest.approx(3.0)
+        assert result.total_score == pytest.approx(2.5)
         assert result.blocked_reason is None
 
     def test_extra_available_players_are_left_unassigned_not_forced_in(self):
@@ -208,7 +215,11 @@ class TestLegalityFallback:
         assert result.is_legal is True
         assert result.skill_total <= TEAM_SKILL_LEVEL_LIMIT_5
         assert result.skill_total == 20
-        assert result.total_score == pytest.approx(2.70)
+        expected = (
+            2 * skill_only_win_probability(7, 4)
+            + 3 * skill_only_win_probability(2, 4)
+        )
+        assert result.total_score == pytest.approx(expected)
         assert result.blocked_reason is None
         # Exactly two of the three SL7 players are fielded, never all three.
         strong_fielded = sum(1 for slot in result.assignments if slot.player_skill_level == 7)
@@ -251,6 +262,51 @@ class TestReconciliation:
         assert assigned_opponents | unassigned_opponents == opp_ids
         assert assigned_opponents & unassigned_opponents == set()
 
+    def test_matrix_count_drift_fails_closed(self):
+        pairings = [
+            _pairing(1, 10, EvidenceLabel.INDIRECT, modeled_win_probability=0.5)
+        ]
+        matrix = _matrix(pairings)
+        matrix.counts["INDIRECT"] = 99
+
+        with pytest.raises(LineupLabError, match="stored counts"):
+            solve(matrix)
+
+    def test_matrix_scope_drift_fails_closed(self):
+        pairing = replace(
+            _pairing(1, 10, EvidenceLabel.INDIRECT, modeled_win_probability=0.5),
+            session_name="Spring 2026",
+        )
+
+        with pytest.raises(LineupLabError, match="format/session scope"):
+            solve(_matrix([pairing]))
+
+
+class TestAvailability:
+    def test_side_specific_unavailability_recomputes_the_assignment(self):
+        pairings = [
+            _pairing(p, o, EvidenceLabel.INDIRECT, modeled_win_probability=0.5)
+            for p in range(1, 4) for o in range(10, 13)
+        ]
+
+        result = solve(
+            _matrix(pairings),
+            unavailable_our_player_ids={1},
+            unavailable_opponent_player_ids={10},
+        )
+
+        assert {slot.player_id for slot in result.assignments} <= {2, 3}
+        assert {slot.opponent_id for slot in result.assignments} <= {11, 12}
+        assert {u.player_id for u in result.unassigned_players} <= {2, 3}
+        assert {u.opponent_id for u in result.unassigned_opponents} <= {11, 12}
+
+    def test_unknown_unavailable_id_fails_closed(self):
+        matrix = _matrix(
+            [_pairing(1, 10, EvidenceLabel.INDIRECT, modeled_win_probability=0.5)]
+        )
+        with pytest.raises(LineupLabError, match="not in the evidence matrix"):
+            solve(matrix, unavailable_our_player_ids={999})
+
 
 class TestExactSearchBound:
     def test_a_roster_too_large_to_search_exactly_raises_rather_than_hangs(self):
@@ -264,3 +320,32 @@ class TestExactSearchBound:
 
         with pytest.raises(LineupLabError, match="narrow tonight's availability"):
             solve(_matrix(pairings))
+
+    def test_sparse_large_graph_is_bounded_after_maximum_matching(self):
+        pairings = []
+        for player_id in range(1, 14):
+            for opponent_id in range(100, 113):
+                if player_id == 1 and opponent_id == 100:
+                    pairings.append(
+                        _pairing(
+                            player_id,
+                            opponent_id,
+                            EvidenceLabel.INDIRECT,
+                            modeled_win_probability=0.5,
+                        )
+                    )
+                else:
+                    pairings.append(
+                        _pairing(
+                            player_id,
+                            opponent_id,
+                            EvidenceLabel.UNKNOWN,
+                            player_skill_level=None,
+                            opponent_skill_level=None,
+                        )
+                    )
+
+        result = solve(_matrix(pairings))
+
+        assert len(result.assignments) == 1
+        assert "Only 1 of 5" in result.blocked_reason

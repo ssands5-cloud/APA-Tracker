@@ -1,18 +1,18 @@
 """Lineup Lab: the "approved best lineup" assignment for Stage 3 of
 docs/captain_first_edge_experience.md.
 
-The scoring formula and the assignment rule are both specified, with
-worked examples and edge cases, in
-docs/stage3_lineup_lab_scoring.md (posted to Issue #14 before this module
-was written, per §10 of the governing spec). This module is the
-implementation of that document and nothing else -- it introduces no
-threshold, weight, or heuristic beyond what that document already states.
+The corrected scoring formula and assignment rule are specified, with
+worked examples and edge cases, in docs/stage3_lineup_lab_scoring.md. The
+initial Stage 3 score was rejected on Issue #14 because its DIRECT history
+term had no held-out rematch validation; this implementation uses only the
+validated current-skill term and introduces no new statistical weight or
+decision threshold.
 
 Deliberately NOT built on analytics.lineup_optimizer: that module's
 ``pairing_score`` defaults every missing input (including a missing
 ``modeled_win_probability``) to a neutral 0.5, which would let an UNKNOWN
 pairing compete for -- and potentially win -- a lineup slot on a fabricated
-value. See docs/stage3_lineup_lab_scoring.md §6.1 for the full reasoning.
+value. See docs/stage3_lineup_lab_scoring.md §1-§2 for the full reasoning.
 
 Purely derived and purely computational, the same split every analytics
 module in this project uses: takes a real, already-classified
@@ -25,16 +25,23 @@ from __future__ import annotations
 import itertools
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Collection, Optional
 
+from analytics.head_to_head import skill_only_win_probability
 from analytics.lineup_legality import LINEUP_SIZE, check_lineup_legality
-from analytics.pairing_evidence import EvidenceLabel, PairingEvidence, PairingEvidenceMatrix
+from analytics.pairing_evidence import (
+    EvidenceLabel,
+    PairingEvidence,
+    PairingEvidenceMatrix,
+    PairingReconciliationError,
+    build_pairing_matrix,
+)
 
 # Same real cap, same real reason, as analytics.lineup_optimizer's own
 # MAX_ASSIGNMENT_PERMUTATIONS: an exact search that would take an
 # unreasonable amount of time is a data anomaly worth surfacing (narrow
 # tonight's availability), not something to solve approximately without
-# saying so. See docs/stage3_lineup_lab_scoring.md §6.4 for the real
+# saying so. See docs/stage3_lineup_lab_scoring.md §7 for the real
 # 13-player-roster example this bound is sized against.
 MAX_ASSIGNMENT_ATTEMPTS = 500_000
 
@@ -57,8 +64,10 @@ class LineupSlot:
     evidence_label: EvidenceLabel
     observed_win_rate: Optional[float]
     direct_evidence_count: int
-    modeled_win_probability: float
-    model_source: str
+    modeled_win_probability: Optional[float]
+    model_source: Optional[str]
+    lineup_score: float
+    lineup_score_source: str
 
 
 @dataclass(frozen=True)
@@ -78,10 +87,11 @@ class LineupLabResult:
     """The full result of one Lineup Lab computation.
 
     ``is_legal`` is ``True``/``False`` only when the chosen assignment has
-    exactly ``LINEUP_SIZE`` slots AND every chosen player/opponent has a
-    real current skill level to check; ``None`` means legality could not be
-    evaluated (a partial lineup, or a missing current skill level) -- never
-    a guessed verdict.
+    exactly ``LINEUP_SIZE`` slots and every chosen one-of-ours player has a
+    real current skill level to check; opponent skill is needed for the
+    selection score, not our 23-rule verdict. ``None`` means legality could
+    not be evaluated (a partial lineup or missing current skill) -- never a
+    guessed verdict.
 
     ``blocked_reason`` is set, and ``assignments`` may still be populated
     for transparency, when no fully approved result exists (see
@@ -98,18 +108,30 @@ class LineupLabResult:
 
 
 def pairing_score(pairing: PairingEvidence) -> Optional[float]:
-    """The Stage 3 score: analytics.pairing_evidence's own
-    ``modeled_win_probability``, unchanged. ``None`` for UNKNOWN --
-    Stage 1's own classifier already guarantees ``modeled_win_probability``
-    is ``None`` exactly when ``evidence_label`` is UNKNOWN and populated
-    otherwise; this function names that invariant rather than
-    re-implementing it. See docs/stage3_lineup_lab_scoring.md §2.
+    """Return the validated current-skill-only score, or ``None``.
+
+    DIRECT history remains visible on the result, but it does not influence
+    lineup selection: ``docs/prediction_validation.md`` records zero
+    walk-forward predictions for the historical-record term. Both current
+    roster skill levels are therefore required and the shared, independently
+    graded skill-only implementation is the sole selection score.
     """
     if pairing.evidence_label is EvidenceLabel.UNKNOWN:
-        assert pairing.modeled_win_probability is None
         return None
-    assert pairing.modeled_win_probability is not None
-    return pairing.modeled_win_probability
+    if pairing.evidence_label not in (
+        EvidenceLabel.DIRECT,
+        EvidenceLabel.INDIRECT,
+    ):
+        raise LineupLabError(f"Unsupported evidence label: {pairing.evidence_label!r}")
+    score = skill_only_win_probability(
+        pairing.player_skill_level,
+        pairing.opponent_skill_level,
+    )
+    if score is None:
+        return None
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        raise LineupLabError(f"Invalid skill-only probability: {score!r}")
+    return score
 
 
 def _attempt_count(our_count: int, opp_count: int, size: int) -> int:
@@ -125,15 +147,9 @@ def _best_matching(
     opp_ids: list[int],
     score_by_pair: dict[tuple[int, int], float],
     size: int,
-    legal_pairs: Optional[set[tuple[int, int]]] = None,
 ) -> Optional[tuple[tuple[tuple[int, int], ...], float]]:
     """The highest-total-score matching of exactly ``size`` scoreable edges,
     or ``None`` when no such matching exists.
-
-    ``legal_pairs``, when given, restricts candidate edges to that set (used
-    for the "search only among legal 5-matchings" fallback in
-    docs/stage3_lineup_lab_scoring.md §6.3 step 5) -- the score itself is
-    unaffected; this only prunes which combinations are considered.
 
     Exact and exhaustive, bounded by MAX_ASSIGNMENT_ATTEMPTS at the call
     site (see ``solve``), the same "exact or refuse, never approximate"
@@ -149,9 +165,6 @@ def _best_matching(
             total = 0.0
             valid = True
             for pair in assignment:
-                if legal_pairs is not None and pair not in legal_pairs:
-                    valid = False
-                    break
                 score = score_by_pair.get(pair)
                 if score is None:
                     valid = False
@@ -164,13 +177,83 @@ def _best_matching(
     return best
 
 
-def solve(matrix: PairingEvidenceMatrix) -> LineupLabResult:
+def _maximum_matching_size(
+    our_ids: list[int],
+    opp_ids: list[int],
+    score_by_pair: dict[tuple[int, int], float],
+) -> int:
+    """Maximum scoreable bipartite matching size, capped at LINEUP_SIZE."""
+    matched_our_by_opponent: dict[int, int] = {}
+
+    def augment(player_id: int, seen_opponents: set[int]) -> bool:
+        for opponent_id in opp_ids:
+            if (player_id, opponent_id) not in score_by_pair:
+                continue
+            if opponent_id in seen_opponents:
+                continue
+            seen_opponents.add(opponent_id)
+            prior_player_id = matched_our_by_opponent.get(opponent_id)
+            if prior_player_id is None or augment(prior_player_id, seen_opponents):
+                matched_our_by_opponent[opponent_id] = player_id
+                return True
+        return False
+
+    for player_id in our_ids:
+        augment(player_id, set())
+        if len(matched_our_by_opponent) == LINEUP_SIZE:
+            break
+    return len(matched_our_by_opponent)
+
+
+def _validate_matrix(matrix: PairingEvidenceMatrix) -> None:
+    try:
+        reconciled_counts = build_pairing_matrix(
+            matrix.pairings,
+            matrix.expected_pairings,
+        )
+    except PairingReconciliationError as exc:
+        raise LineupLabError(f"Invalid evidence matrix: {exc}") from exc
+    if reconciled_counts != matrix.counts:
+        raise LineupLabError(
+            "Invalid evidence matrix: stored counts do not match its pairings"
+        )
+    for pairing in matrix.pairings:
+        if pairing.format != matrix.format or pairing.session_name != matrix.session_name:
+            raise LineupLabError(
+                "Invalid evidence matrix: a pairing is outside its format/session scope"
+            )
+
+
+def solve(
+    matrix: PairingEvidenceMatrix,
+    *,
+    unavailable_our_player_ids: Optional[Collection[int]] = None,
+    unavailable_opponent_player_ids: Optional[Collection[int]] = None,
+) -> LineupLabResult:
     """Compute the approved best lineup for one real, already-classified
-    evidence matrix. See docs/stage3_lineup_lab_scoring.md §6.3 for the
+    evidence matrix. See docs/stage3_lineup_lab_scoring.md §3-§5 for the
     exact algorithm this implements.
     """
-    by_pair: dict[tuple[int, int], PairingEvidence] = {
+    _validate_matrix(matrix)
+    all_by_pair: dict[tuple[int, int], PairingEvidence] = {
         (p.player_id, p.opponent_id): p for p in matrix.pairings
+    }
+    all_our_ids = {p.player_id for p in matrix.pairings}
+    all_opp_ids = {p.opponent_id for p in matrix.pairings}
+    unavailable_ours = set(unavailable_our_player_ids or ())
+    unavailable_opponents = set(unavailable_opponent_player_ids or ())
+    unknown_ours = sorted(unavailable_ours - all_our_ids)
+    unknown_opponents = sorted(unavailable_opponents - all_opp_ids)
+    if unknown_ours or unknown_opponents:
+        raise LineupLabError(
+            "Unavailable ids are not in the evidence matrix: "
+            f"ours={unknown_ours}, opponents={unknown_opponents}"
+        )
+
+    by_pair = {
+        key: pairing
+        for key, pairing in all_by_pair.items()
+        if key[0] not in unavailable_ours and key[1] not in unavailable_opponents
     }
     score_by_pair: dict[tuple[int, int], float] = {}
     for key, pairing in by_pair.items():
@@ -178,30 +261,24 @@ def solve(matrix: PairingEvidenceMatrix) -> LineupLabResult:
         if score is not None:
             score_by_pair[key] = score
 
-    our_ids = sorted({p.player_id for p in matrix.pairings})
-    opp_ids = sorted({p.opponent_id for p in matrix.pairings})
+    our_ids = sorted(all_our_ids - unavailable_ours)
+    opp_ids = sorted(all_opp_ids - unavailable_opponents)
     names_by_player = {p.player_id: p.player_name for p in matrix.pairings}
     names_by_opponent = {p.opponent_id: p.opponent_name for p in matrix.pairings}
 
-    target_size = min(LINEUP_SIZE, len(our_ids), len(opp_ids))
-    if _attempt_count(len(our_ids), len(opp_ids), target_size) > MAX_ASSIGNMENT_ATTEMPTS:
+    chosen_size = _maximum_matching_size(our_ids, opp_ids, score_by_pair)
+    if _attempt_count(len(our_ids), len(opp_ids), chosen_size) > MAX_ASSIGNMENT_ATTEMPTS:
         raise LineupLabError(
             f"Too many available players/opponents to search exactly "
             f"({len(our_ids)} of ours, {len(opp_ids)} identified) -- narrow "
             "tonight's availability before requesting the approved lineup."
         )
 
-    # Largest matching size, using only scoreable edges, up to LINEUP_SIZE.
-    chosen_size = 0
-    best = None
-    for size in range(target_size, -1, -1):
-        candidate = _best_matching(our_ids, opp_ids, score_by_pair, size)
-        if candidate is not None:
-            chosen_size = size
-            best = candidate
-            break
+    best = _best_matching(our_ids, opp_ids, score_by_pair, chosen_size)
 
-    def _unassigned(assignment: tuple[tuple[int, int], ...]) -> LineupLabResult:
+    def _unassigned(
+        assignment: tuple[tuple[int, int], ...]
+    ) -> tuple[tuple[UnmatchedPlayer, ...], tuple[UnmatchedOpponent, ...]]:
         used_players = {p for p, _ in assignment}
         used_opponents = {o for _, o in assignment}
         return (
@@ -225,6 +302,8 @@ def solve(matrix: PairingEvidenceMatrix) -> LineupLabResult:
                 direct_evidence_count=pairing.direct_evidence_count,
                 modeled_win_probability=pairing.modeled_win_probability,
                 model_source=pairing.model_source,
+                lineup_score=score_by_pair[(pid, oid)],
+                lineup_score_source="analytics.head_to_head:validated-skill-only",
             ))
         return tuple(slots)
 
@@ -261,20 +340,33 @@ def solve(matrix: PairingEvidenceMatrix) -> LineupLabResult:
         slots = []
         for pid, oid in assignment:
             pairing = by_pair[(pid, oid)]
-            if pairing.player_skill_level is None or pairing.opponent_skill_level is None:
+            if pairing.player_skill_level is None:
                 return None
             slots.append((pid, pairing.player_skill_level))
         return check_lineup_legality(slots)
 
     legality = _legality_for(assignment)
-    if legality is None or legality.is_legal:
+    if legality is None:
         return LineupLabResult(
             assignments=_slots(assignment),
             unassigned_players=unassigned_players,
             unassigned_opponents=unassigned_opponents,
             total_score=total_score,
-            skill_total=legality.skill_total if legality else None,
-            is_legal=legality.is_legal if legality else None,
+            skill_total=None,
+            is_legal=None,
+            blocked_reason=(
+                "A complete lineup cannot be approved because at least one "
+                "selected player has no current skill level for the 23-rule check."
+            ),
+        )
+    if legality.is_legal:
+        return LineupLabResult(
+            assignments=_slots(assignment),
+            unassigned_players=unassigned_players,
+            unassigned_opponents=unassigned_opponents,
+            total_score=total_score,
+            skill_total=legality.skill_total,
+            is_legal=True,
             blocked_reason=None,
         )
 

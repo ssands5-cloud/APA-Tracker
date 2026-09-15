@@ -388,29 +388,36 @@ Scope: §9–§11, built only on §13's approved analytics. No new objective,
 threshold, or heuristic that isn't already written down and validated
 somewhere in this document or a dated amendment to it (§10).
 
-**First pass implemented (analytics only):** the §9 "approved best lineup"
-objective's scoring formula and assignment rule are specified in the dated
-amendment `docs/stage3_lineup_lab_scoring.md` (posted to Issue #14 before
-any code, per §10), and implemented as `analytics/lineup_lab.py`
-(`pairing_score`, `solve`). Mirrors Stage 1's own precedent exactly: pure
-analytics and tests first, HTML wiring as a separate, later increment (the
-same split Stage 1 → Stage 2 already used). `ui/tabs/tonights_match.py`
-does not yet render a Lineup Lab section -- `exports/captain_first_edge.html`
-currently shows the matrix (Stage 2) only. Wiring `analytics.lineup_lab.solve`
-into `scripts/build_captain_first_edge.py` and rendering its result is the
-next real, scoped increment, not done in this pass.
+**First pass implemented, then corrected (analytics only):** commit
+`27342e5` initially reused DIRECT's combined history-and-skill modeled
+probability as its selection score. Issue #14 correctly failed that claim
+closed: `docs/prediction_validation.md` records zero held-out rematch
+predictions for the history term, so arithmetic examples were not evidence
+of calibration. The dated amendment
+`docs/stage3_lineup_lab_scoring.md` now supersedes that score. The corrected
+`analytics.lineup_lab.pairing_score` uses only the current-roster
+skill-gap probability already graded against 106 real results, identically
+for DIRECT and INDIRECT. DIRECT observed history remains carried through
+for display but does not influence assignment until it has real walk-forward
+validation.
+
+`analytics.lineup_lab.solve` now revalidates the matrix, accepts separate
+per-side unavailability sets and recomputes from scratch, determines the real
+maximum scoreable matching before applying the exact-search bound, and never
+approves a five-player assignment without a real 23-rule verdict. This keeps
+the same Stage 1 → Stage 2 split: analytics and tests first, HTML wiring as a
+separate later increment. `ui/tabs/tonights_match.py` does not yet render
+Lineup Lab, so no unapproved lineup advice is currently captain-facing.
 
 Not yet started: §11 (Data Coverage view) and §9's "Unassigned players" /
 "Unassigned opponents" HTML presentation.
 
-Tests: `tests/test_lineup_lab.py` -- the score (regression-pinned to the
-amendment's §4 worked examples), a fully-scoreable legal lineup, extra
-available players correctly left unassigned, UNKNOWN-only players never
-guessed into a slot, the illegal-max-score-falls-back-to-best-legal
-scenario, no-legal-lineup-exists reporting the best illegal one for
-transparency, the assigned+unassigned reconciliation invariant, and the
-exact-search bound raising rather than hanging on an oversized roster. Full
-suite: 1079 passed, 0 failed (`pytest tests/ -q`).
+Tests: `tests/test_lineup_lab.py` -- shared validated scoring for DIRECT and
+INDIRECT, proof that unvalidated DIRECT history cannot change the selection,
+missing-input/UNKNOWN handling, full/partial/blocked legality scenarios,
+side-specific availability, matrix and result reconciliation, and dense
+oversized versus large-sparse exact-search bounds. Full-suite evidence is
+recorded on Issue #14 for the correction commit rather than predicted here.
 
 ## 17. Hard boundaries (all stages)
 
