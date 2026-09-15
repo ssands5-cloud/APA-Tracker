@@ -31,6 +31,7 @@ from html import escape
 from typing import Optional, Sequence
 
 from analytics.lineup_lab import LineupLabResult
+from analytics.opponent_risk_profile import build_profile as build_risk_profile
 from analytics.pairing_evidence import PairingEvidenceMatrix
 
 COLUMNS = (
@@ -197,6 +198,60 @@ def _lineup_payload(scope: MatchScope) -> Optional[dict]:
     }
 
 
+def _pct_or_no_data(value: Optional[float]) -> str:
+    return "No data" if value is None else f"{value * 100:.0f}%"
+
+
+def _risk_profile_section(scopes: Sequence[MatchScope]) -> str:
+    """Captain's Edge Opponent Risk Profile: a purely descriptive,
+    whole-schedule ranking across every real opponent this build could
+    evaluate -- see analytics/opponent_risk_profile.py. Computed once,
+    across every real opponent scope, independent of which single scope
+    the Session/Opponent/Format dropdowns above currently show.
+
+    No categorical danger/favorable flag, no threshold on
+    modeled_win_probability -- ranked only by the reliability-weighted
+    skill-only probability, DIRECT win rate, and real sample size.
+    """
+    matrices = [
+        (scope.opponent_team_external_id, scope.opponent_team_name, scope.matrix)
+        for scope in scopes
+        if scope.matrix is not None
+    ]
+    if not matrices:
+        return (
+            '<section class="tm-risk-profile"><h2>Opponent Risk Profile</h2>'
+            "<p>No real opponent scope could be evaluated yet.</p></section>"
+        )
+
+    profile = build_risk_profile(matrices)
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(entry.opponent_team_name)}</td>"
+        f"<td class='num'>{entry.total_pairings}</td>"
+        f"<td class='num'>{entry.direct_pairing_count}</td>"
+        f"<td class='num'>{_pct_or_no_data(entry.direct_win_rate)}</td>"
+        f"<td class='num'>{entry.sample_size}</td>"
+        f"<td class='num'>{_pct_or_no_data(entry.reliability_weighted_skill_probability)}</td>"
+        "</tr>"
+        for entry in profile
+    )
+    return f"""<section class="tm-risk-profile">
+<h2>Opponent Risk Profile</h2>
+<p class="tm-sub">A purely descriptive ranking, real opponents only -- sorted by
+reliability-weighted skill-only probability, toughest first. No categorical
+danger/favorable flag and no threshold on modeled_win_probability are used;
+<b>Recommended Avoid</b> and <b>Recommended Target</b> are Not available -- threshold
+not validated (see docs/player_vs_player_html_structure.md).</p>
+<table class="tm-risk-table">
+<thead><tr><th>Opponent</th><th class="num">Feasible Pairings</th>
+<th class="num">DIRECT Pairings</th><th class="num">DIRECT Win Rate</th>
+<th class="num">Sample Size</th><th class="num">Reliability-Weighted Skill Prob.</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</section>"""
+
+
 def render(
     scopes: Sequence[MatchScope],
     our_team_name: str,
@@ -254,6 +309,7 @@ def render(
         f'<option value="{escape(s)}">{escape(s)}</option>' for s in sessions
     )
     team_value = our_team_external_id or our_team_name
+    risk_profile_html = _risk_profile_section(scopes)
 
     return f"""<!doctype html>
 <html>
@@ -262,6 +318,10 @@ def render(
 <title>{escape(title)}</title>
 <style>
 body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1c1f24; }}
+.tm-risk-profile {{ margin: 22px 0; padding: 14px; background: #f4f6f8; border-radius: 8px; }}
+.tm-risk-table {{ width: 100%; border-collapse: collapse; font-size: 13.5px; }}
+.tm-risk-table th, .tm-risk-table td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; }}
+.tm-risk-table td.num, .tm-risk-table th.num {{ text-align: right; }}
 h1 {{ margin-bottom: 4px; }}
 .tm-sub {{ color: #666e7a; margin-top: 0; }}
 .tm-controls {{ display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end;
@@ -315,6 +375,8 @@ analytics.pairing_evidence; nothing on this page is recomputed in the browser.</
     <label for="tm-showall">Show pairings marked unavailable</label>
   </div>
 </div>
+
+{risk_profile_html}
 
 <div id="tm-body"><p>Select an opponent and format to see tonight's evidence matrix.</p></div>
 

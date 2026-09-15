@@ -327,3 +327,47 @@ class TestLineupLabWiring:
         end = html.index(";\n", start)
         payload = json.loads(html[start:end])
         assert list(payload.values())[0]["lineup"] is None
+
+
+class TestOpponentRiskProfile:
+    def test_every_real_opponent_scope_appears_once(self):
+        matrix_a = _matrix([_pairing(1, 10, EvidenceLabel.DIRECT, observed_win_rate=1.0,
+                                      direct_evidence_count=1)])
+        matrix_b = _matrix([_pairing(1, 11, EvidenceLabel.UNKNOWN, player_skill_level=None)])
+        scopes = [
+            MatchScope("Fall 2026", "THEIRS-A", "Corner Pockets", "8-Ball Open", matrix_a),
+            MatchScope("Fall 2026", "THEIRS-B", "Rack Attack", "8-Ball Open", matrix_b),
+        ]
+        html = render(scopes, "Chalk It Up")
+
+        assert "Opponent Risk Profile" in html
+        assert "Corner Pockets" in html
+        assert "Rack Attack" in html
+
+    def test_no_categorical_flag_or_threshold_language_appears(self):
+        matrix = _matrix([_pairing(1, 10, EvidenceLabel.DIRECT, observed_win_rate=1.0,
+                                    direct_evidence_count=1)])
+        scope = MatchScope("Fall 2026", "THEIRS", "Corner Pockets", "8-Ball Open", matrix)
+        html = render([scope], "Chalk It Up")
+
+        assert "Not available -- threshold" in html
+        assert "not validated" in html
+        # The disclaimer explains what is NOT used (it necessarily names
+        # "danger"/"favorable" to disclaim them) -- what must never appear
+        # is an actual categorical badge/class rendering a verdict.
+        assert 'class="risk-danger"' not in html
+        assert 'class="risk-favorable"' not in html
+
+    def test_a_scope_with_no_matrix_is_excluded_from_the_profile_not_crashing(self):
+        scope = MatchScope("Fall 2026", "THEIRS", "Corner Pockets", "8-Ball Open",
+                            matrix=None, unavailable_reason="ambiguous roster")
+        html = render([scope], "Chalk It Up")
+
+        assert "No real opponent scope could be evaluated yet" in html
+
+    def test_no_data_shown_for_an_opponent_with_no_direct_history(self):
+        matrix = _matrix([_pairing(1, 10, EvidenceLabel.UNKNOWN, player_skill_level=None)])
+        scope = MatchScope("Fall 2026", "THEIRS", "Corner Pockets", "8-Ball Open", matrix)
+        html = render([scope], "Chalk It Up")
+
+        assert "No data" in html
