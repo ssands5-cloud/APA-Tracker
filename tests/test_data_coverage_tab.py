@@ -81,3 +81,20 @@ class TestRender:
 
         assert "http://" not in html
         assert "https://" not in html
+
+    def test_zero_feasible_pairings_never_claims_100_percent(self):
+        # A zero-pairing scope has no real coverage to report -- the "Total
+        # feasible pairings" row must not fall back to a hardcoded "100%"
+        # next to a literal 0, which would misrepresent an empty scope as
+        # fully covered.
+        report = build_report(_matrix([]))
+        html = render(report, "Us", "Them")
+
+        assert "<td>0</td><td>100" not in html
+        assert '<tr><th>Total feasible pairings</th><td>0</td><td>No data</td></tr>' in html
+
+    def test_nonzero_total_still_shows_100_percent(self):
+        report = build_report(_matrix([_pairing(1, 10, EvidenceLabel.DIRECT, direct_evidence_count=1)]))
+        html = render(report, "Us", "Them")
+
+        assert '<tr><th>Total feasible pairings</th><td>1</td><td>100.0%</td></tr>' in html

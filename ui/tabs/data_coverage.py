@@ -63,7 +63,7 @@ matchup's evidence can actually be trusted right now.</p>
 <tr><th>DIRECT</th><td>{coverage.direct_count}</td><td>{_pct(coverage.direct_pct)}</td></tr>
 <tr><th>INDIRECT</th><td>{coverage.indirect_count}</td><td>{_pct(coverage.indirect_pct)}</td></tr>
 <tr><th>UNKNOWN</th><td>{coverage.unknown_count}</td><td>{_pct(coverage.unknown_pct)}</td></tr>
-<tr><th>Total feasible pairings</th><td>{coverage.total}</td><td>100%</td></tr>
+<tr><th>Total feasible pairings</th><td>{coverage.total}</td><td>{"100.0%" if coverage.total else "No data"}</td></tr>
 </tbody></table>
 
 <h3>Missing skill levels</h3>
