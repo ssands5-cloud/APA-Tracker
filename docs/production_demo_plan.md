@@ -87,6 +87,30 @@ filters may hide an unavailable player from candidate views, but must not erase
 the canonical source row or rewrite its historical evidence. The UI shows the
 capture time and availability state beside the profile.
 
+## Data Coverage integration
+
+After Player vs Player Matrix is built, `analytics/data_coverage.py` produces
+one audit document from that matrix plus real standings/career refresh
+timestamps. The demo renders that document as the
+Data Coverage tab and `data_coverage.html`/`.xlsx`. Tonight's Match, Pair View,
+Matrix View, Lineup Lab, and Captain's Edge link to metric keys in the embedded
+report; they do not calculate their own coverage percentages.
+
+The presenter uses this tab to inspect missing skills,
+DIRECT/INDIRECT/UNKNOWN totals, per-pair sample size, source refresh times, and
+known unavailable fields. General roster/schema and Lineup Lab assignment
+reconciliation remain manifest checks until the coverage analytics contract is
+extended. A zero denominator remains null. Failure to construct or reconcile
+the report blocks the production demo.
+
+## Optional scrape and ingest
+
+The full demo builder may invoke the opt-in live acquisition contract in
+`scrape_and_ingest_pipeline.md` before building artifacts. Live mode requires an
+explicit flag and a safe credential source; fixture mode denies network access.
+Both create a fresh database, reconcile it, and verify it before export. An
+authentication or verification failure never falls back to a stale snapshot.
+
 ## Current blockers
 
 - The analytics split and standalone matrix exporters exist; the unified tab,
@@ -94,8 +118,9 @@ capture time and availability state beside the profile.
   integration remain to be implemented and audited.
 - A fresh authenticated scrape and regenerated schema are still required for a
   rich production dataset.
-- Data Coverage remains a planned Stage 3 follow-up at the current repository
-  head.
+- Data Coverage analytics and standalone renderers exist in the implementation
+  lane; unified tab/script-JSON/demo-builder wiring remains to be completed and
+  audited.
 - The full history-plus-skill modeled probability and its identical
   `next_match_projection` alias are display-only until real held-out rematch
   validation exists; the current module does not establish a scheduled meeting.
@@ -108,3 +133,6 @@ capture time and availability state beside the profile.
   disclosures plus keyboard-accessible sorting/responsive containment before
   release; the workbook needs a documented decision for fields present only in
   the HTML detail contract.
+- Data Coverage unified wiring must correct the current zero-pair HTML Total
+  row (which prints 100%) and disclose/guard its name-based standings timestamp
+  lookup before production presentation.

@@ -73,6 +73,33 @@ preflight
   → write redacted run manifest
 ```
 
+```mermaid
+flowchart TD
+    A[Parse CLI and verify repository boundary] --> B{Acquisition mode}
+    B -->|--live| C[Load credential through env, stdin, prompt, or browser]
+    B -->|--fixtures| D[Install network-deny guard and verify fixture manifest]
+    C --> E[Authenticated scrape]
+    D --> F[Read approved fixtures]
+    E --> G[Hash and validate captures]
+    F --> G
+    G --> H[Parse through existing contracts]
+    H --> I[Create fresh SQLite]
+    I --> J[Ingest in dependency order]
+    J --> K[Rebuild shared analytics]
+    K --> L[Reconcile identities, matrix, and assignments]
+    L --> M[Verify schema, data, redaction, and hashes]
+    M --> N[Promote verified run for demo exports]
+```
+
+```mermaid
+flowchart LR
+    P[Phase starts] --> Q{Phase passes?}
+    Q -->|Yes| R[Commit phase and continue]
+    Q -->|No| S[Roll back phase]
+    S --> T[Write redacted failure category]
+    T --> U[Stop: no export or stale fallback]
+```
+
 ### 1. Preflight
 
 Verify canonical repository root/origin, Python/dependencies, config schema,

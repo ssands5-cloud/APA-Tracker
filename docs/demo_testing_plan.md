@@ -24,6 +24,11 @@ no-data result. It is design-only until the orchestration script exists.
 - Opponent Risk Profile source mapping, build-time/availability labels, and
   fail-closed Avoid/Target status. Until threshold approval, both flags must be
   null for every pair.
+- Data Coverage missing-skill deduplication/order, matrix count/percentage
+  parity, zero-total null behavior, DIRECT-vs-INDIRECT sample semantics,
+  timestamp passthrough, fixed unavailable fields, and immutable inputs.
+- Data Coverage HTML zero-pair regression: DIRECT/INDIRECT/UNKNOWN and Total
+  percentages must all render `No data`, never a hardcoded 100%.
 - Lineup Lab score, maximum matching, unassigned reconciliation, legality gate,
   and exact-search bound.
 
@@ -40,6 +45,9 @@ no-data result. It is design-only until the orchestration script exists.
 - Verify all outputs share the same database/config/source manifest.
 - Verify Captain's Edge risk-profile values equal the selected matrix row and
   that HTML/script JSON/Excel agree on flag status and threshold version.
+- Compare Data Coverage HTML, Excel, script JSON, and manifest by scope and pair
+  order; reconcile evidence counts/percentages, missing-skill identities,
+  sample sizes, refresh timestamps, and unavailable text before rounding.
 - Run the optional scrape-and-ingest CLI entirely against mocked transports and
   fixtures; assert live network use is impossible in CI.
 
@@ -53,6 +61,8 @@ no-data result. It is design-only until the orchestration script exists.
   exclusivity, output containment, and a hard network-deny guard.
 - Exercise missing roster, ambiguous membership, stale schema, empty history,
   invalid result, conflicting same-match fact, and overlarge assignment paths.
+- Exercise zero-pair, complete-skill, missing-skill, mixed-evidence,
+  UNKNOWN-only, missing-timestamp, and hostile-text Data Coverage fixtures.
 
 ### Live smoke and manual review
 
@@ -67,7 +77,8 @@ no-data result. It is design-only until the orchestration script exists.
 
 No demo is presented when a required phase fails, the database is stale, an
 artifact is missing without a documented reason, the matrix counts do not
-reconcile, Pair/Matrix route state is inconsistent, Captain's Edge disagrees
+reconcile, an evidence percentage uses a denominator other than total feasible
+pairings, Pair/Matrix route state is inconsistent, Captain's Edge disagrees
 with the selected row, an unvalidated risk flag is non-null, or the page
 contains a fabricated fallback. A fixture CI run may
 pass with unavailable rosters when that is the fixture's truthful state; that

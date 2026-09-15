@@ -18,16 +18,18 @@ scraper or analytics logic into a new script.
 4. **Build database** — write a new SQLite file in the run directory and call
    `python -m pipeline --fixtures ... --config ... --ingest-only` or the
    equivalent Python entry point. Schema checks happen before any export.
-5. **Build exports** — run `pipeline.exports.run` and
-   `scripts/build_captain_first_edge.py` against the same database and output
-   directory. Planned `demo.py` then obtains the Stage 1 matrix and one map of
-   complete exact-pair histories (currently all-history across format/session),
-   calls
-   `analytics.player_vs_player_matrix.build_matrix_export` once, and gives the
-   identical returned rows to the implemented UI export renderers (or future
-   demo wrappers that delegate to them). The HTML renderer reuses the explicit-
-   pair fragment for each row. Do not call `summarize` again in the
-   orchestrator, run a second ingest, or open the live database writable.
+5. **Build documents and exports** — run `pipeline.exports.run` against the
+   final read-only database. Planned `demo.py` obtains the Stage 1 matrix and
+   one map of complete exact-pair histories (currently all-history across
+   format/session), calls
+   `analytics.player_vs_player_matrix.build_matrix_export` once, obtains the
+   Lineup Lab document, and then builds one `DataCoverageReport` from those
+   matrix plus query-layer refresh timestamps. General schema/source and Lineup
+   reconciliation stay in the manifest verification layer. Only after those immutable
+   documents exist does it render Player vs Player, Data Coverage, Captain's
+   Edge, and captain-first outputs. The HTML renderer reuses the explicit-pair
+   fragment for each row. Do not call `summarize` again in the orchestrator,
+   run a second ingest, or open the live database writable.
 6. **Verify** — run artifact existence/size checks, JSON schema checks,
    workbook-open checks, HTML safety checks, matrix reconciliation, and
    source-database identity checks. Compare every matrix pair/game key and
@@ -59,6 +61,20 @@ The Excel renderer receives the same ordered rows directly, not reparsed HTML
 and not browser-mutated state. If a selected pair is materialized in Excel, the
 orchestrator passes its key explicitly and verifies that it exists in the
 matrix.
+
+## Data Coverage assembly
+
+The orchestrator gathers standings/career refresh inputs through read-only
+query functions, then calls `analytics.data_coverage.build_report` once after
+matrix construction. It embeds the resulting document as safely escaped
+`script#coverage-data`, sends the same object to `data_coverage.xlsx`, and
+copies its summary/status into the manifest. Links from other tabs carry only a
+metric key/entity key used to select an existing report row.
+
+If matrix denominator reconciliation, timestamp acquisition, source hashing in
+the manifest, or coverage render parity fails, the run stops before
+presentation. The orchestrator may not
+silently omit the tab or replace a null rate with 0%/100%.
 
 ## Optional production acquisition
 

@@ -57,11 +57,17 @@ line. Skip this step when a verified fresh database already exists.
     its row and workbook history; inspect both artifact hashes in the manifest.
 13. Open Lineup Lab. Review assignments, unassigned sides, total score, and the
    complete/partial/blocked legality state.
-14. Open Data Coverage. Call out missing skills, sample sizes, capture/update
-   dates, and unavailable fields.
-15. Open `analysis_tabs.html`, then the workbook and JSON links. Confirm the
+14. Open Data Coverage. Verify DIRECT/INDIRECT/UNKNOWN counts and percentages
+    against total feasible pairings, inspect every named missing skill, review
+    each pair's sample-size row, and call out standings/career refresh times and
+    fixed unavailable fields. Follow one coverage link from Player vs Player
+    and confirm it selects a section without changing totals.
+15. Open `data_coverage.xlsx`; compare `Data_Coverage` and `Sample_Sizes` with
+    the tab. For zero feasible pairs, confirm percentages are blank/No data and
+    the audit workbook still opens successfully.
+16. Open `analysis_tabs.html`, then the workbook and JSON links. Confirm the
    selected snapshot and provenance match the primary page.
-16. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
+17. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
    and test result in the presentation notes.
 
 ## Closing language

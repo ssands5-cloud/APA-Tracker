@@ -47,6 +47,27 @@ The export adapter receives the stable `PlayerVsPlayerExportRow` sequence from
 the matrix module. Each row nests one `PlayerVsPlayerSummary`. Renderers do not
 query data or call analytics.
 
+## Combined dashboard layout
+
+The target HTML has one Player vs Player tab with Pair View and Matrix View.
+Matrix View presents the complete row table and a DIRECT/INDIRECT/UNKNOWN count
+chart. Pair View presents the selected row's metric table, result timeline, game
+history, and sourced Opponent Risk Profile. Selecting Details changes subview
+and route state; it does not calculate a new summary. The full DOM/script-JSON
+contract is in `player_vs_player_html_structure.md`.
+
+The Excel companion materializes the same ordered matrix on
+`Player_vs_Player`, an optional build-selected pair on `Selected_Pair`, and
+chronological real games on `PvP_Game_History`. It does not attempt an
+interactive formula-driven dashboard. Exact columns and current-vs-target gaps
+are in `player_vs_player_excel_structure.md`.
+
+Initial row order is session, format (8-ball, 9-ball, other), player
+name/external ID, then opponent name/external ID. Scores, probabilities,
+evidence labels, and flags never affect source order. HTML filtering/sorting is
+temporary presentation state; workbook rows and script JSON retain canonical
+order.
+
 ## Analytics consumption
 
 The summary supplies DIRECT exact-pair game history and these values:

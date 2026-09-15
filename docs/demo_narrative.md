@@ -11,6 +11,11 @@ Point out that the controls come from the schedule and database, not free text
 or a guessed “most recent” match. The capture/provenance line establishes when
 the snapshot was actually collected.
 
+For a production run, explain that the snapshot came either from a previously
+verified fresh database or the explicit scrape-and-ingest option. Live
+acquisition is never a CI/default fallback, and credentials/raw responses are
+not part of the demo bundle.
+
 ## Evidence before advice
 
 Read the evidence cards first. DIRECT means recognized results from distinct,
@@ -55,10 +60,16 @@ legality verdict; a partial or blocked result is an honest answer.
 
 ## Data Coverage
 
-Close by naming missing skill levels, direct sample sizes, refresh timestamps,
-coverage percentages, and unavailable APA fields. The key product behavior is
-that the tool makes uncertainty legible instead of converting it into a neat
-but unsupported number.
+Close the analytical story in the Data Coverage tab. Show that the denominator
+for every evidence percentage is total feasible pairings, then name missing
+skill identities, direct sample sizes, matrix reconciliation, standings/career
+refresh timestamps, and structural APA gaps. Show that zero feasible pairings
+gives `No data` percentages rather than a misleading 0% or 100%.
+
+Follow a missing-data link from Pair View or Captain's Edge and show that it
+selects an existing coverage row without changing the embedded report. The key
+product behavior is that the tool makes uncertainty legible instead of
+converting it into a neat but unsupported number.
 
 ## Supporting exports
 

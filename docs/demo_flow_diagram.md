@@ -19,10 +19,11 @@ flowchart TD
     I --> J[Rebuild matchup and trend aggregates]
     J --> K[Run schema, referential, and coverage checks]
     K -->|Fail| Z
-    K --> L[Build general JSON, XLSX, and analysis tabs]
+    K --> L[Build general JSON, XLSX, Lineup Lab, and analysis tabs]
     L --> PVPA[Build Player vs Player Matrix from Stage 1 plus exact histories]
-    PVPA --> PVPJ[Encode escaped Player vs Player script JSON]
-    PVPJ --> PVPM[Render unified Player vs Player tab and Excel]
+    PVPA --> DCA[Build denominated Data Coverage report]
+    DCA --> PVPJ[Encode escaped Player vs Player and Coverage script JSON]
+    PVPJ --> PVPM[Render Player vs Player and Data Coverage HTML/Excel]
     PVPM --> M[Build Captain's Edge and captain-first HTML from same matrix]
     M --> N[Check manifest, HTML safety, and cross-export parity]
     N -->|Fail| Z
@@ -33,7 +34,7 @@ flowchart TD
     PVPMV --> PVP[Pair View: inspect one explicit comparison]
     PVP --> RISK[Opponent Risk Profile and flag status]
     RISK --> Q[Lineup Lab]
-    Q --> DC[Data Coverage when implemented]
+    Q --> DC[Data Coverage: denominators, gaps, and source status]
     DC --> R[Export review and evidence capture]
     R --> S[Archive manifest and release notes]
 ```

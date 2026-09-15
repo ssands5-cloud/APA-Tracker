@@ -99,3 +99,15 @@ status fields, and game keys against the script JSON before display rounding.
 Assert no duplicate/missing matrix row, no UNKNOWN suppression, no formula,
 macro, external link, hidden sheet, or repair prompt. When flag status is not
 approved, assert both flag cells are null for every row.
+
+## Data Coverage handoff
+
+`player_vs_player.xlsx` and `data_coverage.xlsx` are sibling artifacts in one
+manifest, built from the same `PairingEvidenceMatrix`. The Player-vs-Player
+workbook does not copy or recalculate coverage percentages. Validation compares
+its pair/evidence counts with `Data_Coverage` and its row-level sample fields
+with `Sample_Sizes`.
+
+Because external workbook links are prohibited, the handoff is documented by
+manifest artifact names/hashes and stable pair keys rather than Excel formulas
+or hyperlinks. A mismatch blocks the bundle.

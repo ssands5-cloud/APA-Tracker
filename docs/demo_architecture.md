@@ -30,6 +30,7 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
              │                        │                        │
              ├─ analytics/player_vs_player.py (explicit pair)  │
              ├─ analytics/player_vs_player_matrix.py (matrix)  │
+             ├─ analytics/data_coverage.py (planned audit view)│
              │              │                                  │
              │              ├─ planned exports/html_builder.py │
              │              └─ planned exports/excel_builder.py│
@@ -117,6 +118,13 @@ built documents:
   and no new analytics. Unsupported innings,
   per-opponent defense, break/run rate, and numeric volatility remain explicit
   gaps; there is no export-layer blended score.
+- `analytics/data_coverage.py` accepts one already-built matrix plus real
+  standings/career refresh timestamps. It produces named missing skills,
+  DIRECT/INDIRECT/UNKNOWN counts and percentages, one sample-size row per pair,
+  timestamps, and fixed unavailable-field disclosures without opening the
+  database or recreating evidence labels. `docs/data_coverage.md` is its exact
+  contract. General schema/run/hash and Lineup Lab reconciliation remain
+  orchestrator/manifest responsibilities.
 
 The legacy `win_probability`, `lineup_optimizer`, `lineup_risk`,
 `opponent_scouting`, `rationale`, `season_projection`, and summary paths remain
@@ -152,6 +160,11 @@ Issue #14 findings are corrected and re-audited.
   registers/verifies the HTML/XLSX without duplicating ingest. Planned
   `exports/html_builder.py` and `exports/excel_builder.py` delegate to the
   existing renderers.
+- `ui/tabs/data_coverage.py`, `ui/export_excel_data_coverage.py`, and
+  `scripts/build_data_coverage.py` consume one `DataCoverageReport` and emit
+  `data_coverage.html`/`.xlsx`; unified demo wiring remains planned. Links from
+  Player vs Player, Lineup Lab, and Captain's Edge may select an existing
+  evidence/missing-skill/sample/gap section but cannot mutate the report.
 
 ### Unified Player vs Player data flow
 
@@ -200,6 +213,9 @@ The critical invariants are:
    matches its source row and chronological game records.
 5. All artifacts in one demo run share one database and one source manifest.
 6. A failed preflight or stale schema stops the run before presentation.
+7. Data Coverage label percentages use total feasible pairings as their
+   explicit denominator; counts, percentages, missing skills, sample rows, and
+   timestamps agree across HTML, Excel, and manifest before rounding.
 
 ## Build modes
 

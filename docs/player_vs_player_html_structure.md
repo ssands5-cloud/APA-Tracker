@@ -161,6 +161,16 @@ volatility are named unavailable fields. The UI never substitutes lifetime
 defense or differently scoped trend volatility. Missing roster identity blocks
 matrix construction instead of inferring membership from historical play.
 
+### Data Coverage bridge
+
+Matrix View's evidence-count heading and every UNKNOWN row include a
+presentation link to the unified Data Coverage tab. Pair View links missing
+skill, sample-size, refresh, and unavailable-field disclosures to the matching
+Data Coverage section. The route carries only a stable section/pair key; the
+coverage report is already embedded and is never recalculated or narrowed at
+the source. Returning to Player vs Player restores the prior subview, selection,
+filters, and scroll position.
+
 ## Accessibility, safety, and deterministic formatting
 
 - Subview controls implement tab/tabpanel roles, keyboard arrows, focus
