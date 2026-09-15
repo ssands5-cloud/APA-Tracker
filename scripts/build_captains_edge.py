@@ -30,9 +30,19 @@ import argparse
 import json
 import logging
 import sqlite3
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+# ``python scripts/build_captains_edge.py`` is a documented operator command
+# (see the module docstring's Usage section). In that direct-file mode
+# Python puts only ``scripts/`` on sys.path, so build_decision_document's
+# lazy ``from analytics.captains_edge import ...`` would otherwise be
+# unimportable -- the same shim every other builder in this project already
+# carries for the same reason.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logger = logging.getLogger(__name__)
 
@@ -848,10 +858,6 @@ _APP_TEMPLATE = r"""<!DOCTYPE html>
 """
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
 # --- Captain's Decision Engine ----------------------------------------------
 #
 # The cheat-sheet above REPORTS what the engines computed. This part DECIDES:
@@ -1021,3 +1027,7 @@ def _group_by_team(connection, pairings: list[dict]) -> tuple[dict, str, list[st
     matched = {p.get("player_name") for group in by_team.values() for p in group}
     unresolved = sorted((set(by_name) - matched) | set(ambiguous))
     return by_team, RESOLUTION_BY_NAME, unresolved
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
