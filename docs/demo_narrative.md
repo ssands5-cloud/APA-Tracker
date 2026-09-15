@@ -1,0 +1,52 @@
+# Demo narrative
+
+The story is told from a captain's point of view: “What do we know about this
+real match, how much of it is direct evidence, and where does the system refuse
+to guess?”
+
+## Opening
+
+Start on Tonight's Match. Select the real team, opponent, format, and session.
+Point out that the controls come from the schedule and database, not free text
+or a guessed “most recent” match. The capture/provenance line establishes when
+the snapshot was actually collected.
+
+## Evidence before advice
+
+Read the evidence cards first. DIRECT means recognized results from distinct,
+scored, finalized, non-bye matches for this exact player/opponent and scope.
+INDIRECT means both current roster skill levels support the validated skill-only
+probability. UNKNOWN means the evidence is insufficient. The total is visibly
+reconciled to the feasible matrix, so the audience sees coverage before a
+recommendation.
+
+## The matrix
+
+Show that every feasible pairing remains visible, including UNKNOWN. Change one
+availability toggle and show the counts and rows update for tonight's choice;
+explain that the evidence labels themselves are not recomputed from browser
+guesses.
+
+## Lineup Lab
+
+Move to the approved lineup. Explain that Stage 3 uses one shared, validated
+skill-only score for DIRECT and INDIRECT rows; a historical DIRECT record is
+displayed but is not silently treated as calibrated selection evidence. The
+solver chooses the largest exact scoreable matching, then shows unassigned
+players and opponents. A complete five-player lineup carries the real 23-rule
+legality verdict; a partial or blocked result is an honest answer.
+
+## Data Coverage
+
+Close by naming missing skill levels, direct sample sizes, refresh timestamps,
+coverage percentages, and unavailable APA fields. The key product behavior is
+that the tool makes uncertainty legible instead of converting it into a neat
+but unsupported number.
+
+## Supporting exports
+
+Open the analysis tabs and workbook only after the primary story. They provide
+historical detail and handoff formats. Explicitly distinguish the legacy
+Captain's Edge/optimizer artifacts from the captain-first validated path, and
+identify modules still excluded under Issue #14.
+
