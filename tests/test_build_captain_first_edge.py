@@ -7,12 +7,17 @@ build rows the same way a schema change would break together.
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+import scripts.build_captain_first_edge as builder_module
 from database.models import Base, Match, Team
 from scripts.build_captain_first_edge import (
+    _database_error,
     _team_name,
     build,
     build_match_scopes,
@@ -104,7 +109,28 @@ class TestTeamName:
         assert _team_name(db, OUR_TEAM) == "Chalk It Up"
 
     def test_an_unresolved_team_is_named_honestly_not_guessed(self, db):
-        assert _team_name(db, "GHOST-TEAM") == "Unknown opponent (id: GHOST-TEAM)"
+        assert _team_name(db, "GHOST-TEAM") == "Unresolved team (id: GHOST-TEAM)"
+
+
+class TestDatabaseErrors:
+    @staticmethod
+    def _stale_schema_error():
+        return OperationalError(
+            "SELECT private_column FROM player_team_history",
+            {},
+            sqlite3.OperationalError(
+                "no such column: player_team_history.team_external_id"
+            ),
+        )
+
+    def test_reason_names_root_error_without_leaking_sql(self):
+        reason = _database_error(self._stale_schema_error())
+
+        assert reason == (
+            "OperationalError: no such column: "
+            "player_team_history.team_external_id"
+        )
+        assert "SELECT" not in reason
 
 
 class TestBuildMatchScopes:
@@ -139,6 +165,42 @@ class TestBuildMatchScopes:
         assert sorted(s.format for s in scopes) == ["EIGHT", "NINE"]
         assert all(s.matrix is not None for s in scopes)
 
+    def test_stale_schema_marks_scope_unavailable_instead_of_crashing(
+        self, db, monkeypatch
+    ):
+        _match(db, "M-1")
+
+        def raise_stale_schema(*args, **kwargs):
+            raise TestDatabaseErrors._stale_schema_error()
+
+        monkeypatch.setattr(
+            builder_module,
+            "build_pairing_evidence_matrix",
+            raise_stale_schema,
+        )
+
+        [scope] = build_match_scopes(db, OUR_TEAM)
+
+        assert scope.matrix is None
+        assert scope.unavailable_reason == (
+            "OperationalError: no such column: "
+            "player_team_history.team_external_id"
+        )
+
+    def test_blank_format_or_session_is_not_offered(self, db):
+        _match(db, "M-BLANK-FORMAT", format="   ")
+        row = Match(
+            external_id="M-BLANK-SESSION",
+            home_team_id=OUR_TEAM,
+            away_team_id=OPPONENT_TEAM,
+            format=FORMAT,
+            session_name="   ",
+        )
+        db.add(row)
+        db.flush()
+
+        assert real_match_scopes(db, OUR_TEAM) == []
+
 
 class TestBuildEndToEnd:
     def test_writes_a_real_self_contained_html_file(self, db, tmp_path):
@@ -161,3 +223,18 @@ class TestBuildEndToEnd:
 
         html = out_path.read_text(encoding="utf-8")
         assert "No real scheduled match was found" in html
+
+    def test_scope_query_failure_writes_an_honest_database_error_page(
+        self, db, tmp_path, monkeypatch
+    ):
+        def raise_stale_schema(*args, **kwargs):
+            raise TestDatabaseErrors._stale_schema_error()
+
+        monkeypatch.setattr(builder_module, "real_match_scopes", raise_stale_schema)
+
+        out_path = build(db, OUR_TEAM, tmp_path)
+
+        html = out_path.read_text(encoding="utf-8")
+        assert "could not read the configured database" in html
+        assert "no such column: player_team_history.team_external_id" in html
+        assert "SELECT private_column" not in html

@@ -328,8 +328,11 @@ here rather than left implicit:
 
 - **Team** and **Session** are not free-choice controls today because the
   data doesn't offer more than one real value for either (one configured
-  team, one real session captured so far); Session still renders as a real
-  `<select>` so a second real session appearing later needs no code change.
+  team, one real session captured so far); both still render as real
+  `<select>` controls. Team contains only the explicitly configured team,
+  while Session begins with an unselected prompt so the page never silently
+  guesses among sessions; a second real session appearing later needs no
+  code change.
   **Opponent** and **Format** are real `<select>` controls populated only
   from combinations with an actual scheduled `Match` row. **Availability**
   is a real per-player checkbox set, one block per side.
@@ -350,6 +353,17 @@ here rather than left implicit:
   dropdown, with its real `PairingEvidenceError`/`CanonicalRosterError`
   message shown in place of a matrix -- never silently omitted from the
   selector (§7's spirit, applied to whole scopes, not just rows).
+- A missing canonical roster is not presented as an ordinary zero-player
+  result: the renderer displays Stage 1's side-specific
+  `our_roster_available` / `opponent_roster_available` state beside the
+  zero-row matrix. A stale database schema or other SQLAlchemy query failure
+  likewise produces an explicit unavailable scope/page using the underlying
+  database reason, without exposing the failed SQL text or mutating the
+  database.
+- All captured names, ids, model-source strings, and error reasons are
+  treated as untrusted display data. Embedded JSON escapes HTML parser
+  delimiters, and browser-rendered values are HTML-escaped before insertion,
+  so a captured value cannot terminate the script or inject markup.
 - "Show pairings marked unavailable" is the one addition beyond §2's literal
   list: without it, marking a player unavailable removes their rows from
   view entirely, which would make it impossible to double check who was
@@ -357,10 +371,11 @@ here rather than left implicit:
   §7 already guarantees unconditionally.
 
 Tests: `tests/test_tonights_match_tab.py` (payload fidelity, no dropped
-pairings, no external resources, an unavailable scope still offered with
-its real reason) and `tests/test_build_captain_first_edge.py` (real scope
-discovery from `Match` rows, bye/foreign-match exclusion, honest team-name
-fallback, a real end-to-end file write). Manually verified against the
+pairings, no external resources, script/HTML injection resistance, explicit
+missing-roster state, an unavailable scope still offered with its real
+reason) and `tests/test_build_captain_first_edge.py` (real scope discovery
+from `Match` rows, bye/foreign/blank-scope exclusion, safe stale-schema
+reporting, honest team-name fallback, a real end-to-end file write). Manually verified against the
 CI-mode sample fixture (`ci-build/pipeline_ci.db`, built via
 `pipeline_run_all.py --skip-scrape --fixtures tests/fixtures/sample_pipeline`)
 -- that fixture carries no `PlayerTeamHistory` rows, so the real, honest

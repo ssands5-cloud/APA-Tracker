@@ -18,16 +18,17 @@ scripts/build_captains_edge.py already uses -- this script cannot write to,
 migrate, or create the real data file, and does NOT use
 database.engine.create_db_engine() (which calls Base.metadata.create_all(),
 a write). A database written before PlayerTeamHistory.team_external_id
-existed will fail every scope with a real "no such column" error from
-SQLite itself -- this script does not paper over that with a migration;
+existed is reported as unavailable using SQLite's underlying reason, without
+exposing the failed SQL statement or pretending that no match was scheduled.
+This script does not paper over that with a migration;
 docs/captain_first_edge_experience.md and database/engine.py already say the
 real fix is to regenerate the database from the API.
 
-A scope this script could not evaluate (an ambiguous or missing canonical
-roster, for example) is still listed in the opponent/format selectors, with
-its real reason shown instead of a matrix -- never silently dropped (see
-docs/captain_first_edge_experience.md's honesty rules, and the "Regular
-season only" note below).
+A scope this script could not evaluate (an ambiguous canonical roster or a
+database query failure, for example) is still listed in the opponent/format
+selectors, with its real reason shown instead of a matrix -- never silently
+dropped. A genuinely absent roster is represented by Stage 1's side-specific
+availability flags and named explicitly in the page.
 
 Usage:
     python scripts/build_captain_first_edge.py
@@ -46,6 +47,7 @@ from typing import Optional
 
 import yaml
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 # ``python scripts/build_captain_first_edge.py`` is a documented operator
@@ -95,7 +97,13 @@ def _team_name(db: Session, team_external_id: str) -> str:
     team = db.query(Team).filter_by(external_id=team_external_id).one_or_none()
     if team is not None:
         return team.name
-    return f"Unknown opponent (id: {team_external_id})"
+    return f"Unresolved team (id: {team_external_id})"
+
+
+def _database_error(exc: SQLAlchemyError) -> str:
+    """Expose the underlying database reason without leaking SQL/parameters."""
+    underlying = getattr(exc, "orig", None)
+    return f"{type(underlying or exc).__name__}: {underlying or exc}"
 
 
 def real_match_scopes(db: Session, our_team_external_id: str) -> list[tuple[str, str, str]]:
@@ -132,7 +140,11 @@ def real_match_scopes(db: Session, our_team_external_id: str) -> list[tuple[str,
         )
         if not opponent:
             continue
-        scopes.add((match.session_name, opponent, match.format))
+        session_name = str(match.session_name or "").strip()
+        format_name = str(match.format or "").strip()
+        if not session_name or not format_name:
+            continue
+        scopes.add((session_name, opponent, format_name))
     return sorted(scopes)
 
 
@@ -163,7 +175,8 @@ def build_match_scopes(db: Session, our_team_external_id: str) -> list[MatchScop
                     matrix=matrix,
                 )
             )
-        except (PairingEvidenceError, CanonicalRosterError, ValueError) as exc:
+        except (PairingEvidenceError, CanonicalRosterError, ValueError, SQLAlchemyError) as exc:
+            reason = _database_error(exc) if isinstance(exc, SQLAlchemyError) else str(exc)
             scopes.append(
                 MatchScope(
                     session_name=session_name,
@@ -171,16 +184,28 @@ def build_match_scopes(db: Session, our_team_external_id: str) -> list[MatchScop
                     opponent_team_name=opponent_team_name,
                     format=format,
                     matrix=None,
-                    unavailable_reason=str(exc),
+                    unavailable_reason=reason,
                 )
             )
     return scopes
 
 
 def build(db: Session, our_team_external_id: str, out_dir: Path) -> Path:
-    our_team_name = _team_name(db, our_team_external_id)
-    scopes = build_match_scopes(db, our_team_external_id)
-    html = render(scopes, our_team_name)
+    try:
+        our_team_name = _team_name(db, our_team_external_id)
+        scopes = build_match_scopes(db, our_team_external_id)
+        html = render(
+            scopes,
+            our_team_name,
+            our_team_external_id=our_team_external_id,
+        )
+    except SQLAlchemyError as exc:
+        html = render(
+            [],
+            f"Configured team (id: {our_team_external_id})",
+            our_team_external_id=our_team_external_id,
+            page_unavailable_reason=_database_error(exc),
+        )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / HTML_NAME
@@ -213,9 +238,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     engine = create_engine("sqlite://", creator=lambda: connect_read_only(db_path))
     db = Session(bind=engine)
     try:
-        out_path = build(db, our_team_external_id, Path(args.out_dir))
+        try:
+            out_path = build(db, our_team_external_id, Path(args.out_dir))
+        except OSError as exc:
+            logger.error("Could not write Captain's Edge HTML: %s", exc)
+            return 1
     finally:
         db.close()
+        engine.dispose()
 
     logger.info("Wrote %s", out_path)
     return 0

@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from html import escape
 from typing import Optional, Sequence
 
-from analytics.pairing_evidence import EvidenceLabel, PairingEvidenceMatrix
+from analytics.pairing_evidence import PairingEvidenceMatrix
 
 COLUMNS = (
     ("player_name", "Our Player", False),
@@ -62,26 +62,34 @@ class MatchScope:
     matrix: Optional[PairingEvidenceMatrix]
     unavailable_reason: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        if (self.matrix is None) == (self.unavailable_reason is None):
+            raise ValueError(
+                "A match scope must carry exactly one of matrix or unavailable_reason"
+            )
+
 
 def _scope_key(session_name: str, opponent_team_external_id: str, format: str) -> str:
     return json.dumps([session_name, opponent_team_external_id, format])
 
 
-def _label_text(evidence_label: EvidenceLabel) -> str:
-    return evidence_label.value
+def _script_json(value: object) -> str:
+    """Serialize JSON without allowing database text to end the script tag.
 
-
-def _cell(pairing, key: str) -> str:
-    value = getattr(pairing, key)
-    if value is None:
-        return "No data"
-    if key == "evidence_label":
-        return _label_text(value)
-    if key in ("observed_win_rate", "modeled_win_probability"):
-        return f"{value * 100:.0f}%"
-    if key == "model_source":
-        return escape(value)
-    return escape(str(value))
+    The payload is embedded in a classic ``<script>`` element. JSON string
+    escaping does not escape ``<`` by default, so a captured player/team name
+    containing ``</script>`` could otherwise break out of the data block.
+    These replacements preserve the decoded values while making the HTML
+    parser treat all database text as script data.
+    """
+    return (
+        json.dumps(value)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
 
 def _matrix_payload(matrix: PairingEvidenceMatrix) -> dict:
@@ -117,7 +125,14 @@ def _matrix_payload(matrix: PairingEvidenceMatrix) -> dict:
     }
 
 
-def render(scopes: Sequence[MatchScope], our_team_name: str, title: str = "Tonight's Match") -> str:
+def render(
+    scopes: Sequence[MatchScope],
+    our_team_name: str,
+    title: str = "Tonight's Match",
+    *,
+    our_team_external_id: Optional[str] = None,
+    page_unavailable_reason: Optional[str] = None,
+) -> str:
     """A self-contained HTML page. No external resources, no server.
 
     ``scopes`` is every real (session, opponent, format) combination this
@@ -125,6 +140,16 @@ def render(scopes: Sequence[MatchScope], our_team_name: str, title: str = "Tonig
     team and a real opponent is the only thing that puts a combination in
     this list. An empty list renders an honest empty state, never a guess.
     """
+    if page_unavailable_reason is not None:
+        return (
+            f"<!doctype html><html><head><meta charset=\"utf-8\">"
+            f"<title>{escape(title)}</title></head><body>"
+            f'<section class="tm-unavailable"><h1>{escape(title)}</h1>'
+            f"<p>This build could not read the configured database: "
+            f"{escape(page_unavailable_reason)}</p>"
+            "<p>Regenerate the database from the APA API, then rebuild this file.</p>"
+            "</section></body></html>"
+        )
     if not scopes:
         return (
             f"<!doctype html><html><head><meta charset=\"utf-8\">"
@@ -152,14 +177,10 @@ def render(scopes: Sequence[MatchScope], our_team_name: str, title: str = "Tonig
         if scope.matrix is not None:
             payload[key] = _matrix_payload(scope.matrix)
 
-    header = "".join(
-        f'<th data-key="{key}" class="{"num" if numeric else ""}">{escape(label)}</th>'
-        for key, label, numeric in COLUMNS
-    )
-
     session_options = "".join(
         f'<option value="{escape(s)}">{escape(s)}</option>' for s in sessions
     )
+    team_value = our_team_external_id or our_team_name
 
     return f"""<!doctype html>
 <html>
@@ -180,7 +201,7 @@ h1 {{ margin-bottom: 4px; }}
 .tm-unavailable {{ color: #9a3b3b; padding: 14px; background: #fdecec; border-radius: 6px; }}
 table {{ border-collapse: collapse; width: 100%; font-size: 13.5px; margin-top: 10px; }}
 th, td {{ padding: 7px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; white-space: nowrap; }}
-th {{ cursor: pointer; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #666e7a; }}
+th {{ font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #666e7a; }}
 td.num, th.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
 tr.evidence-DIRECT {{ background: #e6f6ec; }}
 tr.evidence-INDIRECT {{ background: #fff8e1; }}
@@ -199,8 +220,14 @@ analytics.pairing_evidence; nothing on this page is recomputed in the browser.</
 
 <div class="tm-controls">
   <div>
+    <label>Team</label>
+    <select id="tm-team" aria-label="Configured team">
+      <option value="{escape(team_value)}">{escape(our_team_name)}</option>
+    </select>
+  </div>
+  <div>
     <label>Session</label>
-    <select id="tm-session">{session_options}</select>
+    <select id="tm-session"><option value="">Select session&hellip;</option>{session_options}</select>
   </div>
   <div>
     <label>Opponent</label>
@@ -219,10 +246,19 @@ analytics.pairing_evidence; nothing on this page is recomputed in the browser.</
 <div id="tm-body"><p>Select an opponent and format to see tonight's evidence matrix.</p></div>
 
 <script>
-var TM_OPTIONS = {json.dumps(options)};
-var TM_PAYLOAD = {json.dumps(payload)};
-var TM_COLUMNS = {json.dumps([[k, l, n] for k, l, n in COLUMNS])};
+var TM_OPTIONS = {_script_json(options)};
+var TM_PAYLOAD = {_script_json(payload)};
+var TM_COLUMNS = {_script_json([[k, l, n] for k, l, n in COLUMNS])};
 var tmUnavailable = {{our: {{}}, opp: {{}}}};
+
+function tmEsc(value) {{
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}}
 
 function tmFmt(row, key) {{
   var value = row[key];
@@ -286,11 +322,12 @@ function tmAvailabilityControls(rows) {{
     theirs[r.opponent_id] = r.opponent_name;
   }});
   function block(label, ids, side) {{
+    if (Object.keys(ids).length === 0) return "";
     var html = '<details class="tm-avail" open><summary>' + label + ' availability</summary>';
     Object.keys(ids).forEach(function (id) {{
       var checked = tmUnavailable[side][id] ? "" : "checked";
-      html += '<label><input type="checkbox" data-side="' + side + '" data-id="' + id +
-        '" ' + checked + ' onchange="tmToggleAvailable(this)"> ' + ids[id] + '</label>';
+      html += '<label><input type="checkbox" data-side="' + tmEsc(side) + '" data-id="' + tmEsc(id) +
+        '" ' + checked + ' onchange="tmToggleAvailable(this)"> ' + tmEsc(ids[id]) + '</label>';
     }});
     return html + '</details>';
   }}
@@ -316,9 +353,26 @@ function tmApplyFilters() {{
     if (!hidden) counts[tr.getAttribute("data-label")]++;
   }});
   var total = counts.DIRECT + counts.INDIRECT + counts.UNKNOWN;
-  document.getElementById("tm-shown-counts").textContent =
-    "Shown: " + total + " pairing(s) -- " + counts.DIRECT + " DIRECT, " +
-    counts.INDIRECT + " INDIRECT, " + counts.UNKNOWN + " UNKNOWN.";
+  var countTarget = document.getElementById("tm-shown-counts");
+  if (countTarget) {{
+    countTarget.textContent =
+      "Shown: " + total + " pairing(s) -- " + counts.DIRECT + " DIRECT, " +
+      counts.INDIRECT + " INDIRECT, " + counts.UNKNOWN + " UNKNOWN.";
+  }}
+}}
+
+function tmRosterWarnings(data) {{
+  var warnings = [];
+  if (!data.our_roster_available) {{
+    warnings.push("Our canonical current roster is unavailable for this team and session.");
+  }}
+  if (!data.opponent_roster_available) {{
+    warnings.push("The opponent canonical current roster is unavailable for this team and session.");
+  }}
+  if (!warnings.length) return "";
+  return '<div class="tm-unavailable">' + warnings.map(function (message) {{
+    return '<p>' + tmEsc(message) + '</p>';
+  }}).join("") + '</div>';
 }}
 
 function tmRender() {{
@@ -330,24 +384,25 @@ function tmRender() {{
   }}
   if (!option.available) {{
     body.innerHTML = '<p class="tm-unavailable">This matchup could not be evaluated: ' +
-      option.unavailable_reason + '</p>';
+      tmEsc(option.unavailable_reason) + '</p>';
     return;
   }}
   var data = TM_PAYLOAD[option.key];
   tmUnavailable = {{our: {{}}, opp: {{}}}};
   var header = TM_COLUMNS.map(function (c) {{
-    return '<th class="' + (c[2] ? "num" : "") + '">' + c[1] + '</th>';
+    return '<th class="' + (c[2] ? "num" : "") + '">' + tmEsc(c[1]) + '</th>';
   }}).join("");
   var body_rows = data.pairings.map(function (r) {{
     var cells = TM_COLUMNS.map(function (c) {{
-      return '<td class="' + (c[2] ? "num" : "") + '">' + tmFmt(r, c[0]) + '</td>';
+      return '<td class="' + (c[2] ? "num" : "") + '">' + tmEsc(tmFmt(r, c[0])) + '</td>';
     }}).join("");
-    return '<tr class="evidence-' + r.evidence_label + '" data-player-id="' + r.player_id +
-      '" data-opponent-id="' + r.opponent_id + '" data-label="' + r.evidence_label + '">' +
+    return '<tr class="evidence-' + tmEsc(r.evidence_label) + '" data-player-id="' + tmEsc(r.player_id) +
+      '" data-opponent-id="' + tmEsc(r.opponent_id) + '" data-label="' + tmEsc(r.evidence_label) + '">' +
       cells + '</tr>';
   }}).join("");
   var c = data.counts;
   body.innerHTML =
+    tmRosterWarnings(data) +
     '<p class="tm-counts">Full matrix: <b>' + c.total_feasible_pairings + '</b> feasible pairing(s) -- ' +
     '<b>' + c.DIRECT + '</b> DIRECT, <b>' + c.INDIRECT + '</b> INDIRECT, <b>' + c.UNKNOWN + '</b> UNKNOWN.</p>' +
     '<p id="tm-shown-counts" class="tm-counts"></p>' +
