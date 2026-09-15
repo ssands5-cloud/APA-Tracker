@@ -34,6 +34,7 @@ section#player-vs-player-tab
 │   └── unavailable-data disclosure
 ├── section#pvp-matrix-view (tabpanel)
 │   ├── player / opponent / evidence filters and Reset
+│   ├── figure#pvp-difficulty-heatmap
 │   ├── figure#pvp-coverage-chart
 │   ├── table#pvp-matrix-table
 │   └── matrix-level audit disclosure
@@ -75,6 +76,8 @@ The orchestrator serializes one escaped JSON document into a non-executable
 - each row's nested explicit `PlayerVsPlayerSummary` and chronological games;
 - source/model status and unavailable-field disclosures;
 - descriptive profile fields and the active presentation sort key/direction.
+- one difficulty cell per matrix pair with both current skill inputs, shared
+  current-skill probability, raw difficulty, formula version, and null reason.
 
 The tab reads this element once with `textContent` and `JSON.parse`. It validates
 the schema version and pair-key uniqueness before enabling controls. Script JSON
@@ -147,6 +150,37 @@ The coverage chart sits above the table and shows counts—not scores—for DIRE
 INDIRECT, and UNKNOWN. It is an accessible inline SVG or semantic bar group with
 the numeric counts repeated in text. It never ranks players.
 
+### Match Difficulty Heatmap
+
+The heatmap sits between the filters and evidence-coverage chart. Rows are our
+players; columns are opponents. Its cell value is the precomputed
+`100 * (1 - current_skill_probability)` from the shared validated
+`skill_only_win_probability` function and current matrix skill levels. The
+browser only maps delivered values to fixed presentation bins.
+
+The sequential numeric legend is 0–<20 `#eff3ff`, 20–<40 `#bdd7e7`, 40–<60
+`#6baed6`, 60–<80 `#3182bd`, and 80–100 `#08519c`. Range labels remain numeric;
+there are no easy/hard, danger/favorable, Avoid/Target, or traffic-light labels.
+The full formula and “current-skill-only baseline” label appear next to the
+legend.
+
+Each cell prints a whole-number difficulty value, has an accessible label with
+both player identities/current skills/evidence label/raw source probability,
+and opens the existing Pair View. DIRECT uses a solid outline, INDIRECT a
+dashed outline, and UNKNOWN/missing-skill data a gray hatched `No data` cell.
+The border communicates evidence only; it does not change the fill value.
+
+Default axes use canonical player/opponent name and external-ID order. A user
+may sort an axis by its visible name or current skill header, nulls last, with
+identity tie-breaks. Cells, observed results, modeled probability, trends, and
+volatility cannot drive axis order. Reset restores canonical order and the
+previous Pair View selection remains addressable by pair key.
+
+The heatmap never consumes the experimental history-blended
+`modeled_win_probability`. A null current-skill probability remains `No data`,
+not 50, and is excluded from numeric-bin counts. The evidence matrix still
+contains every feasible pair, including UNKNOWN.
+
 Filters hide rows only by explicit user action. Reset restores every row and
 the canonical source order. Sorting is keyboard-operable, declares direction,
 places `No data` last, and never changes the exported source order. Details
@@ -159,10 +193,13 @@ zero reliability, null probabilities, `no data` trends, and no timeline
 markers. A missing value displays `No data` plus a reason; a measured zero stays
 numeric zero. There is no 50% fallback.
 
-Innings, per-opponent defense, per-opponent break/run rate, and numeric
-volatility are named unavailable fields. The UI never substitutes lifetime
-defense or differently scoped trend volatility. Missing roster identity blocks
-matrix construction instead of inferring membership from historical play.
+Innings, per-opponent defense, per-opponent break/run rate, and pair-specific
+numeric volatility are named unavailable fields. The UI never substitutes
+lifetime defense. A separately joined Opponent Volatility Profile may show
+overall player/format/session skill-level variation only with a visible **not
+pair-specific** label; it does not fill the pair-specific gap. Missing roster
+identity blocks matrix construction instead of inferring membership from
+historical play.
 
 ### Data Coverage bridge
 

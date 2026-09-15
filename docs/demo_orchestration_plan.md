@@ -25,11 +25,14 @@ scraper or analytics logic into a new script.
    `analytics.player_vs_player_matrix.build_matrix_export` once, obtains the
    Lineup Lab document, and then builds one `DataCoverageReport` from those
    matrix plus query-layer refresh timestamps. General schema/source and Lineup
-   reconciliation stay in the manifest verification layer. Only after those immutable
-   documents exist does it render Player vs Player, Data Coverage, Captain's
-   Edge, and captain-first outputs. The HTML renderer reuses the explicit-pair
-   fragment for each row. Do not call `summarize` again in the orchestrator,
-   run a second ingest, or open the live database writable.
+   reconciliation stay in the manifest verification layer. Only after those
+   immutable documents exist does it render Player vs Player, Data Coverage,
+   Captain's Edge, and captain-first outputs. The extended builder also creates
+   Team Strength, Season Projection, Trend Analyzer, Opponent Volatility,
+   current-skill heatmap, and Live Assistant source documents from the same
+   locked database/scope. The HTML renderer reuses the explicit-pair fragment
+   for each row. Do not call `summarize` again in the orchestrator, run a second
+   ingest, or open the live database writable.
 6. **Verify** — run artifact existence/size checks, JSON schema checks,
    workbook-open checks, HTML safety checks, matrix reconciliation, and
    source-database identity checks. Compare every matrix pair/game key and
@@ -84,6 +87,10 @@ A full live demo may prepend the guarded scrape-and-ingest flow specified in
 `scrape_and_ingest_pipeline.md`. It is opt-in, never an implicit fallback, and
 must finish reconciliation and verification before exports start. Fixture mode
 remains the default for CI and never makes a live APA request.
+
+The complete non-interactive phase/output contract is specified in
+`full_production_demo_builder.md`; `demo_launcher.md` owns presentation,
+loopback serving, browser-open behavior, and operator logging.
 
 ## Process and idempotency rules
 

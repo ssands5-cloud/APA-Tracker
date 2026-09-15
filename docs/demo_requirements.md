@@ -38,6 +38,14 @@ The database must contain, or explicitly report why it does not contain:
 - TeamStat rows carrying immutable `team_external_id`, division, session, and
   `is_current` membership state;
 - enough rows to make the displayed trend/career statistics meaningful.
+- canonical current-team/session player wins and played counts for Team
+  Strength offense/depth, plus finalized scored match PF/PA for its defense
+  proxy; missing components must remain unavailable;
+- every real unscored remaining match and resolvable season standings records
+  needed by Season Projection, with ambiguous team-name joins reported;
+- chronological skill-level observations keyed by player/format/session for
+  Trend Analyzer and Opponent Volatility, including thin/no-data histories;
+- current skill levels for every heatmap cell that receives a numeric value.
 
 There is no minimum evidence count that may be invented for a “better” demo.
 The page must show the real DIRECT/INDIRECT/UNKNOWN mix and the Data Coverage
@@ -56,6 +64,15 @@ and the requested artifacts that have real source data:
   Player tab's Matrix/Pair data, plus optional script-JSON parity data;
 - `data_coverage.html` and `data_coverage.xlsx`, generated from the same
   denominated `DataCoverageReport` used by the embedded Data Coverage tab;
+- `team_strength.html` and `team_strength.xlsx` when the scoped component
+  report can be built, including player/match audit sheets;
+- `season_projection.html` and `season_projection.xlsx` for the real remaining
+  schedule and standings history;
+- `trend_analyzer.html` plus the general or dedicated Trend Analyzer workbook;
+- the Opponent Volatility HTML/embedded panel and
+  `opponent_volatility.xlsx`;
+- the Match Difficulty Heatmap embedded in the unified Player-vs-Player tab;
+- the Captain's Live Assistant snapshot embedded in captain-first HTML;
 - `analysis_tabs.html` (Captain's Edge/Lineup Optimizer where available,
   Head-to-Head, Player Trends);
 - `apa_data.json` and `apa_stats.xlsx`;
@@ -89,6 +106,23 @@ not a successful deliverable.
   denominator; a zero total produces null label percentages. HTML, Excel, and
   manifest scope/counts/percentages/missing skills/sample rows/timestamps must
   agree.
+- Team Strength shows its three components, raw denominators, formula version,
+  and composite null gate; it contains no strength tier or predictive claim.
+- Season Projection retains every real remaining match, labels log5 and its
+  source-rate status/assumptions, and never fabricates a future lineup, 50%
+  fallback, playoff probability, or final rank.
+- Match Difficulty uses only the shared validated current-skill probability.
+  Its pair keys equal the matrix; missing skills remain hatched `No data` and
+  the experimental history blend never controls color.
+- Trend HOT/COLD/NEUTRAL indicators describe captured skill history only and
+  carry the exact slope/volatility/sample inputs. Opponent Volatility is
+  labeled overall player-format-session context, never pair-specific risk.
+- The Live Assistant validates common run/scope/hash across every input,
+  distinguishes source facts from captain-entered local state, and cannot
+  rescrape, submit, invent play order, or blend a hidden assistant score.
+- The Full Production Demo Builder must finalize a READY marker, manifest, and
+  checksums before the Unified Launcher can serve/open the run. The launcher
+  binds only to loopback and never presents a failed or partial build.
 
 ## Human acceptance
 
@@ -100,3 +134,7 @@ Matrix View and Pair View without losing UNKNOWN rows, review the Captain's
 Edge descriptive Opponent Risk Profile, and open all requested workbooks without
 repair prompts. The reviewer must also inspect Data Coverage denominators,
 follow one missing-data link, and reconcile its evidence counts with the matrix.
+The reviewer must additionally audit Team Strength component denominators,
+inspect one numeric and one unavailable heatmap cell, trace one trend/volatility
+note to its sample, verify one Season Projection source-status row, and change a
+Live Assistant availability input without losing reconciliation or provenance.

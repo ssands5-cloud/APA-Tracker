@@ -39,7 +39,7 @@ their canonical order. A `PlayerVsPlayerExportRow` carries:
   skill delta, reliability, last-recorded skill probability, modeled
   probability, trends, projection alias, and chronological game records;
 - fixed disclosures for innings, per-opponent defense, per-opponent break/run,
-  and numeric volatility, which are unavailable in this contract.
+  and pair-specific numeric volatility, which are unavailable in this contract.
 
 An absent history key is treated as an empty history. The resulting pair stays
 in the matrix and receives the honest zero/null summary produced by
@@ -91,6 +91,82 @@ Before rendering, the orchestrator must verify:
 - each history record belongs to its row's exact internal player IDs;
 - no duplicate pair key exists.
 
+## Match Difficulty Heatmap design
+
+The heatmap is a planned second presentation of the same feasible-pair keys,
+not a new Player-vs-Player model. Each cell is oriented from our player toward
+one opponent and uses the same validated current-skill-only function as Stage 3
+Lineup Lab:
+
+```text
+current_skill_probability =
+    analytics.head_to_head.skill_only_win_probability(
+        player_current_skill,
+        opponent_current_skill,
+    )
+
+match_difficulty = 100 * (1 - current_skill_probability)
+```
+
+The builder computes and versions this value; HTML does not. Higher values mean
+the current-skill-only baseline assigns our player a lower probability in that
+cell. It is not a claim about future lineup order or a categorical warning.
+
+The planned immutable `MatchDifficultyCell` carries the matrix pair key, both
+current skill inputs, `current_skill_probability`, `match_difficulty`, evidence
+label, `formula_version = match-difficulty-v1-current-skill`, and a null reason.
+Its key set must equal the matrix key set even when every numeric value is null.
+
+The heatmap must not use `PlayerVsPlayerSummary.modeled_win_probability`, the
+Stage 1 DIRECT history blend, observed win rate, trend, reliability, or
+opponent volatility. DIRECT and INDIRECT cells with the same current skills
+therefore have the same difficulty value. Their evidence labels and samples
+remain visible through text/border treatment.
+
+### Grid and ordering
+
+- Rows are our canonical current-roster players; columns are canonical opponent
+  roster players.
+- Default row/column order is case-insensitive display name then external ID.
+- Optional header controls may sort one axis by name or current skill level;
+  null skills sort last and identity remains the tie-break.
+- Cell values, experimental probabilities, trend, and volatility never reorder
+  an axis. Reset restores canonical order.
+- Frozen row/column headers identify both player names, IDs, and current skills.
+- Each cell exposes the numeric difficulty, source probability, evidence label,
+  and pair key through visible/focusable detail, not hover alone.
+
+### Numeric color scale
+
+The fixed sequential blue scale has numeric bins only:
+
+| Difficulty | Fill |
+| ---: | --- |
+| 0 to <20 | `#eff3ff` |
+| 20 to <40 | `#bdd7e7` |
+| 40 to <60 | `#6baed6` |
+| 60 to <80 | `#3182bd` |
+| 80 to 100 | `#08519c` |
+
+The legend prints the numeric ranges and the formula; it does not name cells
+easy, hard, favorable, dangerous, target, or avoid. Cells display the rounded
+whole-number value while parity uses the raw probability/value. Dark fills use
+white text; light fills use dark text. A text value and accessible label always
+supplement color.
+
+### UNKNOWN and missing inputs
+
+If either current skill is missing, `current_skill_probability` and
+`match_difficulty` are null. The cell uses `#f2f2f2`, diagonal hatching, and
+literal `No data`. It is excluded from numeric legend counts and never placed
+at 50. An UNKNOWN evidence label remains UNKNOWN. A DIRECT row can also have a
+null heatmap cell when historical evidence exists but a current skill does not;
+the UI keeps both facts visible.
+
+Heatmap JSON/HTML/Excel parity compares pair key, both skill inputs, raw
+probability, raw difficulty, evidence label, and null reason. The matrix pair
+count is unchanged by heatmap availability.
+
 ## UNKNOWN and unavailable data
 
 UNKNOWN rows are first-class rows. They are never dropped, converted to an
@@ -101,8 +177,10 @@ a count while the missing probabilities are unavailable values.
 
 The matrix repeats the module's named unavailable-field disclosures. Captured
 APA data has no innings, no per-opponent defense average, and no defensible
-per-opponent break/run attribution. Numeric volatility belongs to a different
-analytics scope and is not joined here.
+per-opponent break/run attribution. Pair-specific numeric volatility remains
+unavailable. A future Opponent Volatility Profile may join the opponent's
+overall player/format/session skill-level variation by exact identity and scope,
+but it must be labeled not pair-specific and kept separate from pair evidence.
 
 ## Matrix HTML structure
 
@@ -174,6 +252,21 @@ external IDs, match ID/date, result, posted skills, points, 9-ball balls,
 format, and session. Rows follow parent matrix order and then each summary's
 chronological game order. A header-only history sheet is not a successful data
 artifact.
+
+### Planned `Match_Difficulty_Heatmap`
+
+This sheet mirrors the HTML grid: our players are rows, opponents are columns,
+and frozen headers include names/external IDs/current skills. Numeric cells hold
+raw 0–100 difficulty values and receive static fills from the same five fixed
+numeric bins. Missing cells contain literal `No data` with gray hatching. The
+fill is presentation only; there is no Excel conditional-format formula.
+
+### Planned `Match_Difficulty_Data`
+
+This audit sheet contains one row per matrix pair: both IDs/names/skills,
+evidence label, current-skill probability, raw difficulty, formula version, and
+null reason. It remains in canonical matrix order. The grid and audit sheet
+must reconcile by pair key and value before the workbook is released.
 
 External IDs are text and probability/rate cells retain the raw analytics
 floats. The current workbook applies fixed widths and header styles but no

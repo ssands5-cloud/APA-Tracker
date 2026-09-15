@@ -1,0 +1,170 @@
+# Full Production Demo Builder
+
+The Full Production Demo Builder is the proposed non-interactive orchestrator
+that turns one authorized data source into one verified, immutable demo bundle.
+It coordinates existing boundaries; it does not copy scraper, parser, ingest,
+analytics, or renderer logic.
+
+The planned entry point is `scripts/build_full_production_demo.py`. The existing
+fixture-oriented `scripts/build_demo.py` remains a limited sample builder until
+the full contract is implemented.
+
+## Invocation
+
+Exactly one data source is required:
+
+```powershell
+python scripts/build_full_production_demo.py --fixtures tests/fixtures/sample_pipeline --config tests/fixtures/ci_pipeline_config.yaml --out demo-runs/fixture
+
+python scripts/build_full_production_demo.py --live --auth token-env --token-env APA_TOKEN --config apa_config.yaml --out demo-runs/live-2026-09-15
+
+python scripts/build_full_production_demo.py --verified-run demo-runs/live-2026-09-15 --out demo-runs/rebuild-2026-09-15
+```
+
+`--live` and `--fixtures` delegate acquisition/ingest to the exact contract in
+`scrape_and_ingest_pipeline.md`. `--verified-run` accepts only a prior run whose
+manifest, database hash, schema checks, and promotable status revalidate. It
+never accepts an arbitrary database path or silently falls back to the newest
+file.
+
+| Flag | Purpose |
+| --- | --- |
+| `--live` | opt in to authenticated APA acquisition |
+| `--fixtures PATH` | select a manifest-backed fixture tree and deny network |
+| `--verified-run PATH` | rebuild exports from one verified immutable run |
+| `--auth ...` and credential-source flags | forwarded unchanged to the guarded acquisition CLI in live mode only |
+| `--config PATH` | repository-local non-secret scope/export configuration |
+| `--out PATH` | new, empty run directory within the canonical repository |
+| `--team-id ID` | exact configured team override, retained as text |
+| `--opponent-team-id ID` | optional exact demo scope restriction |
+| `--format NAME`, `--session NAME` | optional exact scope restrictions |
+| `--keep-raw` | forward the controlled capture-retention request in live mode |
+| `--fail-on-warning` | promote selected warning classes to build failure |
+| `--log-level info\|debug` | change redacted diagnostic detail, never payload content |
+
+The builder does not expose `--serve`, `--open`, or browser flags. Presentation
+belongs to the launcher after verification.
+
+## End-to-end flow
+
+```mermaid
+flowchart TD
+    A[Parse flags and verify canonical root/origin] --> B{Data source}
+    B -->|live| C[Guarded scrape and ingest]
+    B -->|fixtures| D[Network-denied fixture ingest]
+    B -->|verified run| E[Revalidate manifest and database hash]
+    C --> F[Fresh verified SQLite]
+    D --> F
+    E --> F
+    F --> G[Read-only source/document assembly]
+    G --> H[Team Strength, Season Projection, Trends, Volatility]
+    H --> I[Pairing matrix, Pair View, Lineup Lab, Data Coverage]
+    I --> J[Captain's Edge and Live Assistant snapshot]
+    J --> K[JSON, Excel, and self-contained HTML renderers]
+    K --> L[Cross-artifact parity and security checks]
+    L -->|Fail| Z[Unpromotable run; no launch]
+    L -->|Pass| M[Write manifest, checksums, index, READY marker]
+```
+
+## Phase contract
+
+1. **Preflight** verifies exact repository root/origin, clean contained output
+   targets, argument exclusivity, config schema, dependencies, and mode policy.
+2. **Acquire/ingest** delegates to the full scrape pipeline or its fixture path
+   and requires a fresh/promotable database.
+3. **Snapshot lock** records the database SHA-256 and opens it read-only for all
+   later phases. A hash change during build fails the run.
+4. **Core documents** build canonical roster/schedule scopes, Player-vs-Player
+   matrix/pairs, Lineup Lab, Data Coverage, and persisted trend views.
+5. **Extended documents** build Team Strength, Season Projection, Opponent
+   Volatility, heatmap values, and the static Live Assistant source document.
+6. **Render** passes each immutable document to its HTML/Excel/JSON renderer.
+   Renderers do presentation only.
+7. **Verify** reconciles keys, raw values, nulls, ordering, formulas/versions,
+   workbook safety, HTML/script escaping, and absence of network references.
+8. **Finalize** writes the redacted manifest/checksum list and an index only
+   after every required gate passes.
+
+## Exact analytics participants
+
+- `analytics/team_stats.py` and proposed `analytics/team_strength.py`;
+- `analytics/season_projection.py`;
+- `analytics/player_trends.py` and proposed
+  `analytics/opponent_volatility.py`;
+- `analytics/pairing_evidence.py`;
+- `analytics/player_vs_player_matrix.py` and
+  `analytics/player_vs_player.py`;
+- `analytics/lineup_lab.py` and `analytics/lineup_legality.py`;
+- `analytics/data_coverage.py`;
+- the descriptive Opponent Risk Profile document when implemented.
+
+Legacy optimizer/scouting outputs may be packaged only under their existing
+warnings and are not inputs to the validated captain-first path.
+
+## Output bundle
+
+```text
+demo-runs/<run-id>/
+├── demo_manifest.json
+├── checksums.sha256
+├── index.html
+├── data/apa_tracker.db
+├── html/
+│   ├── captain_first_edge.html
+│   ├── player_vs_player.html
+│   ├── data_coverage.html
+│   ├── team_strength.html
+│   ├── season_projection.html
+│   ├── trend_analyzer.html
+│   ├── opponent_volatility.html
+│   └── captains_live_assistant.html
+├── excel/
+│   ├── apa_stats.xlsx
+│   ├── player_vs_player.xlsx
+│   ├── data_coverage.xlsx
+│   ├── team_strength.xlsx
+│   ├── season_projection.xlsx
+│   ├── trend_analyzer.xlsx
+│   └── opponent_volatility.xlsx
+└── json/ (optional parity documents)
+```
+
+The bundle excludes raw authenticated captures unless explicitly retained in a
+separate protected run area. It always excludes credentials, cookies, browser
+profiles, environment dumps, absolute user paths, and private debug payloads.
+The local verified run contains its locked database for audit. A public/share
+package omits that database unless an explicit privacy review authorizes it.
+
+## Failure and idempotency rules
+
+- A phase failure stops every dependent phase; there is no stale-data fallback.
+- Every run uses a new directory. No database/export is repaired or appended.
+- A missing optional data document is represented by a manifest reason and an
+  honest UI state, not a fabricated placeholder value.
+- A missing required artifact, scope/hash mismatch, unsupported formula
+  version, or cross-renderer mismatch makes the run unpromotable.
+- Rebuilding the same verified inputs produces identical deterministic content
+  after excluding manifest-declared run timestamps/IDs.
+- Cleanup may remove only the exact temporary paths created for that run.
+
+## Exit-code composition
+
+Acquisition/ingest failures preserve the stable 2–9 and 130 categories defined
+by `scrape_and_ingest_pipeline.md`. The full builder adds:
+
+| Code | Category |
+| ---: | --- |
+| 10 | analytics/document construction or reconciliation failure |
+| 11 | HTML/Excel/JSON render or cross-renderer parity failure |
+| 12 | bundle manifest/checksum/finalization failure |
+
+The first terminal category wins except secret-safety code 9, which supersedes
+other failures if possible disclosure is detected. A stopped or failed run
+never receives READY.
+
+## Launcher handoff
+
+Successful finalization writes `READY` only after manifest and checksum
+verification. The launcher accepts the run directory, validates that marker and
+manifest again, then serves or opens `index.html`. The builder never launches a
+browser itself, preventing a partially verified run from being presented.

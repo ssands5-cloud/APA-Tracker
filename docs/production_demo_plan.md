@@ -15,7 +15,8 @@ assignment:
 
 ```text
 Tonight's Match → Player vs Player (Matrix View → Pair View)
-→ Lineup Lab → Data Coverage → Exports
+→ Lineup Lab → Team Strength → Season Projection
+→ Captain's Live Assistant → Data Coverage → Exports
 ```
 
 This order makes the complete evidence surface inspectable before the
@@ -102,6 +103,35 @@ reconciliation remain manifest checks until the coverage analytics contract is
 extended. A zero denominator remains null. Failure to construct or reconcile
 the report blocks the production demo.
 
+## Team Strength and Season Projection integration
+
+The builder creates Team Strength after canonical roster and finalized-match
+scope resolution. It presents offense, the team-score containment proxy, and
+the fifth-player depth floor separately before the equal-component
+`team_strength_index`. Every component carries raw denominators and a formula
+version; the composite is null if any component is unavailable. It is
+descriptive context only and cannot generate a strength tier or alter Lineup
+Lab.
+
+Season Projection then calls the existing `analytics/season_projection.py`
+once for the selected team's real remaining schedule. The demo shows actual
+source win rates/status, raw log5 probability where available, fractional
+expected remaining wins/losses, projected-final arithmetic, and the real
+deduplicated standings curve. A remaining match with neither rate stays visible
+with `NO_RATE`; it is not assigned 50%.
+
+The projection assumes stationary team win rates and independent remaining
+matches. It does not simulate future players, availability, lineup order,
+home/away effects, playoff qualification, or final rank. The implementation's
+numeric upset-likelihood field may be displayed with its formula and cutoff
+provenance, but not as categorical captain advice. Name-based standings
+identity ambiguity blocks that opponent estimate.
+
+HTML, Excel, script JSON, and manifest must agree on Team Strength formula
+versions/denominators and Season Projection schedule keys/source statuses/raw
+values before rounding. These sections follow Lineup Lab in the full narrative
+and precede the Live Assistant/Data Coverage close.
+
 ## Optional scrape and ingest
 
 The full demo builder may invoke the opt-in live acquisition contract in
@@ -135,3 +165,14 @@ authentication or verification failure never falls back to a stale snapshot.
 - Data Coverage unified wiring must correct the current zero-pair HTML Total
   row (which prints 100%) and disclose/guard its name-based standings timestamp
   lookup before production presentation.
+- Team Strength analytics/renderers do not yet exist. Its team/session source
+  join, component null gates, and equal-weight formula require implementation
+  and validation before the composite can appear.
+- Season Projection analytics exists, but its verified team-ID/standings join,
+  immutable demo document, HTML/Excel renderers, and parity tests remain to be
+  implemented. The existing 0.40 upset threshold is not fitted advice.
+- Trend Analyzer, Opponent Volatility, heatmap, and Live Assistant composition
+  require implementation and cross-scope tests. None may introduce a hidden
+  recommendation score or categorical opponent-risk flag.
+- The Full Production Demo Builder and Unified Launcher remain design-only;
+  they must enforce READY/manifest/hash verification before presentation.

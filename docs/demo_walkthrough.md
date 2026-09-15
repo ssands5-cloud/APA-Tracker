@@ -9,7 +9,7 @@ This walkthrough uses either a database already regenerated according to
 From the canonical APA Tracker root, use the future launcher contract:
 
 ```powershell
-python scripts/run_production_demo.py --live --config apa_config.yaml --serve
+python scripts/run_production_demo.py --live --auth token-env --token-env APA_TOKEN --config apa_config.yaml --serve --open
 ```
 
 For a no-network rehearsal, use a committed or explicitly approved fixture
@@ -60,18 +60,35 @@ line. Skip this step when a verified fresh database already exists.
     its row and workbook history; inspect both artifact hashes in the manifest.
 13. Open Lineup Lab. Review assignments, unassigned sides, total score, and the
    complete/partial/blocked legality state.
-14. Open Data Coverage. Verify DIRECT/INDIRECT/UNKNOWN counts and percentages
+14. Open Team Strength. Read offense, defense proxy, and depth with their raw
+    denominators before the composite. Confirm a missing component makes the
+    composite `No data` and no strong/weak tier appears.
+15. Return to Player vs Player and open Match Difficulty Heatmap. Confirm every
+    matrix pair has a cell, numeric color comes only from the validated current-
+    skill probability, and UNKNOWN/missing-skill cells are gray hatched
+    `No data`, never 50.
+16. Open Captain's Live Assistant. Change one local availability input and
+    verify the displayed complete/partial/blocked Lineup Lab result and
+    unassigned lists reconcile. Inspect starter and anchor candidates, then
+    confirm trend and opponent-volatility notes show exact values, sample size,
+    and scope without categorical opponent advice or a hidden score.
+17. Open Season Projection. Verify every real remaining match appears in
+    schedule order, inspect both source rates/status and the log5 probability,
+    and confirm `NO_RATE` stays `No data`. Distinguish solid real standings
+    history from the dashed projected endpoint and read the model assumptions.
+18. Open Data Coverage. Verify DIRECT/INDIRECT/UNKNOWN counts and percentages
     against total feasible pairings, inspect every named missing skill, review
     each pair's sample-size row, and call out standings/career refresh times and
     fixed unavailable fields. Follow one coverage link from Player vs Player
     and confirm it selects a section without changing totals.
-15. Open `data_coverage.xlsx`; compare `Data_Coverage` and `Sample_Sizes` with
+19. Open `data_coverage.xlsx`; compare `Data_Coverage` and `Sample_Sizes` with
     the tab. For zero feasible pairs, confirm percentages are blank/No data and
     the audit workbook still opens successfully.
-16. Open `analysis_tabs.html`, then the workbook and JSON links. Confirm the
-   selected snapshot and provenance match the primary page.
-17. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
-   and test result in the presentation notes.
+20. Open `analysis_tabs.html`, then Team Strength, Season Projection, Trend,
+    Opponent Volatility, general workbook, and JSON links. Confirm raw values,
+    formula versions, scope, and provenance match the primary page.
+21. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
+    and test result in the presentation notes.
 
 ## Closing language
 

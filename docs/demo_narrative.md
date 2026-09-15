@@ -61,6 +61,38 @@ solver chooses the largest exact scoreable matching, then shows unassigned
 players and opponents. A complete five-player lineup carries the real 23-rule
 legality verdict; a partial or blocked result is an honest answer.
 
+## Team strength and season projection
+
+Step back from individual pairings to the Team Strength view. Read the three
+components before the composite: pooled roster result rate, the explicitly
+labeled team-score containment proxy, and the observed fifth-player depth
+floor. Show the raw W/P, PF/PA, player/match counts, and any null component. The
+equal-weight composite is descriptive and disappears when a component is
+missing; it is not a league percentile or strong/weak tier.
+
+Then open Season Projection. Start with the actual record and real remaining
+schedule. Explain that each available match probability is the existing log5
+baseline over real season win rates, not a simulated player lineup. The
+expected remaining record is a fractional sum, not a guaranteed finish. Show
+the probability-source status for an opponent with missing standings evidence
+and keep that scheduled row visible as `No data`.
+
+On the chart, distinguish solid historical standings points from the dashed
+projected endpoint. Name the stationary-record, independence, identity-join,
+and freshness assumptions. Do not present playoff odds, final rank, or a
+categorical season verdict; the captured data and current model do not support
+them.
+
+## Captain's Live Assistant
+
+Open the Live Assistant last in the decision sequence. Change one local
+availability input and show that the approved Lineup Lab document is re-solved
+or a precomputed verified static scenario is selected. Review starter and
+anchor candidates as sourced evidence cards, then read the descriptive notes
+that name UNKNOWN, thin samples, trend, and opponent volatility with their
+scope. Emphasize that “Live” is local match-night state over a fixed snapshot;
+it neither rescrapes APA nor blends a hidden risk score.
+
 ## Data Coverage
 
 Close the analytical story in the Data Coverage tab. Show that the denominator

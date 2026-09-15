@@ -35,6 +35,25 @@ no-data result. It is design-only until the orchestration script exists.
   percentages must all render `No data`, never a hardcoded 100%.
 - Lineup Lab score, maximum matching, unassigned reconciliation, legality gate,
   and exact-search bound.
+- Team Strength offense pooling, defense-proxy PF/PA orientation, fifth-player
+  depth floor, equal-component composite, full-component null gate, formula
+  version, and invalid-denominator rejection.
+- Season Projection log5 branches, one-side/no-rate behavior, expected totals,
+  real-schedule retention, identity ambiguity, and standings-history
+  deduplication.
+- Trend Analyzer independently verifies least-squares slope and sample standard
+  deviation, full-session versus last-20 spans, exact five-observation/±0.05/
+  0.40 boundaries, `trend_score` denominator floor/null gate/sign, and literal
+  descriptive indicator labels.
+- Opponent Volatility verifies `100 * sigma / (1 + sigma)`, zero/null
+  distinction, median/coverage, exact player-format-session join, and absence
+  of pair-specific or categorical-risk claims.
+- Match Difficulty verifies `100 * (1 - current_skill_probability)` from the
+  shared Stage 3 function, all pair keys, fixed numeric color bins, and hatched
+  null cells; the history-blended probability must not affect it.
+- Live Assistant scope/hash validation, availability re-solve or exact static
+  scenario selection, assignment/unassigned/legality reconciliation, note
+  template provenance, and separation of captain input from source facts.
 
 ### Pipeline integration
 
@@ -55,6 +74,14 @@ no-data result. It is design-only until the orchestration script exists.
   sample sizes, refresh timestamps, and unavailable text before rounding.
 - Run the optional scrape-and-ingest CLI entirely against mocked transports and
   fixtures; assert live network use is impossible in CI.
+- Compare Team Strength HTML/XLSX/JSON raw components and denominators; compare
+  Season Projection schedule/source-status/probability/expected totals; compare
+  Trend/Volatility keys, spans, nulls, and values before rounding.
+- Compare heatmap keys against the complete matrix and verify the Live Assistant
+  references the same immutable documents rather than recalculating them.
+- Run Full Production Demo Builder fixture mode twice and compare deterministic
+  bundle content. Verify the launcher refuses absent/invalid READY, manifest,
+  checksum, or database-hash state.
 
 ### Security and robustness
 
@@ -68,6 +95,11 @@ no-data result. It is design-only until the orchestration script exists.
   invalid result, conflicting same-match fact, and overlarge assignment paths.
 - Exercise zero-pair, complete-skill, missing-skill, mixed-evidence,
   UNKNOWN-only, missing-timestamp, and hostile-text Data Coverage fixtures.
+- Exercise all-null/all-zero/one-point/exactly-20/more-than-20 trend histories,
+  missing Team Strength components, no remaining schedule, ambiguous standings
+  names, and mismatched Live Assistant run/scope hashes.
+- Assert fixture CI cannot use live builder/launcher flags, DNS, HTTP, browser
+  open, or non-loopback serving.
 
 ### Live smoke and manual review
 
@@ -84,7 +116,10 @@ No demo is presented when a required phase fails, the database is stale, an
 artifact is missing without a documented reason, the matrix counts do not
 reconcile, an evidence percentage uses a denominator other than total feasible
 pairings, Pair/Matrix route state is inconsistent, Captain's Edge disagrees
-with the selected row, an unvalidated risk flag is non-null, or the page
-contains a fabricated fallback. A fixture CI run may
-pass with unavailable rosters when that is the fixture's truthful state; that
-is a guard-path assertion, not evidence that the production snapshot is ready.
+with the selected row, a categorical opponent-risk field exists, Team Strength
+renormalizes missing components, a heatmap cell uses the blended model, trend
+spans/gates disagree, Season Projection drops a remaining match, the Live
+Assistant mixes run scopes, or the page contains a fabricated fallback. A
+fixture CI run may pass with unavailable rosters when that is the fixture's
+truthful state; that is a guard-path assertion, not evidence that the
+production snapshot is ready.

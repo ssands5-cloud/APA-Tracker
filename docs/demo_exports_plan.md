@@ -9,11 +9,20 @@ the future launcher should call it rather than duplicating exporter logic.
 | Artifact | Builder | Demo role | Required validation |
 | --- | --- | --- | --- |
 | `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage, and descriptive Opponent Risk Profile entry view | self-contained HTML, scope/evidence reconciliation, named single-field ordering, no categorical risk fields, no external requests |
-| `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix plus anchored explicit-pair details | UNKNOWN visibility, escaping, stable initial pair order, no renderer math |
-| `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff plus real game history | openpyxl load, values only, pair/game-key parity |
+| `player_vs_player.html` | `ui/export_html_player_vs_player.py`, reusing `ui/tabs/player_vs_player.py` | whole-scope matrix, current-skill difficulty heatmap, and anchored explicit-pair details | UNKNOWN visibility, fixed numeric color bins, escaping, stable initial pair order, no renderer math |
+| `player_vs_player.xlsx` | `ui/export_excel_player_vs_player.py` | whole-matrix handoff, difficulty grid/audit rows, and real game history | openpyxl load, values only, pair/game/heatmap-key parity |
 | Player vs Player JSON document | planned `demo.py` adapter (optional) | versioned matrix parity/source document | pair/game-key reconciliation, source/status fields, null preservation |
 | `data_coverage.html` | `scripts/build_data_coverage.py` + `ui/tabs/data_coverage.py` | evidence coverage, missing skills, sample sizes, refresh dates, unavailable fields | escaped/self-contained, zero-total nulls, matrix count parity |
 | `data_coverage.xlsx` | `ui/export_excel_data_coverage.py` | `Data_Coverage` and `Sample_Sizes` sheets | openpyxl load, values only, counts/percentages/timestamps/sample parity |
+| `team_strength.html` | planned Team Strength renderer | offense, defense proxy, depth, composite, and source coverage | formula-version/raw-denominator parity; no strength tiers |
+| `team_strength.xlsx` | planned Team Strength workbook renderer | team summary plus roster/match audit rows | three values-only sheets, exact player/match keys, null composite gate |
+| `season_projection.html` | planned Season Projection renderer over `analytics/season_projection.py` | remaining schedule, log5 baseline, and real standings curve | every schedule row retained, source-status and assumption labels |
+| `season_projection.xlsx` | planned Season Projection workbook renderer | summary, remaining matches, and standings history | values only, log5/expected-total parity, identity-join disclosure |
+| `trend_analyzer.html` | planned Trend Analyzer renderer | slope, volatility, trend score, descriptive indicators, and history chart | exact spans/gates, no extrapolation or recommendation |
+| `trend_analyzer.xlsx` | planned Trend Analyzer workbook renderer | trend summary and chronological skill history | values only, exact player/format/session keys and null gates |
+| `opponent_volatility.html` | planned Opponent Volatility renderer | opponent-team median/coverage and player-level variation | exact scoped join, numeric scale, no categorical risk labels |
+| `opponent_volatility.xlsx` | planned Opponent Volatility renderer | team median/coverage plus all opponent rows | exact transform/median, null retention, no threshold styling |
+| `captains_live_assistant.html` | planned captain-first composition | match-night local state over immutable verified analytics | common run/scope/hash, exact Lineup Lab reconciliation, no hidden score |
 | `analysis_tabs.html` | `pipeline.exports.write_tabs` + `ui/tabs/*` | supporting Head-to-Head, Player Trends, and available legacy cards | non-empty sections only when real documents exist |
 | `apa_data.json` | `ui.export_json.export_to_json` | machine-readable general snapshot | valid JSON, expected top-level keys, source timestamps |
 | `apa_stats.xlsx` | `ui.export_excel.export_to_excel` | workbook for captain/operator review | openpyxl load without repair; sheet headers and real rows |
@@ -21,7 +30,8 @@ the future launcher should call it rather than duplicating exporter logic.
 | `captains_edge.json` | `scripts/build_captains_edge.py` | legacy decision payload | valid JSON and no fabricated null replacements |
 | `captains_edge.xlsx` | `scripts/build_captains_edge.py` | legacy shareable workbook | open without repair |
 | `lineups.json` | `scripts/build_lineups.py` | legacy optimizer output, not Stage 3 approval | schema/row provenance and explicit warnings |
-| `demo_manifest.json` | future orchestrator | run provenance and release evidence | hashes, relative paths, no secrets |
+| `index.html` | planned Full Production Demo Builder | verified relative links to every available artifact | emitted only after parity/security gates; no remote assets |
+| `demo_manifest.json` | planned `scripts/build_full_production_demo.py` | run provenance and release evidence | hashes, relative paths, no secrets |
 
 ## Ordering
 
@@ -34,13 +44,18 @@ the future launcher should call it rather than duplicating exporter logic.
 4. Build one Data Coverage report from the matrix plus query-layer
    standings/career refresh timestamps. Render its HTML/XLSX from the identical
    report. Lineup assignment coverage remains a separate manifest check.
-5. Build Captain's Edge and Lineup Optimizer read-only documents. Captain's
+5. Build Team Strength, Season Projection, Trend Analyzer, Opponent Volatility,
+   and current-skill heatmap values from the same locked database/scope. Keep
+   every formula version, raw denominator, join status, and null reason.
+6. Build Captain's Edge and Lineup Optimizer read-only documents. Captain's
    Edge consumes the already-built matrix document for its Opponent Risk
    Profile; it does not rerun analytics.
-6. Append optional workbook sheets only when the source document has real rows.
-7. Write analysis tabs after JSON artifacts exist.
-8. Build captain-first HTML after the final database and scope set exist.
-9. Validate every path, hash, coverage denominator, descriptive sort contract,
+7. Build the static Captain's Live Assistant source document from the already-
+   built reports; do not blend an assistant score.
+8. Append optional workbook sheets only when the source document has real rows.
+9. Write analysis tabs after JSON artifacts exist.
+10. Build captain-first HTML after the final database and scope set exist.
+11. Validate every path, hash, coverage denominator, descriptive sort contract,
    and Player vs Player cross-renderer value before presentation.
 
 ## Cross-artifact consistency
@@ -67,6 +82,19 @@ Data Coverage HTML/XLSX and the manifest must agree on scope,
 DIRECT/INDIRECT/UNKNOWN/total counts, raw percentages, missing-skill identities,
 sample rows, refresh timestamps, and unavailable-field text. A zero denominator
 leaves label percentages null; it is never coerced to 0% or 100%.
+
+Team Strength artifacts must agree on all three components, composite null
+gate, formula version, raw W/P and PF/PA values, fifth-player identity, roster
+coverage, and source keys. Season Projection artifacts must agree on every
+remaining match, actual source rates/status, raw log5 probability, expected
+totals, and real standings-history points. Trend/volatility artifacts must
+agree on player/format/session keys, sample spans, raw sigma/slope, transformed
+indices, nulls, and canonical order.
+
+Heatmap HTML/script JSON carries one value for every matrix pair key. Its
+difficulty is derived only from the shared current-skill probability; Excel and
+HTML must never substitute the experimental blended probability. Missing skills
+remain null/hatched and do not reduce the matrix denominator.
 
 ## Packaging
 

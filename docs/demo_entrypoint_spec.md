@@ -8,18 +8,23 @@ the script.
 
 ```text
 python scripts/run_production_demo.py
-  (--live | --fixtures FIXTURE_ROOT)
+  (--live | --fixtures FIXTURE_ROOT | --verified-run RUN_ROOT)
+  [--auth token-env|token-stdin|credentials-env|prompt|browser]
   [--config PATH]
   [--out-dir PATH]
   [--team-id TEAM_ID]
   [--serve]
+  [--open]
   [--port PORT]
-  [--skip-tests]
+  [--no-build]
   [--keep-run]
   [--verbose]
 ```
 
-Exactly one of `--live` and `--fixtures` is required. The default config is
+Exactly one data source is required. `--no-build` requires `--verified-run`;
+`--open` requires `--serve`. Live authentication flags follow
+`scrape_and_ingest_pipeline.md` and are forbidden in fixture/prior-run modes.
+The default config is
 `apa_config.yaml`; the default output is a unique directory under `demo-runs/`.
 `--team-id` overrides only the display-side configured team and must be a real
 team ID present in the regenerated database.
@@ -30,11 +35,12 @@ team ID present in the regenerated database.
 | ---: | --- |
 | 0 | Build, verification, and manifest completed |
 | 2 | Invalid arguments, config, or repository/output boundary |
-| 3 | Authentication, fixture, or dependency acquisition failure |
-| 4 | Ingest or stale-schema failure |
-| 5 | Export or HTML build failure |
-| 6 | Verification failure; artifacts must not be presented |
-| 7 | Optional local server could not start |
+| 3–9 | Preserved scrape/ingest/auth/reconciliation/verification/secret-safety categories |
+| 10 | Analytics/document construction failure |
+| 11 | Export or cross-renderer parity failure |
+| 12 | Bundle finalization failure |
+| 13 | Optional local server/browser presentation failure |
+| 130 | Operator interruption; partial work is not presented |
 
 ## Observable output
 
@@ -57,5 +63,7 @@ scope without embedding SQL text or secrets.
 `--serve` starts a local-only server bound to `127.0.0.1`; it never binds all
 interfaces. The printed URL points to a generated `index.html` with links to
 the captain-first page, analysis tabs, and downloadable artifacts. Without
-`--serve`, the operator opens those files directly.
-
+`--serve`, the operator opens those files directly. `--open` launches only
+after a health check proves the served run ID and index hash. The complete
+wrapper, logging, and safety contract is in `demo_launcher.md`; builder phases
+are in `full_production_demo_builder.md`.
