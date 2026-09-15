@@ -9,6 +9,9 @@ the future launcher should call it rather than duplicating exporter logic.
 | Artifact | Builder | Demo role | Required validation |
 | --- | --- | --- | --- |
 | `captain_first_edge.html` | `scripts/build_captain_first_edge.py` + `ui/tabs/tonights_match.py` | Primary Tonight's Match, Lineup Lab, Data Coverage view | self-contained HTML, scope/evidence reconciliation, no external requests |
+| `player_vs_player.html` | planned `exports/html_builder.py`, reusing `ui/tabs/player_vs_player.py` | all-pairs index and selected-pair evidence drill-down | UNKNOWN visibility, escaping, stable pair order, no renderer math |
+| `player_vs_player.xlsx` | planned `exports/excel_builder.py` | summary and real chronological game-history handoff | openpyxl load, values only, no placeholder sheets, HTML parity |
+| `player_vs_player.json` | planned `demo.py` export adapter (optional) | versioned parity/source document | pair-key reconciliation, source/status fields, null preservation |
 | `analysis_tabs.html` | `pipeline.exports.write_tabs` + `ui/tabs/*` | supporting Head-to-Head, Player Trends, and available legacy cards | non-empty sections only when real documents exist |
 | `apa_data.json` | `ui.export_json.export_to_json` | machine-readable general snapshot | valid JSON, expected top-level keys, source timestamps |
 | `apa_stats.xlsx` | `ui.export_excel.export_to_excel` | workbook for captain/operator review | openpyxl load without repair; sheet headers and real rows |
@@ -25,8 +28,11 @@ the future launcher should call it rather than duplicating exporter logic.
 3. Build Captain's Edge and Lineup Optimizer read-only documents.
 4. Append optional workbook sheets only when the source document has real rows.
 5. Write analysis tabs after JSON artifacts exist.
-6. Build captain-first HTML last so it sees the final database and scope set.
-7. Validate every path and hash before presentation.
+6. Build each Player vs Player summary, enrich it with the same Stage 1 matrix,
+   and pass one versioned document to both planned renderers.
+7. Build captain-first HTML after the final database and scope set exist.
+8. Validate every path, hash, and Player vs Player cross-renderer value before
+   presentation.
 
 ## Cross-artifact consistency
 
@@ -35,7 +41,9 @@ serving) for every artifact. The selected team, opponent, format, and session
 must match across HTML controls, JSON scopes, and workbook rows. Observed win
 rates and modeled probabilities keep distinct labels everywhere. “No data” and
 “unavailable” are display contracts, not missing JSON keys silently interpreted
-as zeros.
+as zeros. Player vs Player additionally keeps Stage 1 distinct-match evidence
+separate from `PlayerVsPlayerSummary.total_games` and labels the modeled
+probability and its identical projection alias with the same audit status.
 
 ## Packaging
 
@@ -44,4 +52,3 @@ include HTML, JSON, XLSX, the redacted manifest, and a README with the capture
 time. It must exclude `.env`, `.session_cache`, raw authenticated fixtures,
 browser profiles, SQLite backups containing teammate data, and debug logs with
 tokens.
-

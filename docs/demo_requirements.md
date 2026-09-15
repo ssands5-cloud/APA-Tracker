@@ -46,6 +46,8 @@ The run is complete only when the selected output directory contains a manifest
 and the requested artifacts that have real source data:
 
 - `captain_first_edge.html` (Tonight's Match, Lineup Lab, Data Coverage);
+- `player_vs_player.html` and `player_vs_player.xlsx` once their planned
+  builders are implemented, plus optional `player_vs_player.json` parity data;
 - `analysis_tabs.html` (Captain's Edge/Lineup Optimizer where available,
   Head-to-Head, Player Trends);
 - `apa_data.json` and `apa_stats.xlsx`;
@@ -72,5 +74,5 @@ not a successful deliverable.
 Before release, a reviewer must be able to select a real scheduled scope,
 change player availability, observe evidence counts reconcile, inspect at least
 one DIRECT/INDIRECT/UNKNOWN row when the snapshot contains them, view Lineup
-Lab unassigned lists, and open the workbook without repair prompts.
-
+Lab unassigned lists, drill into Player vs Player without losing UNKNOWN rows,
+and open both workbooks without repair prompts.

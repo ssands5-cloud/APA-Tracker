@@ -28,11 +28,16 @@ auth/ ──► scraper/ ──► scraper fixtures (raw GraphQL JSON, gitignore
        analytics/               ui/export_json.py        ui/export_excel.py
        raw → derived             scripts/build_*          ui/tabs/*
              │                        │                        │
+             ├─ analytics/player_vs_player.py (separate lane)  │
+             │              │                                  │
+             │              ├─ planned exports/html_builder.py │
+             │              └─ planned exports/excel_builder.py│
              └────────────────────────┴────────────────────────┘
                                       ▼
                          exports/ (HTML, JSON, XLSX)
                                       │
                                       ▼
+                         planned ui/router.py + demo.py
                          demo launcher / browser walkthrough
 ```
 
@@ -97,8 +102,16 @@ built documents:
   calculation. `analytics.lineup_lab.py` uses the approved skill-only score,
   exact matching, and explicit unassigned lists.
 - `ui/tabs/tonights_match.py` is the static captain-first reporter. Stage 3
-  HTML wiring adds Lineup Lab and Data Coverage to that same self-contained
-  artifact.
+  HTML wiring currently includes Lineup Lab; Data Coverage remains a planned
+  follow-up.
+- `analytics/player_vs_player.py` supplies a pure exact-pair summary over
+  chronological `PlayerHeadToHead` rows: recognized-game record, skill delta,
+  shared history reliability, last-recorded skill-only probability, full
+  modeled probability, whole/recent pair trends, an identical forward
+  projection alias, and the game timeline. A planned `demo.py` adapter combines
+  it with canonical Stage 1 scope/evidence identity. Unsupported innings,
+  per-opponent defense, break/run rate, and numeric volatility remain explicit
+  gaps; there is no export-layer blended score.
 
 The legacy `win_probability`, `lineup_optimizer`, `lineup_risk`,
 `opponent_scouting`, `rationale`, `season_projection`, and summary paths remain
@@ -116,6 +129,13 @@ Issue #14 findings are corrected and re-audited.
   `captain_first_edge.html`, which is the production-demo entry view.
 - `pipeline/exports.py` writes `analysis_tabs.html` after the builders, so the
   static tabs see committed JSON documents rather than an uncommitted session.
+- Planned `exports/html_builder.py` and `exports/excel_builder.py` will render
+  the same Player vs Player document as `player_vs_player.html` and
+  `player_vs_player.xlsx`, reusing the separate-lane
+  `ui/tabs/player_vs_player.py` fragment for single-pair HTML. Planned
+  `ui/router.py` adds the drill-down after Tonight's Match; planned `demo.py`
+  orchestrates one analytics build per pair, enriches it with Stage 1 evidence,
+  verifies renderer parity, and registers artifacts without duplicating ingest.
 
 ## Demo boundary and invariants
 
@@ -132,8 +152,10 @@ The critical invariants are:
 2. Assigned plus unassigned players/opponents equals each side's available
    roster.
 3. A complete five-player Lineup Lab result has a real legality verdict.
-4. All artifacts in one demo run share one database and one source manifest.
-5. A failed preflight or stale schema stops the run before presentation.
+4. Player vs Player HTML and Excel contain the same pair keys and values in the
+   same canonical order, UNKNOWN rows included.
+5. All artifacts in one demo run share one database and one source manifest.
+6. A failed preflight or stale schema stops the run before presentation.
 
 ## Build modes
 
@@ -142,4 +164,3 @@ The critical invariants are:
 | Live production | Rehearsal/presentation from current league data | Authenticated APA access | Fresh rosters, schedule, scores, TeamStat history |
 | Fixture CI | Repeatable pull-request/nightly validation | None | Committed sample fixtures; captain-first roster may be unavailable by design |
 | Empty/stale guard | Failure-path proof | None | Missing DB or stale schema; explicit error artifact, no advice |
-

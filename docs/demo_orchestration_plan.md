@@ -20,10 +20,15 @@ scraper or analytics logic into a new script.
    equivalent Python entry point. Schema checks happen before any export.
 5. **Build exports** — run `pipeline.exports.run` and
    `scripts/build_captain_first_edge.py` against the same database and output
-   directory. Do not call a second ingest or open the live database writable.
+   directory. Planned `demo.py` then obtains the Stage 1 matrix, calls
+   `analytics.player_vs_player.summarize` for each canonical pair, enriches the
+   summaries with scope/evidence identity, and gives the identical document to
+   `exports/html_builder.py` and `exports/excel_builder.py`. Do not call a
+   second ingest or open the live database writable.
 6. **Verify** — run artifact existence/size checks, JSON schema checks,
    workbook-open checks, HTML safety checks, matrix reconciliation, and
-   source-database identity checks.
+   source-database identity checks. Compare every Player vs Player pair/game
+   key and value across HTML, Excel, and optional JSON before rounding.
 7. **Present** — write a small local index with links to the static pages and
    open it only after verification. A local HTTP server is optional; `file:`
    links must remain functional.
@@ -49,4 +54,3 @@ It must not synthesize rosters, fill missing skill levels, rewrite scoresheets,
 enable excluded analytics, alter the scraper contract, or “repair” a stale
 schema in place. It also must not silently downgrade from live data to a stale
 database when authentication fails.
-

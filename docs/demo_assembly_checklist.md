@@ -25,9 +25,14 @@
 - [ ] Build Captain's Edge HTML/JSON/XLSX and optional `lineups.json`.
 - [ ] Build `analysis_tabs.html`.
 - [ ] Build `captain_first_edge.html` with Stage 3 Lineup Lab/Data Coverage.
+- [ ] Build Player vs Player HTML/Excel from one enriched analytics document;
+      keep the optional JSON as the parity oracle.
+- [ ] Verify UNKNOWN visibility; distinct-match/game-count separation; and
+      explicit innings, defense, break/run, and volatility gaps.
 - [ ] Confirm self-contained HTML, no external requests, safe escaping, and
       visible provenance.
 - [ ] Confirm matrix identity reconciliation and evidence percentages.
+- [ ] Confirm Player vs Player HTML/Excel/JSON pair and game parity.
 - [ ] Confirm assigned/unassigned reconciliation and legality/blocked reason.
 - [ ] Load every workbook with openpyxl without repair prompts.
 - [ ] Write and verify the redacted manifest and hashes.
@@ -39,4 +44,3 @@
 - [ ] Record commit, capture time, test command, warnings, and Issue #14 link.
 - [ ] Package only approved HTML, JSON, XLSX, manifest, and release notes.
 - [ ] Retain the previous release for rollback; do not delete it automatically.
-

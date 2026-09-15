@@ -13,6 +13,9 @@ no-data result. It is design-only until the orchestration script exists.
   detection including `team_external_id`.
 - Pairing labels, distinct-match counting, scope filtering, and exact matrix
   reconciliation.
+- Player vs Player recognized-game arithmetic, history reliability, last-game
+  skill-only probability, identical modeled/projection alias, unavailable
+  innings/defense/break-run/volatility disclosures, and stable pair/game order.
 - Lineup Lab score, maximum matching, unassigned reconciliation, legality gate,
   and exact-search bound.
 
@@ -22,6 +25,9 @@ no-data result. It is design-only until the orchestration script exists.
 - Assert that every expected artifact is created and loadable.
 - Run the identical input twice into two scratch directories and compare all
   deterministic fields; exclude only documented timestamps and absolute paths.
+- Compare Player vs Player HTML, Excel, and optional JSON by pair/game key and
+  pre-rounding value; assert distinct team-match count is not conflated with
+  recognized game count.
 - Verify all outputs share the same database/config/source manifest.
 
 ### Security and robustness
@@ -49,4 +55,3 @@ artifact is missing without a documented reason, the matrix counts do not
 reconcile, or the page contains a fabricated fallback. A fixture CI run may
 pass with unavailable rosters when that is the fixture's truthful state; that
 is a guard-path assertion, not evidence that the production snapshot is ready.
-

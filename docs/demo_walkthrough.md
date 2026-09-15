@@ -35,13 +35,18 @@ roster history is absent; it is not a rich production dataset.
 6. Inspect an UNKNOWN row: it remains present and reads “No data.”
 7. Toggle an unavailable player and use the page's availability view to verify
    the player is not silently lost.
-8. Open Lineup Lab. Review assignments, unassigned sides, total score, and the
+8. Open Player vs Player from a matrix row. Verify the pair IDs/scope, compare
+   distinct DIRECT matches with recognized game rows, review the chronological
+   history, and confirm unsupported metrics say “No data.”
+9. Compare the Player vs Player HTML and workbook pair values and inspect their
+   matching artifact hashes in the manifest.
+10. Open Lineup Lab. Review assignments, unassigned sides, total score, and the
    complete/partial/blocked legality state.
-9. Open Data Coverage. Call out missing skills, sample sizes, capture/update
+11. Open Data Coverage. Call out missing skills, sample sizes, capture/update
    dates, and unavailable fields.
-10. Open `analysis_tabs.html`, then the workbook and JSON links. Confirm the
+12. Open `analysis_tabs.html`, then the workbook and JSON links. Confirm the
     selected snapshot and provenance match the primary page.
-11. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
+13. Open `demo_manifest.json` and record the run ID, commit, hashes, warnings,
     and test result in the presentation notes.
 
 ## Closing language
@@ -50,4 +55,3 @@ End with: “This is a decision aid whose confidence is visible. Where APA gave
 us a real result or current skill level, we show it and name the source. Where
 the snapshot cannot support a claim, the demo keeps the row visible and says
 so.”
-

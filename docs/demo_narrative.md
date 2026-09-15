@@ -36,6 +36,15 @@ solver chooses the largest exact scoreable matching, then shows unassigned
 players and opponents. A complete five-player lineup carries the real 23-rule
 legality verdict; a partial or blocked result is an honest answer.
 
+## Player vs Player drill-down
+
+Before discussing the assignment, open one matrix pair. Show its recognized
+game history, Stage 1 distinct-match evidence, history reliability, last-
+recorded skill-only probability, and the full model/projection alias as separate
+experimental context. Then point to the named unavailable innings, defense,
+break/run, and numeric-volatility fields. The value of this view is as much in
+what it refuses to infer as in the real history it displays.
+
 ## Data Coverage
 
 Close by naming missing skill levels, direct sample sizes, refresh timestamps,
@@ -49,4 +58,3 @@ Open the analysis tabs and workbook only after the primary story. They provide
 historical detail and handoff formats. Explicitly distinguish the legacy
 Captain's Edge/optimizer artifacts from the captain-first validated path, and
 identify modules still excluded under Issue #14.
-
