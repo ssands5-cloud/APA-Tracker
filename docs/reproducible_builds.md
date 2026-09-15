@@ -86,9 +86,10 @@ Six steps, any failure stops the build immediately:
    -- there's no separate ad hoc comparison here duplicating it.
 5. Clear `ci-build/`, run the real pipeline against the committed sample
    tree (or the repository-local tree explicitly supplied with `--fixtures`),
-   and confirm every declared artifact actually exists on disk. Ignored
-   local scrape output is never selected implicitly, and stale files cannot
-   satisfy the artifact check.
+   and require the exact declared artifact set as non-empty regular files.
+   Missing, empty, directory-shaped, or undeclared entries fail the build.
+   Ignored local scrape output is never selected implicitly, and stale files
+   cannot satisfy the artifact check.
 6. Write `dist/BUILD_INFO.json` -- see "Versioning artifacts" below.
 
 The venv is deleted afterward unless `--keep-venv` is passed. Both

@@ -139,6 +139,45 @@ def paths_overlap(left: Path, right: Path) -> bool:
     return left == right or left in right.parents or right in left.parents
 
 
+def validated_artifacts(
+    exports_dir: Path,
+    expected: Optional[set[str]] = None,
+) -> list[str]:
+    """Return the exact artifact inventory or explain why it is invalid."""
+    expected_names = EXPECTED_ARTIFACTS if expected is None else expected
+    if not exports_dir.is_dir():
+        raise ValueError(f"missing exports directory: {exports_dir}")
+
+    entries = {path.name: path for path in exports_dir.iterdir()}
+    actual_names = set(entries)
+    problems: list[str] = []
+
+    missing = sorted(expected_names - actual_names)
+    if missing:
+        problems.append("missing: " + ", ".join(missing))
+
+    unexpected = sorted(actual_names - expected_names)
+    if unexpected:
+        problems.append("unexpected: " + ", ".join(unexpected))
+
+    present = expected_names & actual_names
+    not_files = sorted(name for name in present if not entries[name].is_file())
+    if not_files:
+        problems.append("not regular files: " + ", ".join(not_files))
+
+    empty = sorted(
+        name
+        for name in present
+        if entries[name].is_file() and entries[name].stat().st_size == 0
+    )
+    if empty:
+        problems.append("empty: " + ", ".join(empty))
+
+    if problems:
+        raise ValueError("; ".join(problems))
+    return sorted(actual_names)
+
+
 def is_replaceable_build_venv(path: Path) -> bool:
     """Whether an existing directory is safe for this script to replace.
 
@@ -355,13 +394,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     if result.returncode != 0:
         fail(f"pipeline run exited {result.returncode}")
-    produced = sorted(p.name for p in exports_dir.glob("*")) if exports_dir.is_dir() else []
-    missing = sorted(EXPECTED_ARTIFACTS.difference(produced))
-    if missing:
-        fail(
-            "pipeline run reported success but did not produce: "
-            + ", ".join(missing)
-        )
+    try:
+        produced = validated_artifacts(exports_dir)
+    except (OSError, ValueError) as exc:
+        fail(f"pipeline artifact verification failed: {exc}")
     print(f"Artifacts in {exports_dir}: {', '.join(produced)}")
 
     # 6. Build manifest: what commit, what interpreter, what exact

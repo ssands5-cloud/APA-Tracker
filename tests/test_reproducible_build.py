@@ -291,6 +291,47 @@ class TestPathsOverlap:
         assert not reproducible_build.paths_overlap(tmp_path / "a", tmp_path / "b")
 
 
+class TestValidatedArtifacts:
+    EXPECTED = {"report.json", "report.xlsx"}
+
+    def test_returns_the_exact_non_empty_file_inventory(self, tmp_path):
+        (tmp_path / "report.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "report.xlsx").write_bytes(b"workbook")
+
+        assert reproducible_build.validated_artifacts(tmp_path, self.EXPECTED) == [
+            "report.json",
+            "report.xlsx",
+        ]
+
+    def test_rejects_a_missing_expected_artifact(self, tmp_path):
+        (tmp_path / "report.json").write_text("{}", encoding="utf-8")
+
+        with pytest.raises(ValueError, match=r"missing: report\.xlsx"):
+            reproducible_build.validated_artifacts(tmp_path, self.EXPECTED)
+
+    def test_rejects_an_empty_expected_artifact(self, tmp_path):
+        (tmp_path / "report.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "report.xlsx").touch()
+
+        with pytest.raises(ValueError, match=r"empty: report\.xlsx"):
+            reproducible_build.validated_artifacts(tmp_path, self.EXPECTED)
+
+    def test_rejects_a_directory_using_an_expected_file_name(self, tmp_path):
+        (tmp_path / "report.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "report.xlsx").mkdir()
+
+        with pytest.raises(ValueError, match=r"not regular files: report\.xlsx"):
+            reproducible_build.validated_artifacts(tmp_path, self.EXPECTED)
+
+    def test_rejects_an_undeclared_entry(self, tmp_path):
+        (tmp_path / "report.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "report.xlsx").write_bytes(b"workbook")
+        (tmp_path / "stale.tmp").write_text("stale", encoding="utf-8")
+
+        with pytest.raises(ValueError, match=r"unexpected: stale\.tmp"):
+            reproducible_build.validated_artifacts(tmp_path, self.EXPECTED)
+
+
 class TestReplaceableBuildVenv:
     def test_plain_directory_is_not_replaceable(self, tmp_path):
         assert not reproducible_build.is_replaceable_build_venv(tmp_path)
