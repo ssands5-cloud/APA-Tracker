@@ -167,6 +167,29 @@ Heatmap JSON/HTML/Excel parity compares pair key, both skill inputs, raw
 probability, raw difficulty, evidence label, and null reason. The matrix pair
 count is unchanged by heatmap availability.
 
+### Heatmap architecture, UX, and demo handoff
+
+The matrix builder calls the shared current-skill probability function once per
+canonical pair and emits `MatchDifficultyCell` values beside—not inside—the
+explicit pair summary. The same cells feed the Matrix View script JSON and the
+two planned Excel sheets. HTML/Excel adapters apply only the fixed color bins;
+neither owns analytics.
+
+The heatmap is the first visualization in Matrix View. Keyboard users traverse
+row-major canonical pair order, and activating a cell opens that exact pair in
+Pair View while preserving filters and scroll position. Axis reordering is a
+visible presentation choice limited to name or current skill; it never changes
+the canonical export order. A text-table alternative exposes every cell and
+all evidence/null details.
+
+During the demo, the presenter opens one measured cell, one UNKNOWN-evidence
+cell with measurable skills, and one missing-skill `No data` cell. This proves
+that evidence styling and current-skill difficulty are separate dimensions.
+Release validation then reconciles the heatmap key set with the full matrix and
+checks the selected cell against Pair View and Excel. Any missing key,
+history-blended value, 50% null fill, category label, or non-fixed color mapping
+blocks promotion.
+
 ## UNKNOWN and unavailable data
 
 UNKNOWN rows are first-class rows. They are never dropped, converted to an

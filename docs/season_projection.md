@@ -10,7 +10,34 @@ analytics/season_projection.py   win_rate() / log5_win_probability() / project_r
 Purely derived and purely computational, the same split every other
 analytics module in this project uses -- it queries nothing itself and
 is not yet wired into the production demo/Excel/JSON layer (see
-"Integration status" below).
+"Integration status" below). The existing `analytics/season_projection.py`
+is the authoritative engine. This plan corrects and extends its surrounding
+contracts; it does not replace the module, fork its formulas, or introduce a
+second season-projection implementation.
+
+## Existing-module correction and extension plan
+
+The implemented dataclasses, `ProbabilitySource`, and functions remain the
+calculation boundary: `win_rate`, `log5_win_probability`,
+`upset_likelihood`, `project_remaining_schedule`, and
+`team_volatility_curve`. Corrections are extensions to this module's existing
+API, backed by focused regression tests; renderers and orchestration must call
+it rather than copying the log5 or aggregation logic.
+
+| Area | Correction or extension around the existing module | Ownership |
+| --- | --- | --- |
+| Probability source | Preserve the implemented single-side fallbacks and attach `BOTH_RATES`, `OUR_RATE_ONLY`, `OPPONENT_RATE_ONLY`, or `NO_RATE` to every `RemainingMatchProjection` | existing analytics module, derived only from the exact two supplied rates |
+| Coverage | Retain every remaining-match row and expose measured-projection count / supplied remaining-match count beside expected totals | existing `SeasonProjection.coverage`; no change to `expected_wins` or `expected_losses` |
+| Team identity | Resolve schedule IDs to standings before the call; ambiguous name-only standings rows remain unavailable | query/reconciliation boundary |
+| Upset output | Remove the unfitted threshold/bucket and expose only numeric per-match `upset_likelihood` | existing analytics module and presentation adapter |
+| Historical curve | Enforce chronological input and expose the existing deduplicated record-change points with their capture times | query adapter and validation |
+| Demo fields | Add actual W/L, projected-final arithmetic, scope, freshness, formula version, source manifest, and unavailable reasons | immutable document composition |
+| Exports | Render the same immutable document to HTML, Excel, and script JSON without formulas or recalculation | presentation adapters |
+
+No `season_projection_v2`, replacement engine, parallel probability service,
+or renderer-local projection is proposed. If a future requirement truly needs
+a new predictive model, it must be reviewed as a separate product and cannot
+silently change the meaning of this existing module's outputs.
 
 ## What this deliberately does NOT do
 
@@ -43,8 +70,8 @@ player matchup. Inputs are:
 
 `analytics/season_projection.py` returns one `RemainingMatchProjection` per
 scheduled match and one aggregate `SeasonProjection`. The planned immutable
-demo document combines those analytics values with explicit builder-supplied
-source status and actual totals. Required document outputs are:
+demo document combines those analytics values, analytics-supplied probability
+source status, and actual totals. Required document outputs are:
 
 | Output | Definition |
 | --- | --- |
@@ -73,10 +100,9 @@ browser or workbook.
 - The one-side fallback is a declared behavior, not an imputed opponent rate.
   The output carries `BOTH_RATES`, `OUR_RATE_ONLY`, `OPPONENT_RATE_ONLY`, or
   `NO_RATE` source status for every match.
-- The current implementation's `high_upset_risk_matches` uses a caller-supplied
-  0.40 cutoff. The production demo presents the underlying numeric
-  `upset_likelihood` and cutoff provenance, not a categorical warning or
-  recommendation. The cutoff is not fitted to APA outcomes.
+- The corrected existing module exposes numeric `upset_likelihood` only. It has
+  no `high_upset_risk_matches` bucket or caller-supplied threshold because no
+  cutoff has been fitted to APA outcomes.
 - `StandingsSnapshot` currently has team name rather than immutable team ID.
   Ambiguous/missing name resolution leaves the opponent rate unavailable; it
   never chooses the first matching name.
@@ -196,25 +222,60 @@ projection logic.
 - Deterministic ties use opponent team ID and match ID, never a probability or
   viewer-local clock.
 
-## Integration status: not yet wired into the pipeline
+## UX routing and demo integration
+
+The proposed `season-projection` route carries the exact team ID, session,
+division/format when proven, and run ID. The tab opens Summary by default, with
+Remaining Matches, Standings History, and Assumptions as addressable in-page
+sections. Selecting a schedule row may highlight its chart/provenance details;
+it cannot change the projection inputs. Invalid or ambiguous scope displays a
+blocked identity state and never falls back to a similarly named team.
+
+The HTML consumes one escaped immutable script-JSON document. Browser behavior
+is limited to section navigation, accessible row focus, and visible sorting of
+delivered rows; it cannot run log5, add expected totals, synthesize a standings
+point, or relabel a missing rate. Excel receives the same document and retains
+canonical schedule/history order regardless of interactive HTML state.
+
+In the production demo, Season Projection follows Team Strength. The presenter
+traces one `BOTH_RATES` match through log5, one fallback or `NO_RATE` row when
+available, expected totals, coverage, and a real standings-history point. It is
+then shown as separately labeled context in the Live Assistant. Promotion
+requires HTML/Excel/JSON/manifest parity and explicit proof that the existing
+analytics module—not a renderer or replacement engine—produced every
+probability and curve point.
+
+## Current implementation and remaining production integration
 
 Unlike `analytics.lineup_risk`/`analytics.opponent_scouting`, this module
-is delivered as a pure, fully-tested analytics module only -- no JSON key,
-no Excel sheet, no config section yet. Two real gaps would need closing
-first, honestly, rather than guessed past:
+now has a dedicated standalone HTML/Excel builder rather than unified-demo
+registration. The existing module carries `ProbabilitySource`, per-match
+source status, and aggregate coverage, and no longer emits the unfitted
+high-upset category. The current standalone integration is:
+
+- `scripts/build_season_projection.py`: read-only configured-team, remaining-
+  schedule, opponent-standings, and standings-history assembly;
+- `ui/tabs/season_projection.py`: presentation-only HTML fragment;
+- `ui/export_excel_season_projection.py`: values-only summary, remaining-match,
+  and available standings-history sheets;
+- focused analytics, builder, HTML, and Excel regression tests.
+
+These are corrections and extensions to the existing module, not a replacement.
+The remaining production gaps are:
 
 - `StandingsSnapshot` has no real `team_id` column, only `team_name`
-  (a plain string) -- matching a real opponent's `Match.away_team_id` to
-  their standings row requires a name-based join, which needs its own
-  real verification (duplicate/renamed team names) before being trusted
-  in a captain-facing export.
+  (a plain string). The standalone builder resolves a canonical opponent team
+  ID to a team name, but full production must fail closed on duplicate/renamed
+  standings identities before using a rate.
 - Which team's remaining schedule to project (the same `apa_config.yaml`
-  `team.team_id` every other per-team view already uses) needs threading
-  through a real builder script, the same way `scripts.build_lineups`
-  already does for the Lineup Optimizer.
+  `team.team_id` every other per-team view already uses) is now threaded
+  through the standalone builder. Full production still needs exact
+  session/format selection and rejection of mixed-scope schedules.
 
-Both are real, scoped, solvable follow-ups -- not fabrication risks, just
-not yet done. Production wiring calls the existing pure analytics once, builds
-one immutable document, and passes it to the HTML/Excel renderers and demo
-manifest. Any identity ambiguity, output mismatch, or renderer-added formula
-blocks the Season Projection demo section.
+Full-demo wiring additionally needs immutable run/config/database provenance,
+formula versions, safe script JSON, top-level navigation, contained output,
+manifest/checksum registration, a declared empty-history sheet policy, and
+HTML/Excel/JSON parity checks. It must continue to call the same pure analytics
+once and pass one reconciled document to every renderer. Any mixed scope,
+identity ambiguity, output mismatch, missing required sheet, or renderer-added
+formula blocks the Season Projection demo section.

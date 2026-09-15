@@ -136,6 +136,27 @@ Rows are immutable and already ordered. The module accepts source rows as
 arguments, queries nothing, changes no database state, and does not import a UI
 renderer.
 
+## Architecture, UX, and routing
+
+```text
+verified SQLite → read-only scope query → analytics/team_strength.py
+                → immutable TeamStrengthReport
+                → HTML / Excel / script JSON / demo manifest
+```
+
+The proposed UI registers one `team-strength` navigation entry in the existing
+tab/router structure. Its route carries the canonical team ID, session,
+division/format when proven, and the run ID. It never accepts a team name as an
+identity key. A stale or unavailable route renders the scoped `No data` state
+and a link to Data Coverage; it does not select the first team.
+
+The self-contained report embeds the immutable document in escaped,
+non-executable script JSON. Browser controls may switch between Summary,
+Roster Evidence, and Match Evidence sections and sort one visible column at a
+time. They cannot recompute a component, renormalize a missing composite, or
+change the exported source order. Back/forward navigation restores section and
+sort state without fetching data.
+
 ## HTML layout
 
 The proposed `team_strength.html` is self-contained:
@@ -197,3 +218,12 @@ formula version, raw denominators, component values, player/match keys, nulls,
 and ordering before rounding. Tests cover exact formulas, invalid counts,
 missing components, fewer than five scoreable players, multi-team name
 collisions, zero denominators, hostile text, and deterministic parity.
+
+The presenter first reads the composite availability, then opens each component
+to show its raw evidence. The demo explicitly calls the defense value a proxy
+and shows that a missing component makes the composite unavailable. The Team
+Strength values may appear as separately labeled context in Captain's Edge and
+the Live Assistant, but they never alter Player-vs-Player values or Lineup Lab
+selection. The artifact index links to both `team_strength.html` and
+`team_strength.xlsx`, and Data Coverage owns any freshness or missing-source
+explanation.

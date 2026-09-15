@@ -81,6 +81,29 @@ upward SL pressure, not a learned probability and not an input to trend score.
 The UI labels it separately or omits it; it may not be called a match-win
 forecast.
 
+## Architecture, UX, and routing
+
+```text
+PlayerMatch + Match chronology
+    → analytics/player_trends.py
+    → persisted PlayerTrend + immutable presentation rows
+    → Trend Analyzer HTML / Excel / script JSON
+```
+
+The analytics module remains the only formula owner. The query/build layer
+validates player, normalized format, session, chronology, and manifest scope;
+the renderer only formats delivered fields. The proposed `trend-analyzer` route
+opens the selected team/session summary and optionally carries an exact player
+external ID. An invalid selection returns to the canonical table with an
+explicit message instead of choosing a similarly named player.
+
+Summary, Player History, and Formula/Provenance are in-page views under the
+same tab. Selecting a table row opens that player's real history chart and
+updates URL/fragment state. Keyboard/back navigation restores the selection.
+Client-side controls may filter and visibly sort delivered rows, but cannot
+recalculate slope, change the 20-reading volatility window, extrapolate the
+chart, or convert an unavailable indicator to NEUTRAL.
+
 ## HTML charts and tables
 
 The proposed Trend Analyzer section uses:
@@ -116,7 +139,8 @@ tie-breaks.
 ## Excel layout
 
 The existing general workbook `Player Trends` sheet remains the canonical
-values export. A dedicated future `trend_analyzer.xlsx` may contain:
+values export until the dedicated production artifact is wired. The finalized
+dedicated design for `trend_analyzer.xlsx` contains:
 
 - `Trend_Analyzer`: one row per player/format/session with every field above;
 - `Trend_History`: one row per real skill observation with player/match IDs,
@@ -127,6 +151,22 @@ nulls stay blank with a status column. Indicator cells carry literal text and
 an accessible fixed fill, never a formula. Workbooks contain no macros,
 external links, hidden helpers, volatile time functions, or recalculated trend
 formulas.
+
+## Demo integration
+
+The demo opens Trend Analyzer after Player-vs-Player evidence and before the
+Opponent Volatility summary. The presenter selects one measured player to
+trace slope, last-20 volatility, trend score, sample, and descriptive indicator
+back to real observations, then selects a thin-data player to show `No data`.
+Captain's Edge and the Live Assistant may repeat the same delivered fields as
+separate descriptive context; no trend field changes pair probabilities,
+heatmap cells, Team Strength, or lineup selection.
+
+The build manifest records the normalized scope, formula constants, row keys,
+history keys, and source hash. HTML, Excel, script JSON, and the persisted
+`PlayerTrend` rows reconcile before display rounding. The artifact index links
+to the HTML section and the canonical general-workbook sheet or dedicated
+values-only workbook selected by the release manifest.
 
 ## Validation strategy
 

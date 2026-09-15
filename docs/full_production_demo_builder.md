@@ -135,6 +135,29 @@ profiles, environment dumps, absolute user paths, and private debug payloads.
 The local verified run contains its locked database for audit. A public/share
 package omits that database unless an explicit privacy review authorizes it.
 
+## Manifest and integration contract
+
+`demo_manifest.json` is the machine-readable handoff between acquisition,
+analytics, exports, CI, and the launcher. It contains a schema version, build
+mode, run ID, repository revision, configuration hash, source/database hashes,
+capture window, selected scopes, analytics formula versions, artifact relative
+paths/hashes/row counts, warning and unavailable-data summaries, parity/security
+gate results, and promotable status. Secret values, absolute user paths, raw
+headers, and credential-source contents are forbidden.
+
+Every phase accepts an explicit immutable input/result object and returns a
+status plus relative artifacts. The builder invokes existing module APIs; it
+does not import renderer internals or inspect browser state. Optional analytics
+may produce an explicit unavailable document, but optionality is declared in
+configuration before the run. A required/optional decision cannot change in
+response to a failure.
+
+The launcher may consume only a finalized manifest whose artifact hashes match
+disk and whose repository/config/source identities match the requested run.
+CI consumes the same manifest fields for parity assertions. This single
+contract prevents the launcher, artifact index, and test harness from selecting
+different outputs by filename convention or modification time.
+
 ## Failure and idempotency rules
 
 - A phase failure stops every dependent phase; there is no stale-data fallback.
@@ -168,3 +191,9 @@ Successful finalization writes `READY` only after manifest and checksum
 verification. The launcher accepts the run directory, validates that marker and
 manifest again, then serves or opens `index.html`. The builder never launches a
 browser itself, preventing a partially verified run from being presented.
+
+The READY marker contains only the manifest schema version, run ID, and
+manifest SHA-256. Finalization writes the manifest and checksums first, flushes
+them durably where supported, verifies them from disk, and writes READY last.
+The launcher recomputes the manifest hash and all required artifact hashes; it
+does not trust READY by presence alone.

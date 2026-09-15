@@ -10,6 +10,22 @@ The assistant coordinates facts; it does not create a new blended decision
 score. Its proposed application boundary consumes immutable documents and
 produces deterministic view state and notes.
 
+## Architecture boundary
+
+```text
+verified immutable analytics documents
+    → scope/hash/key reconciliation
+    → local availability + captain-entered state
+    → approved Lineup Lab re-solve or verified static scenario
+    → deterministic Live Assistant view/session document
+```
+
+The assistant has no database query, scraper, prediction, or export formula of
+its own. The application boundary owns state transitions and exact re-solve
+requests; the existing analytics modules retain their formulas. HTML renders
+the current view, and any audit workbook renders the session document. A run,
+scope, pair-key, or source-hash mismatch fails closed before controls activate.
+
 ## Inputs
 
 | Input document | Owner | Assistant use |
@@ -120,6 +136,33 @@ status changes use an ARIA live region, and every color has literal text. The
 assistant never hides UNKNOWN rows or unavailable players from the audit
 drawer.
 
+## HTML and session workbook
+
+The planned self-contained HTML embeds only verified source documents and
+manifest-approved static scenarios. Its local state is initialized empty and
+never written back to the source database. Availability toggles, selected
+pairs, and captain notes carry literal `captain_input` labels; source values
+remain read-only. A printable audit drawer lists the active scenario, all
+unassigned identities, the 23-rule result, source run/hash, and every note
+trigger/value.
+
+If session export is enabled, `captains_live_assistant.xlsx` contains values-only
+sheets:
+
+- `Assistant_Session`: run/scope/hash, session start, snapshot capture time,
+  final local state, Lineup Lab status, legality result, and export time;
+- `Availability_Events`: monotonic event sequence, local timestamp, player ID,
+  side, prior state, new state, and `captain_input` source type;
+- `Candidate_View`: the exact ordered candidate/pair rows and immutable source
+  values displayed for the exported state;
+- `Risk_Notes`: deterministic note key, literal rendered note, source field,
+  source value, sample/coverage, and source type.
+
+The workbook contains no formulas, macros, external links, hidden sheets, or
+claim that a candidate was played. Empty event/note sheets retain headers and a
+manifest-declared zero count. IDs remain text, timestamps are ISO 8601 with
+offset, and row order follows event sequence or delivered candidate order.
+
 ## State transitions
 
 ```mermaid
@@ -151,3 +194,18 @@ matching, note-template inputs, absence of categorical advice, offline/network
 denial, hostile-text escaping, keyboard behavior, and deterministic session
 export. The assistant is not production-ready until these tests and a live
 operator rehearsal pass.
+
+## Demo integration
+
+The Live Assistant opens after Team Strength and Season Projection context has
+been established. The presenter toggles one known player unavailable, shows the
+exact approved re-solve/static-scenario match, opens one candidate's Pair View,
+and traces a descriptive trend or volatility note to its source panel. They
+then restore availability and verify the canonical lineup/state returns.
+
+The full demo builder creates the immutable source document and any approved
+static scenarios; the launcher merely opens the verified page. A session
+workbook is produced only after an explicit operator export action and is
+registered separately from build-time artifacts. Demo acceptance requires
+offline operation, complete UNKNOWN/unassigned visibility, HTML/session-export
+parity, and proof that no local action mutates the database or source bundle.

@@ -119,6 +119,28 @@ recorded in metadata and retain null-last/identity tie-break behavior. The
 workbook is values-only and contains no formula, macro, external link, hidden
 sheet, or threshold-based conditional formatting.
 
+## UX, routing, and demo integration
+
+The unified Player-vs-Player Pair View exposes one opponent profile inline,
+while the proposed `opponent-volatility` detail route opens the complete
+opponent roster for the same team/format/session/run scope. Exact external IDs
+are routing keys; display names are never used to repair a missing join.
+Returning from the detail route restores the selected pair and Matrix View
+filters.
+
+The HTML's team card, neutral dot plot, and player table are three views of the
+same immutable document. Clicking a point focuses its table row and announces
+the numeric value, sample, and descriptor. Sorting is explicit, reversible,
+null-last, and recorded in presentation state. The UI has no default
+"riskiest" order and never promotes a value into an alert.
+
+In the demo, Opponent Volatility follows Trend Analyzer: the presenter proves
+the exact transform for one player, then the opponent-team median and coverage.
+The same row is opened from Player-vs-Player and Captain's Edge to demonstrate
+identity/scope parity. The workbook's summary and all-player sheets, the HTML,
+script JSON, and manifest must agree on raw sigma, stability, index, descriptor,
+sample, median inputs, nulls, and row order before the feature is promotable.
+
 ## Validation
 
 Tests pin the algebraic transformation, zero/null distinction, median for odd

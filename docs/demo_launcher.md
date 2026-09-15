@@ -33,6 +33,12 @@ The launcher forwards data/config/scope/auth flags as an argument list to
 `--open` requires `--serve`. CI forbids `--live`, browser authentication,
 `--serve`, and `--open`; it calls the builder in fixture mode directly.
 
+Mode flags are mutually exclusive. `--no-build` is valid only with
+`--verified-run` and forbids all acquisition/credential/config mutation flags.
+Unknown flags fail; the launcher never forwards them speculatively. Paths are
+resolved and boundary-checked before a child process starts, and repeated flags
+use an explicit parser error rather than last-value-wins behavior.
+
 ## Wrapper flow
 
 ```mermaid
@@ -113,6 +119,22 @@ Builder exit codes pass through unchanged. Launcher-only presentation failure
 uses code 13; operator interruption uses 130. A browser-open failure after the
 verified loopback server starts reports code 13 and the still-valid manual URL,
 but never changes the run's READY state.
+
+## Builder integration contract
+
+The launcher starts the builder as a child process with an argument array and a
+minimal allowlisted environment. It consumes versioned redacted JSONL phase
+events when requested and treats ordinary stdout as operator text, never as a
+source of artifact paths. The child exit code, resolved run path, and manifest
+identity must agree; disagreement is a presentation failure.
+
+For a successful build or `--no-build` presentation, the launcher reads READY,
+recomputes the manifest SHA-256, validates every required artifact checksum,
+confirms `promotable=true`, and resolves `index.html` beneath the run root. Only
+then may it bind a loopback server. The browser health check must return the
+same run ID and index hash from the verified bundle. The launcher never marks a
+run ready, repairs a manifest, rebuilds a missing export, or substitutes the
+most recent run.
 
 ## Acceptance tests
 

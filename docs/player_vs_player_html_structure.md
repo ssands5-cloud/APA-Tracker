@@ -211,6 +211,20 @@ coverage report is already embedded and is never recalculated or narrowed at
 the source. Returning to Player vs Player restores the prior subview, selection,
 filters, and scroll position.
 
+### Heatmap demo and export parity
+
+The demo enters Matrix View, reads the numeric-only legend, activates one
+measured cell to open Pair View, and returns without losing matrix state. It
+also shows an UNKNOWN-evidence cell whose current skills still yield a numeric
+difficulty and a missing-skill cell whose value remains `No data`. This
+demonstrates that evidence and current-skill difficulty are independent.
+
+Before release, every heatmap pair key and raw value must match the
+`Match_Difficulty_Data` audit sheet, and every grid position must match the
+`Match_Difficulty_Heatmap` sheet. The fixed HTML and Excel fill bins must agree.
+Missing/duplicate keys, a renderer-side formula, a null converted to 50, or any
+categorical difficulty language blocks the unified tab and workbook.
+
 ## Accessibility, safety, and deterministic formatting
 
 - Subview controls implement tab/tabpanel roles, keyboard arrows, focus
