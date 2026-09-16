@@ -379,7 +379,8 @@ def _mn_player_report(our_team_id, opponent_team_id, fmt, session,
                        opponent_id, opponent_name, opponent_skill_level,
                        evidence_label="INDIRECT", observed_win_rate=None,
                        direct_evidence_count=0, direct_wins=None, direct_losses=None,
-                       modeled_win_probability=None, model_source=None, summary=""):
+                       modeled_win_probability=None, model_source=None, summary="",
+                       direct_games=None):
     """A synthetic PLAYER_DATA entry (key + report) matching
     player_matchup_report_to_dict's shape and ui/dashboard.py's own
     mnPairKey format exactly."""
@@ -398,6 +399,7 @@ def _mn_player_report(our_team_id, opponent_team_id, fmt, session,
         "direct_wins": direct_wins, "direct_losses": direct_losses,
         "modeled_win_probability": modeled_win_probability, "model_source": model_source,
         "summary": summary,
+        "direct_games": direct_games or [],
     }
     return {"key": key, "report": report}
 
@@ -1158,6 +1160,162 @@ class TestMatchNight:
         card_text = card.inner_text()
         assert "No combination" in card_text
         assert "A valid finish:" not in card_text
+        assert page.console_errors == []
+
+
+class TestOpponentScoutingCard:
+    """Directive: opponent scouting cards -- exact head-to-head W-L per
+    available teammate with sample sizes, recent recorded results with
+    real dates and the window clearly stated, plain-English limitation
+    disclosures, and coach notes saved by player identity. Never infers a
+    missing result as a loss or a streak."""
+
+    def _setup(self, page, direct_games_for_direct_player=None):
+        our_team_id, opp_team_id = "SYN-OUR-SC", "SYN-OPP-SC"
+        fmt, session = "8-Ball Open", "Scouting Session"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        our_roster = [
+            _mn_roster_entry(1001, "Direct Player", 5),
+            _mn_roster_entry(1002, "Indirect Player", 3),
+            _mn_roster_entry(1003, "Absent Player", 4),
+        ]
+        opponent_roster = [_mn_roster_entry(2001, "Scouted Opponent", 6)]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team SC", opp_team_id,
+                                "Synthetic Opponent SC", fmt, session, our_roster, opponent_roster)
+        entries = [
+            _mn_player_report(
+                our_team_id, opp_team_id, fmt, session, 1001, "Direct Player", 5,
+                2001, "Scouted Opponent", 6, evidence_label="DIRECT",
+                observed_win_rate=0.6667, direct_evidence_count=3,
+                direct_wins=2, direct_losses=1,
+                modeled_win_probability=0.6667,
+                model_source="analytics.head_to_head:direct-history-and-skill",
+                summary="Direct record: 67% observed win rate (2-1) across 3 recorded match(es).",
+                direct_games=direct_games_for_direct_player or [
+                    {"match_date": "2026-08-03", "result": "W"},
+                    {"match_date": "2026-08-17", "result": "L"},
+                    {"match_date": None, "result": "W"},
+                ],
+            ),
+            _mn_player_report(
+                our_team_id, opp_team_id, fmt, session, 1002, "Indirect Player", 3,
+                2001, "Scouted Opponent", 6, evidence_label="INDIRECT",
+                modeled_win_probability=0.4, model_source="analytics.head_to_head:skill-only",
+                summary="No direct history. Skill-only estimate: 40% (SL3 vs SL6).",
+            ),
+            _mn_player_report(
+                our_team_id, opp_team_id, fmt, session, 1003, "Absent Player", 4,
+                2001, "Scouted Opponent", 6, evidence_label="INDIRECT",
+                modeled_win_probability=0.45, model_source="analytics.head_to_head:skill-only",
+                summary="No direct history. Skill-only estimate: 45% (SL4 vs SL6).",
+            ),
+        ]
+        _mn_inject(page, scope_key, scope, entries)
+        page.select_option("#mn-roster .mn-status-select[data-player-id='1003']", "absent")
+        page.select_option("#mn-opponent", "2001")
+        return scope_key
+
+    def test_shows_exact_head_to_head_and_sample_size_for_available_teammates(self, page):
+        self._setup(page)
+        # nth-based, not text-matched: "Indirect Player" contains the
+        # substring "direct Player" case-insensitively, which would make
+        # Playwright's has_text="Direct Player" match both real rows.
+        rows = page.locator("#mn-scouting table tbody tr")
+        assert rows.count() == 2  # Absent Player excluded -- see the next test
+        direct_row, indirect_row = rows.nth(0), rows.nth(1)
+
+        direct_text = direct_row.inner_text()
+        assert "Direct Player" in direct_text
+        assert "DIRECT" in direct_text
+        assert "2-1" in direct_text
+        assert direct_row.locator("td").all_inner_texts()[3] == "3"  # exact sample size
+
+        indirect_text = indirect_row.inner_text()
+        assert "Indirect Player" in indirect_text
+        assert "No recorded meetings" in indirect_text
+        assert indirect_row.locator("td").all_inner_texts()[3] == "0"
+        assert page.console_errors == []
+
+    def test_excludes_absent_teammates_from_the_table(self, page):
+        self._setup(page)
+        table_text = page.locator("#mn-scouting table").inner_text()
+        assert "Absent Player" not in table_text
+
+    def test_recent_results_show_real_dates_and_an_honest_unknown_date(self, page):
+        self._setup(page)
+        results_text = page.locator("#mn-scouting").inner_text()
+        assert "2026-08-03" in results_text
+        assert "won" in results_text
+        assert "2026-08-17" in results_text
+        assert "lost" in results_text
+        assert "date unknown" in results_text
+        assert page.console_errors == []
+
+    def test_the_evidence_window_is_clearly_stated(self, page):
+        self._setup(page)
+        card_text = page.locator("#mn-scouting").inner_text()
+        assert "Window: 8-Ball Open, Scouting Session" in card_text
+
+    def test_a_player_with_no_direct_history_is_never_shown_as_a_loss(self, page):
+        """Directive: never infer a loss or a streak from incomplete
+        history -- a real player who has simply never faced this opponent
+        must read as unknown, not as a fabricated 0-0 or a loss."""
+        self._setup(page)
+        card_text = page.locator("#mn-scouting").inner_text()
+        assert "No recorded meetings" in card_text
+        assert "0-0" not in card_text
+        assert "streak" not in card_text.lower() or "does not track" in card_text.lower()
+
+    def test_coach_notes_save_keyed_by_the_opponents_own_player_identity(self, page):
+        self._setup(page)
+        page.fill("#mn-scouting-notes", "Strong break, weak safeties.")
+        page.click("#mn-scouting-notes-save")
+        assert "Saved" in page.locator("#mn-scouting-notes-status").inner_text()
+
+        stored = page.evaluate(
+            "window.localStorage.getItem('match-night:scouting-notes:EXT-2001')"
+        )
+        assert stored == "Strong break, weak safeties."
+        assert page.console_errors == []
+
+    def test_coach_notes_persist_across_a_real_reload(self, page):
+        """Saved by player identity, not by match -- must survive a
+        reload the same way the underlying localStorage record does,
+        independent of any one match's own saved state."""
+        self._setup(page)
+        page.fill("#mn-scouting-notes", "Sandbags his skill level.")
+        page.click("#mn-scouting-notes-save")
+
+        page.reload()
+
+        stored = page.evaluate(
+            "window.localStorage.getItem('match-night:scouting-notes:EXT-2001')"
+        )
+        assert stored == "Sandbags his skill level."
+        assert page.console_errors == []
+
+    def test_switching_opponents_shows_that_players_own_notes_not_the_others(self, page):
+        our_team_id, opp_team_id = "SYN-OUR-SC2", "SYN-OPP-SC2"
+        fmt, session = "8-Ball Open", "Scouting Session 2"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        our_roster = [_mn_roster_entry(1010, "Player 1010", 5)]
+        opponent_roster = [
+            _mn_roster_entry(2010, "Opponent A", 6),
+            _mn_roster_entry(2011, "Opponent B", 4),
+        ]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team SC2", opp_team_id,
+                                "Synthetic Opponent SC2", fmt, session, our_roster, opponent_roster)
+        _mn_inject(page, scope_key, scope, [])
+
+        page.select_option("#mn-opponent", "2010")
+        page.fill("#mn-scouting-notes", "Notes about Opponent A.")
+        page.click("#mn-scouting-notes-save")
+
+        page.select_option("#mn-opponent", "2011")
+        assert page.locator("#mn-scouting-notes").input_value() == ""
+
+        page.select_option("#mn-opponent", "2010")
+        assert page.locator("#mn-scouting-notes").input_value() == "Notes about Opponent A."
         assert page.console_errors == []
 
 

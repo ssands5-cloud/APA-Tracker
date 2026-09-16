@@ -145,7 +145,7 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 #mn-scope, #mn-match, #mn-opponent, .mn-status-select {{
   font-size: 16px; padding: 10px; min-height: 44px;
 }}
-#mn-reset, #mn-print, #mn-undo-btn, .mn-undo-btn {{
+#mn-reset, #mn-print, #mn-undo-btn, .mn-undo-btn, #mn-scouting-notes-save {{
   font-size: 15px; padding: 10px 16px; min-height: 44px;
 }}
 .mn-sticky {{ position: sticky; top: 0; z-index: 5; background: #1F3864; color: #fff;
@@ -155,6 +155,13 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 .mn-sticky.mn-sticky-warn {{ background: #7a3b00; }}
 .mn-technical {{ color: #666e7a; font-size: 12.5px; margin-top: 4px; }}
 .mn-technical summary {{ cursor: pointer; }}
+.mn-scouting-card {{ border: 1px solid #1F3864; border-radius: 6px; padding: 12px 14px;
+  margin: 10px 0; background: #f4f6fa; }}
+.mn-scouting-card h4 {{ margin: 0 0 4px; }}
+.mn-scouting-card h5 {{ margin: 14px 0 4px; }}
+#mn-scouting-notes {{ font-size: 16px; padding: 10px; width: 100%; box-sizing: border-box;
+  font-family: inherit; }}
+#mn-scouting-notes-status {{ margin-left: 8px; }}
 @media print {{
   body * {{ display: none !important; }}
   #mn-print-summary, #mn-print-summary * {{ display: revert !important; }}
@@ -217,6 +224,7 @@ not necessarily when the underlying data was last synced from the league portal.
 <div class="cd-controls mn-screen-only">
 <label>They put up: <select id="mn-opponent"></select></label>
 </div>
+<div id="mn-scouting" class="mn-screen-only"></div>
 <div id="mn-comparison" class="mn-screen-only"></div>
 <h3 class="mn-screen-only">Boards sent (detail)</h3>
 <div id="mn-lineup" class="mn-screen-only"></div>
@@ -1108,6 +1116,7 @@ toughest first -- never a categorical "danger" label
     if (!scope) return;
     mnRenderRoster(scope);
     mnRenderOpponentSelect(scope);
+    mnRenderScouting(scope);
     mnRenderComparison(scope);
     mnRenderLineup(scope);
     mnRenderWarning(scope);
@@ -1142,6 +1151,105 @@ toughest first -- never a categorical "danger" label
       if (raw) return JSON.parse(raw);
     }} catch (e) {{ /* private browsing or storage disabled */ }}
     return null;
+  }}
+
+  // Directive: opponent scouting cards -- "My own scouting notes, clearly
+  // labeled as coach observations and saved by player identity." Keyed by
+  // the opponent's own real external_id, deliberately NOT by scope/match,
+  // so a note about a real person survives across every match and season
+  // this bundle ever covers them in, not just tonight's.
+  function mnScoutingNotesKey(playerExternalId) {{
+    return "match-night:scouting-notes:" + playerExternalId;
+  }}
+
+  function mnLoadScoutingNotes(playerExternalId) {{
+    try {{
+      return window.localStorage.getItem(mnScoutingNotesKey(playerExternalId)) || "";
+    }} catch (e) {{ return ""; }}
+  }}
+
+  function mnSaveScoutingNotes(playerExternalId, text) {{
+    try {{ window.localStorage.setItem(mnScoutingNotesKey(playerExternalId), text); }}
+    catch (e) {{ /* real, honest limitation: notes just won't persist */ }}
+  }}
+
+  function mnRenderScouting(scope) {{
+    // Directive: opponent scouting card -- shown "when I select their
+    // player." A REPORTER over the exact same PLAYER_DATA/direct_games
+    // already embedded for the comparison cards below -- no new estimate,
+    // no new model, and a missing result is always shown as literally
+    // that, never inferred as a loss or folded into a "streak" that isn't
+    // tracked anywhere in this project.
+    var target = document.getElementById("mn-scouting");
+    if (mnSelectionUnavailableReason) {{ target.innerHTML = ""; return; }}
+    var opponentId = document.getElementById("mn-opponent").value;
+    if (!opponentId) {{ target.innerHTML = ""; return; }}
+    var opponent = scope.opponent_roster.filter(function (o) {{
+      return String(o.id) === String(opponentId);
+    }})[0];
+    if (!opponent) {{ target.innerHTML = ""; return; }}
+
+    var available = scope.our_roster.filter(function (p) {{
+      return (mnState.statuses[p.id] || "available") === "available";
+    }});
+
+    var html = "<div class='mn-scouting-card'><h4>Scouting: " + esc(opponent.name)
+      + " <span class='cd-note'>SL " + orNoData(opponent.skill_level) + "</span></h4>"
+      + "<p class='cd-note'>Window: " + esc(scope.format) + ", " + esc(scope.session_name)
+      + " only -- not this player's whole history, and not other formats/sessions.</p>";
+
+    html += "<table><thead><tr><th>Our player</th><th>Evidence</th><th>Record</th>"
+      + "<th>Sample size</th></tr></thead><tbody>";
+    var recentGames = [];
+    available.forEach(function (p) {{
+      var report = PLAYER_DATA[mnPairKey(scope, p.id, opponentId)];
+      if (!report) return;
+      var recordText = (report.direct_wins !== null && report.direct_wins !== undefined)
+        ? report.direct_wins + "-" + report.direct_losses
+        : "No recorded meetings";
+      html += "<tr><td>" + esc(p.name) + "</td><td>" + esc(report.evidence_label) + "</td>"
+        + "<td>" + recordText + "</td><td>" + report.direct_evidence_count + "</td></tr>";
+      (report.direct_games || []).forEach(function (g) {{
+        recentGames.push({{ player: p.name, date: g.match_date, result: g.result }});
+      }});
+    }});
+    html += "</tbody></table>";
+
+    if (recentGames.length) {{
+      html += "<h5>Recent recorded results</h5><ul>";
+      recentGames.forEach(function (g) {{
+        html += "<li>" + esc(g.date || "date unknown") + " -- " + esc(g.player) + " "
+          + (g.result === "W" ? "won" : "lost") + "</li>";
+      }});
+      html += "</ul>";
+    }} else {{
+      html += "<p class='cd-none'>No recorded meetings within this window against any "
+        + "currently Available teammate.</p>";
+    }}
+
+    html += "<p class='cd-note'>Every estimate above uses skill levels only where no direct "
+      + "history exists within this window. A missing or small sample is shown exactly as "
+      + "that -- never treated as a loss, and this project does not track a win/loss "
+      + "streak separate from this real evidence.</p>";
+
+    var savedNotes = mnLoadScoutingNotes(opponent.external_id);
+    html += "<h5>Coach notes <span class='cd-note'>(your own observations -- not "
+      + "calculated, saved for " + esc(opponent.name) + " across every match)</span></h5>"
+      + "<textarea id='mn-scouting-notes' rows='3'>" + esc(savedNotes) + "</textarea>"
+      + "<div><button type='button' id='mn-scouting-notes-save'>Save notes</button>"
+      + " <span id='mn-scouting-notes-status' class='cd-note'></span></div>";
+
+    html += "</div>";
+    target.innerHTML = html;
+
+    var saveBtn = document.getElementById("mn-scouting-notes-save");
+    if (saveBtn) {{
+      saveBtn.addEventListener("click", function () {{
+        var text = document.getElementById("mn-scouting-notes").value;
+        mnSaveScoutingNotes(opponent.external_id, text);
+        document.getElementById("mn-scouting-notes-status").textContent = "Saved.";
+      }});
+    }}
   }}
 
   function mnInitScope() {{
@@ -1237,7 +1345,9 @@ toughest first -- never a categorical "danger" label
   document.getElementById("mn-scope").addEventListener("change", mnInitScope);
   document.getElementById("mn-match").addEventListener("change", mnOnMatchChange);
   document.getElementById("mn-opponent").addEventListener("change", function () {{
-    mnRenderComparison(mnCurrentScope());
+    var scope = mnCurrentScope();
+    mnRenderScouting(scope);
+    mnRenderComparison(scope);
   }});
   document.getElementById("mn-reset").addEventListener("click", function () {{
     if (!window.confirm("Reset all Match Night state for this match?")) return;

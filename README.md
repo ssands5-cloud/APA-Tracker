@@ -396,10 +396,23 @@ already embedded on the page — no new estimate, no new model.
   stays visible while scrolling through comparison cards, decision cards
   ahead of the detailed boards-sent log. A basic print view (`Print
   summary`) renders just the roster status and boards sent, usable offline.
+- **Opponent scouting card** — appears the moment an opponent is
+  announced, before the "who should I send" comparison cards: exact
+  head-to-head W-L (and sample size) against every currently-Available
+  teammate, the real dated list of individual recorded games behind that
+  record (`analytics.pairing_evidence.HeadToHeadGame`, the same
+  authoritative rows the pooled win/loss count is already counted from —
+  itemized, not reconstructed), with the real format/session window
+  stated explicitly. A missing or zero-game history reads as "No recorded
+  meetings", never a guessed 0-0 or an inferred loss/streak (this project
+  tracks no such streak separate from this real evidence, and never will
+  by inventing one here). Coach's own scouting notes save by the
+  opponent's real player identity (not by match or scope), so a note
+  about a real person survives across every future match they're
+  announced in — clearly labeled as an observation, never mixed with a
+  calculated field.
 
-Still open, honestly disclosed: a dedicated per-opponent scouting card
-(recent results, coach-entered notes kept separate from calculated stats —
-from an earlier "Match Night" directive) is not built yet.
+Still open, honestly disclosed:
 The 4-player/19 skill-level fallback (a team that can't field 5 legal
 players) is intentionally not implemented here either —
 `analytics/lineup_legality.py`'s own docstring already flags that as

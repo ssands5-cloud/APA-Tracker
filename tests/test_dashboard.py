@@ -212,8 +212,9 @@ class TestMatchNight:
             [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
             [], "Mark It Up",
         )
-        for element_id in ("mn-scope", "mn-match", "mn-opponent", "mn-roster", "mn-comparison",
-                            "mn-lineup", "mn-warning", "mn-reset", "mn-print", "mn-sticky"):
+        for element_id in ("mn-scope", "mn-match", "mn-opponent", "mn-roster", "mn-scouting",
+                            "mn-comparison", "mn-lineup", "mn-warning", "mn-reset", "mn-print",
+                            "mn-sticky"):
             assert f'id="{element_id}"' in html
 
     def test_bundle_generated_time_is_shown_when_built_at_is_given(self):
@@ -255,3 +256,12 @@ class TestMatchNight:
         obvious on the page itself, not just true in the underlying data."""
         html = render([_player_report()], [], [], "Mark It Up")
         assert "not a promise" in html.lower() or "not a winning streak" in html.lower()
+
+    # The scouting card's own disclosure text ("never treated as a loss",
+    # "Coach notes ... not calculated") is built by client-side JS only
+    # once an opponent is selected -- checking it against this module's
+    # raw page *source* would be fragile (it'd depend on incidental JS
+    # string-literal line-wrapping, not real rendered behavior) and
+    # contradicts this class's own stated split with the browser suite.
+    # See tests/test_dashboard_browser.py's TestOpponentScoutingCard for
+    # the real, rendered-DOM check.

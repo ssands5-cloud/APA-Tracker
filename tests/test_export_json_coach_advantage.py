@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from analytics.lineup_lab import LineupLabResult, LineupSlot, UnmatchedOpponent, UnmatchedPlayer
-from analytics.pairing_evidence import EvidenceLabel, PairingEvidence, PairingEvidenceMatrix
+from analytics.pairing_evidence import EvidenceLabel, HeadToHeadGame, PairingEvidence, PairingEvidenceMatrix
 from analytics.player_matchup_engine import build_player_matchup_report
 from analytics.team_matchup_engine import build_team_matchup_report
 from ui.export_json_coach_advantage import (
@@ -42,6 +42,25 @@ class TestPlayerMatchupReportToDict:
         assert data["direct_wins"] == 3
         assert data["direct_losses"] == 1
         assert data["summary"] == report.summary
+
+    def test_direct_games_round_trips_as_dated_win_loss_entries(self):
+        report = build_player_matchup_report(
+            _pairing(direct_games=(
+                HeadToHeadGame(match_date="2026-09-01", result="W"),
+                HeadToHeadGame(match_date=None, result="L"),
+            )),
+            "OUR1", "OPP1",
+        )
+        data = player_matchup_report_to_dict(report)
+        assert data["direct_games"] == [
+            {"match_date": "2026-09-01", "result": "W"},
+            {"match_date": None, "result": "L"},
+        ]
+
+    def test_direct_games_is_an_empty_list_by_default(self):
+        report = build_player_matchup_report(_pairing(), "OUR1", "OPP1")
+        data = player_matchup_report_to_dict(report)
+        assert data["direct_games"] == []
 
     def test_evidence_label_serializes_as_a_plain_string_not_an_enum(self):
         report = build_player_matchup_report(_pairing(), "OUR1", "OPP1")

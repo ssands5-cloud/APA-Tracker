@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from analytics.pairing_evidence import EvidenceLabel, PairingEvidence
+from analytics.pairing_evidence import EvidenceLabel, HeadToHeadGame, PairingEvidence
 from analytics.skill_level_trends import (
     skill_level_changes,
     skill_level_trend,
@@ -129,6 +129,7 @@ class PlayerMatchupReport:
     modeled_win_probability: Optional[float]
     model_source: Optional[str]
     summary: str
+    direct_games: tuple[HeadToHeadGame, ...] = ()
 
 
 def _summary_for(
@@ -227,4 +228,5 @@ def build_player_matchup_report(
         modeled_win_probability=pairing.modeled_win_probability,
         model_source=pairing.model_source,
         summary=_summary_for(pairing, player_trend, opponent_trend, direct_wins, direct_losses),
+        direct_games=pairing.direct_games,
     )

@@ -59,6 +59,9 @@ def player_matchup_report_to_dict(report: PlayerMatchupReport) -> dict:
         "modeled_win_probability": report.modeled_win_probability,
         "model_source": report.model_source,
         "summary": report.summary,
+        "direct_games": [
+            {"match_date": g.match_date, "result": g.result} for g in report.direct_games
+        ],
     }
 
 

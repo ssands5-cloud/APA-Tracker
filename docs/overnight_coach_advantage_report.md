@@ -398,6 +398,74 @@ before starting.
   confirmation step/button -- a real, smaller gap than building a whole
   new control, disclosed rather than silently assumed equivalent.
 
+### Opponent scouting cards -- 2026-09-16 20:51 UTC
+
+User directive, second half (after closing `ae345be` above): build
+opponent scouting cards for Match Night. Shown the moment an opponent is
+announced (`#mn-opponent` selected), before the "who should I send"
+comparison cards.
+
+- **New real data field, not a new model:** `analytics.pairing_evidence.HeadToHeadGame`
+  (`match_date`, `result`) and a `direct_games` field on both
+  `PairingEvidence` and `PlayerMatchupReport` -- the exact same
+  authoritative `PlayerHeadToHead` rows `direct_wins`/`direct_losses`
+  were already counted from (`_authoritative_direct_rows`, unchanged),
+  now also kept itemized with each real game's own date rather than only
+  summed. Threaded through the JSON export unchanged. No new query
+  beyond what Stage 1 classification already runs; no new estimate.
+- **The card itself** (`ui/dashboard.py`, `mnRenderScouting`):
+  - **Exact head-to-head + sample size per available teammate** -- one
+    row per currently-Available teammate (Absent/Held-back/Already-
+    played excluded, matching "each available teammate" literally): real
+    W-L record or "No recorded meetings" (never a guessed 0-0), and the
+    real `direct_evidence_count` as an explicit sample size.
+  - **Recent recorded results, dated, window stated** -- every real
+    `direct_games` entry across those teammates, each with its real date
+    (or "date unknown" -- never invented) and W/L, under a "Window:
+    {format}, {session}" line stating the scope explicitly, not implied.
+  - **Plain-English limitations** -- a fixed disclosure that estimates
+    without direct history use skill levels only, and that a missing or
+    small sample is shown exactly as that, "never treated as a loss,"
+    plus an explicit statement that this project does not track a
+    win/loss streak separate from this real evidence -- directly
+    satisfying "never infer losses or streaks from incomplete history."
+  - **Coach's own scouting notes** -- a `<textarea>` + Save button,
+    persisted to `localStorage` keyed by the opponent's real
+    `external_id` (**player identity**, not match or scope), so a note
+    about a real person survives across every future match/session this
+    bundle or a later one ever shows them in. Labeled "your own
+    observations -- not calculated" to keep it visually and textually
+    separate from every computed field on the same card. Verified
+    switching opponents shows that player's own notes, never another's.
+  - Phone-sized touch targets (44px) and text reused from the same CSS
+    conventions established for the rest of Match Night.
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T205132Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; screenshotted a phone-width
+  (420px) render with a real opponent selected, confirming the card
+  renders real division data (an actual 0-1 DIRECT record against a real
+  opponent, with a real dated game) with no console errors.
+- **New tests:** 3 in `tests/test_pairing_evidence.py` (`direct_games`
+  carries the real dated game, preserves a missing date honestly, empty
+  for a real INDIRECT pairing), 2 in `tests/test_player_matchup_engine.py`,
+  2 in `tests/test_export_json_coach_advantage.py`, 1 static
+  (`tests/test_dashboard.py`, element id), and 8 browser tests
+  (`TestOpponentScoutingCard` in `tests/test_dashboard_browser.py`:
+  exact W-L/sample size, absent-teammate exclusion, dated recent
+  results with an honest unknown-date case, the window statement, the
+  no-recorded-meetings-never-a-loss disclosure, notes saving by player
+  identity, notes surviving a real reload, and notes not leaking between
+  two different announced opponents).
+- Full suite: **1679 passed, 0 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).
+- **Not addressed this cycle, honestly disclosed:** the scouting card
+  shows only this bundle's own scope/session evidence (matching the
+  directive's explicit "within the selected format/session" scope) --
+  a whole-career or cross-format opponent history view was not asked for
+  here and is not built. The 4-player/19 fallback remains open, as
+  already logged above.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 

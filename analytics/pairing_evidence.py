@@ -53,6 +53,21 @@ class PairingReconciliationError(AssertionError):
 
 
 @dataclass(frozen=True)
+class HeadToHeadGame:
+    """One real, individual recorded game behind a DIRECT pairing's pooled
+    win/loss count -- the same authoritative ``PlayerHeadToHead`` row
+    ``direct_wins``/``direct_losses`` are already counted from, just kept
+    itemized with its own real date instead of only summed. ``match_date``
+    is the real ``Match.match_date`` value, kept as delivered text (see
+    that column's own docstring) -- never reparsed or reformatted here.
+    ``None`` when a match has no recorded date, shown honestly rather than
+    guessed."""
+
+    match_date: Optional[str]
+    result: str  # "W" or "L" -- PlayerHeadToHead.result is already filtered to these
+
+
+@dataclass(frozen=True)
 class PairingEvidence:
     player_id: int
     player_external_id: str
@@ -71,6 +86,7 @@ class PairingEvidence:
     model_source: Optional[str]
     direct_wins: Optional[int] = None
     direct_losses: Optional[int] = None
+    direct_games: tuple[HeadToHeadGame, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -324,6 +340,10 @@ def _classify_pairing(
         model_source=model_source,
         direct_wins=direct_wl[0] if direct_wl is not None else None,
         direct_losses=direct_wl[1] if direct_wl is not None else None,
+        direct_games=tuple(
+            HeadToHeadGame(match_date=row.match.match_date, result=row.result)
+            for row in direct_rows
+        ),
     )
 
 

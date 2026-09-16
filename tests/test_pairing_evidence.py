@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from analytics.head_to_head import skill_only_win_probability
 from analytics.pairing_evidence import (
     EvidenceLabel,
+    HeadToHeadGame,
     PairingEvidence,
     PairingEvidenceError,
     PairingReconciliationError,
@@ -187,6 +188,49 @@ class TestAuthoritativeDirectEvidence:
 
         assert evidence.evidence_label is EvidenceLabel.INDIRECT
         assert evidence.direct_evidence_count == 0
+
+    def test_direct_games_carries_the_real_dated_game_behind_the_pooled_count(self, db):
+        """Match Night scouting card follow-up: direct_wins/direct_losses
+        are a pooled count -- direct_games is the same real evidence,
+        itemized with each real game's own date, never reconstructed or
+        guessed."""
+        player, opponent = _seed_pair(db)
+        match = _match(db, "M-1")
+        match.match_date = "2026-09-10"
+        _game(db, player, opponent, match, "W")
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.direct_games == (HeadToHeadGame(match_date="2026-09-10", result="W"),)
+
+    def test_direct_games_carries_a_missing_date_honestly(self, db):
+        """A game with no recorded date must appear as None, never a
+        guessed or reformatted value -- ordering itself is inherited
+        unchanged from _authoritative_direct_rows's own existing query
+        (SQL sorts NULL match_date first), not something this field
+        changes or relies on being chronological."""
+        player, opponent = _seed_pair(db)
+        first = _match(db, "M-1")
+        first.match_date = "2026-09-01"
+        second = _match(db, "M-2")
+        second.match_date = None
+        _game(db, player, opponent, first, "W")
+        _game(db, player, opponent, second, "L")
+
+        evidence = _build(db).pairings[0]
+
+        assert set(evidence.direct_games) == {
+            HeadToHeadGame(match_date="2026-09-01", result="W"),
+            HeadToHeadGame(match_date=None, result="L"),
+        }
+
+    def test_direct_games_is_empty_for_a_real_indirect_pairing(self, db):
+        _seed_pair(db, our_skill=5, opponent_skill=4)
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.evidence_label is EvidenceLabel.INDIRECT
+        assert evidence.direct_games == ()
 
     def test_evidence_count_and_rate_use_distinct_matches(self, db):
         player, opponent = _seed_pair(db)

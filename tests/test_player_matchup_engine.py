@@ -7,7 +7,7 @@ analytics.opponent_risk_profile are already tested.
 
 from __future__ import annotations
 
-from analytics.pairing_evidence import EvidenceLabel, PairingEvidence
+from analytics.pairing_evidence import EvidenceLabel, HeadToHeadGame, PairingEvidence
 from analytics.player_matchup_engine import (
     NO_SKILL_TREND,
     build_player_matchup_report,
@@ -116,6 +116,21 @@ class TestBuildPlayerMatchupReport:
         # No categorical verdict language -- descriptive only.
         assert "favored" not in report.summary.lower()
         assert "dangerous" not in report.summary.lower()
+
+    def test_direct_games_passes_through_unchanged(self):
+        """Match Night scouting card follow-up: the dated per-game list
+        behind the pooled direct_wins/direct_losses count must reach the
+        report unchanged -- no reordering, no reconstruction."""
+        games = (
+            HeadToHeadGame(match_date="2026-09-01", result="W"),
+            HeadToHeadGame(match_date="2026-09-15", result="L"),
+        )
+        report = _build(_pairing(direct_games=games))
+        assert report.direct_games == games
+
+    def test_direct_games_defaults_to_empty(self):
+        report = _build(_pairing(evidence_label=EvidenceLabel.INDIRECT, direct_wins=None, direct_losses=None))
+        assert report.direct_games == ()
 
     def test_indirect_evidence_reports_the_skill_only_estimate(self):
         pairing = _pairing(
