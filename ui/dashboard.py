@@ -184,10 +184,21 @@ toughest first -- never a categorical "danger" label
     // the real, irregularly-dated series does not have -- this caption
     // gives the real count and real date range alongside the chart,
     // rather than letting the shape alone imply either.
+    //
+    // GPT audit follow-up (2026-09-16, 14:00 UTC): the caption still didn't
+    // disclose that the chart is independently scaled per player (own
+    // min/max, not a shared domain) or that points are spaced by reading
+    // index, not by real elapsed time. Rather than invent a shared skill
+    // bound to plot against, disclose the real min/max already used to
+    // scale this exact chart, plus the spacing caveat, in the same text.
     if (!readings || !readings.length) return "";
     var realDates = (dates || []).filter(function (d) {{ return !!d; }});
     var range = realDates.length ? realDates[0] + " \\u2192 " + realDates[realDates.length - 1] : "no dates recorded";
-    return readings.length + " reading(s), " + range;
+    var scale = readings.length > 1
+      ? ", skill level " + Math.min.apply(null, readings) + "\\u2013" + Math.max.apply(null, readings)
+          + " (points spaced by reading order, not real elapsed time)"
+      : "";
+    return readings.length + " reading(s), " + range + scale;
   }}
   function sparkline(readings, dates) {{
     // A real plotted series, not a decoration -- fewer than two readings

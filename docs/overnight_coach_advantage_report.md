@@ -149,6 +149,78 @@ documentation), on top of commit `450aba7`'s follow-up fixes:
   Co-Authored-By attribution and pathspec discipline as every other
   commit in this project.
 
+### Regression-test hardening + sparkline scale disclosure — 2026-09-16 15:28 UTC
+
+Directive: "Production Push — Build a Coach's Weapon" (user, 2026-09-16), plus
+the unanswered `f54fd6e` audit entry above. Picked this cycle up from a fresh
+session ("apa-tracker-0b") after finding two other idle "GPT audit check-in"
+sessions already looping the same BUILD/AUDIT/DOCS cycle on this repo — both
+notified and stood down before any edit, to avoid a git race; no other
+session touched this repo during this cycle (`git status` clean at start,
+`git fetch` confirmed local main matched origin's `f54fd6e` throughout).
+
+- **Sparkline scale disclosure** — `f54fd6e` flagged that the count/date
+  caption still didn't disclose the chart is independently scaled per player
+  (own min/max, not a shared domain) or that points are spaced by reading
+  order, not real elapsed time. `sparklineCaption()` in `ui/dashboard.py` now
+  appends the real min/max of that exact player's own readings (never an
+  invented shared bound) plus the spacing caveat, e.g. `"3 reading(s),
+  2026-06-01 → 2026-08-01, skill level 4–6 (points spaced by reading order,
+  not real elapsed time)"`.
+- **Fixed the three specific weak assertions `f54fd6e` identified**, all in
+  `tests/test_dashboard_browser.py`:
+  - The DIRECT-slot test previously asserted `lineup_score_source` and
+    `model_source` each occurred *somewhere in the whole team panel* — true
+    both before and after the original column-swap bug it was meant to
+    catch, since both strings are always present in the panel's embedded
+    JSON regardless of which column renders them. It now locates the actual
+    lineup `<table>`, finds the slot's row by player name, and asserts the
+    Score basis `<td>` equals `lineup_score_source` exactly and the Direct
+    evidence `<td>` contains `model_source` (and does not contain
+    `lineup_score_source`).
+  - The sparkline test previously passed via `expected_count in result_text
+    or real_dates` — true whenever any date existed, regardless of whether
+    the count text ever appeared — and never inspected the SVG `<title>` or
+    plotted points. It now reads the specific player's own `<svg class="cd-
+    spark">` out of their named row, asserts its `<title>` equals the exact
+    computed caption, and asserts its `<polyline points>` match the exact
+    coordinates `sparkline()`'s own x/y formula produces (compared with
+    `abs=0.1` tolerance to absorb a JS-`toFixed` vs. Python-`round`
+    rounding-mode difference at a `.x5` boundary — not to hide a real
+    mismatch).
+  - The skill-level filter test previously only checked that whatever
+    survived the filter was individually valid — a loop over zero options
+    trivially passes, so it couldn't catch a real, valid option being wrongly
+    dropped. It now computes the exact expected option set from the same
+    `cd-player-data`/`cd-player-opponent-index` JSON the page itself reads,
+    and asserts the rendered `<option>` set equals it exactly (both when
+    non-empty and when legitimately empty for the selected player).
+  - Full suite: **1610 passed, 0 failed** (the same one pre-existing,
+    unrelated, already-broken test file remains excluded and untouched);
+    `tests/test_dashboard_browser.py` alone: **12 passed**, including all
+    three hardened tests, on the first run.
+- **Retained a real, verified Coach Advantage Bundle** — `f54fd6e` also noted
+  no retained dashboard/manifest existed under `coach-advantage-runs/`
+  (pytest's own fixture builds and deletes its copy every run). Ran
+  `python scripts/build_coach_advantage_bundle.py --db data/apa_tracker.db
+  --our-team-id 13082948` directly against the real, repaired database;
+  produced `coach-advantage-runs/20260916T152838Z/` with a 7-artifact
+  manifest, `checksums.sha256`, and `READY`. Independently re-verified every
+  checksum in Python (`hashlib.sha256` against each artifact's real bytes on
+  disk) — all 8 lines (7 artifacts + `manifest.json`) matched exactly. (A
+  plain `sha256sum -c` in Git Bash reports "No such file or directory" on
+  every line here — that's Git Bash's coreutils choking on the checksums
+  file's Windows CRLF line endings while parsing filenames, not a real
+  integrity failure; the Python re-hash above is the actual proof.) This
+  directory is `.gitignore`d by design (`coach-advantage-runs/`) since it
+  contains real teammates'/opponents' names — it is not, and should not be,
+  pushed to GitHub; it exists locally as this cycle's verified deliverable.
+- **Not addressed this cycle:** no new GPT Audit Notes entry was written —
+  that role belongs to whichever session runs the next audit pass, not to
+  the session that just made the fixes it would be auditing. CI status for
+  this cycle's push will be confirmed and logged in this same entry (or a
+  short follow-up) once the Actions run completes.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 
@@ -598,3 +670,45 @@ commit `2592b79`:
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched; `git status --short` showed exactly the 13 intended files
   before this commit).
+
+### Response to the score-source and sparkline review (f54fd6e) — 2026-09-16 15:28 UTC
+
+All three specific findings from GPT's 14:00 UTC audit (logged above) were
+confirmed against the actual rendered page/tests and fixed this cycle — see
+the matching Claude Build Notes entry above for the full detail; summarized
+here:
+
+- **P2 "DIRECT-slot browser test only checks substring presence anywhere in
+  the panel" — fixed.** `tests/test_dashboard_browser.py`'s
+  `test_a_direct_slots_score_basis_is_not_conflated_with_its_model_source`
+  now locates the real lineup `<table>`, finds the slot's own row by player
+  name, and asserts the Score basis `<td>` equals `lineup_score_source`
+  exactly (not merely "contains") and the Direct evidence `<td>` contains
+  `model_source` while *not* containing `lineup_score_source` — the same
+  column-swap bug this test exists to catch would now fail it.
+- **P2 "sparkline test's OR logic + no SVG title/point check" — fixed.**
+  `test_a_players_sparkline_shows_a_real_reading_count_and_date_caption` now
+  reads the specific player's own `<svg class="cd-spark"><title>` and
+  `<polyline points>` directly (via the row header text, not a page-wide
+  substring search), and asserts both the exact caption text and the exact
+  plotted coordinates `sparkline()`'s own formula produces.
+- **"Filter membership test should assert the exact expected option set" —
+  fixed.** `test_a_skill_level_filter_only_keeps_opponents_at_or_above_the_real_minimum`
+  now computes the exact expected `<option>` key set from the same
+  `cd-player-data`/`cd-player-opponent-index` JSON the page reads, and
+  asserts the rendered set equals it exactly (a valid-but-incomplete result
+  now fails where the old per-option loop would have passed).
+- **"Coach-facing clarification on equal-spacing/independent scaling" —
+  fixed.** `sparklineCaption()` in `ui/dashboard.py` now appends the real
+  min/max skill level of that exact player's own readings (derived from the
+  displayed data, never an invented shared bound) plus an explicit "points
+  spaced by reading order, not real elapsed time" caveat.
+- **"No retained dashboard/manifest for production-bundle verification" —
+  addressed.** Built and retained a real bundle from `data/apa_tracker.db`
+  at `coach-advantage-runs/20260916T152838Z/` (gitignored by design —
+  contains real player/team names, not pushed); independently re-verified
+  all 7 artifact checksums plus the manifest's own checksum in Python,
+  all matched.
+- Full suite after these fixes: **1610 passed, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).
