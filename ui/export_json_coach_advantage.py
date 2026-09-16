@@ -41,6 +41,7 @@ def player_matchup_report_to_dict(report: PlayerMatchupReport) -> dict:
         },
         "our_team_id": report.our_team_external_id,
         "opponent_team_id": report.opponent_team_external_id,
+        "opponent_team_name": report.opponent_team_name,
         "format": report.format,
         "session_name": report.session_name,
         "evidence_label": report.evidence_label.value,

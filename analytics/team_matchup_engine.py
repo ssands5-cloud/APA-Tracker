@@ -6,17 +6,22 @@ player-within-one-matchup granularity instead of that module's
 cross-division team granularity), this is a REPORTER: it takes an
 already-built ``analytics.pairing_evidence.PairingEvidenceMatrix`` and an
 already-computed ``analytics.lineup_lab.LineupLabResult`` (or its real
-error) and aggregates them. It queries nothing itself and recomputes no
-probability -- every number traces to Stage 1's classifier
-(``pairing_evidence``) or Stage 3's approved lineup solver (``lineup_lab``).
+error) and aggregates them. It queries nothing itself; every pooled
+direct win/loss record traces straight to Stage 1's classifier
+(``pairing_evidence``) with no reconstruction, and every lineup number to
+Stage 3's approved solver (``lineup_lab``). The one exception is
+``RankedOpponent.reliability_weighted_skill_probability``, a real
+recomputation over already-validated inputs -- see "Explicitly
+experimental" below for exactly what it is and is not.
 
 "Danger players" / "weak spots" are ranked, never labeled: the same
 purely-descriptive convention ``analytics.opponent_risk_profile`` already
 uses ("this module ranks opponents; it does not label them"), because this
 project has repeatedly had to fail-close invented, unfitted categorical
 danger thresholds (docs/captain_first_edge_experience.md §13). A coach
-reads the ranking and applies their own judgment; this module supplies the
-real, validated signal, not a verdict.
+reads the ranking and applies their own judgment; this module supplies a
+real signal -- pooled direct record validated, the skill-only ranking
+still experimental (see below) -- never a verdict.
 
 **Explicitly experimental, not independently validated:**
 ``RankedOpponent.reliability_weighted_skill_probability`` extends
@@ -49,7 +54,7 @@ from typing import Optional
 from analytics.head_to_head import skill_only_win_probability
 from analytics.lineup_lab import LineupLabResult
 from analytics.pairing_evidence import EvidenceLabel, PairingEvidenceMatrix
-from analytics.player_matchup_engine import NO_SKILL_TREND, SkillTrendInfo, reconstruct_win_loss
+from analytics.player_matchup_engine import NO_SKILL_TREND, SkillTrendInfo
 
 
 def _pairing_weight(direct_evidence_count: int) -> int:
@@ -100,10 +105,11 @@ def _pooled_direct_record(
     4-game 100% record, which can materially misstate the real combined
     record (a real example this project found: a 1-0 pairing and a 2-2
     pairing average to a reported 75%, when the true pooled record is
-    3-2 -- 60%). Each pairing's own (wins, losses) is recovered exactly
-    via ``analytics.player_matchup_engine.reconstruct_win_loss`` (safe
-    because the exact real distinct-match count is known alongside the
-    rate, not a percentage alone) and then genuinely summed.
+    3-2 -- 60%). Each pairing's own exact (wins, losses) comes straight
+    from ``PairingEvidence.direct_wins``/``direct_losses`` -- counted
+    directly from the authoritative rows at Stage 1, never reconstructed
+    from a rounded rate (GPT audit follow-up: reconstruction is not exact
+    in general for large samples) -- and then genuinely summed.
     """
     total_wins = 0
     total_games = 0
@@ -111,12 +117,10 @@ def _pooled_direct_record(
     for p in matrix.pairings:
         if p.opponent_id != opponent_id or p.evidence_label is not EvidenceLabel.DIRECT:
             continue
-        wl = reconstruct_win_loss(p.observed_win_rate, p.direct_evidence_count)
-        if wl is None:
+        if p.direct_wins is None:
             continue
         any_direct = True
-        wins, _losses = wl
-        total_wins += wins
+        total_wins += p.direct_wins
         total_games += p.direct_evidence_count
     if not any_direct or total_games == 0:
         return None, None, None, 0

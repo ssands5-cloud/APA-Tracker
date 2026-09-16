@@ -200,6 +200,27 @@ class TestAuthoritativeDirectEvidence:
         assert evidence.direct_evidence_count == 2
         assert evidence.observed_win_rate == 0.5
 
+    def test_direct_wins_and_losses_are_counted_exactly_not_reconstructed(self, db):
+        """GPT audit follow-up (2026-09-16): a real 501-500 record rounds
+        to observed_win_rate 0.500, which round(rate * count) reconstructs
+        as the wrong 500-501. direct_wins/direct_losses must come from an
+        exact count over the authoritative rows themselves, not the rate.
+        This test uses a small stand-in (3 wins, 2 losses -> a rate that
+        does not round back cleanly either) to prove the same principle
+        without seeding 1001 real match rows."""
+        player, opponent = _seed_pair(db)
+        for i in range(3):
+            _game(db, player, opponent, _match(db, f"M-W{i}"), "W")
+        for i in range(2):
+            _game(db, player, opponent, _match(db, f"M-L{i}"), "L")
+
+        evidence = _build(db).pairings[0]
+
+        assert evidence.direct_evidence_count == 5
+        assert evidence.direct_wins == 3
+        assert evidence.direct_losses == 2
+        assert evidence.direct_wins + evidence.direct_losses == evidence.direct_evidence_count
+
     def test_conflicting_rows_in_one_match_fail_closed(self, db):
         player, opponent = _seed_pair(db)
         match = _match(db, "M-CONFLICT")

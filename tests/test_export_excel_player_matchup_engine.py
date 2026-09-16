@@ -15,6 +15,7 @@ def _pairing(**overrides) -> PairingEvidence:
         opponent_id=2, opponent_external_id="P2", opponent_name="Bob", opponent_skill_level=4,
         format="8-Ball Open", session_name="Fall 2026",
         evidence_label=EvidenceLabel.DIRECT, observed_win_rate=0.75, direct_evidence_count=4,
+        direct_wins=3, direct_losses=1,
         modeled_win_probability=0.7, model_source="analytics.head_to_head",
     )
     base.update(overrides)

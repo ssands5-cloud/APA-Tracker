@@ -11,7 +11,6 @@ from analytics.pairing_evidence import EvidenceLabel, PairingEvidence
 from analytics.player_matchup_engine import (
     NO_SKILL_TREND,
     build_player_matchup_report,
-    reconstruct_win_loss,
     skill_trend_for,
 )
 from database.models import Match, PlayerMatch
@@ -29,6 +28,7 @@ def _pairing(**overrides) -> PairingEvidence:
         format="8-Ball Open", session_name="Fall 2026",
         evidence_label=EvidenceLabel.DIRECT,
         observed_win_rate=0.75, direct_evidence_count=4,
+        direct_wins=3, direct_losses=1,
         modeled_win_probability=0.7, model_source="analytics.head_to_head",
     )
     base.update(overrides)
@@ -58,35 +58,23 @@ class TestSkillTrendFor:
         assert trend.last_change == "SL 4 → SL 5 in Week 3"
 
 
-class TestReconstructWinLoss:
-    """GPT audit P1: direct_evidence_count is distinct MATCHES, not games,
-    and the exact real (wins, losses) is safely recoverable alongside it --
-    not a fabricated precision, since the count is exact, not just the
-    rounded rate."""
-
-    def test_exact_record_recovers_correctly(self):
-        assert reconstruct_win_loss(0.75, 4) == (3, 1)
-
-    def test_a_rate_that_does_not_round_cleanly_still_recovers_the_real_count(self):
-        # 4 of 6 wins -> 0.667 rounded to 3 decimals, as
-        # analytics.pairing_evidence._observed_win_rate actually stores it.
-        assert reconstruct_win_loss(0.667, 6) == (4, 2)
-
-    def test_the_real_example_that_motivated_this_fix(self):
-        # A 1-0 pairing and a 2-2 pairing must each reconstruct exactly,
-        # so a caller pooling across pairings gets the true 3-2 combined
-        # record, not an average-of-rates distortion.
-        assert reconstruct_win_loss(1.0, 1) == (1, 0)
-        assert reconstruct_win_loss(0.5, 4) == (2, 2)
-
-    def test_no_rate_is_not_reconstructed(self):
-        assert reconstruct_win_loss(None, 0) is None
-
-    def test_zero_count_is_not_reconstructed(self):
-        assert reconstruct_win_loss(0.5, 0) is None
-
-
 class TestBuildPlayerMatchupReport:
+    def test_direct_wins_and_losses_pass_through_unreconstructed(self):
+        """GPT audit follow-up (2026-09-16): reconstructing wins/losses
+        from the rounded observed_win_rate is not exact in general (a real
+        501-500 record rounds to 0.500, which reconstructs as the wrong
+        500-501). The report must carry PairingEvidence's own exact
+        direct_wins/direct_losses straight through, never re-derive them
+        from the rate here."""
+        pairing = _pairing(
+            observed_win_rate=0.5, direct_evidence_count=1001,
+            direct_wins=501, direct_losses=500,
+        )
+        report = _build(pairing)
+        assert report.direct_wins == 501
+        assert report.direct_losses == 500
+        assert "(501-500)" in report.summary
+
     def test_direct_evidence_produces_a_descriptive_not_categorical_summary(self):
         report = _build()
 
@@ -104,6 +92,7 @@ class TestBuildPlayerMatchupReport:
         pairing = _pairing(
             evidence_label=EvidenceLabel.INDIRECT,
             observed_win_rate=None, direct_evidence_count=0,
+            direct_wins=None, direct_losses=None,
             modeled_win_probability=0.62, model_source="analytics.head_to_head.skill_only_win_probability",
         )
         report = _build(pairing)
@@ -118,6 +107,7 @@ class TestBuildPlayerMatchupReport:
         pairing = _pairing(
             evidence_label=EvidenceLabel.UNKNOWN,
             observed_win_rate=None, direct_evidence_count=0,
+            direct_wins=None, direct_losses=None,
             modeled_win_probability=None, model_source=None,
         )
         report = _build(pairing)
@@ -160,3 +150,15 @@ class TestBuildPlayerMatchupReport:
         report = _build()
         assert report.our_team_external_id == OUR_TEAM
         assert report.opponent_team_external_id == OPPONENT_TEAM
+
+    def test_the_report_carries_the_real_opponent_team_name(self):
+        """GPT audit follow-up (2026-09-16): the opponent's real team name
+        must be on the report so a coach-facing selector can disambiguate
+        a same-named opponent player on two different teams -- the keys
+        never collided, but the label alone could look identical."""
+        report = _build(opponent_team_name="Corner Pockets")
+        assert report.opponent_team_name == "Corner Pockets"
+
+    def test_a_missing_opponent_team_name_is_no_data_not_a_crash(self):
+        report = _build()
+        assert report.opponent_team_name is None

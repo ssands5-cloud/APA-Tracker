@@ -8,7 +8,10 @@ pairing): a bundle covering several real scopes can carry hundreds of
 reports, and a single dropdown of "A vs B (format, session)" options does
 not scale to a real division-wide roster. Choosing a player first narrows
 the second selector to only the real opponents that player has a report
-against.
+against. Opponent option labels include the opponent's real team name
+(GPT audit follow-up: a same-named opponent player on two teams during
+simultaneous membership can otherwise produce indistinguishable choices
+even though the underlying scope-safe keys never collide).
 """
 
 from __future__ import annotations
@@ -44,9 +47,10 @@ def _player_options_and_index(reports: Sequence[PlayerMatchupReport]) -> tuple[d
     by_player: dict[int, list[dict]] = defaultdict(list)
     for r in reports:
         players.setdefault(r.player_id, {"id": r.player_id, "name": r.player_name})
+        team_display = r.opponent_team_name or r.opponent_team_external_id
         by_player[r.player_id].append({
             "key": _pair_key(r),
-            "label": f"{r.opponent_name} ({r.format}, {r.session_name})",
+            "label": f"{r.opponent_name} — {team_display} ({r.format}, {r.session_name})",
         })
     for choices in by_player.values():
         choices.sort(key=lambda c: c["label"].lower())

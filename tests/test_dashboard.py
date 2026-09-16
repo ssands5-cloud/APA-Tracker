@@ -59,8 +59,8 @@ class TestRender:
         start = html.index('id="cd-player-opponent-index">') + len('id="cd-player-opponent-index">')
         end = html.index("</script>", start)
         index = json.loads(html[start:end])
-        assert [c["label"] for c in index["1"]] == ["Bob (8-Ball Open, Fall 2026)"]
-        assert [c["label"] for c in index["3"]] == ["Dave (8-Ball Open, Fall 2026)"]
+        assert [c["label"] for c in index["1"]] == ["Bob — OPP1 (8-Ball Open, Fall 2026)"]
+        assert [c["label"] for c in index["3"]] == ["Dave — OPP1 (8-Ball Open, Fall 2026)"]
 
     def test_opponent_risk_profile_rows_are_purely_descriptive(self):
         entry = OpponentRiskEntry(

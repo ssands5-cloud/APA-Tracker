@@ -69,6 +69,8 @@ class PairingEvidence:
     direct_evidence_count: int
     modeled_win_probability: Optional[float]
     model_source: Optional[str]
+    direct_wins: Optional[int] = None
+    direct_losses: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -241,6 +243,20 @@ def _one_row_per_distinct_match(
     return distinct
 
 
+def _win_loss_counts(rows: Sequence[PlayerHeadToHead]) -> Optional[tuple[int, int]]:
+    """The real, exact (wins, losses) count behind a DIRECT pairing --
+    counted directly from the authoritative rows, never reconstructed from
+    a rounded rate. GPT audit follow-up (2026-09-16): reconstructing wins
+    as ``round(rate * count)`` is NOT exact in general (e.g. a real 501-500
+    record rounds to a 0.500 rate, which reconstructs as the wrong 500-501)
+    -- carrying the exact integer counts here removes the need to
+    reconstruct anything downstream."""
+    if not rows:
+        return None
+    wins = sum(1 for row in rows if row.result == "W")
+    return wins, len(rows) - wins
+
+
 def _observed_win_rate(rows: Sequence[PlayerHeadToHead]) -> Optional[float]:
     if not rows:
         return None
@@ -273,10 +289,12 @@ def _classify_pairing(
     if direct_rows:
         label = EvidenceLabel.DIRECT
         observed = _observed_win_rate(direct_rows)
+        direct_wl = _win_loss_counts(direct_rows)
         modeled = win_probability(direct_rows)
         model_source = "analytics.head_to_head:direct-history-and-skill"
     else:
         observed = None
+        direct_wl = None
         modeled = skill_only_win_probability(
             player.skill_level,
             opponent.skill_level,
@@ -304,6 +322,8 @@ def _classify_pairing(
         direct_evidence_count=len(direct_rows),
         modeled_win_probability=modeled,
         model_source=model_source,
+        direct_wins=direct_wl[0] if direct_wl is not None else None,
+        direct_losses=direct_wl[1] if direct_wl is not None else None,
     )
 
 

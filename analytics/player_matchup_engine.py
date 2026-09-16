@@ -76,24 +76,6 @@ def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
 NO_SKILL_TREND = SkillTrendInfo(trend="no data", volatility=0, last_change=None)
 
 
-def reconstruct_win_loss(
-    observed_win_rate: Optional[float], direct_evidence_count: int,
-) -> Optional[tuple[int, int]]:
-    """The real (wins, losses) record behind a DIRECT pairing's rate --
-    safe to reconstruct exactly, not a fabricated precision: unlike a
-    percentage alone, ``observed_win_rate`` here is paired with the exact
-    real distinct-match count that produced it
-    (``analytics.pairing_evidence._observed_win_rate`` computes
-    ``round(wins / len(rows), 3)``), so ``round(rate * count)`` recovers
-    the real integer win count exactly for any realistic sample size.
-    Returns ``None`` when there is no DIRECT rate to reconstruct from.
-    """
-    if observed_win_rate is None or direct_evidence_count <= 0:
-        return None
-    wins = round(observed_win_rate * direct_evidence_count)
-    return wins, direct_evidence_count - wins
-
-
 @dataclass(frozen=True)
 class PlayerMatchupReport:
     """One real (player, opponent) pairing's full Coach Mode report,
@@ -115,6 +97,7 @@ class PlayerMatchupReport:
     opponent_trend: SkillTrendInfo
     our_team_external_id: str
     opponent_team_external_id: str
+    opponent_team_name: Optional[str]
     format: str
     session_name: str
     evidence_label: EvidenceLabel
@@ -180,17 +163,25 @@ def build_player_matchup_report(
     opponent_team_external_id: str,
     player_trend: Optional[SkillTrendInfo] = None,
     opponent_trend: Optional[SkillTrendInfo] = None,
+    opponent_team_name: Optional[str] = None,
 ) -> PlayerMatchupReport:
     """Build one Coach Mode report from an already-classified
     ``PairingEvidence`` row, scoped to the real team pairing it came from.
     ``player_trend``/``opponent_trend`` default to "no data" rather than
     raising, since a player with no skill-level reading at all is a real,
-    valid state this report must still show honestly.
+    valid state this report must still show honestly. ``direct_wins``/
+    ``direct_losses`` are carried straight through from ``pairing`` --
+    counted directly from the authoritative rows at Stage 1, never
+    reconstructed from the rounded ``observed_win_rate`` here (GPT audit
+    follow-up: reconstruction is not exact in general for large samples).
+    ``opponent_team_name`` disambiguates this report from another real
+    scope against a same-named opponent player on a different team (GPT
+    audit follow-up: linked opponent-selector labels need the team, not
+    just the opponent's name/format/session).
     """
     player_trend = player_trend if player_trend is not None else NO_SKILL_TREND
     opponent_trend = opponent_trend if opponent_trend is not None else NO_SKILL_TREND
-    direct_wl = reconstruct_win_loss(pairing.observed_win_rate, pairing.direct_evidence_count)
-    direct_wins, direct_losses = direct_wl if direct_wl is not None else (None, None)
+    direct_wins, direct_losses = pairing.direct_wins, pairing.direct_losses
     return PlayerMatchupReport(
         player_id=pairing.player_id,
         player_external_id=pairing.player_external_id,
@@ -204,6 +195,7 @@ def build_player_matchup_report(
         opponent_trend=opponent_trend,
         our_team_external_id=our_team_external_id,
         opponent_team_external_id=opponent_team_external_id,
+        opponent_team_name=opponent_team_name,
         format=pairing.format,
         session_name=pairing.session_name,
         evidence_label=pairing.evidence_label,

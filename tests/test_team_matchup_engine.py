@@ -85,9 +85,11 @@ class TestBuildRankedOpponents:
         pairings' own rates would report."""
         pairings = [
             _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.DIRECT,
-                     observed_win_rate=1.0, direct_evidence_count=1),
+                     observed_win_rate=1.0, direct_evidence_count=1,
+                     direct_wins=1, direct_losses=0),
             _pairing(2, 10, "Alex", "Bob", evidence_label=EvidenceLabel.DIRECT,
-                     observed_win_rate=0.5, direct_evidence_count=4),
+                     observed_win_rate=0.5, direct_evidence_count=4,
+                     direct_wins=2, direct_losses=2),
         ]
         ranked = build_ranked_opponents(_matrix(pairings))
 
@@ -96,6 +98,22 @@ class TestBuildRankedOpponents:
         assert bob.direct_wins == 3
         assert bob.direct_losses == 2
         assert bob.direct_sample_size == 5  # sum of distinct-match counts
+
+    def test_a_large_sample_pools_exactly_not_via_rounded_rate_reconstruction(self):
+        """GPT audit follow-up (2026-09-16): a real 501-500 record rounds
+        to observed_win_rate 0.500, which would reconstruct as the wrong
+        500-501 if wins were re-derived from the rate. Pooling must use
+        PairingEvidence's own exact direct_wins/direct_losses instead."""
+        pairings = [
+            _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.DIRECT,
+                     observed_win_rate=0.5, direct_evidence_count=1001,
+                     direct_wins=501, direct_losses=500),
+        ]
+        ranked = build_ranked_opponents(_matrix(pairings))
+
+        bob = ranked[0]
+        assert bob.direct_wins == 501
+        assert bob.direct_losses == 500
 
     def test_no_direct_history_reports_none_not_zero(self):
         pairings = [

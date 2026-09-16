@@ -18,6 +18,7 @@ def _pairing(**overrides) -> PairingEvidence:
         opponent_id=2, opponent_external_id="P2", opponent_name="Bob", opponent_skill_level=4,
         format="8-Ball Open", session_name="Fall 2026",
         evidence_label=EvidenceLabel.DIRECT, observed_win_rate=0.75, direct_evidence_count=4,
+        direct_wins=3, direct_losses=1,
         modeled_win_probability=0.7, model_source="analytics.head_to_head",
     )
     base.update(overrides)
@@ -26,13 +27,16 @@ def _pairing(**overrides) -> PairingEvidence:
 
 class TestPlayerMatchupReportToDict:
     def test_round_trips_every_real_field(self):
-        report = build_player_matchup_report(_pairing(), "OUR1", "OPP1")
+        report = build_player_matchup_report(
+            _pairing(), "OUR1", "OPP1", opponent_team_name="Corner Pockets",
+        )
         data = player_matchup_report_to_dict(report)
 
         assert data["player"]["name"] == "Ann"
         assert data["opponent"]["name"] == "Bob"
         assert data["our_team_id"] == "OUR1"
         assert data["opponent_team_id"] == "OPP1"
+        assert data["opponent_team_name"] == "Corner Pockets"
         assert data["evidence_label"] == "DIRECT"
         assert data["observed_win_rate"] == 0.75
         assert data["direct_wins"] == 3

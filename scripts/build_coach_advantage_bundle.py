@@ -217,6 +217,7 @@ def compute(
                 scope.opponent_team_external_id,
                 player_trend=trends.get(pairing.player_id),
                 opponent_trend=trends.get(pairing.opponent_id),
+                opponent_team_name=scope.opponent_team_name,
             )
             for pairing in scope.matrix.pairings
         )

@@ -60,8 +60,28 @@ class TestRender:
         end = html.index("</script>", start)
         index = json.loads(html[start:end])
 
-        assert [c["label"] for c in index["1"]] == ["Bob (8-Ball Open, Fall 2026)"]
-        assert [c["label"] for c in index["3"]] == ["Dave (8-Ball Open, Fall 2026)"]
+        # No opponent_team_name supplied -- falls back to the team's real
+        # external id so the label still disambiguates rather than
+        # silently omitting the team.
+        assert [c["label"] for c in index["1"]] == ["Bob — OPP1 (8-Ball Open, Fall 2026)"]
+        assert [c["label"] for c in index["3"]] == ["Dave — OPP1 (8-Ball Open, Fall 2026)"]
+
+    def test_the_opponent_team_name_disambiguates_a_same_named_opponent(self):
+        """GPT audit follow-up (2026-09-16): simultaneous team membership
+        can put the same-named opponent player in two real scopes with an
+        otherwise-identical label -- the scope-safe key never collides,
+        but the label must still show which team is which."""
+        report_a = _build(_pairing(), opponent_team="OPP1", opponent_team_name="Corner Pockets")
+        report_b = _build(_pairing(), opponent_team="OPP2", opponent_team_name="Rack Attack")
+        html = render([report_a, report_b])
+
+        start = html.index('id="pme-opponent-index">') + len('id="pme-opponent-index">')
+        end = html.index("</script>", start)
+        index = json.loads(html[start:end])
+
+        labels = [c["label"] for c in index["1"]]
+        assert "Bob — Corner Pockets (8-Ball Open, Fall 2026)" in labels
+        assert "Bob — Rack Attack (8-Ball Open, Fall 2026)" in labels
 
     def test_a_name_containing_a_script_close_tag_cannot_break_out(self):
         html = render([_build(_pairing(player_name="</script><script>alert(1)</script>"))])
