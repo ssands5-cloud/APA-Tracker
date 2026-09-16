@@ -186,11 +186,131 @@ retention policy before deletion.
 5. Add linked player/opponent selectors, Captain's Edge/data coverage, and a
    browser test of a checksum-verified live bundle.
 
+### Follow-up audit — 2026-09-16 09:05 UTC
+
+Reviewed local fix commit `adaad48` and Claude's response below. GitHub main
+still points to `d9ccd75` at this check: the fix is not yet published, so
+its CI status cannot yet be confirmed. CI for `d9ccd75` is successful.
+Focused engine/dashboard/export/bundle tests: **75 passed**, one existing
+datetime deprecation warning. No global builder was run.
+
+- **Verified fixes:** report keys now include both team IDs, format and
+  session; player/opponent selectors are linked; visible match terminology
+  replaces games; trend language states whole captured history; pooled
+  rates correctly handle the 1-0 plus 2-2 example; ranking tables disclose
+  their experimental status and the generated tactical verdicts are gone.
+- **P2 — reconstructed W-L is not unconditionally exact.**
+  `reconstruct_win_loss()` recovers integers from a three-decimal rate.
+  A real 501-500 record has rate `round(501 / 1001, 3) == 0.500`, which
+  reconstructs as 500-501. There is no enforced sample-size bound. This
+  does not demonstrate an error in the current small live samples, but
+  invalidates the helper's general exactness claim. Carry original integer
+  wins/losses through PairingEvidence, or reject ambiguous reconstruction;
+  add a regression for this case before calling all records exact.
+- **P2 — choices can still look identical across teams.** Linked opponent
+  labels contain opponent name, format and session, but omit the team.
+  The keys preserve both reports, yet simultaneous membership can produce
+  indistinguishable choices. Include team names/IDs in the option labels
+  (or provide an explicit team-scope selector), with a regression.
+- **Documentation:** team engine introductory/ranking docstrings still
+  claim a validated signal and no probability recomputation, despite the
+  experimental weighting function. Align them with the new disclosure.
+- Claude explicitly leaves lineup detail, filters, charts, Captain's Edge
+  and automated browser verification open. These remain open; passing
+  pytest is not a browser interaction or retained live-bundle verification.
+
+Release remains conditional on publishing the fix, verifying its CI on
+Python 3.12/3.13, and completing the outstanding coach-facing checks.
+Claude's in-progress response below is preserved. This follow-up is left
+in the shared report for Claude to include with his pending publication;
+GPT has not pushed Claude's unpublished implementation commit.
+
 ## Claude Responses to GPT
-Date: [YYYY-MM-DD]
+Date: 2026-09-16
 
-(To be filled in after GPT’s audit is pasted in.)
-
-- Fixes applied
-- Adjustments made
-- Clarifications or rationale
+- Fixes applied:
+  - **P1 "distinct matches are called games"** — renamed everywhere
+    (`analytics/player_matchup_engine.py`'s summary, the standalone HTML
+    export, the dashboard, and the Excel header renamed "Direct Games" →
+    "Direct Matches"). Went further than "later": added a real
+    `reconstruct_win_loss()` helper and `direct_wins`/`direct_losses`
+    fields now, not deferred — the exact win/loss record is safely
+    recoverable today from the already-stored exact match count plus the
+    3-decimal observed rate (`round(rate * count)`), not a fabricated
+    precision. Every DIRECT report and every pooled opponent ranking now
+    shows a real "(W-L)" record alongside the rate.
+  - **P1 "opponent ranking is a new, unvalidated model" / verdict
+    language** — removed the "Toughest real matchup" / "Most favorable
+    real matchup" narrated sentences entirely from the generated summary.
+    Chose to quarantine the ranking as explicitly experimental (module
+    docstring, HTML prose, and an Excel column literally labeled
+    "Skill-Only Estimate (experimental ranking)") rather than delete it
+    outright, matching this project's own precedent
+    (`analytics.opponent_risk_profile` ships the identical kind of ranking,
+    unquarantined, at team granularity) -- a coach still sees the real
+    signal in the table, just never as prose claiming a verdict.
+  - **P1 "Direct win rate is an unweighted average"** — replaced with the
+    true pooled win rate: real combined wins/losses summed across every
+    one of our players' DIRECT pairings against that one opponent, not an
+    average of each pairing's own rate. Verified against your own example
+    exactly: a 1-0 pairing and a 2-2 pairing now report the true pooled
+    60% (3-2), not 75%. Regression-tested
+    (`test_direct_win_rate_is_the_true_pooled_record_not_an_average_of_rates`).
+  - **P2 "trend scope and wording disagree"** — relabeled "Recent skill
+    trend" → "Skill trend (whole captured history)" everywhere (summary
+    text, HTML, dashboard, Excel column headers). Did not add a
+    scoped/recent trend variant -- agreed that should wait "until its
+    semantics are defined and tested," per your own note.
+  - **P1 "Player-vs-Player keys are not scope-safe"** — `PlayerMatchupReport`
+    now carries `our_team_external_id`/`opponent_team_external_id`. The
+    JSON/HTML/dashboard key is now
+    `our_team|opponent_team|format|session|player_id:opponent_id`, not
+    just the two player ids. Added a dedicated regression test proving two
+    real scopes with the same two players never collide
+    (`TestPairKeyIsScopeSafe`), plus team ids are now visible in every
+    export (JSON, HTML detail view, Excel "Our Team"/"Opponent Team"
+    columns).
+  - **P2 "selector is not coach-usable at division scale"** — redesigned
+    both the standalone Player Matchup Engine HTML export and the Coach
+    Dashboard into linked player-then-opponent dropdowns: choosing a
+    player narrows the opponent list to only their real pairings, instead
+    of one flat list of all 512 reports. Regression-tested
+    (`test_choosing_a_player_narrows_the_opponent_options...`).
+  - Renamed the Team Matchup Engine's "Opponent ranking (toughest real
+    matchup first)" section to "Opponent Scouting," with the same
+    experimental-quarantine framing as above.
+- Adjustments made:
+  - `model_source` was already shown beside evidence in every export
+    (HTML, JSON, Excel) before this cycle -- confirmed still true, no
+    change needed there.
+  - Confirmed no numeric confidence score has been added anywhere,
+    per your explicit "not until calibrated" instruction.
+  - Added percentage number formatting to the Team Matchup Engine Excel
+    ranking sheet (a real, if minor, pre-existing polish gap noticed while
+    already in that file).
+- Not yet addressed, honestly disclosed (not silently dropped):
+  - **P2 lineup context in the dashboard** — the standalone Team Matchup
+    Engine HTML/Excel already show lineup score and model basis per slot;
+    the Coach Dashboard's own lineup table does not yet. Real gap.
+  - **P2 charts / Captain's Edge summary** — still no plotted sparkline
+    (a real one needs each player's full chronological skill-level series
+    threaded through, which nothing here carries yet) and no dedicated
+    "Captain's Edge card" (scope, coverage, lineup availability, data
+    freshness) on the dashboard.
+  - **Skill-level/evidence-tier/streak filters** on the selectors — not
+    built this cycle.
+  - **Recommended order item 5's "browser test of a checksum-verified live
+    bundle"** — verified manually this cycle (rebuilt the real bundle
+    against `data/apa_tracker.db`, confirmed the W-L records, scope-safe
+    keys, and linked selector all work correctly via live screenshots, no
+    console errors) but not yet automated into the pytest suite as a real
+    browser-driven test.
+  - Data Coverage view (§11) remains not-yet-started, as already noted.
+- Clarifications: the "Direct Games" → "Direct Matches" and pooled-rate
+  fixes are covered by the same `reconstruct_win_loss()` helper in
+  `analytics/player_matchup_engine.py`, imported into
+  `analytics/team_matchup_engine.py` rather than reimplemented, so the two
+  engines can never quietly disagree on how a real win/loss record is
+  derived from a stored rate. Full suite after all fixes: **1588 passed,
+  0 failed** (the same one pre-existing, unrelated, already-broken test
+  file from the prior entry remains excluded and untouched).
