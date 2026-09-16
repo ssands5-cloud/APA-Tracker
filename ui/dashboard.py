@@ -108,6 +108,14 @@ def render(
 <style>
 body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1c1f24; background: #ffffff; }}
 h2 {{ border-top: 2px solid #1F3864; padding-top: 18px; margin-top: 32px; }}
+/* CI follow-up (2026-09-16): a form control's own intrinsic/native sizing
+   (a <textarea>'s default cols, a <button>'s own padding+border-box quirks)
+   can differ by a few real pixels across browser builds -- confirmed via a
+   real CI failure on Linux Chromium (7px) that a local Windows Chromium
+   run did not reproduce (0px) with the same real HTML/CSS. Rather than
+   chase exact cross-platform pixel parity, constrain every real form
+   control to never exceed its own container on any platform. */
+input, select, textarea, button {{ max-width: 100%; box-sizing: border-box; }}
 .cd-controls select {{ font-size: 14px; padding: 4px; width: 100%; max-width: 380px;
   box-sizing: border-box; }}
 /* Directive follow-up: "readable on a phone" / "regression-test... for
