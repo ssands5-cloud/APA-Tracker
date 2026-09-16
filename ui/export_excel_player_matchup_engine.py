@@ -15,19 +15,21 @@ from openpyxl.utils import get_column_letter
 from analytics.player_matchup_engine import PlayerMatchupReport
 
 COLUMNS = [
-    "Player", "Player SL", "Player Trend", "Player Volatility",
-    "Opponent", "Opponent SL", "Opponent Trend", "Opponent Volatility",
-    "Format", "Session", "Evidence", "Observed Win Rate", "Direct Games",
-    "Modeled Probability", "Model Source", "Summary",
+    "Our Team", "Opponent Team", "Player", "Player SL", "Player Trend (whole history)",
+    "Player Volatility", "Opponent", "Opponent SL", "Opponent Trend (whole history)",
+    "Opponent Volatility", "Format", "Session", "Evidence", "Observed Win Rate",
+    "Direct W-L", "Direct Matches", "Modeled Probability", "Model Source", "Summary",
 ]
 
 
 def _rows(reports: Sequence[PlayerMatchupReport]) -> list[list]:
     return [
         [
+            r.our_team_external_id, r.opponent_team_external_id,
             r.player_name, r.player_skill_level, r.player_trend.trend, r.player_trend.volatility,
             r.opponent_name, r.opponent_skill_level, r.opponent_trend.trend, r.opponent_trend.volatility,
             r.format, r.session_name, r.evidence_label.value, r.observed_win_rate,
+            f"{r.direct_wins}-{r.direct_losses}" if r.direct_wins is not None else "",
             r.direct_evidence_count, r.modeled_win_probability, r.model_source or "", r.summary,
         ]
         for r in reports
@@ -63,7 +65,7 @@ def write_workbook(reports: Sequence[PlayerMatchupReport], path: Path) -> Path:
         sheet.column_dimensions[get_column_letter(index)].width = width
 
     # Observed Win Rate and Modeled Probability read as percentages.
-    for col in (12, 14):
+    for col in (14, 17):
         for row in sheet.iter_rows(min_row=2, min_col=col, max_col=col):
             for cell in row:
                 cell.number_format = "0%"

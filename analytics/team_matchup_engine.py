@@ -18,6 +18,19 @@ danger thresholds (docs/captain_first_edge_experience.md §13). A coach
 reads the ranking and applies their own judgment; this module supplies the
 real, validated signal, not a verdict.
 
+**Explicitly experimental, not independently validated:**
+``RankedOpponent.reliability_weighted_skill_probability`` extends
+``analytics.opponent_risk_profile``'s own team-level weighting formula to
+player-within-one-matchup granularity -- a new application of an existing
+pattern, not itself checked against held-out real outcomes the way the
+skill-only probability it's built from was (``docs/prediction_validation.md``).
+It is surfaced ONLY as a sort order over a table the coach reads directly
+(see ``ui/dashboard.py`` / ``ui/export_html_team_matchup_engine.py``); this
+module's own generated ``summary`` text never narrates it as "toughest" or
+"most favorable" (an earlier version did, and was corrected after review --
+that phrasing reads as a tactical verdict a ranking signal like this has
+not been validated to support).
+
 "Board" in this module's output means "this one scope's own computed
 Lineup Lab slot," numbered for display only -- this project's data model
 has no persisted, stable per-player board/position identity
@@ -36,7 +49,7 @@ from typing import Optional
 from analytics.head_to_head import skill_only_win_probability
 from analytics.lineup_lab import LineupLabResult
 from analytics.pairing_evidence import EvidenceLabel, PairingEvidenceMatrix
-from analytics.player_matchup_engine import SkillTrendInfo, NO_SKILL_TREND
+from analytics.player_matchup_engine import NO_SKILL_TREND, SkillTrendInfo, reconstruct_win_loss
 
 
 def _pairing_weight(direct_evidence_count: int) -> int:
@@ -70,32 +83,44 @@ class RankedOpponent:
     opponent_name: str
     opponent_skill_level: Optional[int]
     direct_win_rate: Optional[float]
+    direct_wins: Optional[int]
+    direct_losses: Optional[int]
     direct_sample_size: int
     reliability_weighted_skill_probability: Optional[float]
 
 
-def _direct_win_rate_and_sample(
+def _pooled_direct_record(
     matrix: PairingEvidenceMatrix, opponent_id: int
-) -> tuple[Optional[float], int]:
-    """Unweighted mean of this opponent's own DIRECT observed_win_rate
-    across whichever of our players have DIRECT history against them --
-    deliberately not a total-wins/total-games reconstruction, matching
-    ``analytics.opponent_risk_profile._direct_win_rate``'s own reasoning:
-    that would require inferring integer win/loss counts back out of a
-    rounded percentage."""
-    rates = [
-        p.observed_win_rate
-        for p in matrix.pairings
-        if p.opponent_id == opponent_id
-        and p.evidence_label is EvidenceLabel.DIRECT
-        and p.observed_win_rate is not None
-    ]
-    sample = sum(
-        p.direct_evidence_count
-        for p in matrix.pairings
-        if p.opponent_id == opponent_id and p.evidence_label is EvidenceLabel.DIRECT
-    )
-    return (round(sum(rates) / len(rates), 4) if rates else None), sample
+) -> tuple[Optional[float], Optional[int], Optional[int], int]:
+    """The real pooled (rate, wins, losses, sample) across every one of our
+    players' DIRECT pairings against this one opponent player.
+
+    Pooled by real win/loss counts, NOT an average of each pairing's own
+    rate: averaging rates weights a 1-game 100% record the same as a
+    4-game 100% record, which can materially misstate the real combined
+    record (a real example this project found: a 1-0 pairing and a 2-2
+    pairing average to a reported 75%, when the true pooled record is
+    3-2 -- 60%). Each pairing's own (wins, losses) is recovered exactly
+    via ``analytics.player_matchup_engine.reconstruct_win_loss`` (safe
+    because the exact real distinct-match count is known alongside the
+    rate, not a percentage alone) and then genuinely summed.
+    """
+    total_wins = 0
+    total_games = 0
+    any_direct = False
+    for p in matrix.pairings:
+        if p.opponent_id != opponent_id or p.evidence_label is not EvidenceLabel.DIRECT:
+            continue
+        wl = reconstruct_win_loss(p.observed_win_rate, p.direct_evidence_count)
+        if wl is None:
+            continue
+        any_direct = True
+        wins, _losses = wl
+        total_wins += wins
+        total_games += p.direct_evidence_count
+    if not any_direct or total_games == 0:
+        return None, None, None, 0
+    return round(total_wins / total_games, 4), total_wins, total_games - total_wins, total_games
 
 
 def _reliability_weighted_skill_probability_for(
@@ -134,7 +159,9 @@ def build_ranked_opponents(matrix: PairingEvidenceMatrix) -> tuple[RankedOpponen
 
     entries = []
     for opponent_id, (external_id, name, skill_level) in by_opponent.items():
-        direct_rate, direct_sample = _direct_win_rate_and_sample(matrix, opponent_id)
+        direct_rate, direct_wins, direct_losses, direct_sample = _pooled_direct_record(
+            matrix, opponent_id
+        )
         entries.append(
             RankedOpponent(
                 opponent_id=opponent_id,
@@ -142,6 +169,8 @@ def build_ranked_opponents(matrix: PairingEvidenceMatrix) -> tuple[RankedOpponen
                 opponent_name=name,
                 opponent_skill_level=skill_level,
                 direct_win_rate=direct_rate,
+                direct_wins=direct_wins,
+                direct_losses=direct_losses,
                 direct_sample_size=direct_sample,
                 reliability_weighted_skill_probability=_reliability_weighted_skill_probability_for(
                     matrix, opponent_id
@@ -187,32 +216,22 @@ def _roster_from_matrix(matrix: PairingEvidenceMatrix, side: str, trends: dict[i
 
 def _summary_for(
     matrix: PairingEvidenceMatrix,
-    ranked_opponents: tuple[RankedOpponent, ...],
     lineup_result: Optional[LineupLabResult],
     lineup_error: Optional[str],
 ) -> str:
     """Plain-language, strictly descriptive summary -- states real counts
-    and the real ranking, never a "your team is favored" verdict a
-    threshold hasn't been checked to support (see module docstring)."""
+    only, never a "your team is favored"/"toughest matchup" verdict a
+    ranking signal like ``reliability_weighted_skill_probability`` has not
+    been validated to support (see module docstring's "Explicitly
+    experimental" note). The ranked table itself -- not this sentence --
+    is where a coach reads that signal.
+    """
     counts = matrix.counts
     total = counts.get("total_feasible_pairings", 0)
     parts = [
         f"{counts.get('DIRECT', 0)} direct, {counts.get('INDIRECT', 0)} indirect, "
         f"{counts.get('UNKNOWN', 0)} unknown pairing(s) out of {total} feasible."
     ]
-    scored = [e for e in ranked_opponents if e.reliability_weighted_skill_probability is not None]
-    if scored:
-        toughest = scored[0]
-        easiest = scored[-1]
-        parts.append(
-            f"Toughest real matchup: {toughest.opponent_name} "
-            f"({toughest.reliability_weighted_skill_probability:.0%} estimate for us)."
-        )
-        if easiest.opponent_id != toughest.opponent_id:
-            parts.append(
-                f"Most favorable real matchup: {easiest.opponent_name} "
-                f"({easiest.reliability_weighted_skill_probability:.0%} estimate for us)."
-            )
     if lineup_result is not None and lineup_result.assignments:
         parts.append(f"Approved lineup fills {len(lineup_result.assignments)} board(s).")
     elif lineup_error is not None:
@@ -270,5 +289,5 @@ def build_team_matchup_report(
         ranked_opponents=ranked_opponents,
         lineup_result=lineup_result,
         lineup_error=lineup_error,
-        summary=_summary_for(matrix, ranked_opponents, lineup_result, lineup_error),
+        summary=_summary_for(matrix, lineup_result, lineup_error),
     )

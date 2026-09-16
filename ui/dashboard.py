@@ -24,12 +24,14 @@ something to fake with an indicator dressed up as a chart.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from html import escape
 from typing import Sequence
 
 from analytics.opponent_risk_profile import OpponentRiskEntry
 from analytics.player_matchup_engine import PlayerMatchupReport
 from analytics.team_matchup_engine import TeamMatchupReport
+from ui.export_html_player_matchup_engine import _pair_key, _player_options_and_index
 from ui.export_json_coach_advantage import (
     player_matchup_report_to_dict,
     team_matchup_report_to_dict,
@@ -37,16 +39,8 @@ from ui.export_json_coach_advantage import (
 from ui.tabs.tonights_match import _script_json
 
 
-def _pair_key(report: PlayerMatchupReport) -> str:
-    return f"{report.player_id}:{report.opponent_id}"
-
-
 def _scope_key(report: TeamMatchupReport) -> str:
     return f"{report.opponent_team_external_id}|{report.format}|{report.session_name}"
-
-
-def _trend_indicator(trend: str) -> str:
-    return {"up": "▲", "down": "▼", "stable": "▬"}.get(trend, "?")
 
 
 def render(
@@ -58,12 +52,19 @@ def render(
     player_payload = {_pair_key(r): player_matchup_report_to_dict(r) for r in player_reports}
     team_payload = {_scope_key(r): team_matchup_report_to_dict(r) for r in team_reports}
 
-    pair_options = "".join(
-        f'<option value="{escape(_pair_key(r))}">'
-        f'{escape(r.player_name)} vs {escape(r.opponent_name)} '
-        f'({escape(r.format)}, {escape(r.session_name)})</option>'
-        for r in player_reports
+    # Linked player-then-opponent selection, not one flat list of every
+    # real pairing -- a bundle with several real scopes can carry hundreds
+    # of reports (512 in this project's real division-wide run), which
+    # does not scale to a single dropdown.
+    players, by_player = _player_options_and_index(player_reports)
+    player_options = "".join(
+        f'<option value="{p["id"]}">{escape(p["name"])}</option>'
+        for p in sorted(players.values(), key=lambda p: p["name"].lower())
     )
+    opponent_index = {
+        str(player_id): [{"key": c["key"], "label": c["label"]} for c in choices]
+        for player_id, choices in by_player.items()
+    }
     scope_options = "".join(
         f'<option value="{escape(_scope_key(r))}">'
         f'{escape(r.opponent_team_name)} ({escape(r.format)}, {escape(r.session_name)})</option>'
@@ -106,7 +107,9 @@ real sparkline needs the full historical series, a disclosed follow-up).</p>
 
 <h2>Player vs Player</h2>
 <div class="cd-controls">
-<label>Pairing: <select id="pme-pair">{pair_options}</select></label>
+<label>Player: <select id="pme-player">{player_options}</select></label>
+&nbsp;
+<label>Opponent: <select id="pme-opponent"></select></label>
 </div>
 <div id="pme-result"></div>
 
@@ -126,10 +129,12 @@ toughest first -- never a categorical "danger" label
 <tbody>{risk_rows or '<tr><td colspan="5">No data</td></tr>'}</tbody></table>
 
 <script type="application/json" id="cd-player-data">{_script_json(player_payload)}</script>
+<script type="application/json" id="cd-player-opponent-index">{_script_json(opponent_index)}</script>
 <script type="application/json" id="cd-team-data">{_script_json(team_payload)}</script>
 <script>
 (function () {{
   var PLAYER_DATA = JSON.parse(document.getElementById("cd-player-data").textContent);
+  var PLAYER_OPPONENT_INDEX = JSON.parse(document.getElementById("cd-player-opponent-index").textContent);
   var TEAM_DATA = JSON.parse(document.getElementById("cd-team-data").textContent);
 
   function esc(value) {{
@@ -145,23 +150,36 @@ toughest first -- never a categorical "danger" label
   }}
   function trendBadge(t) {{
     var arrow = {{"up": "\\u25b2", "down": "\\u25bc", "stable": "\\u25ac"}}[t.trend] || "?";
-    return arrow + " " + orNoData(t.trend) + " (volatility " + t.volatility + ")";
+    return arrow + " " + orNoData(t.trend) + " (whole history, volatility " + t.volatility + ")";
+  }}
+
+  function refreshOpponents() {{
+    var playerId = document.getElementById("pme-player").value;
+    var choices = PLAYER_OPPONENT_INDEX[playerId] || [];
+    var select = document.getElementById("pme-opponent");
+    select.innerHTML = choices.map(function (c) {{
+      return "<option value=\\"" + esc(c.key) + "\\">" + esc(c.label) + "</option>";
+    }}).join("");
+    renderPlayer();
   }}
 
   function renderPlayer() {{
-    var key = document.getElementById("pme-pair").value;
+    var key = document.getElementById("pme-opponent").value;
     var target = document.getElementById("pme-result");
     var r = PLAYER_DATA[key];
     if (!r) {{ target.innerHTML = "<p class='cd-none'>No report for this pairing.</p>"; return; }}
 
     var html = "<table><tbody>";
+    html += "<tr><th>Scope</th><td>" + esc(r.our_team_id) + " vs " + esc(r.opponent_team_id)
+         + " &middot; " + esc(r.format) + " &middot; " + esc(r.session_name) + "</td></tr>";
     html += "<tr><th>" + esc(r.player.name) + "</th><td>SL " + orNoData(r.player.skill_level)
          + " &middot; " + trendBadge(r.player.trend) + "</td></tr>";
     html += "<tr><th>" + esc(r.opponent.name) + "</th><td>SL " + orNoData(r.opponent.skill_level)
          + " &middot; " + trendBadge(r.opponent.trend) + "</td></tr>";
     html += "<tr><th>Evidence</th><td>" + esc(r.evidence_label) + "</td></tr>";
     html += "<tr><th>Observed win rate</th><td>" + pct(r.observed_win_rate)
-         + " (" + r.direct_evidence_count + " direct game(s))</td></tr>";
+         + (r.direct_wins !== null ? " (" + r.direct_wins + "-" + r.direct_losses + ")" : "")
+         + " across " + r.direct_evidence_count + " recorded match(es)</td></tr>";
     html += "<tr><th>Modeled probability</th><td>" + pct(r.modeled_win_probability) + "</td></tr>";
     html += "</tbody></table><p class='cd-summary-box'>" + esc(r.summary) + "</p>";
     target.innerHTML = html;
@@ -191,11 +209,18 @@ toughest first -- never a categorical "danger" label
     html += "<div class='cd-cols'><div>" + rosterTable("Our roster", r.our_roster) + "</div>"
          + "<div>" + rosterTable("Opponent roster", r.opponent_roster) + "</div></div>";
 
-    html += "<h4>Opponent ranking (toughest first)</h4><table><thead><tr>"
-         + "<th>Opponent</th><th>SL</th><th>Direct win rate</th><th>Skill-only estimate</th></tr></thead><tbody>";
+    html += "<h4>Opponent ranking</h4><p class='cd-note'>Sorted by an "
+         + "experimental, not independently validated skill-only estimate "
+         + "(lowest first) -- a ranking signal to read from the table, not "
+         + "a tactical verdict. Pooled direct win rate is the real combined "
+         + "record, not an average of averages.</p>"
+         + "<table><thead><tr>"
+         + "<th>Opponent</th><th>SL</th><th>Pooled direct win rate</th><th>Direct W-L</th>"
+         + "<th>Skill-only estimate (experimental)</th></tr></thead><tbody>";
     r.ranked_opponents.forEach(function (o) {{
       html += "<tr><td>" + esc(o.name) + "</td><td>" + orNoData(o.skill_level) + "</td>"
            + "<td>" + pct(o.direct_win_rate) + "</td>"
+           + "<td>" + (o.direct_wins !== null ? o.direct_wins + "-" + o.direct_losses : "No data") + "</td>"
            + "<td>" + pct(o.reliability_weighted_skill_probability) + "</td></tr>";
     }});
     html += "</tbody></table>";
@@ -214,9 +239,10 @@ toughest first -- never a categorical "danger" label
     target.innerHTML = html;
   }}
 
-  document.getElementById("pme-pair").addEventListener("change", renderPlayer);
+  document.getElementById("pme-player").addEventListener("change", refreshOpponents);
+  document.getElementById("pme-opponent").addEventListener("change", renderPlayer);
   document.getElementById("tme-scope").addEventListener("change", renderTeam);
-  renderPlayer();
+  refreshOpponents();
   renderTeam();
 }})();
 </script>

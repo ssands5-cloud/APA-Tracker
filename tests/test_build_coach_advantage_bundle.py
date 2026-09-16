@@ -103,6 +103,38 @@ class TestRealFixtureContent:
             html = (run_dir / "html" / name).read_text(encoding="utf-8").lower()
             assert "recommended avoid" not in html
             assert "recommended target" not in html
+            assert "toughest real matchup" not in html
+            assert "most favorable real matchup" not in html
+
+    def test_direct_pairings_carry_a_real_win_loss_record(self, run_dir):
+        """GPT audit P1 / directive item 4 ("verify W-L records are
+        present"): every DIRECT player report must carry a reconstructed
+        win/loss record, not just the observed rate and a bare match
+        count."""
+        data = json.loads((run_dir / "json" / "player_matchup_engine.json").read_text(encoding="utf-8"))
+        direct = [r for r in data if r["evidence_label"] == "DIRECT"]
+        assert direct, "the coherent fixture is expected to have real DIRECT pairings"
+        for report in direct:
+            assert report["direct_wins"] is not None
+            assert report["direct_losses"] is not None
+            assert report["direct_wins"] + report["direct_losses"] == report["direct_evidence_count"]
+
+    def test_player_reports_carry_their_real_team_scope(self, run_dir):
+        """GPT audit P1: player reports must be attributable to a real
+        team pairing, not just two internal player ids."""
+        data = json.loads((run_dir / "json" / "player_matchup_engine.json").read_text(encoding="utf-8"))
+        for report in data:
+            assert report["our_team_id"]
+            assert report["opponent_team_id"]
+
+    def test_the_dashboards_player_selector_is_player_then_opponent(self, run_dir):
+        """Directive item 2 / GPT audit P2: the selector must be a linked
+        player-then-opponent workflow, not one flat list of every real
+        pairing."""
+        html = (run_dir / "html" / "dashboard.html").read_text(encoding="utf-8")
+        assert 'id="pme-player"' in html
+        assert 'id="pme-opponent"' in html
+        assert 'id="cd-player-opponent-index"' in html
 
 
 class TestPreflightRefusals:

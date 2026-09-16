@@ -213,6 +213,8 @@ def compute(
         player_reports = tuple(
             build_player_matchup_report(
                 pairing,
+                our_team_external_id,
+                scope.opponent_team_external_id,
                 player_trend=trends.get(pairing.player_id),
                 opponent_trend=trends.get(pairing.opponent_id),
             )

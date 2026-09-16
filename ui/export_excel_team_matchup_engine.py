@@ -7,7 +7,7 @@ REPORTER -- no computation happens here.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Optional, Sequence
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -43,7 +43,10 @@ def _unique_title(desired: str, used_titles: set[str]) -> str:
         suffix += 1
 
 
-def _add_sheet(workbook: Workbook, title: str, columns: list[str], rows: list[list]) -> None:
+def _add_sheet(
+    workbook: Workbook, title: str, columns: list[str], rows: list[list],
+    percent_columns: Optional[list[str]] = None,
+) -> None:
     sheet = workbook.create_sheet(title)
     sheet.append(columns)
     for cell in sheet[1]:
@@ -60,6 +63,13 @@ def _add_sheet(workbook: Workbook, title: str, columns: list[str], rows: list[li
         for row in rows[:200]:
             width = max(width, min(len(str(row[index - 1])) + 2, 60))
         sheet.column_dimensions[get_column_letter(index)].width = width
+
+    for name in percent_columns or []:
+        col = columns.index(name) + 1
+        for row in sheet.iter_rows(min_row=2, min_col=col, max_col=col):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = "0%"
 
 
 def write_workbook(reports: Sequence[TeamMatchupReport], path: Path) -> Path:
@@ -94,21 +104,25 @@ def write_workbook(reports: Sequence[TeamMatchupReport], path: Path) -> Path:
             ])
         _add_sheet(
             workbook, roster_title,
-            ["Our Player", "Our SL", "Our Trend", "Opponent", "Opp SL", "Opp Trend"],
+            ["Our Player", "Our SL", "Our Trend (whole history)", "Opponent", "Opp SL",
+             "Opp Trend (whole history)"],
             rows,
         )
 
         ranking_rows = [
             [
                 o.opponent_name, o.opponent_skill_level, o.direct_win_rate,
+                f"{o.direct_wins}-{o.direct_losses}" if o.direct_wins is not None else "",
                 o.direct_sample_size, o.reliability_weighted_skill_probability,
             ]
             for o in report.ranked_opponents
         ]
         _add_sheet(
             workbook, rank_title,
-            ["Opponent", "SL", "Direct Win Rate", "Direct Sample", "Skill-Only Estimate"],
+            ["Opponent", "SL", "Pooled Direct Win Rate", "Direct W-L", "Direct Sample",
+             "Skill-Only Estimate (experimental ranking)"],
             ranking_rows,
+            percent_columns=["Pooled Direct Win Rate", "Skill-Only Estimate (experimental ranking)"],
         )
 
         lineup_rows = []

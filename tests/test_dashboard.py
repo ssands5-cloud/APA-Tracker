@@ -35,10 +35,14 @@ def _matrix() -> PairingEvidenceMatrix:
     )
 
 
+def _player_report(pairing=None, our_team="OUR1", opponent_team="OPP1", **kwargs):
+    return build_player_matchup_report(pairing or _pairing(), our_team, opponent_team, **kwargs)
+
+
 class TestRender:
     def test_a_self_contained_page_with_no_external_resources(self):
         html = render(
-            [build_player_matchup_report(_pairing())],
+            [_player_report()],
             [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
             [],
             "Mark It Up",
@@ -46,6 +50,17 @@ class TestRender:
         assert "<html" in html
         assert "http://" not in html
         assert "https://" not in html
+
+    def test_choosing_a_player_narrows_the_opponent_selector(self):
+        report_a = _player_report()
+        report_b = _player_report(_pairing(player_id=3, player_name="Carol", opponent_id=4, opponent_name="Dave"))
+        html = render([report_a, report_b], [], [], "Mark It Up")
+
+        start = html.index('id="cd-player-opponent-index">') + len('id="cd-player-opponent-index">')
+        end = html.index("</script>", start)
+        index = json.loads(html[start:end])
+        assert [c["label"] for c in index["1"]] == ["Bob (8-Ball Open, Fall 2026)"]
+        assert [c["label"] for c in index["3"]] == ["Dave (8-Ball Open, Fall 2026)"]
 
     def test_opponent_risk_profile_rows_are_purely_descriptive(self):
         entry = OpponentRiskEntry(
@@ -67,17 +82,28 @@ class TestRender:
 
     def test_a_name_containing_a_script_close_tag_cannot_break_out(self):
         html = render(
-            [build_player_matchup_report(_pairing(player_name="</script><script>alert(1)</script>"))],
+            [_player_report(_pairing(player_name="</script><script>alert(1)</script>"))],
             [], [], "Mark It Up",
         )
         assert "<script>alert(1)</script>" not in html
 
     def test_both_engines_embedded_json_is_present_and_valid(self):
-        player_report = build_player_matchup_report(_pairing())
+        player_report = _player_report()
         team_report = build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")
         html = render([player_report], [team_report], [], "Mark It Up")
 
-        for element_id in ("cd-player-data", "cd-team-data"):
+        for element_id in ("cd-player-data", "cd-player-opponent-index", "cd-team-data"):
             start = html.index(f'id="{element_id}">') + len(f'id="{element_id}">')
             end = html.index("</script>", start)
             json.loads(html[start:end])  # must not raise
+
+    def test_the_opponent_ranking_never_narrates_a_toughest_or_favorable_verdict(self):
+        html = " ".join(render(
+            [], [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")], [], "Mark It Up",
+        ).split())
+        assert "experimental" in html.lower()
+        # The prose note explaining WHY it's descriptive-only may say
+        # "not a tactical verdict"; the generated summary itself must not
+        # narrate a specific opponent as toughest/favorable.
+        assert "toughest real matchup" not in html.lower()
+        assert "most favorable real matchup" not in html.lower()

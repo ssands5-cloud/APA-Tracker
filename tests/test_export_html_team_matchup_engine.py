@@ -55,3 +55,14 @@ class TestRender:
         key = f"OPP1|8-Ball Open|Fall 2026"
         assert payload[key]["summary"] == report.summary
         assert "favored" not in report.summary.lower()
+
+    def test_the_opponent_scouting_section_never_narrates_a_verdict(self):
+        """GPT audit P1: renamed from "Opponent ranking (toughest real
+        matchup first)" to "Opponent Scouting," an explicitly experimental
+        ranking with no narrated verdict."""
+        report = build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")
+        html = " ".join(render([report]).split())
+        assert "Opponent Scouting" in html
+        assert "experimental" in html.lower()
+        assert "toughest real matchup" not in html.lower()
+        assert "most favorable real matchup" not in html.lower()

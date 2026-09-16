@@ -76,9 +76,32 @@ def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
 NO_SKILL_TREND = SkillTrendInfo(trend="no data", volatility=0, last_change=None)
 
 
+def reconstruct_win_loss(
+    observed_win_rate: Optional[float], direct_evidence_count: int,
+) -> Optional[tuple[int, int]]:
+    """The real (wins, losses) record behind a DIRECT pairing's rate --
+    safe to reconstruct exactly, not a fabricated precision: unlike a
+    percentage alone, ``observed_win_rate`` here is paired with the exact
+    real distinct-match count that produced it
+    (``analytics.pairing_evidence._observed_win_rate`` computes
+    ``round(wins / len(rows), 3)``), so ``round(rate * count)`` recovers
+    the real integer win count exactly for any realistic sample size.
+    Returns ``None`` when there is no DIRECT rate to reconstruct from.
+    """
+    if observed_win_rate is None or direct_evidence_count <= 0:
+        return None
+    wins = round(observed_win_rate * direct_evidence_count)
+    return wins, direct_evidence_count - wins
+
+
 @dataclass(frozen=True)
 class PlayerMatchupReport:
-    """One real (player, opponent) pairing's full Coach Mode report."""
+    """One real (player, opponent) pairing's full Coach Mode report,
+    scoped to the exact real team pairing it came from -- ``our_team_*``/
+    ``opponent_team_*`` make this report's identity unique across a bundle
+    covering several real scopes (the same two players can face each other
+    under more than one real format/session against the division), which
+    ``player_id``/``opponent_id`` alone do not guarantee."""
 
     player_id: int
     player_external_id: str
@@ -90,11 +113,15 @@ class PlayerMatchupReport:
     opponent_name: str
     opponent_skill_level: Optional[int]
     opponent_trend: SkillTrendInfo
+    our_team_external_id: str
+    opponent_team_external_id: str
     format: str
     session_name: str
     evidence_label: EvidenceLabel
     observed_win_rate: Optional[float]
     direct_evidence_count: int
+    direct_wins: Optional[int]
+    direct_losses: Optional[int]
     modeled_win_probability: Optional[float]
     model_source: Optional[str]
     summary: str
@@ -104,6 +131,8 @@ def _summary_for(
     pairing: PairingEvidence,
     player_trend: SkillTrendInfo,
     opponent_trend: SkillTrendInfo,
+    direct_wins: Optional[int],
+    direct_losses: Optional[int],
 ) -> str:
     """Plain-language, strictly descriptive summary -- states what the real
     evidence is, never a "favored because" verdict (see module docstring).
@@ -112,9 +141,10 @@ def _summary_for(
         rate_pct = (
             f"{pairing.observed_win_rate:.0%}" if pairing.observed_win_rate is not None else "No data"
         )
+        record = f" ({direct_wins}-{direct_losses})" if direct_wins is not None else ""
         parts = [
-            f"Direct record: {rate_pct} observed win rate across "
-            f"{pairing.direct_evidence_count} game(s)."
+            f"Direct record: {rate_pct} observed win rate{record} across "
+            f"{pairing.direct_evidence_count} recorded match(es)."
         ]
     elif pairing.evidence_label is EvidenceLabel.INDIRECT:
         parts = [
@@ -135,24 +165,32 @@ def _summary_for(
     if opponent_trend.trend != "no data":
         trend_bits.append(f"{pairing.opponent_name}: {opponent_trend.trend}")
     if trend_bits:
-        parts.append("Recent skill trend — " + "; ".join(trend_bits) + ".")
+        # "Whole captured history", never "recent": skill_level_history()
+        # pulls every match-linked reading a player has, across whatever
+        # teams/sessions were captured -- not scoped to this one pairing's
+        # format/session, and not windowed to anything recent.
+        parts.append("Skill trend (whole captured history) — " + "; ".join(trend_bits) + ".")
 
     return " ".join(parts)
 
 
 def build_player_matchup_report(
     pairing: PairingEvidence,
+    our_team_external_id: str,
+    opponent_team_external_id: str,
     player_trend: Optional[SkillTrendInfo] = None,
     opponent_trend: Optional[SkillTrendInfo] = None,
 ) -> PlayerMatchupReport:
     """Build one Coach Mode report from an already-classified
-    ``PairingEvidence`` row. ``player_trend``/``opponent_trend`` default to
-    "no data" rather than raising, since a player with no skill-level
-    reading at all is a real, valid state this report must still show
-    honestly.
+    ``PairingEvidence`` row, scoped to the real team pairing it came from.
+    ``player_trend``/``opponent_trend`` default to "no data" rather than
+    raising, since a player with no skill-level reading at all is a real,
+    valid state this report must still show honestly.
     """
     player_trend = player_trend if player_trend is not None else NO_SKILL_TREND
     opponent_trend = opponent_trend if opponent_trend is not None else NO_SKILL_TREND
+    direct_wl = reconstruct_win_loss(pairing.observed_win_rate, pairing.direct_evidence_count)
+    direct_wins, direct_losses = direct_wl if direct_wl is not None else (None, None)
     return PlayerMatchupReport(
         player_id=pairing.player_id,
         player_external_id=pairing.player_external_id,
@@ -164,12 +202,16 @@ def build_player_matchup_report(
         opponent_name=pairing.opponent_name,
         opponent_skill_level=pairing.opponent_skill_level,
         opponent_trend=opponent_trend,
+        our_team_external_id=our_team_external_id,
+        opponent_team_external_id=opponent_team_external_id,
         format=pairing.format,
         session_name=pairing.session_name,
         evidence_label=pairing.evidence_label,
         observed_win_rate=pairing.observed_win_rate,
         direct_evidence_count=pairing.direct_evidence_count,
+        direct_wins=direct_wins,
+        direct_losses=direct_losses,
         modeled_win_probability=pairing.modeled_win_probability,
         model_source=pairing.model_source,
-        summary=_summary_for(pairing, player_trend, opponent_trend),
+        summary=_summary_for(pairing, player_trend, opponent_trend, direct_wins, direct_losses),
     )

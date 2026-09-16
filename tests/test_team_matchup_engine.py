@@ -78,18 +78,37 @@ class TestBuildRankedOpponents:
         assert ranked[-1].opponent_name == "NoData"
         assert ranked[-1].reliability_weighted_skill_probability is None
 
-    def test_direct_win_rate_is_the_unweighted_mean_never_reconstructed_counts(self):
+    def test_direct_win_rate_is_the_true_pooled_record_not_an_average_of_rates(self):
+        """GPT audit P1, the real example that motivated this fix: a 1-0
+        pairing and a 2-2 pairing must pool to the true combined 3-2 (60%)
+        record, not the misleading 75% an unweighted average of the two
+        pairings' own rates would report."""
         pairings = [
             _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.DIRECT,
                      observed_win_rate=1.0, direct_evidence_count=1),
             _pairing(2, 10, "Alex", "Bob", evidence_label=EvidenceLabel.DIRECT,
-                     observed_win_rate=0.5, direct_evidence_count=3),
+                     observed_win_rate=0.5, direct_evidence_count=4),
         ]
         ranked = build_ranked_opponents(_matrix(pairings))
 
         bob = next(r for r in ranked if r.opponent_name == "Bob")
-        assert bob.direct_win_rate == 0.75  # unweighted mean of 1.0 and 0.5
-        assert bob.direct_sample_size == 4  # sum of distinct-match counts
+        assert bob.direct_win_rate == 0.6  # true pooled 3-2, not avg(1.0, 0.5) == 0.75
+        assert bob.direct_wins == 3
+        assert bob.direct_losses == 2
+        assert bob.direct_sample_size == 5  # sum of distinct-match counts
+
+    def test_no_direct_history_reports_none_not_zero(self):
+        pairings = [
+            _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.INDIRECT,
+                     modeled_win_probability=0.5, model_source="skill_only"),
+        ]
+        ranked = build_ranked_opponents(_matrix(pairings))
+
+        bob = ranked[0]
+        assert bob.direct_win_rate is None
+        assert bob.direct_wins is None
+        assert bob.direct_losses is None
+        assert bob.direct_sample_size == 0
 
 
 class TestBuildTeamMatchupReport:
@@ -166,3 +185,27 @@ class TestBuildTeamMatchupReport:
         )
         assert report.lineup_result is None
         assert "No approved lineup" in report.summary
+
+    def test_the_summary_never_narrates_a_toughest_or_favorable_verdict(self):
+        """GPT audit P1: an earlier version's summary said "Toughest real
+        matchup: X" / "Most favorable real matchup: Y", which reads as a
+        tactical verdict from a ranking signal
+        (reliability_weighted_skill_probability) that has not been
+        independently validated. The ranked table itself still carries the
+        real signal -- the auto-generated prose summary must not narrate
+        it as a verdict."""
+        pairings = [
+            _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.INDIRECT,
+                     player_skill_level=5, opponent_skill_level=7,
+                     modeled_win_probability=0.2, model_source="skill_only"),
+            _pairing(1, 11, "Ann", "Carol", evidence_label=EvidenceLabel.INDIRECT,
+                     player_skill_level=5, opponent_skill_level=3,
+                     modeled_win_probability=0.8, model_source="skill_only"),
+        ]
+        report = build_team_matchup_report(_matrix(pairings), "Mark It Up", "Corner Pockets")
+
+        assert "toughest" not in report.summary.lower()
+        assert "favorable" not in report.summary.lower()
+        assert "favored" not in report.summary.lower()
+        # The real ranking signal is still there -- just not narrated.
+        assert len(report.ranked_opponents) == 2

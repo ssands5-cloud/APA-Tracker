@@ -26,17 +26,21 @@ def _pairing(**overrides) -> PairingEvidence:
 
 class TestPlayerMatchupReportToDict:
     def test_round_trips_every_real_field(self):
-        report = build_player_matchup_report(_pairing())
+        report = build_player_matchup_report(_pairing(), "OUR1", "OPP1")
         data = player_matchup_report_to_dict(report)
 
         assert data["player"]["name"] == "Ann"
         assert data["opponent"]["name"] == "Bob"
+        assert data["our_team_id"] == "OUR1"
+        assert data["opponent_team_id"] == "OPP1"
         assert data["evidence_label"] == "DIRECT"
         assert data["observed_win_rate"] == 0.75
+        assert data["direct_wins"] == 3
+        assert data["direct_losses"] == 1
         assert data["summary"] == report.summary
 
     def test_evidence_label_serializes_as_a_plain_string_not_an_enum(self):
-        report = build_player_matchup_report(_pairing())
+        report = build_player_matchup_report(_pairing(), "OUR1", "OPP1")
         data = player_matchup_report_to_dict(report)
         assert isinstance(data["evidence_label"], str)
 
@@ -59,6 +63,14 @@ class TestTeamMatchupReportToDict:
         assert data["our_team"]["name"] == "Mark It Up"
         assert data["opponent_roster"][0]["name"] == "Bob"
         assert data["evidence_counts"]["DIRECT"] == 1
+
+    def test_ranked_opponents_carry_the_real_pooled_win_loss_record(self):
+        report = build_team_matchup_report(self._matrix(), "Mark It Up", "Corner Pockets")
+        data = team_matchup_report_to_dict(report)
+
+        bob = next(o for o in data["ranked_opponents"] if o["name"] == "Bob")
+        assert bob["direct_wins"] == 3
+        assert bob["direct_losses"] == 1
 
     def test_lineup_is_none_when_no_result_and_no_error(self):
         report = build_team_matchup_report(self._matrix(), "Mark It Up", "Corner Pockets")

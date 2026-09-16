@@ -76,7 +76,7 @@ no such stable field.</p>
 
   function rosterTable(name, roster) {{
     var html = "<h3>" + esc(name) + "</h3><table><thead><tr><th>Player</th><th>SL</th>"
-             + "<th>Trend</th><th>Volatility</th></tr></thead><tbody>";
+             + "<th>Trend (whole history)</th><th>Volatility</th></tr></thead><tbody>";
     roster.forEach(function (p) {{
       html += "<tr><td>" + esc(p.name) + "</td><td>" + orNoData(p.skill_level) + "</td>"
            + "<td>" + orNoData(p.trend.trend) + "</td><td>" + p.trend.volatility + "</td></tr>";
@@ -107,12 +107,22 @@ no such stable field.</p>
     html += "<div class='tme-cols'><div>" + rosterTable("Our roster", r.our_roster) + "</div>"
          + "<div>" + rosterTable("Opponent roster", r.opponent_roster) + "</div></div>";
 
-    html += "<h3>Opponent ranking (toughest real matchup first)</h3><table><thead><tr>"
-         + "<th>Opponent</th><th>SL</th><th>Direct win rate</th><th>Direct sample</th>"
-         + "<th>Skill-only estimate</th></tr></thead><tbody>";
+    html += "<h3>Opponent Scouting</h3><p class='tme-note'>Sorted by an "
+         + "experimental, not independently validated skill-only estimate "
+         + "(lowest first) -- a real signal to read from the table, never "
+         + "a \"toughest\"/\"favorable\" verdict a ranking like this has "
+         + "not been checked against held-out real outcomes to support. "
+         + "Pooled direct win rate is the true combined record across "
+         + "every one of our players who has faced this opponent, not an "
+         + "average of each pairing's own rate.</p>"
+         + "<table><thead><tr>"
+         + "<th>Opponent</th><th>SL</th><th>Pooled direct win rate</th><th>Direct W-L</th>"
+         + "<th>Direct sample</th><th>Skill-only estimate (experimental)</th></tr></thead><tbody>";
     r.ranked_opponents.forEach(function (o) {{
       html += "<tr><td>" + esc(o.name) + "</td><td>" + orNoData(o.skill_level) + "</td>"
-           + "<td>" + pct(o.direct_win_rate) + "</td><td>" + o.direct_sample_size + "</td>"
+           + "<td>" + pct(o.direct_win_rate) + "</td>"
+           + "<td>" + (o.direct_wins !== null ? o.direct_wins + "-" + o.direct_losses : "No data") + "</td>"
+           + "<td>" + o.direct_sample_size + "</td>"
            + "<td>" + pct(o.reliability_weighted_skill_probability) + "</td></tr>";
     }});
     html += "</tbody></table>";
