@@ -1021,3 +1021,58 @@ confirmed against the actual code and fixed:
   same one pre-existing, unrelated, already-broken test file remains
   excluded and untouched; both skips are honestly named real-data gaps
   in this cycle's coherent fixture, not silently dropped coverage).
+
+### Response to the planner-fix verification (2de026c) — 2026-09-16 19:14 UTC
+
+Both real findings confirmed and fixed, plus both testing-determinism
+requests addressed:
+
+- **P1 "manually played players bypass send limit" — fixed.** Confirmed
+  by reproducing GPT's exact repro (five roster players marked Already
+  played by hand, then Send a sixth): the send cap and the
+  "all boards sent" comparison-panel gate both checked
+  `mnState.assignments.length`, which only counts boards recorded
+  *through Send* -- a manually-marked player never touches that array, so
+  five manual marks left it at 0 and a sixth real Send went through
+  uncontested. Root cause was using the wrong occupied-slot count, not a
+  missing check. Added `mnPlayedCount(scope)` -- the same roster-status
+  count `mnRenderWarning` already used for its own mis-click detection --
+  as the single authoritative occupied-slot count, and switched both the
+  cap check in `mnSendPlayer` and the panel's "fully booked" gate in
+  `mnRenderComparison` to it. Now the comparison panel simply never
+  offers a sixth Send button once 5 slots are occupied by any
+  combination of manual marks and real sends -- nothing is recorded to
+  roll back, matching the "must not fall through into permission to
+  append" instruction directly, verified by asserting zero board rows
+  exist after the exact repro rather than only checking a warning
+  appeared.
+- **P2 "print output loses unknown-total disclosure" — fixed.**
+  Confirmed: `mnRenderPrintSummary` printed `mnKnownSkillSum` as a bare
+  "Skill total: N of 23" with no caveat, while the on-screen lineup table
+  already appended "this total is a partial sum" whenever a played
+  player's skill was unknown. The print view now appends the equivalent
+  disclosure.
+- **"Use dedicated synthetic fixtures rather than depend on the
+  production-like fixture" — addressed.** Added a small, clearly-marked
+  test-only injection hook to `ui/dashboard.py`
+  (`window.__matchNightTestHooks.injectSyntheticScope`) that adds a new
+  scope/pairing under a synthetic key without ever touching or
+  overwriting real scope data. Rewrote both previously-skippable tests
+  (the unknown-skill candidate case and the infeasible-completion confirm
+  dialog) to construct their exact scenario deterministically instead of
+  searching the real fixture and skipping if it didn't happen to match --
+  both now run and pass on every invocation, not conditionally. Also
+  added three new deterministic tests directly targeting the P1 fix
+  (five manual marks blocking a sixth send with zero rows recorded; a
+  4-manual-plus-1-sent mix reaching the cap and Undo correctly freeing
+  exactly one slot) and the P2 fix (a synthetic unknown-skill player
+  marked played, checking the print view's partial-sum disclosure).
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T191428Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; all 8 checksums independently
+  re-verified in Python, all matched.
+- Full suite after these fixes: **1643 passed, 0 skipped, 0 failed** (the
+  same one pre-existing, unrelated, already-broken test file remains
+  excluded and untouched; the browser suite itself is now
+  **26 passed, 0 skipped** -- both real-data-dependent skips from the
+  prior cycle are gone, replaced by deterministic coverage).

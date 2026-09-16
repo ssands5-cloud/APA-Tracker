@@ -569,11 +569,23 @@ toughest first -- never a categorical "danger" label
       + scope.session_name + "|" + playerId + ":" + opponentId;
   }}
 
-  function mnRenderWarning(scope) {{
-    var target = document.getElementById("mn-warning");
-    var playedCount = scope.our_roster.filter(function (p) {{
+  function mnPlayedCount(scope) {{
+    // GPT audit follow-up (2026-09-16): the send cap and duplicate guard
+    // previously checked mnState.assignments.length, which only counts
+    // boards recorded through Send -- a player marked "Already played"
+    // manually (a real, intended way to enter a match already in
+    // progress) occupies a slot too, without ever adding an assignment.
+    // Five players marked played by hand, then one more sent through the
+    // comparison flow, produced a real "6 of 5 boards used" -- this is
+    // the single authoritative occupied-slot count both checks must use.
+    return scope.our_roster.filter(function (p) {{
       return mnState.statuses[p.id] === "played";
     }}).length;
+  }}
+
+  function mnRenderWarning(scope) {{
+    var target = document.getElementById("mn-warning");
+    var playedCount = mnPlayedCount(scope);
     if (playedCount > MN_SIZE) {{
       target.innerHTML = "<p class='cd-none'>" + playedCount + " players are marked "
         + "Already played -- a standard lineup only uses " + MN_SIZE + ". Check for a "
@@ -659,9 +671,10 @@ toughest first -- never a categorical "danger" label
 
   function mnRenderComparison(scope) {{
     var target = document.getElementById("mn-comparison");
-    if (mnState.assignments.length >= MN_SIZE) {{
-      target.innerHTML = "<p class='cd-none'>All " + MN_SIZE + " boards have been sent this "
-        + "match. Undo a board below if you need to change one.</p>";
+    if (mnPlayedCount(scope) >= MN_SIZE) {{
+      target.innerHTML = "<p class='cd-none'>All " + MN_SIZE + " boards are already accounted "
+        + "for (sent or marked Already played) this match. Undo a sent board below, or change "
+        + "a player's status, if you need to free one up.</p>";
       return;
     }}
     var opponentId = document.getElementById("mn-opponent").value;
@@ -743,14 +756,17 @@ toughest first -- never a categorical "danger" label
     // GPT audit follow-up (2026-09-16): assignments and per-player status
     // could previously disagree -- toggling a player back to Available and
     // sending them again against a different opponent left BOTH records in
-    // place (assignments had no uniqueness check and no board cap), so the
-    // "boards sent" table and the committed-skill total could both be real
-    // but describe two different lineups. Assignments are now the
-    // authoritative record: refuse a second one for the same player, and
-    // refuse once all MN_SIZE boards are already recorded. Undo (in
-    // mnRenderLineup) is the only supported way to take a board back.
-    if (mnState.assignments.length >= MN_SIZE) {{
-      window.alert("All " + MN_SIZE + " boards have already been sent this match.");
+    // place. Assignments are now the authoritative record for *who played
+    // whom*, but the occupied-slot COUNT must come from mnPlayedCount --
+    // GPT audit follow-up (2026-09-16, 2de026c): checking
+    // assignments.length here let five players marked Already played
+    // manually plus one real Send exceed the 5-board cap entirely,
+    // since none of the five manual entries ever touched assignments.
+    if (mnPlayedCount(scope) >= MN_SIZE) {{
+      window.alert(
+        "All " + MN_SIZE + " boards are already accounted for (sent or marked Already "
+        + "played) this match."
+      );
       return;
     }}
     if (mnState.assignments.some(function (a) {{ return String(a.player_id) === String(playerId); }})) {{
@@ -871,7 +887,17 @@ toughest first -- never a categorical "danger" label
       html += "</ol>";
     }}
     var committed = mnCommittedSkillLevels(scope);
-    html += "<p>Skill total: " + mnKnownSkillSum(committed) + " of " + MN_LIMIT + "</p>";
+    html += "<p>Skill total: " + mnKnownSkillSum(committed) + " of " + MN_LIMIT;
+    // GPT audit follow-up (2026-09-16, 2de026c): the on-screen total
+    // already disclosed a missing skill as a partial sum; the printed
+    // summary silently dropped that same caveat, showing a bare number
+    // that looked complete when it wasn't.
+    if (committed.some(function (v) {{ return v === null || v === undefined; }})) {{
+      html += " -- a player with no known skill level is included in the board "
+        + "count above but not in this total; this is a partial sum, not the real "
+        + "full total";
+    }}
+    html += "</p>";
     target.innerHTML = html;
   }}
 
@@ -916,11 +942,29 @@ toughest first -- never a categorical "danger" label
   renderTeam();
   mnInitScope();
 
-  // Test-only introspection hook -- tests/test_dashboard_browser.py uses
-  // this to exercise mnLegalCompletionExists's exact-search bound directly
-  // (a synthetic large roster, not something a real fixture ever has), and
-  // nothing else on the page reads it. Never used to drive real behavior.
-  window.__matchNightTestHooks = {{ legalCompletionExists: mnLegalCompletionExists }};
+  // Test-only introspection/injection hooks -- tests/test_dashboard_browser.py
+  // uses these for deterministic Match Night coverage that shouldn't have to
+  // depend on whether a given real fixture happens to contain a matching
+  // edge case (an unknown skill level, an infeasible completion). Nothing
+  // else on the page reads this object, and injectSyntheticScope only ever
+  // *adds* a new scope/pairing under a synthetic key -- it never touches or
+  // overwrites any real scope's data.
+  window.__matchNightTestHooks = {{
+    legalCompletionExists: mnLegalCompletionExists,
+    injectSyntheticScope: function (scopeKey, scopeData, playerReports) {{
+      TEAM_DATA[scopeKey] = scopeData;
+      (playerReports || []).forEach(function (entry) {{ PLAYER_DATA[entry.key] = entry.report; }});
+      var select = document.getElementById("mn-scope");
+      if (!Array.prototype.some.call(select.options, function (o) {{ return o.value === scopeKey; }})) {{
+        var opt = document.createElement("option");
+        opt.value = scopeKey;
+        opt.textContent = scopeKey;
+        select.appendChild(opt);
+      }}
+      select.value = scopeKey;
+      mnInitScope();
+    }},
+  }};
 }})();
 </script>
 </body></html>"""
