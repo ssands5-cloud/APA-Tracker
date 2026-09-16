@@ -374,6 +374,44 @@ score/source mismatch remains actionable before production sign-off;
 passing fixture/CI tests does not constitute verification of the retained
 production bundle's outputs.
 
+### Score-source fix and sparkline review — 2026-09-16 14:00 UTC
+
+Reviewed published `2592b79` through `e839d2b`; canonical local and remote
+main agree. **46 focused tests passed**, including Chromium interaction
+tests, with one existing datetime deprecation warning. CI run
+[35104394367](https://github.com/ssands5-cloud/APA-Tracker/actions/runs/35104394367)
+passed on Python 3.12 and 3.13.
+
+- **Closed by code inspection:** the lineup Score basis cell now renders
+  `lineup_score_source`; separate Direct evidence text carries the observed
+  rate/count and pairing model source. This resolves the reported mismatch.
+- **Verified:** skill readings and their dates are collected together with
+  missing skill readings excluded consistently, serialized, and displayed
+  with count/date captions. Missing dates are not invented.
+- **P2 regression-test weakness:** the new DIRECT-slot browser test only
+  checks that both source strings occur somewhere in the whole team panel;
+  it does not verify the Score basis cell. The Python test likewise checks
+  string presence in HTML that includes embedded JSON. Both can pass if
+  the original column mismatch returns. Assert the selected DIRECT row's
+  Score basis cell equals its `lineup_score_source` and its Direct evidence
+  cell contains the separate observed evidence.
+- **P2 regression-test weakness:** the sparkline test's
+  `assert expected_count in result_text or real_dates` passes whenever any
+  dates exist, regardless of whether count text appears. The next assertion
+  accepts either endpoint, and the test never checks the SVG title or
+  points despite its stated purpose. Assert count, both endpoints, SVG
+  title, and expected coordinates on the specific player's element.
+  The filter membership test should also assert the exact expected option
+  set: its current loop can pass when all valid options disappear.
+- **Coach-facing clarification still recommended:** count/date captions do
+  not disclose equal-spaced readings or independent vertical scaling.
+  Add a short visible explanation or real min/max labels; a shared scale
+  can derive from the displayed data without inventing any skill bounds.
+
+No retained dashboard/manifest was found by the scoped search in
+`coach-advantage-runs`; production-bundle verification remains open.
+No feature code was modified and no global builder was run.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
