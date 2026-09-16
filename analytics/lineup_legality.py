@@ -41,6 +41,7 @@ part of the input specifically so this can be checked.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -109,4 +110,75 @@ def check_lineup_legality(
         limit=TEAM_SKILL_LEVEL_LIMIT_5,
         is_legal=(total <= TEAM_SKILL_LEVEL_LIMIT_5) and not has_duplicate_players,
         has_duplicate_players=has_duplicate_players,
+    )
+
+
+# A real, small bound on the exact search below -- same "exact or refuse,
+# never approximate" posture as analytics.lineup_lab's own
+# MAX_ASSIGNMENT_ATTEMPTS. A 5-player lineup only ever needs a combination
+# of at most 5 remaining slots from a real team's own available roster
+# (never a division-wide count), so this is sized generously, not tuned to
+# any specific real roster.
+MAX_COMPLETION_ATTEMPTS = 200_000
+
+
+def legal_completion_exists(
+    committed_skill_levels: Sequence[int],
+    available_skill_levels: Sequence[Optional[int]],
+) -> Optional[bool]:
+    """Whether a legal standard 5-player lineup can still be completed --
+    for a live Match Night planner deciding who to send *before* the whole
+    lineup is locked in, not just verifying one already-complete lineup.
+
+    ``committed_skill_levels`` are the real skill levels of players already
+    assigned to a board this match (order doesn't matter -- the 23-Rule
+    caps the sum of the 5, not any per-board total). ``available_skill_levels``
+    is the remaining, not-yet-committed pool a captain could still choose
+    from to fill the rest -- pass ``None`` for any player whose current
+    skill level isn't known, exactly as ``check_lineup_legality`` already
+    requires a real skill level per slot (see that function's own
+    docstring); this function never guesses one either.
+
+    Returns ``None`` -- not a guessed ``False`` -- when there are already
+    more than ``LINEUP_SIZE`` committed players (a malformed call, not a
+    legality question), or when fewer players with a *known* skill level
+    remain available than are needed to fill the rest (not enough real
+    information to answer, the same honest-unavailable-state posture as
+    ``check_lineup_legality`` returning ``None`` for an incomplete lineup).
+
+    Otherwise returns the real answer: does at least one combination of the
+    still-needed players from ``available_skill_levels`` (each used at most
+    once, matching that a real player can only fill one board) bring the
+    total to ``TEAM_SKILL_LEVEL_LIMIT_5`` or below. An exact, bounded search
+    (see ``MAX_COMPLETION_ATTEMPTS``) over a real team's own small remaining
+    roster -- never an approximation, and it raises rather than silently
+    truncate the search if that bound is somehow exceeded.
+    """
+    still_needed = LINEUP_SIZE - len(committed_skill_levels)
+    if still_needed < 0:
+        return None
+    if still_needed == 0:
+        return sum(committed_skill_levels) <= TEAM_SKILL_LEVEL_LIMIT_5
+
+    known = [level for level in available_skill_levels if level is not None]
+    if len(known) < still_needed:
+        return None
+
+    attempts = 1
+    for i in range(still_needed):
+        attempts *= len(known) - i
+    for j in range(1, still_needed + 1):
+        attempts //= j
+    if attempts > MAX_COMPLETION_ATTEMPTS:
+        raise ValueError(
+            f"Too many remaining available players ({len(known)}) to search "
+            f"exactly for a {still_needed}-slot completion -- narrow "
+            "tonight's availability before asking for this check."
+        )
+
+    committed_total = sum(committed_skill_levels)
+    remaining_cap = TEAM_SKILL_LEVEL_LIMIT_5 - committed_total
+    return any(
+        sum(combo) <= remaining_cap
+        for combo in itertools.combinations(known, still_needed)
     )

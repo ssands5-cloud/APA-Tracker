@@ -114,6 +114,24 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 .cd-edge-card {{ background: #eef2fa; border: 1px solid #1F3864; border-radius: 4px;
   padding: 10px 14px; margin: 8px 0 18px; }}
 .cd-edge-card h3 {{ margin-top: 0; }}
+.mn-roster-row {{ display: flex; align-items: center; gap: 10px; padding: 6px 4px;
+  border-bottom: 1px solid #e2e5ea; flex-wrap: wrap; }}
+.mn-roster-row select {{ font-size: 15px; padding: 6px; }}
+.mn-roster-name {{ min-width: 140px; font-weight: 600; }}
+.mn-card {{ border: 1px solid #e2e5ea; border-radius: 6px; padding: 12px 14px;
+  margin: 10px 0; background: #fff; }}
+.mn-card.mn-ok {{ border-left: 5px solid #1a7f37; }}
+.mn-card.mn-warn {{ border-left: 5px solid #b58900; }}
+.mn-card.mn-unknown {{ border-left: 5px solid #8a919c; }}
+.mn-card h4 {{ margin: 0 0 4px; }}
+.mn-send-btn {{ font-size: 15px; padding: 8px 16px; margin-top: 6px; }}
+.mn-status-line {{ font-weight: 600; }}
+#mn-warning .cd-none {{ font-weight: 600; }}
+.mn-print-only {{ display: none; }}
+@media print {{
+  body * {{ display: none !important; }}
+  #mn-print-summary, #mn-print-summary * {{ display: revert !important; }}
+}}
 </style></head><body>
 <h1>Coach Dashboard — {escape(our_team_name)}</h1>
 <p class="cd-note">Every number on this page traces to
@@ -148,6 +166,27 @@ sparkline of the player's whole skill-level history.</p>
 <label>Match: <select id="tme-scope">{scope_options}</select></label>
 </div>
 <div id="tme-result"></div>
+
+<h2 class="mn-screen-only">Match Night</h2>
+<p class="cd-note mn-screen-only">"They put up this player -- who should I send?" Mark who's
+available tonight, pick the opponent's announced player, and compare your legal options
+side by side. A skill-level estimate is not a promise, and skill-level movement is not a
+winning streak -- both are shown as what they really are, not as a verdict.</p>
+<div class="cd-controls mn-screen-only">
+<label>Match: <select id="mn-scope">{scope_options}</select></label>
+&nbsp;
+<button type="button" id="mn-reset">Reset Match Night</button>
+&nbsp;
+<button type="button" id="mn-print">Print summary</button>
+</div>
+<div id="mn-warning" class="mn-screen-only"></div>
+<div id="mn-roster" class="mn-screen-only"></div>
+<div class="cd-controls mn-screen-only">
+<label>They put up: <select id="mn-opponent"></select></label>
+</div>
+<div id="mn-comparison" class="mn-screen-only"></div>
+<div id="mn-lineup" class="mn-screen-only"></div>
+<div id="mn-print-summary" class="mn-print-only"></div>
 
 <h2>Opponent Risk Profile (whole-division, purely descriptive ranking)</h2>
 <p class="cd-note">Ranked by reliability-weighted skill-only probability,
@@ -417,6 +456,337 @@ toughest first -- never a categorical "danger" label
     target.innerHTML = html;
   }}
 
+  // ---- Match Night ----
+  // "They put up this player -- who should I send?" plus a live lineup
+  // planner. Reuses the exact same PLAYER_DATA/TEAM_DATA already embedded
+  // above -- no new estimate, no new model. The only new computation here
+  // is the real APA 23-Rule *completion* check (can a legal 5-player
+  // lineup still be finished, not just "is this one already legal") --
+  // ported from analytics.lineup_legality.legal_completion_exists (see
+  // that function's own docstring, and analytics/lineup_legality.py's
+  // module docstring for the real rule's cited source) because this
+  // planner is live and interactive in the browser, not a build-time
+  // report. Same real constants: LINEUP_SIZE=5, TEAM_SKILL_LEVEL_LIMIT_5=23.
+  var MN_LIMIT = 23;
+  var MN_SIZE = 5;
+  var MN_STATUSES = ["available", "absent", "played", "held"];
+  var MN_STATUS_LABELS = {{
+    available: "Available", absent: "Absent", played: "Already played", held: "Held back"
+  }};
+  var mnState = {{ statuses: {{}}, assignments: [] }};
+
+  function mnLegalCompletionExists(committed, available) {{
+    // null = not enough known-skill players to answer, never a guess.
+    var stillNeeded = MN_SIZE - committed.length;
+    if (stillNeeded < 0) return null;
+    var committedTotal = committed.reduce(function (a, b) {{ return a + b; }}, 0);
+    if (stillNeeded === 0) return committedTotal <= MN_LIMIT;
+    var known = available.filter(function (v) {{ return v !== null && v !== undefined; }});
+    if (known.length < stillNeeded) return null;
+    var remainingCap = MN_LIMIT - committedTotal;
+    var found = false;
+    (function combos(start, chosen) {{
+      if (found || chosen.length === stillNeeded) {{
+        if (chosen.length === stillNeeded) {{
+          var sum = chosen.reduce(function (a, b) {{ return a + b; }}, 0);
+          if (sum <= remainingCap) found = true;
+        }}
+        return;
+      }}
+      for (var i = start; i < known.length && !found; i++) {{
+        chosen.push(known[i]);
+        combos(i + 1, chosen);
+        chosen.pop();
+      }}
+    }})(0, []);
+    return found;
+  }}
+
+  function mnStorageKey(scopeKey) {{ return "match-night:" + scopeKey; }}
+
+  function mnLoadState(scopeKey) {{
+    try {{
+      var raw = window.localStorage.getItem(mnStorageKey(scopeKey));
+      if (raw) return JSON.parse(raw);
+    }} catch (e) {{ /* private browsing or storage disabled -- honest fallback below */ }}
+    return {{ statuses: {{}}, assignments: [] }};
+  }}
+
+  function mnSaveState(scopeKey, state) {{
+    try {{ window.localStorage.setItem(mnStorageKey(scopeKey), JSON.stringify(state)); }}
+    catch (e) {{ /* real, honest limitation: state just won't persist across reloads */ }}
+  }}
+
+  function mnCurrentScope() {{
+    return TEAM_DATA[document.getElementById("mn-scope").value];
+  }}
+
+  function mnCommittedSkillLevels(scope) {{
+    return scope.our_roster
+      .filter(function (p) {{ return mnState.statuses[p.id] === "played"; }})
+      .map(function (p) {{ return p.skill_level; }})
+      .filter(function (v) {{ return v !== null && v !== undefined; }});
+  }}
+
+  function mnPairKey(scope, playerId, opponentId) {{
+    return scope.our_team.id + "|" + scope.opponent_team.id + "|" + scope.format + "|"
+      + scope.session_name + "|" + playerId + ":" + opponentId;
+  }}
+
+  function mnRenderWarning(scope) {{
+    var target = document.getElementById("mn-warning");
+    var playedCount = scope.our_roster.filter(function (p) {{
+      return mnState.statuses[p.id] === "played";
+    }}).length;
+    if (playedCount > MN_SIZE) {{
+      target.innerHTML = "<p class='cd-none'>" + playedCount + " players are marked "
+        + "Already played -- a standard lineup only uses " + MN_SIZE + ". Check for a "
+        + "mis-click before relying on the legality check below.</p>";
+      return;
+    }}
+    var committed = mnCommittedSkillLevels(scope);
+    var available = scope.our_roster
+      .filter(function (p) {{ return (mnState.statuses[p.id] || "available") === "available"; }})
+      .map(function (p) {{ return p.skill_level; }});
+    var verdict = mnLegalCompletionExists(committed, available);
+    if (verdict === false) {{
+      target.innerHTML = "<p class='cd-none'>No legal " + MN_SIZE + "-player lineup "
+        + "(combined skill level " + MN_LIMIT + " or less) can still be completed from "
+        + "tonight's Available players. Reconsider who's marked available/held back "
+        + "before sending anyone else.</p>";
+    }} else if (verdict === null && playedCount < MN_SIZE) {{
+      target.innerHTML = "<p class='cd-note'>Not enough Available players with a known "
+        + "current skill level to verify a legal completion yet.</p>";
+    }} else {{
+      target.innerHTML = "";
+    }}
+  }}
+
+  function mnRenderRoster(scope) {{
+    var target = document.getElementById("mn-roster");
+    var html = "<h4>Tonight's roster</h4>";
+    scope.our_roster.forEach(function (p) {{
+      var status = mnState.statuses[p.id] || "available";
+      html += "<div class='mn-roster-row'><span class='mn-roster-name'>" + esc(p.name)
+        + "</span><span class='cd-note'>SL " + orNoData(p.skill_level) + "</span>"
+        + "<select data-player-id='" + p.id + "' class='mn-status-select'>"
+        + MN_STATUSES.map(function (s) {{
+            return "<option value='" + s + "'" + (s === status ? " selected" : "") + ">"
+              + MN_STATUS_LABELS[s] + "</option>";
+          }}).join("")
+        + "</select></div>";
+    }});
+    target.innerHTML = html;
+    target.querySelectorAll(".mn-status-select").forEach(function (sel) {{
+      sel.addEventListener("change", function () {{
+        mnState.statuses[sel.getAttribute("data-player-id")] = sel.value;
+        mnSaveState(document.getElementById("mn-scope").value, mnState);
+        mnRenderAll();
+      }});
+    }});
+  }}
+
+  function mnRenderOpponentSelect(scope) {{
+    var select = document.getElementById("mn-opponent");
+    var previous = select.value;
+    var usedOpponentIds = {{}};
+    mnState.assignments.forEach(function (a) {{ usedOpponentIds[a.opponent_id] = true; }});
+    var remaining = scope.opponent_roster.filter(function (o) {{ return !usedOpponentIds[o.id]; }});
+    select.innerHTML = remaining.length
+      ? remaining.map(function (o) {{
+          return "<option value='" + o.id + "'>" + esc(o.name) + " (SL "
+            + orNoData(o.skill_level) + ")</option>";
+        }}).join("")
+      : "<option value=''>No remaining opponents identified</option>";
+    if (remaining.some(function (o) {{ return String(o.id) === previous; }})) {{
+      select.value = previous;
+    }}
+  }}
+
+  function mnRenderComparison(scope) {{
+    var target = document.getElementById("mn-comparison");
+    var opponentId = document.getElementById("mn-opponent").value;
+    if (!opponentId) {{
+      target.innerHTML = "<p class='cd-none'>Select who they put up.</p>";
+      return;
+    }}
+    var opponent = scope.opponent_roster.filter(function (o) {{
+      return String(o.id) === String(opponentId);
+    }})[0];
+    var available = scope.our_roster.filter(function (p) {{
+      return (mnState.statuses[p.id] || "available") === "available";
+    }});
+    if (!available.length) {{
+      target.innerHTML = "<p class='cd-none'>No players are marked Available.</p>";
+      return;
+    }}
+    var committed = mnCommittedSkillLevels(scope);
+    var html = "<h4>They put up " + esc(opponent ? opponent.name : "?") + " -- who should you send?</h4>";
+    available.forEach(function (p) {{
+      var report = PLAYER_DATA[mnPairKey(scope, p.id, opponentId)];
+      var otherAvailableSkills = available
+        .filter(function (q) {{ return q.id !== p.id; }})
+        .map(function (q) {{ return q.skill_level; }});
+      var candidateCommitted = committed.concat(
+        p.skill_level !== null && p.skill_level !== undefined ? [p.skill_level] : []
+      );
+      var verdict = mnLegalCompletionExists(candidateCommitted, otherAvailableSkills);
+      var cls = verdict === false ? "mn-warn" : (verdict === null ? "mn-unknown" : "mn-ok");
+      html += "<div class='mn-card " + cls + "'><h4>" + esc(p.name) + " <span class='cd-note'>SL "
+        + orNoData(p.skill_level) + "</span>" + trendBadge(p.trend) + "</h4>";
+      if (report) {{
+        html += "<table><tbody>"
+          + "<tr><th>Evidence</th><td>" + esc(report.evidence_label) + "</td></tr>"
+          + "<tr><th>Direct record</th><td>" + (report.direct_wins !== null && report.direct_wins !== undefined
+              ? report.direct_wins + "-" + report.direct_losses + " (" + pct(report.observed_win_rate) + ")"
+              : "No data") + " across " + report.direct_evidence_count + " match(es)</td></tr>"
+          + "<tr><th>Skill-only estimate (experimental)</th><td>" + pct(report.modeled_win_probability) + "</td></tr>"
+          + "</tbody></table>"
+          + "<p class='cd-summary-box'>" + esc(report.summary) + "</p>";
+      }} else {{
+        html += "<p class='cd-none'>No matchup data found for this pairing.</p>";
+      }}
+      if (verdict === false) {{
+        html += "<p class='mn-status-line'>\\u26a0 Sending " + esc(p.name) + " would leave "
+          + "no legal lineup possible with tonight's remaining Available players.</p>";
+      }} else if (verdict === null) {{
+        html += "<p class='cd-note'>Not enough known skill levels among the rest of "
+          + "tonight's Available players to verify a legal completion.</p>";
+      }} else {{
+        html += "<p class='cd-note'>Sending " + esc(p.name) + " still leaves a legal "
+          + "lineup possible.</p>";
+      }}
+      html += "<button type='button' class='mn-send-btn' data-player-id='" + p.id + "'>Send "
+        + esc(p.name) + "</button></div>";
+    }});
+    target.innerHTML = html;
+    target.querySelectorAll(".mn-send-btn").forEach(function (btn) {{
+      btn.addEventListener("click", function () {{
+        mnSendPlayer(scope, btn.getAttribute("data-player-id"), opponentId);
+      }});
+    }});
+  }}
+
+  function mnSendPlayer(scope, playerId, opponentId) {{
+    var player = scope.our_roster.filter(function (p) {{ return String(p.id) === String(playerId); }})[0];
+    var opponent = scope.opponent_roster.filter(function (o) {{ return String(o.id) === String(opponentId); }})[0];
+    if (!player) return;
+    var committed = mnCommittedSkillLevels(scope);
+    var otherAvailable = scope.our_roster
+      .filter(function (p) {{
+        return (mnState.statuses[p.id] || "available") === "available" && String(p.id) !== String(playerId);
+      }})
+      .map(function (p) {{ return p.skill_level; }});
+    var candidateCommitted = committed.concat(
+      player.skill_level !== null && player.skill_level !== undefined ? [player.skill_level] : []
+    );
+    var verdict = mnLegalCompletionExists(candidateCommitted, otherAvailable);
+    if (verdict === false) {{
+      var proceed = window.confirm(
+        "Sending " + player.name + " would leave no legal " + MN_SIZE + "-player lineup "
+        + "possible with tonight's remaining Available players. Send anyway?"
+      );
+      if (!proceed) return;
+    }}
+    var report = PLAYER_DATA[mnPairKey(scope, playerId, opponentId)];
+    mnState.assignments.push({{
+      board: mnState.assignments.length + 1,
+      player_id: player.id, player_name: player.name, player_skill_level: player.skill_level,
+      opponent_id: opponent ? opponent.id : opponentId,
+      opponent_name: opponent ? opponent.name : "?",
+      opponent_skill_level: opponent ? opponent.skill_level : null,
+      evidence_label: report ? report.evidence_label : null,
+      observed_win_rate: report ? report.observed_win_rate : null,
+      direct_wins: report ? report.direct_wins : null,
+      direct_losses: report ? report.direct_losses : null,
+      modeled_win_probability: report ? report.modeled_win_probability : null,
+    }});
+    mnState.statuses[playerId] = "played";
+    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnRenderAll();
+  }}
+
+  function mnRenderLineup(scope) {{
+    var target = document.getElementById("mn-lineup");
+    var html = "<h4>Boards sent tonight</h4>";
+    if (!mnState.assignments.length) {{
+      html += "<p class='cd-none'>No boards sent yet.</p>";
+    }} else {{
+      html += "<table><thead><tr><th>Board</th><th>Our player</th><th>Opponent</th>"
+        + "<th>Evidence</th><th>Direct record</th><th>Skill-only estimate</th></tr></thead><tbody>";
+      mnState.assignments.forEach(function (a) {{
+        html += "<tr><td>" + a.board + "</td><td>" + esc(a.player_name) + " (SL "
+          + orNoData(a.player_skill_level) + ")</td><td>" + esc(a.opponent_name) + " (SL "
+          + orNoData(a.opponent_skill_level) + ")</td><td>" + esc(a.evidence_label) + "</td>"
+          + "<td>" + (a.direct_wins !== null && a.direct_wins !== undefined
+              ? a.direct_wins + "-" + a.direct_losses : "No data") + "</td>"
+          + "<td>" + pct(a.modeled_win_probability) + "</td></tr>";
+      }});
+      html += "</tbody></table>";
+    }}
+    var committed = mnCommittedSkillLevels(scope);
+    html += "<p>Committed skill total so far: <strong>"
+      + committed.reduce(function (a, b) {{ return a + b; }}, 0) + "</strong> of " + MN_LIMIT
+      + " (" + committed.length + " of " + MN_SIZE + " boards used)</p>";
+    target.innerHTML = html;
+  }}
+
+  function mnRenderPrintSummary(scope) {{
+    var target = document.getElementById("mn-print-summary");
+    var html = "<h2>Match Night summary -- " + esc(scope.our_team.name) + " vs "
+      + esc(scope.opponent_team.name) + " (" + esc(scope.format) + ", " + esc(scope.session_name) + ")</h2>";
+    html += "<h3>Roster status</h3><ul>";
+    scope.our_roster.forEach(function (p) {{
+      html += "<li>" + esc(p.name) + " -- " + MN_STATUS_LABELS[mnState.statuses[p.id] || "available"] + "</li>";
+    }});
+    html += "</ul><h3>Boards sent</h3>";
+    if (!mnState.assignments.length) {{
+      html += "<p>No boards sent yet.</p>";
+    }} else {{
+      html += "<ol>";
+      mnState.assignments.forEach(function (a) {{
+        html += "<li>" + esc(a.player_name) + " vs " + esc(a.opponent_name) + " -- "
+          + esc(a.evidence_label) + ", "
+          + (a.direct_wins !== null && a.direct_wins !== undefined
+              ? a.direct_wins + "-" + a.direct_losses + " direct" : "no direct history")
+          + "</li>";
+      }});
+      html += "</ol>";
+    }}
+    var committed = mnCommittedSkillLevels(scope);
+    html += "<p>Skill total: " + committed.reduce(function (a, b) {{ return a + b; }}, 0)
+      + " of " + MN_LIMIT + "</p>";
+    target.innerHTML = html;
+  }}
+
+  function mnRenderAll() {{
+    var scope = mnCurrentScope();
+    if (!scope) return;
+    mnRenderRoster(scope);
+    mnRenderOpponentSelect(scope);
+    mnRenderComparison(scope);
+    mnRenderLineup(scope);
+    mnRenderWarning(scope);
+    mnRenderPrintSummary(scope);
+  }}
+
+  function mnInitScope() {{
+    mnState = mnLoadState(document.getElementById("mn-scope").value);
+    mnRenderAll();
+  }}
+
+  document.getElementById("mn-scope").addEventListener("change", mnInitScope);
+  document.getElementById("mn-opponent").addEventListener("change", function () {{
+    mnRenderComparison(mnCurrentScope());
+  }});
+  document.getElementById("mn-reset").addEventListener("click", function () {{
+    if (!window.confirm("Reset all Match Night state for this match?")) return;
+    mnState = {{ statuses: {{}}, assignments: [] }};
+    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnRenderAll();
+  }});
+  document.getElementById("mn-print").addEventListener("click", function () {{ window.print(); }});
+
   document.getElementById("pme-player").addEventListener("change", refreshOpponents);
   document.getElementById("pme-opponent").addEventListener("change", renderPlayer);
   document.getElementById("tme-scope").addEventListener("change", renderTeam);
@@ -428,6 +798,7 @@ toughest first -- never a categorical "danger" label
   }});
   refreshOpponents();
   renderTeam();
+  mnInitScope();
 }})();
 </script>
 </body></html>"""

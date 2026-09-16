@@ -196,3 +196,38 @@ class TestRender:
         # The DIRECT slot's own model_source must still be visible (as real
         # evidence context), just not conflated with the score's basis.
         assert "analytics.head_to_head:direct-history-and-skill" in html
+
+
+class TestMatchNight:
+    """Directive: a "Match Night" workflow -- "who should I send" plus a
+    live lineup planner. These tests check the static HTML surface (element
+    ids the browser-driven tests in tests/test_dashboard_browser.py hook
+    into, and that the page never references data.our_roster.trend/etc as
+    verdict language); the real interactive behavior needs a live DOM, so
+    it's covered there, not here."""
+
+    def test_the_match_night_controls_are_present(self):
+        html = render(
+            [_player_report()],
+            [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
+            [], "Mark It Up",
+        )
+        for element_id in ("mn-scope", "mn-opponent", "mn-roster", "mn-comparison",
+                            "mn-lineup", "mn-warning", "mn-reset", "mn-print"):
+            assert f'id="{element_id}"' in html
+
+    def test_match_night_never_narrates_a_verdict(self):
+        html = " ".join(render(
+            [_player_report()],
+            [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
+            [], "Mark It Up",
+        ).split())
+        assert "is favored" not in html.lower()
+        assert "danger player" not in html.lower()
+        assert "guaranteed" not in html.lower()
+
+    def test_the_page_states_an_estimate_is_not_a_promise(self):
+        """Directive: 'a matchup estimate is not a promise' must be made
+        obvious on the page itself, not just true in the underlying data."""
+        html = render([_player_report()], [], [], "Mark It Up")
+        assert "not a promise" in html.lower() or "not a winning streak" in html.lower()

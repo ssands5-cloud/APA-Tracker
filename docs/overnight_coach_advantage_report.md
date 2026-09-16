@@ -221,6 +221,90 @@ session touched this repo during this cycle (`git status` clean at start,
   this cycle's push will be confirmed and logged in this same entry (or a
   short follow-up) once the Actions run completes.
 
+### Match Night — "who should I send" + a live lineup planner — 2026-09-16 15:55 UTC
+
+User directive: "Match Night" -- item #1 ("they put up this player, who
+should I send?") and item #2 (a live lineup planner tracking availability
+and the real skill-limit rule) together, scoped to one selected team,
+opponent, format, and session, as directed. Coordinated with both other
+active sessions before starting (messaged both, got explicit stand-down
+acknowledgments) so this wasn't built twice; pinged both again once pushed.
+
+- **New rule engine: `analytics/lineup_legality.py::legal_completion_exists()`**
+  -- the real question a live planner needs that `check_lineup_legality`
+  doesn't answer: not "is this already-complete lineup legal" but "can a
+  legal lineup still be completed from who's left, before the choice is
+  locked in." Same real constants (`TEAM_SKILL_LEVEL_LIMIT_5=23`,
+  `LINEUP_SIZE=5`), same real, cited rule -- no new threshold. Returns
+  `None` (never a guessed `False`) when there's not enough real
+  known-skill-level data to answer, exactly matching
+  `check_lineup_legality`'s own honest-unavailable-state posture. An exact,
+  bounded combinatorial search (`MAX_COMPLETION_ATTEMPTS`, same "exact or
+  refuse" posture as `analytics.lineup_lab`'s own bound) -- 26 new tests,
+  including a case that intentionally exceeds the bound and asserts it
+  raises rather than approximates.
+- **Coach Dashboard's third panel: Match Night** (`ui/dashboard.py`) --
+  reuses the exact same embedded `PLAYER_DATA`/`TEAM_DATA` JSON the other
+  two panels already have; no new estimate, no new model, no new query.
+  - Per-player availability (Available/Absent/Already played/Held back),
+    defaulting honestly to Available rather than guessing a status.
+  - "They put up X -- who should you send?": every currently-Available
+    player gets a card built from the *same* `PlayerMatchupReport` already
+    on the page for that exact pairing (skill levels, exact DIRECT W-L,
+    evidence label, the skill-only estimate labeled "(experimental)", and
+    the existing plain-language `summary` field -- reused verbatim, not
+    reworded, so it can't drift from the one used elsewhere on the page).
+  - Each card also shows whether sending that player still leaves a legal
+    lineup possible, via a JS port of `legal_completion_exists` run against
+    the real remaining Available pool. A choice that would leave no legal
+    completion is flagged on the card and gated behind a real
+    `window.confirm()` before it's applied -- warned, never silently
+    blocked, since a captain may have no other real choice that night.
+  - A running "boards sent" log (who, who they faced, the real evidence)
+    with a live committed-skill-total, `localStorage`-persisted per scope
+    (wrapped in try/catch -- a real, disclosed limitation if storage is
+    unavailable, not a crash), a reset control, and a basic `window.print()`
+    summary view (roster status + boards sent) for offline use.
+  - The page states outright, in its own intro text, that "a skill-level
+    estimate is not a promise" and skill-level movement "is not a winning
+    streak" -- a directive requirement, not left implicit in the data.
+- **Verified in a real browser, not just against fixtures:** rebuilt the
+  real bundle against `data/apa_tracker.db`
+  (`coach-advantage-runs/20260916T155153Z/`, the prior retained run deleted
+  since it predated this feature) and screenshotted the live Match Night
+  panel -- roster, opponent selection, comparison cards, evidence, and the
+  "no boards sent yet" / skill-total-0-of-23 state all render correctly
+  with real division data.
+- **New tests:** `tests/test_lineup_legality.py` (+26, the completion-check
+  function), `tests/test_dashboard.py` (+3, static HTML surface: element
+  ids, no verdict language, the "not a promise" disclosure text),
+  `tests/test_dashboard_browser.py` (+5 real interaction tests: marking a
+  player absent removes them from the comparison; sending a player records
+  exactly one board and flips their status; state survives a
+  `page.reload()` via `localStorage`; Reset clears it; and a real
+  confirm()-dialog test that searches every real scope in the bundle via
+  `legal_completion_exists` as an oracle for a genuine best-case-infeasible
+  candidate rather than fabricating one -- skips honestly, with a named
+  reason, if this cycle's coherent fixture has no such real scenario in any
+  scope, which it currently does not).
+- Full suite: **1630 passed, 1 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched; the one new skip is the confirm-dialog test above, honestly
+  disclosed, not silently dropped).
+- **Not addressed this cycle, honestly disclosed (directive items #3 and
+  #5, not asked for in this pass):** a dedicated per-opponent scouting card
+  (recent results, coach-entered notes kept separate from calculated
+  stats); full phone-friendly styling/large touch targets beyond what
+  Match Night already has. Also not implemented, matching
+  `analytics/lineup_legality.py`'s own prior, explicit decision: the
+  4-player/19 skill-level fallback for a team that can't field 5 legal
+  players -- that module's docstring already flags this as real
+  captain-choice complexity needing its own follow-up with its own tests,
+  not assumed here either. Opponent-side legality (whether the opponent
+  team's own lineup is valid) is out of scope -- this tool only ever
+  reasons about our own team's skill total, matching the real 23-Rule
+  itself.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 

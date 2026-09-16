@@ -344,12 +344,53 @@ validated win-probability model or danger threshold is real, separate
 statistical work — checked against this project's own recorded outcomes
 before it ships, not asserted in the code.
 
+**Match Night** — the dashboard's third panel, for the actual in-match
+decision: "they put up this player, who should I send?" Reuses the exact
+same Player vs Player / Team vs Team data already embedded on the page —
+no new estimate, no new model.
+
+- **Roster availability** — mark each of tonight's players Available,
+  Absent, Already played, or Held back. Nothing computed elsewhere treats
+  an unmarked player as available by default beyond the honest "Available"
+  starting state.
+- **Side-by-side comparison** — pick who the opponent announced, and every
+  currently-Available player gets a card: skill levels, exact DIRECT
+  win/loss record, evidence label, the skill-only estimate (always labeled
+  "experimental"), and the same plain-language summary
+  `analytics.player_matchup_engine` already generates — never a "favored"
+  verdict.
+- **Legality-preserving warnings** — before you send anyone, a real,
+  bounded exact search (`analytics.lineup_legality.legal_completion_exists`,
+  ported to JS since this planner is live/interactive, not a build-time
+  report) checks whether a legal 5-player lineup (real APA 23-Rule, ≤23
+  combined skill level) can still be completed from who's left Available.
+  A choice that would leave no legal completion is flagged on its card and
+  gated behind a real confirmation dialog before it's applied — never
+  silently blocked, since a captain may have no other choice.
+- **Running lineup log + saved state** — every board sent is logged (who,
+  who they faced, the real evidence behind that pairing) with a live
+  committed-skill-total, persisted to the browser's own `localStorage` per
+  scope so a page reload doesn't lose tonight's match. A basic print
+  view (`Print summary`) renders just the roster status and boards sent,
+  usable offline.
+
+Still open, honestly disclosed: a dedicated per-opponent scouting card
+(recent results, coach-entered notes kept separate from calculated stats —
+directive item #3) and full phone-friendly styling/large touch targets
+beyond what Match Night already has (directive item #5) are not built yet.
+The 4-player/19 skill-level fallback (a team that can't field 5 legal
+players) is intentionally not implemented here either — `analytics/
+lineup_legality.py`'s own docstring already flags that as unverified
+captain-choice territory needing its own follow-up, not assumed.
+
 **Regression coverage:** `tests/test_dashboard_browser.py` drives a real
 headless Chromium instance (Playwright) against a real, freshly built
 bundle's `dashboard.html` — picking players, narrowing opponents, applying
-and clearing filters, switching real team scopes, and checking for
-JavaScript errors — so the dashboard's actual browser behavior is
-regression-tested, not just the HTML/JSON it renders.
+and clearing filters, switching real team scopes, marking players
+absent/held back, sending a player and checking the resulting board/status,
+confirming a legality-breaking send triggers a real confirm() dialog, and
+checking for JavaScript errors throughout — so the dashboard's actual
+browser behavior is regression-tested, not just the HTML/JSON it renders.
 
 Still open, honestly disclosed: skill/streak win-loss tracking beyond the
 skill-level trend direction (this project does not currently persist a

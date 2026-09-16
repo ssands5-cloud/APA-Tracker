@@ -334,6 +334,140 @@ class TestTeamVsTeamAndCaptainsEdge:
         assert page.console_errors == []
 
 
+class TestMatchNight:
+    """Directive: "Match Night" -- "who should I send" plus a live lineup
+    planner. Drives the real interactive flow against the real, live
+    bundle: mark a player absent, get a real opponent announced, compare
+    real candidates side by side, send one, and check the running lineup
+    and legality warning update from real embedded data, not a fixture."""
+
+    def test_marking_a_player_absent_removes_them_from_the_comparison(self, page):
+        first_row = page.locator("#mn-roster .mn-roster-row").first
+        player_name = first_row.locator(".mn-roster-name").inner_text()
+        first_row.locator("select").select_option("absent")
+
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if opponent_options and opponent_options[0]:
+            page.select_option("#mn-opponent", opponent_options[0])
+        comparison_text = page.locator("#mn-comparison").inner_text()
+        assert player_name not in comparison_text
+        assert page.console_errors == []
+
+    def test_sending_a_player_adds_a_board_and_marks_them_already_played(self, page):
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this fixture scope")
+        page.select_option("#mn-opponent", opponent_options[0])
+
+        send_button = page.locator("#mn-comparison .mn-send-btn").first
+        if send_button.count() == 0:
+            pytest.skip("no available candidate rendered for this fixture scope")
+        sent_name = send_button.get_attribute("data-player-id")
+        sent_label = send_button.inner_text()  # "Send <Name>"
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        send_button.click()
+
+        rows = page.locator("#mn-lineup table tbody tr")
+        assert rows.count() == 1, "exactly one board should be recorded after one send"
+        first_row_cells = rows.first.locator("td").all_inner_texts()
+        assert first_row_cells[0] == "1"  # Board column
+        assert sent_label.endswith(first_row_cells[1].split(" (SL")[0])  # Our player column
+
+        status_select = page.locator(f"#mn-roster .mn-status-select[data-player-id='{sent_name}']")
+        assert status_select.input_value() == "played"
+        assert page.console_errors == []
+
+    def test_match_night_state_survives_a_reload_via_local_storage(self, page):
+        first_row = page.locator("#mn-roster .mn-roster-row").first
+        first_row.locator("select").select_option("held")
+        page.reload()
+
+        reloaded_status = page.locator("#mn-roster .mn-roster-row").first.locator("select").input_value()
+        assert reloaded_status == "held"
+        assert page.console_errors == []
+
+    def test_resetting_clears_the_saved_state(self, page):
+        first_row = page.locator("#mn-roster .mn-roster-row").first
+        first_row.locator("select").select_option("absent")
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.click("#mn-reset")
+
+        status = page.locator("#mn-roster .mn-roster-row").first.locator("select").input_value()
+        assert status == "available"
+        assert page.console_errors == []
+
+    def test_a_completion_breaking_choice_prompts_a_confirm_dialog(self, page):
+        """Find a real candidate (not a fixture) from the live embedded
+        team data for whom sending them leaves the rest of the *whole* real
+        roster unable to complete a legal lineup even in the
+        best case -- i.e. candidate.skill_level + (the four smallest other
+        known skill levels on the real roster) already exceeds the real
+        23-Rule cap, using analytics.lineup_legality.legal_completion_exists
+        (the same function this UI's JS is a direct port of) as the oracle.
+        No availability needs to be held back for this: if the theoretical
+        best case already fails, every real subset does too. Skips honestly
+        if this real roster's skill levels can never produce that case."""
+        from analytics.lineup_legality import TEAM_SKILL_LEVEL_LIMIT_5, legal_completion_exists
+
+        all_team_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-team-data').textContent)"
+        )
+        scope_key = candidate = None
+        for key, report in all_team_data.items():
+            known = [p for p in report["our_roster"] if p["skill_level"] is not None]
+            if len(known) < 5:
+                continue
+            for c in sorted(known, key=lambda p: p["skill_level"], reverse=True):
+                others = sorted(p["skill_level"] for p in known if p["id"] != c["id"])
+                if c["skill_level"] + sum(others[:4]) > TEAM_SKILL_LEVEL_LIMIT_5:
+                    scope_key, candidate = key, c
+                    break
+            if candidate is not None:
+                break
+        if candidate is None:
+            pytest.skip(
+                "no real roster in this bundle's skill levels can ever fail to "
+                "complete a legal lineup no matter who is sent first -- no "
+                "infeasible scenario to construct honestly this cycle"
+            )
+        page.select_option("#mn-scope", scope_key)
+        # Sanity-check the constructed scenario against the real oracle before
+        # trusting the browser to agree with it.
+        others = [p["skill_level"] for p in known if p["id"] != candidate["id"]]
+        assert legal_completion_exists([candidate["skill_level"]], others) is False
+
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this fixture scope")
+        page.select_option("#mn-opponent", opponent_options[0])
+
+        send_button = page.locator(f"#mn-comparison .mn-send-btn[data-player-id='{candidate['id']}']")
+        if send_button.count() == 0:
+            pytest.skip("the constructed candidate has no matchup data for this opponent")
+        card = send_button.locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
+        assert "mn-warn" in (card.get_attribute("class") or "")
+
+        dialog_messages = []
+        page.once("dialog", lambda dialog: (dialog_messages.append(dialog.message), dialog.dismiss()))
+        send_button.click()
+        page.wait_for_timeout(100)
+
+        assert dialog_messages, "expected a confirm() dialog before an infeasible send"
+        assert "no legal" in dialog_messages[0].lower()
+        # Dismissed, not accepted -- the send must not have been applied.
+        status_select = page.locator(f"#mn-roster .mn-status-select[data-player-id='{candidate['id']}']")
+        assert status_select.input_value() == "available"
+        assert page.console_errors == []
+
+
 class TestNoConsoleErrorsOnLoad:
     def test_the_page_loads_with_no_javascript_error(self, page):
         assert page.console_errors == []
