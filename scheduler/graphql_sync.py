@@ -42,6 +42,7 @@ from database.ingest import (
     upsert_team,
 )
 from database.models import Match, Player, PlayerMatch
+from database.queries import resolve_roster_identity
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
@@ -223,6 +224,61 @@ def match_already_has_scoresheet(db: Session, match_external_id) -> bool:
     return db.query(PlayerMatch).filter_by(match_id=match.id).first() is not None
 
 
+def resolve_scoresheet_identities(
+    db: Session, session_name: str, scores: list[dict]
+) -> tuple[dict[str, str], int, int]:
+    """Map each scoresheet row's own per-position alias player id to its
+    real canonical-roster external id, via database.queries.
+    resolve_roster_identity scoped to that row's own real team id and this
+    session -- see that function's docstring for why the alias id is not a
+    stable identity by itself.
+
+    ``scores`` is match_player_scores()'s own output, the only mapper that
+    carries a real team_id per row; head_to_head_rows()'s rows do not, but
+    are derived from the SAME match detail and therefore share the SAME
+    alias ids, so this one mapping covers both once built.
+
+    Returns (alias_to_real_external_id, resolved_count, unresolved_count).
+    An alias id absent from the mapping was not uniquely resolvable -- a
+    caller must leave it exactly as the scoresheet reported it, never guess.
+    """
+    mapping: dict[str, str] = {}
+    resolved = 0
+    unresolved = 0
+    seen: set[str] = set()
+    for entry in scores:
+        alias_id = entry.get("player_id")
+        if not alias_id or alias_id in seen:
+            continue
+        seen.add(alias_id)
+        team_id = entry.get("team_id")
+        name = entry.get("player_name")
+        if not team_id or not name:
+            unresolved += 1
+            continue
+        real_player = resolve_roster_identity(db, team_id, session_name, name)
+        if real_player is not None:
+            mapping[alias_id] = real_player.external_id
+            resolved += 1
+        else:
+            unresolved += 1
+    return mapping, resolved, unresolved
+
+
+def apply_identity_mapping(rows: list[dict], mapping: dict[str, str], keys: tuple[str, ...]) -> list[dict]:
+    """A new list of rows with the given id keys rewritten through mapping.
+    A key whose value has no entry in mapping is left exactly as-is."""
+    rewritten = []
+    for row in rows:
+        new_row = dict(row)
+        for key in keys:
+            alias_id = new_row.get(key)
+            if alias_id in mapping:
+                new_row[key] = mapping[alias_id]
+        rewritten.append(new_row)
+    return rewritten
+
+
 def run_all_teams(
     config_path: str = "apa_config.yaml", export: bool = True, db_path: Optional[str] = None,
     resume: bool = False,
@@ -265,6 +321,9 @@ def run_all_teams(
         "Found %d team(s) for this account: %s",
         len(team_rows), ", ".join(r["team_name"] for r in team_rows) or "(none)",
     )
+    # Scoresheet identity resolution is scoped to (team, session): a real
+    # session name per team id, read once here rather than per match below.
+    session_by_team_id = {row["team_id"]: row["session_name"] for row in team_rows}
 
     engine = create_db_engine(config)
     with Session(engine) as db:
@@ -330,6 +389,8 @@ def run_all_teams(
         # the account's own dashboard already reported.
         scoresheet_count = 0
         head_to_head_count = 0
+        identity_resolved_count = 0
+        identity_unresolved_count = 0
         for row in viewer_matches_rows(viewer_matches):
             if not row["match_id"] or not row["is_scored"]:
                 continue
@@ -351,6 +412,16 @@ def run_all_teams(
                 )
                 continue
             scores = match_player_scores(match)
+            # Resolve each scoresheet alias id to its real canonical-roster
+            # identity BEFORE ingesting -- see resolve_scoresheet_identities'
+            # docstring for why the scoresheet's own id is not stable.
+            session_name = session_by_team_id.get(row["team_id"], "")
+            identity_map, resolved_n, unresolved_n = resolve_scoresheet_identities(
+                db, session_name, scores
+            )
+            identity_resolved_count += resolved_n
+            identity_unresolved_count += unresolved_n
+            scores = apply_identity_mapping(scores, identity_map, ("player_id",))
             if scores:
                 created, updated = ingest_match_scores(db, row["match_id"], scores)
                 scoresheet_count += created + updated
@@ -360,9 +431,14 @@ def run_all_teams(
             # skipping the call here entirely would leave those stale
             # forever, since ingest_head_to_head has no other way to learn
             # this match_id needs reconciling.
-            head_to_head_count += ingest_head_to_head(db, row["match_id"], head_to_head_rows(match))
+            h2h_rows = apply_identity_mapping(
+                head_to_head_rows(match), identity_map, ("player_id", "opponent_id")
+            )
+            head_to_head_count += ingest_head_to_head(db, row["match_id"], h2h_rows)
         counts["scoresheet_rows"] = scoresheet_count
         counts["head_to_head_rows"] = head_to_head_count
+        counts["identity_resolved"] = identity_resolved_count
+        counts["identity_unresolved"] = identity_unresolved_count
 
         # Career stats (getEightBallStats) and cross-season team history
         # (TeamStat) for the ACCOUNT'S OWN member -- HANDOFF.md item 2,
@@ -518,6 +594,7 @@ def sync_division_wide(
         "matches_discovered": 0, "matches_ingested": 0,
         "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
         "head_to_head_rows": 0,
+        "identity_resolved": 0, "identity_unresolved": 0,
     }
 
     try:
@@ -599,12 +676,22 @@ def sync_division_wide(
             )
             continue
         scores = match_player_scores(detail)
+        # Resolve each scoresheet alias id to its real canonical-roster
+        # identity BEFORE ingesting -- see resolve_scoresheet_identities'
+        # docstring for why the scoresheet's own id is not stable.
+        identity_map, resolved_n, unresolved_n = resolve_scoresheet_identities(
+            db, division_session_name, scores
+        )
+        counts["identity_resolved"] += resolved_n
+        counts["identity_unresolved"] += unresolved_n
+        scores = apply_identity_mapping(scores, identity_map, ("player_id",))
         if scores:
             ingest_match_scores(db, match["match_id"], scores)
             counts["scored_matches_with_scoresheet"] += 1
-        counts["head_to_head_rows"] += ingest_head_to_head(
-            db, match["match_id"], head_to_head_rows(detail)
+        h2h_rows = apply_identity_mapping(
+            head_to_head_rows(detail), identity_map, ("player_id", "opponent_id")
         )
+        counts["head_to_head_rows"] += ingest_head_to_head(db, match["match_id"], h2h_rows)
 
     return counts
 
@@ -688,6 +775,7 @@ def run_division_wide(
         "matches_discovered": 0, "matches_ingested": 0,
         "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
         "head_to_head_rows": 0,
+        "identity_resolved": 0, "identity_unresolved": 0,
     }
     with Session(engine) as db:
         context = _division_context(config, team_rows)
@@ -713,18 +801,28 @@ def run_division_wide(
             export_to_json(db, config)
 
     coverage_gaps = reconcile_division_wide_coverage(totals)
+    identity_total = totals["identity_resolved"] + totals["identity_unresolved"]
+    identity_rate = (
+        round(totals["identity_resolved"] / identity_total, 4) if identity_total else None
+    )
     logger.info(
         "Division-wide sync complete: %d division(s), %d team(s) discovered "
         "(%d ingested), %d roster player(s) discovered (%d ingested), %d match(es) "
         "discovered (%d ingested), %d scored match(es) discovered (%d with a "
-        "scoresheet). Coverage gaps: %s",
+        "scoresheet). Scoresheet identity: %d resolved to canonical roster, %d "
+        "unresolved (rate %s). Coverage gaps: %s",
         len(division_ids), totals["teams_discovered"], totals["teams_ingested"],
         totals["roster_players_discovered"], totals["roster_players_ingested"],
         totals["matches_discovered"], totals["matches_ingested"],
         totals["scored_matches_discovered"], totals["scored_matches_with_scoresheet"],
+        totals["identity_resolved"], totals["identity_unresolved"],
+        "n/a" if identity_rate is None else f"{identity_rate * 100:.1f}%",
         "none" if not coverage_gaps else "; ".join(coverage_gaps),
     )
-    return {"own_teams": own_counts, "division_wide": totals, "coverage_gaps": coverage_gaps}
+    return {
+        "own_teams": own_counts, "division_wide": totals, "coverage_gaps": coverage_gaps,
+        "identity_resolution_rate": identity_rate,
+    }
 
 
 def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, int]:

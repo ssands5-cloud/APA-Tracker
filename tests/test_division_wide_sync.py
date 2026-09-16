@@ -67,11 +67,11 @@ MATCH_DETAIL_PAYLOAD = {
     "results": [
         {"homeAway": "HOME", "scores": [
             {"player": {"id": 9001, "displayName": "Ann Fixture"}, "matchPositionNumber": 1,
-             "skillLevel": 6, "result": "W", "points": {"total": 3}},
+             "skillLevel": 6, "winLoss": "W", "points": {"total": 3}},
         ]},
         {"homeAway": "AWAY", "scores": [
             {"player": {"id": 9002, "displayName": "Uma Sample"}, "matchPositionNumber": 1,
-             "skillLevel": 5, "result": "L", "points": {"total": 1}},
+             "skillLevel": 5, "winLoss": "L", "points": {"total": 1}},
         ]},
     ],
 }
@@ -95,6 +95,119 @@ def mocked_fetches(monkeypatch):
     monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
     monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
     monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: MATCH_DETAIL_PAYLOAD)
+
+
+class TestIdentityResolution:
+    """The real defect: APA's own scoresheet uses a DIFFERENT alias id
+    space than roster/TeamStat queries for the same real person -- even
+    across a single real person's own matches. Confirmed on a real
+    promoted database: 275 of 277 real scoresheet identities resolved
+    uniquely via team-scoped name matching, zero ambiguous. These fixtures
+    deliberately use a scoresheet alias id (99001/99002) that differs from
+    the roster's real member id (9001/9002), exactly like the real defect.
+    """
+
+    ALIAS_ROSTERS_PAYLOAD = ROSTERS_PAYLOAD  # same team/roster shape
+
+    ALIAS_SCHEDULE_PAYLOAD = SCHEDULE_PAYLOAD
+
+    ALIAS_MATCH_DETAIL_PAYLOAD = {
+        "id": 90401,
+        "home": {"id": 301, "name": "Fixture Sharks"},
+        "away": {"id": 302, "name": "Fixture Renegades"},
+        "results": [
+            {"homeAway": "HOME", "scores": [
+                {"player": {"id": 99001, "displayName": "Ann Fixture"}, "matchPositionNumber": 1,
+                 "skillLevel": 6, "winLoss": "W", "points": {"total": 3}},
+            ]},
+            {"homeAway": "AWAY", "scores": [
+                {"player": {"id": 99002, "displayName": "Uma Sample"}, "matchPositionNumber": 1,
+                 "skillLevel": 5, "winLoss": "L", "points": {"total": 1}},
+            ]},
+        ],
+    }
+
+    def test_scoresheet_alias_ids_are_rewritten_to_canonical_roster_identity(self, db, monkeypatch):
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: self.ALIAS_ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: self.ALIAS_SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: self.ALIAS_MATCH_DETAIL_PAYLOAD)
+
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        from database.models import Player, PlayerHeadToHead, PlayerMatch
+
+        # The roster's real player (external_id "9001" per ROSTERS_PAYLOAD's
+        # member.id) must own the PlayerMatch/PlayerHeadToHead rows -- not a
+        # separate Player created under the scoresheet's own alias id 99001.
+        ann = db.query(Player).filter_by(external_id="9001").one()
+        assert db.query(Player).filter_by(external_id="99001").first() is None
+        assert db.query(PlayerMatch).filter_by(player_id=ann.id).count() == 1
+        assert db.query(PlayerHeadToHead).filter_by(player_id=ann.id).count() == 1
+
+    def test_the_direct_pairing_matrix_now_finds_this_evidence(self, db, monkeypatch):
+        """The actual, user-visible symptom this whole fix addresses: before
+        the fix, PairingEvidenceMatrix (keyed on canonical roster ids) could
+        never find PlayerHeadToHead rows keyed on scoresheet alias ids, so
+        every real pairing showed as INDIRECT even with real games played."""
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: self.ALIAS_ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: self.ALIAS_SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: self.ALIAS_MATCH_DETAIL_PAYLOAD)
+
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        from analytics.pairing_evidence import EvidenceLabel, build_pairing_evidence_matrix
+
+        matrix = build_pairing_evidence_matrix(
+            db, our_team_external_id="301", opponent_team_external_id="302",
+            format=FORMAT_NAME, session_name=SESSION_NAME,
+        )
+        pairing = matrix.pairings[0]
+        assert pairing.evidence_label == EvidenceLabel.DIRECT
+
+    def test_resolution_counts_are_reported(self, db, monkeypatch):
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: self.ALIAS_ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: self.ALIAS_SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: self.ALIAS_MATCH_DETAIL_PAYLOAD)
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["identity_resolved"] == 2
+        assert counts["identity_unresolved"] == 0
+
+    def test_a_name_absent_from_the_current_roster_is_left_unresolved_not_guessed(self, db, monkeypatch):
+        """The real, honest case (a substitute player): never merge onto a
+        roster player who isn't actually a unique name match."""
+        detail = {
+            "id": 90401,
+            "home": {"id": 301, "name": "Fixture Sharks"},
+            "away": {"id": 302, "name": "Fixture Renegades"},
+            "results": [
+                {"homeAway": "HOME", "scores": [
+                    {"player": {"id": 99009, "displayName": "Substitute Sub"}, "matchPositionNumber": 1,
+                     "skillLevel": 6, "winLoss": "W", "points": {"total": 3}},
+                ]},
+                {"homeAway": "AWAY", "scores": [
+                    {"player": {"id": 99002, "displayName": "Uma Sample"}, "matchPositionNumber": 1,
+                     "skillLevel": 5, "winLoss": "L", "points": {"total": 1}},
+                ]},
+            ],
+        }
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: self.ALIAS_ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: self.ALIAS_SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: detail)
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        from database.models import Player
+
+        assert counts["identity_unresolved"] == 1
+        assert counts["identity_resolved"] == 1
+        substitute = db.query(Player).filter_by(external_id="99009").one_or_none()
+        assert substitute is not None  # kept under its own honest, unmerged identity
 
 
 class TestSyncDivisionWide:

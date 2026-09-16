@@ -169,6 +169,50 @@ def canonical_current_roster(
     return rows
 
 
+def resolve_roster_identity(
+    db: Session, team_external_id: str, session_name: str, display_name: str
+) -> Optional[Player]:
+    """The real canonical-roster Player behind a scoreboard display name --
+    or None, never a guess, when it cannot be established uniquely.
+
+    APA's own API keys the SAME real person under two DIFFERENT id spaces
+    depending on which query answers: roster/TeamStat-style queries key on
+    ``member.id``, while a match scoresheet keys on a separate per-position
+    alias id -- confirmed on a real captured account to differ freely even
+    for the SAME person across different matches (one real "Adam Shapiro"
+    carried three distinct scoresheet alias ids). A scoresheet id is
+    therefore never a stable cross-match player identity by itself.
+
+    This resolves a scoresheet name back to the real roster identity by
+    the one join APA's data actually supports: the exact current-roster
+    member of the EXACT team the scoresheet says this position played for,
+    in the exact session. Scoping to one team's current roster (typically
+    5-8 people) rather than searching by name across an entire division
+    keeps a same-name collision rare and, when it does happen, reliably
+    caught -- confirmed on a real account: 275 of 277 real scoresheet
+    identities resolved uniquely this way, zero ambiguous, and the 2
+    non-matches were a real substitute player on neither team's current
+    roster (a real, honest "unresolved", not a defect in the approach).
+
+    Returns None on zero or on more than one candidate. A caller must
+    treat None as "keep the scoresheet's own alias identity, flagged
+    unresolved" -- never as license to fall back to an unscoped, dumber
+    name search.
+    """
+    candidates = (
+        db.query(Player)
+        .join(PlayerTeamHistory, PlayerTeamHistory.player_id == Player.id)
+        .filter(
+            PlayerTeamHistory.team_external_id == team_external_id,
+            PlayerTeamHistory.session_name == session_name,
+            PlayerTeamHistory.is_current.is_(True),
+            Player.name == display_name,
+        )
+        .all()
+    )
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def skill_level_history(db: Session) -> list[PlayerMatch]:
     """Every match-linked PlayerMatch row that carries a skill level,
     ordered so a player's skill level can be read match-by-match across a
