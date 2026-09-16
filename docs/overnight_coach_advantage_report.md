@@ -2,10 +2,15 @@
 
 ## Claude Build Notes
 
-**Status: built, tested, and run against real production data. Not yet reviewed by GPT** —
-see the caveat at the end of this section before treating this as independently audited.
+Entries below are appended nightly, newest last, and never overwritten --
+see the bottom of this file for the most recent entry.
 
-### What was built
+### 2026-09-16
+
+**Status: built, tested, and run against real production data. Not yet reviewed by GPT** —
+see the caveat at the end of this entry before treating this as independently audited.
+
+#### What was built
 
 Following the Coach Advantage architecture plan's **Option A** path (build
 strictly on already-approved, already-validated evidence; no new
@@ -54,7 +59,7 @@ win-probability model, no invented categorical threshold):
   pre-existing, unrelated, already-broken test file — see Known Issues
   below): **1577 passed, 0 failed.**
 
-### Run against real production data
+#### Run against real production data
 
 ```
 python scripts/build_coach_advantage_bundle.py --db data/apa_tracker.db --our-team-id 13082948
@@ -76,7 +81,7 @@ roster/trend tables, opponent ranking table, and approved-lineup table all
 render real names, real skill levels, real evidence labels, and honest
 "No data" cells — no console errors.
 
-### A real bug found and fixed during this build (not a pre-existing one)
+#### A real bug found and fixed during this build (not a pre-existing one)
 
 While rebuilding the real bundle, `ui/dashboard.py` and both new HTML
 exports were nearly unreadable in a dark-mode browser: their `body` rule
@@ -110,7 +115,7 @@ delete-and-rebuild the same path, causing a real, reproducible
 alone). Fixed by building this test file's own fixture into a private
 `tmp_path`, never the shared project-wide fixture file.
 
-### Deliberately excluded (Option A, per the architecture plan)
+#### Deliberately excluded (Option A, per the architecture plan)
 
 No new win-probability/confidence model. No categorical "danger
 player"/"favored" flag. No "Player A is favored because…" verdict text.
@@ -123,7 +128,7 @@ exclusion table, which names by module exactly why this project has
 repeatedly had to fail-close invented, unfitted thresholds presented as
 coach advice.
 
-### Known gaps / disclosed limitations
+#### Known gaps / disclosed limitations
 
 - **No plotted sparkline.** Trend is shown as a direction + volatility
   count (`▲ up (volatility 2)`), not a chart. A real sparkline needs each
@@ -141,7 +146,7 @@ coach advice.
   fuller coverage view (missing skill levels named individually, refresh
   dates, etc.) that document specifies.
 
-### Known issue found, NOT caused by this work
+#### Known issue found, NOT caused by this work
 
 `ui/export_html_player_vs_player.py` has a substantial (149 insertions /
 126 deletions), **uncommitted** change already sitting in the working tree
@@ -159,7 +164,7 @@ for something this task broke. **This needs your own attention separately**
 — it looks like unfinished work of your own (or a prior session's) sitting
 uncommitted, not something to discard without checking first.
 
-### Overnight coordination reality check
+#### Overnight coordination reality check
 
 Verified via `gh api repos/ssands5-cloud/APA-Tracker/collaborators`:
 `ssands5-cloud` is the only collaborator on this repository. There is no
