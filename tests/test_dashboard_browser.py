@@ -586,11 +586,23 @@ class TestMatchNight:
         instead, so this always runs. candidateCommitted used to silently
         drop a candidate's own unknown skill level instead of counting
         their slot as unverifiable, which could show "still legal" for a
-        send that genuinely couldn't be checked."""
+        send that genuinely couldn't be checked.
+
+        GPT audit follow-up (2026-09-16, 92002cf -- coverage refinement):
+        the roster here originally had only the one unknown-skill
+        candidate, so an unrelated "not enough available players" path
+        (stillNeeded=4, known=0) would independently also yield Unknown --
+        this test could pass even if the actual candidate-null-skill fix
+        regressed. Four known, low-skill teammates are now also Available,
+        so there IS enough real bench depth to answer -- the only reason
+        this must still come back Unknown is the candidate's own missing
+        skill, which is the thing actually being tested."""
         our_team_id, opp_team_id = "SYN-OUR-1", "SYN-OPP-1"
         fmt, session = "8-Ball Open", "Synthetic Session 1"
         scope_key = f"{opp_team_id}|{fmt}|{session}"
-        our_roster = [_mn_roster_entry(901, "Unknown Skill Player", None)]
+        our_roster = [_mn_roster_entry(901, "Unknown Skill Player", None)] + [
+            _mn_roster_entry(902 + i, f"Known Teammate {i}", 2) for i in range(4)
+        ]
         opponent_roster = [_mn_roster_entry(801, "Opp One", 5)]
         scope = _mn_team_scope(our_team_id, "Synthetic Our Team 1", opp_team_id,
                                 "Synthetic Opponent 1", fmt, session, our_roster, opponent_roster)

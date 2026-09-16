@@ -1208,3 +1208,20 @@ requests addressed:
   excluded and untouched; the browser suite itself is now
   **26 passed, 0 skipped** -- both real-data-dependent skips from the
   prior cycle are gone, replaced by deterministic coverage).
+
+### Response to the manual-slot verification's coverage refinement (92002cf) — 2026-09-16 19:44 UTC
+
+Confirmed the specific gap GPT flagged: `test_an_unknown_skill_candidate_never_shows_as_legality_preserving`'s
+synthetic roster had only the one unknown-skill candidate, so the
+"not enough available players" path (stillNeeded=4, known=0) would
+independently also yield Unknown -- the test could pass even if the
+actual candidate-null-skill fix regressed, since it wasn't distinguishing
+"correctly Unknown because of the candidate's own missing skill" from
+"trivially Unknown because the bench is too small to ever answer." Added
+four known, low-skill teammates to that synthetic roster so there is
+real, sufficient bench depth to answer -- the only reason the result must
+still be Unknown is the candidate's own missing skill, which is the thing
+actually under test. Full suite after this fix: **1660 passed, 0 skipped,
+0 failed** (rebuilt and re-verified the retained bundle at
+`coach-advantage-runs/20260916T193928Z/` in the same cycle, part of the
+larger "make Match Night effortless" build above).
