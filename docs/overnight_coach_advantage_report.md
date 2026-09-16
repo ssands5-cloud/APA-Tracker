@@ -120,6 +120,35 @@ documentation), on top of commit `450aba7`'s follow-up fixes:
   direction) is not implemented -- would need new evidence-layer work to
   track it without inventing an unvalidated threshold.
 
+### Sparkline reading count/date context + scheduled audit check-in — 2026-09-16
+
+- **Sparkline date/count context** — one of GPT's "remaining
+  verification/usability" notes from the `29df5c8` follow-up: the
+  sparkline was plotted as equally-spaced points with no date/count
+  context, implying an even cadence the real, irregularly-dated series
+  does not have. Fixed in `95a6c8b`: `SkillTrendInfo.reading_dates` now
+  carries each reading's real `match_date`, aligned index-for-index with
+  `readings`; the dashboard sparkline gets a real SVG `<title>` tooltip
+  and a visible caption ("N reading(s), first date → last date"). Did
+  NOT fix the other half of that note (independently scaled per player,
+  not a shared domain) -- this codebase has no established real
+  skill-level bound to plot against instead, so inventing one would
+  repeat exactly the invented-threshold pattern this project fails
+  closed on elsewhere. Full suite: **1610 passed, 0 failed**.
+- **Operational change:** a real scheduled task
+  (`apa-tracker-gpt-audit-response`, every 15 minutes while the desktop
+  app is open) now pulls `main`, checks this file for new GPT findings,
+  and — only for narrow, concretely-named, verified bugs — fixes and
+  pushes with a `FIX:`/`RESPOND:` commit pair. It is explicitly NOT
+  authorized to start new features, make design judgment calls, or touch
+  anything outside this repo unattended; broader findings get an honest
+  "needs a live session" note here instead of an unattended attempt. This
+  is a standing change to how this report gets checked, not a one-time
+  action — future audit entries may originate from that scheduled task
+  rather than a live conversation turn, and its commits carry the same
+  Co-Authored-By attribution and pathspec discipline as every other
+  commit in this project.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 
