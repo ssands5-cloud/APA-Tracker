@@ -286,6 +286,51 @@ class TestVerifyPhase:
 
         assert result.status == "ok"
 
+    def test_zero_assignments_with_no_explanation_still_fails(self, run_copy):
+        """The pre-existing guarantee this check exists for: genuinely empty
+        lineups (a real bug, e.g. build_lineups.py never ran) must still
+        fail verification when nothing declares why."""
+        manifest = json.loads((run_copy / "demo_manifest.json").read_text(encoding="utf-8"))
+        bundled_db = run_copy / "data" / manifest["database_file"]
+        lineups_path = run_copy / "json" / "lineups.json"
+        payload = json.loads(lineups_path.read_text(encoding="utf-8"))
+        payload["lineups"] = []
+        payload["lineups_unavailable"] = []
+        lineups_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        with pytest.raises(BuildError, match="no lineup assignments"):
+            builder.verify(
+                run_copy, bundled_db, sha256_file(bundled_db), "fixture",
+                manifest["reconciliation"],
+            )
+
+    def test_zero_assignments_with_a_declared_reason_does_not_fail(self, run_copy):
+        """The new, load-bearing behaviour: a run whose own selected scope
+        exceeded the lineup optimizer's exact-search guard is a real,
+        reported state (scripts/build_lineups.py's "available": False
+        groups) -- not a silent failure this check should hide behind a
+        hard build error."""
+        manifest = json.loads((run_copy / "demo_manifest.json").read_text(encoding="utf-8"))
+        bundled_db = run_copy / "data" / manifest["database_file"]
+        lineups_path = run_copy / "json" / "lineups.json"
+        payload = json.loads(lineups_path.read_text(encoding="utf-8"))
+        payload["lineups"] = []
+        payload["lineups_unavailable"] = [{
+            "available": False,
+            "team_id": "1", "team_name": "Our Team",
+            "opponent_team_id": "2", "opponent_team_name": "Their Team",
+            "format": "8-Ball Open", "session_name": "2026 Rehearsal Session",
+            "unavailable_reason": "needs 3,628,800 assignments, above the 500,000 guard",
+        }]
+        lineups_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = builder.verify(
+            run_copy, bundled_db, sha256_file(bundled_db), "fixture",
+            manifest["reconciliation"],
+        )
+
+        assert result.status == "ok"
+
 
 class TestFinalizeOrdering:
     def test_a_failed_finalize_leaves_no_ready_marker(self, run_copy):

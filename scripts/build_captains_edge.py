@@ -170,14 +170,53 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def fetch_matchups(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+def _scope_team_pair_clause(scope: Optional[dict[str, Any]], our_alias: str, opp_alias: str) -> tuple[str, list[Any]]:
+    """A SQL fragment restricting a pairing to exactly ``scope``'s two teams.
+
+    Matches either direction (a player from either team can be the "own"
+    side of a pairing row), since the underlying tables store pairings from
+    one player's perspective, not from the demo run's own/opponent framing.
+    Returns an empty fragment and no params when ``scope`` is ``None`` --
+    the whole-database behaviour every other caller of these fetchers keeps.
+    """
+    if scope is None:
+        return "", []
+    our_team_id = str(scope["our_team_id"])
+    opponent_team_id = str(scope["opponent_team_id"])
+    clause = (
+        f"(({our_alias}.external_id = ? AND {opp_alias}.external_id = ?) "
+        f"OR ({our_alias}.external_id = ? AND {opp_alias}.external_id = ?))"
+    )
+    return clause, [our_team_id, opponent_team_id, opponent_team_id, our_team_id]
+
+
+def fetch_matchups(
+    connection: sqlite3.Connection, scope: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     """Every scored pairing, straight out of `player_matchups` -- the table
     analytics/matchup_builder writes. No arithmetic beyond the display tag.
+
+    ``scope`` (when given) restricts this to exactly one real team pairing
+    and format/session, the same scope dict shape used elsewhere in this
+    project (our_team_id, opponent_team_id, format, session_name) -- for a
+    demo run's own artifacts, never for the standalone whole-division report
+    this function otherwise produces.
     """
     if not _table_exists(connection, "player_matchups"):
         return []
+    team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+    where_parts = []
+    params: list[Any] = []
+    if team_clause:
+        where_parts.append(team_clause)
+        params.extend(team_params)
+    if scope is not None:
+        where_parts.append("m.format = ?")
+        where_parts.append("m.session_name = ?")
+        params.extend([scope["format"], scope["session_name"]])
+    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
     rows = connection.execute(
-        """
+        f"""
         SELECT
             p.external_id   AS player_id,
             p.name          AS player_name,
@@ -198,8 +237,12 @@ def fetch_matchups(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         FROM player_matchups m
         JOIN players p ON p.id = m.player_id
         JOIN players o ON o.id = m.opponent_id
+        LEFT JOIN teams t ON t.id = p.team_id
+        LEFT JOIN teams ot ON ot.id = o.team_id
+        {where_sql}
         ORDER BY p.name, m.matchup_score DESC
-        """
+        """,
+        params,
     ).fetchall()
 
     matchups = []
@@ -210,17 +253,28 @@ def fetch_matchups(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     return matchups
 
 
-def fetch_players(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+def fetch_players(
+    connection: sqlite3.Connection, scope: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     """Roster rows for everyone who appears in at least one scored pairing.
 
     Deliberately not every row in `players`: the roster carries people with
     no matchup rows at all, and offering them in the selector would promise
-    an answer the app cannot give.
+    an answer the app cannot give. ``scope`` restricts this to the two real
+    teams named in it (see fetch_matchups).
     """
     if not _table_exists(connection, "player_matchups"):
         return []
+    where_parts = [
+        "(p.id IN (SELECT player_id FROM player_matchups) "
+        "OR p.id IN (SELECT opponent_id FROM player_matchups))"
+    ]
+    params: list[Any] = []
+    if scope is not None:
+        where_parts.append("t.external_id IN (?, ?)")
+        params.extend([str(scope["our_team_id"]), str(scope["opponent_team_id"])])
     rows = connection.execute(
-        """
+        f"""
         SELECT DISTINCT
             p.external_id AS player_id,
             p.name        AS player_name,
@@ -233,25 +287,40 @@ def fetch_players(connection: sqlite3.Connection) -> list[dict[str, Any]]:
             t.name        AS team_name
         FROM players p
         LEFT JOIN teams t ON t.id = p.team_id
-        WHERE p.id IN (SELECT player_id FROM player_matchups)
-           OR p.id IN (SELECT opponent_id FROM player_matchups)
+        WHERE {' AND '.join(where_parts)}
         ORDER BY p.name
-        """
+        """,
+        params,
     ).fetchall()
     return [dict(row) for row in rows]
 
 
-def fetch_head_to_head(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+def fetch_head_to_head(
+    connection: sqlite3.Connection, scope: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     """The individual games behind each pairing, newest first.
 
     `player_matchups` says what the record is; this says which games made it,
     which is what a captain actually argues about. A missing table or no rows
     is normal on a database synced before head-to-head ingestion existed.
+    ``scope`` restricts this to the one real team pairing and format/session
+    named in it (see fetch_matchups).
     """
     if not _table_exists(connection, "player_head_to_head"):
         return []
+    team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+    where_parts = []
+    params: list[Any] = []
+    if team_clause:
+        where_parts.append(team_clause)
+        params.extend(team_params)
+    if scope is not None:
+        where_parts.append("h.format = ?")
+        where_parts.append("h.session_name = ?")
+        params.extend([scope["format"], scope["session_name"]])
+    where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
     rows = connection.execute(
-        """
+        f"""
         SELECT
             p.external_id AS player_id,
             p.name        AS player_name,
@@ -269,9 +338,13 @@ def fetch_head_to_head(connection: sqlite3.Connection) -> list[dict[str, Any]]:
         FROM player_head_to_head h
         JOIN players p ON p.id = h.player_id
         JOIN players o ON o.id = h.opponent_id
+        LEFT JOIN teams t ON t.id = p.team_id
+        LEFT JOIN teams ot ON ot.id = o.team_id
         LEFT JOIN matches mt ON mt.id = h.match_id
+        {where_sql}
         ORDER BY mt.week DESC, mt.match_date DESC
-        """
+        """,
+        params,
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -280,16 +353,24 @@ def _distinct(matchups: list[dict[str, Any]], key: str) -> list[str]:
     return sorted({m[key] for m in matchups if m.get(key)})
 
 
-def build_payload(connection: sqlite3.Connection, banner: str = "") -> dict[str, Any]:
-    """Everything both artifacts need, in one JSON-serialisable dict."""
-    matchups = fetch_matchups(connection)
+def build_payload(
+    connection: sqlite3.Connection, banner: str = "", scope: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Everything both artifacts need, in one JSON-serialisable dict.
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts every fetch to that one real team pairing -- for a demo
+    run's own artifacts. The default (``None``) is the whole-division report
+    this script otherwise produces for standalone/CLI use.
+    """
+    matchups = fetch_matchups(connection, scope)
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "banner": banner,
         "min_sample": DEFAULT_MIN_SAMPLE,
-        "players": fetch_players(connection),
+        "players": fetch_players(connection, scope),
         "matchups": matchups,
-        "head_to_head": fetch_head_to_head(connection),
+        "head_to_head": fetch_head_to_head(connection, scope),
         "formats": _distinct(matchups, "format"),
         "sessions": _distinct(matchups, "session_name"),
     }
@@ -421,14 +502,20 @@ def write_workbook(payload: dict[str, Any], path: Path) -> Path:
 
 
 def build(db_path: Optional[str] = None, out_dir: Optional[str] = None,
-          banner: str = "") -> tuple[Path, Path]:
-    """Read the database and write both artifacts. Returns (html, xlsx)."""
+          banner: str = "", scope: Optional[dict[str, Any]] = None) -> tuple[Path, Path]:
+    """Read the database and write both artifacts. Returns (html, xlsx).
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts every artifact to that one real team pairing -- for a
+    demo run's own artifacts. The default (``None``) is the whole-division
+    report this script otherwise produces for standalone/CLI use.
+    """
     resolved = resolve_db_path(db_path)
     logger.info("Reading %s", resolved)
 
     connection = connect_read_only(resolved)
     try:
-        payload = build_payload(connection, banner)
+        payload = build_payload(connection, banner, scope)
     finally:
         connection.close()
 
@@ -439,7 +526,7 @@ def build(db_path: Optional[str] = None, out_dir: Optional[str] = None,
     html_path.write_text(render_html(payload), encoding="utf-8")
 
     xlsx_path = write_workbook(payload, directory / XLSX_NAME)
-    json_path = write_decision_json(str(resolved), directory / JSON_NAME)
+    json_path = write_decision_json(str(resolved), directory / JSON_NAME, scope)
 
     logger.info(
         "Wrote %s, %s and %s (%d players, %d pairings, %d games)",
@@ -868,17 +955,35 @@ _APP_TEMPLATE = r"""<!DOCTYPE html>
 # the three views of Captain's Edge from drifting apart.
 
 
-def _decision_rows(connection) -> tuple[list[dict], dict[str, dict]]:
+def _decision_rows(
+    connection, scope: Optional[dict[str, Any]] = None,
+) -> tuple[list[dict], dict[str, dict]]:
     """(pairings, trends-by-player-id) for the decision engine.
 
     Pairings come from player_h2h_advantage -- win_probability,
     expected_points and expected_balls live there, NOT on player_matchups,
     despite the spec naming analytics.matchups as their source.
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts this to the one real team pairing and format/session
+    named in it -- for a demo run's own artifacts, never the standalone
+    whole-division decision document this otherwise produces.
     """
     pairings = []
     if _table_exists(connection, "player_h2h_advantage"):
+        team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+        where_parts = []
+        params: list[Any] = []
+        if team_clause:
+            where_parts.append(team_clause)
+            params.extend(team_params)
+        if scope is not None:
+            where_parts.append("a.format = ?")
+            where_parts.append("a.session_name = ?")
+            params.extend([scope["format"], scope["session_name"]])
+        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
         pairings = [dict(row) for row in connection.execute(
-            """
+            f"""
             SELECT p.external_id AS player_id, p.name AS player_name,
                    p.team_id      AS team_pk,
                    o.external_id AS opponent_id, o.name AS opponent_name,
@@ -889,7 +994,11 @@ def _decision_rows(connection) -> tuple[list[dict], dict[str, dict]]:
             FROM player_h2h_advantage a
             JOIN players p ON p.id = a.player_id
             JOIN players o ON o.id = a.opponent_id
-            """
+            LEFT JOIN teams t ON t.id = p.team_id
+            LEFT JOIN teams ot ON ot.id = o.team_id
+            {where_sql}
+            """,
+            params,
         ).fetchall()]
 
     trends: dict[str, dict] = {}
@@ -911,11 +1020,15 @@ def _decision_rows(connection) -> tuple[list[dict], dict[str, dict]]:
     return pairings, trends
 
 
-def build_decision_document(connection) -> dict[str, Any]:
-    """The Captain's Decision Engine's full output, ready to serialise."""
+def build_decision_document(connection, scope: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """The Captain's Decision Engine's full output, ready to serialise.
+
+    ``scope`` restricts this to one real team pairing and format/session
+    (see ``_decision_rows``), for a demo run's own artifacts.
+    """
     from analytics.captains_edge import compute_bounds, lineup_recommendation
 
-    pairings, trends = _decision_rows(connection)
+    pairings, trends = _decision_rows(connection, scope)
     bounds = compute_bounds(pairings)
 
     by_team, resolution, unresolved = _group_by_team(connection, pairings)
@@ -951,17 +1064,22 @@ def build_decision_document(connection) -> dict[str, Any]:
     }
 
 
-def write_decision_json(db_path: str, path: Path) -> Path:
+def write_decision_json(
+    db_path: str, path: Path, scope: Optional[dict[str, Any]] = None,
+) -> Path:
     """Write exports/captains_edge.json.
 
     Rewritten in full each run rather than merged: the document is derived
     entirely from current rows, so a stale lineup for a team that no longer
     has pairings must not survive. That is the pruning requirement -- a whole
     file replaced is a cleaner guarantee than row-by-row deletion.
+
+    ``scope`` restricts the document to one real team pairing (see
+    ``build_decision_document``), for a demo run's own artifacts.
     """
     connection = connect_read_only(Path(db_path))
     try:
-        document = build_decision_document(connection)
+        document = build_decision_document(connection, scope)
     finally:
         connection.close()
 

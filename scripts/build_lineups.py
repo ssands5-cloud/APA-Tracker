@@ -120,6 +120,7 @@ def _warn(warnings: list[str], message: str) -> None:
 def fetch_pairing_rows(
     connection: sqlite3.Connection,
     warnings: Optional[list[str]] = None,
+    scope: Optional[dict[str, Any]] = None,
 ) -> list[dict[str, Any]]:
     """Fetch raw H2H pairing rows and roster identity metadata.
 
@@ -127,6 +128,13 @@ def fetch_pairing_rows(
     raw value is preserved as ``matchup_score``; ``build_payload`` adds a
     separate normalized ``matchup_score_normalized`` field for the pure
     optimizer, whose contract is 0..1.  No values are filled in here.
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts this to one real team pairing -- for a demo run's own
+    artifacts, never the standalone whole-division export this otherwise
+    produces. Matches either direction, since a pairing row is stored from
+    one player's own perspective, not from the demo run's own/opponent
+    framing.
     """
 
     local_warnings = warnings if warnings is not None else []
@@ -154,15 +162,34 @@ def fetch_pairing_rows(
         return []
 
     if _table_exists(connection, "teams"):
-        team_columns = ", t.name AS team_name, ot.name AS opponent_team_name"
+        team_columns = (
+            ", t.name AS team_name, ot.name AS opponent_team_name"
+            ", t.external_id AS team_external_id, ot.external_id AS opponent_team_external_id"
+        )
         team_joins = (
             "LEFT JOIN teams t ON t.id = p.team_id "
             "LEFT JOIN teams ot ON ot.id = o.team_id"
         )
     else:
-        team_columns = ", NULL AS team_name, NULL AS opponent_team_name"
+        team_columns = (
+            ", NULL AS team_name, NULL AS opponent_team_name"
+            ", NULL AS team_external_id, NULL AS opponent_team_external_id"
+        )
         team_joins = ""
         _warn(local_warnings, "teams is unavailable; team names will be blank where IDs exist.")
+
+    where_sql = ""
+    params: list[Any] = []
+    if scope is not None:
+        our_team_id = str(scope["our_team_id"])
+        opponent_team_id = str(scope["opponent_team_id"])
+        where_sql = (
+            "WHERE ((t.external_id = ? AND ot.external_id = ?) "
+            "OR (t.external_id = ? AND ot.external_id = ?)) "
+            "AND a.format = ? AND a.session_name = ?"
+        )
+        params = [our_team_id, opponent_team_id, opponent_team_id, our_team_id,
+                  scope["format"], scope["session_name"]]
 
     try:
         rows = connection.execute(
@@ -189,9 +216,11 @@ def fetch_pairing_rows(
             JOIN players p ON p.id = a.player_id
             JOIN players o ON o.id = a.opponent_id
             {team_joins}
+            {where_sql}
             ORDER BY COALESCE(p.name, ''), COALESCE(o.name, ''),
                      COALESCE(a.format, ''), COALESCE(a.session_name, '')
-            """
+            """,
+            params,
         ).fetchall()
     except sqlite3.Error as exc:
         _warn(local_warnings, f"Could not read player_h2h_advantage: {exc}.")
@@ -654,7 +683,28 @@ def _lineup_for_group(
             f"({format_name}, {session_name}) have no H2H row; neutral defaults may be used.",
         )
 
-    solution = solve_lineup_assignment(matrix, player_names, opponent_names)
+    try:
+        solution = solve_lineup_assignment(matrix, player_names, opponent_names)
+    except ValueError as exc:
+        # The optimizer's exact-search guard, not a bug: report this group
+        # as unavailable with the real reason rather than approximating or
+        # crashing the whole build. See analytics/lineup_optimizer.py's
+        # MAX_ASSIGNMENT_PERMUTATIONS.
+        return {
+            "team_id": str(first["team_pk"]),
+            "team_name": first.get("team_name") or "",
+            "opponent_team_id": str(first["opponent_team_pk"]),
+            "opponent_team_name": first.get("opponent_team_name") or "",
+            "format": format_name,
+            "session_name": session_name,
+            "roster_resolution": _resolution_label(rows),
+            "pairing_rows": len(rows),
+            "players_considered": len(players),
+            "opponents_considered": len(opponents),
+            "available": False,
+            "unavailable_reason": str(exc),
+        }
+
     assignments: list[dict[str, Any]] = []
     for entry in solution.assignments:
         serialized = vars(entry).copy()
@@ -678,6 +728,7 @@ def _lineup_for_group(
     risk = compute_lineup_risk(solution.assignments, weights=lineup_risk_weights)
 
     return {
+        "available": True,
         "team_id": str(first["team_pk"]),
         "team_name": first.get("team_name") or "",
         "opponent_team_id": str(first["opponent_team_pk"]),
@@ -719,11 +770,18 @@ def build_payload(
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
     rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
     opponent_scouting_thresholds: OpponentScoutingThresholds = DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
+    scope: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Build the complete JSON-serializable lineup document."""
+    """Build the complete JSON-serializable lineup document.
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts this to one real team pairing -- for a demo run's own
+    artifacts. The default (``None``) is the standalone whole-division
+    export this otherwise produces.
+    """
 
     warnings: list[str] = []
-    pairings = fetch_pairing_rows(connection, warnings)
+    pairings = fetch_pairing_rows(connection, warnings, scope)
     trends = fetch_trends(connection, warnings)
     win_rates_by_sl = fetch_win_rates_by_skill_level(connection, warnings)
 
@@ -758,7 +816,7 @@ def build_payload(
             (row["team_pk"], row["opponent_team_pk"], row["format"], row["session_name"])
         ].append(row)
 
-    lineups = [
+    all_groups = [
         _lineup_for_group(
             group, trends, warnings, weights=weights,
             win_rates_by_sl=win_rates_by_sl, win_probability_weights=win_probability_weights,
@@ -766,6 +824,15 @@ def build_payload(
         )
         for _, group in sorted(grouped.items(), key=lambda item: tuple(map(str, item[0])))
     ]
+    lineups = [group for group in all_groups if group["available"]]
+    lineups_unavailable = [group for group in all_groups if not group["available"]]
+    for group in lineups_unavailable:
+        _warn(
+            warnings,
+            f"Lineup Lab unavailable for {group.get('team_name') or group['team_id']} vs "
+            f"{group.get('opponent_team_name') or group['opponent_team_id']} "
+            f"({group['format']}, {group['session_name']}): {group['unavailable_reason']}",
+        )
 
     if pairings:
         trendless = sum(1 for row in pairings if not row.get("trend_available"))
@@ -790,6 +857,7 @@ def build_payload(
         "players_with_trends": len({key[0] for key in trends}),
         "eligible_pairing_rows": len(eligible),
         "lineups": lineups,
+        "lineups_unavailable": lineups_unavailable,
         "opponent_scouting": [
             {
                 "opponent_id": entry.opponent_id,
@@ -1024,8 +1092,15 @@ def build(
     lineup_risk_weights: LineupRiskWeights = DEFAULT_LINEUP_RISK_WEIGHTS,
     rationale_toggles: RationaleToggles = DEFAULT_RATIONALE_TOGGLES,
     opponent_scouting_thresholds: OpponentScoutingThresholds = DEFAULT_OPPONENT_SCOUTING_THRESHOLDS,
+    scope: Optional[dict[str, Any]] = None,
 ) -> Path:
-    """Read the source database and atomically write ``lineups.json``."""
+    """Read the source database and atomically write ``lineups.json``.
+
+    ``scope`` (our_team_id, opponent_team_id, format, session_name), when
+    given, restricts this to one real team pairing -- for a demo run's own
+    artifacts. The default (``None``) is the standalone whole-division
+    export this otherwise produces.
+    """
 
     resolved = resolve_db_path(db_path)
     logger.info("Reading %s", resolved)
@@ -1037,6 +1112,7 @@ def build(
             lineup_risk_weights=lineup_risk_weights,
             rationale_toggles=rationale_toggles,
             opponent_scouting_thresholds=opponent_scouting_thresholds,
+            scope=scope,
         )
     finally:
         connection.close()

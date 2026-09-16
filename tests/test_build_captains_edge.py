@@ -164,6 +164,121 @@ class TestQueries:
         assert payload["sessions"] == ["Summer 2026"]
 
 
+class TestScope:
+    """A demo run scopes this builder to its own one real team pairing --
+    see scripts/build_full_production_demo.py's build_documents(), which
+    passes its own (our_team_id, opponent_team_id, format, session_name)
+    scope dict through unchanged. Unrelated division pairings existing in
+    the same real database must not appear in a scoped build's output."""
+
+    SCOPE = {
+        "our_team_id": "T1", "opponent_team_id": "T2",
+        "format": "EIGHT_BALL", "session_name": "Summer 2026",
+    }
+
+    @pytest.fixture
+    def scoped_db_path(self, tmp_path):
+        path = tmp_path / "scoped.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            team_a = Team(external_id="T1", name="Chalk It Up")
+            team_b = Team(external_id="T2", name="Corner Pockets")
+            team_c = Team(external_id="T3", name="Unrelated C")
+            team_d = Team(external_id="T4", name="Unrelated D")
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=team_a)
+            bob = Player(external_id="P2", name="Bob", skill_level=4, team=team_b)
+            dave = Player(external_id="P3", name="Dave", skill_level=5, team=team_c)
+            erin = Player(external_id="P4", name="Erin", skill_level=6, team=team_d)
+            db.add_all([team_a, team_b, team_c, team_d, alice, bob, dave, erin])
+            db.flush()
+
+            match = Match(external_id="M1", week=7, match_date="2026-08-01",
+                          home_team_id="T1", away_team_id="T2",
+                          home_score=3, away_score=2)
+            db.add(match)
+            db.flush()
+
+            db.add_all([
+                PlayerMatchup(
+                    player_id=alice.id, opponent_id=bob.id, matches_played=6,
+                    win_rate=0.8333, matchup_score=78, confidence_score=71,
+                    format="EIGHT_BALL", session_name="Summer 2026",
+                ),
+                # Unrelated real pairing on unrelated teams, same format/session.
+                PlayerMatchup(
+                    player_id=dave.id, opponent_id=erin.id, matches_played=3,
+                    win_rate=0.5, matchup_score=50, confidence_score=50,
+                    format="EIGHT_BALL", session_name="Summer 2026",
+                ),
+            ])
+            db.add_all([
+                PlayerHeadToHead(
+                    player_id=alice.id, opponent_id=bob.id, match_id=match.id,
+                    own_skill_level=5, opponent_skill_level=4, result="W",
+                    format="EIGHT_BALL", session_name="Summer 2026",
+                ),
+                PlayerHeadToHead(
+                    player_id=dave.id, opponent_id=erin.id, match_id=match.id,
+                    own_skill_level=5, opponent_skill_level=6, result="L",
+                    format="EIGHT_BALL", session_name="Summer 2026",
+                ),
+            ])
+            db.commit()
+        engine.dispose()
+        return path
+
+    def test_fetch_matchups_excludes_an_unrelated_team_pairing(self, scoped_db_path):
+        conn = connect_read_only(scoped_db_path)
+        try:
+            scoped = fetch_matchups(conn, scope=self.SCOPE)
+            unscoped = fetch_matchups(conn)
+        finally:
+            conn.close()
+        assert len(scoped) == 1
+        assert scoped[0]["player_name"] == "Alice"
+        assert len(unscoped) == 2
+
+    def test_fetch_players_excludes_players_from_other_teams(self, scoped_db_path):
+        conn = connect_read_only(scoped_db_path)
+        try:
+            names = {p["player_name"] for p in fetch_players(conn, scope=self.SCOPE)}
+        finally:
+            conn.close()
+        assert names == {"Alice", "Bob"}
+
+    def test_fetch_head_to_head_excludes_an_unrelated_game(self, scoped_db_path):
+        conn = connect_read_only(scoped_db_path)
+        try:
+            games = fetch_head_to_head(conn, scope=self.SCOPE)
+        finally:
+            conn.close()
+        assert len(games) == 1
+        assert games[0]["opponent_name"] == "Bob"
+
+    def test_build_payload_is_scoped_end_to_end(self, scoped_db_path):
+        conn = connect_read_only(scoped_db_path)
+        try:
+            payload = build_payload(conn, scope=self.SCOPE)
+        finally:
+            conn.close()
+        assert len(payload["matchups"]) == 1
+        assert {p["player_name"] for p in payload["players"]} == {"Alice", "Bob"}
+        assert len(payload["head_to_head"]) == 1
+
+    def test_build_writes_a_scoped_decision_document(self, scoped_db_path, tmp_path):
+        html_path, xlsx_path = build(str(scoped_db_path), str(tmp_path), scope=self.SCOPE)
+        assert html_path.is_file()
+        assert xlsx_path.is_file()
+        decision = json.loads((tmp_path / "captains_edge.json").read_text(encoding="utf-8"))
+        team_ids = {lineup["team_id"] for lineup in decision["lineups"]}
+        # Internal team pks are opaque here, but only our own scoped team's
+        # players should ever appear in a scoped decision document.
+        all_players = {p["player_name"] for lineup in decision["lineups"] for p in lineup["players"]}
+        assert "Dave" not in all_players
+        assert "Erin" not in all_players
+
+
 class TestDegradedDatabases:
     def test_a_schema_with_no_rows_yields_an_empty_payload_not_a_crash(self, tmp_path):
         path = tmp_path / "empty.db"

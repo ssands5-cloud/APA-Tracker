@@ -377,10 +377,14 @@ def build_documents(db: Session, db_path: Path, scope: dict, staging: Path) -> P
     except Exception as exc:  # noqa: BLE001 - phase category
         raise BuildError(f"analytics document construction failed: {exc}", EXIT_DOCUMENTS) from exc
 
-    # These two own their own read-only connections by design.
+    # These two own their own read-only connections by design. Scoped to
+    # this run's exact team pairing -- like every other builder above --
+    # rather than the whole division: a captain reviewing this run's
+    # artifacts should see this run's own opponent, not every other real
+    # team pairing division-wide sync happens to have ingested.
     try:
-        build_captains_edge.build(str(db_path), str(staging))
-        build_lineups.build(str(db_path), str(staging))
+        build_captains_edge.build(str(db_path), str(staging), scope=scope)
+        build_lineups.build(str(db_path), str(staging), scope=scope)
     except Exception as exc:  # noqa: BLE001 - phase category
         raise BuildError(f"legacy document construction failed: {exc}", EXIT_DOCUMENTS) from exc
 
@@ -622,7 +626,13 @@ def verify(run_dir: Path, db_path: Path, locked_hash: str, mode: str, reconcilia
     try:
         lineups = json.loads(lineups_path.read_text(encoding="utf-8"))
         assignments = sum(len(entry.get("assignments", [])) for entry in lineups.get("lineups", []))
-        if assignments == 0:
+        unavailable = lineups.get("lineups_unavailable", [])
+        # Zero assignments is only a real bug when nothing explains it. A
+        # declared unavailability (the run's own scope exceeded the exact-
+        # search guard) is a real, reported state -- see
+        # scripts/build_lineups.py's "available": False groups -- not a
+        # silent failure this build should hide behind a hard error.
+        if assignments == 0 and not unavailable:
             problems.append("lineups.json contains no lineup assignments")
     except (OSError, ValueError) as exc:
         problems.append(f"lineups.json unreadable: {exc}")

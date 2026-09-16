@@ -219,6 +219,177 @@ class TestPayload:
         assert payload["resolution_warnings"]
 
 
+class TestScope:
+    """A demo run scopes this builder to its own one real team pairing --
+    see scripts/build_full_production_demo.py's build_documents(), which
+    passes its own (our_team_id, opponent_team_id, format, session_name)
+    scope dict through unchanged. Unrelated division pairings existing in
+    the same real database must never affect a scoped build's output or
+    block it, whatever size they are."""
+
+    SCOPE = {
+        "our_team_id": "T1", "opponent_team_id": "T2",
+        "format": "8-Ball Open", "session_name": "Summer 2026",
+    }
+
+    def _add_unrelated_pairing(self, db, count: int) -> None:
+        """A separate, unrelated real team pairing with ``count`` players
+        per side -- large enough to exceed the exact-search guard when
+        ``count`` is 10, to prove it never reaches this scoped build."""
+        team_a = Team(external_id="T3", name="Unrelated A")
+        team_b = Team(external_id="T4", name="Unrelated B")
+        db.add_all([team_a, team_b])
+        db.flush()
+        left = [
+            Player(external_id=f"L{i}", name=f"Left {i}", team=team_a)
+            for i in range(count)
+        ]
+        right = [
+            Player(external_id=f"R{i}", name=f"Right {i}", team=team_b)
+            for i in range(count)
+        ]
+        db.add_all(left + right)
+        db.flush()
+        for player in left:
+            for opponent in right:
+                db.add(PlayerH2HAdvantage(
+                    player_id=player.id, opponent_id=opponent.id, matchup_score=50,
+                    win_probability=0.5, format="8-Ball Open", session_name="Summer 2026",
+                ))
+
+    def test_fetch_pairing_rows_excludes_an_unrelated_team_pairing(self, tmp_path):
+        path = tmp_path / "scoped.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            own_team = Team(external_id="T1", name="Chalk It Up")
+            opponent_team = Team(external_id="T2", name="Corner Pockets")
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=own_team)
+            bob = Player(external_id="P3", name="Bob", skill_level=5, team=opponent_team)
+            db.add_all([own_team, opponent_team, alice, bob])
+            db.flush()
+            db.add(PlayerH2HAdvantage(
+                player_id=alice.id, opponent_id=bob.id, matchup_score=90,
+                win_probability=0.9, format="8-Ball Open", session_name="Summer 2026",
+            ))
+            self._add_unrelated_pairing(db, count=3)
+            db.commit()
+        engine.dispose()
+
+        conn = connect_read_only(path)
+        try:
+            scoped_rows = fetch_pairing_rows(conn, scope=self.SCOPE)
+            all_rows = fetch_pairing_rows(conn)
+        finally:
+            conn.close()
+
+        assert len(scoped_rows) == 1
+        assert scoped_rows[0]["player_name"] == "Alice"
+        assert len(all_rows) == 1 + 3 * 3
+
+    def test_a_scoped_build_ignores_an_unrelated_oversized_pairing(self, tmp_path):
+        """The load-bearing regression: an unrelated real team pairing large
+        enough to exceed the guard must never block or appear in a scoped
+        build -- it should not even reach the optimizer."""
+        path = tmp_path / "scoped_large.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            own_team = Team(external_id="T1", name="Chalk It Up")
+            opponent_team = Team(external_id="T2", name="Corner Pockets")
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=own_team)
+            bob = Player(external_id="P3", name="Bob", skill_level=5, team=opponent_team)
+            db.add_all([own_team, opponent_team, alice, bob])
+            db.flush()
+            db.add(PlayerH2HAdvantage(
+                player_id=alice.id, opponent_id=bob.id, matchup_score=90,
+                win_probability=0.9, format="8-Ball Open", session_name="Summer 2026",
+            ))
+            self._add_unrelated_pairing(db, count=10)  # 10x10 exceeds the guard
+            db.commit()
+        engine.dispose()
+
+        conn = connect_read_only(path)
+        try:
+            payload = build_payload(conn, source_db=str(path), scope=self.SCOPE)
+        finally:
+            conn.close()
+
+        assert payload["pairing_rows"] == 1
+        assert len(payload["lineups"]) == 1
+        assert payload["lineups"][0]["team_name"] == "Chalk It Up"
+        assert payload["lineups_unavailable"] == []
+
+    def test_a_pinned_scope_that_itself_exceeds_the_guard_is_reported_unavailable(self, tmp_path):
+        """The other half of the same regression: when the SELECTED scope
+        itself is the oversized pairing, the build must not crash -- it
+        reports Lineup Lab unavailable with the real reason and count, and
+        keeps going (docs/lineup_optimizer.md's guard, never approximated)."""
+        path = tmp_path / "scoped_oversized_selected.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            team_a = Team(external_id="T1", name="Big Team A")
+            team_b = Team(external_id="T2", name="Big Team B")
+            db.add_all([team_a, team_b])
+            db.flush()
+            left = [Player(external_id=f"A{i}", name=f"A{i}", team=team_a) for i in range(10)]
+            right = [Player(external_id=f"B{i}", name=f"B{i}", team=team_b) for i in range(10)]
+            db.add_all(left + right)
+            db.flush()
+            for player in left:
+                for opponent in right:
+                    db.add(PlayerH2HAdvantage(
+                        player_id=player.id, opponent_id=opponent.id, matchup_score=50,
+                        win_probability=0.5, format="8-Ball Open", session_name="Summer 2026",
+                    ))
+            db.commit()
+        engine.dispose()
+
+        conn = connect_read_only(path)
+        try:
+            payload = build_payload(conn, source_db=str(path), scope=self.SCOPE)
+        finally:
+            conn.close()
+
+        assert payload["lineups"] == []
+        assert len(payload["lineups_unavailable"]) == 1
+        unavailable = payload["lineups_unavailable"][0]
+        assert unavailable["available"] is False
+        assert "500,000" in unavailable["unavailable_reason"]
+        assert any("Lineup Lab unavailable" in warning for warning in payload["resolution_warnings"])
+
+    def test_build_writes_a_scoped_file_without_raising_when_selected_scope_is_oversized(self, tmp_path):
+        """End-to-end: build() itself must not raise even when the run's
+        own selected scope is the oversized pairing."""
+        path = tmp_path / "e2e.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            team_a = Team(external_id="T1", name="Big Team A")
+            team_b = Team(external_id="T2", name="Big Team B")
+            db.add_all([team_a, team_b])
+            db.flush()
+            left = [Player(external_id=f"A{i}", name=f"A{i}", team=team_a) for i in range(10)]
+            right = [Player(external_id=f"B{i}", name=f"B{i}", team=team_b) for i in range(10)]
+            db.add_all(left + right)
+            db.flush()
+            for player in left:
+                for opponent in right:
+                    db.add(PlayerH2HAdvantage(
+                        player_id=player.id, opponent_id=opponent.id, matchup_score=50,
+                        win_probability=0.5, format="8-Ball Open", session_name="Summer 2026",
+                    ))
+            db.commit()
+        engine.dispose()
+
+        output = build(str(path), str(tmp_path), scope=self.SCOPE)
+
+        written = json.loads(output.read_text(encoding="utf-8"))
+        assert written["lineups"] == []
+        assert len(written["lineups_unavailable"]) == 1
+
+
 class TestConfiguredWeights:
     """apa_config.yaml's real `lineup_optimizer` section, threaded through
     load_weights_from_config -> build_payload -> the real PairingCandidate
