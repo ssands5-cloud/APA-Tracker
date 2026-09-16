@@ -431,8 +431,12 @@ browser behavior is regression-tested, not just the HTML/JSON it renders.
 Still open, honestly disclosed: skill/streak win-loss tracking beyond the
 skill-level trend direction (this project does not currently persist a
 per-player match win/loss streak separate from the validated evidence
-layer), and the Data Coverage view (§11 of
-`docs/captain_first_edge_experience.md`), which remains not-yet-started.
+layer). The Data Coverage view (§11 of
+`docs/captain_first_edge_experience.md`) is already built --
+`analytics/data_coverage.py`, `scripts/build_data_coverage.py`,
+`ui/tabs/data_coverage.py`, and its own Excel export -- as its own
+standalone page, not (yet) integrated into this combined Coach Dashboard
+alongside Match Night/Data Coverage's other siblings above.
 
 ## Notes
 

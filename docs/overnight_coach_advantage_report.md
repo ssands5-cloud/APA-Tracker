@@ -466,6 +466,61 @@ comparison cards.
   here and is not built. The 4-player/19 fallback remains open, as
   already logged above.
 
+### Near-miss: attempted a duplicate Data Coverage implementation -- 2026-09-16 21:20 UTC
+
+While GPT was between check-ins, picked up "Data Coverage view (§11)" as a
+next step, trusting this project's own repeated "still open, not yet
+started" disclosure (mine included, across several prior entries) without
+first checking the actual repository. That disclosure was stale: §11 was
+already fully implemented in commit `02f3e64` ("Implement Data Coverage"),
+71 commits before this one -- `analytics/data_coverage.py`,
+`scripts/build_data_coverage.py`, `ui/tabs/data_coverage.py`, and
+`ui/export_excel_data_coverage.py`, all with their own passing tests (27
+total across four test files), as a standalone page in the same family as
+`ui/tabs/tonights_match.py`, not integrated into the combined Coach
+Dashboard.
+
+**What went wrong:** wrote a new `analytics/data_coverage.py` from scratch
+without first checking whether the path already existed -- `Write`
+overwrote an already-committed, working file (`git status` afterward
+showed it as `M`, not new/untracked, which is what caught this). Then
+wired a second, differently-shaped implementation (`build_data_coverage_report`/
+flat-dict `evidence_percentages` vs. the real one's `build_report`/
+nested `EvidenceCoverage` object) into `scripts/build_captain_first_edge.py`,
+`scripts/build_coach_advantage_bundle.py`, `ui/dashboard.py`, and
+`ui/export_json_coach_advantage.py`, plus new tests across 6 files --
+before a full-suite run surfaced the collision via three now-broken,
+already-committed test files (`test_build_data_coverage.py`,
+`test_data_coverage_tab.py`, `test_export_excel_data_coverage.py`)
+importing a `build_report` symbol the overwritten module no longer had.
+
+**Fix:** restored the two directly-clobbered files
+(`analytics/data_coverage.py`, `tests/test_data_coverage.py`) to their
+committed content. The other 8 files touched while wiring the duplicate in
+had no prior Data Coverage content to restore -- diffed each against the
+last real commit (`f3c937e`) and manually removed exactly the hunks this
+detour had added (a blanket `git checkout` across many files was blocked
+by this session's own safety classifier as looking destructive, correctly
+enough given it can't distinguish "revert my own last-30-minutes mistake"
+from "discard real uncommitted work" -- explained that in place of
+retrying around it). Verified `git diff f3c937e --stat` was empty for
+every touched file afterward, then ran the full suite: **1679 passed, 0
+skipped, 0 failed** -- identical to the count already logged for `f3c937e`
+itself, confirming a clean, lossless revert with nothing left behind.
+
+Also corrected README.md's own stale "Data Coverage view... remains
+not-yet-started" line (the same wrong claim this session's own prior
+entries had been carrying forward) to state what's actually there and
+where.
+
+**Lesson, applied going forward:** before starting a "next step" picked
+from a disclosure list rather than a direct user instruction, check the
+actual repository state (`ls`/`grep` for the relevant module/path) first
+-- a disclosure written days or many cycles ago can go stale exactly the
+way this one did, and this project's own many-hands, many-session history
+makes that more likely, not less. No feature code was lost; the only real
+cost was this cycle's own time.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 
