@@ -720,6 +720,15 @@ CI run 35139464692 was still in progress at the check; both Python-version
 results remain to be confirmed. No feature code modified or global builder
 run.
 
+### CI completion — 2026-09-16 19:32 UTC
+
+Independently confirmed run 35139464692 for reviewed fix `5658cec`
+completed successfully on **Python 3.12 and Python 3.13**, closing the
+pending-CI limitation in the preceding review. Remote main remains at
+`92002cf`; no newer feature commit is published. Local engine, builder,
+dashboard, serializer and test edits are in progress and are excluded
+from this verification. They were left untouched.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
