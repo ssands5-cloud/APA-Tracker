@@ -608,6 +608,52 @@ legality/dashboard/test edits are in progress and are not included in
 this verification; they were left untouched. Previously disclosed
 production-review limitations remain open.
 
+### Match Night audit — 2026-09-16 (f39ad08)
+
+Reviewed published `f39ad08`. Focused legality/dashboard/browser suite:
+**57 passed, 1 skipped**, one datetime warning. The skipped test covers
+the infeasible-choice confirmation path. GitHub reports successful CI.
+Despite passing tests, **Match Night is not approved for live reliance**:
+
+- **P1 — assignments and status can disagree, permitting duplicate and
+  excess boards.** Reproduced in Chromium against retained
+  `coach-advantage-runs/20260916T155153Z/html/dashboard.html`: send Eddi
+  Dobrini, change his status from Played back to Available, send him again.
+  Both assignments persist against different opponents. Four further sends
+  produced SIX assignment rows while the summary claimed 21 of 23 and
+  "5 of 5 boards used". `mnCommittedSkillLevels` counts unique roster
+  statuses, not assignments; `mnSendPlayer` enforces neither uniqueness
+  nor the five-board limit. Make assignments authoritative, prevent duplicate
+  sends and sends after five boards, and provide an explicit undo action
+  that consistently restores player/opponent availability. Add browser
+  regressions for the exact sequence, reload, and sixth-send prevention.
+- **P1 — missing committed/candidate skills can produce false assurance.**
+  `mnCommittedSkillLevels` filters out null skills, and candidateCommitted
+  omits an unknown-SL candidate entirely. With five other low known skills
+  available the latter evaluates a five-player completion that excludes
+  the player being sent, yet can display "still leaves a legal lineup
+  possible." Preserve occupied slots and propagate unavailable status
+  whenever committed/candidate skills are unknown. Tests must cover both
+  an already-played unknown player and an unknown candidate with ample
+  known available teammates.
+- **P2 — mislabeled probability.** Match Night comparison and sent-board
+  tables label `modeled_win_probability` as "Skill-only estimate" for all
+  evidence tiers. DIRECT uses history-and-skill (e.g. Eddi/Brandon displayed
+  36.0% in the reproduced first board), so this repeats the model-basis
+  confusion in a new panel. Carry/display `model_source`, or supply the
+  actual skill-only score if that is the intended comparison. Test DIRECT
+  and INDIRECT labels independently, including persisted assignments.
+- **P2 — exact-search guard missing in browser port.** Python completion
+  search enforces MAX_COMPLETION_ATTEMPTS; the recursive JS port does not.
+  Match its explicit unavailable/guard behavior or use a proven exact
+  method appropriate to this sum-only check; do not leave unbounded search
+  in an interactive screen while describing the port as guarded.
+
+No feature code changed or global builder run. The old verified retained
+run `20260916T152838Z` was absent at this check; the newer retained run was
+used only for the stated Match Night reproduction, not blanket export
+verification. Prior dashboard approval does not extend to this new planner.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
