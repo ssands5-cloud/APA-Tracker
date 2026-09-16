@@ -230,6 +230,24 @@ class TestFlagPolicy:
         with pytest.raises(SystemExit):
             launcher.main(["--mode", "fixture", "--resume"])
 
+    def test_source_db_is_rejected_outside_live_mode(self):
+        with pytest.raises(SystemExit):
+            launcher.main(["--mode", "fixture", "--source-db", "data/apa_tracker.db"])
+
+    def test_source_db_is_forwarded_to_the_builder(self, monkeypatch):
+        captured = {}
+
+        def fake_invoke(forwarded, events_path):
+            captured["forwarded"] = forwarded
+            return 99  # any non-zero: stop before verification, which isn't under test here
+
+        monkeypatch.setattr(launcher, "invoke_builder", fake_invoke)
+
+        launcher.main(["--mode", "live", "--source-db", "data/apa_tracker.db"])
+
+        assert "--source-db" in captured["forwarded"]
+        assert "data/apa_tracker.db" in captured["forwarded"]
+
     def test_resume_is_forwarded_to_the_builder(self, monkeypatch):
         captured = {}
 

@@ -323,6 +323,24 @@ def acquire_live(resume: bool = False) -> tuple[Path, PhaseResult]:
     )
 
 
+def acquire_existing(source_db: Path) -> tuple[Path, PhaseResult]:
+    """Use an already-acquired database as-is: never touches the network,
+    never requires a token, and never rescrapes.
+
+    For building a fresh verified run from data that was already ingested
+    and, separately, already repaired (e.g. by
+    scripts/backfill_player_identity.py) -- when the goal is a new manifest
+    and checksums over the CURRENT contents of that database, not a new
+    scrape. The file is used read-only exactly like any other acquired
+    database; nothing here mutates it.
+    """
+    if not source_db.is_file() or source_db.stat().st_size == 0:
+        raise BuildError(f"no database at {source_db}", EXIT_ACQUIRE)
+    return source_db, PhaseResult(
+        "acquire", "ok", f"using already-acquired database {source_db.name} (no rescrape)"
+    )
+
+
 def build_documents(db: Session, db_path: Path, scope: dict, staging: Path) -> PhaseResult:
     """Run every analytics builder against one database and one scope."""
     from scripts import (
@@ -704,12 +722,16 @@ def run_build(
     promote: bool = False,
     events: Optional[EventSink] = None,
     resume: bool = False,
+    source_db: Optional[Path] = None,
 ) -> Path:
     events = events or EventSink(None)
     phases: list[PhaseResult] = [preflight(run_dir, run_root)]
     events.emit("preflight", "ok")
 
-    db_path, acquire_result = acquire_fixture() if mode == "fixture" else acquire_live(resume=resume)
+    if source_db is not None:
+        db_path, acquire_result = acquire_existing(source_db)
+    else:
+        db_path, acquire_result = acquire_fixture() if mode == "fixture" else acquire_live(resume=resume)
     phases.append(acquire_result)
 
     locked_hash = sha256_file(db_path)
@@ -884,10 +906,27 @@ def main(argv: Optional[list[str]] = None) -> int:
         ),
     )
     parser.add_argument("--events", help="write versioned redacted JSONL events here")
+    parser.add_argument(
+        "--source-db",
+        help=(
+            "live mode only: build from this already-acquired database instead of "
+            "a fresh scrape -- never touches the network, never requires a token, "
+            "and never rescrapes. For a new verified run over data that was already "
+            "ingested and separately repaired in place."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.resume and args.mode != "live":
         parser.error("--resume is only meaningful with --mode live")
+    if args.source_db and args.mode != "live":
+        parser.error("--source-db is only meaningful with --mode live")
+    if args.source_db and args.resume:
+        parser.error("--source-db and --resume are mutually exclusive: one names an "
+                      "existing database, the other resumes a fresh scrape")
+    if args.source_db and args.promote:
+        parser.error("--source-db and --promote are mutually exclusive: the source "
+                      "database is not a freshly-acquired staging file to promote")
 
     run_root = Path(args.run_root)
     if args.out:
@@ -900,6 +939,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         completed = run_build(
             args.mode, run_dir, run_root, promote=args.promote, events=events, resume=args.resume,
+            source_db=Path(args.source_db) if args.source_db else None,
         )
     except BuildError as exc:
         logger.error("BUILD FAILED: %s", exc)

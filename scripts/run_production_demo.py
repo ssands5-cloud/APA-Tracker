@@ -211,6 +211,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--resume", action="store_true",
         help="live mode only, forwarded to the builder: resume an interrupted acquisition",
     )
+    parser.add_argument(
+        "--source-db",
+        help=(
+            "live mode only, forwarded to the builder: build from this already-"
+            "acquired database instead of a fresh scrape -- never rescrapes"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if BOUNDARY_FILE.read_text(encoding="utf-8").strip() != BOUNDARY_ID if BOUNDARY_FILE.is_file() else True:
@@ -224,6 +231,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.error("--mode is required unless --no-build is used")
     if args.resume and args.mode != "live":
         parser.error("--resume is only meaningful with --mode live")
+    if args.source_db and args.mode != "live":
+        parser.error("--source-db is only meaningful with --mode live")
 
     run_root = Path(args.run_root)
 
@@ -236,6 +245,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 forwarded.append("--promote")
             if args.resume:
                 forwarded.append("--resume")
+            if args.source_db:
+                forwarded.extend(["--source-db", args.source_db])
             with tempfile.TemporaryDirectory(prefix="launcher-") as tmp:
                 events_path = Path(tmp) / "events.jsonl"
                 code = invoke_builder(forwarded, events_path)

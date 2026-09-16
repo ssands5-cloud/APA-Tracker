@@ -304,6 +304,69 @@ class TestResumeFlagPolicy:
             builder.main(["--mode", "fixture", "--resume"])
 
 
+class TestSourceDbFlagPolicy:
+    def test_source_db_is_rejected_outside_live_mode(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "fixture", "--source-db", "data/apa_tracker.db"])
+
+    def test_source_db_and_resume_are_mutually_exclusive(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "live", "--source-db", "data/apa_tracker.db", "--resume"])
+
+    def test_source_db_and_promote_are_mutually_exclusive(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "live", "--source-db", "data/apa_tracker.db", "--promote"])
+
+
+class TestAcquireExisting:
+    def test_a_missing_database_is_refused(self, tmp_path):
+        with pytest.raises(BuildError):
+            builder.acquire_existing(tmp_path / "nope.db")
+
+    def test_an_empty_database_is_refused(self, tmp_path):
+        empty = tmp_path / "empty.db"
+        empty.write_bytes(b"")
+        with pytest.raises(BuildError):
+            builder.acquire_existing(empty)
+
+    def test_a_real_file_is_used_as_is_no_network_no_token(self, tmp_path, monkeypatch):
+        source = tmp_path / "already-acquired.db"
+        source.write_bytes(b"some real bytes")
+        monkeypatch.delenv(builder.TOKEN_ENV, raising=False)
+
+        db_path, result = builder.acquire_existing(source)
+
+        assert db_path == source
+        assert result.status == "ok"
+        assert "no rescrape" in result.detail
+
+    def test_run_build_never_calls_acquire_live_when_source_db_is_given(self, monkeypatch, run_root, tmp_path):
+        """The load-bearing guarantee: a source-db build must not touch the
+        network or require a token, even if one happens to be unset."""
+        monkeypatch.delenv(builder.TOKEN_ENV, raising=False)
+
+        def _fail_if_called(resume=False):
+            raise AssertionError("acquire_live() must not be called when --source-db is given")
+
+        monkeypatch.setattr(builder, "acquire_live", _fail_if_called)
+        # Scope selection from real config/matches is exercised elsewhere;
+        # here we only need to prove the source-db wiring itself, using the
+        # already-built fixture database as a stand-in "already-acquired" file.
+        monkeypatch.setattr(builder, "_live_scope", lambda db: dict(FIXTURE_SCOPE))
+
+        source = tmp_path / "source.db"
+        shutil.copy2(builder.FIXTURE_DB, source)
+        target = run_root / "source-db-test"
+
+        completed = run_build(
+            "live", target, run_root, source_db=source,
+        )
+
+        manifest = json.loads((completed / "demo_manifest.json").read_text(encoding="utf-8"))
+        assert manifest["database_file"] == "source.db"
+        assert (completed / "READY").is_file()
+
+
 class TestLiveModeResume:
     def test_without_resume_an_existing_staging_file_is_deleted_first(self, monkeypatch, tmp_path):
         monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
