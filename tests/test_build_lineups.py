@@ -16,7 +16,15 @@ from analytics.opponent_scouting import (
     OpponentScoutingThresholds,
 )
 from analytics.win_probability import DEFAULT_WIN_PROBABILITY_WEIGHTS, WinProbabilityWeights
-from database.models import Base, Player, PlayerH2HAdvantage, PlayerHeadToHead, PlayerTrend, Team
+from database.models import (
+    Base,
+    Player,
+    PlayerH2HAdvantage,
+    PlayerHeadToHead,
+    PlayerTeamHistory,
+    PlayerTrend,
+    Team,
+)
 from scripts.build_lineups import (
     build,
     build_payload,
@@ -232,6 +240,17 @@ class TestScope:
         "format": "8-Ball Open", "session_name": "Summer 2026",
     }
 
+    @staticmethod
+    def _current(db, player, team_external_id, session_name="Summer 2026"):
+        """Real current-roster membership via player_team_history -- the
+        authoritative source scope filtering must use, never
+        players.team_id (a single scalar FK that cannot represent a player
+        rostered on several teams at once for the same session)."""
+        db.add(PlayerTeamHistory(
+            player_id=player.id, team_external_id=team_external_id,
+            session_name=session_name, is_current=True,
+        ))
+
     def _add_unrelated_pairing(self, db, count: int) -> None:
         """A separate, unrelated real team pairing with ``count`` players
         per side -- large enough to exceed the exact-search guard when
@@ -251,6 +270,10 @@ class TestScope:
         db.add_all(left + right)
         db.flush()
         for player in left:
+            self._current(db, player, "T3")
+        for player in right:
+            self._current(db, player, "T4")
+        for player in left:
             for opponent in right:
                 db.add(PlayerH2HAdvantage(
                     player_id=player.id, opponent_id=opponent.id, matchup_score=50,
@@ -268,6 +291,8 @@ class TestScope:
             bob = Player(external_id="P3", name="Bob", skill_level=5, team=opponent_team)
             db.add_all([own_team, opponent_team, alice, bob])
             db.flush()
+            self._current(db, alice, "T1")
+            self._current(db, bob, "T2")
             db.add(PlayerH2HAdvantage(
                 player_id=alice.id, opponent_id=bob.id, matchup_score=90,
                 win_probability=0.9, format="8-Ball Open", session_name="Summer 2026",
@@ -301,6 +326,8 @@ class TestScope:
             bob = Player(external_id="P3", name="Bob", skill_level=5, team=opponent_team)
             db.add_all([own_team, opponent_team, alice, bob])
             db.flush()
+            self._current(db, alice, "T1")
+            self._current(db, bob, "T2")
             db.add(PlayerH2HAdvantage(
                 player_id=alice.id, opponent_id=bob.id, matchup_score=90,
                 win_probability=0.9, format="8-Ball Open", session_name="Summer 2026",
@@ -338,6 +365,10 @@ class TestScope:
             db.add_all(left + right)
             db.flush()
             for player in left:
+                self._current(db, player, "T1")
+            for player in right:
+                self._current(db, player, "T2")
+            for player in left:
                 for opponent in right:
                     db.add(PlayerH2HAdvantage(
                         player_id=player.id, opponent_id=opponent.id, matchup_score=50,
@@ -374,6 +405,10 @@ class TestScope:
             right = [Player(external_id=f"B{i}", name=f"B{i}", team=team_b) for i in range(10)]
             db.add_all(left + right)
             db.flush()
+            for player in left:
+                self._current(db, player, "T1")
+            for player in right:
+                self._current(db, player, "T2")
             for player in left:
                 for opponent in right:
                     db.add(PlayerH2HAdvantage(

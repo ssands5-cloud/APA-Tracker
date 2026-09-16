@@ -170,8 +170,22 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def _scope_team_pair_clause(scope: Optional[dict[str, Any]], our_alias: str, opp_alias: str) -> tuple[str, list[Any]]:
-    """A SQL fragment restricting a pairing to exactly ``scope``'s two teams.
+def _scope_team_pair_clause(
+    scope: Optional[dict[str, Any]], player_alias: str, opponent_alias: str,
+) -> tuple[str, list[Any]]:
+    """A SQL fragment restricting a pairing to exactly ``scope``'s two teams
+    and session, via CURRENT roster membership -- never ``players.team_id``.
+
+    A real player can be rostered on several teams at once for the same
+    session (different formats/divisions), so ``players.team_id`` (a single
+    scalar FK, whichever team ingest last touched) is not a reliable way to
+    ask "is this player on team X this session" -- confirmed on real
+    production data: a real player's ``team_id`` pointed at one of his four
+    concurrent Fall 2026 teams, not the one a caller's scope actually named.
+    ``player_team_history`` is the authoritative source (the same one
+    ``database.queries.resolve_roster_identity`` and this project's identity
+    fix both use), so membership is checked there instead, scoped to the
+    real session named in ``scope``.
 
     Matches either direction (a player from either team can be the "own"
     side of a pairing row), since the underlying tables store pairings from
@@ -183,11 +197,24 @@ def _scope_team_pair_clause(scope: Optional[dict[str, Any]], our_alias: str, opp
         return "", []
     our_team_id = str(scope["our_team_id"])
     opponent_team_id = str(scope["opponent_team_id"])
+    session_name = scope["session_name"]
+
+    def _member_of(alias: str) -> str:
+        return (
+            f"EXISTS (SELECT 1 FROM player_team_history pth "
+            f"WHERE pth.player_id = {alias}.id AND pth.is_current = 1 "
+            f"AND pth.session_name = ? AND pth.team_external_id = ?)"
+        )
+
     clause = (
-        f"(({our_alias}.external_id = ? AND {opp_alias}.external_id = ?) "
-        f"OR ({our_alias}.external_id = ? AND {opp_alias}.external_id = ?))"
+        f"(({_member_of(player_alias)} AND {_member_of(opponent_alias)}) "
+        f"OR ({_member_of(player_alias)} AND {_member_of(opponent_alias)}))"
     )
-    return clause, [our_team_id, opponent_team_id, opponent_team_id, our_team_id]
+    params = [
+        session_name, our_team_id, session_name, opponent_team_id,
+        session_name, opponent_team_id, session_name, our_team_id,
+    ]
+    return clause, params
 
 
 def fetch_matchups(
@@ -204,7 +231,7 @@ def fetch_matchups(
     """
     if not _table_exists(connection, "player_matchups"):
         return []
-    team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+    team_clause, team_params = _scope_team_pair_clause(scope, "p", "o")
     where_parts = []
     params: list[Any] = []
     if team_clause:
@@ -271,8 +298,18 @@ def fetch_players(
     ]
     params: list[Any] = []
     if scope is not None:
-        where_parts.append("t.external_id IN (?, ?)")
-        params.extend([str(scope["our_team_id"]), str(scope["opponent_team_id"])])
+        # Current roster membership, via player_team_history -- see
+        # _scope_team_pair_clause's docstring for why players.team_id (a
+        # single scalar FK) cannot answer "is this player on team X this
+        # session" for a player rostered on several teams at once.
+        where_parts.append(
+            "EXISTS (SELECT 1 FROM player_team_history pth "
+            "WHERE pth.player_id = p.id AND pth.is_current = 1 "
+            "AND pth.session_name = ? AND pth.team_external_id IN (?, ?))"
+        )
+        params.extend([
+            scope["session_name"], str(scope["our_team_id"]), str(scope["opponent_team_id"]),
+        ])
     rows = connection.execute(
         f"""
         SELECT DISTINCT
@@ -308,7 +345,7 @@ def fetch_head_to_head(
     """
     if not _table_exists(connection, "player_head_to_head"):
         return []
-    team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+    team_clause, team_params = _scope_team_pair_clause(scope, "p", "o")
     where_parts = []
     params: list[Any] = []
     if team_clause:
@@ -971,7 +1008,7 @@ def _decision_rows(
     """
     pairings = []
     if _table_exists(connection, "player_h2h_advantage"):
-        team_clause, team_params = _scope_team_pair_clause(scope, "t", "ot")
+        team_clause, team_params = _scope_team_pair_clause(scope, "p", "o")
         where_parts = []
         params: list[Any] = []
         if team_clause:

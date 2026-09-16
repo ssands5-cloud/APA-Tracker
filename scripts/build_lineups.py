@@ -181,15 +181,36 @@ def fetch_pairing_rows(
     where_sql = ""
     params: list[Any] = []
     if scope is not None:
+        # Membership is checked against player_team_history, never
+        # players.team_id (a single scalar FK) -- a real player can be
+        # rostered on several teams at once for the same session (different
+        # formats/divisions), confirmed on real production data: a real
+        # player's team_id pointed at one of his four concurrent Fall 2026
+        # teams, not the one this scope actually names. player_team_history
+        # is the authoritative source (the same one
+        # database.queries.resolve_roster_identity and this project's
+        # identity fix both use).
         our_team_id = str(scope["our_team_id"])
         opponent_team_id = str(scope["opponent_team_id"])
+        session_name = scope["session_name"]
+
+        def _member_of(alias: str) -> str:
+            return (
+                "EXISTS (SELECT 1 FROM player_team_history pth "
+                f"WHERE pth.player_id = {alias}.id AND pth.is_current = 1 "
+                "AND pth.session_name = ? AND pth.team_external_id = ?)"
+            )
+
         where_sql = (
-            "WHERE ((t.external_id = ? AND ot.external_id = ?) "
-            "OR (t.external_id = ? AND ot.external_id = ?)) "
+            f"WHERE (({_member_of('p')} AND {_member_of('o')}) "
+            f"OR ({_member_of('p')} AND {_member_of('o')})) "
             "AND a.format = ? AND a.session_name = ?"
         )
-        params = [our_team_id, opponent_team_id, opponent_team_id, our_team_id,
-                  scope["format"], scope["session_name"]]
+        params = [
+            session_name, our_team_id, session_name, opponent_team_id,
+            session_name, opponent_team_id, session_name, our_team_id,
+            scope["format"], scope["session_name"],
+        ]
 
     try:
         rows = connection.execute(

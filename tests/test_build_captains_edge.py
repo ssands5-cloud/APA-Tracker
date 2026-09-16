@@ -15,7 +15,7 @@ from openpyxl import load_workbook
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from database.models import Base, Match, Player, PlayerHeadToHead, PlayerMatchup, Team
+from database.models import Base, Match, Player, PlayerHeadToHead, PlayerMatchup, PlayerTeamHistory, Team
 from scripts.build_captains_edge import (
     NoDatabaseError,
     build,
@@ -199,6 +199,19 @@ class TestScope:
             db.add(match)
             db.flush()
 
+            # Real current-roster membership -- the authoritative source
+            # this builder's scope filtering must use, never players.team_id
+            # (see _scope_team_pair_clause's docstring: a real player can be
+            # rostered on several teams at once for the same session).
+            for player, team_external_id in (
+                (alice, "T1"), (bob, "T2"), (dave, "T3"), (erin, "T4"),
+            ):
+                db.add(PlayerTeamHistory(
+                    player_id=player.id, team_external_id=team_external_id,
+                    session_name="Summer 2026", is_current=True,
+                ))
+            db.flush()
+
             db.add_all([
                 PlayerMatchup(
                     player_id=alice.id, opponent_id=bob.id, matches_played=6,
@@ -265,6 +278,61 @@ class TestScope:
         assert len(payload["matchups"]) == 1
         assert {p["player_name"] for p in payload["players"]} == {"Alice", "Bob"}
         assert len(payload["head_to_head"]) == 1
+
+    def test_scope_resolves_correctly_when_a_player_has_several_current_teams(self, tmp_path):
+        """The real production bug this scoping is built against: a real
+        player can be rostered on several current teams for the same
+        session (different formats/divisions). players.team_id is a single
+        scalar FK -- whichever team ingest last touched -- so filtering on
+        it silently drops or misattributes a multi-team player. Scoping
+        must use player_team_history instead, which records every
+        membership."""
+        path = tmp_path / "multi_team.db"
+        engine = create_engine(f"sqlite:///{path}")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            team_a = Team(external_id="T1", name="Chalk It Up")
+            team_b = Team(external_id="T2", name="Corner Pockets")
+            team_other = Team(external_id="T9", name="A Whole Different Division")
+            # Alice's own players.team_id (the single scalar FK) points at
+            # the UNRELATED team -- exactly the real production shape found
+            # on data/apa_tracker.db, where a player's team_id happened to
+            # point at one of several concurrent teams, not the scoped one.
+            alice = Player(external_id="P1", name="Alice", skill_level=5, team=team_other)
+            bob = Player(external_id="P2", name="Bob", skill_level=4, team=team_b)
+            db.add_all([team_a, team_b, team_other, alice, bob])
+            db.flush()
+            db.add_all([
+                PlayerTeamHistory(
+                    player_id=alice.id, team_external_id="T9",
+                    session_name="Summer 2026", is_current=True,
+                ),
+                # Alice is ALSO, concurrently, on the scope's own team T1.
+                PlayerTeamHistory(
+                    player_id=alice.id, team_external_id="T1",
+                    session_name="Summer 2026", is_current=True,
+                ),
+                PlayerTeamHistory(
+                    player_id=bob.id, team_external_id="T2",
+                    session_name="Summer 2026", is_current=True,
+                ),
+            ])
+            db.add(PlayerMatchup(
+                player_id=alice.id, opponent_id=bob.id, matches_played=6,
+                win_rate=0.8333, matchup_score=78, confidence_score=71,
+                format="EIGHT_BALL", session_name="Summer 2026",
+            ))
+            db.commit()
+        engine.dispose()
+
+        conn = connect_read_only(path)
+        try:
+            scoped = fetch_matchups(conn, scope=self.SCOPE)
+        finally:
+            conn.close()
+
+        assert len(scoped) == 1
+        assert scoped[0]["player_name"] == "Alice"
 
     def test_build_writes_a_scoped_decision_document(self, scoped_db_path, tmp_path):
         html_path, xlsx_path = build(str(scoped_db_path), str(tmp_path), scope=self.SCOPE)
