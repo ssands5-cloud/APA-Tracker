@@ -122,6 +122,36 @@ class TestPlayerVsPlayerSelectors:
         assert "No opponents match these filters" in opponent_text
         assert page.console_errors == []
 
+    def test_a_skill_level_filter_only_keeps_opponents_at_or_above_the_real_minimum(self, page):
+        """GPT audit follow-up (2026-09-16): prove real filter membership
+        against the actual opponent skill levels, not just that some
+        options remain -- pick a real, achievable threshold from the live
+        data itself rather than an arbitrary guess."""
+        player_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-player-data').textContent)"
+        )
+        real_skill_levels = sorted({
+            r["opponent"]["skill_level"] for r in player_data.values()
+            if r["opponent"]["skill_level"] is not None
+        })
+        if len(real_skill_levels) < 2:
+            pytest.skip("the coherent fixture has fewer than two distinct opponent skill levels")
+        threshold = real_skill_levels[len(real_skill_levels) // 2]
+
+        page.fill("#pme-filter-sl-min", str(threshold))
+        page.dispatch_event("#pme-filter-sl-min", "input")
+
+        selected_key = page.locator("#pme-opponent").input_value()
+        if selected_key:
+            assert player_data[selected_key]["opponent"]["skill_level"] >= threshold
+        option_keys = page.locator("#pme-opponent").locator("option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        for key in option_keys:
+            if key in player_data:
+                assert player_data[key]["opponent"]["skill_level"] >= threshold
+        assert page.console_errors == []
+
     def test_clearing_the_filter_restores_the_real_opponent_list(self, page):
         page.fill("#pme-filter-sl-min", "99")
         page.dispatch_event("#pme-filter-sl-min", "input")
@@ -146,11 +176,45 @@ class TestTeamVsTeamAndCaptainsEdge:
         assert "Captain's Edge" in result_text
         assert "Evidence coverage" in result_text
 
-    def test_the_lineup_table_shows_score_and_model_basis_context(self, page):
+    def test_the_lineup_table_shows_score_and_score_basis_context(self, page):
         result_text = page.locator("#tme-result").inner_text()
         assert "Approved lineup" in result_text
         assert "Score" in result_text
-        assert "Model basis" in result_text
+        assert "Score basis" in result_text
+        assert "Direct evidence" in result_text
+
+    def test_a_direct_slots_score_basis_is_not_conflated_with_its_model_source(self, page):
+        """GPT audit follow-up (2026-09-16): analytics.lineup_lab.pairing_score
+        deliberately never uses DIRECT history for lineup selection --
+        lineup_score is always the validated skill-only score, even for a
+        DIRECT slot whose own model_source says otherwise. Find a real
+        DIRECT lineup slot in the live bundle's embedded data and check the
+        rendered page shows the real score-basis text, not the pairing's
+        own (different) model_source, under the Score basis column."""
+        team_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-team-data').textContent)"
+        )
+        direct_slot = None
+        scope_key = None
+        for key, report in team_data.items():
+            lineup = report.get("lineup")
+            if not lineup:
+                continue
+            for slot in lineup["assignments"]:
+                if slot["evidence_label"] == "DIRECT":
+                    direct_slot = slot
+                    scope_key = key
+                    break
+            if direct_slot:
+                break
+        if direct_slot is None:
+            pytest.skip("the coherent fixture has no DIRECT lineup slot to check this cycle")
+
+        page.select_option("#tme-scope", scope_key)
+        result_text = page.locator("#tme-result").inner_text()
+        assert direct_slot["lineup_score_source"] in result_text
+        assert direct_slot["model_source"] in result_text
+        assert page.console_errors == []
 
     def test_no_javascript_errors_across_every_real_scope(self, page):
         scope_select = page.locator("#tme-scope")

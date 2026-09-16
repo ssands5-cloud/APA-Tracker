@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 
+from analytics.lineup_lab import LineupLabResult, LineupSlot
 from analytics.opponent_risk_profile import OpponentRiskEntry
 from analytics.pairing_evidence import EvidenceLabel, PairingEvidence, PairingEvidenceMatrix
 from analytics.player_matchup_engine import build_player_matchup_report
@@ -128,11 +129,48 @@ class TestRender:
         assert "is favored" not in html.lower()
         assert "danger player" not in html.lower()
 
-    def test_lineup_table_carries_score_and_model_basis_context(self):
-        """GPT audit P2 / directive: lineup context (score, model basis,
-        sample) must be visible on the Coach Dashboard's own lineup table,
-        not only in the standalone Team Matchup Engine export."""
+    def test_lineup_table_carries_score_and_score_basis_context(self):
+        """GPT audit P2 / directive: lineup context (score, score basis,
+        direct evidence) must be visible on the Coach Dashboard's own
+        lineup table, not only in the standalone Team Matchup Engine
+        export."""
         html = render([], [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")], [], "Mark It Up")
         assert "Score" in html
-        assert "Model basis" in html
-        assert "Sample" in html
+        assert "Score basis" in html
+        assert "Direct evidence" in html
+
+    def test_lineup_score_basis_is_the_real_score_source_not_the_pairings_model_source(self):
+        """GPT audit follow-up (2026-09-16): analytics.lineup_lab.pairing_score
+        deliberately excludes DIRECT history from lineup selection --
+        lineup_score is ALWAYS the validated skill-only score
+        (lineup_score_source), even for a DIRECT slot whose own
+        model_source says "direct-history-and-skill". An earlier version
+        rendered model_source next to the score under "Model basis",
+        wrongly implying DIRECT history influenced it. This fixture uses a
+        DIRECT slot where the two sources genuinely differ, and asserts
+        the rendered basis column shows the real score source."""
+        lineup_result = LineupLabResult(
+            assignments=(
+                LineupSlot(
+                    player_id=1, player_name="Ann", player_skill_level=5,
+                    opponent_id=2, opponent_name="Bob", opponent_skill_level=4,
+                    evidence_label=EvidenceLabel.DIRECT, observed_win_rate=0.75,
+                    direct_evidence_count=4,
+                    modeled_win_probability=0.62,
+                    model_source="analytics.head_to_head:direct-history-and-skill",
+                    lineup_score=0.62,
+                    lineup_score_source="analytics.head_to_head:validated-skill-only",
+                ),
+            ),
+            unassigned_players=(), unassigned_opponents=(),
+            total_score=0.62, skill_total=5, is_legal=True, blocked_reason=None,
+        )
+        report = build_team_matchup_report(
+            _matrix(), "Mark It Up", "Corner Pockets", lineup_result=lineup_result,
+        )
+        html = " ".join(render([], [report], [], "Mark It Up").split())
+
+        assert "analytics.head_to_head:validated-skill-only" in html
+        # The DIRECT slot's own model_source must still be visible (as real
+        # evidence context), just not conflated with the score's basis.
+        assert "analytics.head_to_head:direct-history-and-skill" in html

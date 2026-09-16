@@ -344,16 +344,24 @@ toughest first -- never a categorical "danger" label
 
     html += "<h4>Approved lineup</h4>";
     if (r.lineup) {{
+      // GPT audit follow-up (2026-09-16): lineup_score is ALWAYS the
+      // validated skill-only score (analytics.lineup_lab.pairing_score
+      // deliberately excludes DIRECT history from lineup selection --
+      // see that module's own docstring), never model_source's own
+      // evidence classification -- those are two different real numbers
+      // with two different real sources, shown in two separate columns
+      // rather than one column implying the score came from model_source.
       html += "<table><thead><tr><th>Board</th><th>Our player</th><th>Opponent</th>"
-           + "<th>Evidence</th><th>Score</th><th>Model basis</th><th>Sample</th></tr></thead><tbody>";
+           + "<th>Evidence</th><th>Score</th><th>Score basis</th><th>Direct evidence</th></tr></thead><tbody>";
       r.lineup.assignments.forEach(function (slot) {{
         html += "<tr><td>" + slot.board + "</td><td>" + esc(slot.player_name) + "</td>"
              + "<td>" + esc(slot.opponent_name) + "</td><td>" + esc(slot.evidence_label) + "</td>"
              + "<td>" + (slot.lineup_score !== null && slot.lineup_score !== undefined
                  ? slot.lineup_score.toFixed(3) : "No data") + "</td>"
-             + "<td>" + orNoData(slot.model_source) + "</td>"
+             + "<td>" + orNoData(slot.lineup_score_source) + "</td>"
              + "<td>" + (slot.observed_win_rate !== null
-                 ? pct(slot.observed_win_rate) + " (" + slot.direct_evidence_count + ")" : "No data")
+                 ? pct(slot.observed_win_rate) + " (" + slot.direct_evidence_count + " match(es), "
+                     + orNoData(slot.model_source) + ")" : "No data")
              + "</td></tr>";
       }});
       html += "</tbody></table>";
