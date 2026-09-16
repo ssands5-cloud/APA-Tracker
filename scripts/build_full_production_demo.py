@@ -110,6 +110,7 @@ HTML_ARTIFACTS = {
     "trend_analyzer.html",
     "opponent_volatility.html",
     "player_vs_player.html",
+    "player_matchup_explorer.html",
     "data_coverage.html",
     "captains_edge.html",
     "captain_first_edge.html",
@@ -135,6 +136,7 @@ FEATURE_STATUS = {
     "trend_analyzer": "available",
     "opponent_volatility": "available",
     "player_vs_player": "available",
+    "player_matchup_explorer": "available",
     "data_coverage": "available",
     "captain_first_edge": "available",
     "lineup_lab": "available",
@@ -269,6 +271,7 @@ def build_documents(db: Session, db_path: Path, scope: dict, staging: Path) -> P
         build_data_coverage,
         build_lineups,
         build_opponent_volatility,
+        build_player_matchup_explorer,
         build_player_vs_player_export,
         build_season_projection,
         build_team_strength,
@@ -288,6 +291,9 @@ def build_documents(db: Session, db_path: Path, scope: dict, staging: Path) -> P
         build_trend_analyzer.build(db, our, session_name, staging, format_name)
         build_opponent_volatility.build(db, opponent, session_name, staging, format_name)
         build_player_vs_player_export.build(db, our, opponent, format_name, session_name, staging)
+        # Whole-session scope on purpose: any two captured players, including
+        # two who are both on other teams.
+        build_player_matchup_explorer.build(db, session_name, staging, format_=format_name)
         build_data_coverage.build(db, our, opponent, format_name, session_name, staging)
         build_captain_first_edge.build(db, our, staging)
     except Exception as exc:  # noqa: BLE001 - phase category
