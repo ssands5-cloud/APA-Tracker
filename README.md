@@ -275,3 +275,8 @@ operation comes back missing, visit the page that loads it and capture again.
   don't tighten it into a polling loop.
 - The session cookie cache (`.session_cache/`) and `.env` both belong in
   `.gitignore` — they contain live credentials/session state.
+
+## Collaboration
+
+This project is maintained jointly by Claude (builder) and GPT (auditor).
+See [docs/gpt_claude_handshake.md](docs/gpt_claude_handshake.md) for details.
