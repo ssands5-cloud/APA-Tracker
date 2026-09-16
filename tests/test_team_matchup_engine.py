@@ -227,3 +227,37 @@ class TestBuildTeamMatchupReport:
         assert "favored" not in report.summary.lower()
         # The real ranking signal is still there -- just not narrated.
         assert len(report.ranked_opponents) == 2
+
+
+class TestRealMatches:
+    """Match Night directive follow-up: a scope's real underlying
+    scheduled Match row(s), so saved planner state can key on the actual
+    calendar match, not just the (opponent, format, session) scope."""
+
+    def test_defaults_to_empty_not_a_guess(self):
+        pairings = [
+            _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.INDIRECT,
+                     modeled_win_probability=0.6, model_source="skill_only"),
+        ]
+        report = build_team_matchup_report(_matrix(pairings), "Mark It Up", "Corner Pockets")
+
+        assert report.real_matches == ()
+
+    def test_passed_through_unchanged(self):
+        from analytics.team_matchup_engine import RealScheduledMatch
+
+        pairings = [
+            _pairing(1, 10, "Ann", "Bob", evidence_label=EvidenceLabel.INDIRECT,
+                     modeled_win_probability=0.6, model_source="skill_only"),
+        ]
+        real_matches = (
+            RealScheduledMatch(
+                external_id="M-1", match_date="2026-09-10",
+                is_scored=False, is_finalized=False, status="Scheduled",
+            ),
+        )
+        report = build_team_matchup_report(
+            _matrix(pairings), "Mark It Up", "Corner Pockets", real_matches=real_matches,
+        )
+
+        assert report.real_matches == real_matches

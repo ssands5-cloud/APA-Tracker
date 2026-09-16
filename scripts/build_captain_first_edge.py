@@ -149,6 +149,57 @@ def real_match_scopes(db: Session, our_team_external_id: str) -> list[tuple[str,
     return sorted(scopes)
 
 
+def real_matches_for_scope(
+    db: Session,
+    our_team_external_id: str,
+    opponent_team_external_id: str,
+    format: str,
+    session_name: str,
+) -> list[RealScheduledMatch]:
+    """Every real ``Match`` row behind one (session, opponent, format)
+    scope -- a scope can legitimately correspond to more than one real
+    calendar match (the same two teams playing twice in a season under the
+    same format/session is common), and Match Night needs each real
+    match's own identity, not just the scope's. Sorted by ``Match.id``
+    (insertion/scrape order) rather than ``match_date`` -- that column is
+    kept as delivered text in more than one real format across ingest
+    paths (see ``Match.match_date``'s own docstring), so sorting it as a
+    string would not reliably be chronological.
+    """
+    from analytics.team_matchup_engine import RealScheduledMatch
+
+    rows = (
+        db.query(Match)
+        .filter(
+            Match.is_bye.is_(False),
+            Match.format == format,
+            Match.session_name == session_name,
+        )
+        .filter(
+            (
+                (Match.home_team_id == our_team_external_id)
+                & (Match.away_team_id == opponent_team_external_id)
+            )
+            | (
+                (Match.away_team_id == our_team_external_id)
+                & (Match.home_team_id == opponent_team_external_id)
+            )
+        )
+        .order_by(Match.id)
+        .all()
+    )
+    return [
+        RealScheduledMatch(
+            external_id=row.external_id,
+            match_date=row.match_date,
+            is_scored=bool(row.is_scored),
+            is_finalized=bool(row.is_finalized),
+            status=row.status,
+        )
+        for row in rows
+    ]
+
+
 def _lineup_lab_for(matrix) -> tuple[Optional[object], Optional[str]]:
     """analytics.lineup_lab.solve's real result for one real matrix, or its
     real error -- never both, never silently skipped. Stage 3 (§9): the

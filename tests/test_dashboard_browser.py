@@ -346,8 +346,17 @@ def _mn_roster_entry(player_id, name, skill_level):
     }
 
 
+def _mn_real_match(external_id, match_date, is_scored=False, is_finalized=False, status=None):
+    """A synthetic real_matches entry matching
+    ui/export_json_coach_advantage.py's _real_match_to_dict shape."""
+    return {
+        "external_id": external_id, "match_date": match_date,
+        "is_scored": is_scored, "is_finalized": is_finalized, "status": status,
+    }
+
+
 def _mn_team_scope(our_team_id, our_team_name, opponent_team_id, opponent_team_name,
-                    fmt, session, our_roster, opponent_roster):
+                    fmt, session, our_roster, opponent_roster, real_matches=None):
     """A synthetic TEAM_DATA entry matching team_matchup_report_to_dict's
     shape -- only the fields Match Night's own mn* render functions
     actually read need real values; evidence_counts/ranked_opponents/
@@ -361,6 +370,7 @@ def _mn_team_scope(our_team_id, our_team_name, opponent_team_id, opponent_team_n
         "ranked_opponents": [], "lineup": None,
         "lineup_error": "Synthetic scope for deterministic testing -- no lineup computed.",
         "summary": "Synthetic scope for deterministic Match Night testing.",
+        "real_matches": real_matches or [],
     }
 
 
@@ -495,12 +505,20 @@ class TestMatchNight:
         assert page.console_errors == []
 
     def test_undo_removes_the_assignment_and_restores_availability(self, page):
+        """Directive: "Undo the last assignment, restore both players'
+        availability... keep screen, saved state, and printed summary
+        consistent." Checks our player's status AND the opponent
+        reappearing in the announce dropdown (mnRenderOpponentSelect
+        recomputes its used-opponent set from live assignments on every
+        render, so Undo should free the opponent automatically -- this
+        proves that, rather than assuming it)."""
         opponent_options = page.locator("#mn-opponent option").evaluate_all(
             "options => options.map(o => o.value)"
         )
         if not opponent_options or not opponent_options[0]:
             pytest.skip("no identified opponent to select in this fixture scope")
-        page.select_option("#mn-opponent", opponent_options[0])
+        sent_opponent_id = opponent_options[0]
+        page.select_option("#mn-opponent", sent_opponent_id)
         send_button = page.locator("#mn-comparison .mn-send-btn").first
         if send_button.count() == 0:
             pytest.skip("no available candidate rendered for this fixture scope")
@@ -508,12 +526,24 @@ class TestMatchNight:
         page.once("dialog", lambda dialog: dialog.accept())
         send_button.click()
         assert page.locator("#mn-lineup table tbody tr").count() == 1
+        # The just-used opponent must no longer be offered.
+        opponent_options_after_send = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        assert sent_opponent_id not in opponent_options_after_send
 
         page.click("#mn-lineup .mn-undo-btn")
 
         assert "No boards sent yet" in page.locator("#mn-lineup").inner_text()
         status_select = page.locator(f"#mn-roster .mn-status-select[data-player-id='{player_id}']")
         assert status_select.input_value() == "available"
+        opponent_options_after_undo = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        assert sent_opponent_id in opponent_options_after_undo, (
+            "Undo must free the opponent back into the announce dropdown too"
+        )
+        assert page.console_errors == []
         assert page.console_errors == []
 
     def test_five_sends_fill_the_match_and_a_sixth_is_refused(self, page):
@@ -619,8 +649,15 @@ class TestMatchNight:
             ).locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
             if card.count() == 0:
                 continue
+            # The real model_source now lives inside a collapsed <details>
+            # (directive: "technical details expandable") -- text_content()
+            # reads the DOM regardless of open/closed state, proving the
+            # real string is genuinely present, not just checking visible
+            # rendered text the way inner_text() would.
+            technical = card.locator(".mn-technical")
+            assert technical.count() == 1
+            assert entry["model_source"] in (technical.text_content() or "")
             card_text = card.inner_text()
-            assert entry["model_source"] in card_text
             # The old fixed *table-row label* is what must be gone -- the
             # plain-language summary honestly saying "Skill-only estimate"
             # for a real INDIRECT pairing (from player_matchup_engine's own
@@ -825,6 +862,140 @@ class TestMatchNight:
 
         print_text = page.locator("#mn-print-summary").inner_text()
         assert "partial sum" in print_text.lower()
+        assert page.console_errors == []
+
+    def test_two_real_matches_in_one_scope_get_independent_saved_state(self, page):
+        """Directive: "Save state by match ID so repeat opponents don't
+        inherit another night's lineup." A synthetic scope with two real
+        matches against the same opponent (a real, common occurrence) --
+        marking a player Held back under one real match must not leak into
+        the other."""
+        our_team_id, opp_team_id = "SYN-OUR-6", "SYN-OPP-6"
+        fmt, session = "8-Ball Open", "Synthetic Session 6"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        our_roster = [_mn_roster_entry(940, "Player 940", 4)]
+        opponent_roster = [_mn_roster_entry(840, "Opp Six", 5)]
+        real_matches = [
+            _mn_real_match("RM-1", "2026-09-10", is_finalized=True, status="Final"),
+            _mn_real_match("RM-2", "2026-09-24", status="Scheduled"),
+        ]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team 6", opp_team_id,
+                                "Synthetic Opponent 6", fmt, session, our_roster,
+                                opponent_roster, real_matches=real_matches)
+        _mn_inject(page, scope_key, scope, [])
+
+        match_options = page.locator("#mn-match option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        assert set(match_options) == {"RM-1", "RM-2"}
+
+        page.select_option("#mn-match", "RM-1")
+        page.select_option("#mn-roster .mn-status-select[data-player-id='940']", "held")
+        assert page.locator(
+            "#mn-roster .mn-status-select[data-player-id='940']"
+        ).input_value() == "held"
+
+        page.select_option("#mn-match", "RM-2")
+        assert page.locator(
+            "#mn-roster .mn-status-select[data-player-id='940']"
+        ).input_value() == "available", (
+            "RM-2's own saved state must not inherit RM-1's Held-back mark"
+        )
+
+        page.select_option("#mn-match", "RM-1")
+        assert page.locator(
+            "#mn-roster .mn-status-select[data-player-id='940']"
+        ).input_value() == "held", "switching back to RM-1 must restore its own saved state"
+        assert page.console_errors == []
+
+    def test_sticky_summary_shows_remaining_slots_and_skill_total(self, page):
+        """Directive: "a sticky remaining-slot/skill-total summary.\""""
+        our_team_id, opp_team_id = "SYN-OUR-7", "SYN-OPP-7"
+        fmt, session = "8-Ball Open", "Synthetic Session 7"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        our_roster = [_mn_roster_entry(950, "Player 950", 4), _mn_roster_entry(951, "Player 951", 3)]
+        opponent_roster = [_mn_roster_entry(850, "Opp Seven", 5)]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team 7", opp_team_id,
+                                "Synthetic Opponent 7", fmt, session, our_roster, opponent_roster)
+        _mn_inject(page, scope_key, scope, [])
+
+        sticky_before = page.locator("#mn-sticky").inner_text()
+        assert "5 board(s) remaining" in sticky_before
+        assert "Skill total: 0 of 23" in sticky_before
+
+        page.select_option("#mn-roster .mn-status-select[data-player-id='950']", "played")
+        sticky_after = page.locator("#mn-sticky").inner_text()
+        assert "4 board(s) remaining" in sticky_after
+        assert "Skill total: 4 of 23" in sticky_after
+        assert page.console_errors == []
+
+    def test_a_legal_candidate_shows_a_concrete_completion_not_just_a_verdict(self, page):
+        """Directive: "after each proposed choice, display a concrete
+        valid completion -- or explain exactly why completion is
+        unavailable." Five low-skill players -- one already committed,
+        four available -- so sending the candidate leaves exactly one
+        required combination (all four remaining), which must be named."""
+        our_team_id, opp_team_id = "SYN-OUR-8", "SYN-OPP-8"
+        fmt, session = "8-Ball Open", "Synthetic Session 8"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        ids = [960, 961, 962, 963, 964]
+        our_roster = [_mn_roster_entry(pid, f"Finisher {pid}", 2) for pid in ids]
+        opponent_roster = [_mn_roster_entry(860, "Opp Eight", 5)]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team 8", opp_team_id,
+                                "Synthetic Opponent 8", fmt, session, our_roster, opponent_roster)
+        entries = [
+            _mn_player_report(
+                our_team_id, opp_team_id, fmt, session, pid, f"Finisher {pid}", 2,
+                860, "Opp Eight", 5, evidence_label="INDIRECT",
+                modeled_win_probability=0.5, model_source="analytics.head_to_head:skill-only",
+                summary="No direct history. Skill-only estimate: 50% (SL2 vs SL5).",
+            )
+            for pid in ids
+        ]
+        _mn_inject(page, scope_key, scope, entries)
+
+        page.select_option("#mn-opponent", "860")
+        card = page.locator(
+            "#mn-comparison .mn-send-btn[data-player-id='960']"
+        ).locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
+        assert card.count() == 1
+        card_text = card.inner_text()
+        assert "A valid finish:" in card_text
+        for pid in ids[1:]:
+            assert f"Finisher {pid}" in card_text
+        assert page.console_errors == []
+
+    def test_an_infeasible_candidate_explains_why_not_a_concrete_finish(self, page):
+        """The other half of the same directive requirement: when no
+        completion exists, the card must say so plainly, not just omit a
+        finish silently."""
+        our_team_id, opp_team_id = "SYN-OUR-9", "SYN-OPP-9"
+        fmt, session = "8-Ball Open", "Synthetic Session 9"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        ids = [970, 971, 972, 973, 974]
+        our_roster = [_mn_roster_entry(pid, f"HighSkill {pid}", 9) for pid in ids]
+        opponent_roster = [_mn_roster_entry(870, "Opp Nine", 5)]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team 9", opp_team_id,
+                                "Synthetic Opponent 9", fmt, session, our_roster, opponent_roster)
+        entries = [
+            _mn_player_report(
+                our_team_id, opp_team_id, fmt, session, pid, f"HighSkill {pid}", 9,
+                870, "Opp Nine", 5, evidence_label="INDIRECT",
+                modeled_win_probability=0.5, model_source="analytics.head_to_head:skill-only",
+                summary="No direct history. Skill-only estimate: 50% (SL9 vs SL5).",
+            )
+            for pid in ids
+        ]
+        _mn_inject(page, scope_key, scope, entries)
+
+        page.select_option("#mn-opponent", "870")
+        card = page.locator(
+            "#mn-comparison .mn-send-btn[data-player-id='970']"
+        ).locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
+        assert card.count() == 1
+        card_text = card.inner_text()
+        assert "No combination" in card_text
+        assert "A valid finish:" not in card_text
         assert page.console_errors == []
 
 

@@ -23,6 +23,7 @@ from scripts.build_captain_first_edge import (
     build,
     build_match_scopes,
     real_match_scopes,
+    real_matches_for_scope,
 )
 from tests.test_pairing_evidence import (
     FORMAT,
@@ -100,6 +101,76 @@ class TestRealMatchScopes:
             (SESSION, OPPONENT_TEAM, "EIGHT"),
             (SESSION, OPPONENT_TEAM, "NINE"),
         ]
+
+
+class TestRealMatchesForScope:
+    """Directive follow-up: Match Night needs each real calendar match's
+    own identity (external_id/date), not just the (session, opponent,
+    format) scope it belongs to -- a scope can legitimately span more than
+    one real match, and saved planner state must key on the specific real
+    match, not the scope alone."""
+
+    def test_finds_the_one_real_match_behind_a_scope(self, db):
+        row = _match(db, "M-1")
+        row.match_date = "2026-09-10"
+        row.status = "Scheduled"
+        db.flush()
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert len(matches) == 1
+        assert matches[0].external_id == "M-1"
+        assert matches[0].match_date == "2026-09-10"
+        assert matches[0].is_scored is True
+        assert matches[0].is_finalized is True
+        assert matches[0].status == "Scheduled"
+
+    def test_a_scope_spanning_two_real_matches_returns_both(self, db):
+        """The real gap this exists to close: two real calendar matches
+        against the same opponent, same format/session -- a genuine,
+        common real occurrence -- must both be identifiable, not
+        collapsed into one."""
+        _match(db, "M-1")
+        _match(db, "M-2")
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert sorted(m.external_id for m in matches) == ["M-1", "M-2"]
+
+    def test_our_team_can_be_the_away_side_too(self, db):
+        _match(db, "M-1", home_team_id=OPPONENT_TEAM, away_team_id=OUR_TEAM)
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert [m.external_id for m in matches] == ["M-1"]
+
+    def test_a_match_against_a_different_opponent_is_excluded(self, db):
+        _match(db, "M-1", away_team_id="TEAM-OTHER")
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert matches == []
+
+    def test_a_bye_is_excluded(self, db):
+        _match(db, "M-1", is_bye=True)
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert matches == []
+
+    def test_no_real_match_returns_an_empty_list_not_a_guess(self, db):
+        assert real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION) == []
+
+    def test_an_unscored_not_yet_played_match_is_still_returned(self, db):
+        """An upcoming, not-yet-played match is exactly who Match Night is
+        for -- excluding it would defeat the whole purpose."""
+        _match(db, "M-1", is_scored=False, is_finalized=False)
+
+        matches = real_matches_for_scope(db, OUR_TEAM, OPPONENT_TEAM, FORMAT, SESSION)
+
+        assert len(matches) == 1
+        assert matches[0].is_scored is False
+        assert matches[0].is_finalized is False
 
 
 class TestTeamName:

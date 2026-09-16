@@ -49,7 +49,7 @@ data.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
 from analytics.head_to_head import skill_only_win_probability
 from analytics.lineup_lab import LineupLabResult
@@ -244,6 +244,26 @@ def _summary_for(
 
 
 @dataclass(frozen=True)
+class RealScheduledMatch:
+    """One real ``database.models.Match`` row belonging to a scope (session,
+    opponent, format) -- purely descriptive fields already on that row,
+    never recomputed. A scope groups by (session, opponent, format), not by
+    individual match, and a real team can legitimately play the same
+    opponent more than once under the same format/session in one season --
+    Match Night needs the individual real match identity (its own
+    ``external_id``/``match_date``) so a coach's saved state for one such
+    match never leaks into another. ``match_date`` is kept as delivered
+    text (see ``Match.match_date``'s own docstring) -- shown as-is, never
+    reparsed or reformatted here."""
+
+    external_id: str
+    match_date: Optional[str]
+    is_scored: bool
+    is_finalized: bool
+    status: Optional[str]
+
+
+@dataclass(frozen=True)
 class TeamMatchupReport:
     """One real scheduled match's full Coach Mode team comparison."""
 
@@ -260,6 +280,7 @@ class TeamMatchupReport:
     lineup_result: Optional[LineupLabResult]
     lineup_error: Optional[str]
     summary: str
+    real_matches: tuple[RealScheduledMatch, ...] = ()
 
 
 def build_team_matchup_report(
@@ -270,12 +291,16 @@ def build_team_matchup_report(
     lineup_error: Optional[str] = None,
     our_trends: Optional[dict[int, SkillTrendInfo]] = None,
     opponent_trends: Optional[dict[int, SkillTrendInfo]] = None,
+    real_matches: Optional[Sequence[RealScheduledMatch]] = None,
 ) -> TeamMatchupReport:
     """Build one Coach Mode team report from an already-classified matrix
     and an already-computed (or already-failed) Lineup Lab result. Exactly
     one of ``lineup_result``/``lineup_error`` is expected to be set,
     mirroring ``scripts/build_captain_first_edge.py``'s own convention --
     not enforced here since a caller may legitimately have neither yet.
+    ``real_matches`` defaults to empty, honestly -- a caller that hasn't
+    queried the real ``Match`` rows for this scope yet (most existing
+    Coach Mode exports don't need to) gets an empty tuple, never a guess.
     """
     our_trends = our_trends or {}
     opponent_trends = opponent_trends or {}
@@ -294,4 +319,5 @@ def build_team_matchup_report(
         lineup_result=lineup_result,
         lineup_error=lineup_error,
         summary=_summary_for(matrix, lineup_result, lineup_error),
+        real_matches=tuple(real_matches or ()),
     )

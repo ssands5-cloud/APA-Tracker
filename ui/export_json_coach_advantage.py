@@ -12,7 +12,12 @@ from typing import Optional
 
 from analytics.lineup_lab import LineupLabResult
 from analytics.player_matchup_engine import PlayerMatchupReport, SkillTrendInfo
-from analytics.team_matchup_engine import RankedOpponent, RosterEntry, TeamMatchupReport
+from analytics.team_matchup_engine import (
+    RankedOpponent,
+    RealScheduledMatch,
+    RosterEntry,
+    TeamMatchupReport,
+)
 
 
 def _trend_dict(trend: SkillTrendInfo) -> dict:
@@ -117,6 +122,16 @@ def _lineup_result_to_dict(result: Optional[LineupLabResult]) -> Optional[dict]:
     }
 
 
+def _real_match_to_dict(match: RealScheduledMatch) -> dict:
+    return {
+        "external_id": match.external_id,
+        "match_date": match.match_date,
+        "is_scored": match.is_scored,
+        "is_finalized": match.is_finalized,
+        "status": match.status,
+    }
+
+
 def team_matchup_report_to_dict(report: TeamMatchupReport) -> dict:
     return {
         "our_team": {"id": report.our_team_external_id, "name": report.our_team_name},
@@ -132,4 +147,5 @@ def team_matchup_report_to_dict(report: TeamMatchupReport) -> dict:
         "lineup": _lineup_result_to_dict(report.lineup_result),
         "lineup_error": report.lineup_error,
         "summary": report.summary,
+        "real_matches": [_real_match_to_dict(m) for m in report.real_matches],
     }

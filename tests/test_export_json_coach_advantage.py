@@ -99,6 +99,29 @@ class TestTeamMatchupReportToDict:
         assert data["lineup"] is None
         assert data["lineup_error"] is None
 
+    def test_real_matches_defaults_to_an_empty_list(self):
+        report = build_team_matchup_report(self._matrix(), "Mark It Up", "Corner Pockets")
+        data = team_matchup_report_to_dict(report)
+        assert data["real_matches"] == []
+
+    def test_real_matches_round_trips_every_real_field(self):
+        from analytics.team_matchup_engine import RealScheduledMatch
+
+        report = build_team_matchup_report(
+            self._matrix(), "Mark It Up", "Corner Pockets",
+            real_matches=(
+                RealScheduledMatch(
+                    external_id="M-1", match_date="2026-09-10",
+                    is_scored=False, is_finalized=False, status="Scheduled",
+                ),
+            ),
+        )
+        data = team_matchup_report_to_dict(report)
+        assert data["real_matches"] == [{
+            "external_id": "M-1", "match_date": "2026-09-10",
+            "is_scored": False, "is_finalized": False, "status": "Scheduled",
+        }]
+
     def test_lineup_result_serializes_with_a_1_based_board_number(self):
         lineup_result = LineupLabResult(
             assignments=(

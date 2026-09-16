@@ -212,9 +212,26 @@ class TestMatchNight:
             [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
             [], "Mark It Up",
         )
-        for element_id in ("mn-scope", "mn-opponent", "mn-roster", "mn-comparison",
-                            "mn-lineup", "mn-warning", "mn-reset", "mn-print"):
+        for element_id in ("mn-scope", "mn-match", "mn-opponent", "mn-roster", "mn-comparison",
+                            "mn-lineup", "mn-warning", "mn-reset", "mn-print", "mn-sticky"):
             assert f'id="{element_id}"' in html
+
+    def test_data_freshness_is_shown_when_built_at_is_given(self):
+        html = render(
+            [_player_report()],
+            [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
+            [], "Mark It Up", built_at="2026-09-16T19:14:44.743930+00:00",
+        )
+        assert "Data last captured:" in html
+        assert "2026-09-16 19:14 UTC" in html
+
+    def test_data_freshness_is_honest_when_built_at_is_not_given(self):
+        html = render(
+            [_player_report()],
+            [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
+            [], "Mark It Up",
+        )
+        assert "Data last captured: not available" in html
 
     def test_match_night_never_narrates_a_verdict(self):
         html = " ".join(render(

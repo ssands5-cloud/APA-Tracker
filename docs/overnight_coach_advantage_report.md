@@ -305,6 +305,99 @@ acknowledgments) so this wasn't built twice; pinged both again once pushed.
   reasons about our own team's skill total, matching the real 23-Rule
   itself.
 
+### Make Match Night effortless -- 2026-09-16 19:31 UTC
+
+User directive: close GPT's `2de026c` audit (already fixed and pushed as
+`5658cec`, CI green, see that response above), then "make Match Night
+effortless" -- five specific asks: real match setup with data freshness
+and match-ID-keyed state; a richer "here are your options" comparison; a
+concrete remaining plan per choice; fast, consistent corrections; and a
+phone-first presentation. Coordinated with the one active peer session
+before starting.
+
+- **Match setup (#1).** A scope (opponent, format, session) can
+  legitimately span more than one real calendar `Match` -- confirmed on
+  this project's own real data: the "Margin of Error" scope has two real
+  scheduled matches (one already finalized 2026-08-03, one upcoming
+  2026-09-28). Added `analytics.team_matchup_engine.RealScheduledMatch`
+  (a scope's real underlying `Match` row(s) -- external_id, match_date,
+  is_scored/is_finalized/status, all real fields, nothing recomputed) and
+  `scripts.build_captain_first_edge.real_matches_for_scope()` to query
+  them (sorted by `Match.id`, not `match_date` -- that column is kept as
+  delivered text in more than one real format across ingest paths, so
+  string-sorting it would not reliably be chronological). Threaded through
+  `build_team_matchup_report()` -> the JSON export -> a new "Scheduled
+  match" selector in the dashboard. Saved planner state (availability,
+  boards sent) is now keyed by scope **+ the selected real match's own
+  external_id**, not the scope alone -- a repeat opponent's second real
+  match can no longer inherit the first one's lineup. Also added a real
+  "Data last captured" line: the bundle's own real `built_at` build
+  timestamp (previously only in `manifest.json`, now also embedded in the
+  dashboard itself and unified to a single computed value shared with the
+  manifest, rather than two independently-taken near-identical
+  timestamps).
+- **Richer comparison (#2).** Each candidate's Direct record row now says
+  "sample size" explicitly rather than only "across N match(es)".
+  Modeled-probability labeling already carried real `model_source`
+  disclosure from the prior cycle's audit fix -- this cycle moved the raw
+  technical string behind an expandable `<details>` (see #5) with a
+  friendly label in front, rather than removing anything.
+- **Concrete remaining plan (#3).** Previously each card only answered
+  true/false/unknown via `mnLegalCompletionExists`. Added
+  `mnFindCompletionWitness()`, a JS-only sibling search (same
+  None-on-unknown-slot and exact-search-guard posture, over real player
+  objects instead of bare skill numbers) that names an actual real
+  completion -- "A valid finish: Ben Fixture (SL 5), Cal Fixture (SL 4), ..."
+  -- when one exists, or states plainly "No combination of tonight's
+  remaining Available players keeps the team's total at or under 23" when
+  none does. Never just a verdict now.
+- **Fast, consistent corrections (#4).** Verified (not assumed) that Undo
+  already frees the opponent back into the announce dropdown --
+  `mnRenderOpponentSelect` recomputes its used-opponent set from live
+  `mnState.assignments` on every render, so removing an assignment
+  naturally un-hides its opponent; added a regression test proving this
+  explicitly (checks the opponent both disappears on Send and reappears on
+  Undo) rather than leaving it as an unverified assumption the way a past
+  audit finding on this exact feature was.
+- **Phone-first presentation (#5).** 44px-minimum touch targets on every
+  Match Night control/select/button; a `position: sticky` remaining-
+  slots/skill-total summary bar (turns to a warning color when no legal
+  finish remains from current Available players) that stays visible while
+  scrolling comparison cards; an explicit "Boards sent (detail)" heading
+  demoting the detailed log below the decision cards; raw
+  `analytics.head_to_head:*` model-source strings replaced with a plain
+  label ("Based on head-to-head history and skill level" /
+  "Based on skill level only...") with the real technical string still
+  present, just behind a `<details>` disclosure, never hidden entirely.
+- **New tests:** 7 in `tests/test_build_captain_first_edge.py`
+  (`real_matches_for_scope`: one real match, two real matches in one
+  scope, away-side team, wrong opponent excluded, bye excluded, empty
+  result, an unscored/not-yet-played match still included), 2 in
+  `tests/test_team_matchup_engine.py`, 2 in
+  `tests/test_export_json_coach_advantage.py`, 3 in `tests/test_dashboard.py`
+  (element ids, freshness shown/honestly-absent), and 9 new/extended in
+  `tests/test_dashboard_browser.py` (match-ID state isolation across two
+  real matches in one synthetic scope, sticky summary content before/after
+  a send, a concrete completion shown for a legal candidate, an explicit
+  no-completion explanation for an infeasible one, and the strengthened
+  Undo/opponent-restoration test).
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T193928Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; screenshotted a phone-width
+  (420px) render confirming the match selector, sticky bar, and concrete
+  "A valid finish" text all render correctly with real division data, no
+  console errors; all 8 checksums independently re-verified in Python.
+- Full suite: **1660 passed, 0 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).
+- **Not addressed this cycle, honestly disclosed:** the dedicated
+  per-opponent scouting card and the 4-player/19 fallback remain open, as
+  already logged above. "Confirm available players" is satisfied
+  structurally (the roster panel sits directly below match setup, before
+  any comparison is shown) rather than as a separate explicit
+  confirmation step/button -- a real, smaller gap than building a whole
+  new control, disclosed rather than silently assumed equivalent.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 

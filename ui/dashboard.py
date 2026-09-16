@@ -36,8 +36,9 @@ table below it -- never narrated as a "favored"/"danger" verdict (see
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 from html import escape
-from typing import Sequence
+from typing import Optional, Sequence
 
 from analytics.opponent_risk_profile import OpponentRiskEntry
 from analytics.player_matchup_engine import PlayerMatchupReport
@@ -59,6 +60,7 @@ def render(
     team_reports: Sequence[TeamMatchupReport],
     opponent_risk_entries: Sequence[OpponentRiskEntry],
     our_team_name: str,
+    built_at: Optional[str] = None,
 ) -> str:
     player_payload = {_pair_key(r): player_matchup_report_to_dict(r) for r in player_reports}
     team_payload = {_scope_key(r): team_matchup_report_to_dict(r) for r in team_reports}
@@ -81,6 +83,15 @@ def render(
         f'{escape(r.opponent_team_name)} ({escape(r.format)}, {escape(r.session_name)})</option>'
         for r in team_reports
     )
+    if built_at:
+        try:
+            _built_dt = datetime.fromisoformat(built_at)
+            freshness_text = _built_dt.strftime("%Y-%m-%d %H:%M UTC")
+        except ValueError:
+            freshness_text = built_at
+    else:
+        freshness_text = "not available"
+
     risk_rows = "".join(
         f"<tr><td>{escape(e.opponent_team_name)}</td>"
         f"<td>{e.direct_pairing_count}/{e.total_pairings}</td>"
@@ -124,10 +135,26 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 .mn-card.mn-warn {{ border-left: 5px solid #b58900; }}
 .mn-card.mn-unknown {{ border-left: 5px solid #8a919c; }}
 .mn-card h4 {{ margin: 0 0 4px; }}
-.mn-send-btn {{ font-size: 15px; padding: 8px 16px; margin-top: 6px; }}
+.mn-send-btn {{ font-size: 16px; padding: 10px 18px; margin-top: 6px; min-height: 44px; }}
 .mn-status-line {{ font-weight: 600; }}
 #mn-warning .cd-none {{ font-weight: 600; }}
 .mn-print-only {{ display: none; }}
+/* Phone-first: large controls (44px is the commonly-cited minimum
+   comfortable touch target), and a sticky remaining-slot/skill-total
+   summary that stays visible while scrolling through comparison cards. */
+#mn-scope, #mn-match, #mn-opponent, .mn-status-select {{
+  font-size: 16px; padding: 10px; min-height: 44px;
+}}
+#mn-reset, #mn-print, #mn-undo-btn, .mn-undo-btn {{
+  font-size: 15px; padding: 10px 16px; min-height: 44px;
+}}
+.mn-sticky {{ position: sticky; top: 0; z-index: 5; background: #1F3864; color: #fff;
+  padding: 10px 14px; margin: 10px 0; border-radius: 4px; font-size: 15px;
+  display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }}
+.mn-sticky strong {{ font-size: 17px; }}
+.mn-sticky.mn-sticky-warn {{ background: #7a3b00; }}
+.mn-technical {{ color: #666e7a; font-size: 12.5px; margin-top: 4px; }}
+.mn-technical summary {{ cursor: pointer; }}
 @media print {{
   body * {{ display: none !important; }}
   #mn-print-summary, #mn-print-summary * {{ display: revert !important; }}
@@ -168,23 +195,29 @@ sparkline of the player's whole skill-level history.</p>
 <div id="tme-result"></div>
 
 <h2 class="mn-screen-only">Match Night</h2>
-<p class="cd-note mn-screen-only">"They put up this player -- who should I send?" Mark who's
-available tonight, pick the opponent's announced player, and compare your legal options
-side by side. A skill-level estimate is not a promise, and skill-level movement is not a
-winning streak -- both are shown as what they really are, not as a verdict.</p>
+<p class="cd-note mn-screen-only">"They put up this player -- who should I send?" Confirm
+tonight's scheduled match and who's available, pick the opponent's announced player, and
+compare your legal options side by side. A skill-level estimate is not a promise, and
+skill-level movement is not a winning streak -- both are shown as what they really are,
+not as a verdict.</p>
 <div class="cd-controls mn-screen-only">
 <label>Match: <select id="mn-scope">{scope_options}</select></label>
+&nbsp;
+<label>Scheduled match: <select id="mn-match"></select></label>
+<p class="cd-note">Data last captured: {escape(freshness_text)}</p>
 &nbsp;
 <button type="button" id="mn-reset">Reset Match Night</button>
 &nbsp;
 <button type="button" id="mn-print">Print summary</button>
 </div>
+<div id="mn-sticky" class="mn-sticky mn-screen-only"></div>
 <div id="mn-warning" class="mn-screen-only"></div>
 <div id="mn-roster" class="mn-screen-only"></div>
 <div class="cd-controls mn-screen-only">
 <label>They put up: <select id="mn-opponent"></select></label>
 </div>
 <div id="mn-comparison" class="mn-screen-only"></div>
+<h3 class="mn-screen-only">Boards sent (detail)</h3>
 <div id="mn-lineup" class="mn-screen-only"></div>
 <div id="mn-print-summary" class="mn-print-only"></div>
 
@@ -527,6 +560,22 @@ toughest first -- never a categorical "danger" label
     return found;
   }}
 
+  function mnFriendlyModelSource(modelSource) {{
+    // Directive: "Replace internal model names with understandable
+    // labels, with technical details expandable." Maps this project's
+    // real, already-established analytics.head_to_head model_source
+    // strings to plain language -- the raw string is never hidden, just
+    // moved behind a <details> disclosure at the call site.
+    if (!modelSource) return "No data";
+    if (modelSource.indexOf("direct-history-and-skill") !== -1) {{
+      return "Based on head-to-head history and skill level";
+    }}
+    if (modelSource.indexOf("skill-only") !== -1) {{
+      return "Based on skill level only (no head-to-head history)";
+    }}
+    return "Based on this project's matchup model";
+  }}
+
   function mnKnownSkillSum(committed) {{
     // Display-only: the sum of whatever committed skill levels are
     // actually known, never a guessed contribution for an unknown one.
@@ -535,23 +584,98 @@ toughest first -- never a categorical "danger" label
       .reduce(function (a, b) {{ return a + b; }}, 0);
   }}
 
-  function mnStorageKey(scopeKey) {{ return "match-night:" + scopeKey; }}
+  function mnFindCompletionWitness(committedSkills, availablePlayers) {{
+    // Directive: "after each proposed choice, display a concrete valid
+    // completion -- or explain exactly why completion is unavailable."
+    // mnLegalCompletionExists only ever answered true/false/null; this
+    // finds one REAL witness combination of actual remaining players
+    // (not just a skill-level count) when one exists, over the same
+    // committedSkills/availablePlayers shape, so the coach sees an actual
+    // finish ("send these four next"), not just a verdict. Same
+    // None-on-unknown-slot and exact-search-guard posture as
+    // mnLegalCompletionExists -- see that function's own comments.
+    // Returns {{status: "ok"|"no-legal"|"unknown", players: [...] }}.
+    if (committedSkills.some(function (v) {{ return v === null || v === undefined; }})) {{
+      return {{ status: "unknown", players: [] }};
+    }}
+    var stillNeeded = MN_SIZE - committedSkills.length;
+    var committedTotal = committedSkills.reduce(function (a, b) {{ return a + b; }}, 0);
+    if (stillNeeded < 0) return {{ status: "unknown", players: [] }};
+    if (stillNeeded === 0) {{
+      return committedTotal <= MN_LIMIT
+        ? {{ status: "ok", players: [] }} : {{ status: "no-legal", players: [] }};
+    }}
+    var known = availablePlayers.filter(function (p) {{
+      return p.skill_level !== null && p.skill_level !== undefined;
+    }});
+    if (known.length < stillNeeded) return {{ status: "unknown", players: [] }};
+    if (mnChooseCount(known.length, stillNeeded) > MN_MAX_COMPLETION_ATTEMPTS) {{
+      return {{ status: "unknown", players: [] }};
+    }}
+    var remainingCap = MN_LIMIT - committedTotal;
+    var found = null;
+    (function combos(start, chosen) {{
+      if (found) return;
+      if (chosen.length === stillNeeded) {{
+        var sum = chosen.reduce(function (a, b) {{ return a + b.skill_level; }}, 0);
+        if (sum <= remainingCap) found = chosen.slice();
+        return;
+      }}
+      for (var i = start; i < known.length && !found; i++) {{
+        chosen.push(known[i]);
+        combos(i + 1, chosen);
+        chosen.pop();
+      }}
+    }})(0, []);
+    return found ? {{ status: "ok", players: found }} : {{ status: "no-legal", players: [] }};
+  }}
 
-  function mnLoadState(scopeKey) {{
+  function mnStorageKey(matchKey) {{ return "match-night:" + matchKey; }}
+
+  function mnLoadState(matchKey) {{
     try {{
-      var raw = window.localStorage.getItem(mnStorageKey(scopeKey));
+      var raw = window.localStorage.getItem(mnStorageKey(matchKey));
       if (raw) return JSON.parse(raw);
     }} catch (e) {{ /* private browsing or storage disabled -- honest fallback below */ }}
     return {{ statuses: {{}}, assignments: [] }};
   }}
 
-  function mnSaveState(scopeKey, state) {{
-    try {{ window.localStorage.setItem(mnStorageKey(scopeKey), JSON.stringify(state)); }}
+  function mnSaveState(matchKey, state) {{
+    try {{ window.localStorage.setItem(mnStorageKey(matchKey), JSON.stringify(state)); }}
     catch (e) {{ /* real, honest limitation: state just won't persist across reloads */ }}
   }}
 
   function mnCurrentScope() {{
     return TEAM_DATA[document.getElementById("mn-scope").value];
+  }}
+
+  function mnCurrentMatchKey() {{
+    // GPT-directed follow-up: "Save state by match ID so repeat opponents
+    // don't inherit another night's lineup." A scope (opponent, format,
+    // session) can legitimately span more than one real calendar match --
+    // the saved-state key includes the selected real match's own
+    // external_id when one is identified, so two matches sharing a scope
+    // never share saved state. Falls back to the scope key alone, openly,
+    // when no real scheduled match was identified for this scope (never
+    // fabricated).
+    var scopeKey = document.getElementById("mn-scope").value;
+    var matchSelect = document.getElementById("mn-match");
+    var matchId = matchSelect && matchSelect.value ? matchSelect.value : "";
+    return matchId ? (scopeKey + "|match:" + matchId) : scopeKey;
+  }}
+
+  function mnRenderMatchSelect(scope) {{
+    var select = document.getElementById("mn-match");
+    var matches = scope.real_matches || [];
+    if (!matches.length) {{
+      select.innerHTML = "<option value=''>No specific scheduled match identified</option>";
+      return;
+    }}
+    select.innerHTML = matches.map(function (m) {{
+      var label = (m.match_date || "Unknown date")
+        + (m.is_finalized ? " (finalized)" : (m.is_scored ? " (scored)" : " (not yet played)"));
+      return "<option value='" + esc(m.external_id) + "'>" + esc(label) + "</option>";
+    }}).join("");
   }}
 
   function mnCommittedSkillLevels(scope) {{
@@ -646,7 +770,7 @@ toughest first -- never a categorical "danger" label
           mnState.assignments.forEach(function (a, i) {{ a.board = i + 1; }});
         }}
         mnState.statuses[pid] = newStatus;
-        mnSaveState(document.getElementById("mn-scope").value, mnState);
+        mnSaveState(mnCurrentMatchKey(), mnState);
         mnRenderAll();
       }});
     }});
@@ -696,16 +820,17 @@ toughest first -- never a categorical "danger" label
     var html = "<h4>They put up " + esc(opponent ? opponent.name : "?") + " -- who should you send?</h4>";
     available.forEach(function (p) {{
       var report = PLAYER_DATA[mnPairKey(scope, p.id, opponentId)];
-      var otherAvailableSkills = available
-        .filter(function (q) {{ return q.id !== p.id; }})
-        .map(function (q) {{ return q.skill_level; }});
+      var otherAvailablePlayers = available.filter(function (q) {{ return q.id !== p.id; }});
       // GPT audit follow-up (2026-09-16): this candidate's own skill level
       // must be passed through even when it's null/unknown -- silently
       // omitting it understated the occupied-slot count and could show
       // "still legal" for a choice that genuinely can't be verified.
       var candidateCommitted = committed.concat([p.skill_level]);
-      var verdict = mnLegalCompletionExists(candidateCommitted, otherAvailableSkills);
-      var cls = verdict === false ? "mn-warn" : (verdict === null ? "mn-unknown" : "mn-ok");
+      // Directive: "after each proposed choice, display a concrete valid
+      // completion -- or explain exactly why completion is unavailable."
+      var witness = mnFindCompletionWitness(candidateCommitted, otherAvailablePlayers);
+      var cls = witness.status === "no-legal" ? "mn-warn"
+        : (witness.status === "unknown" ? "mn-unknown" : "mn-ok");
       html += "<div class='mn-card " + cls + "'><h4>" + esc(p.name) + " <span class='cd-note'>SL "
         + orNoData(p.skill_level) + "</span>" + trendBadge(p.trend) + "</h4>";
       if (report) {{
@@ -713,30 +838,38 @@ toughest first -- never a categorical "danger" label
           + "<tr><th>Evidence</th><td>" + esc(report.evidence_label) + "</td></tr>"
           + "<tr><th>Direct record</th><td>" + (report.direct_wins !== null && report.direct_wins !== undefined
               ? report.direct_wins + "-" + report.direct_losses + " (" + pct(report.observed_win_rate) + ")"
-              : "No data") + " across " + report.direct_evidence_count + " match(es)</td></tr>"
+              : "No data") + " -- sample size " + report.direct_evidence_count + " match(es)</td></tr>"
           // GPT audit follow-up (2026-09-16): modeled_win_probability is
           // NOT always skill-only -- a DIRECT pairing's real model_source
           // can be "...direct-history-and-skill". Labeling it "Skill-only
           // estimate" unconditionally repeated the exact model-basis
           // conflation already fixed once this session in the lineup
-          // table; show the real model_source alongside instead of a
-          // fixed, sometimes-wrong label.
-          + "<tr><th>Modeled probability</th><td>" + pct(report.modeled_win_probability)
-              + " <span class='cd-note'>(" + orNoData(report.model_source) + ")</span></td></tr>"
+          // table. Directive: "Replace internal model names with
+          // understandable labels, with technical details expandable" --
+          // a friendly label up front, the real technical string behind
+          // a <details> disclosure for a captain who wants it.
+          + "<tr><th>Estimate</th><td>" + pct(report.modeled_win_probability)
+              + " <details class='mn-technical'><summary>"
+              + esc(mnFriendlyModelSource(report.model_source)) + "</summary>"
+              + esc(orNoData(report.model_source)) + "</details></td></tr>"
           + "</tbody></table>"
           + "<p class='cd-summary-box'>" + esc(report.summary) + "</p>";
       }} else {{
         html += "<p class='cd-none'>No matchup data found for this pairing.</p>";
       }}
-      if (verdict === false) {{
-        html += "<p class='mn-status-line'>\\u26a0 Sending " + esc(p.name) + " would leave "
-          + "no legal lineup possible with tonight's remaining Available players.</p>";
-      }} else if (verdict === null) {{
+      if (witness.status === "no-legal") {{
+        html += "<p class='mn-status-line'>\\u26a0 No combination of tonight's remaining "
+          + "Available players keeps the team's total at or under " + MN_LIMIT
+          + " if you send " + esc(p.name) + ".</p>";
+      }} else if (witness.status === "unknown") {{
         html += "<p class='cd-note'>Not enough known skill levels among the rest of "
-          + "tonight's Available players to verify a legal completion.</p>";
+          + "tonight's Available players to verify a completion.</p>";
+      }} else if (witness.players.length) {{
+        html += "<p class='cd-note'>A valid finish: " + witness.players.map(function (w) {{
+            return esc(w.name) + " (SL " + w.skill_level + ")";
+          }}).join(", ") + ".</p>";
       }} else {{
-        html += "<p class='cd-note'>Sending " + esc(p.name) + " still leaves a legal "
-          + "lineup possible.</p>";
+        html += "<p class='cd-note'>Sending " + esc(p.name) + " completes a legal lineup.</p>";
       }}
       html += "<button type='button' class='mn-send-btn' data-player-id='" + p.id + "'>Send "
         + esc(p.name) + "</button></div>";
@@ -808,7 +941,7 @@ toughest first -- never a categorical "danger" label
       model_source: report ? report.model_source : null,
     }});
     mnState.statuses[playerId] = "played";
-    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnSaveState(mnCurrentMatchKey(), mnState);
     mnRenderAll();
   }}
 
@@ -821,7 +954,7 @@ toughest first -- never a categorical "danger" label
       mnState.statuses[removed.player_id] = "available";
     }}
     mnState.assignments.forEach(function (a, i) {{ a.board = i + 1; }});
-    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnSaveState(mnCurrentMatchKey(), mnState);
     mnRenderAll();
   }}
 
@@ -839,10 +972,12 @@ toughest first -- never a categorical "danger" label
           + orNoData(a.opponent_skill_level) + ")</td><td>" + esc(a.evidence_label) + "</td>"
           + "<td>" + (a.direct_wins !== null && a.direct_wins !== undefined
               ? a.direct_wins + "-" + a.direct_losses : "No data") + "</td>"
-          // Same real model_source shown alongside the number here too --
-          // it is not always the skill-only model (see mnRenderComparison).
-          + "<td>" + pct(a.modeled_win_probability) + " <span class='cd-note'>("
-              + orNoData(a.model_source) + ")</span></td>"
+          // Same friendly label + expandable technical detail as the
+          // comparison cards -- it is not always the skill-only model.
+          + "<td>" + pct(a.modeled_win_probability)
+              + " <details class='mn-technical'><summary>"
+              + esc(mnFriendlyModelSource(a.model_source)) + "</summary>"
+              + esc(orNoData(a.model_source)) + "</details></td>"
           + "<td><button type='button' class='mn-undo-btn' data-index='" + index + "'>Undo</button></td>"
           + "</tr>";
       }});
@@ -901,6 +1036,27 @@ toughest first -- never a categorical "danger" label
     target.innerHTML = html;
   }}
 
+  function mnRenderSticky(scope) {{
+    // Directive: "a sticky remaining-slot/skill-total summary" -- stays
+    // visible while scrolling through comparison cards, the single glance
+    // a captain needs mid-decision without scrolling back up.
+    var target = document.getElementById("mn-sticky");
+    var committed = mnCommittedSkillLevels(scope);
+    var playedCount = mnPlayedCount(scope);
+    var remainingSlots = MN_SIZE - playedCount;
+    var knownSum = mnKnownSkillSum(committed);
+    var hasUnknown = committed.some(function (v) {{ return v === null || v === undefined; }});
+    var available = scope.our_roster
+      .filter(function (p) {{ return (mnState.statuses[p.id] || "available") === "available"; }})
+      .map(function (p) {{ return p.skill_level; }});
+    var verdict = mnLegalCompletionExists(committed, available);
+    var warn = verdict === false;
+    target.className = "mn-sticky mn-screen-only" + (warn ? " mn-sticky-warn" : "");
+    target.innerHTML = "<span><strong>" + remainingSlots + "</strong> board(s) remaining</span>"
+      + "<span>Skill total: <strong>" + knownSum + (hasUnknown ? "+?" : "") + "</strong> of " + MN_LIMIT + "</span>"
+      + (warn ? "<span>&#9888; No legal finish possible from current Available players</span>" : "");
+  }}
+
   function mnRenderAll() {{
     var scope = mnCurrentScope();
     if (!scope) return;
@@ -909,22 +1065,36 @@ toughest first -- never a categorical "danger" label
     mnRenderComparison(scope);
     mnRenderLineup(scope);
     mnRenderWarning(scope);
+    mnRenderSticky(scope);
     mnRenderPrintSummary(scope);
   }}
 
   function mnInitScope() {{
-    mnState = mnLoadState(document.getElementById("mn-scope").value);
+    // Scope changed: rebuild the real-match selector for the new scope
+    // first (its options depend on which scope is active), THEN load
+    // state under the resulting scope+match key.
+    var scope = mnCurrentScope();
+    if (scope) mnRenderMatchSelect(scope);
+    mnState = mnLoadState(mnCurrentMatchKey());
+    mnRenderAll();
+  }}
+
+  function mnOnMatchChange() {{
+    // Match changed within the same scope: the selector's own options are
+    // already correct, just load the (possibly different) saved state.
+    mnState = mnLoadState(mnCurrentMatchKey());
     mnRenderAll();
   }}
 
   document.getElementById("mn-scope").addEventListener("change", mnInitScope);
+  document.getElementById("mn-match").addEventListener("change", mnOnMatchChange);
   document.getElementById("mn-opponent").addEventListener("change", function () {{
     mnRenderComparison(mnCurrentScope());
   }});
   document.getElementById("mn-reset").addEventListener("click", function () {{
     if (!window.confirm("Reset all Match Night state for this match?")) return;
     mnState = {{ statuses: {{}}, assignments: [] }};
-    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnSaveState(mnCurrentMatchKey(), mnState);
     mnRenderAll();
   }});
   document.getElementById("mn-print").addEventListener("click", function () {{ window.print(); }});

@@ -345,43 +345,60 @@ statistical work — checked against this project's own recorded outcomes
 before it ships, not asserted in the code.
 
 **Match Night** — the dashboard's third panel, for the actual in-match
-decision: "they put up this player, who should I send?" Reuses the exact
-same Player vs Player / Team vs Team data already embedded on the page —
-no new estimate, no new model.
+decision: "they put up this player, who should I send, and what does that
+leave me?" Reuses the exact same Player vs Player / Team vs Team data
+already embedded on the page — no new estimate, no new model.
 
+- **Match setup** — pick the (opponent, format, session) scope, then the
+  real scheduled match itself: `analytics.team_matchup_engine.RealScheduledMatch`
+  carries each scope's real underlying `Match` row(s) (own `external_id` +
+  `match_date`), since the same two teams can legitimately play more than
+  once under one scope in a season. Saved state (availability, boards sent)
+  is keyed by the selected real match, not just the scope, so two matches
+  against a repeat opponent never inherit each other's lineup. A "Data last
+  captured" line shows the real bundle build timestamp.
 - **Roster availability** — mark each of tonight's players Available,
-  Absent, Already played, or Held back. Nothing computed elsewhere treats
-  an unmarked player as available by default beyond the honest "Available"
-  starting state.
+  Absent, Already played, or Held back — four genuinely distinct states,
+  never conflated. Nothing computed elsewhere treats an unmarked player as
+  available by default beyond the honest "Available" starting state.
 - **Side-by-side comparison** — pick who the opponent announced, and every
   currently-Available player gets a card: skill levels, exact DIRECT
-  win/loss record, evidence label, the skill-only estimate (always labeled
-  "experimental"), and the same plain-language summary
-  `analytics.player_matchup_engine` already generates — never a "favored"
-  verdict.
-- **Legality-preserving warnings** — before you send anyone, a real,
-  bounded exact search (`analytics.lineup_legality.legal_completion_exists`,
-  ported to JS since this planner is live/interactive, not a build-time
-  report) checks whether a legal 5-player lineup (real APA 23-Rule, ≤23
-  combined skill level) can still be completed from who's left Available.
-  A choice that would leave no legal completion is flagged on its card and
-  gated behind a real confirmation dialog before it's applied — never
-  silently blocked, since a captain may have no other choice.
-- **Running lineup log + saved state** — every board sent is logged (who,
-  who they faced, the real evidence behind that pairing) with a live
-  committed-skill-total, persisted to the browser's own `localStorage` per
-  scope so a page reload doesn't lose tonight's match. A basic print
-  view (`Print summary`) renders just the roster status and boards sent,
-  usable offline.
+  win/loss record and its real sample size, a modeled probability labeled
+  in plain language (with the real technical model string one click away
+  in an expandable `<details>`, never hidden — just not the headline), and
+  the same plain-language summary `analytics.player_matchup_engine`
+  already generates — never a "favored" verdict.
+- **A concrete remaining plan** — each candidate's card doesn't just say
+  "still legal": it names one real, valid completion (which specific
+  teammates and their skill levels would finish a legal lineup), or states
+  plainly that no combination of tonight's remaining Available players
+  keeps the team under the real 23-Rule cap. Backed by a real, bounded
+  exact search (`analytics.lineup_legality.legal_completion_exists`, ported
+  to JS since this planner is live/interactive, not a build-time report) —
+  a choice that would leave no legal completion is also gated behind a real
+  confirmation dialog before it's applied, never silently blocked, since a
+  captain may have no other choice.
+- **Fast corrections** — every sent board has its own Undo: removes the
+  recorded assignment, restores that player's own availability, and frees
+  the opponent back into the announce dropdown, all three kept consistent
+  with the saved state and the print view. A manual status change away from
+  "Already played" retracts a stale Send record the same way, so the two
+  can never quietly disagree (the real bug a GPT audit caught and this
+  fixes).
+- **Phone-first presentation** — large controls and touch targets (44px
+  minimum) throughout, a sticky remaining-slots/skill-total summary that
+  stays visible while scrolling through comparison cards, decision cards
+  ahead of the detailed boards-sent log. A basic print view (`Print
+  summary`) renders just the roster status and boards sent, usable offline.
 
 Still open, honestly disclosed: a dedicated per-opponent scouting card
 (recent results, coach-entered notes kept separate from calculated stats —
-directive item #3) and full phone-friendly styling/large touch targets
-beyond what Match Night already has (directive item #5) are not built yet.
+from an earlier "Match Night" directive) is not built yet.
 The 4-player/19 skill-level fallback (a team that can't field 5 legal
-players) is intentionally not implemented here either — `analytics/
-lineup_legality.py`'s own docstring already flags that as unverified
-captain-choice territory needing its own follow-up, not assumed.
+players) is intentionally not implemented here either —
+`analytics/lineup_legality.py`'s own docstring already flags that as
+unverified captain-choice territory needing its own follow-up, not
+assumed.
 
 **Regression coverage:** `tests/test_dashboard_browser.py` drives a real
 headless Chromium instance (Playwright) against a real, freshly built

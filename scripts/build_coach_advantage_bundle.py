@@ -71,6 +71,7 @@ from scripts.build_captain_first_edge import (
     _configured_our_team_id,
     _team_name,
     build_match_scopes,
+    real_matches_for_scope,
 )
 from scripts.build_captains_edge import NoDatabaseError, connect_read_only, resolve_db_path
 from scripts.build_full_production_demo import (
@@ -223,10 +224,15 @@ def compute(
         )
         our_trends = {p.player_id: p.player_trend for p in player_reports}
         opponent_trends = {p.opponent_id: p.opponent_trend for p in player_reports}
+        real_matches = real_matches_for_scope(
+            db, our_team_external_id, scope.opponent_team_external_id,
+            scope.format, scope.session_name,
+        )
         team_report = build_team_matchup_report(
             scope.matrix, our_team_name, scope.opponent_team_name,
             lineup_result=scope.lineup_result, lineup_error=scope.lineup_error,
             our_trends=our_trends, opponent_trends=opponent_trends,
+            real_matches=real_matches,
         )
         computed.append(ComputedScope(
             opponent_team_external_id=scope.opponent_team_external_id,
@@ -249,7 +255,10 @@ def compute(
     )
 
 
-def render(run_dir: Path, computed: list[ComputedScope], risk_profile: list, our_team_name: str) -> PhaseResult:
+def render(
+    run_dir: Path, computed: list[ComputedScope], risk_profile: list, our_team_name: str,
+    built_at: str,
+) -> PhaseResult:
     all_player_reports = [r for c in computed for r in c.player_reports]
     all_team_reports = [c.team_report for c in computed if c.team_report is not None]
 
@@ -266,7 +275,9 @@ def render(run_dir: Path, computed: list[ComputedScope], risk_profile: list, our
         render_team_html(all_team_reports), encoding="utf-8"
     )
     (html_dir / "dashboard.html").write_text(
-        dashboard_module.render(all_player_reports, all_team_reports, risk_profile, our_team_name),
+        dashboard_module.render(
+            all_player_reports, all_team_reports, risk_profile, our_team_name, built_at=built_at,
+        ),
         encoding="utf-8",
     )
 
@@ -366,11 +377,15 @@ def run_build(
     run_dir.mkdir(parents=True, exist_ok=True)
     engine = create_engine("sqlite://", creator=lambda: connect_read_only(db_path))
     db = Session(bind=engine)
+    # Computed once and reused for both the dashboard's own "data as of"
+    # display and the manifest below, rather than two independently-taken
+    # timestamps for what should be the same real build moment.
+    built_at = datetime.now(timezone.utc).isoformat()
     try:
         our_team_name = _team_name(db, our_team_external_id)
         computed, risk_profile, compute_result = compute(db, our_team_external_id, our_team_name)
         phases.append(compute_result)
-        render_result, artifacts = render(run_dir, computed, risk_profile, our_team_name)
+        render_result, artifacts = render(run_dir, computed, risk_profile, our_team_name, built_at)
         phases.append(render_result)
         phases.append(verify(computed))
     finally:
@@ -380,7 +395,7 @@ def run_build(
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "run_id": run_dir.name,
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": built_at,
         "database_sha256": locked_hash,
         "database_file": db_path.name,
         "our_team_id": our_team_external_id,
