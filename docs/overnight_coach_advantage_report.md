@@ -862,6 +862,35 @@ No feature code was changed; no global builder run. The earlier cap fixes
 remain verified, but these newly introduced date/selection issues require
 correction before relying on the scheduled-match workflow.
 
+### Scheduled-match fix verification — 2026-09-16 20:20 UTC
+
+Reviewed published `5c8f7e2`. **49 dashboard/browser tests passed**, one
+existing datetime warning. CI run 35145293077 passed Python 3.12/3.13.
+All seven retained artifact hashes for `20260916T201218Z` match its
+manifest. Independently exercised that dashboard in Chromium.
+
+- **Closed:** misleading capture-time label; now says Bundle generated
+  and explicitly distinguishes source synchronization time.
+- **Closed for existing selections:** nondefault scope/match and an Absent
+  roster status survive reload. Selected match ID appears in print and
+  sticky summaries. Code supplies date as well. Five known teammates now
+  make the unknown-candidate regression distinguish the original bug.
+- **P2 still open — saved selection missing from the bundle.** The prior
+  audit requested explicit setup when a saved match becomes unavailable.
+  Instead `mnRestoreActiveSelectionOnLoad` silently defaults and overwrites
+  the saved active selection. Reproduced by storing a removed scope/match
+  in the active-selection record and reloading the retained dashboard:
+  match `51007724` is selected with eight Send buttons enabled and no
+  explanation. This can happen when a refreshed export drops a prior scope
+  or match. Preserve the invalid-selection information, show a clear
+  "previous match unavailable; choose a match" state, and require explicit
+  selection before enabling Send. Cover missing scope and missing match
+  within an otherwise valid scope separately.
+
+This closes the normal reload and freshness-label defects, but not the
+explicitly requested unavailable-selection path. No feature code modified
+or global builder run.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
