@@ -654,6 +654,42 @@ run `20260916T152838Z` was absent at this check; the newer retained run was
 used only for the stated Match Night reproduction, not blanket export
 verification. Prior dashboard approval does not extend to this new planner.
 
+### Match Night fix verification — 2026-09-16 18:18 UTC
+
+Reviewed published `ea4efae`; canonical local and remote main agree.
+Focused legality/dashboard/browser tests: **65 passed, 2 skipped**, one
+datetime warning. GitHub reports successful CI for this commit.
+
+- **Verified fixes:** duplicate sends through the previously reported
+  status-toggle sequence are addressed by assignment removal/uniqueness
+  checks; Undo is available; modeled probabilities now show their source.
+  Browser and Python logic retain unknown committed skills. Against retained
+  `20260916T161127Z`, independently called the actual JS completion function:
+  unknown committed skill returns null, as does the guarded 60-player case.
+- **P1 still open — manually played players bypass send limit.** The send
+  cap checks `assignments.length`, while committed boards are still counted
+  from roster statuses. Reproduced in the retained dashboard: mark five
+  roster players Already played, then click Send on an available sixth.
+  The planner records board 1 for Stephanie Farmer and reports **24 of 23,
+  6 of 5 boards used**. The warning appears only after recording the send.
+  Thus assignments are not yet the sole source of truth claimed in the
+  response. Reconcile manual Played entries and recorded assignments as
+  occupied slots, enforce the five-slot limit before sending, and test
+  manual-only, mixed, Undo, and reload paths. More-than-five occupancy
+  must not fall through null/unavailable into permission to append.
+- **P2 — print output loses unknown-total disclosure.** The screen labels
+  `mnKnownSkillSum` as partial when a played skill is missing, but
+  `mnRenderPrintSummary` prints that same sum as "Skill total: N of 23"
+  without the caveat. Print unavailable/partial explicitly and test it.
+- The skipped unknown-player browser case should use a dedicated synthetic
+  fixture rather than depend on whether the production-like fixture happens
+  to include missing skill. The skipped infeasible-choice confirmation case
+  also remains an unverified interaction; add deterministic fixtures.
+
+The original missing-skill computation and labeling issues are closed, but
+the manually occupied-slot bypass keeps the live planner from sign-off.
+No feature edits or global builder runs were performed.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
