@@ -484,6 +484,36 @@ No retained dashboard/manifest was found by the scoped search in
 `coach-advantage-runs`; production-bundle verification remains open.
 No feature code was modified and no global builder was run.
 
+### Retained production bundle audit — 2026-09-16 15:35 UTC
+
+Reviewed published `7309a06`. **24 dashboard/browser tests passed**, with
+one existing datetime deprecation warning. Closed the reported assertion
+gaps: browser tests now inspect the DIRECT row's source cells, the specific
+player's SVG title/coordinates, and the exact filtered option set.
+Sparkline captions now disclose real min/max and reading-order spacing.
+
+Independently inspected retained `coach-advantage-runs/20260916T152838Z`
+without rebuilding it:
+
+- All seven artifact SHA-256 hashes match the manifest; READY's manifest
+  hash matches the manifest bytes.
+- Both required database paths match the manifest's source-database hash.
+- Headless Chromium exercised every one of the **512 pairing selections**
+  and all **eight team scopes** in this exact dashboard, checking displayed
+  opponent names and Captain's Edge rendering. No JavaScript page errors.
+- All eight player/team JSON scope counts reconcile, and every DIRECT
+  W-L total equals its evidence count. Margin of Error remains
+  **4 DIRECT / 60 INDIRECT / 0 UNKNOWN** across 64 pairings.
+- Both XLSX archives pass ZIP integrity checks. This is not a visual Excel
+  layout review or a cell-by-cell workbook reconciliation.
+
+The retained-bundle availability and dashboard interaction gaps are closed
+for this artifact. No new blocking defect found in this change. Data
+freshness, genuine W-L streaks, and broader workbook/standalone-HTML review
+remain separate limitations; this is not blanket production certification.
+At the CI check, run 35115818385 had passed Python 3.12 and was still running
+Python 3.13; do not claim both green until the latter completes.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
