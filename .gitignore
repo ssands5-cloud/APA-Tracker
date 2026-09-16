@@ -22,6 +22,10 @@ dist/
 # a copy of the locked database -- all build output, none of it source.
 demo-runs/
 
+# Verified Coach Advantage bundles from scripts/build_coach_advantage_bundle.py.
+# Same reasoning as demo-runs/ above -- all build output, none of it source.
+coach-advantage-runs/
+
 # Local scratch state from agent tooling; not part of the project.
 .superpowers/
 

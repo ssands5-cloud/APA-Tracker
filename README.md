@@ -267,6 +267,50 @@ teammates' names, so skim the file before sharing it with anyone.
 A HAR captured on one page only contains the queries that page issued: if an
 operation comes back missing, visit the page that loads it and capture again.
 
+## Coach Advantage Tools
+
+Two REPORTER modules and one builder turn the existing, already-validated
+analytics into coach-facing Player vs Player and Team vs Team comparisons,
+plus a combined static Coach Dashboard:
+
+- `analytics/player_matchup_engine.py` — one real (player, opponent)
+  pairing's evidence (DIRECT record or the validated skill-only estimate,
+  never both blended), each side's raw skill-level trend
+  (`analytics/skill_level_trends.py`), and a strictly descriptive summary.
+- `analytics/team_matchup_engine.py` — one real scheduled match's roster
+  comparison, per-opponent-player ranking (mirrors
+  `analytics/opponent_risk_profile.py`'s own whole-division convention at
+  player granularity), and the embedded `analytics/lineup_lab.py` approved
+  lineup.
+- `scripts/build_coach_advantage_bundle.py` — the builder: real scope
+  discovery via `scripts/build_captain_first_edge.py`, then both engines,
+  HTML/Excel/JSON, and `ui/dashboard.py`'s combined page, finished with a
+  manifest, checksums, and a `READY` marker (same discipline as
+  `scripts/build_full_production_demo.py`). Never scrapes -- read-only
+  against whatever database you point it at:
+
+  ```powershell
+  python scripts/build_coach_advantage_bundle.py --db data/apa_tracker.db --our-team-id 13082948
+  ```
+
+**Deliberately excluded, by design, not by omission:** a new
+win-probability/confidence model, categorical "danger player" flags, and
+"Player A is favored because…" verdicts. `docs/captain_first_edge_experience.md`
+§13 documents, by name, the modules this project has had to fail-close for
+exactly that pattern (invented, unfitted thresholds presented as advice).
+Every number here traces to real DIRECT history or the skill-only estimate
+already validated against 106 recorded outcomes
+(`docs/prediction_validation.md`); rankings are purely descriptive, sorted
+by that real signal, never labeled. Adding a genuinely validated
+win-probability model or danger threshold is real, separate statistical
+work — checked against this project's own recorded outcomes before it
+ships, not asserted in the code.
+
+Known limitation: the dashboard shows each player's trend as a direction
++ volatility count, not a plotted sparkline — a real chart needs the full
+chronological skill-level series per player, which is a disclosed
+follow-up, not something faked with an indicator dressed up as a chart.
+
 ## Notes
 
 - This only scrapes pages behind your own login for your own team/league —
