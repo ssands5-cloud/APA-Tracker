@@ -107,3 +107,32 @@ class TestRender:
         # narrate a specific opponent as toughest/favorable.
         assert "toughest real matchup" not in html.lower()
         assert "most favorable real matchup" not in html.lower()
+
+    def test_opponent_filter_controls_are_present(self):
+        """Directive: skill level / streak(trend) / volatility filters on
+        the Player vs Player selector."""
+        html = render([_player_report()], [], [], "Mark It Up")
+        assert 'id="pme-filter-sl-min"' in html
+        assert 'id="pme-filter-sl-max"' in html
+        assert 'id="pme-filter-vol-min"' in html
+        assert 'class="pme-filter-trend"' in html
+
+    def test_captains_edge_card_is_purely_descriptive(self):
+        html = " ".join(render(
+            [], [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")], [], "Mark It Up",
+        ).split())
+        assert "Captain's Edge" in html
+        assert "Evidence coverage" in html
+        # The card may explain, in prose, that it never emits a verdict --
+        # it must not actually narrate a specific opponent as one.
+        assert "is favored" not in html.lower()
+        assert "danger player" not in html.lower()
+
+    def test_lineup_table_carries_score_and_model_basis_context(self):
+        """GPT audit P2 / directive: lineup context (score, model basis,
+        sample) must be visible on the Coach Dashboard's own lineup table,
+        not only in the standalone Team Matchup Engine export."""
+        html = render([], [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")], [], "Mark It Up")
+        assert "Score" in html
+        assert "Model basis" in html
+        assert "Sample" in html

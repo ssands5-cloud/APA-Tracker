@@ -44,11 +44,15 @@ class SkillTrendInfo:
     history -- not scoped to this one pairing's format/session, since
     skill level itself is not format/session-specific in this project's
     data model (``Player.skill_level`` / ``PlayerMatch.skill_level`` carry
-    no format dimension)."""
+    no format dimension). ``readings`` is the real chronological series of
+    skill-level values behind ``trend``/``volatility`` -- the same numbers,
+    just not yet collapsed to a summary -- so a caller can plot it (a real
+    sparkline) instead of only reading a direction and a change count."""
 
     trend: str
     volatility: int
     last_change: Optional[str]
+    readings: tuple[int, ...] = ()
 
 
 def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
@@ -66,14 +70,16 @@ def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
         last_change_text = f"SL {last.from_level} → SL {last.to_level}"
         if last.week is not None:
             last_change_text += f" in Week {last.week}"
+    readings = tuple(m.skill_level for m in matches if m.skill_level is not None)
     return SkillTrendInfo(
         trend=skill_level_trend(matches),
         volatility=skill_level_volatility(matches),
         last_change=last_change_text,
+        readings=readings,
     )
 
 
-NO_SKILL_TREND = SkillTrendInfo(trend="no data", volatility=0, last_change=None)
+NO_SKILL_TREND = SkillTrendInfo(trend="no data", volatility=0, last_change=None, readings=())
 
 
 @dataclass(frozen=True)

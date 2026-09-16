@@ -48,6 +48,16 @@ class TestPlayerMatchupReportToDict:
         data = player_matchup_report_to_dict(report)
         assert isinstance(data["evidence_label"], str)
 
+    def test_trend_readings_serialize_as_a_plain_list_for_a_browser_sparkline(self):
+        from analytics.player_matchup_engine import SkillTrendInfo
+
+        report = build_player_matchup_report(
+            _pairing(), "OUR1", "OPP1",
+            player_trend=SkillTrendInfo(trend="up", volatility=1, last_change=None, readings=(4, 5, 5, 6)),
+        )
+        data = player_matchup_report_to_dict(report)
+        assert data["player"]["trend"]["readings"] == [4, 5, 5, 6]
+
 
 class TestTeamMatchupReportToDict:
     def _matrix(self):

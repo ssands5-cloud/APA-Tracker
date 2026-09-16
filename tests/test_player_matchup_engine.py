@@ -57,6 +57,21 @@ class TestSkillTrendFor:
         assert trend.volatility == 1
         assert trend.last_change == "SL 4 → SL 5 in Week 3"
 
+    def test_readings_carry_the_real_chronological_series_for_a_sparkline(self):
+        """A real plotted sparkline needs the actual series, not just the
+        direction/volatility summary -- readings must be the real ordered
+        skill_level values, missing readings skipped, never guessed."""
+        matches = [
+            PlayerMatch(skill_level=4, match_date="2026-08-01"),
+            PlayerMatch(skill_level=None, match_date="2026-08-08"),
+            PlayerMatch(skill_level=5, match_date="2026-08-15"),
+        ]
+        trend = skill_trend_for(matches)
+        assert trend.readings == (4, 5)
+
+    def test_no_data_sentinel_has_no_readings(self):
+        assert NO_SKILL_TREND.readings == ()
+
 
 class TestBuildPlayerMatchupReport:
     def test_direct_wins_and_losses_pass_through_unreconstructed(self):

@@ -13,13 +13,24 @@ A REPORTER over three already-computed inputs -- ``PlayerMatchupReport``,
 ``TeamMatchupReport``, and ``OpponentRiskEntry`` -- combined into one page.
 Nothing here recomputes a rate, a label, a ranking, or a lineup.
 
-Known, disclosed limitation: "trend" is shown as a compact indicator
-(direction + a volatility count), not a plotted sparkline. A real sparkline
-needs the full chronological skill-level series per player
-(``database.queries.skill_level_history``), which this dashboard's inputs
-do not carry (``analytics.player_matchup_engine.SkillTrendInfo`` is a
-summary, not a series) -- adding one is a real, separate follow-up, not
-something to fake with an indicator dressed up as a chart.
+"Trend" is shown as a compact indicator (direction + a volatility count)
+plus a real plotted sparkline: ``SkillTrendInfo.readings`` now carries the
+player's whole real chronological skill-level series
+(``database.queries.skill_level_history``), so the inline SVG polyline
+drawn in the browser is the real series, not a decoration standing in for
+one. A player with fewer than two readings shows the text indicator alone
+-- there is nothing to plot, and that is shown honestly rather than faked.
+
+Filters (skill level range, minimum volatility, trend direction) narrow
+the opponent list in Player vs Player to only real opponents matching the
+real, already-computed fields on their report -- no new threshold or
+model is introduced to power a filter.
+
+The Team vs Team section's "Captain's Edge" card is a purely descriptive
+summary of one real scope: evidence coverage, lineup fill status, and the
+lowest/highest experimental skill-only estimate already in the ranked
+table below it -- never narrated as a "favored"/"danger" verdict (see
+``analytics.team_matchup_engine``'s own "Explicitly experimental" note).
 """
 
 from __future__ import annotations
@@ -94,6 +105,15 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 .cd-note {{ color: #666e7a; font-size: 12.5px; }}
 .cd-cols {{ display: flex; gap: 24px; flex-wrap: wrap; }}
 .cd-cols > div {{ flex: 1; min-width: 280px; }}
+.cd-filters {{ display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+  background: #f4f6fa; border: 1px solid #e2e5ea; border-radius: 4px;
+  padding: 8px 12px; margin: 10px 0; font-size: 13px; }}
+.cd-filters label {{ display: inline-flex; align-items: center; gap: 4px; }}
+.cd-filters input[type="number"] {{ width: 48px; }}
+.cd-spark {{ vertical-align: middle; margin-left: 6px; }}
+.cd-edge-card {{ background: #eef2fa; border: 1px solid #1F3864; border-radius: 4px;
+  padding: 10px 14px; margin: 8px 0 18px; }}
+.cd-edge-card h3 {{ margin-top: 0; }}
 </style></head><body>
 <h1>Coach Dashboard — {escape(our_team_name)}</h1>
 <p class="cd-note">Every number on this page traces to
@@ -102,14 +122,24 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 <code>analytics.lineup_lab</code>'s approved assignment. No new
 win-probability model, no invented danger threshold, no categorical
 verdict -- see <code>docs/captain_first_edge_experience.md</code> §13.
-"Trend" below is a direction + volatility count, not a plotted series (a
-real sparkline needs the full historical series, a disclosed follow-up).</p>
+"Trend" below is a direction + volatility count plus a real plotted
+sparkline of the player's whole skill-level history.</p>
 
 <h2>Player vs Player</h2>
 <div class="cd-controls">
 <label>Player: <select id="pme-player">{player_options}</select></label>
 &nbsp;
 <label>Opponent: <select id="pme-opponent"></select></label>
+</div>
+<div class="cd-filters">
+<strong>Opponent filters:</strong>
+<label>SL min <input type="number" id="pme-filter-sl-min" min="0" max="9"></label>
+<label>SL max <input type="number" id="pme-filter-sl-max" min="0" max="9"></label>
+<label>Min volatility <input type="number" id="pme-filter-vol-min" min="0" value="0"></label>
+<label><input type="checkbox" class="pme-filter-trend" value="up" checked>Up</label>
+<label><input type="checkbox" class="pme-filter-trend" value="down" checked>Down</label>
+<label><input type="checkbox" class="pme-filter-trend" value="stable" checked>Stable</label>
+<label><input type="checkbox" class="pme-filter-trend" value="no data" checked>No data</label>
 </div>
 <div id="pme-result"></div>
 
@@ -148,18 +178,63 @@ toughest first -- never a categorical "danger" label
   function pct(value) {{
     return (value === null || value === undefined) ? "No data" : (value * 100).toFixed(1) + "%";
   }}
+  function sparkline(readings) {{
+    // A real plotted series, not a decoration -- fewer than two readings
+    // means there is nothing to plot, shown honestly as no chart at all.
+    if (!readings || readings.length < 2) return "";
+    var w = 90, h = 22, pad = 2;
+    var min = Math.min.apply(null, readings), max = Math.max.apply(null, readings);
+    var range = (max - min) || 1;
+    var step = (w - pad * 2) / (readings.length - 1);
+    var points = readings.map(function (v, i) {{
+      var x = pad + i * step;
+      var y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }}).join(" ");
+    return "<svg class='cd-spark' width='" + w + "' height='" + h + "' viewBox='0 0 " + w + " " + h
+         + "' role='img' aria-label='Skill level trend sparkline'>"
+         + "<polyline points='" + points + "' fill='none' stroke='#1F3864' stroke-width='1.5'/></svg>";
+  }}
   function trendBadge(t) {{
     var arrow = {{"up": "\\u25b2", "down": "\\u25bc", "stable": "\\u25ac"}}[t.trend] || "?";
-    return arrow + " " + orNoData(t.trend) + " (whole history, volatility " + t.volatility + ")";
+    return arrow + " " + orNoData(t.trend) + " (whole history, volatility " + t.volatility + ")"
+         + sparkline(t.readings);
+  }}
+
+  function opponentFilters() {{
+    var slMin = parseFloat(document.getElementById("pme-filter-sl-min").value);
+    var slMax = parseFloat(document.getElementById("pme-filter-sl-max").value);
+    var volMin = parseFloat(document.getElementById("pme-filter-vol-min").value);
+    var trends = Array.prototype.slice.call(
+      document.querySelectorAll(".pme-filter-trend:checked")
+    ).map(function (cb) {{ return cb.value; }});
+    return {{ slMin: slMin, slMax: slMax, volMin: volMin, trends: trends }};
+  }}
+
+  function passesFilters(choice, filters) {{
+    // Filters read only real, already-computed fields on the opponent's
+    // own report -- no new threshold or model backs a filter.
+    var r = PLAYER_DATA[choice.key];
+    if (!r) return true;
+    var sl = r.opponent.skill_level;
+    if (!isNaN(filters.slMin) && (sl === null || sl < filters.slMin)) return false;
+    if (!isNaN(filters.slMax) && (sl === null || sl > filters.slMax)) return false;
+    if (!isNaN(filters.volMin) && r.opponent.trend.volatility < filters.volMin) return false;
+    if (filters.trends.indexOf(r.opponent.trend.trend) === -1) return false;
+    return true;
   }}
 
   function refreshOpponents() {{
     var playerId = document.getElementById("pme-player").value;
-    var choices = PLAYER_OPPONENT_INDEX[playerId] || [];
+    var choices = (PLAYER_OPPONENT_INDEX[playerId] || []).filter(function (c) {{
+      return passesFilters(c, opponentFilters());
+    }});
     var select = document.getElementById("pme-opponent");
-    select.innerHTML = choices.map(function (c) {{
-      return "<option value=\\"" + esc(c.key) + "\\">" + esc(c.label) + "</option>";
-    }}).join("");
+    select.innerHTML = choices.length
+      ? choices.map(function (c) {{
+          return "<option value=\\"" + esc(c.key) + "\\">" + esc(c.label) + "</option>";
+        }}).join("")
+      : "<option value=\\"\\">No opponents match these filters</option>";
     renderPlayer();
   }}
 
@@ -185,13 +260,55 @@ toughest first -- never a categorical "danger" label
     target.innerHTML = html;
   }}
 
+  function captainsEdgeCard(r) {{
+    // Purely descriptive: real evidence coverage, real lineup status, and
+    // the lowest/highest experimental estimate already in the ranked
+    // table below -- never narrated as a "favored"/"danger" verdict.
+    var counts = r.evidence_counts;
+    var total = counts.total_feasible_pairings || 0;
+    var directPct = total ? Math.round(((counts.DIRECT || 0) / total) * 100) + "%" : "No data";
+    var lineupStatus;
+    if (r.lineup) {{
+      lineupStatus = r.lineup.assignments.length + " board(s) filled";
+      if (r.lineup.unassigned_players.length) {{
+        lineupStatus += ", " + r.lineup.unassigned_players.length + " player(s) unassigned";
+      }}
+    }} else {{
+      lineupStatus = "No approved lineup: " + esc(r.lineup_error || "unavailable");
+    }}
+    var ranked = r.ranked_opponents.filter(function (o) {{
+      return o.reliability_weighted_skill_probability !== null;
+    }});
+    var lowest = ranked.length ? ranked[0] : null;
+    var highest = ranked.length ? ranked[ranked.length - 1] : null;
+
+    var html = "<div class='cd-edge-card'><h3>Captain's Edge</h3><table><tbody>";
+    html += "<tr><th>Scope</th><td>" + esc(r.our_team.name) + " vs " + esc(r.opponent_team.name)
+         + " &middot; " + esc(r.format) + " &middot; " + esc(r.session_name) + "</td></tr>";
+    html += "<tr><th>Evidence coverage</th><td>" + (counts.DIRECT || 0) + " direct / "
+         + (counts.INDIRECT || 0) + " indirect / " + (counts.UNKNOWN || 0) + " unknown of "
+         + total + " (" + directPct + " direct)</td></tr>";
+    html += "<tr><th>Lineup</th><td>" + lineupStatus + "</td></tr>";
+    html += "<tr><th>Lowest experimental estimate</th><td>"
+         + (lowest ? esc(lowest.name) + " (" + pct(lowest.reliability_weighted_skill_probability) + ")" : "No data")
+         + "</td></tr>";
+    html += "<tr><th>Highest experimental estimate</th><td>"
+         + (highest ? esc(highest.name) + " (" + pct(highest.reliability_weighted_skill_probability) + ")" : "No data")
+         + "</td></tr>";
+    html += "</tbody></table><p class='cd-note'>Descriptive only -- the "
+         + "lowest/highest experimental skill-only estimate from the ranked "
+         + "table below, not a validated \\"favored\\"/\\"danger\\" verdict.</p></div>";
+    return html;
+  }}
+
   function renderTeam() {{
     var key = document.getElementById("tme-scope").value;
     var target = document.getElementById("tme-result");
     var r = TEAM_DATA[key];
     if (!r) {{ target.innerHTML = "<p class='cd-none'>No report for this match.</p>"; return; }}
 
-    var html = "<p class='cd-summary-box'>" + esc(r.summary) + "</p>";
+    var html = captainsEdgeCard(r);
+    html += "<p class='cd-summary-box'>" + esc(r.summary) + "</p>";
     html += "<table><tbody>";
     html += "<tr><th>Direct</th><td>" + (r.evidence_counts.DIRECT || 0) + "</td></tr>";
     html += "<tr><th>Indirect</th><td>" + (r.evidence_counts.INDIRECT || 0) + "</td></tr>";
@@ -227,12 +344,32 @@ toughest first -- never a categorical "danger" label
 
     html += "<h4>Approved lineup</h4>";
     if (r.lineup) {{
-      html += "<table><thead><tr><th>Board</th><th>Our player</th><th>Opponent</th><th>Evidence</th></tr></thead><tbody>";
+      html += "<table><thead><tr><th>Board</th><th>Our player</th><th>Opponent</th>"
+           + "<th>Evidence</th><th>Score</th><th>Model basis</th><th>Sample</th></tr></thead><tbody>";
       r.lineup.assignments.forEach(function (slot) {{
         html += "<tr><td>" + slot.board + "</td><td>" + esc(slot.player_name) + "</td>"
-             + "<td>" + esc(slot.opponent_name) + "</td><td>" + esc(slot.evidence_label) + "</td></tr>";
+             + "<td>" + esc(slot.opponent_name) + "</td><td>" + esc(slot.evidence_label) + "</td>"
+             + "<td>" + (slot.lineup_score !== null && slot.lineup_score !== undefined
+                 ? slot.lineup_score.toFixed(3) : "No data") + "</td>"
+             + "<td>" + orNoData(slot.model_source) + "</td>"
+             + "<td>" + (slot.observed_win_rate !== null
+                 ? pct(slot.observed_win_rate) + " (" + slot.direct_evidence_count + ")" : "No data")
+             + "</td></tr>";
       }});
       html += "</tbody></table>";
+      if (r.lineup.unassigned_players.length) {{
+        html += "<p>Unassigned players: " + r.lineup.unassigned_players.map(function (p) {{
+          return esc(p.name);
+        }}).join(", ") + "</p>";
+      }}
+      if (r.lineup.unassigned_opponents.length) {{
+        html += "<p>Unassigned opponents: " + r.lineup.unassigned_opponents.map(function (p) {{
+          return esc(p.name);
+        }}).join(", ") + "</p>";
+      }}
+      if (r.lineup.blocked_reason) {{
+        html += "<p class='cd-none'>" + esc(r.lineup.blocked_reason) + "</p>";
+      }}
     }} else {{
       html += "<p class='cd-none'>" + esc(r.lineup_error || "No approved lineup available.") + "</p>";
     }}
@@ -242,6 +379,12 @@ toughest first -- never a categorical "danger" label
   document.getElementById("pme-player").addEventListener("change", refreshOpponents);
   document.getElementById("pme-opponent").addEventListener("change", renderPlayer);
   document.getElementById("tme-scope").addEventListener("change", renderTeam);
+  ["pme-filter-sl-min", "pme-filter-sl-max", "pme-filter-vol-min"].forEach(function (id) {{
+    document.getElementById(id).addEventListener("input", refreshOpponents);
+  }});
+  document.querySelectorAll(".pme-filter-trend").forEach(function (cb) {{
+    cb.addEventListener("change", refreshOpponents);
+  }});
   refreshOpponents();
   renderTeam();
 }})();

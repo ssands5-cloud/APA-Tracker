@@ -45,6 +45,13 @@ jobs:
           # docs/reproducible_builds.md.
           pip install -r requirements-dev.txt
 
+      - name: Install Playwright's Chromium browser
+        # requirements-dev.txt installs the playwright package, but the
+        # actual browser binary is a separate download this step fetches --
+        # needed for tests/test_dashboard_browser.py's real, headless
+        # Chromium regression test of the Coach Dashboard.
+        run: playwright install --with-deps chromium
+
       - name: Run test suite
         run: python -m pytest tests/ -v
 

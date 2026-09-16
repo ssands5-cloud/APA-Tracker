@@ -267,21 +267,23 @@ teammates' names, so skim the file before sharing it with anyone.
 A HAR captured on one page only contains the queries that page issued: if an
 operation comes back missing, visit the page that loads it and capture again.
 
-## Coach Advantage Tools
+## Coach Advantage Tools ("Coach's Weapon")
 
 Two REPORTER modules and one builder turn the existing, already-validated
-analytics into coach-facing Player vs Player and Team vs Team comparisons,
-plus a combined static Coach Dashboard:
+analytics into a coach-facing Player vs Player comparison, a Team vs Team
+comparison, and a combined static Coach Dashboard:
 
 - `analytics/player_matchup_engine.py` — one real (player, opponent)
-  pairing's evidence (DIRECT record or the validated skill-only estimate,
-  never both blended), each side's raw skill-level trend
-  (`analytics/skill_level_trends.py`), and a strictly descriptive summary.
+  pairing's evidence (DIRECT record with the exact win/loss count, or the
+  validated skill-only estimate, never both blended), each side's real
+  skill-level trend series (`analytics/skill_level_trends.py`), and a
+  strictly descriptive summary.
 - `analytics/team_matchup_engine.py` — one real scheduled match's roster
   comparison, per-opponent-player ranking (mirrors
   `analytics/opponent_risk_profile.py`'s own whole-division convention at
-  player granularity), and the embedded `analytics/lineup_lab.py` approved
-  lineup.
+  player granularity), the true pooled DIRECT win/loss record across every
+  one of our players who has faced an opponent, and the embedded
+  `analytics/lineup_lab.py` approved lineup.
 - `scripts/build_coach_advantage_bundle.py` — the builder: real scope
   discovery via `scripts/build_captain_first_edge.py`, then both engines,
   HTML/Excel/JSON, and `ui/dashboard.py`'s combined page, finished with a
@@ -293,23 +295,58 @@ plus a combined static Coach Dashboard:
   python scripts/build_coach_advantage_bundle.py --db data/apa_tracker.db --our-team-id 13082948
   ```
 
+**Coach Dashboard (`ui/dashboard.py`) features:**
+
+- **Player-then-opponent selectors** — choosing a player narrows the
+  opponent list to only the real pairings that player has a report
+  against, rather than one flat list of every pairing in the bundle
+  (hundreds, at real division scale). Opponent option labels include the
+  opponent's real team name so a same-named player on two teams during
+  simultaneous roster membership is never ambiguous.
+- **Skill-level trend sparklines** — a real inline SVG polyline plotted
+  from each player's whole chronological skill-level series
+  (`SkillTrendInfo.readings`), next to the existing direction + volatility
+  indicator. A player with fewer than two readings shows the text
+  indicator alone; there is nothing to plot, and that is shown honestly.
+- **Opponent filters** — skill level range, minimum volatility, and trend
+  direction, narrowing the opponent list to only real opponents matching
+  the real, already-computed fields on their own report. No new threshold
+  or model backs a filter.
+- **Captain's Edge card** — one real scope's evidence coverage, lineup
+  fill status, and the lowest/highest experimental skill-only estimate
+  already in the ranked table below it — purely descriptive, never
+  narrated as a "favored"/"danger" verdict.
+- **Lineup context** — the approved lineup table shows each board's real
+  lineup score, model basis, and sample size, plus any unassigned
+  players/opponents or a real blocked reason, not just names and evidence
+  labels.
+
 **Deliberately excluded, by design, not by omission:** a new
 win-probability/confidence model, categorical "danger player" flags, and
 "Player A is favored because…" verdicts. `docs/captain_first_edge_experience.md`
 §13 documents, by name, the modules this project has had to fail-close for
 exactly that pattern (invented, unfitted thresholds presented as advice).
-Every number here traces to real DIRECT history or the skill-only estimate
-already validated against 106 recorded outcomes
-(`docs/prediction_validation.md`); rankings are purely descriptive, sorted
-by that real signal, never labeled. Adding a genuinely validated
-win-probability model or danger threshold is real, separate statistical
-work — checked against this project's own recorded outcomes before it
-ships, not asserted in the code.
+Every number here traces to real DIRECT history (exact win/loss counts,
+counted once from the authoritative match rows, never reconstructed from
+a rounded rate) or the skill-only estimate already validated against 106
+recorded outcomes (`docs/prediction_validation.md`); rankings are purely
+descriptive, sorted by that real signal, never labeled. Adding a genuinely
+validated win-probability model or danger threshold is real, separate
+statistical work — checked against this project's own recorded outcomes
+before it ships, not asserted in the code.
 
-Known limitation: the dashboard shows each player's trend as a direction
-+ volatility count, not a plotted sparkline — a real chart needs the full
-chronological skill-level series per player, which is a disclosed
-follow-up, not something faked with an indicator dressed up as a chart.
+**Regression coverage:** `tests/test_dashboard_browser.py` drives a real
+headless Chromium instance (Playwright) against a real, freshly built
+bundle's `dashboard.html` — picking players, narrowing opponents, applying
+and clearing filters, switching real team scopes, and checking for
+JavaScript errors — so the dashboard's actual browser behavior is
+regression-tested, not just the HTML/JSON it renders.
+
+Still open, honestly disclosed: skill/streak win-loss tracking beyond the
+skill-level trend direction (this project does not currently persist a
+per-player match win/loss streak separate from the validated evidence
+layer), and the Data Coverage view (§11 of
+`docs/captain_first_edge_experience.md`), which remains not-yet-started.
 
 ## Notes
 
