@@ -60,6 +60,66 @@ Date: 2026-09-16
   audit this repo autonomously overnight, so the section below is a real,
   unfilled placeholder.
 
+### Production Push — Coach's Weapon — 2026-09-16
+
+Responding to the "Production Push: Build a Coach's Weapon" directive's
+items 2-4 (production-grade dashboard, automated regression,
+documentation), on top of commit `450aba7`'s follow-up fixes:
+
+- **Sparklines** — `SkillTrendInfo` now carries `readings`, the real
+  chronological skill-level series (not just direction/volatility),
+  plotted as an inline SVG polyline in the dashboard next to the existing
+  text indicator. A player with fewer than two readings shows the text
+  indicator alone, honestly, rather than a fake or placeholder chart. No
+  new data source: it's the same `database.queries.skill_level_history`
+  rows already flowing through `skill_trend_for()`.
+- **Filters** — skill level range, minimum volatility, and trend
+  direction on the Player vs Player opponent selector, filtering on the
+  real, already-computed fields on each opponent's own report. No new
+  threshold or model backs a filter. Honest scope note: this project does
+  not persist a per-player match win/loss streak separate from the
+  validated evidence layer, so "streaks" is implemented as the real trend
+  direction (up/down/stable/no data) rather than an invented streak
+  counter — flagged here rather than silently relabeling one for the
+  other.
+- **Captain's Edge card** — added to the Team vs Team panel: real evidence
+  coverage, real lineup fill status, and the lowest/highest experimental
+  skill-only estimate already in the ranked table below it. Purely
+  descriptive, consistent with this project's existing anti-verdict
+  convention — never narrates a specific opponent as "favored"/"danger."
+- **Lineup context** — the dashboard's own approved-lineup table now shows
+  each board's real lineup score, model basis, and sample size, plus
+  unassigned players/opponents and any real blocked reason. Previously
+  this detail existed only in the standalone Team Matchup Engine
+  HTML/Excel export, not the Coach Dashboard itself (a real gap the prior
+  entry disclosed).
+- **Automated browser regression** — `tests/test_dashboard_browser.py`
+  drives a real headless Chromium instance (Playwright, already a project
+  dependency) against a real, freshly built bundle's `dashboard.html`:
+  player-then-opponent selection, applying and clearing filters (including
+  the "no opponents match" and all-trends-unchecked paths), every real
+  team scope, and a check for JavaScript console errors throughout. Added
+  the missing `playwright install --with-deps chromium` CI step
+  (`.github/workflows/tests.yml`) so this actually runs in GitHub Actions,
+  not only locally.
+- **README** — expanded the Coach Advantage Tools section into a "Coach's
+  Weapon" feature list, removing the now-stale "no sparkline" disclosure.
+- Full suite: **1604 passed, 0 failed** (the same one pre-existing,
+  unrelated, already-broken test file remains excluded and untouched).
+
+**Not addressed this cycle, honestly disclosed:**
+- **Hourly GitHub check-ins** — I only act within conversation turns; I
+  cannot autonomously poll GitHub or push commits on an hourly cadence
+  without a real scheduled task, and no GPT actor exists on this repo to
+  do so from its side either (verified earlier: `ssands5-cloud` is the
+  sole collaborator). This has been flagged every cycle it was asked for;
+  a real fix needs the user to decide whether to set up actual scheduled
+  automation, not another unfulfillable restatement of the ask here.
+- Data Coverage view (§11) remains not-yet-started, as already noted.
+- A genuine per-player win/loss streak (distinct from skill-level trend
+  direction) is not implemented -- would need new evidence-layer work to
+  track it without inventing an unvalidated threshold.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 
