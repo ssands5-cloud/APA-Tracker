@@ -175,6 +175,26 @@ class TestLegalCompletionExists:
         # inside MAX_COMPLETION_ATTEMPTS, must not raise.
         assert legal_completion_exists([], [2] * 20) is True
 
+    def test_an_unknown_committed_slot_is_never_dropped_or_treated_as_verified(self):
+        """GPT audit follow-up (2026-09-16): an occupied slot with no known
+        skill level must still count against LINEUP_SIZE -- dropping it
+        from committed_skill_levels entirely understated how many slots
+        were really used and could wrongly report a completion as still
+        possible. Pass None for that slot; the real answer is always None,
+        never a guessed True or False, no matter how favorable the rest of
+        the real data looks."""
+        # Without the unknown slot, this would trivially read as "1 slot
+        # used, 4 needed, plenty of low-skill players available" -> True.
+        # With it correctly counted as an occupied-but-unverifiable slot,
+        # the honest answer is None.
+        assert legal_completion_exists([5, None], [1, 1, 1, 1, 1, 1]) is None
+
+    def test_an_unknown_committed_slot_still_returns_none_even_with_no_availability_left(self):
+        assert legal_completion_exists([5, 5, 5, 5, None], []) is None
+
+    def test_multiple_unknown_committed_slots_still_return_none(self):
+        assert legal_completion_exists([None, None], [1, 1, 1]) is None
+
     def test_a_completion_search_over_the_real_bound_raises_rather_than_approximate(self):
         # Force an exact-search size whose C(n, k) exceeds the real bound,
         # rather than ever silently truncating or sampling the search.

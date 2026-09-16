@@ -382,6 +382,213 @@ class TestMatchNight:
         assert status_select.input_value() == "played"
         assert page.console_errors == []
 
+    def test_the_exact_reported_repro_produces_one_assignment_not_two(self, page):
+        """GPT audit follow-up (2026-09-16), P1: reproduces the exact
+        reported sequence for commit f39ad08 -- send a player, flip their
+        status back to Available, send them again -- which previously left
+        TWO assignment rows for the same player (mnCommittedSkillLevels
+        counted unique roster statuses, not assignments; mnSendPlayer
+        enforced neither uniqueness nor the board cap). The roster
+        status-select now retracts the stale assignment the instant status
+        moves off "played", so this exact sequence must leave exactly one."""
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this fixture scope")
+        page.select_option("#mn-opponent", opponent_options[0])
+        send_button = page.locator("#mn-comparison .mn-send-btn").first
+        if send_button.count() == 0:
+            pytest.skip("no available candidate rendered for this fixture scope")
+        player_id = send_button.get_attribute("data-player-id")
+        page.once("dialog", lambda dialog: dialog.accept())
+        send_button.click()
+        assert page.locator("#mn-lineup table tbody tr").count() == 1
+
+        page.select_option(f"#mn-roster .mn-status-select[data-player-id='{player_id}']", "available")
+        assert page.locator("#mn-lineup table tbody tr").count() == 0, (
+            "changing status away from Already played must retract the stale assignment"
+        )
+
+        opponent_options_2 = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options_2 or not opponent_options_2[0]:
+            pytest.skip("no opponent available to resend against after retraction")
+        page.select_option("#mn-opponent", opponent_options_2[0])
+        resend_button = page.locator(f"#mn-comparison .mn-send-btn[data-player-id='{player_id}']")
+        if resend_button.count() == 0:
+            pytest.skip("the same player has no matchup data against any remaining opponent")
+        page.once("dialog", lambda dialog: dialog.accept())
+        resend_button.click()
+
+        rows = page.locator("#mn-lineup table tbody tr")
+        assert rows.count() == 1, "resending after a clean retraction must leave exactly one board"
+        status_select = page.locator(f"#mn-roster .mn-status-select[data-player-id='{player_id}']")
+        assert status_select.input_value() == "played"
+        assert page.console_errors == []
+
+    def test_undo_removes_the_assignment_and_restores_availability(self, page):
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this fixture scope")
+        page.select_option("#mn-opponent", opponent_options[0])
+        send_button = page.locator("#mn-comparison .mn-send-btn").first
+        if send_button.count() == 0:
+            pytest.skip("no available candidate rendered for this fixture scope")
+        player_id = send_button.get_attribute("data-player-id")
+        page.once("dialog", lambda dialog: dialog.accept())
+        send_button.click()
+        assert page.locator("#mn-lineup table tbody tr").count() == 1
+
+        page.click("#mn-lineup .mn-undo-btn")
+
+        assert "No boards sent yet" in page.locator("#mn-lineup").inner_text()
+        status_select = page.locator(f"#mn-roster .mn-status-select[data-player-id='{player_id}']")
+        assert status_select.input_value() == "available"
+        assert page.console_errors == []
+
+    def test_five_sends_fill_the_match_and_a_sixth_is_refused(self, page):
+        """GPT audit follow-up (2026-09-16), P1: mnSendPlayer previously had
+        no board cap at all -- reproduced by sending six real players in a
+        row. Sends up to five real (player, opponent) pairs from the live
+        bundle and checks the panel then reports all boards sent with no
+        further Send buttons offered, rather than allowing a sixth."""
+        sent = 0
+        for _ in range(5):
+            opponent_options = page.locator("#mn-opponent option").evaluate_all(
+                "options => options.map(o => o.value)"
+            )
+            if not opponent_options or not opponent_options[0]:
+                break
+            page.select_option("#mn-opponent", opponent_options[0])
+            send_button = page.locator("#mn-comparison .mn-send-btn").first
+            if send_button.count() == 0:
+                break
+            page.once("dialog", lambda dialog: dialog.accept())
+            send_button.click()
+            sent += 1
+        if sent < 5:
+            pytest.skip(
+                f"this fixture scope only supports {sent} real sends, not enough to "
+                "reach the 5-board cap"
+            )
+        assert page.locator("#mn-lineup table tbody tr").count() == 5
+        comparison_text = page.locator("#mn-comparison").inner_text()
+        assert "All 5 boards have been sent" in comparison_text
+        assert page.locator("#mn-comparison .mn-send-btn").count() == 0
+        assert page.console_errors == []
+
+    def test_an_unknown_skill_candidate_never_shows_as_legality_preserving(self, page):
+        """GPT audit follow-up (2026-09-16), P1: candidateCommitted used to
+        silently drop a candidate's own unknown skill level instead of
+        counting their slot as unverifiable, which could show "still legal"
+        for a send that genuinely couldn't be checked. Finds a real
+        roster player with no known skill level across every real scope in
+        the bundle (skips honestly if none exists) and checks their card is
+        always rendered Unknown, never marked legality-preserving."""
+        all_team_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-team-data').textContent)"
+        )
+        scope_key = unknown_player = None
+        for key, report in all_team_data.items():
+            for p in report["our_roster"]:
+                if p["skill_level"] is None:
+                    scope_key, unknown_player = key, p
+                    break
+            if unknown_player:
+                break
+        if unknown_player is None:
+            pytest.skip("no real roster player in this bundle has an unknown skill level")
+
+        page.select_option("#mn-scope", scope_key)
+        opponent_options = page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this scope")
+        page.select_option("#mn-opponent", opponent_options[0])
+
+        card = page.locator(
+            f"#mn-comparison .mn-send-btn[data-player-id='{unknown_player['id']}']"
+        ).locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
+        if card.count() == 0:
+            pytest.skip("this unknown-skill player has no matchup data for this opponent")
+        classes = card.get_attribute("class") or ""
+        assert "mn-unknown" in classes
+        assert "mn-ok" not in classes
+        assert "mn-warn" not in classes
+        assert page.console_errors == []
+
+    def test_the_probability_label_shows_the_real_model_source_not_a_fixed_claim(self, page):
+        """GPT audit follow-up (2026-09-16), P2: modeled_win_probability is
+        not always the skill-only model -- a DIRECT pairing's real
+        model_source can be "...direct-history-and-skill". The comparison
+        card previously labeled every row "Skill-only estimate
+        (experimental)" regardless, repeating the exact model-basis
+        conflation already fixed once this session in the lineup table.
+        Checks a real DIRECT and/or real INDIRECT candidate's card shows
+        its own real model_source, and the old fixed mislabel never
+        appears, across every real scope (skips only if truly none of
+        either kind has matchup data reachable through the UI)."""
+        all_player_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-player-data').textContent)"
+        )
+        candidates = [
+            r for r in all_player_data.values()
+            if r["evidence_label"] in ("DIRECT", "INDIRECT") and r["model_source"]
+        ]
+        checked_labels = set()
+        for entry in candidates:
+            scope_key = f"{entry['opponent_team_id']}|{entry['format']}|{entry['session_name']}"
+            if scope_key not in page.evaluate(
+                "Array.from(document.getElementById('mn-scope').options).map(o => o.value)"
+            ):
+                continue
+            page.select_option("#mn-scope", scope_key)
+            opponent_ids = page.locator("#mn-opponent option").evaluate_all(
+                "options => options.map(o => o.value)"
+            )
+            if str(entry["opponent"]["id"]) not in opponent_ids:
+                continue
+            page.select_option("#mn-opponent", str(entry["opponent"]["id"]))
+            card = page.locator(
+                f"#mn-comparison .mn-send-btn[data-player-id='{entry['player']['id']}']"
+            ).locator("xpath=ancestor::div[contains(@class, 'mn-card')]")
+            if card.count() == 0:
+                continue
+            card_text = card.inner_text()
+            assert entry["model_source"] in card_text
+            # The old fixed *table-row label* is what must be gone -- the
+            # plain-language summary honestly saying "Skill-only estimate"
+            # for a real INDIRECT pairing (from player_matchup_engine's own
+            # already-correct _summary_for()) is expected text, not a bug.
+            assert "Skill-only estimate (experimental)" not in card_text
+            checked_labels.add(entry["evidence_label"])
+        if not checked_labels:
+            pytest.skip("no DIRECT/INDIRECT candidate with matchup data was reachable through the UI")
+        assert page.console_errors == []
+
+    def test_the_completion_search_guard_returns_unknown_rather_than_hanging(self, page):
+        """GPT audit follow-up (2026-09-16), P2: the JS port of
+        legal_completion_exists had no MAX_COMPLETION_ATTEMPTS-equivalent
+        guard, unlike the Python function it claims to mirror -- an
+        unbounded recursive search in an interactive page can only ever
+        freeze the tab, not fail loudly the way a script raising and
+        exiting can. Calls the real function directly through the
+        page's own test-only hook (see ui/dashboard.py's
+        window.__matchNightTestHooks comment) with a synthetic 60-player
+        pool needing all 5 slots -- C(60,5) is far past the real 200000
+        bound -- and checks it returns the honest "cannot verify" signal
+        quickly rather than hanging or throwing."""
+        result = page.evaluate(
+            "window.__matchNightTestHooks.legalCompletionExists([], Array(60).fill(2))"
+        )
+        assert result is None
+        assert page.console_errors == []
+
     def test_match_night_state_survives_a_reload_via_local_storage(self, page):
         first_row = page.locator("#mn-roster .mn-roster-row").first
         first_row.locator("select").select_option("held")

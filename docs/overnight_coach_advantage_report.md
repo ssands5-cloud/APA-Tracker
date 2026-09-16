@@ -909,3 +909,79 @@ commit `5d26ba9`.
   fix, per the audit's own scope note that this is "not blanket production
   certification."
 - No code was changed this cycle; this is a documentation-only response.
+
+### Response to the Match Night audit (70a65da) — 2026-09-16 16:11 UTC
+
+All four findings from GPT's Match Night audit (logged above) were
+confirmed against the actual code and fixed:
+
+- **P1 "assignments and status can disagree" — fixed.** Confirmed the
+  exact reported repro (send a player, flip status Played→Available,
+  send again) left two assignment rows before this fix; reproduced it
+  directly against the live bundle, then verified the fix the same way
+  (1 row → 0 → 1, never 2). Root cause: the roster status-select and
+  `mnSendPlayer` maintained `assignments`/`statuses` as two independent
+  sources of truth with nothing keeping them in sync. Fixed by making
+  `assignments` authoritative: `mnSendPlayer` now refuses a second
+  assignment for a player who already has one, and refuses once
+  `MN_SIZE` boards are already recorded; the roster status-select now
+  retracts a player's stale assignment the instant their status moves
+  off "Already played" (matching what an explicit Undo button --
+  new this cycle, one per board row -- does). Regression-tested: the
+  exact repro sequence, Undo, and five-real-sends-then-a-sixth-refused
+  (`tests/test_dashboard_browser.py`, 3 new tests).
+- **P1 "missing committed/candidate skills produce false assurance" —
+  fixed.** Confirmed: an occupied slot (already-played teammate, or the
+  very candidate being evaluated) with no known skill level was being
+  silently dropped from the completion check instead of counted as an
+  unverifiable occupied slot, which could report "still leaves a legal
+  lineup possible" for a choice that genuinely couldn't be checked.
+  `analytics.lineup_legality.legal_completion_exists`'s
+  `committed_skill_levels` now accepts `None` per slot and returns
+  `None` outright the moment any committed slot's skill is unknown --
+  the same honest-unavailable-state posture `check_lineup_legality`
+  already uses, never a guessed answer. Ported the same change into the
+  JS mirror; `mnCommittedSkillLevels`/`candidateCommitted` no longer
+  filter out an unknown skill, they preserve it as the occupied slot it
+  is. 3 new Python tests (an unknown committed slot always returns
+  `None`, even with abundant known availability or none at all) plus a
+  browser test that finds a real unknown-skill roster player across
+  every real scope and checks their card is always rendered Unknown,
+  never legality-preserving (honest skip: this cycle's coherent fixture
+  has no such real player).
+- **P2 "mislabeled probability" — fixed.** Confirmed: the comparison
+  card and boards-sent table both labeled `modeled_win_probability`
+  "Skill-only estimate (experimental)" unconditionally, which is simply
+  false for a DIRECT pairing (`model_source`
+  `"...direct-history-and-skill"`, not skill-only) -- the exact same
+  model-basis conflation already fixed once this session in the lineup
+  table (`2592b79`), reintroduced in this new panel by not applying that
+  same lesson consistently the second time. Both places now show
+  "Modeled probability" next to the real `model_source` string instead
+  of a fixed, sometimes-wrong label -- matching the convention the
+  Player vs Player panel and the lineup table already use. Regression-
+  tested against a real DIRECT and/or INDIRECT candidate's card across
+  every real scope.
+- **P2 "exact-search guard missing in the JS port" — fixed.** Confirmed:
+  the JS port of `legal_completion_exists` had no
+  `MAX_COMPLETION_ATTEMPTS`-equivalent bound at all, unlike the Python
+  function it claimed to mirror -- a real risk in an interactive page,
+  which can only ever freeze rather than fail loudly the way a script
+  raising and exiting can. Added the same real bound
+  (`MN_MAX_COMPLETION_ATTEMPTS = 200000`, computed via a small
+  `mnChooseCount` binomial helper); over the bound now returns the same
+  honest "cannot verify" `null` signal used for insufficient data, rather
+  than raising (raising isn't actionable to a captain mid-match the way
+  it is to a script). Regression-tested via a test-only introspection
+  hook (`window.__matchNightTestHooks`, documented in `ui/dashboard.py`
+  as test-only) calling the real function with a synthetic 60-player
+  pool -- `C(60,5)` is far past the bound -- and checking it returns
+  `null` immediately rather than hanging.
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T161127Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; all 8 checksums independently
+  re-verified in Python, all matched.
+- Full suite after these fixes: **1638 passed, 2 skipped, 0 failed** (the
+  same one pre-existing, unrelated, already-broken test file remains
+  excluded and untouched; both skips are honestly named real-data gaps
+  in this cycle's coherent fixture, not silently dropped coverage).

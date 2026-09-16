@@ -469,20 +469,45 @@ toughest first -- never a categorical "danger" label
   // report. Same real constants: LINEUP_SIZE=5, TEAM_SKILL_LEVEL_LIMIT_5=23.
   var MN_LIMIT = 23;
   var MN_SIZE = 5;
+  // Same real bound, same "exact or refuse" posture, as
+  // analytics.lineup_legality.MAX_COMPLETION_ATTEMPTS -- GPT audit
+  // follow-up (2026-09-16): the first version of this port had no such
+  // guard at all, unlike the Python function it claimed to mirror. An
+  // unbounded recursive search is a real risk in an interactive page (it
+  // can only ever freeze the tab, not just fail loudly like a script can
+  // raise and exit) -- rather than crash or hang, return the same honest
+  // "cannot verify" signal as the not-enough-information case below.
+  var MN_MAX_COMPLETION_ATTEMPTS = 200000;
   var MN_STATUSES = ["available", "absent", "played", "held"];
   var MN_STATUS_LABELS = {{
     available: "Available", absent: "Absent", played: "Already played", held: "Held back"
   }};
   var mnState = {{ statuses: {{}}, assignments: [] }};
 
+  function mnChooseCount(n, k) {{
+    var result = 1;
+    for (var i = 0; i < k; i++) {{ result = result * (n - i) / (i + 1); }}
+    return result;
+  }}
+
   function mnLegalCompletionExists(committed, available) {{
-    // null = not enough known-skill players to answer, never a guess.
+    // committed: one entry per already-occupied board slot -- null means
+    // that slot's own player has no known current skill level. GPT audit
+    // follow-up (2026-09-16): an earlier version of every caller here
+    // silently dropped an unknown-skill occupied slot instead of passing
+    // null, which understated how many of the MN_SIZE slots were really
+    // used and could report a completion as still possible when it
+    // couldn't honestly be verified at all. Direct port of
+    // analytics.lineup_legality.legal_completion_exists -- see that
+    // function's own docstring for the full reasoning.
+    if (committed.some(function (v) {{ return v === null || v === undefined; }})) return null;
     var stillNeeded = MN_SIZE - committed.length;
     if (stillNeeded < 0) return null;
     var committedTotal = committed.reduce(function (a, b) {{ return a + b; }}, 0);
     if (stillNeeded === 0) return committedTotal <= MN_LIMIT;
     var known = available.filter(function (v) {{ return v !== null && v !== undefined; }});
     if (known.length < stillNeeded) return null;
+    if (mnChooseCount(known.length, stillNeeded) > MN_MAX_COMPLETION_ATTEMPTS) return null;
     var remainingCap = MN_LIMIT - committedTotal;
     var found = false;
     (function combos(start, chosen) {{
@@ -500,6 +525,14 @@ toughest first -- never a categorical "danger" label
       }}
     }})(0, []);
     return found;
+  }}
+
+  function mnKnownSkillSum(committed) {{
+    // Display-only: the sum of whatever committed skill levels are
+    // actually known, never a guessed contribution for an unknown one.
+    return committed
+      .filter(function (v) {{ return v !== null && v !== undefined; }})
+      .reduce(function (a, b) {{ return a + b; }}, 0);
   }}
 
   function mnStorageKey(scopeKey) {{ return "match-night:" + scopeKey; }}
@@ -522,10 +555,13 @@ toughest first -- never a categorical "danger" label
   }}
 
   function mnCommittedSkillLevels(scope) {{
+    // One entry per player already marked "played" -- null preserved
+    // (not dropped) for an unknown skill level, since that slot is still
+    // occupied either way. See mnLegalCompletionExists's own comment for
+    // why dropping it was a real correctness bug.
     return scope.our_roster
       .filter(function (p) {{ return mnState.statuses[p.id] === "played"; }})
-      .map(function (p) {{ return p.skill_level; }})
-      .filter(function (v) {{ return v !== null && v !== undefined; }});
+      .map(function (p) {{ return p.skill_level; }});
   }}
 
   function mnPairKey(scope, playerId, opponentId) {{
@@ -555,8 +591,12 @@ toughest first -- never a categorical "danger" label
         + "tonight's Available players. Reconsider who's marked available/held back "
         + "before sending anyone else.</p>";
     }} else if (verdict === null && playedCount < MN_SIZE) {{
-      target.innerHTML = "<p class='cd-note'>Not enough Available players with a known "
-        + "current skill level to verify a legal completion yet.</p>";
+      var unknownCommitted = committed.some(function (v) {{ return v === null || v === undefined; }});
+      target.innerHTML = unknownCommitted
+        ? "<p class='cd-note'>A player already marked Already played has no known current "
+          + "skill level, so the real skill total can't be verified.</p>"
+        : "<p class='cd-note'>Not enough Available players with a known current skill "
+          + "level to verify a legal completion yet.</p>";
     }} else {{
       target.innerHTML = "";
     }}
@@ -579,7 +619,21 @@ toughest first -- never a categorical "danger" label
     target.innerHTML = html;
     target.querySelectorAll(".mn-status-select").forEach(function (sel) {{
       sel.addEventListener("change", function () {{
-        mnState.statuses[sel.getAttribute("data-player-id")] = sel.value;
+        var pid = sel.getAttribute("data-player-id");
+        var newStatus = sel.value;
+        if (newStatus !== "played") {{
+          // GPT audit follow-up (2026-09-16): manually moving a player off
+          // "Already played" while a formal Send record still exists for
+          // them left assignments and statuses disagreeing (the exact
+          // desync the duplicate-boards bug came from) -- an explicit
+          // status change away from "played" now retracts that record too,
+          // the same as clicking Undo on it would.
+          mnState.assignments = mnState.assignments.filter(function (a) {{
+            return String(a.player_id) !== String(pid);
+          }});
+          mnState.assignments.forEach(function (a, i) {{ a.board = i + 1; }});
+        }}
+        mnState.statuses[pid] = newStatus;
         mnSaveState(document.getElementById("mn-scope").value, mnState);
         mnRenderAll();
       }});
@@ -605,6 +659,11 @@ toughest first -- never a categorical "danger" label
 
   function mnRenderComparison(scope) {{
     var target = document.getElementById("mn-comparison");
+    if (mnState.assignments.length >= MN_SIZE) {{
+      target.innerHTML = "<p class='cd-none'>All " + MN_SIZE + " boards have been sent this "
+        + "match. Undo a board below if you need to change one.</p>";
+      return;
+    }}
     var opponentId = document.getElementById("mn-opponent").value;
     if (!opponentId) {{
       target.innerHTML = "<p class='cd-none'>Select who they put up.</p>";
@@ -627,9 +686,11 @@ toughest first -- never a categorical "danger" label
       var otherAvailableSkills = available
         .filter(function (q) {{ return q.id !== p.id; }})
         .map(function (q) {{ return q.skill_level; }});
-      var candidateCommitted = committed.concat(
-        p.skill_level !== null && p.skill_level !== undefined ? [p.skill_level] : []
-      );
+      // GPT audit follow-up (2026-09-16): this candidate's own skill level
+      // must be passed through even when it's null/unknown -- silently
+      // omitting it understated the occupied-slot count and could show
+      // "still legal" for a choice that genuinely can't be verified.
+      var candidateCommitted = committed.concat([p.skill_level]);
       var verdict = mnLegalCompletionExists(candidateCommitted, otherAvailableSkills);
       var cls = verdict === false ? "mn-warn" : (verdict === null ? "mn-unknown" : "mn-ok");
       html += "<div class='mn-card " + cls + "'><h4>" + esc(p.name) + " <span class='cd-note'>SL "
@@ -640,7 +701,15 @@ toughest first -- never a categorical "danger" label
           + "<tr><th>Direct record</th><td>" + (report.direct_wins !== null && report.direct_wins !== undefined
               ? report.direct_wins + "-" + report.direct_losses + " (" + pct(report.observed_win_rate) + ")"
               : "No data") + " across " + report.direct_evidence_count + " match(es)</td></tr>"
-          + "<tr><th>Skill-only estimate (experimental)</th><td>" + pct(report.modeled_win_probability) + "</td></tr>"
+          // GPT audit follow-up (2026-09-16): modeled_win_probability is
+          // NOT always skill-only -- a DIRECT pairing's real model_source
+          // can be "...direct-history-and-skill". Labeling it "Skill-only
+          // estimate" unconditionally repeated the exact model-basis
+          // conflation already fixed once this session in the lineup
+          // table; show the real model_source alongside instead of a
+          // fixed, sometimes-wrong label.
+          + "<tr><th>Modeled probability</th><td>" + pct(report.modeled_win_probability)
+              + " <span class='cd-note'>(" + orNoData(report.model_source) + ")</span></td></tr>"
           + "</tbody></table>"
           + "<p class='cd-summary-box'>" + esc(report.summary) + "</p>";
       }} else {{
@@ -671,15 +740,35 @@ toughest first -- never a categorical "danger" label
     var player = scope.our_roster.filter(function (p) {{ return String(p.id) === String(playerId); }})[0];
     var opponent = scope.opponent_roster.filter(function (o) {{ return String(o.id) === String(opponentId); }})[0];
     if (!player) return;
+    // GPT audit follow-up (2026-09-16): assignments and per-player status
+    // could previously disagree -- toggling a player back to Available and
+    // sending them again against a different opponent left BOTH records in
+    // place (assignments had no uniqueness check and no board cap), so the
+    // "boards sent" table and the committed-skill total could both be real
+    // but describe two different lineups. Assignments are now the
+    // authoritative record: refuse a second one for the same player, and
+    // refuse once all MN_SIZE boards are already recorded. Undo (in
+    // mnRenderLineup) is the only supported way to take a board back.
+    if (mnState.assignments.length >= MN_SIZE) {{
+      window.alert("All " + MN_SIZE + " boards have already been sent this match.");
+      return;
+    }}
+    if (mnState.assignments.some(function (a) {{ return String(a.player_id) === String(playerId); }})) {{
+      window.alert(
+        player.name + " already has a recorded board this match. Undo it below first "
+        + "if you need to send them again."
+      );
+      return;
+    }}
     var committed = mnCommittedSkillLevels(scope);
     var otherAvailable = scope.our_roster
       .filter(function (p) {{
         return (mnState.statuses[p.id] || "available") === "available" && String(p.id) !== String(playerId);
       }})
       .map(function (p) {{ return p.skill_level; }});
-    var candidateCommitted = committed.concat(
-      player.skill_level !== null && player.skill_level !== undefined ? [player.skill_level] : []
-    );
+    // GPT audit follow-up (2026-09-16): pass the real skill level through
+    // even when null/unknown -- see mnRenderComparison's matching note.
+    var candidateCommitted = committed.concat([player.skill_level]);
     var verdict = mnLegalCompletionExists(candidateCommitted, otherAvailable);
     if (verdict === false) {{
       var proceed = window.confirm(
@@ -700,8 +789,22 @@ toughest first -- never a categorical "danger" label
       direct_wins: report ? report.direct_wins : null,
       direct_losses: report ? report.direct_losses : null,
       modeled_win_probability: report ? report.modeled_win_probability : null,
+      model_source: report ? report.model_source : null,
     }});
     mnState.statuses[playerId] = "played";
+    mnSaveState(document.getElementById("mn-scope").value, mnState);
+    mnRenderAll();
+  }}
+
+  function mnUndoAssignment(scope, index) {{
+    var removed = mnState.assignments.splice(index, 1)[0];
+    if (removed && mnState.statuses[removed.player_id] === "played") {{
+      // Only restore Available if the status is still exactly what Send
+      // set it to -- a captain may have since marked them Absent/Held back
+      // on purpose, which Undo must not silently override.
+      mnState.statuses[removed.player_id] = "available";
+    }}
+    mnState.assignments.forEach(function (a, i) {{ a.board = i + 1; }});
     mnSaveState(document.getElementById("mn-scope").value, mnState);
     mnRenderAll();
   }}
@@ -713,22 +816,36 @@ toughest first -- never a categorical "danger" label
       html += "<p class='cd-none'>No boards sent yet.</p>";
     }} else {{
       html += "<table><thead><tr><th>Board</th><th>Our player</th><th>Opponent</th>"
-        + "<th>Evidence</th><th>Direct record</th><th>Skill-only estimate</th></tr></thead><tbody>";
-      mnState.assignments.forEach(function (a) {{
+        + "<th>Evidence</th><th>Direct record</th><th>Modeled probability</th><th></th></tr></thead><tbody>";
+      mnState.assignments.forEach(function (a, index) {{
         html += "<tr><td>" + a.board + "</td><td>" + esc(a.player_name) + " (SL "
           + orNoData(a.player_skill_level) + ")</td><td>" + esc(a.opponent_name) + " (SL "
           + orNoData(a.opponent_skill_level) + ")</td><td>" + esc(a.evidence_label) + "</td>"
           + "<td>" + (a.direct_wins !== null && a.direct_wins !== undefined
               ? a.direct_wins + "-" + a.direct_losses : "No data") + "</td>"
-          + "<td>" + pct(a.modeled_win_probability) + "</td></tr>";
+          // Same real model_source shown alongside the number here too --
+          // it is not always the skill-only model (see mnRenderComparison).
+          + "<td>" + pct(a.modeled_win_probability) + " <span class='cd-note'>("
+              + orNoData(a.model_source) + ")</span></td>"
+          + "<td><button type='button' class='mn-undo-btn' data-index='" + index + "'>Undo</button></td>"
+          + "</tr>";
       }});
       html += "</tbody></table>";
     }}
     var committed = mnCommittedSkillLevels(scope);
-    html += "<p>Committed skill total so far: <strong>"
-      + committed.reduce(function (a, b) {{ return a + b; }}, 0) + "</strong> of " + MN_LIMIT
-      + " (" + committed.length + " of " + MN_SIZE + " boards used)</p>";
+    html += "<p>Committed skill total so far: <strong>" + mnKnownSkillSum(committed)
+      + "</strong> of " + MN_LIMIT + " (" + committed.length + " of " + MN_SIZE + " boards used)";
+    if (committed.some(function (v) {{ return v === null || v === undefined; }})) {{
+      html += " <span class='cd-note'>-- includes a player with no known skill level; "
+        + "this total is a partial sum, not the real full total</span>";
+    }}
+    html += "</p>";
     target.innerHTML = html;
+    target.querySelectorAll(".mn-undo-btn").forEach(function (btn) {{
+      btn.addEventListener("click", function () {{
+        mnUndoAssignment(scope, parseInt(btn.getAttribute("data-index"), 10));
+      }});
+    }});
   }}
 
   function mnRenderPrintSummary(scope) {{
@@ -754,8 +871,7 @@ toughest first -- never a categorical "danger" label
       html += "</ol>";
     }}
     var committed = mnCommittedSkillLevels(scope);
-    html += "<p>Skill total: " + committed.reduce(function (a, b) {{ return a + b; }}, 0)
-      + " of " + MN_LIMIT + "</p>";
+    html += "<p>Skill total: " + mnKnownSkillSum(committed) + " of " + MN_LIMIT + "</p>";
     target.innerHTML = html;
   }}
 
@@ -799,6 +915,12 @@ toughest first -- never a categorical "danger" label
   refreshOpponents();
   renderTeam();
   mnInitScope();
+
+  // Test-only introspection hook -- tests/test_dashboard_browser.py uses
+  // this to exercise mnLegalCompletionExists's exact-search bound directly
+  // (a synthetic large roster, not something a real fixture ever has), and
+  // nothing else on the page reads it. Never used to drive real behavior.
+  window.__matchNightTestHooks = {{ legalCompletionExists: mnLegalCompletionExists }};
 }})();
 </script>
 </body></html>"""

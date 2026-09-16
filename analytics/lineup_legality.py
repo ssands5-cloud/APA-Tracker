@@ -123,27 +123,41 @@ MAX_COMPLETION_ATTEMPTS = 200_000
 
 
 def legal_completion_exists(
-    committed_skill_levels: Sequence[int],
+    committed_skill_levels: Sequence[Optional[int]],
     available_skill_levels: Sequence[Optional[int]],
 ) -> Optional[bool]:
     """Whether a legal standard 5-player lineup can still be completed --
     for a live Match Night planner deciding who to send *before* the whole
     lineup is locked in, not just verifying one already-complete lineup.
 
-    ``committed_skill_levels`` are the real skill levels of players already
-    assigned to a board this match (order doesn't matter -- the 23-Rule
-    caps the sum of the 5, not any per-board total). ``available_skill_levels``
-    is the remaining, not-yet-committed pool a captain could still choose
-    from to fill the rest -- pass ``None`` for any player whose current
-    skill level isn't known, exactly as ``check_lineup_legality`` already
-    requires a real skill level per slot (see that function's own
-    docstring); this function never guesses one either.
+    ``committed_skill_levels`` is one entry per board slot already occupied
+    this match (order doesn't matter -- the 23-Rule caps the sum of the 5,
+    not any per-board total) -- pass ``None`` for a slot whose own player has
+    no known current skill level, rather than omitting that slot entirely.
+    GPT audit follow-up (2026-09-16): an earlier caller-side pattern of
+    dropping an unknown-skill occupied slot from this list understated how
+    many of the 5 slots were actually already used, which could report a
+    completion as still possible when it could not honestly be verified at
+    all. A slot that's occupied is occupied whether or not its own skill
+    level is known -- it must still count against ``LINEUP_SIZE``, and this
+    function returns ``None`` outright the moment any committed slot's skill
+    is unknown, since the true committed total can't be computed without it
+    (never assumed to be 0 -- see ``check_lineup_legality``'s own docstring
+    for why that would understate the real total).
+
+    ``available_skill_levels`` is the remaining, not-yet-committed pool a
+    captain could still choose from to fill the rest -- pass ``None`` for
+    any player whose current skill level isn't known here too; unlike a
+    committed slot, an available player who's simply never chosen for a
+    remaining slot doesn't need their own skill known, so these are only
+    dropped from the search, not treated as disqualifying.
 
     Returns ``None`` -- not a guessed ``False`` -- when there are already
-    more than ``LINEUP_SIZE`` committed players (a malformed call, not a
-    legality question), or when fewer players with a *known* skill level
-    remain available than are needed to fill the rest (not enough real
-    information to answer, the same honest-unavailable-state posture as
+    more than ``LINEUP_SIZE`` committed slots (a malformed call, not a
+    legality question), when any committed slot's skill level is unknown
+    (see above), or when fewer players with a *known* skill level remain
+    available than are needed to fill the rest (not enough real information
+    to answer, the same honest-unavailable-state posture as
     ``check_lineup_legality`` returning ``None`` for an incomplete lineup).
 
     Otherwise returns the real answer: does at least one combination of the
@@ -154,6 +168,8 @@ def legal_completion_exists(
     roster -- never an approximation, and it raises rather than silently
     truncate the search if that bound is somehow exceeded.
     """
+    if any(level is None for level in committed_skill_levels):
+        return None
     still_needed = LINEUP_SIZE - len(committed_skill_levels)
     if still_needed < 0:
         return None
