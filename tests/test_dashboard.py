@@ -258,7 +258,7 @@ class TestMatchNight:
         assert "not a promise" in html.lower() or "not a winning streak" in html.lower()
 
     # The scouting card's own disclosure text ("never treated as a loss",
-    # "Coach notes ... not calculated") is built by client-side JS only
+    # "Coach Observations ... not calculated") is built by client-side JS only
     # once an opponent is selected -- checking it against this module's
     # raw page *source* would be fragile (it'd depend on incidental JS
     # string-literal line-wrapping, not real rendered behavior) and

@@ -396,21 +396,37 @@ already embedded on the page — no new estimate, no new model.
   stays visible while scrolling through comparison cards, decision cards
   ahead of the detailed boards-sent log. A basic print view (`Print
   summary`) renders just the roster status and boards sent, usable offline.
-- **Opponent scouting card** — appears the moment an opponent is
-  announced, before the "who should I send" comparison cards: exact
-  head-to-head W-L (and sample size) against every currently-Available
-  teammate, the real dated list of individual recorded games behind that
-  record (`analytics.pairing_evidence.HeadToHeadGame`, the same
-  authoritative rows the pooled win/loss count is already counted from —
-  itemized, not reconstructed), with the real format/session window
-  stated explicitly. A missing or zero-game history reads as "No recorded
-  meetings", never a guessed 0-0 or an inferred loss/streak (this project
-  tracks no such streak separate from this real evidence, and never will
-  by inventing one here). Coach's own scouting notes save by the
-  opponent's real player identity (not by match or scope), so a note
-  about a real person survives across every future match they're
-  announced in — clearly labeled as an observation, never mixed with a
-  calculated field.
+### Match Night Scouting
+
+Its own real `<h2>` section within Match Night — the same visual weight as
+Player vs Player/Team vs Team/Data Coverage above it, not a small card
+buried inside another section — appearing the moment an opponent is
+announced, before the "who should I send" comparison cards:
+
+- **Exact head-to-head W-L, with sample size** — against every
+  currently-Available teammate (Absent/Held-back/Already-played
+  excluded), pulled from the same `PlayerMatchupReport` data the
+  comparison cards already use.
+- **Recent recorded results, dated, window stated** — the real dated list
+  of individual recorded games behind that pooled record
+  (`analytics.pairing_evidence.HeadToHeadGame`, the same authoritative
+  rows the win/loss count is already counted from — itemized, not
+  reconstructed), under an explicit "Window: {format}, {session}" line.
+  A missing or zero-game history reads as "No recorded meetings", never a
+  guessed 0-0 or an inferred loss/streak — this project tracks no such
+  streak separate from this real evidence, and never will by inventing
+  one here.
+- **Plain-English limitations** — a fixed disclosure that an estimate
+  without direct history uses skill levels only, and that a missing or
+  small sample is shown exactly as that.
+- **Coach Observations** — the coach's own notes, clearly labeled and
+  visually separate from every calculated field on the card, saved to the
+  browser's `localStorage` by the opponent's real player identity (not by
+  match or scope), so a note about a real person survives across every
+  future match they're announced in.
+- **Phone-readable** — verified with a real 390px-viewport browser test
+  (not just CSS asserted and trusted): no horizontal page scroll, and
+  every Match Night control meets a real 44px touch-target minimum.
 
 Still open, honestly disclosed:
 The 4-player/19 skill-level fallback (a team that can't field 5 legal

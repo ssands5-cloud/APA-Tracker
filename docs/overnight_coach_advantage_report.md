@@ -521,6 +521,81 @@ way this one did, and this project's own many-hands, many-session history
 makes that more likely, not less. No feature code was lost; the only real
 cost was this cycle's own time.
 
+### Match Night Scouting -- dashboard integration + mobile regression -- 2026-09-16 22:02 UTC
+
+User directive: "evolve APA-Tracker into a coach's powerhouse tool for
+Match Night" -- close `ae345be`, build opponent scouting cards, integrate
+them into the dashboard, document, ship. Verified against the repo before
+touching anything (per the lesson just above): items 1 (`ae345be`, commit
+`8a48ec3`, FIX:) and 2 (scouting cards, commit `f3c937e`, BUILD:) were
+**already fully built and closed** -- every sub-bullet checked out
+against the actual code. Did not redo either. Found four real, narrower
+gaps against the rest of the directive and closed those:
+
+- **"Add a Scouting tab"** -- the scouting card rendered as a nested
+  `<h4>` inside Match Night's markup, not a first-class section. This page
+  has no literal tab widget anywhere (every real section -- Player vs
+  Player, Team vs Team, Data Coverage -- is an `<h2>` on one scrolling
+  page); promoted Scouting to a real `<h2>`, matching that same visual
+  weight, while deliberately keeping it driven by Match Night's existing
+  opponent selection rather than adding a second, disconnected selector
+  (the directive's own "choose opponent -> see scouting card" already
+  describes exactly that flow).
+- **"Coach's own notes... clearly labeled as 'Coach Observations'"** --
+  the label said "Coach notes"; relabeled to the directive's exact
+  phrase, "Coach Observations."
+- **README "Match Night Scouting" section** -- was a bullet folded into
+  the general Match Night feature list; promoted to its own named `###`
+  subsection.
+- **"Regression-test with browser simulation for mobile readability"** --
+  no automated mobile-viewport test existed (only a manual screenshot
+  check earlier this session, never committed as a test). Added a real
+  390px-viewport (`TestMobileReadability`, a dedicated Playwright page
+  fixture, not the desktop-sized default every other test in this file
+  uses) regression suite -- and it found a real, **pre-existing,
+  whole-dashboard bug** predating this entire session: `document
+  .documentElement.scrollWidth` exceeded the real 390px viewport by
+  **395px** at load. Root cause: `.cd-controls select { min-width:
+  380px }` (forcing the Player vs Player/Team vs Team/Data Coverage
+  dropdowns wider than a real phone screen) plus several real result
+  tables (Team vs Team's roster/lineup columns, the Opponent Risk
+  Profile ranking) with no scroll containment of their own, so an
+  inherently wide table stretched the *entire page* horizontally instead
+  of just itself. Fixed both: the select rule is now `width: 100%;
+  max-width: 380px` (shrinks on a narrow screen, unchanged on desktop),
+  and every real result panel (`#pme-result`, `#tme-result`,
+  `#dc-result`, `#risk-result` -- wrapped the previously-bare Opponent
+  Risk table in this new id -- `#mn-comparison`, `#mn-lineup`,
+  `#mn-scouting`) now scrolls horizontally in place via `overflow-x:
+  auto` rather than blowing out the whole document. Re-measured after
+  the fix against the real production bundle at a real 390px viewport:
+  **0px overflow**, confirmed both via the automated test (coherent
+  fixture) and a direct manual check against `data/apa_tracker.db`'s
+  real division data (the harder case -- longer names, more roster
+  columns).
+- **New tests:** 5 browser tests -- the `<h2>` promotion, the "Coach
+  Observations" label, and 3 in a new `TestMobileReadability` class (no
+  horizontal scroll at 390px, every Match Night control meets the real
+  44px touch-target minimum at phone width, the scouting card itself is
+  visible and fits within 390px).
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T220236Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; all 8 checksums independently
+  re-verified in Python; a real 390px screenshot confirms the fix visually
+  (no cut-off content, Scouting reads as its own section) with no console
+  errors.
+- Full suite: **1684 passed, 0 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).
+- **Not addressed this cycle, honestly disclosed:** the whole-dashboard
+  overflow fix only wraps EXISTING result containers in a scroll
+  boundary -- it does not redesign the older Player vs Player/Team vs
+  Team/Data Coverage sections for a phone-first layout the way Match
+  Night itself already has (sticky summary, 44px targets throughout);
+  those sections are now merely *not broken* at phone width, not
+  optimized for it. A deeper mobile pass on those sections, if wanted, is
+  separate, disclosed work, not assumed done here.
+
 ## GPT Audit Notes
 Date: 2026-09-16
 

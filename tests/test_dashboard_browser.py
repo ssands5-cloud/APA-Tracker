@@ -1266,6 +1266,22 @@ class TestOpponentScoutingCard:
         assert "0-0" not in card_text
         assert "streak" not in card_text.lower() or "does not track" in card_text.lower()
 
+    def test_scouting_renders_as_a_first_class_h2_section_not_a_nested_card(self, page):
+        """Directive: "Add a Scouting tab in the Coach Dashboard." This
+        page has no literal tab widget anywhere -- every real section
+        (Player vs Player, Team vs Team, Data Coverage) is an <h2> on one
+        scrolling page. Scouting must carry that same real heading level,
+        not a smaller one buried inside another section's markup."""
+        self._setup(page)
+        heading = page.locator("#mn-scouting h2")
+        assert heading.count() == 1
+        assert "Scouting: Scouted Opponent" in heading.inner_text()
+
+    def test_coach_notes_are_labeled_coach_observations(self, page):
+        self._setup(page)
+        card_text = page.locator("#mn-scouting").inner_text()
+        assert "Coach Observations" in card_text
+
     def test_coach_notes_save_keyed_by_the_opponents_own_player_identity(self, page):
         self._setup(page)
         page.fill("#mn-scouting-notes", "Strong break, weak safeties.")
@@ -1322,3 +1338,79 @@ class TestOpponentScoutingCard:
 class TestNoConsoleErrorsOnLoad:
     def test_the_page_loads_with_no_javascript_error(self, page):
         assert page.console_errors == []
+
+
+class TestMobileReadability:
+    """Directive: "Cards must be readable on a phone" / "Regression-test
+    with browser simulation for mobile readability." A real phone-sized
+    viewport (390x844, a real iPhone 12/13 logical size), not just the
+    default `page` fixture's desktop-sized viewport every other test in
+    this file uses -- this is the one place that distinction actually
+    matters, so it gets its own dedicated mobile page."""
+
+    @pytest.fixture
+    def mobile_page(self, browser, dashboard_path):
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        console_errors: list[str] = []
+        page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+        page.on("pageerror", lambda exc: console_errors.append(str(exc)))
+        page.goto(dashboard_path.as_uri())
+        page.console_errors = console_errors  # type: ignore[attr-defined]
+        try:
+            yield page
+        finally:
+            page.close()
+
+    def test_the_page_never_needs_horizontal_scrolling_at_phone_width(self, mobile_page):
+        opponent_options = mobile_page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if opponent_options and opponent_options[0]:
+            mobile_page.select_option("#mn-opponent", opponent_options[0])
+        mobile_page.wait_for_timeout(100)
+
+        overflow = mobile_page.evaluate(
+            "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+        )
+        assert overflow <= 1, (
+            f"page content is {overflow}px wider than the real 390px viewport -- "
+            "horizontal scrolling at phone width, not readable on a phone"
+        )
+        assert mobile_page.console_errors == []
+
+    def test_match_night_and_scouting_controls_meet_the_real_44px_touch_target(self, mobile_page):
+        """The same 44px-minimum convention already established for the
+        rest of Match Night -- verified here at real phone width, not
+        just asserted in CSS someone could silently regress."""
+        opponent_options = mobile_page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if opponent_options and opponent_options[0]:
+            mobile_page.select_option("#mn-opponent", opponent_options[0])
+        mobile_page.wait_for_timeout(100)
+
+        for selector in ("#mn-scope", "#mn-match", "#mn-opponent", "#mn-reset", "#mn-print"):
+            box = mobile_page.locator(selector).bounding_box()
+            assert box is not None, f"{selector} did not render"
+            assert box["height"] >= 44, f"{selector} is only {box['height']}px tall"
+
+        save_button = mobile_page.locator("#mn-scouting-notes-save")
+        if save_button.count():
+            box = save_button.bounding_box()
+            assert box is not None and box["height"] >= 44
+
+    def test_the_scouting_card_itself_is_visible_and_readable_at_phone_width(self, mobile_page):
+        opponent_options = mobile_page.locator("#mn-opponent option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        if not opponent_options or not opponent_options[0]:
+            pytest.skip("no identified opponent to select in this fixture scope")
+        mobile_page.select_option("#mn-opponent", opponent_options[0])
+        mobile_page.wait_for_timeout(100)
+
+        card = mobile_page.locator("#mn-scouting .mn-scouting-card")
+        assert card.count() == 1
+        assert card.is_visible()
+        box = card.bounding_box()
+        assert box is not None and box["width"] <= 390
+        assert mobile_page.console_errors == []

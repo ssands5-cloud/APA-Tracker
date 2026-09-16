@@ -108,7 +108,17 @@ def render(
 <style>
 body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1c1f24; background: #ffffff; }}
 h2 {{ border-top: 2px solid #1F3864; padding-top: 18px; margin-top: 32px; }}
-.cd-controls select {{ font-size: 14px; padding: 4px; min-width: 380px; }}
+.cd-controls select {{ font-size: 14px; padding: 4px; width: 100%; max-width: 380px;
+  box-sizing: border-box; }}
+/* Directive follow-up: "readable on a phone" / "regression-test... for
+   mobile readability" surfaced a real, pre-existing whole-dashboard gap
+   -- these result panels can hold a real wide table (many roster/ranking
+   columns), and without this the whole page grew wider than a real phone
+   viewport rather than just this one panel scrolling in place. Confirmed
+   via a real 390px-viewport measurement (document.documentElement's own
+   scrollWidth) before this fix, not assumed. */
+#pme-result, #tme-result, #dc-result, #risk-result,
+#mn-comparison, #mn-lineup, #mn-scouting {{ overflow-x: auto; }}
 table {{ border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 8px 0 18px; }}
 th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; }}
 .cd-summary-box {{ background: #eef2fa; border-left: 4px solid #1F3864; padding: 10px 14px; }}
@@ -157,7 +167,7 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 .mn-technical summary {{ cursor: pointer; }}
 .mn-scouting-card {{ border: 1px solid #1F3864; border-radius: 6px; padding: 12px 14px;
   margin: 10px 0; background: #f4f6fa; }}
-.mn-scouting-card h4 {{ margin: 0 0 4px; }}
+.mn-scouting-card h2 {{ margin: 0 0 4px; border-top: none; padding-top: 0; font-size: 20px; }}
 .mn-scouting-card h5 {{ margin: 14px 0 4px; }}
 #mn-scouting-notes {{ font-size: 16px; padding: 10px; width: 100%; box-sizing: border-box;
   font-family: inherit; }}
@@ -234,10 +244,10 @@ not necessarily when the underlying data was last synced from the league portal.
 <p class="cd-note">Ranked by reliability-weighted skill-only probability,
 toughest first -- never a categorical "danger" label
 (<code>analytics.opponent_risk_profile</code>).</p>
-<table><thead><tr><th>Opponent</th><th>Direct pairings</th>
+<div id="risk-result"><table><thead><tr><th>Opponent</th><th>Direct pairings</th>
 <th>Direct win rate</th><th>Direct sample</th>
 <th>Skill-only estimate</th></tr></thead>
-<tbody>{risk_rows or '<tr><td colspan="5">No data</td></tr>'}</tbody></table>
+<tbody>{risk_rows or '<tr><td colspan="5">No data</td></tr>'}</tbody></table></div>
 
 <script type="application/json" id="cd-player-data">{_script_json(player_payload)}</script>
 <script type="application/json" id="cd-player-opponent-index">{_script_json(opponent_index)}</script>
@@ -1193,8 +1203,15 @@ toughest first -- never a categorical "danger" label
       return (mnState.statuses[p.id] || "available") === "available";
     }});
 
-    var html = "<div class='mn-scouting-card'><h4>Scouting: " + esc(opponent.name)
-      + " <span class='cd-note'>SL " + orNoData(opponent.skill_level) + "</span></h4>"
+    // Directive: "Add a Scouting tab in the Coach Dashboard." This page
+    // has no literal tab widget anywhere (every section is an <h2> on one
+    // scrolling page, including Player vs Player/Team vs Team/Data
+    // Coverage above) -- a real <h2> here, not a nested <h4>, gives
+    // Scouting the same first-class visual weight as those sections while
+    // keeping it driven by the SAME real opponent selection Match Night
+    // already uses, rather than a second, disconnected selector.
+    var html = "<div class='mn-scouting-card'><h2>Scouting: " + esc(opponent.name)
+      + " <span class='cd-note'>SL " + orNoData(opponent.skill_level) + "</span></h2>"
       + "<p class='cd-note'>Window: " + esc(scope.format) + ", " + esc(scope.session_name)
       + " only -- not this player's whole history, and not other formats/sessions.</p>";
 
@@ -1233,7 +1250,7 @@ toughest first -- never a categorical "danger" label
       + "streak separate from this real evidence.</p>";
 
     var savedNotes = mnLoadScoutingNotes(opponent.external_id);
-    html += "<h5>Coach notes <span class='cd-note'>(your own observations -- not "
+    html += "<h5>Coach Observations <span class='cd-note'>(your own notes -- not "
       + "calculated, saved for " + esc(opponent.name) + " across every match)</span></h5>"
       + "<textarea id='mn-scouting-notes' rows='3'>" + esc(savedNotes) + "</textarea>"
       + "<div><button type='button' id='mn-scouting-notes-save'>Save notes</button>"
