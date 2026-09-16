@@ -64,7 +64,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from analytics.pairing_evidence import build_pairing_evidence_matrix
-from database.queries import canonical_current_roster
+from database.models import Match
+from database.queries import CanonicalRosterError, canonical_current_roster
 from scripts.build_captains_edge import connect_read_only
 
 logger = logging.getLogger("build_full_production_demo")
@@ -239,6 +240,13 @@ def acquire_live() -> tuple[Path, PhaseResult]:
     scraper contract and is never used as a fallback. The token value is read
     directly by the scraper layer and is never logged, echoed, or written to
     the manifest.
+
+    Ingests every accessible team, current roster, scheduled match, and
+    completed scoresheet in each division the account's own teams belong to
+    (scheduler.graphql_sync.run_division_wide) -- not only the account's own
+    teams, which is as far as run_all_teams alone goes. A non-empty
+    coverage_gaps result is a hard refusal: this staging database is never
+    handed to the rest of the build, let alone promoted.
     """
     if not os.environ.get(TOKEN_ENV):
         raise BuildError(
@@ -248,19 +256,37 @@ def acquire_live() -> tuple[Path, PhaseResult]:
             EXIT_AUTH,
         )
 
-    from scheduler.graphql_sync import run_all_teams
+    from scheduler.graphql_sync import run_division_wide
+
+    if LIVE_STAGING_DB.exists():
+        LIVE_STAGING_DB.unlink()  # a fresh scrape, never appended to stale state
 
     try:
-        run_all_teams(str(PROJECT_ROOT / "apa_config.yaml"), export=False)
+        result = run_division_wide(
+            str(PROJECT_ROOT / "apa_config.yaml"), export=False,
+            db_path=str(LIVE_STAGING_DB),
+        )
     except Exception as exc:  # noqa: BLE001 - category, never the payload
         raise BuildError(f"live acquisition failed: {type(exc).__name__}", EXIT_ACQUIRE) from None
+
+    if result["coverage_gaps"]:
+        raise BuildError(
+            "division-wide coverage is incomplete, refusing to stage this run: "
+            + "; ".join(result["coverage_gaps"]),
+            EXIT_ACQUIRE,
+        )
 
     if not LIVE_STAGING_DB.is_file() or LIVE_STAGING_DB.stat().st_size == 0:
         raise BuildError(
             f"live acquisition produced no staging database at {LIVE_STAGING_DB}",
             EXIT_ACQUIRE,
         )
-    return LIVE_STAGING_DB, PhaseResult("acquire", "ok", "staged live data")
+    totals = result["division_wide"]
+    return LIVE_STAGING_DB, PhaseResult(
+        "acquire", "ok",
+        f"{totals['teams_ingested']} team(s), {totals['matches_ingested']} match(es), "
+        f"{totals['scored_matches_with_scoresheet']} scoresheet(s); coverage complete",
+    )
 
 
 def build_documents(db: Session, db_path: Path, scope: dict, staging: Path) -> PhaseResult:
@@ -654,13 +680,16 @@ def run_build(
     locked_hash = sha256_file(db_path)
     phases.append(PhaseResult("lock", "ok", f"database sha256 {locked_hash[:12]}"))
 
-    scope = dict(FIXTURE_SCOPE) if mode == "fixture" else _live_scope()
     run_dir.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="staging-", dir=run_dir))
 
     engine = create_engine("sqlite://", creator=lambda: connect_read_only(db_path))
     db = Session(bind=engine)
     try:
+        # Live scope must be chosen from what was actually ingested, so it
+        # needs the open database -- fixture scope is a fixed constant and
+        # needs nothing from it.
+        scope = dict(FIXTURE_SCOPE) if mode == "fixture" else _live_scope(db)
         phases.append(build_documents(db, db_path, scope, staging))
         reconciliation = _reconciliation(db, scope)
     finally:
@@ -716,20 +745,61 @@ def run_build(
     return run_dir
 
 
-def _live_scope() -> dict:
-    """Live scope comes from configuration, never from fixture constants."""
+def _live_scope(db: Session) -> dict:
+    """A real (opponent, session, format) scope, chosen from what was
+    actually ingested -- never a fixture constant, and never a guess.
+
+    Candidates are every real, non-bye match our configured team appears in,
+    earliest scheduled week first. A candidate is only usable when BOTH
+    sides resolve a real canonical current roster (database.queries.
+    canonical_current_roster) for that match's own session -- the same
+    identity guard every analytics builder in this project already requires,
+    so a scope this function picks is guaranteed buildable, not merely
+    plausible. The first such candidate wins; ties are broken by match
+    external id for a stable, reproducible choice.
+    """
     from scripts.build_captain_first_edge import _configured_our_team_id
 
-    team_id = _configured_our_team_id()
-    if not team_id:
+    our_team_id = _configured_our_team_id()
+    if not our_team_id:
         raise BuildError(
             "live mode needs team.team_id in apa_config.yaml to select a scope",
             EXIT_PREFLIGHT,
         )
+
+    candidates = (
+        db.query(Match)
+        .filter(
+            Match.is_bye.is_(False),
+            (Match.home_team_id == our_team_id) | (Match.away_team_id == our_team_id),
+        )
+        .order_by(Match.week, Match.external_id)
+        .all()
+    )
+
+    tried: list[str] = []
+    for match in candidates:
+        opponent_id = match.away_team_id if match.home_team_id == our_team_id else match.home_team_id
+        if not opponent_id or not match.session_name or not match.format:
+            continue
+        tried.append(f"{opponent_id}/{match.session_name}/{match.format}")
+        try:
+            our_roster = canonical_current_roster(db, our_team_id, match.session_name)
+            opponent_roster = canonical_current_roster(db, opponent_id, match.session_name)
+        except CanonicalRosterError:
+            continue  # a real identity problem on this candidate; try the next one
+        if our_roster and opponent_roster:
+            return {
+                "our_team_id": our_team_id,
+                "opponent_team_id": opponent_id,
+                "session_name": match.session_name,
+                "format": match.format,
+            }
+
     raise BuildError(
-        "live scope selection is not implemented yet: the opponent/session/format "
-        "must be chosen from real captured data once a token-backed scrape has run",
-        EXIT_PREFLIGHT,
+        "no usable live scope: no real match gave both sides a canonical current "
+        "roster" + (f" (tried {len(tried)} candidate(s))" if tried else " (no real matches found)"),
+        EXIT_DOCUMENTS,
     )
 
 

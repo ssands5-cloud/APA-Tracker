@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import logging
 from datetime import datetime
+from typing import Optional
 
 import yaml
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ from database.ingest import (
     ingest_match_scores,
     ingest_player_team_history,
     ingest_standings,
+    upsert_player,
     upsert_roster,
     upsert_team,
 )
@@ -45,9 +47,13 @@ from scraper.graphql_scraper import (
     AccessTokenMissing,
     alias_id_for_league,
     dashboard_teams_rows,
+    division_roster_team_rows,
+    division_schedule_rows,
     division_standings_rows,
     eight_ball_stats_row,
     fetch_dashboard_teams,
+    fetch_division_rosters,
+    fetch_division_schedule,
     fetch_division_standings,
     fetch_eight_ball_stats,
     fetch_formats_by_member_id,
@@ -197,7 +203,9 @@ def ingest_viewer_data(db: Session, viewer_teams: dict, viewer_matches: dict) ->
     }
 
 
-def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, int]:
+def run_all_teams(
+    config_path: str = "apa_config.yaml", export: bool = True, db_path: Optional[str] = None
+) -> dict[str, int]:
     """Sync every team the account plays on, not just the one configured in
     apa_config.yaml's team.team_id.
 
@@ -206,8 +214,16 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
     DIFFERENT divisions, which a single configured division_id could not
     have covered either -- so standings are fetched per division actually
     found on the account's own teams, not from config at all.
+
+    ``db_path``, when given, overrides apa_config.yaml's own
+    database.path -- the staging-database callers (a full production demo
+    build) need every write to land in a scratch file, never in the
+    configured real production database, until a separate, explicit
+    promotion step decides otherwise.
     """
     config = load_config(config_path)
+    if db_path:
+        config.setdefault("database", {})["path"] = db_path
 
     try:
         viewer_teams = fetch_dashboard_teams(config)
@@ -396,6 +412,261 @@ def run_all_teams(config_path: str = "apa_config.yaml", export: bool = True) -> 
         counts["career_stats"], counts["team_history"], counts["matchups"],
     )
     return counts
+
+
+def _division_context(config: dict, team_rows: list[dict]) -> dict[str, dict]:
+    """One real (format, session_name) per distinct division found on the
+    account's own teams.
+
+    Neither DIVISION_ROSTERS_QUERY nor DIVISION_SCHEDULE_QUERY carries a
+    human-readable format string or a session name -- only TEAM_PAGE_QUERY
+    does. One representative viewer-owned team per division is enough to
+    read both, since a division has exactly one format and one session by
+    construction; querying it once per division rather than once per team
+    is deliberate.
+    """
+    context: dict[str, dict] = {}
+    for row in team_rows:
+        division_id = row["division_id"]
+        if not division_id or division_id in context:
+            continue
+        try:
+            data = fetch_team_data(config, team_id=row["team_id"])
+        except (AccessTokenMissing, AccessTokenExpired):
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch format/session context for division %s (%s: %s); "
+                "skipping that division's whole-division sync.",
+                division_id, type(exc).__name__, exc,
+            )
+            continue
+        info = team_row(data)
+        context[division_id] = {
+            "format": info["format"],
+            "session_name": info["session_name"],
+        }
+    return context
+
+
+def sync_division_wide(
+    config: dict,
+    db: Session,
+    division_id: str,
+    division_format: str,
+    division_session_name: str,
+) -> dict[str, int]:
+    """Every accessible team's current roster and every scheduled/completed
+    match in ONE division -- not only the account's own teams.
+
+    Each roster player's current membership is written to PlayerTeamHistory
+    (is_current=True) via the same ingest_player_team_history() upsert
+    run_all_teams already uses for the viewer's own TeamStat rows -- that
+    function is not actually member-specific, only ever CALLED that way
+    before now. This is what makes database.queries.canonical_current_roster
+    resolve for an arbitrary division player, opponent or not.
+
+    Returns both DISCOVERED and INGESTED counts so a caller can prove
+    complete coverage rather than trusting that nothing silently dropped.
+    """
+    counts = {
+        "teams_discovered": 0, "teams_ingested": 0,
+        "roster_players_discovered": 0, "roster_players_ingested": 0,
+        "matches_discovered": 0, "matches_ingested": 0,
+        "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
+        "head_to_head_rows": 0,
+    }
+
+    try:
+        rosters = fetch_division_rosters(config, division_id)
+    except (AccessTokenMissing, AccessTokenExpired):
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Could not fetch division rosters for division %s (%s: %s); "
+            "this division's coverage will be reported incomplete.",
+            division_id, type(exc).__name__, exc,
+        )
+        rosters = {}
+
+    for team in division_roster_team_rows(rosters):
+        counts["teams_discovered"] += 1
+        team_obj = upsert_team(db, team["team_id"], team["team_name"])
+        counts["teams_ingested"] += 1
+        for entry in team["roster"]:
+            counts["roster_players_discovered"] += 1
+            if not entry["player_id"]:
+                continue  # a vacant slot names no real player to upsert
+            player = upsert_player(db, entry["player_id"], entry["player_name"], team_obj)
+            written = ingest_player_team_history(db, player, [{
+                "team_id": team["team_id"], "team_name": team["team_name"],
+                "division_id": division_id, "session_name": division_session_name,
+                "is_current": True, "skill_level": entry["skill_level"],
+                "matches_won": entry["matches_won"], "matches_played": entry["matches_played"],
+            }])
+            counts["roster_players_ingested"] += written
+
+    try:
+        schedule = fetch_division_schedule(config, division_id)
+    except (AccessTokenMissing, AccessTokenExpired):
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Could not fetch division schedule for division %s (%s: %s); "
+            "this division's coverage will be reported incomplete.",
+            division_id, type(exc).__name__, exc,
+        )
+        schedule = {}
+
+    for match in division_schedule_rows(schedule):
+        if match["is_bye"]:
+            continue
+        counts["matches_discovered"] += 1
+        ingest_match(
+            db, match_id=match["match_id"],
+            home_team_id=match["home_team_id"], away_team_id=match["away_team_id"],
+            home_team_name=match["home_team_name"], away_team_name=match["away_team_name"],
+            match_date=match["date"], status=match["status"],
+            home_score=match["home_score"], away_score=match["away_score"],
+            week=match["week"], is_bye=False,
+            is_scored=match["is_scored"], is_finalized=match["is_finalized"],
+            format=division_format, session_name=division_session_name,
+        )
+        counts["matches_ingested"] += 1
+
+        if not match["is_scored"]:
+            continue
+        counts["scored_matches_discovered"] += 1
+        try:
+            detail = fetch_match_detail(config, int(match["match_id"]))
+        except (AccessTokenMissing, AccessTokenExpired):
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch scoresheet for match %s (%s: %s); skipping just that one.",
+                match["match_id"], type(exc).__name__, exc,
+            )
+            continue
+        scores = match_player_scores(detail)
+        if scores:
+            ingest_match_scores(db, match["match_id"], scores)
+            counts["scored_matches_with_scoresheet"] += 1
+        counts["head_to_head_rows"] += ingest_head_to_head(
+            db, match["match_id"], head_to_head_rows(detail)
+        )
+
+    return counts
+
+
+def reconcile_division_wide_coverage(totals: dict[str, int]) -> list[str]:
+    """Every discovered team/match/scored-match must have been ingested.
+
+    Returns the list of coverage gaps found -- empty means complete. This is
+    a promotion gate, not a log line: a caller with a non-empty result must
+    refuse to promote the staging database, never merely warn.
+    """
+    problems = []
+    if totals["teams_ingested"] < totals["teams_discovered"]:
+        problems.append(
+            f"{totals['teams_discovered'] - totals['teams_ingested']} discovered "
+            f"team(s) were not ingested"
+        )
+    if totals["roster_players_ingested"] < totals["roster_players_discovered"]:
+        problems.append(
+            f"{totals['roster_players_discovered'] - totals['roster_players_ingested']} "
+            f"discovered roster player(s) were not ingested"
+        )
+    if totals["matches_ingested"] < totals["matches_discovered"]:
+        problems.append(
+            f"{totals['matches_discovered'] - totals['matches_ingested']} discovered "
+            f"scheduled match(es) were not ingested"
+        )
+    if totals["scored_matches_with_scoresheet"] < totals["scored_matches_discovered"]:
+        problems.append(
+            f"{totals['scored_matches_discovered'] - totals['scored_matches_with_scoresheet']} "
+            f"completed match(es) have no scoresheet"
+        )
+    return problems
+
+
+def run_division_wide(
+    config_path: str = "apa_config.yaml", export: bool = False, db_path: Optional[str] = None
+) -> dict:
+    """Every accessible team, current roster, scheduled match, and completed
+    scoresheet in each division the account's own teams belong to.
+
+    Layered on top of run_all_teams() rather than duplicating it: that call
+    ingests everything for the account's OWN teams and is independently
+    tested. This adds every OTHER team in each of those same divisions --
+    their current rosters, their scheduled matches, and their completed
+    scoresheets -- which no existing entry point covers.
+
+    ``db_path`` overrides apa_config.yaml's own database.path for BOTH the
+    run_all_teams() call below and this function's own writes -- a staging
+    build must never touch the configured real production database.
+
+    Returns {"own_teams": <run_all_teams' counts>, "division_wide": <summed
+    sync_division_wide counts>, "coverage_gaps": <reconcile_division_wide_
+    coverage's result>}. A non-empty "coverage_gaps" means this run must not
+    be promoted.
+    """
+    own_counts = run_all_teams(config_path, export=False, db_path=db_path)
+
+    config = load_config(config_path)
+    if db_path:
+        config.setdefault("database", {})["path"] = db_path
+    try:
+        viewer_teams = fetch_dashboard_teams(config)
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        logger.error("%s", exc)
+        raise SystemExit(1) from exc
+    team_rows = dashboard_teams_rows(viewer_teams)
+    division_ids = sorted({row["division_id"] for row in team_rows if row["division_id"]})
+
+    engine = create_db_engine(config)
+    totals = {
+        "teams_discovered": 0, "teams_ingested": 0,
+        "roster_players_discovered": 0, "roster_players_ingested": 0,
+        "matches_discovered": 0, "matches_ingested": 0,
+        "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
+        "head_to_head_rows": 0,
+    }
+    with Session(engine) as db:
+        context = _division_context(config, team_rows)
+        for division_id in division_ids:
+            info = context.get(division_id)
+            if not info:
+                logger.warning(
+                    "No format/session context for division %s -- its whole-division "
+                    "coverage will be reported incomplete.", division_id,
+                )
+                continue
+            counts = sync_division_wide(
+                config, db, division_id, info["format"], info["session_name"]
+            )
+            for key in totals:
+                totals[key] += counts[key]
+
+        matchup_rows = build_matchups(db)
+        totals["matchups"] = len(matchup_rows)
+
+        if export:
+            export_to_excel(db, config)
+            export_to_json(db, config)
+
+    coverage_gaps = reconcile_division_wide_coverage(totals)
+    logger.info(
+        "Division-wide sync complete: %d division(s), %d team(s) discovered "
+        "(%d ingested), %d roster player(s) discovered (%d ingested), %d match(es) "
+        "discovered (%d ingested), %d scored match(es) discovered (%d with a "
+        "scoresheet). Coverage gaps: %s",
+        len(division_ids), totals["teams_discovered"], totals["teams_ingested"],
+        totals["roster_players_discovered"], totals["roster_players_ingested"],
+        totals["matches_discovered"], totals["matches_ingested"],
+        totals["scored_matches_discovered"], totals["scored_matches_with_scoresheet"],
+        "none" if not coverage_gaps else "; ".join(coverage_gaps),
+    )
+    return {"own_teams": own_counts, "division_wide": totals, "coverage_gaps": coverage_gaps}
 
 
 def run(config_path: str = "apa_config.yaml", export: bool = True) -> dict[str, int]:

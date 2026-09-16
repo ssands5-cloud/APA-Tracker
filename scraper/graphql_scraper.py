@@ -16,6 +16,8 @@ from typing import Any, Optional
 from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
     DASHBOARD_TEAMS_QUERY,
+    DIVISION_ROSTERS_QUERY,
+    DIVISION_SCHEDULE_QUERY,
     DIVISION_STANDINGS_QUERY,
     FORMATS_BY_MEMBER_ID_QUERY,
     GET_EIGHT_BALL_STATS_QUERY,
@@ -254,6 +256,130 @@ def division_standings_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
                 "points": team.get("sessionTotalPoints"),
             }
         )
+    return rows
+
+
+def _division(payload: dict[str, Any]) -> dict[str, Any]:
+    """The `division` object from a response, or {} when the server nulled it."""
+    return (payload or {}).get("division") or {}
+
+
+def fetch_division_rosters(config: dict, division_id) -> dict[str, Any]:
+    """Every team's current roster in one division -- not just our own.
+
+    DIVISION_ROSTERS_QUERY was already captured (2026-09-03) and defined in
+    parser/apa_graphql.py but never wired to a caller; run_all_teams only
+    ever fetches a roster one team at a time, and only for teams the
+    account's own viewer plays on. This is the division-wide counterpart:
+    one call returns every team's roster, including opponents the account
+    has never played.
+
+    Raises the same AccessTokenExpired/GraphQLError contract as every other
+    fetch_* function here.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(DIVISION_ROSTERS_QUERY, {"id": int(division_id)}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return _division(payload)
+
+
+def division_roster_team_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
+    """One entry per real team in the division, each carrying its own real
+    roster rows in the same shape roster_rows() already produces -- a bye
+    slot (isBye) is excluded, since it names no real team to upsert."""
+    teams = []
+    for team in division.get("teams") or []:
+        team = team or {}
+        if team.get("isBye"):
+            continue
+        roster = []
+        for player in team.get("roster") or []:
+            player = player or {}
+            played = player.get("matchesPlayed") or 0
+            won = player.get("matchesWon") or 0
+            member = player.get("member") or {}
+            roster.append({
+                "player_id": str(member.get("id") or player.get("id") or ""),
+                "player_name": player.get("displayName") or "",
+                "skill_level": player.get("skillLevel"),
+                "matches_won": won,
+                "matches_played": played,
+            })
+        teams.append({
+            "team_id": str(team.get("id") or ""),
+            "team_name": team.get("name") or "",
+            "roster": roster,
+        })
+    return teams
+
+
+def fetch_division_schedule(config: dict, division_id) -> dict[str, Any]:
+    """Every scheduled and completed match for every team in one division.
+
+    Same "captured but never wired" history as fetch_division_rosters:
+    DIVISION_SCHEDULE_QUERY already exists in parser/apa_graphql.py.
+    run_all_teams only ever sees matches through matchesByViewer, which is
+    scoped to the account's own teams -- this is what a match between two
+    teams the account has never played looks like.
+    """
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        payload = execute(DIVISION_SCHEDULE_QUERY, {"id": int(division_id)}, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and set "
+            "APA_ACCESS_TOKEN again."
+        ) from exc
+    return _division(payload)
+
+
+def division_schedule_rows(division: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per real scheduled match across the whole division, in the
+    same shape schedule_rows() already produces. The query nests matches
+    under `schedule` (one entry per week); DIVISION_SCHEDULE_QUERY's match
+    object carries no week number of its own (unlike TEAM_SCHEDULE_QUERY),
+    so `weekOfPlay` from the enclosing week block is the only real source
+    for it here."""
+    rows = []
+    for week_block in division.get("schedule") or []:
+        week_block = week_block or {}
+        week = week_block.get("weekOfPlay")
+        for match in week_block.get("matches") or []:
+            match = match or {}
+            home = match.get("home") or {}
+            away = match.get("away") or {}
+            scores = {"home": None, "away": None}
+            for result in match.get("results") or []:
+                side = str(result.get("homeAway") or "").lower()
+                points = (result.get("points") or {}).get("total")
+                if side in {"home", "away"}:
+                    scores[side] = points
+            rows.append({
+                "match_id": str(match.get("id") or ""),
+                "week": week,
+                "date": match.get("startTime"),
+                "status": match.get("status"),
+                "home_team_id": str(home.get("id") or ""),
+                "home_team_name": home.get("name") or "",
+                "away_team_id": str(away.get("id") or ""),
+                "away_team_name": away.get("name") or "",
+                "is_bye": bool(match.get("isBye")),
+                "is_scored": bool(match.get("isScored")),
+                "is_finalized": bool(match.get("isFinalized")),
+                "home_score": scores["home"],
+                "away_score": scores["away"],
+            })
     return rows
 
 

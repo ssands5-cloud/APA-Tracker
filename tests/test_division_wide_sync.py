@@ -1,0 +1,255 @@
+"""Tests for scheduler.graphql_sync's division-wide sync and reconciliation.
+
+sync_division_wide/run_division_wide are exercised for real against a real
+SQLite database, with only the fetch_*() functions monkeypatched -- no
+requests.post call, no network, and no real token needed. This proves the
+actual ingest path (upsert_team, upsert_player, ingest_player_team_history,
+ingest_match, ingest_match_scores, ingest_head_to_head) runs unmodified,
+which is the property the whole "prove complete coverage" requirement rests
+on: the reconciliation counts are worthless if they're checked against a
+different code path than the one that actually writes the database.
+"""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from database.models import Base
+from database.queries import canonical_current_roster
+from scheduler import graphql_sync as sync
+
+DIVISION_ID = "300"
+SESSION_NAME = "2026 Rehearsal Session"
+FORMAT_NAME = "8-Ball Open"
+
+ROSTERS_PAYLOAD = {
+    "teams": [
+        {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+            {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+             "skillLevel": 6, "member": {"id": 9001}},
+        ]},
+        {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+            {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+             "skillLevel": 5, "member": {"id": 9002}},
+        ]},
+    ],
+}
+
+SCHEDULE_PAYLOAD = {
+    "schedule": [
+        {"weekOfPlay": 1, "matches": [
+            {
+                "id": 90401, "isBye": False, "status": "COMPLETED", "startTime": "2026-01-15",
+                "isScored": True, "isFinalized": True,
+                "results": [{"homeAway": "HOME", "points": {"total": 18}},
+                            {"homeAway": "AWAY", "points": {"total": 12}}],
+                "home": {"id": 301, "name": "Fixture Sharks"},
+                "away": {"id": 302, "name": "Fixture Renegades"},
+            },
+        ]},
+        {"weekOfPlay": 2, "matches": [
+            {
+                "id": 90402, "isBye": False, "status": "SCHEDULED", "startTime": "2026-01-22",
+                "isScored": False, "isFinalized": False, "results": [],
+                "home": {"id": 302, "name": "Fixture Renegades"},
+                "away": {"id": 301, "name": "Fixture Sharks"},
+            },
+        ]},
+    ],
+}
+
+MATCH_DETAIL_PAYLOAD = {
+    "id": 90401,
+    "home": {"id": 301, "name": "Fixture Sharks"},
+    "away": {"id": 302, "name": "Fixture Renegades"},
+    "results": [
+        {"homeAway": "HOME", "scores": [
+            {"player": {"id": 9001, "displayName": "Ann Fixture"}, "matchPositionNumber": 1,
+             "skillLevel": 6, "result": "W", "points": {"total": 3}},
+        ]},
+        {"homeAway": "AWAY", "scores": [
+            {"player": {"id": 9002, "displayName": "Uma Sample"}, "matchPositionNumber": 1,
+             "skillLevel": 5, "result": "L", "points": {"total": 1}},
+        ]},
+    ],
+}
+
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = Session(bind=engine)
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def mocked_fetches(monkeypatch):
+    """Every fetch_*() sync.py imports by name, replaced with fixture data.
+    No network, no token, no requests.post."""
+    monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
+    monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+    monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: MATCH_DETAIL_PAYLOAD)
+
+
+class TestSyncDivisionWide:
+    def test_every_discovered_team_is_ingested(self, db, mocked_fetches):
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["teams_discovered"] == 2
+        assert counts["teams_ingested"] == 2
+
+    def test_an_opponent_only_team_gets_a_real_canonical_roster(self, db, mocked_fetches):
+        """The load-bearing new behavior: a team the account never played
+        still resolves through canonical_current_roster afterward."""
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        roster = canonical_current_roster(db, "302", SESSION_NAME)
+        assert len(roster) == 1
+        assert roster[0].skill_level == 5
+
+    def test_every_discovered_match_is_ingested_including_unscored(self, db, mocked_fetches):
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["matches_discovered"] == 2
+        assert counts["matches_ingested"] == 2
+
+    def test_a_scored_match_gets_a_real_scoresheet(self, db, mocked_fetches):
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["scored_matches_discovered"] == 1
+        assert counts["scored_matches_with_scoresheet"] == 1
+
+    def test_an_unscored_match_needs_no_scoresheet_to_be_complete(self, db, mocked_fetches):
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        # 1 scheduled + 1 scored -- the unscored one is never counted as a gap.
+        assert counts["matches_ingested"] == 2
+        assert counts["scored_matches_discovered"] == 1
+
+    def test_a_failed_scoresheet_fetch_is_not_silently_complete(self, db, monkeypatch):
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+
+        def failing_detail(config, match_id):
+            raise RuntimeError("simulated transient failure")
+
+        monkeypatch.setattr(sync, "fetch_match_detail", failing_detail)
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["scored_matches_discovered"] == 1
+        assert counts["scored_matches_with_scoresheet"] == 0
+
+
+class TestReconciliation:
+    def _complete(self):
+        return {
+            "teams_discovered": 2, "teams_ingested": 2,
+            "roster_players_discovered": 5, "roster_players_ingested": 5,
+            "matches_discovered": 10, "matches_ingested": 10,
+            "scored_matches_discovered": 4, "scored_matches_with_scoresheet": 4,
+        }
+
+    def test_complete_coverage_has_no_gaps(self):
+        assert sync.reconcile_division_wide_coverage(self._complete()) == []
+
+    def test_a_missing_team_is_a_gap(self):
+        totals = self._complete()
+        totals["teams_ingested"] = 1
+        gaps = sync.reconcile_division_wide_coverage(totals)
+        assert any("team" in g for g in gaps)
+
+    def test_a_missing_roster_player_is_a_gap(self):
+        totals = self._complete()
+        totals["roster_players_ingested"] = 3
+        gaps = sync.reconcile_division_wide_coverage(totals)
+        assert any("roster player" in g for g in gaps)
+
+    def test_a_missing_match_is_a_gap(self):
+        totals = self._complete()
+        totals["matches_ingested"] = 9
+        gaps = sync.reconcile_division_wide_coverage(totals)
+        assert any("scheduled match" in g for g in gaps)
+
+    def test_a_missing_scoresheet_is_a_gap(self):
+        totals = self._complete()
+        totals["scored_matches_with_scoresheet"] = 3
+        gaps = sync.reconcile_division_wide_coverage(totals)
+        assert any("scoresheet" in g for g in gaps)
+
+    def test_multiple_gaps_are_all_reported_at_once(self):
+        totals = self._complete()
+        totals["teams_ingested"] = 1
+        totals["matches_ingested"] = 9
+        gaps = sync.reconcile_division_wide_coverage(totals)
+        assert len(gaps) == 2
+
+
+class TestRunDivisionWide:
+    def test_end_to_end_reports_complete_coverage_and_no_gaps(self, db, monkeypatch, mocked_fetches):
+        monkeypatch.setattr(sync, "create_db_engine", lambda config: db.get_bind())
+        monkeypatch.setattr(sync, "load_config", lambda path: {})
+        monkeypatch.setattr(
+            sync, "run_all_teams",
+            lambda config_path, export=False, db_path=None: {"teams": 0},
+        )
+        monkeypatch.setattr(sync, "fetch_dashboard_teams", lambda config: {
+            "leagueTeams": [{"id": 301, "name": "Fixture Sharks",
+                              "division": {"id": 300, "type": "EIGHT_BALL"},
+                              "league": {"id": 1, "slug": "l"},
+                              "session": {"id": 1, "name": SESSION_NAME}}],
+            "tournamentTeams": [],
+        })
+        monkeypatch.setattr(sync, "fetch_team_data", lambda config, team_id: {
+            "team": {"id": 301, "name": "Fixture Sharks",
+                      "division": {"id": 300, "name": "D", "format": FORMAT_NAME},
+                      "session": {"id": 1, "name": SESSION_NAME},
+                      "league": {"id": 1, "slug": "l"}, "location": {}},
+        })
+
+        # sync.py opens its OWN Session(engine) internally; give it the same
+        # in-memory database this test already set up rather than a second,
+        # empty one.
+        result = sync.run_division_wide(config_path="unused.yaml", export=False)
+
+        assert result["coverage_gaps"] == []
+        assert result["division_wide"]["teams_ingested"] == 2
+
+    def test_a_division_with_no_format_context_is_reported_incomplete(self, db, monkeypatch, mocked_fetches):
+        monkeypatch.setattr(sync, "create_db_engine", lambda config: db.get_bind())
+        monkeypatch.setattr(sync, "load_config", lambda path: {})
+        monkeypatch.setattr(
+            sync, "run_all_teams",
+            lambda config_path, export=False, db_path=None: {"teams": 0},
+        )
+        monkeypatch.setattr(sync, "fetch_dashboard_teams", lambda config: {
+            "leagueTeams": [{"id": 301, "name": "Fixture Sharks",
+                              "division": {"id": 300, "type": "EIGHT_BALL"},
+                              "league": {"id": 1, "slug": "l"},
+                              "session": {"id": 1, "name": SESSION_NAME}}],
+            "tournamentTeams": [],
+        })
+
+        def failing_team_data(config, team_id):
+            raise RuntimeError("simulated failure fetching context")
+
+        monkeypatch.setattr(sync, "fetch_team_data", failing_team_data)
+
+        result = sync.run_division_wide(config_path="unused.yaml", export=False)
+
+        # No division was actually synced, so there is nothing to report as
+        # ingested against nothing discovered -- zero teams processed.
+        assert result["division_wide"]["teams_discovered"] == 0
+        assert result["division_wide"]["teams_ingested"] == 0

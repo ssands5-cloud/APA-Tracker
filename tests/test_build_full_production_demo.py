@@ -14,6 +14,8 @@ import json
 import shutil
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from scripts import build_full_production_demo as builder
 from scripts.build_full_production_demo import (
@@ -315,11 +317,21 @@ class TestLiveMode:
 
         assert "never falls back" in str(excinfo.value)
 
-    def test_the_token_value_is_never_echoed(self, monkeypatch):
+    def test_the_token_value_is_never_echoed(self, monkeypatch, run_copy):
         monkeypatch.setenv(builder.TOKEN_ENV, "super-secret-token-value")
-
-        with pytest.raises(BuildError) as excinfo:
-            builder._live_scope()
+        manifest = json.loads((run_copy / "demo_manifest.json").read_text(encoding="utf-8"))
+        engine = create_engine(
+            "sqlite://", creator=lambda: builder.connect_read_only(
+                run_copy / "data" / manifest["database_file"]
+            ),
+        )
+        db = Session(bind=engine)
+        try:
+            with pytest.raises(BuildError) as excinfo:
+                builder._live_scope(db)
+        finally:
+            db.close()
+            engine.dispose()
 
         assert "super-secret-token-value" not in str(excinfo.value)
 
