@@ -153,6 +153,118 @@ class TestSyncDivisionWide:
         assert counts["scored_matches_with_scoresheet"] == 0
 
 
+class TestMatchAlreadyHasScoresheet:
+    def test_false_when_the_match_does_not_exist_at_all(self, db):
+        assert sync.match_already_has_scoresheet(db, "90401") is False
+
+    def test_false_when_the_match_exists_but_has_no_playermatch_rows(self, db):
+        from database.models import Match
+
+        db.add(Match(external_id="90401", session_name=SESSION_NAME, format=FORMAT_NAME))
+        db.flush()
+
+        assert sync.match_already_has_scoresheet(db, "90401") is False
+
+    def test_true_once_a_real_playermatch_row_exists(self, db, mocked_fetches):
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert sync.match_already_has_scoresheet(db, "90401") is True
+
+
+class TestResume:
+    def test_resume_skips_fetch_match_detail_for_an_already_ingested_match(self, db, mocked_fetches, monkeypatch):
+        # First pass: real ingestion, exactly like a run that got this far
+        # before the token expired.
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        def must_not_be_called(config, match_id):
+            raise AssertionError("fetch_match_detail should have been skipped on resume")
+
+        monkeypatch.setattr(sync, "fetch_match_detail", must_not_be_called)
+
+        # Second pass, resume=True: the one scored match already has a real
+        # scoresheet, so fetch_match_detail must not run again.
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME,
+                                          resume=True)
+
+        assert counts["scored_matches_discovered"] == 1
+        assert counts["scored_matches_with_scoresheet"] == 1
+
+    def test_resume_still_fetches_a_genuinely_new_scored_match(self, db, monkeypatch):
+        """A resume must not become a no-op: a match that legitimately
+        never got its scoresheet still gets fetched."""
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+        calls = []
+
+        def counting_detail(config, match_id):
+            calls.append(match_id)
+            return MATCH_DETAIL_PAYLOAD
+
+        monkeypatch.setattr(sync, "fetch_match_detail", counting_detail)
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME,
+                                          resume=True)
+
+        assert calls == [90401]
+        assert counts["scored_matches_with_scoresheet"] == 1
+
+    def test_without_resume_the_match_is_refetched_regardless(self, db, mocked_fetches, monkeypatch):
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        calls = []
+
+        def counting_detail(config, match_id):
+            calls.append(match_id)
+            return MATCH_DETAIL_PAYLOAD
+
+        monkeypatch.setattr(sync, "fetch_match_detail", counting_detail)
+
+        sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                 division_format=FORMAT_NAME, division_session_name=SESSION_NAME,
+                                 resume=False)
+
+        assert calls == [90401]
+
+    def test_run_all_teams_resume_skips_an_already_scored_own_match(self, db, monkeypatch):
+        from database.models import Match, PlayerMatch, Player
+
+        db.add(Match(external_id="55555", session_name=SESSION_NAME, format=FORMAT_NAME,
+                     home_team_id="T1", away_team_id="T2", is_scored=True))
+        db.flush()
+        match = db.query(Match).filter_by(external_id="55555").one()
+        player = Player(external_id="P1", name="Ann")
+        db.add(player)
+        db.flush()
+        db.add(PlayerMatch(player_id=player.id, match_id=match.id, result="W"))
+        db.commit()
+
+        monkeypatch.setattr(sync, "load_config", lambda path: {})
+        monkeypatch.setattr(sync, "create_db_engine", lambda config: db.get_bind())
+        monkeypatch.setattr(sync, "fetch_dashboard_teams", lambda config: {"leagueTeams": [], "tournamentTeams": []})
+        monkeypatch.setattr(sync, "fetch_matches_by_viewer", lambda config: {
+            "leagueTeams": [{"matches": [{
+                "id": 55555, "isBye": False, "isScored": True, "isFinalized": True,
+                "startTime": "2026-01-15", "status": "COMPLETED",
+                "home": {"id": "T1", "name": "Home"}, "away": {"id": "T2", "name": "Away"},
+                "results": [],
+            }]}],
+        })
+
+        def must_not_be_called(config, match_id):
+            raise AssertionError("fetch_match_detail should have been skipped on resume")
+
+        monkeypatch.setattr(sync, "fetch_match_detail", must_not_be_called)
+
+        sync.run_all_teams(config_path="unused.yaml", export=False, resume=True)
+        # No AssertionError above means the checkpoint worked.
+
+
 class TestReconciliation:
     def _complete(self):
         return {
@@ -203,7 +315,7 @@ class TestRunDivisionWide:
         monkeypatch.setattr(sync, "load_config", lambda path: {})
         monkeypatch.setattr(
             sync, "run_all_teams",
-            lambda config_path, export=False, db_path=None: {"teams": 0},
+            lambda config_path, export=False, db_path=None, resume=False: {"teams": 0},
         )
         monkeypatch.setattr(sync, "fetch_dashboard_teams", lambda config: {
             "leagueTeams": [{"id": 301, "name": "Fixture Sharks",
@@ -232,7 +344,7 @@ class TestRunDivisionWide:
         monkeypatch.setattr(sync, "load_config", lambda path: {})
         monkeypatch.setattr(
             sync, "run_all_teams",
-            lambda config_path, export=False, db_path=None: {"teams": 0},
+            lambda config_path, export=False, db_path=None, resume=False: {"teams": 0},
         )
         monkeypatch.setattr(sync, "fetch_dashboard_teams", lambda config: {
             "leagueTeams": [{"id": 301, "name": "Fixture Sharks",

@@ -41,7 +41,7 @@ from database.ingest import (
     upsert_roster,
     upsert_team,
 )
-from database.models import Player
+from database.models import Match, Player, PlayerMatch
 from scraper.graphql_scraper import (
     AccessTokenExpired,
     AccessTokenMissing,
@@ -203,8 +203,29 @@ def ingest_viewer_data(db: Session, viewer_teams: dict, viewer_matches: dict) ->
     }
 
 
+def match_already_has_scoresheet(db: Session, match_external_id) -> bool:
+    """Whether match_external_id already has real per-player scoresheet
+    rows ingested -- the checkpoint signal a resumed acquisition uses to
+    skip the one expensive call (fetch_match_detail) it needs to skip.
+
+    A real match whose CURRENT authoritative scoresheet has zero valid
+    pairings (every position vacated/forfeited) also has no PlayerMatch
+    rows, so it reads as "not yet fetched" and is refetched on every
+    resume -- harmless (the same real, idempotent empty result each time),
+    just not free. A real per-attempt ledger would avoid that at the cost
+    of a new table; this project already accepts a slightly wider
+    idempotent retry elsewhere (see database.ingest.ingest_head_to_head's
+    delete-then-insert) rather than add state for a rare case.
+    """
+    match = db.query(Match).filter_by(external_id=str(match_external_id)).one_or_none()
+    if match is None:
+        return False
+    return db.query(PlayerMatch).filter_by(match_id=match.id).first() is not None
+
+
 def run_all_teams(
-    config_path: str = "apa_config.yaml", export: bool = True, db_path: Optional[str] = None
+    config_path: str = "apa_config.yaml", export: bool = True, db_path: Optional[str] = None,
+    resume: bool = False,
 ) -> dict[str, int]:
     """Sync every team the account plays on, not just the one configured in
     apa_config.yaml's team.team_id.
@@ -220,6 +241,13 @@ def run_all_teams(
     build) need every write to land in a scratch file, never in the
     configured real production database, until a separate, explicit
     promotion step decides otherwise.
+
+    ``resume=True`` skips fetch_match_detail (the expensive, one-call-per-
+    match step) for any scored match that already has real scoresheet rows
+    from an earlier, interrupted run against this SAME database -- a real
+    APA access token is short-lived and a full sync can outlast it. Cheap,
+    idempotent calls (roster, schedule, standings) are always redone
+    regardless, so a resumed run still discovers anything genuinely new.
     """
     config = load_config(config_path)
     if db_path:
@@ -304,6 +332,13 @@ def run_all_teams(
         head_to_head_count = 0
         for row in viewer_matches_rows(viewer_matches):
             if not row["match_id"] or not row["is_scored"]:
+                continue
+            if resume and match_already_has_scoresheet(db, row["match_id"]):
+                # Both ingest_match_scores and ingest_head_to_head already
+                # completed for this match in an earlier, interrupted run
+                # against this same database -- they run back-to-back with
+                # no yield point between them, so PlayerMatch rows existing
+                # proves both finished for this match specifically.
                 continue
             try:
                 match = fetch_match_detail(config, int(row["match_id"]))
@@ -455,6 +490,7 @@ def sync_division_wide(
     division_id: str,
     division_format: str,
     division_session_name: str,
+    resume: bool = False,
 ) -> dict[str, int]:
     """Every accessible team's current roster and every scheduled/completed
     match in ONE division -- not only the account's own teams.
@@ -465,6 +501,13 @@ def sync_division_wide(
     function is not actually member-specific, only ever CALLED that way
     before now. This is what makes database.queries.canonical_current_roster
     resolve for an arbitrary division player, opponent or not.
+
+    ``resume=True`` skips fetch_match_detail for a scored match that already
+    has real scoresheet rows from an earlier, interrupted run against this
+    SAME database -- see match_already_has_scoresheet(). Roster and schedule
+    fetches are always redone regardless: they are one cheap call per
+    division each, not one call per match, so resuming gains nothing by
+    skipping them and could miss something genuinely new.
 
     Returns both DISCOVERED and INGESTED counts so a caller can prove
     complete coverage rather than trusting that nothing silently dropped.
@@ -537,6 +580,14 @@ def sync_division_wide(
         if not match["is_scored"]:
             continue
         counts["scored_matches_discovered"] += 1
+
+        if resume and match_already_has_scoresheet(db, match["match_id"]):
+            # Already fetched and ingested (scores + head-to-head both,
+            # same back-to-back-calls guarantee as run_all_teams's loop) in
+            # an earlier, interrupted run against this same database.
+            counts["scored_matches_with_scoresheet"] += 1
+            continue
+
         try:
             detail = fetch_match_detail(config, int(match["match_id"]))
         except (AccessTokenMissing, AccessTokenExpired):
@@ -590,7 +641,8 @@ def reconcile_division_wide_coverage(totals: dict[str, int]) -> list[str]:
 
 
 def run_division_wide(
-    config_path: str = "apa_config.yaml", export: bool = False, db_path: Optional[str] = None
+    config_path: str = "apa_config.yaml", export: bool = False, db_path: Optional[str] = None,
+    resume: bool = False,
 ) -> dict:
     """Every accessible team, current roster, scheduled match, and completed
     scoresheet in each division the account's own teams belong to.
@@ -605,12 +657,18 @@ def run_division_wide(
     run_all_teams() call below and this function's own writes -- a staging
     build must never touch the configured real production database.
 
+    ``resume=True`` is for a caller that deliberately did NOT delete an
+    existing staging database from an earlier, interrupted run (a real APA
+    access token is short-lived and a full division-wide sync can outlast
+    it): every already-fetched scoresheet is skipped, so only what a fresh
+    token still needs to cover actually gets fetched.
+
     Returns {"own_teams": <run_all_teams' counts>, "division_wide": <summed
     sync_division_wide counts>, "coverage_gaps": <reconcile_division_wide_
     coverage's result>}. A non-empty "coverage_gaps" means this run must not
     be promoted.
     """
-    own_counts = run_all_teams(config_path, export=False, db_path=db_path)
+    own_counts = run_all_teams(config_path, export=False, db_path=db_path, resume=resume)
 
     config = load_config(config_path)
     if db_path:
@@ -642,7 +700,7 @@ def run_division_wide(
                 )
                 continue
             counts = sync_division_wide(
-                config, db, division_id, info["format"], info["session_name"]
+                config, db, division_id, info["format"], info["session_name"], resume=resume,
             )
             for key in totals:
                 totals[key] += counts[key]

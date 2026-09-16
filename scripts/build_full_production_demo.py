@@ -232,7 +232,7 @@ def acquire_fixture() -> tuple[Path, PhaseResult]:
     return db_file, PhaseResult("acquire", "ok", "rebuilt the coherent fixture database")
 
 
-def acquire_live() -> tuple[Path, PhaseResult]:
+def acquire_live(resume: bool = False) -> tuple[Path, PhaseResult]:
     """Stage a fresh authenticated scrape into the staging database.
 
     Requires a bearer token in the environment. There is deliberately no
@@ -247,6 +247,18 @@ def acquire_live() -> tuple[Path, PhaseResult]:
     teams, which is as far as run_all_teams alone goes. A non-empty
     coverage_gaps result is a hard refusal: this staging database is never
     handed to the rest of the build, let alone promoted.
+
+    ``resume=True`` preserves an existing staging database instead of
+    deleting it first, and threads through to run_division_wide() so
+    already-fetched scoresheets are skipped: a real APA access token is
+    short-lived and a full division-wide sync (one call per team roster,
+    one per division schedule, and one per scored match -- over a hundred
+    of those alone on a real account) can outlast it. Every ingest call
+    this project makes commits immediately, so a database interrupted
+    mid-run genuinely has everything committed up to that point; resuming
+    is safe to retry as many times as a fresh token requires. Without
+    ``resume``, an existing staging file is still deleted first, exactly as
+    before -- a fresh scrape by default, resumed only on request.
     """
     if not os.environ.get(TOKEN_ENV):
         raise BuildError(
@@ -258,13 +270,13 @@ def acquire_live() -> tuple[Path, PhaseResult]:
 
     from scheduler.graphql_sync import run_division_wide
 
-    if LIVE_STAGING_DB.exists():
+    if LIVE_STAGING_DB.exists() and not resume:
         LIVE_STAGING_DB.unlink()  # a fresh scrape, never appended to stale state
 
     try:
         result = run_division_wide(
             str(PROJECT_ROOT / "apa_config.yaml"), export=False,
-            db_path=str(LIVE_STAGING_DB),
+            db_path=str(LIVE_STAGING_DB), resume=resume,
         )
     except Exception as exc:  # noqa: BLE001 - category, never the payload
         raise BuildError(f"live acquisition failed: {type(exc).__name__}", EXIT_ACQUIRE) from None
@@ -691,12 +703,13 @@ def run_build(
     run_root: Path,
     promote: bool = False,
     events: Optional[EventSink] = None,
+    resume: bool = False,
 ) -> Path:
     events = events or EventSink(None)
     phases: list[PhaseResult] = [preflight(run_dir, run_root)]
     events.emit("preflight", "ok")
 
-    db_path, acquire_result = acquire_fixture() if mode == "fixture" else acquire_live()
+    db_path, acquire_result = acquire_fixture() if mode == "fixture" else acquire_live(resume=resume)
     phases.append(acquire_result)
 
     locked_hash = sha256_file(db_path)
@@ -860,8 +873,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="live mode only: replace data/apa_tracker.db after a successful build",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "live mode only: resume an interrupted acquisition instead of deleting "
+            "the staging database and starting over -- skips scoresheets already "
+            "fetched, since a real APA token can expire before a full division-wide "
+            "sync finishes"
+        ),
+    )
     parser.add_argument("--events", help="write versioned redacted JSONL events here")
     args = parser.parse_args(argv)
+
+    if args.resume and args.mode != "live":
+        parser.error("--resume is only meaningful with --mode live")
 
     run_root = Path(args.run_root)
     if args.out:
@@ -872,7 +898,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     events = EventSink(Path(args.events) if args.events else None)
     try:
-        completed = run_build(args.mode, run_dir, run_root, promote=args.promote, events=events)
+        completed = run_build(
+            args.mode, run_dir, run_root, promote=args.promote, events=events, resume=args.resume,
+        )
     except BuildError as exc:
         logger.error("BUILD FAILED: %s", exc)
         events.emit("failed", "error", code=exc.code)

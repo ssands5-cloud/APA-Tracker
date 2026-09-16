@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -297,6 +298,70 @@ class TestFinalizeOrdering:
         assert not (run_copy / "READY").exists()
 
 
+class TestResumeFlagPolicy:
+    def test_resume_is_rejected_outside_live_mode(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "fixture", "--resume"])
+
+
+class TestLiveModeResume:
+    def test_without_resume_an_existing_staging_file_is_deleted_first(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
+        staging_db = tmp_path / "staged.db"
+        staging_db.write_bytes(b"stale partial data")
+        monkeypatch.setattr(builder, "LIVE_STAGING_DB", staging_db)
+
+        import scheduler.graphql_sync as sync_module
+
+        seen_resume = {}
+
+        def fake_run_division_wide(config_path, export=False, db_path=None, resume=False):
+            seen_resume["value"] = resume
+            seen_resume["file_existed_at_call_time"] = Path(db_path).exists()
+            from database.engine import create_db_engine
+            engine = create_db_engine({"database": {"path": db_path}})
+            engine.dispose()
+            return {"coverage_gaps": [], "division_wide": {
+                "teams_ingested": 0, "matches_ingested": 0, "scored_matches_with_scoresheet": 0,
+            }}
+
+        monkeypatch.setattr(sync_module, "run_division_wide", fake_run_division_wide)
+
+        builder.acquire_live(resume=False)
+
+        assert seen_resume["value"] is False
+        assert seen_resume["file_existed_at_call_time"] is False
+
+    def test_with_resume_an_existing_staging_file_is_preserved(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
+        staging_db = tmp_path / "staged.db"
+
+        from database.engine import create_db_engine
+        create_db_engine({"database": {"path": str(staging_db)}}).dispose()
+        original_bytes = staging_db.read_bytes()
+        monkeypatch.setattr(builder, "LIVE_STAGING_DB", staging_db)
+
+        import scheduler.graphql_sync as sync_module
+
+        seen_resume = {}
+
+        def fake_run_division_wide(config_path, export=False, db_path=None, resume=False):
+            seen_resume["value"] = resume
+            seen_resume["file_existed_at_call_time"] = Path(db_path).exists()
+            seen_resume["bytes_preserved"] = Path(db_path).read_bytes() == original_bytes
+            return {"coverage_gaps": [], "division_wide": {
+                "teams_ingested": 0, "matches_ingested": 0, "scored_matches_with_scoresheet": 0,
+            }}
+
+        monkeypatch.setattr(sync_module, "run_division_wide", fake_run_division_wide)
+
+        builder.acquire_live(resume=True)
+
+        assert seen_resume["value"] is True
+        assert seen_resume["file_existed_at_call_time"] is True
+        assert seen_resume["bytes_preserved"] is True
+
+
 class TestLiveMode:
     def test_acquire_live_populates_player_h2h_advantage(self, monkeypatch, tmp_path):
         """A real live run surfaced this: build_lineups.py and Captain's
@@ -312,7 +377,7 @@ class TestLiveMode:
         from database.engine import create_db_engine
         from database.models import Match, Player, PlayerHeadToHead
 
-        def fake_run_division_wide(config_path, export=False, db_path=None):
+        def fake_run_division_wide(config_path, export=False, db_path=None, resume=False):
             # acquire_live() deletes any existing staging file before this
             # call (fresh-scrape semantics), so the real ingestion has to
             # happen here, inside the mock, exactly as a real scrape would.

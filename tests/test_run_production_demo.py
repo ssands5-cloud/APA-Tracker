@@ -226,6 +226,23 @@ class TestFlagPolicy:
         with pytest.raises(SystemExit):
             launcher.main(["--no-build"])
 
+    def test_resume_is_rejected_outside_live_mode(self):
+        with pytest.raises(SystemExit):
+            launcher.main(["--mode", "fixture", "--resume"])
+
+    def test_resume_is_forwarded_to_the_builder(self, monkeypatch):
+        captured = {}
+
+        def fake_invoke(forwarded, events_path):
+            captured["forwarded"] = forwarded
+            return 99  # any non-zero: stop before verification, which isn't under test here
+
+        monkeypatch.setattr(launcher, "invoke_builder", fake_invoke)
+
+        launcher.main(["--mode", "live", "--resume"])
+
+        assert "--resume" in captured["forwarded"]
+
     def test_mode_is_required_unless_no_build(self):
         with pytest.raises(SystemExit):
             launcher.main([])

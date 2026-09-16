@@ -207,6 +207,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--open", dest="open_browser", action="store_true", help="requires --serve")
     parser.add_argument("--run-root", default=str(DEFAULT_RUN_ROOT))
     parser.add_argument("--promote", action="store_true", help="forwarded to the builder")
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="live mode only, forwarded to the builder: resume an interrupted acquisition",
+    )
     args = parser.parse_args(argv)
 
     if BOUNDARY_FILE.read_text(encoding="utf-8").strip() != BOUNDARY_ID if BOUNDARY_FILE.is_file() else True:
@@ -218,6 +222,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.error("--no-build requires --verified-run")
     if not args.no_build and not args.mode:
         parser.error("--mode is required unless --no-build is used")
+    if args.resume and args.mode != "live":
+        parser.error("--resume is only meaningful with --mode live")
 
     run_root = Path(args.run_root)
 
@@ -228,6 +234,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             forwarded = ["--mode", args.mode, "--run-root", str(run_root)]
             if args.promote:
                 forwarded.append("--promote")
+            if args.resume:
+                forwarded.append("--resume")
             with tempfile.TemporaryDirectory(prefix="launcher-") as tmp:
                 events_path = Path(tmp) / "events.jsonl"
                 code = invoke_builder(forwarded, events_path)
