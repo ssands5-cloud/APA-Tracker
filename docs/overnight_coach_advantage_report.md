@@ -331,3 +331,60 @@ Date: 2026-09-16
   derived from a stored rate. Full suite after all fixes: **1588 passed,
   0 failed** (the same one pre-existing, unrelated, already-broken test
   file from the prior entry remains excluded and untouched).
+
+### Response to the follow-up audit (0741dd3) — 2026-09-16
+
+Both real correctness findings from GPT's 09:05 UTC follow-up (logged
+above) were confirmed against the actual code and fixed in commit
+`450aba7`:
+
+- **Fixes applied:**
+  - **P2 "reconstructed W-L is not unconditionally exact"** — confirmed:
+    `reconstruct_win_loss()`'s `round(rate * count)` is provably not exact
+    for every real sample (e.g. a real 501-500 record rounds to
+    `observed_win_rate 0.500`, which reconstructs as the wrong 500-501).
+    Rather than bound or reject the ambiguous case, went further and
+    removed the need to reconstruct anything at all: added
+    `direct_wins`/`direct_losses` fields directly to
+    `analytics.pairing_evidence.PairingEvidence`, counted exactly from the
+    authoritative match rows at Stage 1 classification time (the same
+    place `observed_win_rate` and `direct_evidence_count` already come
+    from). `reconstruct_win_loss()` is deleted; both
+    `player_matchup_engine.build_player_matchup_report()` and
+    `team_matchup_engine._pooled_direct_record()` now read these exact
+    integers straight off `PairingEvidence`, never re-derive them from a
+    rate. Regression-tested with both a small exact case
+    (`test_direct_wins_and_losses_are_counted_exactly_not_reconstructed`)
+    and the literal 501-500/1001-match example GPT's own analysis
+    identified as the failure mode
+    (`test_a_large_sample_pools_exactly_not_via_rounded_rate_reconstruction`,
+    `test_direct_wins_and_losses_pass_through_unreconstructed`).
+  - **P2 "choices can still look identical across teams"** — confirmed:
+    the linked opponent dropdown's label was `"Name (format, session)"`
+    with no team, so a same-named opponent player on two teams during
+    simultaneous roster membership could display identically even though
+    the underlying scope-safe key never collided. Added
+    `opponent_team_name` to `PlayerMatchupReport` (threaded through from
+    the real scope already available in
+    `scripts/build_coach_advantage_bundle.py`) and included it in the
+    dropdown label (`"Name — Team (format, session)"`); falls back to the
+    team's real external id if no name was supplied, so the label is
+    never silently ambiguous even in a caller that doesn't have a display
+    name handy. Regression-tested
+    (`test_the_opponent_team_name_disambiguates_a_same_named_opponent`).
+  - **Documentation** — corrected `analytics/team_matchup_engine.py`'s
+    module docstring, which still claimed "recomputes no probability" /
+    "the real, validated signal" despite the module's own "Explicitly
+    experimental" section admitting
+    `reliability_weighted_skill_probability` is a real, unvalidated
+    recomputation. The introductory paragraphs now name that one
+    exception explicitly and point to the experimental section instead of
+    contradicting it.
+- **Not yet addressed, honestly disclosed (unchanged from the prior
+  entry):** dashboard lineup context, plotted sparklines, Captain's Edge
+  card, skill/streak filters, and an automated browser-driven regression
+  test of a live bundle (still verified manually, not in pytest).
+- Full suite after these fixes: **1589 passed, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched; `git status --short` showed exactly the 13 intended files
+  before this commit).
