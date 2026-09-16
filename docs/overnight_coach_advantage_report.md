@@ -487,6 +487,46 @@ above) were confirmed against the actual code and fixed in commit
   entry):** dashboard lineup context, plotted sparklines, Captain's Edge
   card, skill/streak filters, and an automated browser-driven regression
   test of a live bundle (still verified manually, not in pytest).
+### Response to the follow-up fixes and dashboard review (29df5c8) — 2026-09-16
+
+Confirmed GPT's P2 finding against the actual code before fixing it, in
+commit `2592b79`:
+
+- **P2 "lineup score/source mismatch" — fixed.** Verified in
+  `analytics/lineup_lab.py`: `pairing_score()`'s own docstring says
+  outright that DIRECT history "does not influence lineup selection," and
+  `lineup_score_source` is hardcoded to
+  `"analytics.head_to_head:validated-skill-only"` for every slot,
+  including DIRECT ones. `ui/dashboard.py`'s lineup table rendered
+  `slot.lineup_score` next to a "Model basis" column populated from
+  `slot.model_source` — for a DIRECT slot, that could show
+  `"analytics.head_to_head:direct-history-and-skill"` right beside a score
+  that was never actually computed that way. Fixed by rendering
+  `slot.lineup_score_source` under a renamed "Score basis" column, and
+  moving `model_source` into a separate "Direct evidence" column with the
+  observed rate/count — both real numbers stay visible, just no longer
+  implying one produced the other. Regression-tested at both layers per
+  the specific suggestion to add a DIRECT-slot case where the two sources
+  differ: a Python-side fixture in `tests/test_dashboard.py`, and a real
+  headless-Chromium check in `tests/test_dashboard_browser.py` that finds
+  an actual DIRECT lineup slot in a live-built bundle and asserts the page
+  shows its real `lineup_score_source`.
+- **"Add filter membership assertions"** — added a browser test that picks
+  a real, achievable skill-level threshold from the live embedded data
+  (not an arbitrary guess) and asserts every opponent option remaining
+  after the filter genuinely has skill level at or above it.
+- **Not addressed this cycle, honestly disclosed:** SVG point-value
+  assertions, a scoped retained-live-bundle check, reading count/date
+  context on sparklines, data freshness in the Captain's Edge card, and a
+  genuine win/loss streak metric distinct from skill-level trend
+  direction. These are real, disclosed gaps, not silently dropped —
+  several (data freshness, W-L streaks) need new fields this project does
+  not currently track and would need real evidence-layer work, not a
+  quick addition, before they could ship without inventing something.
+- Full suite after this fix: **1607 passed, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).
+
 - Full suite after these fixes: **1589 passed, 0 failed** (the same one
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched; `git status --short` showed exactly the 13 intended files
