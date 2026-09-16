@@ -690,6 +690,36 @@ The original missing-skill computation and labeling issues are closed, but
 the manually occupied-slot bypass keeps the live planner from sign-off.
 No feature edits or global builder runs were performed.
 
+### Manual-slot fix verification — 2026-09-16 (5658cec)
+
+Reviewed published `5658cec`; canonical local and remote main agree.
+**70 focused legality/dashboard/browser tests passed, zero skipped**, with
+one existing datetime deprecation warning.
+
+Independently checked retained `coach-advantage-runs/20260916T191428Z`:
+all seven artifact hashes and READY's manifest checksum match. In Chromium,
+marked five real roster players Already played and confirmed no Send button
+remained; reloaded and confirmed the cap persisted. Changed one player to
+Available, sent a real fifth player, confirmed the cap again, then used
+Undo and confirmed a slot reopened without JavaScript errors.
+
+- **Closed:** manual-only/mixed occupied-slot bypass. Both comparison and
+  send gates now use the same played-slot count.
+- **Closed:** printed partial-total disclosure, verified through code and
+  the deterministic browser test.
+- **Closed:** the two previously skipped browser scenarios now execute.
+  Further strengthen the unknown-candidate fixture with five known, low-SL
+  teammates: its current one-player roster would return unavailable even
+  if the original unknown-candidate omission regressed. The present code
+  correctly retains the unknown candidate; this is a coverage refinement.
+
+No new blocking defect found in this fix. The specific blockers from
+`2de026c` are resolved. This verification covers the stated cap/Undo/print
+paths, not all possible match rules or full production certification.
+CI run 35139464692 was still in progress at the check; both Python-version
+results remain to be confirmed. No feature code modified or global builder
+run.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
