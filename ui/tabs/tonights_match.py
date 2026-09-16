@@ -305,8 +305,18 @@ def render(
             payload[key] = _matrix_payload(scope.matrix)
             payload[key]["lineup"] = _lineup_payload(scope)
 
+    # One real session means there is nothing to choose between, so it opens
+    # already selected rather than behind a "Select session..." step. With
+    # two or more the prompt stays: silently picking one of several real
+    # scopes is exactly what docs/team_strength.md's routing rule forbids.
+    session_prompt = (
+        "" if len(sessions) == 1
+        else '<option value="">Select session&hellip;</option>'
+    )
     session_options = "".join(
-        f'<option value="{escape(s)}">{escape(s)}</option>' for s in sessions
+        f'<option value="{escape(s)}"{" selected" if len(sessions) == 1 else ""}>'
+        f"{escape(s)}</option>"
+        for s in sessions
     )
     team_value = our_team_external_id or our_team_name
     risk_profile_html = _risk_profile_section(scopes)
@@ -360,7 +370,7 @@ analytics.pairing_evidence; nothing on this page is recomputed in the browser.</
   </div>
   <div>
     <label>Session</label>
-    <select id="tm-session"><option value="">Select session&hellip;</option>{session_options}</select>
+    <select id="tm-session">{session_prompt}{session_options}</select>
   </div>
   <div>
     <label>Opponent</label>
@@ -415,6 +425,13 @@ function tmPopulate(select, values, current) {{
   }});
 }}
 
+// One real choice needs no prompt: drop the placeholder and select it, so
+// the page opens populated. Two or more keep the prompt -- picking one of
+// several real scopes on the operator's behalf is never correct.
+function tmOnlyChoice(values) {{
+  return values.length === 2 ? values.slice(1) : values;
+}}
+
 function tmRefreshOpponents() {{
   var session = document.getElementById("tm-session").value;
   var seen = {{}};
@@ -425,7 +442,8 @@ function tmRefreshOpponents() {{
       seen[o.opponent_team_external_id] = true;
       values.push({{value: o.opponent_team_external_id, label: o.opponent_team_name}});
     }});
-  tmPopulate(document.getElementById("tm-opponent"), values, "");
+  values = tmOnlyChoice(values);
+  tmPopulate(document.getElementById("tm-opponent"), values, values[0].value);
   tmRefreshFormats();
 }}
 
@@ -436,7 +454,8 @@ function tmRefreshFormats() {{
   TM_OPTIONS.filter(function (o) {{
     return o.session_name === session && o.opponent_team_external_id === opponent;
   }}).forEach(function (o) {{ values.push({{value: o.format, label: o.format}}); }});
-  tmPopulate(document.getElementById("tm-format"), values, "");
+  values = tmOnlyChoice(values);
+  tmPopulate(document.getElementById("tm-format"), values, values[0].value);
   tmRender();
 }}
 

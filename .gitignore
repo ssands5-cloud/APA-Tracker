@@ -17,6 +17,11 @@ build/
 .build-venv/
 dist/
 
+# Verified demo bundles from scripts/build_full_production_demo.py. Each run
+# contains generated HTML/XLSX/JSON, a generated manifest and checksums, and
+# a copy of the locked database -- all build output, none of it source.
+demo-runs/
+
 # Local scratch state from agent tooling; not part of the project.
 .superpowers/
 

@@ -80,18 +80,29 @@ OUR_TEAM_NAME = "Fixture Sharks"
 OPP_TEAM_ID = "90302"
 OPP_TEAM_NAME = "Fixture Renegades"
 
-# (external_id, name, base_skill) -- position order matters: position i on
-# our side plays position i on the opponent side in every match below.
+# (external_id, name, current_skill) -- position order matters: position i
+# on our side plays position i on the opponent side in every match below.
+#
+# The skill here is the player's CURRENT level: it is what the canonical
+# roster row carries and therefore what the 23-Rule is checked against, and
+# it equals the last entry of that player's SKILL_SCHEDULE when they have
+# one (asserted by tests, so a schedule can never drift from the roster).
+#
+# Our five current levels total 23 exactly -- the real
+# TEAM_SKILL_LEVEL_LIMIT_5 -- so Lineup Lab's best five-player assignment is
+# LEGAL and the demo's primary path is a success rather than a block. The
+# illegal path is kept as a real, separately-tested scenario rather than
+# being the only thing the fixture can show.
 OUR_ROSTER = [
-    ("F001", "Ann Fixture", 5),
-    ("F002", "Ben Fixture", 6),
+    ("F001", "Ann Fixture", 6),
+    ("F002", "Ben Fixture", 5),
     ("F003", "Cal Fixture", 4),
-    ("F004", "Dee Fixture", 7),
+    ("F004", "Dee Fixture", 5),
     ("F005", "Eli Fixture", 3),
 ]
 OPP_ROSTER = [
     ("F101", "Uma Sample", 5),
-    ("F102", "Vik Sample", 6),
+    ("F102", "Vik Sample", 5),
     ("F103", "Wes Sample", 4),
     ("F104", "Xia Sample", 7),
     ("F105", "Yaz Sample", 3),

@@ -198,11 +198,35 @@ class TestControlsArePresent:
         assert 'id="tm-team"' in html
         assert '<option value="OUR">Chalk It Up</option>' in html
         assert 'id="tm-session"' in html
-        assert '<option value="">Select session&hellip;</option>' in html
         assert 'id="tm-opponent"' in html
         assert 'id="tm-format"' in html
         assert 'tm-avail' in html
         assert "Chalk It Up" in html
+
+    def test_a_single_session_opens_preselected(self):
+        """One real session is nothing to choose between, so the page opens
+        populated rather than behind a "Select session..." step."""
+        matrix = _matrix([_pairing()])
+        scope = MatchScope("Fall 2026", "THEIRS", "Corner Pockets", "8-Ball Open", matrix)
+
+        html = render([scope], "Chalk It Up", our_team_external_id="OUR")
+
+        assert '<option value="Fall 2026" selected>Fall 2026</option>' in html
+        assert "Select session" not in html
+
+    def test_several_sessions_still_require_an_explicit_choice(self):
+        """Choosing one of several real scopes on the captain's behalf is
+        never correct: the prompt stays and nothing is preselected."""
+        matrix = _matrix([_pairing()])
+        scopes = [
+            MatchScope("Fall 2026", "THEIRS", "Corner Pockets", "8-Ball Open", matrix),
+            MatchScope("Spring 2027", "THEIRS", "Corner Pockets", "8-Ball Open", matrix),
+        ]
+
+        html = render(scopes, "Chalk It Up", our_team_external_id="OUR")
+
+        assert '<option value="">Select session&hellip;</option>' in html
+        assert "selected>" not in html
 
     def test_availability_toggle_is_safe_before_a_matrix_is_selected(self):
         matrix = _matrix([_pairing()])
