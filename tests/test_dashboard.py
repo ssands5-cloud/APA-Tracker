@@ -129,6 +129,28 @@ class TestRender:
         assert "is favored" not in html.lower()
         assert "danger player" not in html.lower()
 
+    def test_reading_dates_are_embedded_for_the_browser_sparkline_caption(self):
+        """GPT audit follow-up (2026-09-16): a sparkline needs the real
+        reading count/date context alongside the chart, not just the
+        plotted shape, since it's independently scaled per player. The
+        caption itself is built client-side (see
+        tests/test_dashboard_browser.py for the real rendered check) --
+        this test only proves the real dates reach the embedded JSON the
+        browser reads from."""
+        from analytics.player_matchup_engine import SkillTrendInfo
+
+        report = _player_report(
+            player_trend=SkillTrendInfo(
+                trend="up", volatility=2, last_change=None,
+                readings=(4, 5, 6),
+                reading_dates=("2026-06-01", "2026-07-01", "2026-08-01"),
+            ),
+        )
+        html = render([report], [], [], "Mark It Up")
+        assert "2026-06-01" in html
+        assert "2026-08-01" in html
+        assert "reading_dates" in html
+
     def test_lineup_table_carries_score_and_score_basis_context(self):
         """GPT audit P2 / directive: lineup context (score, score basis,
         direct evidence) must be visible on the Coach Dashboard's own

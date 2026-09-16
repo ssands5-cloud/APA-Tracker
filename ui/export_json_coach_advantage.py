@@ -21,6 +21,7 @@ def _trend_dict(trend: SkillTrendInfo) -> dict:
         "volatility": trend.volatility,
         "last_change": trend.last_change,
         "readings": list(trend.readings),
+        "reading_dates": list(trend.reading_dates),
     }
 
 

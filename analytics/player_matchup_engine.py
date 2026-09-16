@@ -47,12 +47,24 @@ class SkillTrendInfo:
     no format dimension). ``readings`` is the real chronological series of
     skill-level values behind ``trend``/``volatility`` -- the same numbers,
     just not yet collapsed to a summary -- so a caller can plot it (a real
-    sparkline) instead of only reading a direction and a change count."""
+    sparkline) instead of only reading a direction and a change count.
+    ``reading_dates`` is each reading's own real ``match_date`` (``None``
+    where a match has no recorded date), same length and order as
+    ``readings`` -- GPT audit follow-up (2026-09-16): a sparkline plotted
+    as equally-spaced points with no date/count context can imply an even
+    cadence and comparable scale a real, irregularly-dated, per-player
+    series does not have. This does not fix the "independently scaled per
+    player" half of that note -- this project has no established real
+    skill-level domain bound to plot against instead (there is no
+    MIN_SKILL/MAX_SKILL constant anywhere in this codebase), so imposing
+    one here would be exactly the kind of invented, unfitted value this
+    project fails closed on elsewhere."""
 
     trend: str
     volatility: int
     last_change: Optional[str]
     readings: tuple[int, ...] = ()
+    reading_dates: tuple[Optional[str], ...] = ()
 
 
 def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
@@ -70,12 +82,15 @@ def skill_trend_for(matches: list[PlayerMatch]) -> SkillTrendInfo:
         last_change_text = f"SL {last.from_level} → SL {last.to_level}"
         if last.week is not None:
             last_change_text += f" in Week {last.week}"
-    readings = tuple(m.skill_level for m in matches if m.skill_level is not None)
+    dated = [(m.skill_level, m.match_date) for m in matches if m.skill_level is not None]
+    readings = tuple(level for level, _ in dated)
+    reading_dates = tuple(date for _, date in dated)
     return SkillTrendInfo(
         trend=skill_level_trend(matches),
         volatility=skill_level_volatility(matches),
         last_change=last_change_text,
         readings=readings,
+        reading_dates=reading_dates,
     )
 
 

@@ -53,10 +53,17 @@ class TestPlayerMatchupReportToDict:
 
         report = build_player_matchup_report(
             _pairing(), "OUR1", "OPP1",
-            player_trend=SkillTrendInfo(trend="up", volatility=1, last_change=None, readings=(4, 5, 5, 6)),
+            player_trend=SkillTrendInfo(
+                trend="up", volatility=1, last_change=None,
+                readings=(4, 5, 5, 6),
+                reading_dates=("2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22"),
+            ),
         )
         data = player_matchup_report_to_dict(report)
         assert data["player"]["trend"]["readings"] == [4, 5, 5, 6]
+        assert data["player"]["trend"]["reading_dates"] == [
+            "2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22",
+        ]
 
 
 class TestTeamMatchupReportToDict:

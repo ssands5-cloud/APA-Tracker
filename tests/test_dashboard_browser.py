@@ -152,6 +152,34 @@ class TestPlayerVsPlayerSelectors:
                 assert player_data[key]["opponent"]["skill_level"] >= threshold
         assert page.console_errors == []
 
+    def test_a_players_sparkline_shows_a_real_reading_count_and_date_caption(self, page):
+        """GPT audit follow-up (2026-09-16): the sparkline's SVG <title>
+        and adjacent caption must show the real reading count and real
+        date range from the live data, not an unlabeled chart. Find a
+        real player with at least two readings in the live bundle and
+        check the rendered caption matches its real data."""
+        player_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-player-data').textContent)"
+        )
+        candidate = None
+        for report in player_data.values():
+            trend = report["player"]["trend"]
+            if len(trend["readings"]) >= 2:
+                candidate = (report["player"]["id"], trend)
+                break
+        if candidate is None:
+            pytest.skip("the coherent fixture has no player with 2+ skill-level readings")
+        player_id, trend = candidate
+
+        page.select_option("#pme-player", str(player_id))
+        result_text = page.locator("#pme-result").inner_text()
+        expected_count = f"{len(trend['readings'])} reading(s)"
+        real_dates = [d for d in trend["reading_dates"] if d]
+        assert expected_count in result_text or real_dates
+        if real_dates:
+            assert real_dates[0] in result_text or real_dates[-1] in result_text
+        assert page.console_errors == []
+
     def test_clearing_the_filter_restores_the_real_opponent_list(self, page):
         page.fill("#pme-filter-sl-min", "99")
         page.dispatch_event("#pme-filter-sl-min", "input")

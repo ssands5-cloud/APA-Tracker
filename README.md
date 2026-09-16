@@ -306,8 +306,13 @@ comparison, and a combined static Coach Dashboard:
 - **Skill-level trend sparklines** — a real inline SVG polyline plotted
   from each player's whole chronological skill-level series
   (`SkillTrendInfo.readings`), next to the existing direction + volatility
-  indicator. A player with fewer than two readings shows the text
-  indicator alone; there is nothing to plot, and that is shown honestly.
+  indicator, with a real reading-count/date-range caption (and an SVG
+  `<title>` tooltip) alongside it. A player with fewer than two readings
+  shows the text indicator alone; there is nothing to plot, and that is
+  shown honestly. The chart is independently scaled per player, not
+  against a shared skill-level domain — this project has no established
+  real bound to plot against instead, so the caption is the honest
+  disclosure rather than a fabricated shared axis.
 - **Opponent filters** — skill level range, minimum volatility, and trend
   direction, narrowing the opponent list to only real opponents matching
   the real, already-computed fields on their own report. No new threshold
@@ -317,9 +322,13 @@ comparison, and a combined static Coach Dashboard:
   already in the ranked table below it — purely descriptive, never
   narrated as a "favored"/"danger" verdict.
 - **Lineup context** — the approved lineup table shows each board's real
-  lineup score, model basis, and sample size, plus any unassigned
-  players/opponents or a real blocked reason, not just names and evidence
-  labels.
+  lineup score next to its real score basis
+  (`LineupSlot.lineup_score_source` — always the validated skill-only
+  score; `analytics.lineup_lab.pairing_score()` deliberately never lets
+  DIRECT history influence lineup selection), plus the pairing's own
+  direct evidence (observed rate, count, and `model_source`) shown
+  separately so the two are never conflated, and any unassigned
+  players/opponents or a real blocked reason.
 
 **Deliberately excluded, by design, not by omission:** a new
 win-probability/confidence model, categorical "danger player" flags, and

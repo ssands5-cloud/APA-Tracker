@@ -178,9 +178,24 @@ toughest first -- never a categorical "danger" label
   function pct(value) {{
     return (value === null || value === undefined) ? "No data" : (value * 100).toFixed(1) + "%";
   }}
-  function sparkline(readings) {{
+  function sparklineCaption(readings, dates) {{
+    // GPT audit follow-up (2026-09-16): a sparkline plotted as equally-
+    // spaced points with no date/count context can imply an even cadence
+    // the real, irregularly-dated series does not have -- this caption
+    // gives the real count and real date range alongside the chart,
+    // rather than letting the shape alone imply either.
+    if (!readings || !readings.length) return "";
+    var realDates = (dates || []).filter(function (d) {{ return !!d; }});
+    var range = realDates.length ? realDates[0] + " \\u2192 " + realDates[realDates.length - 1] : "no dates recorded";
+    return readings.length + " reading(s), " + range;
+  }}
+  function sparkline(readings, dates) {{
     // A real plotted series, not a decoration -- fewer than two readings
     // means there is nothing to plot, shown honestly as no chart at all.
+    // Independently scaled per player (own min/max, not a shared domain):
+    // this project has no established real skill-level bound to plot
+    // against instead, so the caption above is the honest disclosure,
+    // not a fabricated shared axis.
     if (!readings || readings.length < 2) return "";
     var w = 90, h = 22, pad = 2;
     var min = Math.min.apply(null, readings), max = Math.max.apply(null, readings);
@@ -191,14 +206,21 @@ toughest first -- never a categorical "danger" label
       var y = h - pad - ((v - min) / range) * (h - pad * 2);
       return x.toFixed(1) + "," + y.toFixed(1);
     }}).join(" ");
+    var title = esc(sparklineCaption(readings, dates));
     return "<svg class='cd-spark' width='" + w + "' height='" + h + "' viewBox='0 0 " + w + " " + h
-         + "' role='img' aria-label='Skill level trend sparkline'>"
+         + "' role='img' aria-label='Skill level trend sparkline: " + title + "'>"
+         + "<title>" + title + "</title>"
          + "<polyline points='" + points + "' fill='none' stroke='#1F3864' stroke-width='1.5'/></svg>";
   }}
   function trendBadge(t) {{
     var arrow = {{"up": "\\u25b2", "down": "\\u25bc", "stable": "\\u25ac"}}[t.trend] || "?";
-    return arrow + " " + orNoData(t.trend) + " (whole history, volatility " + t.volatility + ")"
-         + sparkline(t.readings);
+    var badge = arrow + " " + orNoData(t.trend) + " (whole history, volatility " + t.volatility + ")"
+         + sparkline(t.readings, t.reading_dates);
+    var caption = sparklineCaption(t.readings, t.reading_dates);
+    if (caption) {{
+      badge += " <span class='cd-note' style='display:inline'>(" + esc(caption) + ")</span>";
+    }}
+    return badge;
   }}
 
   function opponentFilters() {{

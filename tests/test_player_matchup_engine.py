@@ -69,8 +69,22 @@ class TestSkillTrendFor:
         trend = skill_trend_for(matches)
         assert trend.readings == (4, 5)
 
+    def test_reading_dates_are_aligned_with_readings_not_all_matches(self):
+        """GPT audit follow-up (2026-09-16): a sparkline needs real date
+        context alongside the values, aligned to the same skipped-None
+        filtering as readings itself -- a date for a reading that was
+        skipped would misalign the two series."""
+        matches = [
+            PlayerMatch(skill_level=4, match_date="2026-08-01"),
+            PlayerMatch(skill_level=None, match_date="2026-08-08"),
+            PlayerMatch(skill_level=5, match_date="2026-08-15"),
+        ]
+        trend = skill_trend_for(matches)
+        assert trend.reading_dates == ("2026-08-01", "2026-08-15")
+
     def test_no_data_sentinel_has_no_readings(self):
         assert NO_SKILL_TREND.readings == ()
+        assert NO_SKILL_TREND.reading_dates == ()
 
 
 class TestBuildPlayerMatchupReport:
