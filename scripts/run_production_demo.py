@@ -218,6 +218,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             "acquired database instead of a fresh scrape -- never rescrapes"
         ),
     )
+    parser.add_argument(
+        "--opponent-team-id",
+        help="live mode only, forwarded to the builder: pin the scope's opponent team",
+    )
+    parser.add_argument(
+        "--session",
+        help="live mode only, forwarded to the builder: pin the scope's session name",
+    )
+    parser.add_argument(
+        "--format",
+        dest="format_name",
+        help="live mode only, forwarded to the builder: pin the scope's format",
+    )
     args = parser.parse_args(argv)
 
     if BOUNDARY_FILE.read_text(encoding="utf-8").strip() != BOUNDARY_ID if BOUNDARY_FILE.is_file() else True:
@@ -233,6 +246,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.error("--resume is only meaningful with --mode live")
     if args.source_db and args.mode != "live":
         parser.error("--source-db is only meaningful with --mode live")
+    scope_overrides = (args.opponent_team_id, args.session, args.format_name)
+    if any(scope_overrides) and args.mode != "live":
+        parser.error("--opponent-team-id/--session/--format are only meaningful with --mode live")
+    if any(scope_overrides) and not all(scope_overrides):
+        parser.error("--opponent-team-id, --session and --format must be given together, or not at all")
 
     run_root = Path(args.run_root)
 
@@ -247,6 +265,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 forwarded.append("--resume")
             if args.source_db:
                 forwarded.extend(["--source-db", args.source_db])
+            if args.opponent_team_id:
+                forwarded.extend(["--opponent-team-id", args.opponent_team_id])
+            if args.session:
+                forwarded.extend(["--session", args.session])
+            if args.format_name:
+                forwarded.extend(["--format", args.format_name])
             with tempfile.TemporaryDirectory(prefix="launcher-") as tmp:
                 events_path = Path(tmp) / "events.jsonl"
                 code = invoke_builder(forwarded, events_path)

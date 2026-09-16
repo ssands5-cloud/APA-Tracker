@@ -723,6 +723,9 @@ def run_build(
     events: Optional[EventSink] = None,
     resume: bool = False,
     source_db: Optional[Path] = None,
+    opponent_team_id: Optional[str] = None,
+    session_name: Optional[str] = None,
+    format_name: Optional[str] = None,
 ) -> Path:
     events = events or EventSink(None)
     phases: list[PhaseResult] = [preflight(run_dir, run_root)]
@@ -746,7 +749,11 @@ def run_build(
         # Live scope must be chosen from what was actually ingested, so it
         # needs the open database -- fixture scope is a fixed constant and
         # needs nothing from it.
-        scope = dict(FIXTURE_SCOPE) if mode == "fixture" else _live_scope(db)
+        scope = (
+            dict(FIXTURE_SCOPE)
+            if mode == "fixture"
+            else _live_scope(db, opponent_team_id, session_name, format_name)
+        )
         phases.append(build_documents(db, db_path, scope, staging))
         reconciliation = _reconciliation(db, scope)
     finally:
@@ -802,18 +809,31 @@ def run_build(
     return run_dir
 
 
-def _live_scope(db: Session) -> dict:
+def _live_scope(
+    db: Session,
+    opponent_team_id: Optional[str] = None,
+    session_name: Optional[str] = None,
+    format_name: Optional[str] = None,
+) -> dict:
     """A real (opponent, session, format) scope, chosen from what was
     actually ingested -- never a fixture constant, and never a guess.
 
-    Candidates are every real, non-bye match our configured team appears in,
-    earliest scheduled week first. A candidate is only usable when BOTH
-    sides resolve a real canonical current roster (database.queries.
-    canonical_current_roster) for that match's own session -- the same
-    identity guard every analytics builder in this project already requires,
-    so a scope this function picks is guaranteed buildable, not merely
-    plausible. The first such candidate wins; ties are broken by match
-    external id for a stable, reproducible choice.
+    With no override, candidates are every real, non-bye match our
+    configured team appears in, earliest scheduled week first. A candidate
+    is only usable when BOTH sides resolve a real canonical current roster
+    (database.queries.canonical_current_roster) for that match's own
+    session -- the same identity guard every analytics builder in this
+    project already requires, so a scope this function picks is guaranteed
+    buildable, not merely plausible. The first such candidate wins; ties
+    are broken by match external id for a stable, reproducible choice.
+
+    When ``opponent_team_id``, ``session_name`` and ``format_name`` are ALL
+    given, that exact scope is used instead of auto-selection -- for
+    pinning a specific, already-verified real matchup (e.g. one an earlier
+    export was built and checked against) rather than whichever real match
+    happens to sort first. The same roster-resolution guard still applies:
+    a pinned scope with no real match, or with either side unable to
+    resolve a canonical current roster, is refused rather than guessed.
     """
     from scripts.build_captain_first_edge import _configured_our_team_id
 
@@ -823,6 +843,48 @@ def _live_scope(db: Session) -> dict:
             "live mode needs team.team_id in apa_config.yaml to select a scope",
             EXIT_PREFLIGHT,
         )
+
+    overrides_given = (opponent_team_id, session_name, format_name)
+    if any(overrides_given) and not all(overrides_given):
+        raise BuildError(
+            "--opponent-team-id, --session and --format must be given together, or not at all",
+            EXIT_PREFLIGHT,
+        )
+    if all(overrides_given):
+        match = (
+            db.query(Match)
+            .filter(
+                Match.is_bye.is_(False),
+                Match.session_name == session_name,
+                Match.format == format_name,
+                (
+                    (Match.home_team_id == our_team_id) & (Match.away_team_id == opponent_team_id)
+                )
+                | (
+                    (Match.away_team_id == our_team_id) & (Match.home_team_id == opponent_team_id)
+                ),
+            )
+            .first()
+        )
+        if match is None:
+            raise BuildError(
+                f"no real match between team {our_team_id} and {opponent_team_id} "
+                f"in session {session_name!r}, format {format_name!r}",
+                EXIT_DOCUMENTS,
+            )
+        try:
+            our_roster = canonical_current_roster(db, our_team_id, session_name)
+            opponent_roster = canonical_current_roster(db, opponent_team_id, session_name)
+        except CanonicalRosterError as exc:
+            raise BuildError(f"pinned scope has no canonical current roster: {exc}", EXIT_DOCUMENTS) from None
+        if not our_roster or not opponent_roster:
+            raise BuildError("pinned scope resolved an empty canonical current roster", EXIT_DOCUMENTS)
+        return {
+            "our_team_id": our_team_id,
+            "opponent_team_id": opponent_team_id,
+            "session_name": session_name,
+            "format": format_name,
+        }
 
     candidates = (
         db.query(Match)
@@ -915,6 +977,20 @@ def main(argv: Optional[list[str]] = None) -> int:
             "ingested and separately repaired in place."
         ),
     )
+    parser.add_argument(
+        "--opponent-team-id",
+        help="live mode only: pin the scope's opponent team instead of auto-selecting one "
+             "(must be given together with --session and --format)",
+    )
+    parser.add_argument(
+        "--session",
+        help="live mode only: pin the scope's session name (must be given with --opponent-team-id and --format)",
+    )
+    parser.add_argument(
+        "--format",
+        dest="format_name",
+        help="live mode only: pin the scope's format (must be given with --opponent-team-id and --session)",
+    )
     args = parser.parse_args(argv)
 
     if args.resume and args.mode != "live":
@@ -927,6 +1003,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.source_db and args.promote:
         parser.error("--source-db and --promote are mutually exclusive: the source "
                       "database is not a freshly-acquired staging file to promote")
+    scope_overrides = (args.opponent_team_id, args.session, args.format_name)
+    if any(scope_overrides) and args.mode != "live":
+        parser.error("--opponent-team-id/--session/--format are only meaningful with --mode live")
+    if any(scope_overrides) and not all(scope_overrides):
+        parser.error("--opponent-team-id, --session and --format must be given together, or not at all")
 
     run_root = Path(args.run_root)
     if args.out:
@@ -940,6 +1021,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         completed = run_build(
             args.mode, run_dir, run_root, promote=args.promote, events=events, resume=args.resume,
             source_db=Path(args.source_db) if args.source_db else None,
+            opponent_team_id=args.opponent_team_id,
+            session_name=args.session,
+            format_name=args.format_name,
         )
     except BuildError as exc:
         logger.error("BUILD FAILED: %s", exc)

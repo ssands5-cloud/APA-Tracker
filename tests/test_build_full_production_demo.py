@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from database.models import Match
 from scripts import build_full_production_demo as builder
 from scripts.build_full_production_demo import (
     FEATURE_STATUS,
@@ -304,6 +305,85 @@ class TestResumeFlagPolicy:
             builder.main(["--mode", "fixture", "--resume"])
 
 
+class TestScopeOverridePolicy:
+    def test_scope_overrides_are_rejected_outside_live_mode(self):
+        with pytest.raises(SystemExit):
+            builder.main([
+                "--mode", "fixture",
+                "--opponent-team-id", "1", "--session", "S", "--format", "F",
+            ])
+
+    def test_scope_overrides_must_be_given_together(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "live", "--opponent-team-id", "1"])
+
+    def test_partial_scope_overrides_via_main_are_rejected(self):
+        with pytest.raises(SystemExit):
+            builder.main(["--mode", "live", "--session", "S", "--format", "F"])
+
+
+class TestLiveScopePinning:
+    def _seeded_db(self, tmp_path):
+        engine = create_engine(f"sqlite:///{tmp_path / 'pin.db'}")
+        from database.models import Base, Player, PlayerTeamHistory
+
+        Base.metadata.create_all(engine)
+        db = Session(bind=engine)
+        our, opp = "111", "222"
+        session_name = "Fall 2026"
+        fmt = "8-Ball Open"
+        for external_id, name, team in (("1", "Ann", our), ("2", "Bob", opp)):
+            player = Player(external_id=external_id, name=name)
+            db.add(player)
+            db.flush()
+            db.add(PlayerTeamHistory(
+                player_id=player.id, team_external_id=team, session_name=session_name, is_current=True,
+            ))
+        db.add(Match(
+            external_id="M1", session_name=session_name, format=fmt,
+            home_team_id=our, away_team_id=opp, is_bye=False,
+        ))
+        db.commit()
+        return db, our, opp, session_name, fmt
+
+    def test_all_three_overrides_pin_the_exact_scope(self, tmp_path, monkeypatch):
+        db, our, opp, session_name, fmt = self._seeded_db(tmp_path)
+        monkeypatch.setattr(
+            "scripts.build_captain_first_edge._configured_our_team_id", lambda: our,
+        )
+        try:
+            scope = builder._live_scope(db, opp, session_name, fmt)
+        finally:
+            db.close()
+
+        assert scope == {
+            "our_team_id": our, "opponent_team_id": opp,
+            "session_name": session_name, "format": fmt,
+        }
+
+    def test_a_pinned_scope_with_no_real_match_is_refused(self, tmp_path, monkeypatch):
+        db, our, opp, session_name, fmt = self._seeded_db(tmp_path)
+        monkeypatch.setattr(
+            "scripts.build_captain_first_edge._configured_our_team_id", lambda: our,
+        )
+        try:
+            with pytest.raises(BuildError):
+                builder._live_scope(db, "999999", session_name, fmt)
+        finally:
+            db.close()
+
+    def test_partial_overrides_at_the_function_level_are_rejected(self, tmp_path, monkeypatch):
+        db, our, opp, session_name, fmt = self._seeded_db(tmp_path)
+        monkeypatch.setattr(
+            "scripts.build_captain_first_edge._configured_our_team_id", lambda: our,
+        )
+        try:
+            with pytest.raises(BuildError):
+                builder._live_scope(db, opp, session_name, None)
+        finally:
+            db.close()
+
+
 class TestSourceDbFlagPolicy:
     def test_source_db_is_rejected_outside_live_mode(self):
         with pytest.raises(SystemExit):
@@ -352,7 +432,7 @@ class TestAcquireExisting:
         # Scope selection from real config/matches is exercised elsewhere;
         # here we only need to prove the source-db wiring itself, using the
         # already-built fixture database as a stand-in "already-acquired" file.
-        monkeypatch.setattr(builder, "_live_scope", lambda db: dict(FIXTURE_SCOPE))
+        monkeypatch.setattr(builder, "_live_scope", lambda db, *a, **k: dict(FIXTURE_SCOPE))
 
         source = tmp_path / "source.db"
         shutil.copy2(builder.FIXTURE_DB, source)
