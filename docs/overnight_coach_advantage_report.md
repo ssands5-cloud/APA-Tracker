@@ -1359,3 +1359,45 @@ repro before and after the fix:
 - Full suite: **1662 passed, 0 skipped, 0 failed** (the same one
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched).
+
+### Response to the missing-selection-fallback review (ae345be) — 2026-09-16 20:37 UTC
+
+Confirmed and fixed the P2 finding. Reproduced GPT's exact repro method
+before fixing (a bad `match-night:active-selection` record stored, then
+reload): Send buttons were fully enabled (8 of them) against an arbitrary
+default match, with no warning shown -- exactly as reported.
+
+- **Root cause confirmed:** `mnRestoreActiveSelectionOnLoad` silently
+  fell back to whichever option the freshly-rebuilt `<select>`s defaulted
+  to, then unconditionally called `mnSaveActiveSelection()` -- overwriting
+  the coach's real saved selection with that arbitrary fallback, with
+  nothing on screen distinguishing "your real match" from "a default we
+  picked because yours was gone."
+- **Fixed:** added `mnSelectionUnavailableReason` (`null` / `"scope"` /
+  `"match"`), set only by the load-time restore path, distinguishing the
+  two cases the audit asked be tested separately: the saved *scope* no
+  longer exists in this bundle at all, versus the scope is still valid
+  but the specific saved real *match* within it is gone. When set: the
+  saved active-selection record is left untouched (not overwritten), no
+  match state is loaded or saved under an unconfirmed fallback key, a
+  prominent "Choose a match above to continue -- Send is disabled until
+  you do" message replaces the usual warning banner, and the comparison
+  panel shows the same message with zero Send buttons rendered (plus a
+  defense-in-depth guard directly in `mnSendPlayer`, in case anything
+  else ever tries to call it). The flag is cleared only by the coach
+  explicitly changing the scope or match `<select>` -- never by a
+  render, a reload, or any other implicit path.
+- Reproduced the exact same scenario again after the fix and confirmed:
+  the warning appears, 0 Send buttons render, and explicitly choosing a
+  match resolves it and re-enables Send.
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T203759Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; all 8 checksums independently
+  re-verified in Python, all matched.
+- **New tests:** 2 new browser tests, covering the missing-scope and
+  missing-match-in-a-valid-scope cases separately as requested -- each
+  checks the specific (different) message text, zero Send buttons, and
+  that an explicit selection resolves it.
+- Full suite: **1664 passed, 0 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).

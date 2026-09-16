@@ -517,6 +517,12 @@ toughest first -- never a categorical "danger" label
     available: "Available", absent: "Absent", played: "Already played", held: "Held back"
   }};
   var mnState = {{ statuses: {{}}, assignments: [] }};
+  // GPT audit follow-up (2026-09-16, ae345be): set when a saved
+  // scope/match selection no longer exists in this bundle (a refreshed
+  // export can drop a scope or a real match). null when the current
+  // selection is trustworthy. Never cleared by a silent fallback --
+  // only by the coach explicitly choosing a scope or match.
+  var mnSelectionUnavailableReason = null; // null | "scope" | "match"
 
   function mnChooseCount(n, k) {{
     var result = 1;
@@ -720,8 +726,21 @@ toughest first -- never a categorical "danger" label
     }}).length;
   }}
 
+  function mnSelectionUnavailableMessage() {{
+    return mnSelectionUnavailableReason === "scope"
+      ? "Your previously selected match's opponent/format/session is no longer in "
+        + "this bundle."
+      : "Your previously selected scheduled match is no longer available for this "
+        + "opponent, format, and session.";
+  }}
+
   function mnRenderWarning(scope) {{
     var target = document.getElementById("mn-warning");
+    if (mnSelectionUnavailableReason) {{
+      target.innerHTML = "<p class='cd-none mn-selection-unavailable'>" + mnSelectionUnavailableMessage()
+        + " Choose a match above to continue -- Send is disabled until you do.</p>";
+      return;
+    }}
     var playedCount = mnPlayedCount(scope);
     if (playedCount > MN_SIZE) {{
       target.innerHTML = "<p class='cd-none'>" + playedCount + " players are marked "
@@ -808,6 +827,14 @@ toughest first -- never a categorical "danger" label
 
   function mnRenderComparison(scope) {{
     var target = document.getElementById("mn-comparison");
+    if (mnSelectionUnavailableReason) {{
+      // Same condition mnRenderWarning already surfaces prominently --
+      // repeated here so Send is provably unavailable at the exact place
+      // it would otherwise appear, not just implied by a banner elsewhere.
+      target.innerHTML = "<p class='cd-none mn-selection-unavailable'>" + mnSelectionUnavailableMessage()
+        + " Choose a match above before comparing options.</p>";
+      return;
+    }}
     if (mnPlayedCount(scope) >= MN_SIZE) {{
       target.innerHTML = "<p class='cd-none'>All " + MN_SIZE + " boards are already accounted "
         + "for (sent or marked Already played) this match. Undo a sent board below, or change "
@@ -896,6 +923,10 @@ toughest first -- never a categorical "danger" label
   }}
 
   function mnSendPlayer(scope, playerId, opponentId) {{
+    // Defense in depth -- mnRenderComparison never renders a Send button
+    // while this is set, but a stale click handler (or a future caller)
+    // must not be able to record a board against an unconfirmed selection.
+    if (mnSelectionUnavailableReason) return;
     var player = scope.our_roster.filter(function (p) {{ return String(p.id) === String(playerId); }})[0];
     var opponent = scope.opponent_roster.filter(function (o) {{ return String(o.id) === String(opponentId); }})[0];
     if (!player) return;
@@ -1114,10 +1145,14 @@ toughest first -- never a categorical "danger" label
   }}
 
   function mnInitScope() {{
-    // Scope changed (by the coach, or as part of page load): rebuild the
+    // Scope changed BY THE COACH (this is the <select> change handler,
+    // never called for the page-load restore path -- see
+    // mnRestoreActiveSelectionOnLoad) -- an explicit choice, so any prior
+    // "selection unavailable" state is now resolved. Rebuild the
     // real-match selector for the new scope first (its options depend on
     // which scope is active), THEN load state under the resulting
     // scope+match key, and remember this as the active selection.
+    mnSelectionUnavailableReason = null;
     var scope = mnCurrentScope();
     if (scope) mnRenderMatchSelect(scope);
     mnState = mnLoadState(mnCurrentMatchKey());
@@ -1126,31 +1161,74 @@ toughest first -- never a categorical "danger" label
   }}
 
   function mnOnMatchChange() {{
-    // Match changed within the same scope: the selector's own options are
-    // already correct, just load the (possibly different) saved state.
+    // Match changed BY THE COACH -- an explicit choice, resolves any
+    // prior "selection unavailable" state. The selector's own options
+    // are already correct, just load the (possibly different) saved
+    // state.
+    mnSelectionUnavailableReason = null;
     mnState = mnLoadState(mnCurrentMatchKey());
     mnRenderAll();
     mnSaveActiveSelection();
   }}
 
   function mnRestoreActiveSelectionOnLoad() {{
+    // GPT audit follow-up (2026-09-16, ae345be): a saved scope or match
+    // that no longer exists in this bundle (a refreshed export can drop
+    // either) was previously handled by silently falling back to the
+    // freshly-rebuilt selectors' own first option AND overwriting the
+    // saved active-selection record with that fallback -- the coach
+    // could end up looking at, and sending real boards against, a
+    // completely different match with no indication anything was lost.
+    // Now: detect which case applies (missing scope vs. a still-valid
+    // scope whose specific saved match is gone -- the audit asked these
+    // be covered, and tested, separately), leave mnSelectionUnavailableReason
+    // set, do NOT load or save any match state under a fallback key, and
+    // render a blocking "choose a match" state instead of comparison
+    // cards until the coach makes an explicit choice (mnInitScope/
+    // mnOnMatchChange, both of which clear this).
     var saved = mnLoadActiveSelection();
+    var scopeSelect = document.getElementById("mn-scope");
+    var missingScope = false;
+
     if (saved) {{
-      var scopeSelect = document.getElementById("mn-scope");
       var hasScope = Array.prototype.some.call(scopeSelect.options, function (o) {{
         return o.value === saved.scopeKey;
       }});
-      if (hasScope) scopeSelect.value = saved.scopeKey;
+      if (hasScope) {{
+        scopeSelect.value = saved.scopeKey;
+      }} else {{
+        missingScope = true;
+      }}
     }}
+
     var scope = mnCurrentScope();
     if (scope) mnRenderMatchSelect(scope);
-    if (saved) {{
+
+    var missingMatch = false;
+    if (saved && !missingScope && saved.matchId) {{
       var matchSelect = document.getElementById("mn-match");
       var hasMatch = Array.prototype.some.call(matchSelect.options, function (o) {{
         return o.value === saved.matchId;
       }});
-      if (hasMatch) matchSelect.value = saved.matchId;
+      if (hasMatch) {{
+        matchSelect.value = saved.matchId;
+      }} else {{
+        missingMatch = true;
+      }}
     }}
+
+    mnSelectionUnavailableReason = missingScope ? "scope" : (missingMatch ? "match" : null);
+
+    if (mnSelectionUnavailableReason) {{
+      // Leave the saved active-selection record untouched -- it still
+      // names the real match the coach actually meant, for whenever a
+      // future bundle restores it. Do not load/save state under a
+      // fallback key that doesn't represent a real choice.
+      mnState = {{ statuses: {{}}, assignments: [] }};
+      mnRenderAll();
+      return;
+    }}
+
     mnState = mnLoadState(mnCurrentMatchKey());
     mnRenderAll();
     mnSaveActiveSelection();

@@ -935,6 +935,77 @@ class TestMatchNight:
         ).input_value() == "held", "switching back to RM-1 must restore its own saved state"
         assert page.console_errors == []
 
+    def test_a_missing_saved_scope_shows_choose_a_match_and_blocks_send(self, page):
+        """GPT audit follow-up (2026-09-16, ae345be), P2: a saved active
+        selection whose SCOPE no longer exists in this bundle (a
+        refreshed export can drop one entirely) previously fell back
+        silently and left Send fully enabled against an arbitrary
+        default match, with no indication the coach's real selection was
+        lost. Reproduces GPT's own repro method (store a bad record in
+        localStorage, then reload) for the missing-SCOPE case
+        specifically -- the missing-MATCH case (scope still valid) is a
+        separate test below, per the audit's explicit request that the
+        two be covered apart."""
+        page.evaluate(
+            "() => window.localStorage.setItem('match-night:active-selection', "
+            "JSON.stringify({scopeKey: 'NONEXISTENT-SCOPE-KEY', matchId: 'NONEXISTENT-MATCH'}))"
+        )
+        page.reload()
+
+        warning_text = page.locator("#mn-warning").inner_text()
+        assert "no longer in this bundle" in warning_text
+        assert "Choose a match" in warning_text
+        comparison_text = page.locator("#mn-comparison").inner_text()
+        assert "Choose a match" in comparison_text
+        assert page.locator("#mn-comparison .mn-send-btn").count() == 0
+        assert page.console_errors == []
+
+        # Explicit selection (changing the match select, even to the
+        # fallback's own first option -- a real <select> change event is
+        # what resolves this, not merely a comparison-panel interaction
+        # like picking an announced opponent) resolves it.
+        match_value = page.locator("#mn-match option").first.get_attribute("value")
+        page.select_option("#mn-match", match_value)
+        assert "Choose a match" not in page.locator("#mn-warning").inner_text()
+
+    def test_a_missing_saved_match_in_a_valid_scope_shows_choose_a_match_and_blocks_send(self, page):
+        """The other half of the same audit request: the saved SCOPE is
+        still valid, but the specific real MATCH id saved within it is
+        gone (that one calendar match was dropped from a refreshed
+        export, or the id changed). Must be distinguished from the
+        missing-scope case (different, more specific message) and must
+        still block Send."""
+        all_team_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-team-data').textContent)"
+        )
+        scope_key = None
+        for key, report in all_team_data.items():
+            if report.get("real_matches"):
+                scope_key = key
+                break
+        if scope_key is None:
+            pytest.skip("no real scope in this bundle has any real scheduled match")
+
+        page.evaluate(
+            "(scopeKey) => window.localStorage.setItem('match-night:active-selection', "
+            "JSON.stringify({scopeKey: scopeKey, matchId: 'NONEXISTENT-MATCH-ID'}))",
+            scope_key,
+        )
+        page.reload()
+
+        warning_text = page.locator("#mn-warning").inner_text()
+        assert "no longer available for this opponent" in warning_text
+        assert "Choose a match" in warning_text
+        assert "no longer in this bundle" not in warning_text  # the missing-scope wording, not this case
+        assert page.locator("#mn-comparison .mn-send-btn").count() == 0
+        # The scope itself restored correctly -- only the match was stale.
+        assert page.locator("#mn-scope").input_value() == scope_key
+        assert page.console_errors == []
+
+        # Explicit selection resolves it.
+        page.select_option("#mn-match", page.locator("#mn-match option").first.get_attribute("value"))
+        assert "Choose a match" not in page.locator("#mn-warning").inner_text()
+
     def test_reload_preserves_the_selected_scope_and_match(self, page):
         """GPT audit follow-up (2026-09-16, a226bd1), P1: reproduced by
         GPT directly -- select a non-default real scheduled match, mark a
