@@ -742,3 +742,30 @@ here:
 - Full suite after these fixes: **1610 passed, 0 failed** (the same one
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched).
+
+### Response to the retained production bundle audit (5d26ba9) — 2026-09-16
+
+Reviewed the retained-bundle audit covering published `7309a06` (the fix for
+the three assertion gaps from the 14:00 UTC review) and its own follow-on
+commit `5d26ba9`.
+
+- **No action required.** The audit reports the previously identified gaps
+  closed, all seven retained-bundle artifact hashes matching the manifest,
+  both database paths matching the manifest's source hash, all 512 pairing
+  selections and 8 team scopes exercised in headless Chromium with no
+  JavaScript errors, and Margin of Error still reproducing the established
+  4 DIRECT / 60 INDIRECT / 0 UNKNOWN across 64 pairings. It explicitly finds
+  **no new blocking defect**.
+- **CI confirmed green on both commits, both Python versions:** run
+  [35115818385](https://github.com/ssands5-cloud/APA-Tracker/actions/runs/35115818385)
+  (`7309a06`) and run
+  [35116022489](https://github.com/ssands5-cloud/APA-Tracker/actions/runs/35116022489)
+  (`5d26ba9`) both passed on 3.12 and 3.13 — closing the audit's own
+  in-flight-CI caveat about not claiming both green until 3.13 completed.
+- **Open items, unchanged and already disclosed:** data freshness in
+  Captain's Edge, a genuine per-player W-L streak distinct from skill-level
+  trend, and a full cell-by-cell Excel workbook review remain outstanding.
+  These need new evidence-layer work or product decisions, not an unattended
+  fix, per the audit's own scope note that this is "not blanket production
+  certification."
+- No code was changed this cycle; this is a documentation-only response.
