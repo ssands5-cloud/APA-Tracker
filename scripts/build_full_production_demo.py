@@ -281,6 +281,28 @@ def acquire_live() -> tuple[Path, PhaseResult]:
             f"live acquisition produced no staging database at {LIVE_STAGING_DB}",
             EXIT_ACQUIRE,
         )
+
+    # player_h2h_advantage (what scripts/build_lineups.py and Captain's
+    # Edge's Decision Engine section both read) is populated by a SEPARATE
+    # step, scripts/build_head_to_head.py, that neither run_all_teams() nor
+    # run_division_wide() calls -- they only rebuild player_matchups (via
+    # analytics.matchup_builder.build_matchups). build_coherent_demo.py
+    # already does this for the fixture path; a real live run surfaced that
+    # nothing did it for live.
+    from database.engine import create_db_engine
+    from database.ingest import ingest_h2h_advantage
+    from scripts.build_head_to_head import build_rows as build_h2h_advantage_rows
+
+    # ingest_h2h_advantage writes, so this connection is opened writable --
+    # not through connect_read_only's mode=ro like every analytics builder
+    # elsewhere in this module.
+    write_engine = create_db_engine({"database": {"path": str(LIVE_STAGING_DB)}})
+    with Session(write_engine) as db:
+        rows = build_h2h_advantage_rows(db)
+        if rows:
+            ingest_h2h_advantage(db, rows)
+    write_engine.dispose()
+
     totals = result["division_wide"]
     return LIVE_STAGING_DB, PhaseResult(
         "acquire", "ok",

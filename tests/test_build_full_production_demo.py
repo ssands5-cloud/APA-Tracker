@@ -298,6 +298,60 @@ class TestFinalizeOrdering:
 
 
 class TestLiveMode:
+    def test_acquire_live_populates_player_h2h_advantage(self, monkeypatch, tmp_path):
+        """A real live run surfaced this: build_lineups.py and Captain's
+        Edge's Decision Engine both read player_h2h_advantage, but neither
+        run_all_teams() nor run_division_wide() ever populate it -- only
+        scripts/build_head_to_head.py does, and nothing called it for a
+        live acquisition. Fixture mode never caught this because
+        build_coherent_demo.py already calls it directly."""
+        monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
+        staging_db = tmp_path / "staged.db"
+        monkeypatch.setattr(builder, "LIVE_STAGING_DB", staging_db)
+
+        from database.engine import create_db_engine
+        from database.models import Match, Player, PlayerHeadToHead
+
+        def fake_run_division_wide(config_path, export=False, db_path=None):
+            # acquire_live() deletes any existing staging file before this
+            # call (fresh-scrape semantics), so the real ingestion has to
+            # happen here, inside the mock, exactly as a real scrape would.
+            engine = create_db_engine({"database": {"path": db_path}})
+            with Session(engine) as seed:
+                seed.add(Match(external_id="M1", session_name="S", format="8-Ball Open"))
+                seed.flush()
+                match = seed.query(Match).filter_by(external_id="M1").one()
+                a = Player(external_id="A", name="Ann")
+                b = Player(external_id="B", name="Bob")
+                seed.add_all([a, b])
+                seed.flush()
+                seed.add(PlayerHeadToHead(
+                    player_id=a.id, opponent_id=b.id, match_id=match.id,
+                    own_skill_level=5, opponent_skill_level=4, result="W",
+                    points_earned=3.0, format="8-Ball Open", session_name="S",
+                ))
+                seed.commit()
+            engine.dispose()
+            return {
+                "coverage_gaps": [],
+                "division_wide": {
+                    "teams_ingested": 1, "matches_ingested": 1,
+                    "scored_matches_with_scoresheet": 1,
+                },
+            }
+
+        import scheduler.graphql_sync as sync_module
+        monkeypatch.setattr(sync_module, "run_division_wide", fake_run_division_wide)
+
+        builder.acquire_live()
+
+        check_engine = create_db_engine({"database": {"path": str(staging_db)}})
+        with Session(check_engine) as db:
+            from database.models import PlayerH2HAdvantage
+            count = db.query(PlayerH2HAdvantage).count()
+        check_engine.dispose()
+        assert count > 0
+
     def test_a_missing_token_fails_with_an_actionable_message(self, monkeypatch):
         monkeypatch.delenv(builder.TOKEN_ENV, raising=False)
 
