@@ -216,22 +216,29 @@ class TestMatchNight:
                             "mn-lineup", "mn-warning", "mn-reset", "mn-print", "mn-sticky"):
             assert f'id="{element_id}"' in html
 
-    def test_data_freshness_is_shown_when_built_at_is_given(self):
+    def test_bundle_generated_time_is_shown_when_built_at_is_given(self):
+        """GPT audit follow-up (2026-09-16, a226bd1): this must say when the
+        bundle was *built*, not claim to be when the underlying data was
+        *captured* -- those are different real facts, and rebuilding an
+        unchanged database would otherwise make stale data look freshly
+        captured."""
         html = render(
             [_player_report()],
             [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
             [], "Mark It Up", built_at="2026-09-16T19:14:44.743930+00:00",
         )
-        assert "Data last captured:" in html
+        assert "Bundle generated:" in html
         assert "2026-09-16 19:14 UTC" in html
+        assert "Data last captured" not in html
+        assert "not necessarily when the underlying data" in html
 
-    def test_data_freshness_is_honest_when_built_at_is_not_given(self):
+    def test_bundle_generated_time_is_honest_when_built_at_is_not_given(self):
         html = render(
             [_player_report()],
             [build_team_matchup_report(_matrix(), "Mark It Up", "Corner Pockets")],
             [], "Mark It Up",
         )
-        assert "Data last captured: not available" in html
+        assert "Bundle generated: not available" in html
 
     def test_match_night_never_narrates_a_verdict(self):
         html = " ".join(render(

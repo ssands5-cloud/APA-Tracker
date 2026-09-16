@@ -1265,3 +1265,68 @@ actually under test. Full suite after this fix: **1660 passed, 0 skipped,
 0 failed** (rebuilt and re-verified the retained bundle at
 `coach-advantage-runs/20260916T193928Z/` in the same cycle, part of the
 larger "make Match Night effortless" build above).
+
+### Response to the scheduled-match workflow review (a226bd1) — 2026-09-16 20:12 UTC
+
+All four findings confirmed and fixed, including reproducing GPT's exact
+repro before and after the fix:
+
+- **P1 "build time mislabeled as data capture time" — fixed.** Confirmed:
+  `built_at` is genuinely when this HTML export was generated, not when
+  the underlying league-portal data was last synced -- rebuilding from an
+  unchanged database would have made stale data look freshly captured
+  under the old "Data last captured" label. Renamed the label to "Bundle
+  generated" with an explicit one-line caveat ("not necessarily when the
+  underlying data was last synced"), rather than inventing a fake capture
+  timestamp from an unrelated table (`StandingsSnapshot.captured_at`
+  exists but covers a different dataset than what Match Night actually
+  reads -- using it would have been a different, equally real, honesty
+  problem). No universal real "last synced" timestamp exists across the
+  tables Match Night depends on to report instead; disclosed here rather
+  than fabricated.
+- **P1 "reload switches away from the selected match" — fixed.**
+  Reproduced the exact repro against the retained dashboard before
+  fixing: selected the non-default real match, marked a player Absent,
+  reloaded -- selection snapped back to the first option, exactly as
+  reported. Root cause: only each match's own planner *state* was
+  persisted; which scope+match was *active* was never saved at all, so a
+  reload had nothing to restore from and the freshly-rebuilt `<select>`s
+  simply defaulted to their first option. Added a separate, explicit
+  "active selection" record (`match-night:active-selection` in
+  `localStorage`, distinct from each match's own state key), saved on
+  every scope/match change and restored on load -- falling back to the
+  default first option only when the saved scope or match no longer
+  exists in this bundle, never guessed otherwise. Reproduced the same
+  scenario again after the fix and confirmed the selection now survives
+  a real reload.
+- **P2 "printed summary omits the scheduled match identity" — fixed.**
+  Added the selected real match's date and id to both the print summary
+  header and the on-screen sticky bar (`mnSelectedMatchLabel()`), so two
+  real nights against the same opponent are now distinguishable in both
+  places, not just team/format/session.
+- **Coverage refinement (round 2) — fixed.** Confirmed GPT's sharper
+  math: with only 4 known teammates, a *regressed* implementation
+  (candidate's unknown skill silently dropped) would compute
+  `stillNeeded=5` against `known=4` and *also* land on Unknown through
+  the unrelated "not enough known players" branch -- the same wrong
+  observable result as the real fix, for a different reason, so the test
+  could not distinguish them. With 5 known teammates, a regression would
+  instead find a real 5-of-5 combination (sum 10 <= 23) and wrongly
+  report a valid completion -- genuinely different from the fixed
+  behavior's immediate "any committed slot unknown -> Unknown". Updated
+  the fixture to 5 known teammates so the two implementations now produce
+  observably different results.
+- Rebuilt and re-verified the retained bundle
+  (`coach-advantage-runs/20260916T201218Z/`, replacing the prior run)
+  against the real `data/apa_tracker.db`; all 8 checksums independently
+  re-verified in Python, all matched.
+- **New tests:** 2 new browser tests (reload preserving a real, non-default
+  scope+match selection across a genuine `page.reload()` -- synthetic
+  injection cannot survive a reload, since it never touches the file on
+  disk, so this specifically uses real bundle data with an honest skip
+  path; print/sticky both naming a synthetic selected match's real date
+  and id), plus updated the "Bundle generated" label tests in
+  `tests/test_dashboard.py`.
+- Full suite: **1662 passed, 0 skipped, 0 failed** (the same one
+  pre-existing, unrelated, already-broken test file remains excluded and
+  untouched).

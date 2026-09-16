@@ -588,20 +588,35 @@ class TestMatchNight:
         their slot as unverifiable, which could show "still legal" for a
         send that genuinely couldn't be checked.
 
-        GPT audit follow-up (2026-09-16, 92002cf -- coverage refinement):
-        the roster here originally had only the one unknown-skill
-        candidate, so an unrelated "not enough available players" path
-        (stillNeeded=4, known=0) would independently also yield Unknown --
-        this test could pass even if the actual candidate-null-skill fix
-        regressed. Four known, low-skill teammates are now also Available,
-        so there IS enough real bench depth to answer -- the only reason
-        this must still come back Unknown is the candidate's own missing
-        skill, which is the thing actually being tested."""
+        GPT audit follow-up (2026-09-16, 92002cf -- coverage refinement,
+        round 1, INSUFFICIENT): a first attempt added four known, low-skill
+        teammates. Still not enough: if the candidate's own unknown skill
+        were silently dropped (the exact original bug) instead of counted
+        as an occupied slot, stillNeeded would wrongly read 5 (not 4), and
+        with only 4 known teammates available (< 5), the broken code would
+        ALSO fall through the separate "not enough known players" branch
+        and land on Unknown by coincidence -- the same wrong observable
+        result as the fix, for a different, unrelated reason. The test
+        could not tell the two apart.
+
+        GPT audit follow-up (2026-09-16, a226bd1 -- coverage refinement,
+        round 2): five known, low-skill teammates closes that gap. If the
+        bug regressed (candidate's null skill dropped): stillNeeded=5,
+        known=5 available teammates -- exactly enough to run the search,
+        which finds 5*2=10 <= 23 and WOULD WRONGLY report a valid
+        completion. With the real fix (candidate's null skill preserved
+        as an occupied-but-unverifiable slot), the very first check inside
+        mnLegalCompletionExists/mnFindCompletionWitness -- "any committed
+        slot unknown -> Unknown" -- fires immediately regardless of how
+        many known teammates exist. The two implementations now produce
+        genuinely different, observable results, which is what makes this
+        a real regression test rather than one that happens to pass
+        either way."""
         our_team_id, opp_team_id = "SYN-OUR-1", "SYN-OPP-1"
         fmt, session = "8-Ball Open", "Synthetic Session 1"
         scope_key = f"{opp_team_id}|{fmt}|{session}"
         our_roster = [_mn_roster_entry(901, "Unknown Skill Player", None)] + [
-            _mn_roster_entry(902 + i, f"Known Teammate {i}", 2) for i in range(4)
+            _mn_roster_entry(902 + i, f"Known Teammate {i}", 2) for i in range(5)
         ]
         opponent_roster = [_mn_roster_entry(801, "Opp One", 5)]
         scope = _mn_team_scope(our_team_id, "Synthetic Our Team 1", opp_team_id,
@@ -918,6 +933,70 @@ class TestMatchNight:
         assert page.locator(
             "#mn-roster .mn-status-select[data-player-id='940']"
         ).input_value() == "held", "switching back to RM-1 must restore its own saved state"
+        assert page.console_errors == []
+
+    def test_reload_preserves_the_selected_scope_and_match(self, page):
+        """GPT audit follow-up (2026-09-16, a226bd1), P1: reproduced by
+        GPT directly -- select a non-default real scheduled match, mark a
+        player Held back, reload, and the selector silently snapped back
+        to its first option even though that match's own saved state was
+        untouched. Uses real bundle data (not the synthetic injection hook
+        -- a page.reload() re-fetches the real file from disk, so an
+        in-memory-injected synthetic scope cannot survive it; only real
+        embedded data can prove the restore-on-reload path). Skips
+        honestly if this cycle's coherent fixture has no real scope
+        spanning two or more real matches to select a non-default one
+        from."""
+        all_team_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-team-data').textContent)"
+        )
+        scope_key = None
+        for key, report in all_team_data.items():
+            if len(report.get("real_matches", [])) >= 2:
+                scope_key = key
+                break
+        if scope_key is None:
+            pytest.skip("no real scope in this bundle spans two or more real scheduled matches")
+        page.select_option("#mn-scope", scope_key)
+        match_options = page.locator("#mn-match option").evaluate_all(
+            "options => options.map(o => o.value)"
+        )
+        target_match = match_options[-1]  # deliberately not the default first option
+        page.select_option("#mn-match", target_match)
+        first_row = page.locator("#mn-roster .mn-roster-row").first
+        first_row.locator("select").select_option("held")
+
+        page.reload()
+
+        assert page.locator("#mn-scope").input_value() == scope_key
+        assert page.locator("#mn-match").input_value() == target_match
+        reloaded_status = page.locator("#mn-roster .mn-roster-row").first.locator("select").input_value()
+        assert reloaded_status == "held"
+        assert page.console_errors == []
+
+    def test_print_summary_and_sticky_bar_name_the_selected_match(self, page):
+        """GPT audit follow-up (2026-09-16, a226bd1), P2: two real nights
+        against the same opponent must be distinguishable in the printed
+        summary and the on-screen sticky bar, not just team/format/session
+        (identical for both nights)."""
+        our_team_id, opp_team_id = "SYN-OUR-11", "SYN-OPP-11"
+        fmt, session = "8-Ball Open", "Synthetic Session 11"
+        scope_key = f"{opp_team_id}|{fmt}|{session}"
+        our_roster = [_mn_roster_entry(990, "Player 990", 4)]
+        opponent_roster = [_mn_roster_entry(890, "Opp Eleven", 5)]
+        real_matches = [_mn_real_match("RM-PRINT", "2026-09-17", status="Scheduled")]
+        scope = _mn_team_scope(our_team_id, "Synthetic Our Team 11", opp_team_id,
+                                "Synthetic Opponent 11", fmt, session, our_roster,
+                                opponent_roster, real_matches=real_matches)
+        _mn_inject(page, scope_key, scope, [])
+
+        page.select_option("#mn-match", "RM-PRINT")
+
+        sticky_text = page.locator("#mn-sticky").inner_text()
+        assert "2026-09-17" in sticky_text
+        print_text = page.locator("#mn-print-summary").inner_text()
+        assert "2026-09-17" in print_text
+        assert "RM-PRINT" in print_text
         assert page.console_errors == []
 
     def test_sticky_summary_shows_remaining_slots_and_skill_total(self, page):

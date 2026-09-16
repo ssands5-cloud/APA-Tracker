@@ -355,8 +355,14 @@ already embedded on the page — no new estimate, no new model.
   `match_date`), since the same two teams can legitimately play more than
   once under one scope in a season. Saved state (availability, boards sent)
   is keyed by the selected real match, not just the scope, so two matches
-  against a repeat opponent never inherit each other's lineup. A "Data last
-  captured" line shows the real bundle build timestamp.
+  against a repeat opponent never inherit each other's lineup. Which
+  scope+match is *active* is itself persisted separately from each
+  match's own state, so a page reload restores the coach's real selection
+  instead of silently snapping back to the first option. A "Bundle
+  generated" line shows the real export timestamp — explicitly not a
+  claim about when the underlying data was last synced, since this
+  project has no single real timestamp for that across every table Match
+  Night reads.
 - **Roster availability** — mark each of tonight's players Available,
   Absent, Already played, or Held back — four genuinely distinct states,
   never conflated. Nothing computed elsewhere treats an unmarked player as

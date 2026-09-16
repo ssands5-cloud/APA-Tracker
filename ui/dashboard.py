@@ -204,7 +204,8 @@ not as a verdict.</p>
 <label>Match: <select id="mn-scope">{scope_options}</select></label>
 &nbsp;
 <label>Scheduled match: <select id="mn-match"></select></label>
-<p class="cd-note">Data last captured: {escape(freshness_text)}</p>
+<p class="cd-note">Bundle generated: {escape(freshness_text)} -- when this export was built,
+not necessarily when the underlying data was last synced from the league portal.</p>
 &nbsp;
 <button type="button" id="mn-reset">Reset Match Night</button>
 &nbsp;
@@ -664,6 +665,18 @@ toughest first -- never a categorical "danger" label
     return matchId ? (scopeKey + "|match:" + matchId) : scopeKey;
   }}
 
+  function mnSelectedMatchLabel(scope) {{
+    // GPT audit follow-up (2026-09-16, a226bd1): two real nights against
+    // the same opponent look identical without this -- print and the
+    // on-screen summary must name the actual selected match, not just
+    // the team/format/session shared by both.
+    var matches = scope.real_matches || [];
+    var matchId = document.getElementById("mn-match").value;
+    var selected = matches.filter(function (m) {{ return String(m.external_id) === String(matchId); }})[0];
+    if (!selected) return "no specific scheduled match identified";
+    return (selected.match_date || "unknown date") + " (id " + selected.external_id + ")";
+  }}
+
   function mnRenderMatchSelect(scope) {{
     var select = document.getElementById("mn-match");
     var matches = scope.real_matches || [];
@@ -1003,6 +1016,7 @@ toughest first -- never a categorical "danger" label
     var target = document.getElementById("mn-print-summary");
     var html = "<h2>Match Night summary -- " + esc(scope.our_team.name) + " vs "
       + esc(scope.opponent_team.name) + " (" + esc(scope.format) + ", " + esc(scope.session_name) + ")</h2>";
+    html += "<p>Scheduled match: " + esc(mnSelectedMatchLabel(scope)) + "</p>";
     html += "<h3>Roster status</h3><ul>";
     scope.our_roster.forEach(function (p) {{
       html += "<li>" + esc(p.name) + " -- " + MN_STATUS_LABELS[mnState.statuses[p.id] || "available"] + "</li>";
@@ -1052,7 +1066,8 @@ toughest first -- never a categorical "danger" label
     var verdict = mnLegalCompletionExists(committed, available);
     var warn = verdict === false;
     target.className = "mn-sticky mn-screen-only" + (warn ? " mn-sticky-warn" : "");
-    target.innerHTML = "<span><strong>" + remainingSlots + "</strong> board(s) remaining</span>"
+    target.innerHTML = "<span>" + esc(mnSelectedMatchLabel(scope)) + "</span>"
+      + "<span><strong>" + remainingSlots + "</strong> board(s) remaining</span>"
       + "<span>Skill total: <strong>" + knownSum + (hasUnknown ? "+?" : "") + "</strong> of " + MN_LIMIT + "</span>"
       + (warn ? "<span>&#9888; No legal finish possible from current Available players</span>" : "");
   }}
@@ -1069,14 +1084,45 @@ toughest first -- never a categorical "danger" label
     mnRenderPrintSummary(scope);
   }}
 
+  // GPT audit follow-up (2026-09-16, a226bd1): a reload previously
+  // silently switched the active scope+match back to whatever the
+  // rebuilt <select>s defaulted to (their first option) -- the saved
+  // planner state for the real, previously-selected match was untouched,
+  // but what the coach actually SAW on screen changed out from under
+  // them. The active scope+match selection is now itself persisted
+  // (separately from each match's own planner state) and restored on
+  // load, falling back to the default first option only when the saved
+  // scope/match no longer exists in this bundle -- never guessed
+  // otherwise.
+  function mnActiveSelectionStorageKey() {{ return "match-night:active-selection"; }}
+
+  function mnSaveActiveSelection() {{
+    try {{
+      window.localStorage.setItem(mnActiveSelectionStorageKey(), JSON.stringify({{
+        scopeKey: document.getElementById("mn-scope").value,
+        matchId: document.getElementById("mn-match").value,
+      }}));
+    }} catch (e) {{ /* real, honest limitation: selection just won't persist */ }}
+  }}
+
+  function mnLoadActiveSelection() {{
+    try {{
+      var raw = window.localStorage.getItem(mnActiveSelectionStorageKey());
+      if (raw) return JSON.parse(raw);
+    }} catch (e) {{ /* private browsing or storage disabled */ }}
+    return null;
+  }}
+
   function mnInitScope() {{
-    // Scope changed: rebuild the real-match selector for the new scope
-    // first (its options depend on which scope is active), THEN load
-    // state under the resulting scope+match key.
+    // Scope changed (by the coach, or as part of page load): rebuild the
+    // real-match selector for the new scope first (its options depend on
+    // which scope is active), THEN load state under the resulting
+    // scope+match key, and remember this as the active selection.
     var scope = mnCurrentScope();
     if (scope) mnRenderMatchSelect(scope);
     mnState = mnLoadState(mnCurrentMatchKey());
     mnRenderAll();
+    mnSaveActiveSelection();
   }}
 
   function mnOnMatchChange() {{
@@ -1084,6 +1130,30 @@ toughest first -- never a categorical "danger" label
     // already correct, just load the (possibly different) saved state.
     mnState = mnLoadState(mnCurrentMatchKey());
     mnRenderAll();
+    mnSaveActiveSelection();
+  }}
+
+  function mnRestoreActiveSelectionOnLoad() {{
+    var saved = mnLoadActiveSelection();
+    if (saved) {{
+      var scopeSelect = document.getElementById("mn-scope");
+      var hasScope = Array.prototype.some.call(scopeSelect.options, function (o) {{
+        return o.value === saved.scopeKey;
+      }});
+      if (hasScope) scopeSelect.value = saved.scopeKey;
+    }}
+    var scope = mnCurrentScope();
+    if (scope) mnRenderMatchSelect(scope);
+    if (saved) {{
+      var matchSelect = document.getElementById("mn-match");
+      var hasMatch = Array.prototype.some.call(matchSelect.options, function (o) {{
+        return o.value === saved.matchId;
+      }});
+      if (hasMatch) matchSelect.value = saved.matchId;
+    }}
+    mnState = mnLoadState(mnCurrentMatchKey());
+    mnRenderAll();
+    mnSaveActiveSelection();
   }}
 
   document.getElementById("mn-scope").addEventListener("change", mnInitScope);
@@ -1110,7 +1180,7 @@ toughest first -- never a categorical "danger" label
   }});
   refreshOpponents();
   renderTeam();
-  mnInitScope();
+  mnRestoreActiveSelectionOnLoad();
 
   // Test-only introspection/injection hooks -- tests/test_dashboard_browser.py
   // uses these for deterministic Match Night coverage that shouldn't have to
