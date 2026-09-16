@@ -822,6 +822,46 @@ pending-CI limitation in the preceding review. Remote main remains at
 dashboard, serializer and test edits are in progress and are excluded
 from this verification. They were left untouched.
 
+### Scheduled-match workflow review — 2026-09-16 19:48 UTC
+
+Reviewed `2850c2b` and `909f271`. **111 focused tests passed**, two existing
+datetime warnings. CI run 35142265951 passed Python 3.12 and 3.13.
+Real matches are queried by both teams, format/session, excluding byes;
+per-match storage keys and bounded completion-witness code are present.
+Friendly model descriptions retain expandable technical sources.
+
+- **P1 — build time is mislabeled as data capture time.** The bundle takes
+  `datetime.now()` before computing exports and passes it as `built_at`,
+  but the dashboard calls it "Data last captured". A rebuild from an old
+  database now falsely makes that database look freshly captured. In the
+  retained `20260916T193928Z` dashboard it reads 2026-09-16 19:39 UTC.
+  Rename this field "Bundle generated"; separately derive capture time
+  from persisted acquisition metadata or explicitly say unavailable.
+  Test rebuilding unchanged source data does not advance capture time.
+- **P1 — reload switches away from the selected match.** Reproduced in
+  Chromium against that retained dashboard: select match `51478078`, mark
+  a player absent, reload; selected match becomes `51007724` under scope
+  `13082949|8-Ball Open|Fall 2026`. The selector is rebuilt with its first
+  option selected. The original state remains saved under its own key, but
+  the active match silently changes. Persist/restore active scope and
+  match identity before loading state; require explicit setup if the saved
+  match is unavailable. Add second-match reload and second-scope reload
+  browser regressions, checking both selection and roster/boards.
+- **P2 — printed summary omits the selected scheduled match identity.**
+  It still names teams/format/session only. Two nights against the same
+  opponent produce indistinguishable headers. Include actual match date
+  and ID in print and the sticky/on-screen summary.
+- **Coverage refinement still open:** adding four known teammates to the
+  unknown-candidate fixture is insufficient to catch omission of the
+  candidate. Omitting that candidate asks for five remaining slots from
+  only four known players and still returns unavailable. Use five low-SL
+  teammates as previously requested, so that the broken implementation
+  would positively and incorrectly claim a valid completion.
+
+No feature code was changed; no global builder run. The earlier cap fixes
+remain verified, but these newly introduced date/selection issues require
+correction before relying on the scheduled-match workflow.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
