@@ -211,7 +211,11 @@ body.cc-ready .dc-embedded { overflow-x: auto; }
   var pvpH = directHeading('H2', 'Player vs Player');
   var teamH = directHeading('H2', 'Team vs Team');
   var matchH = directHeading('H2', 'Match Night');
+  var matchNote = matchH && matchH.nextElementSibling && matchH.nextElementSibling.classList.contains('cd-note')
+    ? matchH.nextElementSibling : null;
   var riskH = directHeading('H2', 'Opponent Risk Profile');
+  var riskNote = riskH && riskH.nextElementSibling && riskH.nextElementSibling.classList.contains('cd-note')
+    ? riskH.nextElementSibling : null;
   var coverage = document.getElementById('data-coverage-freshness');
   if (!title || !pvpH || !teamH || !matchH || !riskH || !coverage) {
     throw new Error('Coach Cockpit layout contract changed; refusing partial rearrangement');
@@ -237,8 +241,7 @@ body.cc-ready .dc-embedded { overflow-x: auto; }
 
   var matchCard = make('section', 'cc-card cc-match-card');
   appendIf(matchCard, matchH);
-  var matchNote = matchH.nextElementSibling;
-  if (matchNote && matchNote.classList.contains('cd-note')) appendIf(matchCard, matchNote);
+  appendIf(matchCard, matchNote);
   appendIf(matchCard, nearestControls('mn-scope'));
   appendIf(matchCard, document.getElementById('mn-sticky'));
   appendIf(matchCard, document.getElementById('mn-warning'));
@@ -265,8 +268,7 @@ body.cc-ready .dc-embedded { overflow-x: auto; }
   aside.appendChild(edgeCard);
 
   var scoutingCard = make('section', 'cc-card cc-scouting-wrap');
-  var scoutingTitle = make('h2', null, 'Opponent Scouting');
-  scoutingCard.appendChild(scoutingTitle);
+  scoutingCard.appendChild(make('h2', null, 'Opponent Scouting'));
   appendIf(scoutingCard, document.getElementById('mn-scouting'));
   aside.appendChild(scoutingCard);
 
@@ -284,8 +286,7 @@ body.cc-ready .dc-embedded { overflow-x: auto; }
   details.appendChild(summary);
   var body = make('div', 'cc-advanced-body');
   appendIf(body, riskH);
-  var riskNote = riskH.nextElementSibling;
-  if (riskNote && riskNote.classList.contains('cd-note')) appendIf(body, riskNote);
+  appendIf(body, riskNote);
   appendIf(body, document.getElementById('risk-result'));
   details.appendChild(body); advanced.appendChild(details); shell.appendChild(advanced);
 
