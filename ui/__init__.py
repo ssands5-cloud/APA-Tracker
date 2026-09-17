@@ -4,10 +4,16 @@ The release Match Night work intentionally changed the planner's rule language,
 but it must not regress three long-standing captain-facing guarantees that the
 browser/unit suite already enforced: estimates are not promises, legal choices
 show a concrete finish, and illegal choices plainly say that no combination
-works.  Keep those phrases in the rendered page while retaining the more
+works. Keep those phrases in the rendered page while retaining the more
 specific 5/23 and 4/19 wording added by the release branch.
 
-The substitutions are deliberately anchored and fail closed.  If the canonical
+The release browser coverage also exercises a 390px phone viewport. The base
+page's 24px desktop body margin leaves too little usable width once Match Night's
+new fallback text is present, so the release renderer adds a small-screen layout
+rule that reduces the page gutter and permits flex children to shrink/wrap. It
+does not mask overflow with ``overflow-x: hidden``; content must genuinely fit.
+
+All substitutions are deliberately anchored and fail closed. If the canonical
 renderer changes so an expected anchor no longer occurs exactly once, rendering
 raises rather than silently dropping a disclosure relied on by the captain UX.
 """
@@ -49,6 +55,17 @@ def _render_with_release_compat(*args, **kwargs):
         " -- No combination of tonight's remaining Available players produces a legal "
         "5-player / 23 completion or 4-player / 19 fallback.",
         "no-combination explanation",
+    )
+    html = _replace_once(
+        html,
+        "</style></head><body>",
+        "@media (max-width: 600px) {\n"
+        "  body { margin: 12px; }\n"
+        "  .cd-cols > div { min-width: 0; }\n"
+        "  .mn-sticky > span { min-width: 0; overflow-wrap: anywhere; }\n"
+        "}\n"
+        "</style></head><body>",
+        "small-screen layout",
     )
     return html
 
