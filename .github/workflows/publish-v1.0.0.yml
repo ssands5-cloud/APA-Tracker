@@ -1,0 +1,84 @@
+name: Publish audited v1.0.0
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-v1.0.0.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: publish-v1.0.0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable audited release target
+        env:
+          TARGET_SHA: 30b82e2be43783d3fc5be345fc683bad1ffd77d7
+          TARGET_TREE: 3a1fce8753707b3a38b5a740f199f2b300eb9a49
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${TARGET_SHA}^{commit}"
+          actual_tree="$(git rev-parse "${TARGET_SHA}^{tree}")"
+          test "${actual_tree}" = "${TARGET_TREE}"
+          version="$(git show "${TARGET_SHA}:VERSION" | tr -d '\r\n')"
+          test "${version}" = "1.0.0"
+
+      - name: Publish immutable tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: 30b82e2be43783d3fc5be345fc683bad1ffd77d7
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+
+          if git show-ref --verify --quiet refs/tags/v1.0.0; then
+            actual_target="$(git rev-list -n 1 refs/tags/v1.0.0)"
+            test "${actual_target}" = "${TARGET_SHA}"
+          else
+            git tag v1.0.0 "${TARGET_SHA}"
+            git push origin refs/tags/v1.0.0
+          fi
+
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          cat > /tmp/release-notes.md <<'EOF'
+          # APA Tracker v1.0.0
+
+          First production-ready release of the APA captain decision-support platform.
+
+          ## Highlights
+          - Live APA GraphQL acquisition with synchronized SQLite data.
+          - Coach Advantage dashboard, scouting, exports, and bundle verification.
+          - Match Night planner with standard 5-player / 23 support.
+          - APA 4-player / 19 fallback support, with 5-player preference whenever a legal five-player finish remains possible.
+          - Explicit match-5 forfeit handling for the 4-player fallback.
+          - Fail-closed handling for unknown skill levels and exact-search bounds.
+          - Mobile Match Night hardening and deterministic Chromium/Playwright regression coverage.
+          - Protected main branch with required Python 3.12 and Python 3.13 CI.
+
+          ## Final verification
+          Release target: `30b82e2be43783d3fc5be345fc683bad1ffd77d7`
+
+          Post-merge GitHub Actions run #172 (`35181758225`) passed the full suite on Python 3.12 and 3.13 with 1,721 tests on each lane, Chromium browser coverage, and CI-mode pipeline smoke.
+
+          Live GraphQL production acceptance remains attributable to audited baseline `f21fe1088ac41594b349abcd777162296096ae7b`; the final promotion changed only `VERSION` from `1.0.0-rc1` to `1.0.0` and did not alter runtime behavior.
+          EOF
+
+          gh release create v1.0.0 \
+            --verify-tag \
+            --title "APA Tracker v1.0.0" \
+            --notes-file /tmp/release-notes.md \
+            --latest
