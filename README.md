@@ -269,9 +269,10 @@ operation comes back missing, visit the page that loads it and capture again.
 
 ## Coach Advantage Tools ("Coach's Weapon")
 
-Two REPORTER modules and one builder turn the existing, already-validated
-analytics into a coach-facing Player vs Player comparison, a Team vs Team
-comparison, and a combined static Coach Dashboard:
+Existing REPORTER modules and one builder turn the already-validated analytics
+into a coach-facing Player vs Player comparison, Team vs Team comparison,
+Data Coverage/Freshness view, Match Night planner, and one combined static
+Coach Cockpit:
 
 - `analytics/player_matchup_engine.py` — one real (player, opponent)
   pairing's evidence (DIRECT record with the exact win/loss count, or the
@@ -284,9 +285,15 @@ comparison, and a combined static Coach Dashboard:
   player granularity), the true pooled DIRECT win/loss record across every
   one of our players who has faced an opponent, and the embedded
   `analytics/lineup_lab.py` approved lineup.
+- `analytics/data_coverage.py` — the existing factual coverage reporter:
+  DIRECT/INDIRECT/UNKNOWN counts, missing posted skill levels, sample sizes,
+  real standings/career refresh timestamps, and explicit unavailable-data
+  disclosures. It does not invent a fresh/stale threshold.
 - `scripts/build_coach_advantage_bundle.py` — the builder: real scope
-  discovery via `scripts/build_captain_first_edge.py`, then both engines,
-  HTML/Excel/JSON, and `ui/dashboard.py`'s combined page, finished with a
+  discovery via `scripts/build_captain_first_edge.py`, then the existing
+  matchup engines and Data Coverage report, HTML/Excel/JSON, and
+  `ui/coach_cockpit.py`'s one-stop composition of the audited
+  `ui/dashboard.py` page plus `ui/tabs/data_coverage.py`, finished with a
   manifest, checksums, and a `READY` marker (same discipline as
   `scripts/build_full_production_demo.py`). Never scrapes -- read-only
   against whatever database you point it at:
@@ -295,7 +302,7 @@ comparison, and a combined static Coach Dashboard:
   python scripts/build_coach_advantage_bundle.py --db data/apa_tracker.db --our-team-id 13082948
   ```
 
-**Coach Dashboard (`ui/dashboard.py`) features:**
+**Coach Dashboard / Cockpit features:**
 
 - **Player-then-opponent selectors** — choosing a player narrows the
   opponent list to only the real pairings that player has a report
@@ -321,6 +328,11 @@ comparison, and a combined static Coach Dashboard:
   fill status, and the lowest/highest experimental skill-only estimate
   already in the ranked table below it — purely descriptive, never
   narrated as a "favored"/"danger" verdict.
+- **Data Coverage & Freshness** — the same already-validated Data Coverage
+  report is now embedded in the one-stop cockpit for each real matchup
+  scope: evidence counts, missing posted skill levels, sample sizes, real
+  refresh timestamps, and unavailable fields. The UI shows those facts as
+  captured and does not invent an age cutoff or a fresh/stale verdict.
 - **Lineup context** — the approved lineup table shows each board's real
   lineup score next to its real score basis
   (`LineupSlot.lineup_score_source` — always the validated skill-only
@@ -360,9 +372,9 @@ already embedded on the page — no new estimate, no new model.
   match's own state, so a page reload restores the coach's real selection
   instead of silently snapping back to the first option. A "Bundle
   generated" line shows the real export timestamp — explicitly not a
-  claim about when the underlying data was last synced, since this
-  project has no single real timestamp for that across every table Match
-  Night reads.
+  claim about when the underlying data was last synced. The embedded Data
+  Coverage section separately shows the real refresh signals the project
+  actually has rather than relabeling build time as source-data freshness.
 - **Roster availability** — mark each of tonight's players Available,
   Absent, Already played, or Held back — four genuinely distinct states,
   never conflated. Nothing computed elsewhere treats an unmarked player as
@@ -380,10 +392,13 @@ already embedded on the page — no new estimate, no new model.
   plainly that no combination of tonight's remaining Available players
   keeps the team under the real 23-Rule cap. Backed by a real, bounded
   exact search (`analytics.lineup_legality.legal_completion_exists`, ported
-  to JS since this planner is live/interactive, not a build-time report) —
-  a choice that would leave no legal completion is also gated behind a real
-  confirmation dialog before it's applied, never silently blocked, since a
-  captain may have no other choice.
+  to JS since this planner is live/interactive, not a build-time report).
+  The normal 5-player / 23 path is preferred whenever it is provably legal.
+  Only when that path is proven impossible can the verified 4-player / 19
+  fallback be surfaced; using it requires forfeiting match 5. Unknown skill
+  levels never force a fallback or forfeit recommendation, and an exact
+  search that exceeds its configured bound fails closed instead of silently
+  approximating.
 - **Fast corrections** — every sent board has its own Undo: removes the
   recorded assignment, restores that player's own availability, and frees
   the opponent back into the announce dropdown, all three kept consistent
@@ -396,6 +411,7 @@ already embedded on the page — no new estimate, no new model.
   stays visible while scrolling through comparison cards, decision cards
   ahead of the detailed boards-sent log. A basic print view (`Print
   summary`) renders just the roster status and boards sent, usable offline.
+
 ### Match Night Scouting
 
 Its own real `<h2>` section within Match Night — the same visual weight as
@@ -428,13 +444,6 @@ announced, before the "who should I send" comparison cards:
   (not just CSS asserted and trusted): no horizontal page scroll, and
   every Match Night control meets a real 44px touch-target minimum.
 
-Still open, honestly disclosed:
-The 4-player/19 skill-level fallback (a team that can't field 5 legal
-players) is intentionally not implemented here either —
-`analytics/lineup_legality.py`'s own docstring already flags that as
-unverified captain-choice territory needing its own follow-up, not
-assumed.
-
 **Regression coverage:** `tests/test_dashboard_browser.py` drives a real
 headless Chromium instance (Playwright) against a real, freshly built
 bundle's `dashboard.html` — picking players, narrowing opponents, applying
@@ -443,16 +452,14 @@ absent/held back, sending a player and checking the resulting board/status,
 confirming a legality-breaking send triggers a real confirm() dialog, and
 checking for JavaScript errors throughout — so the dashboard's actual
 browser behavior is regression-tested, not just the HTML/JSON it renders.
+The post-v1.0 Coach Cockpit integration adds a separate real 390px Chromium
+regression that expands Data Coverage and verifies any wide table scroll is
+contained locally instead of widening the whole page.
 
-Still open, honestly disclosed: skill/streak win-loss tracking beyond the
-skill-level trend direction (this project does not currently persist a
-per-player match win/loss streak separate from the validated evidence
-layer). The Data Coverage view (§11 of
-`docs/captain_first_edge_experience.md`) is already built --
-`analytics/data_coverage.py`, `scripts/build_data_coverage.py`,
-`ui/tabs/data_coverage.py`, and its own Excel export -- as its own
-standalone page, not (yet) integrated into this combined Coach Dashboard
-alongside Match Night/Data Coverage's other siblings above.
+Still open, honestly disclosed: a genuine per-player match win/loss streak
+separate from skill-level trend is not currently persisted by the validated
+evidence layer. It remains separate evidence-layer work, not something the
+cockpit infers from incomplete data.
 
 ## Notes
 
@@ -465,5 +472,5 @@ alongside Match Night/Data Coverage's other siblings above.
 
 ## Collaboration
 
-This project is maintained jointly by Claude (builder) and GPT (auditor).
+This project uses a builder/auditor handshake between GPT/Jeeves and Claude.
 See [docs/gpt_claude_handshake.md](docs/gpt_claude_handshake.md) for details.
