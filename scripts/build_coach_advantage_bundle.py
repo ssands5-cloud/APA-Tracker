@@ -1,8 +1,8 @@
 """Coach Advantage Bundle Builder.
 
 Turns one real database snapshot into one verified bundle of the Coach
-Advantage Tools: Player Matchup Engine, Team Matchup Engine, and the
-static Coach Dashboard. A COORDINATION boundary, like
+Advantage Tools: Player Matchup Engine, Team Matchup Engine, Data Coverage,
+and the static Coach Dashboard. A COORDINATION boundary, like
 ``scripts/build_full_production_demo.py``: it calls existing acquisition
 and analytics entry points and copies none of their logic.
 
@@ -12,9 +12,9 @@ already does exactly this (every real scheduled match for the configured
 team, classified via ``analytics.pairing_evidence``, with
 ``analytics.lineup_lab``'s approved lineup attached or its real failure
 reason). This builder is a thin layer on top: for each real scope it
-already resolved, it builds a ``PlayerMatchupReport`` per pairing and one
-``TeamMatchupReport``, then renders HTML/Excel/JSON and the combined
-dashboard.
+already resolved, it builds a ``PlayerMatchupReport``, ``TeamMatchupReport``,
+and the existing ``DataCoverageReport`` from that same matrix, then renders
+HTML/Excel/JSON and the combined dashboard.
 
 Phases, in order, each stopping the build on failure:
 
@@ -24,11 +24,11 @@ Phases, in order, each stopping the build on failure:
                    scrapes, never requires a token (see --source-db in
                    scripts/build_full_production_demo.py for the same
                    already-established convention)
-    3. compute     real scope discovery, per-scope pairing/team reports,
-                   whole-division Opponent Risk Profile
+    3. compute     real scope discovery, per-scope pairing/team/coverage
+                   reports, whole-division Opponent Risk Profile
     4. render      HTML/Excel/JSON per engine, plus the combined dashboard
     5. verify      reconcile evidence counts against each scope's own
-                   already-reconciled matrix
+                   already-reconciled matrix and Data Coverage report
     6. finalize    write manifest and checksums, re-read and verify them
                    from disk, then write READY last
 
@@ -58,6 +58,7 @@ if __package__ in (None, ""):
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from analytics.data_coverage import DataCoverageReport, build_report as build_data_coverage_report
 from analytics.opponent_risk_profile import build_profile as build_opponent_risk_profile
 from analytics.pairing_evidence import PairingEvidenceMatrix
 from analytics.player_matchup_engine import (
@@ -74,6 +75,7 @@ from scripts.build_captain_first_edge import (
     real_matches_for_scope,
 )
 from scripts.build_captains_edge import NoDatabaseError, connect_read_only, resolve_db_path
+from scripts.build_data_coverage import _career_stats_refreshed_at, _standings_refreshed_at
 from scripts.build_full_production_demo import (
     BOUNDARY_FILE,
     BOUNDARY_ID,
@@ -155,6 +157,7 @@ class ComputedScope:
     unavailable_reason: Optional[str]
     player_reports: tuple[PlayerMatchupReport, ...]
     team_report: Optional[TeamMatchupReport]
+    coverage_report: Optional[DataCoverageReport] = None
 
 
 def preflight(run_dir: Path, run_root: Path) -> PhaseResult:
@@ -194,9 +197,12 @@ def compute(
 ) -> tuple[list[ComputedScope], list, PhaseResult]:
     """Real scope discovery (scripts.build_captain_first_edge) plus this
     builder's own Coach Mode aggregation on top -- no scope discovery or
-    evidence classification is reimplemented here."""
+    evidence classification is reimplemented here. Data Coverage is built
+    from the exact same already-classified matrix, plus its existing real
+    refresh-timestamp sources."""
     trends = _skill_trends(db)
     match_scopes = build_match_scopes(db, our_team_external_id)
+    standings_refreshed_at = _standings_refreshed_at(db, our_team_name)
 
     computed: list[ComputedScope] = []
     risk_inputs = []
@@ -234,12 +240,21 @@ def compute(
             our_trends=our_trends, opponent_trends=opponent_trends,
             real_matches=real_matches,
         )
+        player_external_ids = {p.player_external_id for p in scope.matrix.pairings} | {
+            p.opponent_external_id for p in scope.matrix.pairings
+        }
+        coverage_report = build_data_coverage_report(
+            scope.matrix,
+            standings_refreshed_at=standings_refreshed_at,
+            career_stats_refreshed_at=_career_stats_refreshed_at(db, player_external_ids),
+        )
         computed.append(ComputedScope(
             opponent_team_external_id=scope.opponent_team_external_id,
             opponent_team_name=scope.opponent_team_name,
             format=scope.format, session_name=scope.session_name,
             matrix=scope.matrix, unavailable_reason=None,
             player_reports=player_reports, team_report=team_report,
+            coverage_report=coverage_report,
         ))
         risk_inputs.append((scope.opponent_team_external_id, scope.opponent_team_name, scope.matrix))
 
@@ -261,6 +276,7 @@ def render(
 ) -> PhaseResult:
     all_player_reports = [r for c in computed for r in c.player_reports]
     all_team_reports = [c.team_report for c in computed if c.team_report is not None]
+    all_coverage_reports = [c.coverage_report for c in computed if c.coverage_report is not None]
 
     html_dir = run_dir / "html"
     excel_dir = run_dir / "excel"
@@ -276,7 +292,12 @@ def render(
     )
     (html_dir / "dashboard.html").write_text(
         dashboard_module.render(
-            all_player_reports, all_team_reports, risk_profile, our_team_name, built_at=built_at,
+            all_player_reports,
+            all_team_reports,
+            risk_profile,
+            our_team_name,
+            built_at=built_at,
+            data_coverage_reports=all_coverage_reports,
         ),
         encoding="utf-8",
     )
@@ -305,7 +326,8 @@ def verify(computed: list[ComputedScope]) -> PhaseResult:
     """Reconcile every usable scope's own evidence counts -- each matrix
     was already reconciled against its own feasible-pair set at build time
     (analytics.pairing_evidence.build_pairing_matrix raises on mismatch),
-    so this is a defensive re-check, not the only gate."""
+    so this is a defensive re-check, not the only gate. The embedded Data
+    Coverage report must also agree exactly with the matrix counts."""
     problems: list[str] = []
     for scope in computed:
         if scope.matrix is None:
@@ -321,6 +343,21 @@ def verify(computed: list[ComputedScope]) -> PhaseResult:
             problems.append(
                 f"{scope.opponent_team_name}: {len(scope.player_reports)} player report(s) "
                 f"but {counts.get('total_feasible_pairings', 0)} feasible pairings"
+            )
+        if scope.coverage_report is None:
+            problems.append(f"{scope.opponent_team_name}: usable scope has no Data Coverage report")
+            continue
+        coverage = scope.coverage_report.evidence_coverage
+        expected = (
+            counts.get("DIRECT", 0), counts.get("INDIRECT", 0), counts.get("UNKNOWN", 0),
+            counts.get("total_feasible_pairings", 0),
+        )
+        actual = (
+            coverage.direct_count, coverage.indirect_count, coverage.unknown_count, coverage.total,
+        )
+        if actual != expected:
+            problems.append(
+                f"{scope.opponent_team_name}: Data Coverage counts {actual} do not match matrix {expected}"
             )
     if problems:
         raise BuildError("; ".join(problems), EXIT_RENDER)
