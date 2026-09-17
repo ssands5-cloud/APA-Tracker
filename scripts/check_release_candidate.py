@@ -26,6 +26,21 @@ def main() -> int:
     require("def assess_completion_options(" in rules, "4-player fallback assessment missing")
     require("requires_forfeit" in rules, "fallback forfeit signal missing")
 
+    dashboard = (ROOT / "ui" / "dashboard.py").read_text(encoding="utf-8")
+    require("var MN_LIMIT_4 = 19;" in dashboard, "Match Night 4-player skill limit missing")
+    require("var MN_SIZE_4 = 4;" in dashboard, "Match Night fallback lineup size missing")
+    require("function mnAssessCompletionOptions(" in dashboard, "Match Night fallback assessment missing")
+    require("assessCompletionOptions: mnAssessCompletionOptions" in dashboard, "Match Night fallback test hook missing")
+    require("Match 5 must be forfeited" in dashboard, "captain-facing fallback forfeit messaging missing")
+
+    browser_tests = ROOT / "tests" / "test_match_night_fallback_browser.py"
+    require(browser_tests.is_file(), "Match Night fallback browser regression suite missing")
+    test_source = browser_tests.read_text(encoding="utf-8")
+    require(
+        test_source.count("    def test_") >= 10,
+        "Match Night fallback browser suite must contain at least 10 deterministic tests",
+    )
+
     print("Source release gates: PASS")
     print("Operational gates still require direct evidence: main protection + live-data acceptance")
     return 0
