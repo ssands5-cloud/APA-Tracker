@@ -83,7 +83,7 @@ from scripts.build_full_production_demo import (
     resolve_contained,
     sha256_file,
 )
-from ui import dashboard as dashboard_module
+from ui import coach_cockpit as dashboard_module
 from ui.export_excel_player_matchup_engine import write_workbook as write_player_workbook
 from ui.export_excel_team_matchup_engine import write_workbook as write_team_workbook
 from ui.export_html_player_matchup_engine import render as render_player_html
