@@ -69,30 +69,38 @@ def skill_level_volatility(matches: list[PlayerMatch]) -> int:
     """Count of week-to-week changes -- not a statistical variance, just how
     many times the level actually moved. 0 for a player with one reading, or
     with several readings that never changed. Uncapped, over the player's
-    WHOLE history -- see windowed_volatility() below for the Matchup
-    Advantage Engine's own, deliberately different, normalized version.
+    WHOLE history -- see normalized_volatility() below for the Matchup
+    Advantage Engine's own, deliberately different, normalized RATE.
     """
     return len(skill_level_changes(matches))
 
 
-def windowed_volatility(matches: list[PlayerMatch], window: int = 5, cap: int = 3) -> int:
-    """P2 volatility normalization, for analytics.matchup_builder ONLY --
-    NOT a replacement for skill_level_volatility() above, which still
-    backs the separate, unrelated per-player Skill Level History summary
-    (ui/export_json.py's _skill_level_summaries): that one's "how volatile
-    has this player been all season" question is different from this
-    one's "how volatile has this player been RECENTLY", and changing the
-    shared function would have silently changed that other feature too --
-    out of P2's stated scope (the Matchup Advantage Engine specifically).
+def normalized_volatility(matches: list[PlayerMatch], window: int = 5) -> float:
+    """Recent skill-level volatility for the Matchup Advantage Engine as a
+    rate in ``[0.0, 1.0]`` rather than a raw change count.
 
-    Counts skill-level changes among only the last `window` readings
-    (default 5) -- not the player's whole history -- then caps the result
-    at `cap` (default 3) so one wildly bouncing stretch doesn't dominate
-    matchup_score/confidence_score any more than a few real changes would.
-    `matches` must already be in chronological order (same requirement as
-    skill_level_changes) and should already be scoped to one (player,
-    format, session) group by the caller (P1-4) -- "recent" here means
-    recent WITHIN that group, not recent overall.
+    This deliberately stays separate from ``skill_level_volatility()``,
+    which backs the whole-history Skill Level summary. Only the last
+    ``window`` readings are considered here, and readings whose skill level
+    is unknown are excluded from both the numerator and denominator.
+
+    The denominator is the number of real opportunities to change:
+
+        volatility = changes / valid_transitions
+        valid_transitions = known_readings - 1
+
+    So two changes across three known readings is 1.0, while two changes
+    across five known readings is 0.5. A raw count would report both as 2
+    and incorrectly treat them as equally unstable.
+
+    ``matches`` must already be chronological and scoped to one player,
+    format, and session by the caller. Fewer than two known readings return
+    0.0 because there is no observed transition to score. The rate needs no
+    cap because it is bounded by construction.
     """
     recent = matches[-window:] if window else matches
-    return min(len(skill_level_changes(recent)), cap)
+    readings = [m for m in recent if m.skill_level is not None]
+    valid_transitions = len(readings) - 1
+    if valid_transitions <= 0:
+        return 0.0
+    return len(skill_level_changes(readings)) / valid_transitions
