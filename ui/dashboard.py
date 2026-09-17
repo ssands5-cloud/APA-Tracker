@@ -160,6 +160,11 @@ th, td {{ padding: 6px 9px; border-bottom: 1px solid #e2e5ea; text-align: left; 
 #mn-scouting-notes {{ font-size: 16px; padding: 10px; width: 100%; box-sizing: border-box;
   font-family: inherit; }}
 #mn-scouting-notes-status {{ margin-left: 8px; }}
+@media (max-width: 600px) {{
+  body {{ margin: 12px; }}
+  .cd-cols > div {{ min-width: 0; }}
+  .mn-sticky > span {{ min-width: 0; overflow-wrap: anywhere; }}
+}}
 @media print {{
   body * {{ display: none !important; }}
   #mn-print-summary, #mn-print-summary * {{ display: revert !important; }}
@@ -204,7 +209,9 @@ sparkline of the player's whole skill-level history.</p>
 tonight's scheduled match and who's available, pick the opponent's announced player, and
 compare your legal options side by side. The normal APA path is five players totaling 23
 or less. If and only if that path is proven impossible, the planner can surface APA's
-verified four-player/19 fallback, which requires forfeiting match 5.</p>
+verified four-player/19 fallback, which requires forfeiting match 5. A skill-level estimate
+is not a promise, and skill-level movement is not a winning streak -- both are shown as
+what they really are, not as a verdict.</p>
 <div class="cd-controls mn-screen-only">
 <label>Match: <select id="mn-scope">{scope_options}</select></label>
 &nbsp;
@@ -479,6 +486,7 @@ toughest first -- never a categorical "danger" label
   var MN_LIMIT = MN_LIMIT_5;
   var MN_SIZE = MN_SIZE_5;
   var MN_MAX_COMPLETION_ATTEMPTS = 200000;
+  var MN_SEARCH_BOUND_EXCEEDED = "too-many-to-check";
   var MN_STATUSES = ["available", "absent", "played", "held"];
   var MN_STATUS_LABELS = {{
     available: "Available", absent: "Absent", played: "Already played", held: "Held back"
@@ -503,7 +511,9 @@ toughest first -- never a categorical "danger" label
     if (available.length < stillNeeded) return insufficientPlayersAreUnknown ? null : false;
     var known = available.filter(function (v) {{ return v !== null && v !== undefined; }});
     if (known.length < stillNeeded) return null;
-    if (mnChooseCount(known.length, stillNeeded) > MN_MAX_COMPLETION_ATTEMPTS) return null;
+    if (mnChooseCount(known.length, stillNeeded) > MN_MAX_COMPLETION_ATTEMPTS) {{
+      return MN_SEARCH_BOUND_EXCEEDED;
+    }}
     var remainingCap = skillLimit - committedTotal;
     var found = false;
     (function combos(start, chosen) {{
@@ -525,9 +535,21 @@ toughest first -- never a categorical "danger" label
 
   function mnLegalCompletionExists(committed, available) {{
     if (committed.length > MN_SIZE_5) return null;
-    return mnCompletionExistsForTarget(
+    var result = mnCompletionExistsForTarget(
       committed, available, MN_SIZE_5, MN_LIMIT_5, true
     );
+    return result === MN_SEARCH_BOUND_EXCEEDED ? null : result;
+  }}
+
+  function mnBoundExceededAssessment(standard) {{
+    return {{
+      standardFivePossible: standard === MN_SEARCH_BOUND_EXCEEDED ? null : standard,
+      fourPlayerFallbackPossible: null,
+      preferredLineupSize: null,
+      skillLimit: null,
+      requiresForfeit: false,
+      verificationStatus: MN_SEARCH_BOUND_EXCEEDED,
+    }};
   }}
 
   function mnAssessCompletionOptions(committed, available) {{
@@ -537,9 +559,15 @@ toughest first -- never a categorical "danger" label
     var standard = mnCompletionExistsForTarget(
       committed, available, MN_SIZE_5, MN_LIMIT_5, false
     );
+    if (standard === MN_SEARCH_BOUND_EXCEEDED) {{
+      return mnBoundExceededAssessment(standard);
+    }}
     var fallback = mnCompletionExistsForTarget(
       committed, available, MN_SIZE_4, MN_LIMIT_4, false
     );
+    if (fallback === MN_SEARCH_BOUND_EXCEEDED) {{
+      return mnBoundExceededAssessment(standard);
+    }}
     var preferredLineupSize = null;
     var skillLimit = null;
     var requiresForfeit = false;
@@ -604,7 +632,7 @@ toughest first -- never a categorical "danger" label
     }});
     if (known.length < stillNeeded) return {{ status: "unknown", players: [] }};
     if (mnChooseCount(known.length, stillNeeded) > MN_MAX_COMPLETION_ATTEMPTS) {{
-      return {{ status: "unknown", players: [] }};
+      return {{ status: MN_SEARCH_BOUND_EXCEEDED, players: [] }};
     }}
     var remainingCap = skillLimit - committedTotal;
     var found = null;
@@ -636,16 +664,25 @@ toughest first -- never a categorical "danger" label
     if (!assessment) {{
       return {{ status: "unknown", players: [], assessment: null }};
     }}
+    if (assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED) {{
+      return {{ status: MN_SEARCH_BOUND_EXCEEDED, players: [], assessment: assessment }};
+    }}
     if (assessment.preferredLineupSize === MN_SIZE_5) {{
       var standardWitness = mnFindCompletionWitnessForTarget(
         committedSkills, availablePlayers, MN_SIZE_5, MN_LIMIT_5, false
       );
+      if (standardWitness.status === MN_SEARCH_BOUND_EXCEEDED) {{
+        return {{ status: MN_SEARCH_BOUND_EXCEEDED, players: [], assessment: assessment }};
+      }}
       return {{ status: "standard", players: standardWitness.players, assessment: assessment }};
     }}
     if (assessment.preferredLineupSize === MN_SIZE_4) {{
       var fallbackWitness = mnFindCompletionWitnessForTarget(
         committedSkills, availablePlayers, MN_SIZE_4, MN_LIMIT_4, false
       );
+      if (fallbackWitness.status === MN_SEARCH_BOUND_EXCEEDED) {{
+        return {{ status: MN_SEARCH_BOUND_EXCEEDED, players: [], assessment: assessment }};
+      }}
       return {{ status: "fallback", players: fallbackWitness.players, assessment: assessment }};
     }}
     if (assessment.standardFivePossible === null || assessment.fourPlayerFallbackPossible === null) {{
@@ -738,6 +775,10 @@ toughest first -- never a categorical "danger" label
       : "Your previously selected scheduled match is no longer available for this opponent, format, and session.";
   }}
 
+  function mnBoundExceededMessage() {{
+    return "Too many remaining Available players to check every exact legal completion. Narrow tonight's Available list before relying on Match Night. No fallback or forfeit recommendation is being made.";
+  }}
+
   function mnRenderWarning(scope) {{
     var target = document.getElementById("mn-warning");
     if (mnSelectionUnavailableReason) {{
@@ -759,6 +800,10 @@ toughest first -- never a categorical "danger" label
       target.innerHTML = "<p class='cd-note'>The current lineup cannot be verified because "
         + (unknownCommitted ? "an already-played player's skill level is unknown. " : "the state is incomplete. ")
         + "The 4-player fallback is not recommended while the standard 5-player path cannot be verified.</p>";
+      return;
+    }}
+    if (assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED) {{
+      target.innerHTML = "<p class='cd-none'>" + mnBoundExceededMessage() + "</p>";
       return;
     }}
     if (assessment.preferredLineupSize === MN_SIZE_4) {{
@@ -870,7 +915,7 @@ toughest first -- never a categorical "danger" label
       var candidateCommitted = committed.concat([p.skill_level]);
       var decision = mnCompletionDecision(candidateCommitted, otherAvailablePlayers);
       var cls = decision.status === "no-legal" ? "mn-warn"
-        : (decision.status === "unknown" ? "mn-unknown"
+        : ((decision.status === "unknown" || decision.status === MN_SEARCH_BOUND_EXCEEDED) ? "mn-unknown"
         : (decision.status === "fallback" ? "mn-fallback" : "mn-ok"));
       html += "<div class='mn-card " + cls + "'><h4>" + esc(p.name) + " <span class='cd-note'>SL "
         + orNoData(p.skill_level) + "</span>" + trendBadge(p.trend) + "</h4>";
@@ -891,7 +936,9 @@ toughest first -- never a categorical "danger" label
       }}
       if (decision.status === "no-legal") {{
         html += "<p class='mn-status-line'>\\u26a0 Sending " + esc(p.name)
-          + " leaves no legal 5-player / 23 completion and no legal 4-player / 19 fallback from the remaining Available players.</p>";
+          + " -- No combination of tonight's remaining Available players produces a legal 5-player / 23 completion or 4-player / 19 fallback.</p>";
+      }} else if (decision.status === MN_SEARCH_BOUND_EXCEEDED) {{
+        html += "<p class='cd-none'>" + mnBoundExceededMessage() + "</p>";
       }} else if (decision.status === "unknown") {{
         html += "<p class='cd-note'>The standard 5-player / 23 path cannot be verified after this send. The 4-player fallback is not recommended while the standard path is unresolved.</p>";
       }} else if (decision.status === "fallback") {{
@@ -904,7 +951,7 @@ toughest first -- never a categorical "danger" label
             + " completes the verified 4-player / 19 fallback. Match 5 must be forfeited.</p>";
         }}
       }} else if (decision.players.length) {{
-        html += "<p class='cd-note'>A valid 5-player / 23 finish: " + decision.players.map(function (w) {{
+        html += "<p class='cd-note'>A valid finish: 5-player / 23: " + decision.players.map(function (w) {{
             return esc(w.name) + " (SL " + w.skill_level + ")";
           }}).join(", ") + ".</p>";
       }} else {{
@@ -949,6 +996,10 @@ toughest first -- never a categorical "danger" label
     }});
     var candidateCommitted = committed.concat([player.skill_level]);
     var decision = mnCompletionDecision(candidateCommitted, otherAvailablePlayers);
+    if (decision.status === MN_SEARCH_BOUND_EXCEEDED) {{
+      window.alert(mnBoundExceededMessage() + " Send was not recorded.");
+      return;
+    }}
     if (decision.status === "no-legal") {{
       var proceedIllegal = window.confirm(
         "Sending " + player.name + " would leave no legal 5-player / 23 lineup and no legal 4-player / 19 fallback possible with tonight's remaining Available players. Send anyway?"
@@ -1024,7 +1075,9 @@ toughest first -- never a categorical "danger" label
       html += " <span class='cd-note'>-- includes a player with no known skill level; this total is a partial sum, not the real full total</span>";
     }}
     html += "</p>";
-    if (targetSize === MN_SIZE_4) {{
+    if (assessment && assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED) {{
+      html += "<p class='cd-none'>" + mnBoundExceededMessage() + "</p>";
+    }} else if (targetSize === MN_SIZE_4) {{
       html += "<p class='cd-none'>Verified 4-player / 19 fallback. Match 5 must be forfeited.</p>";
     }}
     target.innerHTML = html;
@@ -1067,7 +1120,9 @@ toughest first -- never a categorical "danger" label
       html += " -- a player with no known skill level is included in the board count above but not in this total; this is a partial sum, not the real full total";
     }}
     html += "</p>";
-    if (targetSize === MN_SIZE_4) {{
+    if (assessment && assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED) {{
+      html += "<p>" + mnBoundExceededMessage() + "</p>";
+    }} else if (targetSize === MN_SIZE_4) {{
       html += "<p>Verified 4-player / 19 fallback. Match 5 must be forfeited.</p>";
     }}
     target.innerHTML = html;
@@ -1084,10 +1139,13 @@ toughest first -- never a categorical "danger" label
     var limit = targetSize === MN_SIZE_4 ? MN_LIMIT_4 : MN_LIMIT_5;
     var remainingSlots = Math.max(0, targetSize - playedCount);
     var warn = !assessment
+      || (assessment && assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED)
       || (assessment && assessment.preferredLineupSize === MN_SIZE_4)
       || (assessment && assessment.standardFivePossible !== true);
     var status = "";
-    if (!assessment || assessment.standardFivePossible === null) {{
+    if (assessment && assessment.verificationStatus === MN_SEARCH_BOUND_EXCEEDED) {{
+      status = "<span>&#9888; Too many Available players to check exactly; narrow tonight's Available list</span>";
+    }} else if (!assessment || assessment.standardFivePossible === null) {{
       status = "<span>&#9888; Standard 5-player path cannot be verified; fallback not recommended</span>";
     }} else if (assessment.preferredLineupSize === MN_SIZE_4) {{
       status = "<span>&#9888; 4-player / 19 fallback — match 5 must be forfeited</span>";

@@ -270,6 +270,45 @@ class TestMatchNightFourPlayerFallback:
         assert "no legal 4-player" in warning
         assert page.console_errors == []
 
+    def test_search_bound_exhaustion_is_distinct_and_actionable(self, page):
+        roster, _ = _inject(page, 32, [2] * 60)
+        assessment = page.evaluate(
+            "window.__matchNightTestHooks.assessCompletionOptions([], Array(60).fill(2))"
+        )
+        assert assessment["verificationStatus"] == "too-many-to-check"
+        assert assessment["preferredLineupSize"] is None
+        assert assessment["requiresForfeit"] is False
+
+        decision = page.evaluate(
+            "() => window.__matchNightTestHooks.completionDecision([], "
+            "Array.from({length: 60}, (_, i) => ({id: i + 1, name: 'P' + (i + 1), skill_level: 2})))"
+        )
+        assert decision["status"] == "too-many-to-check"
+
+        warning = page.locator("#mn-warning").inner_text().lower()
+        sticky = page.locator("#mn-sticky").inner_text().lower()
+        for text in (warning, sticky):
+            assert "too many" in text
+            assert "narrow" in text
+        assert "forfeit" not in sticky
+
+        dialog_messages: list[str] = []
+
+        def dismiss_dialog(dialog):
+            dialog_messages.append(dialog.message)
+            dialog.dismiss()
+
+        page.once("dialog", dismiss_dialog)
+        page.locator("#mn-comparison .mn-send-btn").first.click()
+        assert dialog_messages
+        assert "too many" in dialog_messages[0].lower()
+        assert "narrow" in dialog_messages[0].lower()
+        first_player_id = roster[0]["id"]
+        assert page.locator(
+            f"#mn-roster .mn-status-select[data-player-id='{first_player_id}']"
+        ).input_value() == "available"
+        assert page.console_errors == []
+
     def test_fallback_remains_readable_on_phone_width(self, browser, dashboard_path):
         phone = browser.new_page(viewport={"width": 390, "height": 844})
         errors: list[str] = []
