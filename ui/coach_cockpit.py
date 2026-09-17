@@ -128,6 +128,7 @@ body.cc-ready .mn-card.mn-fallback { background: #2b2112; }
   background: var(--cc-panel); color: var(--cc-green); font-size: 12px; font-weight: 700;
 }
 .cc-grid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(320px, .82fr); gap: 16px; align-items: start; }
+.cc-main, .cc-aside { min-width: 0; }
 .cc-card {
   background: var(--cc-panel); border: 1px solid var(--cc-line); border-radius: 14px;
   padding: 16px; margin-bottom: 16px; box-shadow: 0 7px 24px rgba(0,0,0,.16);
