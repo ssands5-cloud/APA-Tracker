@@ -275,6 +275,7 @@ class TestMatchNightFourPlayerFallback:
         errors: list[str] = []
         phone.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
         phone.on("pageerror", lambda exc: errors.append(str(exc)))
+        phone.console_errors = errors  # type: ignore[attr-defined]
         try:
             phone.goto(dashboard_path.as_uri())
             _inject(phone, 31, [5, 5, 5, 4])
