@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+ALLOWED_RELEASE_VERSIONS = frozenset({"1.0.0-rc1", "1.0.0"})
 
 
 def require(condition: bool, message: str) -> None:
@@ -16,9 +17,16 @@ def require(condition: bool, message: str) -> None:
         raise SystemExit(f"RELEASE GATE FAILED: {message}")
 
 
+def validate_release_version(version: str) -> None:
+    require(
+        version in ALLOWED_RELEASE_VERSIONS,
+        f"unexpected APA Tracker 1.0 release version {version!r}",
+    )
+
+
 def main() -> int:
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    require(version == "1.0.0-rc1", f"unexpected pre-release version {version!r}")
+    validate_release_version(version)
 
     rules = (ROOT / "analytics" / "lineup_legality.py").read_text(encoding="utf-8")
     require("TEAM_SKILL_LEVEL_LIMIT_4 = 19" in rules, "4-player/19 rule constant missing")
