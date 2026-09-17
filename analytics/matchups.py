@@ -209,11 +209,20 @@ def trend_modifier(trend: str) -> int:
     return _TREND_MODIFIER.get(trend, 0)
 
 
-def volatility_penalty(volatility: int) -> int:
-    """3 points per real skill-level change, capped at 15 so one wildly
-    volatile player doesn't single-handedly zero out the score. See
-    analytics.skill_level_trends.skill_level_volatility."""
-    return min(volatility * 3, 15)
+MAX_VOLATILITY_PENALTY = 15
+
+
+def volatility_penalty(volatility: float) -> int:
+    """Penalty proportional to recent normalized skill-level volatility.
+
+    ``volatility`` is a rate in ``[0.0, 1.0]`` from
+    analytics.skill_level_trends.normalized_volatility, not a raw change
+    count. A player who changed on every observed transition pays the full
+    15-point ceiling; one who changed on half pays about half. Inputs are
+    clamped defensively so stale callers cannot exceed the documented cap.
+    """
+    rate = min(1.0, max(0.0, volatility))
+    return int(round(rate * MAX_VOLATILITY_PENALTY))
 
 
 def sample_size_weight(n: int) -> float:
@@ -247,7 +256,7 @@ def reliability_weight(n: int) -> float:
     return n / (n + 3)
 
 
-def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> int:
+def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: float) -> int:
     """0-100: how much to trust matchup_score, from three independently
     documented components, averaged:
 
@@ -255,8 +264,9 @@ def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) 
       is 0 confidence, FULL_CONFIDENCE_GAMES+ is full confidence. A row
       with a malformed result doesn't count toward n -- it's not evidence
       either way.
-    - volatility: 100 minus 15 per real skill-level change (the same per-
-      change cost volatility_penalty charges the score itself), floored at 0.
+    - volatility: 100 * (1 - rate), where rate is recent normalized
+      volatility. No observed movement scores 100; movement on every
+      observed transition scores 0.
     - trend stability: "stable" is trusted most (100); a trend actively
       moving -- "up" or "down" -- means the player's true current level is
       a moving target, not a settled one (70); "no data" is a genuine
@@ -264,12 +274,13 @@ def confidence_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) 
     """
     n = len(recognized_results(rows))
     sample_component = sample_size_weight(n) * 100
-    volatility_component = max(0, 100 - volatility * 15)
+    rate = min(1.0, max(0.0, volatility))
+    volatility_component = 100.0 * (1.0 - rate)
     stability_component = _TREND_STABILITY.get(trend, 50)
     return int(round((sample_component + volatility_component + stability_component) / 3))
 
 
-def matchup_score(rows: list[PlayerHeadToHead], trend: str, volatility: int) -> int:
+def matchup_score(rows: list[PlayerHeadToHead], trend: str, volatility: float) -> int:
     """0-100. The win-rate swing (recency-weighted, per weighted_win_rate())
     is scaled by reliability_weight() -- P2 -- and the opponent-skill swing
     (per opponent_skill_modifier()) is scaled by sample_size_weight(), each
