@@ -11,6 +11,14 @@ combined skill levels must not exceed 23 -- identical for 8-Ball Open and
 legal players may instead play 4 players totalling 19 or less and forfeit
 the 5th match.
 
+This module implements both paths. ``check_lineup_legality`` remains the
+strict already-complete 5-player/23 verifier. ``legal_completion_exists``
+remains the backwards-compatible live-planner question for the normal
+5-player path. ``assess_completion_options`` adds the verified fallback:
+it distinguishes a legal standard completion from the 4-player/19 path
+that requires a forfeit, while preserving ``None`` whenever unknown skill
+levels prevent an honest answer.
+
 **What this module deliberately does NOT implement**: an earlier draft of
 this feature (before the rule was verified) assumed additional
 constraints -- "no more than two SL6+ players", "at least one SL3 or
@@ -20,15 +28,6 @@ this project's whole approach exists to catch before it ships as if
 authoritative. They are not implemented here. If APA does publish such a
 constraint somewhere this check hasn't found, it needs its own citation
 before it's added -- not assumed because it sounded plausible.
-
-**What this module also does not implement yet**: the 4-player/19 and
-(per a secondary, less-directly-confirmed search result) a further
-3-player/15 fallback for a team that cannot field 5 (or 4) legal players.
-`TEAM_SKILL_LEVEL_LIMIT_4` is recorded as a real, sourced constant, but no
-function here decides "should this team fall back to 4 players" -- that is
-a captain decision (which player to sit, not just how many) genuinely
-harder than the 5-player check, and is left for a follow-up with its own
-tests once actually needed.
 
 **Duplicate players**: APA's skill-level cap says nothing about player
 identity, but a lineup that names the same real player in two slots isn't
@@ -50,12 +49,11 @@ TEAM_SKILL_LEVEL_LIMIT_5 = 23
 Open and 9-Ball Open -- APA's rule does not vary the cap by format."""
 
 TEAM_SKILL_LEVEL_LIMIT_4 = 19
-"""The real fallback cap when a team cannot field 5 legal players: 4
-players totalling this or less, forfeiting the 5th match. Recorded here
-for documentation; not yet wired into a decision function -- see the
-module docstring."""
+"""The verified fallback cap when a team cannot field 5 legal players:
+4 players totalling this or less, with the 5th match forfeited."""
 
 LINEUP_SIZE = 5
+FALLBACK_LINEUP_SIZE = 4
 
 LINEUP_LEGALITY_SOURCE_URL = "https://rules.poolplayers.com/general-rules/team-skill-level-limit/"
 
@@ -70,6 +68,27 @@ class LineupLegality:
     slot. A duplicate always makes `is_legal` False regardless of
     `skill_total` -- it isn't a real lineup to begin with, independent of
     the skill-level math."""
+
+
+@dataclass(frozen=True)
+class CompletionAssessment:
+    """Tri-state assessment of the two verified APA completion paths.
+
+    Each ``*_possible`` field is True/False when the available-player and
+    skill-level facts are sufficient to decide that path, or None when
+    unknown skill levels keep the answer genuinely unresolved.
+
+    ``preferred_lineup_size`` is 5 whenever a normal legal completion is
+    proven. It becomes 4 only when the 5-player path is proven impossible
+    AND the 4-player/19 fallback is proven possible. We never recommend a
+    forfeit merely because the 5-player path is uncertain.
+    """
+
+    standard_five_possible: Optional[bool]
+    four_player_fallback_possible: Optional[bool]
+    preferred_lineup_size: Optional[int]
+    skill_limit: Optional[int]
+    requires_forfeit: bool
 
 
 def check_lineup_legality(
@@ -113,68 +132,39 @@ def check_lineup_legality(
     )
 
 
-# A real, small bound on the exact search below -- same "exact or refuse,
+# A real, small bound on the exact searches below -- same "exact or refuse,
 # never approximate" posture as analytics.lineup_lab's own
-# MAX_ASSIGNMENT_ATTEMPTS. A 5-player lineup only ever needs a combination
-# of at most 5 remaining slots from a real team's own available roster
-# (never a division-wide count), so this is sized generously, not tuned to
-# any specific real roster.
+# MAX_ASSIGNMENT_ATTEMPTS. A real team's own available roster is small, so
+# this is generous while still preventing an accidental combinatorial hang.
 MAX_COMPLETION_ATTEMPTS = 200_000
 
 
-def legal_completion_exists(
+def _completion_exists_for_target(
     committed_skill_levels: Sequence[Optional[int]],
     available_skill_levels: Sequence[Optional[int]],
+    *,
+    target_size: int,
+    skill_limit: int,
+    insufficient_players_are_unknown: bool,
 ) -> Optional[bool]:
-    """Whether a legal standard 5-player lineup can still be completed --
-    for a live Match Night planner deciding who to send *before* the whole
-    lineup is locked in, not just verifying one already-complete lineup.
-
-    ``committed_skill_levels`` is one entry per board slot already occupied
-    this match (order doesn't matter -- the 23-Rule caps the sum of the 5,
-    not any per-board total) -- pass ``None`` for a slot whose own player has
-    no known current skill level, rather than omitting that slot entirely.
-    GPT audit follow-up (2026-09-16): an earlier caller-side pattern of
-    dropping an unknown-skill occupied slot from this list understated how
-    many of the 5 slots were actually already used, which could report a
-    completion as still possible when it could not honestly be verified at
-    all. A slot that's occupied is occupied whether or not its own skill
-    level is known -- it must still count against ``LINEUP_SIZE``, and this
-    function returns ``None`` outright the moment any committed slot's skill
-    is unknown, since the true committed total can't be computed without it
-    (never assumed to be 0 -- see ``check_lineup_legality``'s own docstring
-    for why that would understate the real total).
-
-    ``available_skill_levels`` is the remaining, not-yet-committed pool a
-    captain could still choose from to fill the rest -- pass ``None`` for
-    any player whose current skill level isn't known here too; unlike a
-    committed slot, an available player who's simply never chosen for a
-    remaining slot doesn't need their own skill known, so these are only
-    dropped from the search, not treated as disqualifying.
-
-    Returns ``None`` -- not a guessed ``False`` -- when there are already
-    more than ``LINEUP_SIZE`` committed slots (a malformed call, not a
-    legality question), when any committed slot's skill level is unknown
-    (see above), or when fewer players with a *known* skill level remain
-    available than are needed to fill the rest (not enough real information
-    to answer, the same honest-unavailable-state posture as
-    ``check_lineup_legality`` returning ``None`` for an incomplete lineup).
-
-    Otherwise returns the real answer: does at least one combination of the
-    still-needed players from ``available_skill_levels`` (each used at most
-    once, matching that a real player can only fill one board) bring the
-    total to ``TEAM_SKILL_LEVEL_LIMIT_5`` or below. An exact, bounded search
-    (see ``MAX_COMPLETION_ATTEMPTS``) over a real team's own small remaining
-    roster -- never an approximation, and it raises rather than silently
-    truncate the search if that bound is somehow exceeded.
-    """
+    """Exact tri-state completion check for one lineup size/limit pair."""
     if any(level is None for level in committed_skill_levels):
         return None
-    still_needed = LINEUP_SIZE - len(committed_skill_levels)
-    if still_needed < 0:
-        return None
+    if len(committed_skill_levels) > target_size:
+        return False
+
+    still_needed = target_size - len(committed_skill_levels)
+    committed_total = sum(committed_skill_levels)
     if still_needed == 0:
-        return sum(committed_skill_levels) <= TEAM_SKILL_LEVEL_LIMIT_5
+        return committed_total <= skill_limit
+
+    # Distinguish "not enough players exist" from "players exist but some
+    # skill levels are unknown." The legacy 5-player wrapper preserves its
+    # historical None behavior for the first case; the new fallback
+    # assessment treats a complete pool with too few players as a proven
+    # impossible path, which is what unlocks the verified 4-player rule.
+    if len(available_skill_levels) < still_needed:
+        return None if insufficient_players_are_unknown else False
 
     known = [level for level in available_skill_levels if level is not None]
     if len(known) < still_needed:
@@ -192,9 +182,90 @@ def legal_completion_exists(
             "tonight's availability before asking for this check."
         )
 
-    committed_total = sum(committed_skill_levels)
-    remaining_cap = TEAM_SKILL_LEVEL_LIMIT_5 - committed_total
+    remaining_cap = skill_limit - committed_total
     return any(
         sum(combo) <= remaining_cap
         for combo in itertools.combinations(known, still_needed)
+    )
+
+
+def legal_completion_exists(
+    committed_skill_levels: Sequence[Optional[int]],
+    available_skill_levels: Sequence[Optional[int]],
+) -> Optional[bool]:
+    """Whether a legal standard 5-player lineup can still be completed.
+
+    This retains the original live-planner contract. ``None`` means the
+    normal 5-player answer cannot be verified from the supplied skill-level
+    facts; callers that need the verified 4-player/19 fallback should use
+    ``assess_completion_options`` instead.
+    """
+    if len(committed_skill_levels) > LINEUP_SIZE:
+        return None
+    return _completion_exists_for_target(
+        committed_skill_levels,
+        available_skill_levels,
+        target_size=LINEUP_SIZE,
+        skill_limit=TEAM_SKILL_LEVEL_LIMIT_5,
+        insufficient_players_are_unknown=True,
+    )
+
+
+def assess_completion_options(
+    committed_skill_levels: Sequence[Optional[int]],
+    available_skill_levels: Sequence[Optional[int]],
+) -> Optional[CompletionAssessment]:
+    """Assess both verified APA lineup paths for a live Match Night state.
+
+    The supplied available list is treated as the complete remaining pool.
+    Therefore, if there are literally fewer players left than needed for a
+    5-player lineup, the standard path is proven impossible rather than
+    unknown. A player whose skill level is unknown must still appear as
+    ``None``; that produces the honest tri-state ``None`` for any path whose
+    legality depends on that missing value.
+
+    The 4-player path is considered only as a fallback. It may be reported
+    possible alongside a possible 5-player path, but ``preferred_lineup_size``
+    remains 5. It becomes 4 only when five is proven impossible and four is
+    proven legal, because the four-player path requires forfeiting match 5.
+    """
+    if len(committed_skill_levels) > LINEUP_SIZE:
+        return None
+    if any(level is None for level in committed_skill_levels):
+        return None
+
+    standard = _completion_exists_for_target(
+        committed_skill_levels,
+        available_skill_levels,
+        target_size=LINEUP_SIZE,
+        skill_limit=TEAM_SKILL_LEVEL_LIMIT_5,
+        insufficient_players_are_unknown=False,
+    )
+
+    fallback = _completion_exists_for_target(
+        committed_skill_levels,
+        available_skill_levels,
+        target_size=FALLBACK_LINEUP_SIZE,
+        skill_limit=TEAM_SKILL_LEVEL_LIMIT_4,
+        insufficient_players_are_unknown=False,
+    )
+
+    preferred_lineup_size: Optional[int] = None
+    skill_limit: Optional[int] = None
+    requires_forfeit = False
+
+    if standard is True:
+        preferred_lineup_size = LINEUP_SIZE
+        skill_limit = TEAM_SKILL_LEVEL_LIMIT_5
+    elif standard is False and fallback is True:
+        preferred_lineup_size = FALLBACK_LINEUP_SIZE
+        skill_limit = TEAM_SKILL_LEVEL_LIMIT_4
+        requires_forfeit = True
+
+    return CompletionAssessment(
+        standard_five_possible=standard,
+        four_player_fallback_possible=fallback,
+        preferred_lineup_size=preferred_lineup_size,
+        skill_limit=skill_limit,
+        requires_forfeit=requires_forfeit,
     )
