@@ -304,12 +304,13 @@ Coach Cockpit:
 
 **Coach Dashboard / Cockpit features:**
 
-- **Player-then-opponent selectors** — choosing a player narrows the
-  opponent list to only the real pairings that player has a report
-  against, rather than one flat list of every pairing in the bundle
-  (hundreds, at real division scale). Opponent option labels include the
-  opponent's real team name so a same-named player on two teams during
-  simultaneous roster membership is never ambiguous.
+- **Player → opposing team → opponent selectors** — choose one of your
+  players, then the opposing team/scope, then that team's player. The final
+  card shows the exact DIRECT head-to-head W-L record, observed win rate, and
+  recorded direct-match sample when real history exists; otherwise it states
+  **No direct history** and keeps the existing skill-only estimate separate.
+  Opposing-team labels include format/session context, so the selector never
+  silently mixes players from another matchup scope.
 - **Skill-level trend sparklines** — a real inline SVG polyline plotted
   from each player's whole chronological skill-level series
   (`SkillTrendInfo.readings`), next to the existing direction + volatility
