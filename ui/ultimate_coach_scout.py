@@ -39,9 +39,11 @@ def render_ultimate_coach_scout(
   --warn:#92400e; --bad:#991b1b; --locked:#5b21b6; --shadow:0 8px 28px rgba(15,39,69,.10);
 }}
 * {{ box-sizing:border-box; }}
+html, body {{ width:100%; max-width:100%; }}
 body {{ margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; color:var(--ink); background:var(--paper); }}
 header {{ background:linear-gradient(135deg,var(--navy),var(--navy2)); color:white; padding:22px 24px; }}
-.header-inner {{ max-width:1500px; margin:auto; display:flex; gap:18px; align-items:center; justify-content:space-between; }}
+.header-inner {{ max-width:1500px; margin:auto; display:flex; gap:18px; align-items:center; justify-content:space-between; min-width:0; }}
+.header-inner > * {{ min-width:0; }}
 h1 {{ margin:0; font-size:clamp(24px,3vw,38px); letter-spacing:-.02em; }}
 .subtitle {{ margin-top:6px; opacity:.86; font-size:14px; }}
 .badge {{ display:inline-flex; align-items:center; gap:7px; padding:7px 11px; border-radius:999px; font-size:12px; font-weight:800; letter-spacing:.03em; }}
@@ -51,11 +53,12 @@ h1 {{ margin:0; font-size:clamp(24px,3vw,38px); letter-spacing:-.02em; }}
 main {{ max-width:1500px; margin:20px auto 48px; padding:0 18px; }}
 .controls, .card {{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); }}
 .controls {{ padding:16px; display:grid; grid-template-columns:1fr 1fr 180px auto; gap:12px; align-items:end; }}
+.controls > * {{ min-width:0; }}
 label {{ display:block; font-size:12px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }}
-input,select {{ width:100%; min-height:42px; border:1px solid #bcc9d8; border-radius:9px; padding:8px 10px; background:white; color:var(--ink); }}
+input,select {{ width:100%; min-width:0; max-width:100%; min-height:42px; border:1px solid #bcc9d8; border-radius:9px; padding:8px 10px; background:white; color:var(--ink); }}
 .checkbox-wrap {{ min-height:42px; display:flex; align-items:center; gap:8px; white-space:nowrap; }}
 .checkbox-wrap input {{ width:auto; min-height:auto; }}
-.grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }}
+.grid {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-top:16px; }}
 .card {{ padding:16px; min-width:0; }}
 .card h2,.card h3 {{ margin:0 0 12px; }}
 .player-name {{ font-size:24px; font-weight:850; letter-spacing:-.02em; }}
@@ -64,13 +67,13 @@ input,select {{ width:100%; min-height:42px; border:1px solid #bcc9d8; border-ra
 .stat {{ background:#f7f9fc; border:1px solid #e1e8f0; border-radius:10px; padding:10px; }}
 .stat b {{ display:block; font-size:18px; margin-top:3px; }}
 .full {{ grid-column:1/-1; }}
-.split {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }}
+.split {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-top:16px; }}
 .odds-lock {{ border:2px solid #c4b5fd; background:#faf8ff; }}
 .odds-lock .lock-title {{ color:var(--locked); font-weight:900; font-size:18px; }}
-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-th,td {{ text-align:left; padding:8px 7px; border-bottom:1px solid #e5ebf2; vertical-align:top; }}
+table {{ width:100%; max-width:100%; border-collapse:collapse; font-size:13px; }}
+th,td {{ text-align:left; padding:8px 7px; border-bottom:1px solid #e5ebf2; vertical-align:top; overflow-wrap:anywhere; }}
 th {{ color:#516175; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }}
-.scroll {{ overflow:auto; max-height:430px; }}
+.scroll {{ width:100%; max-width:100%; overflow:auto; max-height:430px; }}
 .empty {{ color:var(--muted); padding:12px 0; }}
 .result-win {{ color:var(--good); font-weight:800; }}
 .result-loss {{ color:var(--bad); font-weight:800; }}
@@ -85,10 +88,12 @@ details summary {{ cursor:pointer; font-weight:800; }}
   .stat-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
 }}
 @media(max-width:620px) {{
-  .controls {{ grid-template-columns:1fr; }}
-  .stat-grid {{ grid-template-columns:1fr 1fr; }}
+  .header-inner {{ flex-direction:column; align-items:flex-start; }}
+  .controls {{ grid-template-columns:minmax(0,1fr); }}
+  .stat-grid {{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); }}
   header {{ padding:18px 14px; }}
   main {{ padding:0 10px; }}
+  .player-name, h1, h2, h3 {{ overflow-wrap:anywhere; }}
 }}
 @media print {{
   body {{ background:white; }}
