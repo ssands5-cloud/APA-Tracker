@@ -225,7 +225,7 @@ def match_already_has_scoresheet(db: Session, match_external_id) -> bool:
 
 
 def resolve_scoresheet_identities(
-    db: Session, session_name: str, scores: list[dict]
+    db: Session, session_name: str, scores: list[dict], *, current_only: bool = True
 ) -> tuple[dict[str, str], int, int]:
     """Map each scoresheet row's own per-position alias player id to its
     real canonical-roster external id, via database.queries.
@@ -256,7 +256,9 @@ def resolve_scoresheet_identities(
         if not team_id or not name:
             unresolved += 1
             continue
-        real_player = resolve_roster_identity(db, team_id, session_name, name)
+        real_player = resolve_roster_identity(
+            db, team_id, session_name, name, current_only=current_only
+        )
         if real_player is not None:
             mapping[alias_id] = real_player.external_id
             resolved += 1
@@ -567,16 +569,20 @@ def sync_division_wide(
     division_format: str,
     division_session_name: str,
     resume: bool = False,
+    *,
+    roster_is_current: bool = True,
+    identity_current_only: bool = True,
 ) -> dict[str, int]:
     """Every accessible team's current roster and every scheduled/completed
     match in ONE division -- not only the account's own teams.
 
-    Each roster player's current membership is written to PlayerTeamHistory
-    (is_current=True) via the same ingest_player_team_history() upsert
-    run_all_teams already uses for the viewer's own TeamStat rows -- that
-    function is not actually member-specific, only ever CALLED that way
-    before now. This is what makes database.queries.canonical_current_roster
-    resolve for an arbitrary division player, opponent or not.
+    Each roster player's membership is written to PlayerTeamHistory via the
+    same ingest_player_team_history() upsert run_all_teams already uses.
+    Current live syncs keep roster_is_current=True. Career backfill passes
+    False for old divisions so historical memberships can support identity
+    resolution without ever masquerading as today's roster. In that mode
+    identity_current_only=False resolves within the exact historical
+    team+session membership instead of requiring a current-row flag.
 
     ``resume=True`` skips fetch_match_detail for a scored match that already
     has real scoresheet rows from an earlier, interrupted run against this
@@ -621,7 +627,7 @@ def sync_division_wide(
             written = ingest_player_team_history(db, player, [{
                 "team_id": team["team_id"], "team_name": team["team_name"],
                 "division_id": division_id, "session_name": division_session_name,
-                "is_current": True, "skill_level": entry["skill_level"],
+                "is_current": roster_is_current, "skill_level": entry["skill_level"],
                 "matches_won": entry["matches_won"], "matches_played": entry["matches_played"],
             }])
             counts["roster_players_ingested"] += written
@@ -680,7 +686,7 @@ def sync_division_wide(
         # identity BEFORE ingesting -- see resolve_scoresheet_identities'
         # docstring for why the scoresheet's own id is not stable.
         identity_map, resolved_n, unresolved_n = resolve_scoresheet_identities(
-            db, division_session_name, scores
+            db, division_session_name, scores, current_only=identity_current_only
         )
         counts["identity_resolved"] += resolved_n
         counts["identity_unresolved"] += unresolved_n
