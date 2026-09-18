@@ -6,7 +6,7 @@ before the current team match. All individual pairings inside the same team
 match are withheld together, so one lineup slot cannot leak into another slot
 from the same night.
 
-No model is fit here. This module only constructs auditable historical examples.
+No model is fit here. This module only constructs auditable historical examples and explicit exclusion counts for evidence that cannot be ordered or paired safely.
 """
 
 from __future__ import annotations
@@ -51,6 +51,12 @@ class BacktestExample:
     player_shared_win_rate_before: Optional[float]
     opponent_shared_games_before: int
     opponent_shared_win_rate_before: Optional[float]
+
+
+@dataclass(frozen=True)
+class BacktestBuildResult:
+    examples: tuple[BacktestExample, ...]
+    exclusions: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -113,8 +119,18 @@ def _rate(outcomes: list[_Outcome]) -> Optional[float]:
     return round(sum(1 for row in outcomes if row.won) / len(outcomes), 4)
 
 
-def _canonical_games(rows: list[PlayerHeadToHead], match: Match) -> list[_CanonicalGame]:
-    """One canonical orientation per unordered player pair in this team match."""
+def _canonical_games(
+    rows: list[PlayerHeadToHead],
+    match: Match,
+) -> tuple[list[_CanonicalGame], dict[str, int]]:
+    """Build only pairings whose mirrored database rows are unambiguous.
+
+    Ingestion originally paired source rows by matchPositionNumber, but that
+    source position is not persisted in PlayerHeadToHead. Therefore a repeated
+    same-player/same-opponent pairing inside one team match cannot be separated
+    faithfully after the fact. Such groups are excluded and counted rather
+    than silently collapsed into one game.
+    """
     grouped: dict[tuple[int, int], list[PlayerHeadToHead]] = {}
     for row in rows:
         if _result(row.result) is None:
@@ -125,6 +141,11 @@ def _canonical_games(rows: list[PlayerHeadToHead], match: Match) -> list[_Canoni
         grouped.setdefault((low, high), []).append(row)
 
     games: list[_CanonicalGame] = []
+    excluded: dict[str, int] = {}
+
+    def exclude(reason: str) -> None:
+        excluded[reason] = excluded.get(reason, 0) + 1
+
     for (low, high), pair_rows in sorted(grouped.items()):
         low_rows = [
             row for row in pair_rows
@@ -135,64 +156,52 @@ def _canonical_games(rows: list[PlayerHeadToHead], match: Match) -> list[_Canoni
             if row.player_id == high and row.opponent_id == low and _result(row.result) is not None
         ]
 
-        low_facts = {
-            (_result(row.result), row.own_skill_level, row.opponent_skill_level)
-            for row in low_rows
-        }
-        if len(low_facts) > 1:
-            raise BacktestDataError(
-                f"conflicting canonical outcomes for match {match.external_id}, pair {low}/{high}"
-            )
-
-        if low_rows:
-            row = low_rows[0]
-            won = bool(_result(row.result))
-            own_sl = row.own_skill_level
-            opp_sl = row.opponent_skill_level
-            fmt = _format_name(row.format or match.format)
-            session = row.session_name or match.session_name or ""
-        elif high_rows:
-            facts = {
-                (_result(row.result), row.own_skill_level, row.opponent_skill_level)
-                for row in high_rows
-            }
-            if len(facts) > 1:
-                raise BacktestDataError(
-                    f"conflicting reverse outcomes for match {match.external_id}, pair {low}/{high}"
-                )
-            row = high_rows[0]
-            won = not bool(_result(row.result))
-            own_sl = row.opponent_skill_level
-            opp_sl = row.own_skill_level
-            fmt = _format_name(row.format or match.format)
-            session = row.session_name or match.session_name or ""
-        else:
+        # A clean source position produces exactly one row in each direction.
+        # Anything else cannot be paired faithfully now that position number is
+        # not persisted.
+        if len(low_rows) != 1 or len(high_rows) != 1:
+            exclude("non_bijective_or_repeated_pair_rows")
             continue
 
-        if fmt is None:
+        low_row = low_rows[0]
+        high_row = high_rows[0]
+        low_result = _result(low_row.result)
+        high_result = _result(high_row.result)
+        if low_result is None or high_result is None or low_result == high_result:
+            exclude("mirrored_results_disagree")
             continue
 
-        if low_rows and high_rows:
-            low_result = _result(low_rows[0].result)
-            high_result = _result(high_rows[0].result)
-            if low_result is None or high_result is None or low_result == high_result:
-                raise BacktestDataError(
-                    f"paired directions disagree for match {match.external_id}, pair {low}/{high}"
-                )
+        low_format = _format_name(low_row.format or match.format)
+        high_format = _format_name(high_row.format or match.format)
+        if low_format is None or high_format is None or low_format != high_format:
+            exclude("mirrored_format_disagrees_or_unknown")
+            continue
+
+        low_session = low_row.session_name or match.session_name or ""
+        high_session = high_row.session_name or match.session_name or ""
+        if low_session != high_session:
+            exclude("mirrored_session_disagrees")
+            continue
+
+        if (
+            low_row.own_skill_level != high_row.opponent_skill_level
+            or low_row.opponent_skill_level != high_row.own_skill_level
+        ):
+            exclude("mirrored_skill_levels_disagree")
+            continue
 
         games.append(
             _CanonicalGame(
                 player_id=low,
                 opponent_id=high,
-                won=won,
-                own_skill_level=own_sl,
-                opponent_skill_level=opp_sl,
-                format=fmt,
-                session_name=session,
+                won=bool(low_result),
+                own_skill_level=low_row.own_skill_level,
+                opponent_skill_level=low_row.opponent_skill_level,
+                format=low_format,
+                session_name=low_session,
             )
         )
-    return games
-
+    return games, excluded
 
 def _features(
     history: dict[tuple[int, str], list[_Outcome]],
@@ -243,8 +252,8 @@ def _features(
     }
 
 
-def build_backtest_examples(db: Session) -> list[BacktestExample]:
-    """Build chronologically ordered examples from authoritative outcomes."""
+def build_backtest_dataset(db: Session) -> BacktestBuildResult:
+    """Build examples plus explicit counts of rows excluded for safety."""
     joined = (
         db.query(PlayerHeadToHead, Match)
         .join(Match, PlayerHeadToHead.match_id == Match.id)
@@ -264,10 +273,14 @@ def build_backtest_examples(db: Session) -> list[BacktestExample]:
         bucket = by_match.setdefault(match.id, (match, []))
         bucket[1].append(row)
 
+    exclusions: dict[str, int] = {}
     dated_matches: list[tuple[datetime, Match, list[PlayerHeadToHead]]] = []
     for match, rows in by_match.values():
         when = _parse_match_datetime(match.match_date)
         if when is None:
+            exclusions["unparseable_or_timezone_naive_match_date"] = (
+                exclusions.get("unparseable_or_timezone_naive_match_date", 0) + 1
+            )
             continue
         dated_matches.append((when, match, rows))
     dated_matches.sort(key=lambda item: (item[0], item[1].id))
@@ -281,10 +294,12 @@ def build_backtest_examples(db: Session) -> list[BacktestExample]:
     # for another match at the same recorded time.
     for _, timestamp_group in groupby(dated_matches, key=lambda item: item[0]):
         batch = list(timestamp_group)
-        batch_games: list[tuple[Match, list[_CanonicalGame]]] = [
-            (match, _canonical_games(rows, match))
-            for _, match, rows in batch
-        ]
+        batch_games: list[tuple[Match, list[_CanonicalGame]]] = []
+        for _, match, rows in batch:
+            games, pair_exclusions = _canonical_games(rows, match)
+            for reason, count in pair_exclusions.items():
+                exclusions[reason] = exclusions.get(reason, 0) + count
+            batch_games.append((match, games))
 
         for match, games in batch_games:
             for game in games:
@@ -325,4 +340,9 @@ def build_backtest_examples(db: Session) -> list[BacktestExample]:
                     _Outcome(opponent_id=game.player_id, won=not game.won)
                 )
 
-    return examples
+    return BacktestBuildResult(examples=tuple(examples), exclusions=exclusions)
+
+
+def build_backtest_examples(db: Session) -> list[BacktestExample]:
+    """Compatibility wrapper returning only the safely-built examples."""
+    return list(build_backtest_dataset(db).examples)
