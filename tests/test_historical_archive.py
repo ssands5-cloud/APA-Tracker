@@ -172,3 +172,14 @@ def test_runner_marks_current_session_current(monkeypatch, tmp_path):
 
     assert seen["roster_is_current"] is True
     assert seen["identity_current_only"] is True
+
+
+def test_load_catalog_accepts_recursive_v2_schema(tmp_path):
+    path = tmp_path / "catalog.json"
+    payload = _catalog([_division()])
+    payload["schema"] = "ultimate-coach-historical-catalog-v2"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = archive.load_catalog(path)
+
+    assert loaded["schema"] == "ultimate-coach-historical-catalog-v2"
