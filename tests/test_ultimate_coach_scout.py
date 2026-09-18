@@ -239,3 +239,28 @@ def test_conflicting_catalog_scope_is_not_used_for_current_format():
     index, conflicts = catalog_scope_index(catalog)
     assert ("10", "Fall 2026") not in index
     assert len(conflicts) == 1
+
+
+def test_conflicted_catalog_scope_cannot_be_reintroduced_by_later_row():
+    catalog = _catalog()
+    catalog["divisions"].extend(
+        [
+            {
+                "division_id": "10",
+                "catalog_session_name": "Fall 2026",
+                "format": "NINE",
+                "league_id": "1",
+                "league_slug": "test",
+            },
+            {
+                "division_id": "10",
+                "catalog_session_name": "Fall 2026",
+                "format": "EIGHT",
+                "league_id": "1",
+                "league_slug": "test",
+            },
+        ]
+    )
+    index, conflicts = catalog_scope_index(catalog)
+    assert ("10", "Fall 2026") not in index
+    assert len(conflicts) == 1
