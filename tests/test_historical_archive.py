@@ -183,3 +183,17 @@ def test_load_catalog_accepts_recursive_v2_schema(tmp_path):
     loaded = archive.load_catalog(path)
 
     assert loaded["schema"] == "ultimate-coach-historical-catalog-v2"
+
+
+def test_division_plan_keeps_same_numeric_ids_from_different_leagues():
+    left = _division()
+    left["league_id"] = "12"
+    left["league_slug"] = "league-a"
+    right = dict(left)
+    right["league_id"] = "99"
+    right["league_slug"] = "league-b"
+
+    plan = archive.division_plan(_catalog([left, right]))
+
+    assert len(plan) == 2
+    assert {row["league_slug"] for row in plan} == {"league-a", "league-b"}
