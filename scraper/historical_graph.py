@@ -161,6 +161,7 @@ def _checkpoint(
     seed_sha256: str,
     processed_divisions: set[str],
     processed_member_leagues: set[str],
+    processed_session_catalogs: set[str],
     sessions: dict[tuple[str, str], dict[str, Any]],
     divisions: dict[tuple[str, str, str], dict[str, Any]],
     source_limitations: list[str],
@@ -173,11 +174,13 @@ def _checkpoint(
         "seed_catalog_sha256": seed_sha256,
         "processed_division_keys": sorted(processed_divisions),
         "processed_member_league_keys": sorted(processed_member_leagues),
+        "processed_session_catalog_keys": sorted(processed_session_catalogs),
         "counts": {
             "sessions": len(sessions),
             "divisions": len(divisions),
             "processed_divisions": len(processed_divisions),
             "processed_member_league_scopes": len(processed_member_leagues),
+            "processed_session_catalogs": len(processed_session_catalogs),
             "source_limitations": len(set(source_limitations)),
         },
         "source_limitations": sorted(set(source_limitations)),
@@ -205,9 +208,19 @@ def expand_historical_catalog(
 
     processed_divisions: set[str] = set()
     processed_member_leagues: set[str] = set()
+    processed_session_catalogs: set[str] = {
+        "|".join(key)
+        for key in sessions
+        if any(dkey[0] == key[0] and dkey[1] == key[1] for dkey in divisions)
+    }
     source_limitations = list(seed_catalog.get("source_limitations") or [])
 
     if resume and report_path is not None and report_path.is_file():
+        if not output_path.is_file():
+            raise HistoryGraphError(
+                "--resume checkpoint exists but expanded catalog is missing; "
+                "refusing to skip previously processed graph nodes"
+            )
         previous = json.loads(report_path.read_text(encoding="utf-8"))
         previous_sha = previous.get("seed_catalog_sha256")
         if previous_sha and previous_sha != seed_sha:
@@ -216,13 +229,15 @@ def expand_historical_catalog(
             )
         processed_divisions = set(previous.get("processed_division_keys") or [])
         processed_member_leagues = set(previous.get("processed_member_league_keys") or [])
+        processed_session_catalogs = set(
+            previous.get("processed_session_catalog_keys") or []
+        )
 
-        if output_path.is_file():
-            previous_catalog = json.loads(output_path.read_text(encoding="utf-8"))
-            if previous_catalog.get("schema") != EXPANDED_SCHEMA:
-                raise HistoryGraphError("resume catalog has an unexpected schema")
-            sessions, divisions = _catalog_indexes(previous_catalog)
-            source_limitations.extend(previous_catalog.get("source_limitations") or [])
+        previous_catalog = json.loads(output_path.read_text(encoding="utf-8"))
+        if previous_catalog.get("schema") != EXPANDED_SCHEMA:
+            raise HistoryGraphError("resume catalog has an unexpected schema")
+        sessions, divisions = _catalog_indexes(previous_catalog)
+        source_limitations.extend(previous_catalog.get("source_limitations") or [])
 
     queue = deque(
         key for key in sorted(divisions) if "|".join(key) not in processed_divisions
@@ -258,6 +273,7 @@ def expand_historical_catalog(
                 seed_sha256=seed_sha,
                 processed_divisions=processed_divisions,
                 processed_member_leagues=processed_member_leagues,
+                processed_session_catalogs=processed_session_catalogs,
                 sessions=sessions,
                 divisions=divisions,
                 source_limitations=source_limitations,
@@ -317,6 +333,11 @@ def expand_historical_catalog(
                 },
                 key=int,
             )
+            if not unique_session_ids:
+                source_limitations.append(
+                    f"member {member_id} league {league_id}/{league_slug}: "
+                    "APA alias returned zero historical sessions"
+                )
 
             for discovered_session_id in unique_session_ids:
                 session_rows = [
@@ -342,13 +363,21 @@ def expand_historical_catalog(
                         "discovery_source": "roster_member_alias_graph",
                     }
 
-                # Calling leagueDivisions for an already-known session is
-                # unnecessary. New sessions are expanded exactly once.
+                # Calling leagueDivisions repeatedly for the same session
+                # is unnecessary and can become very expensive when an old
+                # session is rediscovered through hundreds of roster members.
+                # Track attempted session catalogs even when APA returned zero
+                # divisions, so a genuine upstream limitation is observed once.
+                session_catalog_key = f"{league_slug}|{discovered_session_id}"
+                if session_catalog_key in processed_session_catalogs:
+                    continue
+
                 known_divisions_for_session = any(
                     dkey[0] == league_slug and dkey[1] == discovered_session_id
                     for dkey in divisions
                 )
                 if known_divisions_for_session:
+                    processed_session_catalogs.add(session_catalog_key)
                     continue
 
                 league = fetch_league_divisions(
@@ -357,6 +386,7 @@ def expand_historical_catalog(
                     int(discovered_session_id),
                 )
                 new_rows = league_division_rows(league)
+                processed_session_catalogs.add(session_catalog_key)
                 if not new_rows:
                     source_limitations.append(
                         f"league {league_slug} session {discovered_session_id} "
@@ -421,6 +451,7 @@ def expand_historical_catalog(
             seed_sha256=seed_sha,
             processed_divisions=processed_divisions,
             processed_member_leagues=processed_member_leagues,
+            processed_session_catalogs=processed_session_catalogs,
             sessions=sessions,
             divisions=divisions,
             source_limitations=source_limitations,
@@ -456,6 +487,7 @@ def expand_historical_catalog(
         seed_sha256=seed_sha,
         processed_divisions=processed_divisions,
         processed_member_leagues=processed_member_leagues,
+        processed_session_catalogs=processed_session_catalogs,
         sessions=sessions,
         divisions=divisions,
         source_limitations=source_limitations,
