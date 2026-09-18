@@ -14,6 +14,7 @@ from database.models import (
     Match,
     Player,
     PlayerCareerStats,
+    PlayerLeagueCareerStats,
     PlayerH2HAdvantage,
     PlayerHeadToHead,
     PlayerMatch,
@@ -500,6 +501,94 @@ def ingest_eight_ball_stats(db: Session, player: Player, stats_row: dict) -> int
         })
         written += 1
     logger.info("Ingested career stats for %s: %d format(s)", player.name, written)
+    return written
+
+
+def ingest_player_league_career_stats(
+    db: Session,
+    player: Player,
+    *,
+    league_id: str,
+    league_slug: str,
+    alias_id: str | int,
+    stats_row: dict,
+) -> int:
+    """Upsert real lifetime stats without collapsing distinct APA leagues.
+
+    Returns the number of format rows written. Missing format blocks stay
+    absent rather than becoming synthetic zeroes.
+    """
+    written = 0
+    mappings = (
+        (
+            "EIGHT",
+            "eight_ball",
+            {
+                "rackless": stats_row.get("eight_ball_rackless"),
+                "skunks": None,
+            },
+        ),
+        (
+            "NINE",
+            "nine_ball",
+            {
+                "rackless": None,
+                "skunks": stats_row.get("nine_ball_skunks"),
+            },
+        ),
+    )
+
+    for format_name, prefix, extras in mappings:
+        played = stats_row.get(f"{prefix}_matches_played")
+        if played is None:
+            continue
+
+        existing = (
+            db.query(PlayerLeagueCareerStats)
+            .filter_by(
+                player_id=player.id,
+                league_id=str(league_id),
+                format=format_name,
+            )
+            .one_or_none()
+        )
+        fields = {
+            "league_slug": league_slug or "",
+            "alias_external_id": str(alias_id),
+            "matches_won": _to_int(stats_row.get(f"{prefix}_matches_won")),
+            "matches_played": _to_int(played),
+            "cla": _to_int(stats_row.get(f"{prefix}_cla")),
+            "defensive_shot_avg": _to_float(stats_row.get(f"{prefix}_defensive_shot_avg")),
+            "match_count_last_two_yrs": _to_int(
+                stats_row.get(f"{prefix}_match_count_for_last_two_yrs")
+            ),
+            "last_played": stats_row.get(f"{prefix}_last_played"),
+            "on_break_count": _to_int(stats_row.get(f"{prefix}_on_break_count")),
+            "break_and_runs": _to_int(stats_row.get(f"{prefix}_break_and_runs")),
+            "mini_slams": _to_int(stats_row.get(f"{prefix}_mini_slams")),
+            **{key: _to_int(value) for key, value in extras.items()},
+        }
+        if existing:
+            for key, value in fields.items():
+                setattr(existing, key, value)
+        else:
+            db.add(
+                PlayerLeagueCareerStats(
+                    player_id=player.id,
+                    league_id=str(league_id),
+                    format=format_name,
+                    **fields,
+                )
+            )
+        written += 1
+
+    db.commit()
+    logger.info(
+        "Ingested league-scoped career stats for %s in league %s: %d format(s)",
+        player.name,
+        league_id,
+        written,
+    )
     return written
 
 
