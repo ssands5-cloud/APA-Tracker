@@ -21,7 +21,7 @@ from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from scheduler.graphql_sync import reconcile_division_wide_coverage, sync_division_wide
 
-CATALOG_SCHEMA = "ultimate-coach-historical-catalog-v1"
+CATALOG_SCHEMAS = {"ultimate-coach-historical-catalog-v1", "ultimate-coach-historical-catalog-v2"}
 REPORT_SCHEMA = "ultimate-coach-archive-v1"
 
 
@@ -39,9 +39,10 @@ def sha256_file(path: Path) -> str:
 
 def load_catalog(path: Path) -> dict[str, Any]:
     catalog = json.loads(path.read_text(encoding="utf-8"))
-    if catalog.get("schema") != CATALOG_SCHEMA:
+    if catalog.get("schema") not in CATALOG_SCHEMAS:
         raise ArchiveError(
-            f"unsupported catalog schema {catalog.get('schema')!r}; expected {CATALOG_SCHEMA!r}"
+            f"unsupported catalog schema {catalog.get('schema')!r}; "
+            f"expected one of {sorted(CATALOG_SCHEMAS)!r}"
         )
     if not isinstance(catalog.get("divisions"), list):
         raise ArchiveError("catalog divisions must be a list")
