@@ -227,6 +227,24 @@ class TestSyncDivisionWide:
         roster = canonical_current_roster(db, "302", SESSION_NAME)
         assert len(roster) == 1
         assert roster[0].skill_level == 5
+    def test_historical_mode_never_marks_old_roster_current_and_still_resolves_identity(
+        self, db, mocked_fetches
+    ):
+        counts = sync.sync_division_wide(
+            config={}, db=db, division_id=DIVISION_ID,
+            division_format=FORMAT_NAME, division_session_name=SESSION_NAME,
+            roster_is_current=False, identity_current_only=False,
+        )
+
+        from database.models import PlayerTeamHistory
+
+        rows = db.query(PlayerTeamHistory).all()
+        assert rows
+        assert all(row.is_current is False for row in rows)
+        assert canonical_current_roster(db, "301", SESSION_NAME) == []
+        assert canonical_current_roster(db, "302", SESSION_NAME) == []
+        assert counts["identity_resolved"] == 2
+        assert counts["identity_unresolved"] == 0
 
     def test_every_discovered_match_is_ingested_including_unscored(self, db, mocked_fetches):
         counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
