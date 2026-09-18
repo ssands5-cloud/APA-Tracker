@@ -260,6 +260,9 @@ def build_scout_payload(
             safe_dated.sort(key=lambda item: item[0])
             first_date = safe_dated[0][1] if safe_dated else None
             last_date = safe_dated[-1][1] if safe_dated else None
+            recent5_rows = [item[2] for item in safe_dated[-5:]]
+            recent5_wins = sum(1 for row in recent5_rows if row.result == "W")
+            recent5_losses = sum(1 for row in recent5_rows if row.result == "L")
 
             latest_observed_sl = None
             latest_observed_sl_date = None
@@ -287,6 +290,16 @@ def build_scout_payload(
             for row, match, when in games:
                 by_opponent[row.opponent_id].append((row, match, when))
 
+            def meeting_sort_key(
+                item: tuple[PlayerHeadToHead, Match, datetime | None]
+            ) -> tuple[int, float, int]:
+                row, _, when = item
+                return (
+                    0 if when is not None else 1,
+                    when.timestamp() if when is not None else float("inf"),
+                    row.id,
+                )
+
             opponents: dict[str, Any] = {}
             for opponent_id, opponent_games in sorted(by_opponent.items()):
                 opponent = player_by_id.get(opponent_id)
@@ -310,6 +323,22 @@ def build_scout_payload(
                     if when is not None
                 ]
                 dated.sort(key=lambda item: item[0])
+
+                meeting_rows = []
+                for row, match, when in sorted(opponent_games, key=meeting_sort_key):
+                    meeting_rows.append(
+                        {
+                            "match_external_id": match.external_id,
+                            "match_date": match.match_date,
+                            "session_name": row.session_name or match.session_name or "",
+                            "result": row.result,
+                            "own_skill_level": row.own_skill_level,
+                            "opponent_skill_level": row.opponent_skill_level,
+                            "points_earned": row.points_earned,
+                            "nine_ball_points": row.nine_ball_points,
+                        }
+                    )
+
                 opponents[str(opponent_id)] = {
                     "opponent_id": opponent_id,
                     "opponent_external_id": opponent.external_id,
@@ -322,6 +351,7 @@ def build_scout_payload(
                     "avg_opponent_skill_level": _average(opp_sl),
                     "first_match_date": dated[0][1] if dated else None,
                     "last_match_date": dated[-1][1] if dated else None,
+                    "meetings": meeting_rows,
                 }
 
             formats[fmt] = {
@@ -334,6 +364,12 @@ def build_scout_payload(
                 "avg_opponent_skill_level": _average(opponent_levels),
                 "first_match_date": first_date,
                 "last_match_date": last_date,
+                "recent5_wins": recent5_wins,
+                "recent5_losses": recent5_losses,
+                "recent5_games": recent5_wins + recent5_losses,
+                "recent5_win_rate": _rate(
+                    recent5_wins, recent5_wins + recent5_losses
+                ),
                 "display_skill_level": display_sl,
                 "display_skill_level_status": display_sl_status,
                 "latest_observed_skill_level": latest_observed_sl,
