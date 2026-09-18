@@ -12,6 +12,8 @@ No model is fit here. This module only constructs auditable historical examples.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+from itertools import groupby
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -66,6 +68,25 @@ class _CanonicalGame:
     opponent_skill_level: Optional[int]
     format: str
     session_name: str
+
+
+def _parse_match_datetime(value: str | None) -> Optional[datetime]:
+    """Return a timezone-aware ISO timestamp, or None when chronology is unsafe.
+
+    Live APA GraphQL startTime values are timezone-aware ISO-8601. Legacy
+    scraped/text rows can use other shapes. Backtesting excludes those rather
+    than guessing a timezone or relying on lexicographic string order.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
 
 
 def _format_name(value: str | None) -> Optional[str]:
@@ -243,54 +264,65 @@ def build_backtest_examples(db: Session) -> list[BacktestExample]:
         bucket = by_match.setdefault(match.id, (match, []))
         bucket[1].append(row)
 
-    ordered_matches = sorted(
-        by_match.values(),
-        key=lambda item: (str(item[0].match_date), item[0].id),
-    )
+    dated_matches: list[tuple[datetime, Match, list[PlayerHeadToHead]]] = []
+    for match, rows in by_match.values():
+        when = _parse_match_datetime(match.match_date)
+        if when is None:
+            continue
+        dated_matches.append((when, match, rows))
+    dated_matches.sort(key=lambda item: (item[0], item[1].id))
 
     history: dict[tuple[int, str], list[_Outcome]] = {}
     examples: list[BacktestExample] = []
 
-    for match, rows in ordered_matches:
-        games = _canonical_games(rows, match)
+    # IMPORTANT: withhold every team match sharing the same real timestamp as
+    # one batch. That is stricter than withholding just one team match and
+    # prevents simultaneous/doubleheader rows from becoming future evidence
+    # for another match at the same recorded time.
+    for _, timestamp_group in groupby(dated_matches, key=lambda item: item[0]):
+        batch = list(timestamp_group)
+        batch_games: list[tuple[Match, list[_CanonicalGame]]] = [
+            (match, _canonical_games(rows, match))
+            for _, match, rows in batch
+        ]
 
-        # IMPORTANT: build every example for this team match before adding any
-        # same-match outcome to history. That prevents lineup-slot leakage.
-        for game in games:
-            features = _features(
-                history,
-                player_id=game.player_id,
-                opponent_id=game.opponent_id,
-                format_name=game.format,
-            )
-            skill_delta = (
-                game.own_skill_level - game.opponent_skill_level
-                if game.own_skill_level is not None and game.opponent_skill_level is not None
-                else None
-            )
-            examples.append(
-                BacktestExample(
-                    match_id=match.id,
-                    match_external_id=match.external_id,
-                    match_date=str(match.match_date),
-                    format=game.format,
-                    session_name=game.session_name,
+        for match, games in batch_games:
+            for game in games:
+                features = _features(
+                    history,
                     player_id=game.player_id,
                     opponent_id=game.opponent_id,
-                    outcome_win=1 if game.won else 0,
-                    own_skill_level=game.own_skill_level,
-                    opponent_skill_level=game.opponent_skill_level,
-                    skill_delta=skill_delta,
-                    **features,
+                    format_name=game.format,
                 )
-            )
+                skill_delta = (
+                    game.own_skill_level - game.opponent_skill_level
+                    if game.own_skill_level is not None and game.opponent_skill_level is not None
+                    else None
+                )
+                examples.append(
+                    BacktestExample(
+                        match_id=match.id,
+                        match_external_id=match.external_id,
+                        match_date=str(match.match_date),
+                        format=game.format,
+                        session_name=game.session_name,
+                        player_id=game.player_id,
+                        opponent_id=game.opponent_id,
+                        outcome_win=1 if game.won else 0,
+                        own_skill_level=game.own_skill_level,
+                        opponent_skill_level=game.opponent_skill_level,
+                        skill_delta=skill_delta,
+                        **features,
+                    )
+                )
 
-        for game in games:
-            history.setdefault((game.player_id, game.format), []).append(
-                _Outcome(opponent_id=game.opponent_id, won=game.won)
-            )
-            history.setdefault((game.opponent_id, game.format), []).append(
-                _Outcome(opponent_id=game.player_id, won=not game.won)
-            )
+        for _, games in batch_games:
+            for game in games:
+                history.setdefault((game.player_id, game.format), []).append(
+                    _Outcome(opponent_id=game.opponent_id, won=game.won)
+                )
+                history.setdefault((game.opponent_id, game.format), []).append(
+                    _Outcome(opponent_id=game.player_id, won=not game.won)
+                )
 
     return examples
