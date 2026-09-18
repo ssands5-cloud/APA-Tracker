@@ -70,14 +70,18 @@ def capture_access_token() -> str | None:
 
 
 def run_pipeline(token: str, *, resume: bool) -> int:
-    """Run catalog -> archive -> player enrichment using one in-memory token."""
+    """Run seed catalog -> history graph -> archive -> enrichment with one token."""
     from scraper.graphql_scraper import fetch_dashboard_teams
     from scheduler.graphql_sync import load_config
     from scripts.build_historical_catalog import main as catalog_main
     from scripts.build_ultimate_coach_archive import (
-        DEFAULT_CATALOG,
         DEFAULT_STAGING,
         main as archive_main,
+    )
+    from scripts.expand_ultimate_coach_history import (
+        DEFAULT_OUTPUT as EXPANDED_CATALOG,
+        DEFAULT_REPORT as HISTORY_GRAPH_REPORT,
+        main as history_graph_main,
     )
     from scripts.enrich_ultimate_coach_players import (
         DEFAULT_REPORT as ENRICHMENT_REPORT,
@@ -94,16 +98,33 @@ def run_pipeline(token: str, *, resume: bool) -> int:
             return 1
         print("\nAPA AUTH OK - authenticated viewer found.")
 
-        if not resume or not DEFAULT_CATALOG.is_file():
-            print("\n[1/3] Building real historical league/session/division catalog...")
+        from scripts.build_historical_catalog import DEFAULT_OUTPUT as SEED_CATALOG
+
+        if not resume or not SEED_CATALOG.is_file():
+            print("\n[1/4] Building authenticated-member seed catalog...")
             if catalog_main([]):
                 return 1
         else:
-            print(f"\n[1/3] Reusing existing catalog for resume: {DEFAULT_CATALOG}")
+            print(f"\n[1/4] Reusing seed catalog for resume: {SEED_CATALOG}")
+
+        graph_resume = (
+            resume
+            and EXPANDED_CATALOG.is_file()
+            and HISTORY_GRAPH_REPORT.is_file()
+        )
+        print("\n[2/4] Recursively expanding history through real roster members...")
+        graph_args = ["--resume"] if graph_resume else []
+        if history_graph_main(graph_args):
+            print("\nHistory graph expansion stopped before completion.")
+            print("Get a fresh APA session and run:")
+            print("  python tools/run_ultimate_coach_browser.py --resume")
+            return 1
 
         archive_resume = resume and DEFAULT_STAGING.is_file()
-        print("\n[2/3] Building/resuming league-wide historical archive...")
-        archive_args = ["--resume"] if archive_resume else []
+        print("\n[3/4] Building/resuming league-wide historical archive...")
+        archive_args = ["--catalog", str(EXPANDED_CATALOG)]
+        if archive_resume:
+            archive_args.append("--resume")
         if archive_main(archive_args):
             print("\nArchive stopped before completion.")
             print("Get a fresh APA session and run:")
@@ -111,8 +132,10 @@ def run_pipeline(token: str, *, resume: bool) -> int:
             return 1
 
         enrich_resume = resume and ENRICHMENT_REPORT.is_file()
-        print("\n[3/3] Enriching every safely resolvable player with APA career stats...")
-        enrich_args = ["--resume"] if enrich_resume else []
+        print("\n[4/4] Enriching every safely resolvable player with APA career stats...")
+        enrich_args = ["--catalog", str(EXPANDED_CATALOG)]
+        if enrich_resume:
+            enrich_args.append("--resume")
         if enrichment_main(enrich_args):
             print("\nPlayer enrichment stopped before completion.")
             print("Get a fresh APA session and run:")
@@ -120,7 +143,7 @@ def run_pipeline(token: str, *, resume: bool) -> int:
             return 1
 
         print("\nULTIMATE COACH DATA FOUNDATION COMPLETE")
-        print(f"  catalog: {DEFAULT_CATALOG}")
+        print(f"  expanded catalog: {EXPANDED_CATALOG}")
         print(f"  staging: {DEFAULT_STAGING}")
         print("  production database was not promoted or replaced.")
         return 0
