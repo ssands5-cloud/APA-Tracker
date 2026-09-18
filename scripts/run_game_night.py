@@ -202,7 +202,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     except GameNightError as exc:
         logger.error("GAME NIGHT FAILED: %s", exc)
         return exc.code
-    except production_builder.BuildError as exc:
+    except (production_builder.BuildError, cockpit_builder.BuildError) as exc:
         logger.error("GAME NIGHT FAILED: %s", exc)
         return exc.code
     except KeyboardInterrupt:
