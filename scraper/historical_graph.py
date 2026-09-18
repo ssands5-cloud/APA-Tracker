@@ -327,6 +327,20 @@ def expand_historical_catalog(
                 f"division {division_id} session {session_id}: missing league id; cannot expand members safely"
             )
             processed_divisions.add(key_text)
+            _persist_state(
+                output_path=output_path,
+                report_path=report_path,
+                seed_catalog=seed_catalog,
+                seed_catalog_path=seed_catalog_path,
+                seed_sha=seed_sha,
+                sessions=sessions,
+                divisions=divisions,
+                source_limitations=source_limitations,
+                processed_divisions=processed_divisions,
+                processed_member_leagues=processed_member_leagues,
+                processed_session_catalogs=processed_session_catalogs,
+                status="expansion_in_progress",
+            )
             continue
 
         roster_payload = fetch_division_rosters(config, division_id)
@@ -339,16 +353,18 @@ def expand_historical_catalog(
                 f"division {division_id} session {session_id}: APA returned zero roster teams during graph expansion"
             )
             processed_divisions.add(key_text)
-            _checkpoint(
-                report_path,
+            _persist_state(
+                output_path=output_path,
+                report_path=report_path,
+                seed_catalog=seed_catalog,
                 seed_catalog_path=seed_catalog_path,
-                seed_sha256=seed_sha,
-                processed_divisions=processed_divisions,
-                processed_member_leagues=processed_member_leagues,
-                processed_session_catalogs=processed_session_catalogs,
+                seed_sha=seed_sha,
                 sessions=sessions,
                 divisions=divisions,
                 source_limitations=source_limitations,
+                processed_divisions=processed_divisions,
+                processed_member_leagues=processed_member_leagues,
+                processed_session_catalogs=processed_session_catalogs,
                 status="expansion_in_progress",
             )
             continue
