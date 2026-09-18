@@ -356,6 +356,30 @@ validated win-probability model or danger threshold is real, separate
 statistical work — checked against this project's own recorded outcomes
 before it ships, not asserted in the code.
 
+**Game-night one-click launcher** — on Windows, double-click
+`Refresh_APA_Cockpit.bat`. It selects a supported Python 3.12/3.13
+interpreter, opens the real APA site so you can log in normally, keeps the
+captured access token in memory only, performs the existing division-wide live
+staging refresh, refuses incomplete coverage, then chooses the logged-in
+account team with the nearest upcoming unplayed real match before building the
+Coach Cockpit. This matters for accounts that play on multiple league teams:
+a Friday match is no longer hidden just because `apa_config.yaml` names a
+Monday team. Pass `--our-team-id TEAM_ID` only when you intentionally want to
+override that automatic game-night choice. The launcher verifies the Cockpit
+against that exact staged database, then promotes the database with the
+existing timestamped-backup protection and opens the verified
+`html/dashboard.html`. A failure before promotion leaves the current
+production database untouched, and every Cockpit build uses a new run directory
+so the previous known-good Cockpit is not overwritten. The equivalent
+token-already-available CLI is:
+
+```powershell
+python scripts/run_game_night.py
+```
+
+Use `--resume` only to continue an interrupted staging refresh with a fresh
+session token; use `--no-open` to verify/build without launching the browser.
+
 **Match Night** — the dashboard's third panel, for the actual in-match
 decision: "they put up this player, who should I send, and what does that
 leave me?" Reuses the exact same Player vs Player / Team vs Team data

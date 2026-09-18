@@ -806,7 +806,7 @@ def run_build(
     phases.append(finalize(run_dir, manifest))
 
     if promote and mode == "live":
-        _promote(db_path)
+        promote_live_database(db_path)
 
     events.emit(
         "complete",
@@ -944,8 +944,13 @@ def _formula_versions() -> dict:
     }
 
 
-def _promote(staged: Path) -> None:
-    """Replace the production database, only behind the explicit flag."""
+def promote_live_database(staged: Path) -> None:
+    """Replace the production database after upstream verification succeeds.
+
+    This is public so thin operator launchers can reuse the exact same backup-and-
+    promote contract instead of copying it. Callers remain responsible for
+    completing their own verification gates before invoking it.
+    """
     backup = LIVE_PRODUCTION_DB.with_suffix(
         f".backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db"
     )
