@@ -360,8 +360,13 @@ before it ships, not asserted in the code.
 `Refresh_APA_Cockpit.bat`. It selects a supported Python 3.12/3.13
 interpreter, opens the real APA site so you can log in normally, keeps the
 captured access token in memory only, performs the existing division-wide live
-staging refresh, refuses incomplete coverage, builds and verifies the Coach
-Cockpit against that exact staged database, then promotes the database with the
+staging refresh, refuses incomplete coverage, then chooses the logged-in
+account team with the nearest upcoming unplayed real match before building the
+Coach Cockpit. This matters for accounts that play on multiple league teams:
+a Friday match is no longer hidden just because `apa_config.yaml` names a
+Monday team. Pass `--our-team-id TEAM_ID` only when you intentionally want to
+override that automatic game-night choice. The launcher verifies the Cockpit
+against that exact staged database, then promotes the database with the
 existing timestamped-backup protection and opens the verified
 `html/dashboard.html`. A failure before promotion leaves the current
 production database untouched, and every Cockpit build uses a new run directory
