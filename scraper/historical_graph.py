@@ -191,6 +191,78 @@ def _checkpoint(
     return report
 
 
+def _expanded_catalog_payload(
+    seed_catalog: dict[str, Any],
+    *,
+    seed_sha: str,
+    sessions: dict[tuple[str, str], dict[str, Any]],
+    divisions: dict[tuple[str, str, str], dict[str, Any]],
+    source_limitations: list[str],
+) -> dict[str, Any]:
+    """Build the deterministic v2 catalog payload from current graph state."""
+    return {
+        "schema": EXPANDED_SCHEMA,
+        "member_id": str(seed_catalog.get("member_id") or ""),
+        "discovery_mode": "recursive_roster_member_alias_graph",
+        "seed_schema": seed_catalog.get("schema"),
+        "seed_catalog_sha256": seed_sha,
+        "aliases": list(seed_catalog.get("aliases") or []),
+        "sessions": [
+            sessions[key] for key in sorted(sessions, key=lambda x: (x[0], int(x[1])))
+        ],
+        "divisions": [
+            divisions[key]
+            for key in sorted(divisions, key=lambda x: (x[0], int(x[1]), int(x[2])))
+        ],
+        "source_limitations": sorted(set(source_limitations)),
+        "counts": {
+            "aliases": len(seed_catalog.get("aliases") or []),
+            "sessions": len(sessions),
+            "divisions": len(divisions),
+        },
+    }
+
+
+def _persist_state(
+    *,
+    output_path: Path,
+    report_path: Path | None,
+    seed_catalog: dict[str, Any],
+    seed_catalog_path: Path,
+    seed_sha: str,
+    sessions: dict[tuple[str, str], dict[str, Any]],
+    divisions: dict[tuple[str, str, str], dict[str, Any]],
+    source_limitations: list[str],
+    processed_divisions: set[str],
+    processed_member_leagues: set[str],
+    processed_session_catalogs: set[str],
+    status: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Persist catalog first, then checkpoint, so resume never skips unseen data."""
+    expanded = _expanded_catalog_payload(
+        seed_catalog,
+        seed_sha=seed_sha,
+        sessions=sessions,
+        divisions=divisions,
+        source_limitations=source_limitations,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(expanded, indent=2, sort_keys=True), encoding="utf-8")
+    report = _checkpoint(
+        report_path,
+        seed_catalog_path=seed_catalog_path,
+        seed_sha256=seed_sha,
+        processed_divisions=processed_divisions,
+        processed_member_leagues=processed_member_leagues,
+        processed_session_catalogs=processed_session_catalogs,
+        sessions=sessions,
+        divisions=divisions,
+        source_limitations=source_limitations,
+        status=status,
+    )
+    return expanded, report
+
+
 def expand_historical_catalog(
     config: dict,
     *,
@@ -307,6 +379,20 @@ def expand_historical_catalog(
                     f"expected one exact league alias, found {len(candidates)}"
                 )
                 processed_member_leagues.add(scope_key)
+                _persist_state(
+                    output_path=output_path,
+                    report_path=report_path,
+                    seed_catalog=seed_catalog,
+                    seed_catalog_path=seed_catalog_path,
+                    seed_sha=seed_sha,
+                    sessions=sessions,
+                    divisions=divisions,
+                    source_limitations=source_limitations,
+                    processed_divisions=processed_divisions,
+                    processed_member_leagues=processed_member_leagues,
+                    processed_session_catalogs=processed_session_catalogs,
+                    status="expansion_in_progress",
+                )
                 continue
 
             alias = candidates[0]
@@ -318,6 +404,20 @@ def expand_historical_catalog(
                     "resolved alias lacks id or supported formats"
                 )
                 processed_member_leagues.add(scope_key)
+                _persist_state(
+                    output_path=output_path,
+                    report_path=report_path,
+                    seed_catalog=seed_catalog,
+                    seed_catalog_path=seed_catalog_path,
+                    seed_sha=seed_sha,
+                    sessions=sessions,
+                    divisions=divisions,
+                    source_limitations=source_limitations,
+                    processed_divisions=processed_divisions,
+                    processed_member_leagues=processed_member_leagues,
+                    processed_session_catalogs=processed_session_catalogs,
+                    status="expansion_in_progress",
+                )
                 continue
 
             discovered_rows: list[dict[str, Any]] = []
@@ -419,78 +519,50 @@ def expand_historical_catalog(
                         queue.append(dkey)
 
             processed_member_leagues.add(scope_key)
+            _persist_state(
+                output_path=output_path,
+                report_path=report_path,
+                seed_catalog=seed_catalog,
+                seed_catalog_path=seed_catalog_path,
+                seed_sha=seed_sha,
+                sessions=sessions,
+                divisions=divisions,
+                source_limitations=source_limitations,
+                processed_divisions=processed_divisions,
+                processed_member_leagues=processed_member_leagues,
+                processed_session_catalogs=processed_session_catalogs,
+                status="expansion_in_progress",
+            )
 
         processed_divisions.add(key_text)
 
-        expanded = {
-            "schema": EXPANDED_SCHEMA,
-            "member_id": str(seed_catalog.get("member_id") or ""),
-            "discovery_mode": "recursive_roster_member_alias_graph",
-            "seed_schema": seed_catalog.get("schema"),
-            "seed_catalog_sha256": seed_sha,
-            "aliases": list(seed_catalog.get("aliases") or []),
-            "sessions": [
-                sessions[key] for key in sorted(sessions, key=lambda x: (x[0], int(x[1])))
-            ],
-            "divisions": [
-                divisions[key]
-                for key in sorted(divisions, key=lambda x: (x[0], int(x[1]), int(x[2])))
-            ],
-            "source_limitations": sorted(set(source_limitations)),
-            "counts": {
-                "aliases": len(seed_catalog.get("aliases") or []),
-                "sessions": len(sessions),
-                "divisions": len(divisions),
-            },
-        }
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(expanded, indent=2, sort_keys=True), encoding="utf-8")
-        _checkpoint(
-            report_path,
+        _persist_state(
+            output_path=output_path,
+            report_path=report_path,
+            seed_catalog=seed_catalog,
             seed_catalog_path=seed_catalog_path,
-            seed_sha256=seed_sha,
-            processed_divisions=processed_divisions,
-            processed_member_leagues=processed_member_leagues,
-            processed_session_catalogs=processed_session_catalogs,
+            seed_sha=seed_sha,
             sessions=sessions,
             divisions=divisions,
             source_limitations=source_limitations,
+            processed_divisions=processed_divisions,
+            processed_member_leagues=processed_member_leagues,
+            processed_session_catalogs=processed_session_catalogs,
             status="expansion_in_progress",
         )
 
-    expanded = {
-        "schema": EXPANDED_SCHEMA,
-        "member_id": str(seed_catalog.get("member_id") or ""),
-        "discovery_mode": "recursive_roster_member_alias_graph",
-        "seed_schema": seed_catalog.get("schema"),
-        "seed_catalog_sha256": seed_sha,
-        "aliases": list(seed_catalog.get("aliases") or []),
-        "sessions": [
-            sessions[key] for key in sorted(sessions, key=lambda x: (x[0], int(x[1])))
-        ],
-        "divisions": [
-            divisions[key]
-            for key in sorted(divisions, key=lambda x: (x[0], int(x[1]), int(x[2])))
-        ],
-        "source_limitations": sorted(set(source_limitations)),
-        "counts": {
-            "aliases": len(seed_catalog.get("aliases") or []),
-            "sessions": len(sessions),
-            "divisions": len(divisions),
-        },
-    }
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(expanded, indent=2, sort_keys=True), encoding="utf-8")
-    report = _checkpoint(
-        report_path,
+    expanded, report = _persist_state(
+        output_path=output_path,
+        report_path=report_path,
+        seed_catalog=seed_catalog,
         seed_catalog_path=seed_catalog_path,
-        seed_sha256=seed_sha,
-        processed_divisions=processed_divisions,
-        processed_member_leagues=processed_member_leagues,
-        processed_session_catalogs=processed_session_catalogs,
+        seed_sha=seed_sha,
         sessions=sessions,
         divisions=divisions,
         source_limitations=source_limitations,
+        processed_divisions=processed_divisions,
+        processed_member_leagues=processed_member_leagues,
+        processed_session_catalogs=processed_session_catalogs,
         status="expansion_complete",
     )
     return expanded, report
