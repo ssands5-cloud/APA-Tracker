@@ -302,3 +302,50 @@ def test_zero_historical_roster_is_visible_source_limitation(monkeypatch, tmp_pa
 
     assert expanded["counts"]["divisions"] == 1
     assert any("zero roster teams" in x for x in report["source_limitations"])
+
+
+def test_roster_entry_id_is_never_used_as_member_id_fallback(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [
+                {
+                    "id": 1,
+                    "name": "T",
+                    "isBye": False,
+                    "roster": [
+                        {
+                            "id": 999999,
+                            "displayName": "No Canonical Member",
+                            "member": None,
+                            "matchesWon": 1,
+                            "matchesPlayed": 2,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    called = []
+
+    def should_not_call(config, member_id):
+        called.append(member_id)
+        return {}
+
+    monkeypatch.setattr(graph, "fetch_formats_by_member_id", should_not_call)
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert called == []
+    assert any(
+        "lacked a canonical numeric member.id" in item
+        for item in report["source_limitations"]
+    )
