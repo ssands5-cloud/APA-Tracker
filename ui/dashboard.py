@@ -379,7 +379,7 @@ toughest first -- never a categorical "danger" label
             : choice.label;
           return "<option value=\\\"" + esc(choice.key) + "\\\">" + esc(label) + "</option>";
         }}).join("")
-      : "<option value=\\\"\\\">No opponents match this team/filter selection</option>";
+      : "<option value=\\\"\\\">No opponents match these filters for this opposing team</option>";
     renderPlayer();
   }}
 
