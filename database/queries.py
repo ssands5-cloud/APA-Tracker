@@ -170,7 +170,12 @@ def canonical_current_roster(
 
 
 def resolve_roster_identity(
-    db: Session, team_external_id: str, session_name: str, display_name: str
+    db: Session,
+    team_external_id: str,
+    session_name: str,
+    display_name: str,
+    *,
+    current_only: bool = True,
 ) -> Optional[Player]:
     """The real canonical-roster Player behind a scoreboard display name --
     or None, never a guess, when it cannot be established uniquely.
@@ -184,30 +189,38 @@ def resolve_roster_identity(
     therefore never a stable cross-match player identity by itself.
 
     This resolves a scoresheet name back to the real roster identity by
-    the one join APA's data actually supports: the exact current-roster
-    member of the EXACT team the scoresheet says this position played for,
-    in the exact session. Scoping to one team's current roster (typically
-    5-8 people) rather than searching by name across an entire division
-    keeps a same-name collision rare and, when it does happen, reliably
-    caught -- confirmed on a real account: 275 of 277 real scoresheet
-    identities resolved uniquely this way, zero ambiguous, and the 2
-    non-matches were a real substitute player on neither team's current
-    roster (a real, honest "unresolved", not a defect in the approach).
+    the one join APA's data actually supports: exact team + session +
+    display-name membership. Current live syncs keep current_only=True
+    (the historical behavior); a career backfill can set it False because
+    historical PlayerTeamHistory rows are deliberately not marked current.
+    In both modes the team and session dimensions remain mandatory, so this
+    never falls back to an unscoped name search.
+
+    Scoping to one team's roster (typically 5-8 people) rather than searching
+    by name across an entire division keeps a same-name collision rare and,
+    when it does happen, reliably caught -- confirmed on a real account:
+    275 of 277 real scoresheet identities resolved uniquely this way, zero
+    ambiguous, and the 2 non-matches were a real substitute player on neither
+    team's canonical roster (a real, honest "unresolved", not a defect in
+    the approach).
 
     Returns None on zero or on more than one candidate. A caller must
     treat None as "keep the scoresheet's own alias identity, flagged
     unresolved" -- never as license to fall back to an unscoped, dumber
     name search.
     """
+    filters = [
+        PlayerTeamHistory.team_external_id == team_external_id,
+        PlayerTeamHistory.session_name == session_name,
+        Player.name == display_name,
+    ]
+    if current_only:
+        filters.append(PlayerTeamHistory.is_current.is_(True))
+
     candidates = (
         db.query(Player)
         .join(PlayerTeamHistory, PlayerTeamHistory.player_id == Player.id)
-        .filter(
-            PlayerTeamHistory.team_external_id == team_external_id,
-            PlayerTeamHistory.session_name == session_name,
-            PlayerTeamHistory.is_current.is_(True),
-            Player.name == display_name,
-        )
+        .filter(*filters)
         .all()
     )
     return candidates[0] if len(candidates) == 1 else None
