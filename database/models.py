@@ -235,6 +235,43 @@ class PlayerCareerStats(Base):
     player = relationship("Player", back_populates="career_stats")
 
 
+class PlayerLeagueCareerStats(Base):
+    """League-scoped lifetime stats for an arbitrary APA player.
+
+    APA aliases are per league. A global (player, format) row is therefore
+    insufficient for scouting players who have histories in more than one
+    league. These rows preserve the exact league and alias id used to fetch
+    each lifetime stat block so downstream analytics can stay source-scoped.
+    """
+
+    __tablename__ = "player_league_career_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "league_id", "format",
+            name="uq_player_league_career_stats_scope",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    league_id = Column(String, nullable=False)
+    league_slug = Column(String)
+    alias_external_id = Column(String, nullable=False)
+    format = Column(String, nullable=False)
+    matches_won = Column(Integer)
+    matches_played = Column(Integer)
+    cla = Column(Integer)
+    defensive_shot_avg = Column(Float)
+    match_count_last_two_yrs = Column(Integer)
+    last_played = Column(String)
+    on_break_count = Column(Integer)
+    break_and_runs = Column(Integer)
+    mini_slams = Column(Integer)
+    rackless = Column(Integer)
+    skunks = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class PlayerTeamHistory(Base):
     """One row per team (past or current) a player's alias has played on,
     from TeamStat -- the cross-season history PlayerMatch has no source

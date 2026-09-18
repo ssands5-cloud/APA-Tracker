@@ -15,12 +15,15 @@ from typing import Any, Optional
 
 from auth.graphql_client import GraphQLAuthError, execute
 from parser.apa_graphql import (
+    ALIAS_SESSION_STATS_DROPDOWN_QUERY,
+    ALIAS_SESSION_STATS_QUERY,
     DASHBOARD_TEAMS_QUERY,
     DIVISION_ROSTERS_QUERY,
     DIVISION_SCHEDULE_QUERY,
     DIVISION_STANDINGS_QUERY,
     FORMATS_BY_MEMBER_ID_QUERY,
     GET_EIGHT_BALL_STATS_QUERY,
+    LEAGUE_DIVISIONS_QUERY,
     MATCH_DETAIL_QUERY,
     MATCHES_BY_VIEWER_QUERY,
     TEAM_PAGE_QUERY,
@@ -933,4 +936,157 @@ def team_stat_rows(alias: dict[str, Any]) -> list[dict[str, Any]]:
                     "is_active": bool(entry.get("isActive")),
                 }
             )
+    return rows
+
+
+# --- Historical catalog accessors -------------------------------------------
+
+_VALID_FORMATS = {"EIGHT", "NINE", "MASTERS"}
+
+
+def _catalog_format(format_name: str) -> str:
+    """Normalize/validate a GraphQL FormatType without guessing.
+
+    The live captures use EIGHT/NINE. Reject unknown strings rather than
+    silently mapping an unexpected APA value onto the wrong format.
+    """
+    value = str(format_name or "").strip().upper()
+    if value not in _VALID_FORMATS:
+        raise ValueError(f"unsupported APA format {format_name!r}")
+    return value
+
+
+def _catalog_execute(config: dict, query: str, variables: dict) -> dict[str, Any]:
+    """Execute one read-only historical-catalog query with standard auth handling."""
+    token = _token(config)
+    timeout = (config.get("session") or {}).get("timeout_seconds", 15)
+    retries = (config.get("session") or {}).get("max_retries", 0)
+    try:
+        return execute(query, variables, token, timeout, retries)
+    except GraphQLAuthError as exc:
+        raise AccessTokenExpired(
+            "The APA access token was rejected (it expires quickly). Re-open the "
+            "APA site while logged in, capture a fresh token, and resume."
+        ) from exc
+
+
+def fetch_alias_sessions(config: dict, alias_id: int, format_name: str) -> dict[str, Any]:
+    """Return the alias plus every APA session exposed for one format."""
+    payload = _catalog_execute(
+        config,
+        ALIAS_SESSION_STATS_DROPDOWN_QUERY,
+        {"id": int(alias_id), "format": _catalog_format(format_name)},
+    )
+    return payload.get("alias") or {}
+
+
+def alias_session_rows(alias: dict[str, Any], format_name: str) -> list[dict[str, Any]]:
+    """Flatten AliasSessionStatsDropdown into stable session catalog rows."""
+    format_name = _catalog_format(format_name)
+    rows = []
+    for session in alias.get("sessions") or []:
+        session = session or {}
+        session_id = session.get("id")
+        if session_id is None:
+            continue
+        rows.append({
+            "alias_id": str(alias.get("id") or ""),
+            "session_id": str(session_id),
+            "session_name": session.get("name") or "",
+            "format": format_name,
+        })
+    return rows
+
+
+def fetch_alias_session_stats(
+    config: dict,
+    alias_id: int,
+    session_id: int,
+    format_name: str,
+) -> dict[str, Any]:
+    """Return the real per-session player/team rows APA exposes for one alias."""
+    payload = _catalog_execute(
+        config,
+        ALIAS_SESSION_STATS_QUERY,
+        {
+            "id": int(alias_id),
+            "session": int(session_id),
+            "format": _catalog_format(format_name),
+        },
+    )
+    return payload.get("alias") or {}
+
+
+def alias_session_team_rows(
+    alias: dict[str, Any],
+    session_id: str | int,
+    format_name: str,
+) -> list[dict[str, Any]]:
+    """Flatten AliasSessionStats team/stat rows without inventing missing values."""
+    league = alias.get("league") or {}
+    format_name = _catalog_format(format_name)
+    rows = []
+    for player in alias.get("players") or []:
+        player = player or {}
+        team = player.get("team") or {}
+        if not team.get("id"):
+            continue
+        rows.append({
+            "alias_id": str(alias.get("id") or ""),
+            "session_id": str(session_id),
+            "format": format_name,
+            "league_id": str(league.get("id") or ""),
+            "league_slug": league.get("slug") or "",
+            "team_id": str(team.get("id") or ""),
+            "team_name": team.get("name") or "",
+            "team_number": team.get("number"),
+            "team_active": team.get("active"),
+            "matches_won": player.get("matchesWon"),
+            "matches_played": player.get("matchesPlayed"),
+            "ppm": player.get("ppm"),
+            "pa": player.get("pa"),
+            "player_type": player.get("__typename") or "",
+        })
+    return rows
+
+
+def fetch_league_divisions(
+    config: dict,
+    league_slug: str,
+    session_id: int | None = None,
+) -> dict[str, Any]:
+    """Enumerate every division APA exposes for one league/session.
+
+    This captured query is the crucial expansion step that makes the archive
+    league-wide rather than limited to divisions in the viewer's own TeamStat
+    history. A known real session id is supplied; ids are never brute-forced.
+    """
+    variables: dict[str, Any] = {"slug": str(league_slug)}
+    if session_id is not None:
+        variables["session"] = int(session_id)
+    payload = _catalog_execute(config, LEAGUE_DIVISIONS_QUERY, variables)
+    return payload.get("league") or {}
+
+
+def league_division_rows(league: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten leagueDivisions while preserving the source session/format."""
+    rows = []
+    for division in league.get("divisions") or []:
+        division = division or {}
+        session = division.get("session") or {}
+        if not division.get("id"):
+            continue
+        rows.append({
+            "league_id": str(league.get("id") or ""),
+            "current_session_id": str(league.get("currentSessionId") or ""),
+            "division_id": str(division.get("id") or ""),
+            "division_name": division.get("name") or "",
+            "division_number": division.get("number"),
+            "format": division.get("format") or "",
+            "type": division.get("type") or "",
+            "night_of_play": division.get("nightOfPlay"),
+            "is_mine": bool(division.get("isMine")),
+            "session_id": str(session.get("id") or ""),
+            "session_name": session.get("name") or "",
+        })
     return rows
