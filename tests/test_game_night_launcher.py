@@ -253,6 +253,201 @@ def test_auto_selects_nearest_upcoming_match_across_current_teams(tmp_path):
     assert selected["opponent_name"] == "Friday Opponent"
 
 
+def test_multi_team_hub_builds_all_owned_teams_and_defaults_nearest(tmp_path, monkeypatch):
+    demo_root = tmp_path / "demo-runs"
+    cockpit_root = tmp_path / "cockpit-runs"
+    staging_db = tmp_path / "data" / "apa_tracker_regenerated.db"
+    staging_db.parent.mkdir(parents=True)
+
+    monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
+    monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
+    monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
+    monkeypatch.setattr(
+        launcher,
+        "_discover_viewer_teams",
+        lambda: [
+            {
+                "team_id": "13082718",
+                "team_name": "Brunch Ballers",
+                "division_type": "EIGHT",
+                "session_name": "Fall 2026",
+            },
+            {
+                "team_id": "13082948",
+                "team_name": "Mark It Up",
+                "division_type": "EIGHT",
+                "session_name": "Fall 2026",
+            },
+        ],
+    )
+
+    events: list[str] = []
+
+    def fake_production_build(mode, run_dir, run_root, promote=False, resume=False, **kwargs):
+        assert mode == "live"
+        assert promote is False
+        events.append("refresh")
+        with sqlite3.connect(staging_db) as conn:
+            conn.execute(
+                """
+                CREATE TABLE matches (
+                    external_id TEXT,
+                    home_team_id TEXT,
+                    away_team_id TEXT,
+                    home_team_name TEXT,
+                    away_team_name TEXT,
+                    match_date TEXT,
+                    is_bye INTEGER,
+                    is_scored INTEGER,
+                    is_finalized INTEGER
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO matches VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)",
+                [
+                    (
+                        "sunday-match", "13082718", "opp-sun",
+                        "Brunch Ballers", "Big Bank Theory", "2026-09-20T11:00:00-06:00",
+                    ),
+                    (
+                        "monday-match", "13082948", "opp-mon",
+                        "Mark It Up", "The Royals", "2026-09-21T19:00:00-06:00",
+                    ),
+                ],
+            )
+
+    def fake_cockpit_build(db_path, team_id, run_dir, run_root, **kwargs):
+        assert db_path == staging_db
+        assert run_root == cockpit_root / "game-night-20260918T010000Z" / "teams"
+        events.append(f"cockpit:{team_id}")
+        _write_bundle(run_dir, staging_db)
+
+    def fake_promote(path):
+        assert path == staging_db
+        events.append("promote")
+
+    opened: list[str] = []
+    monkeypatch.setattr(launcher.production_builder, "run_build", fake_production_build)
+    monkeypatch.setattr(launcher.cockpit_builder, "run_build", fake_cockpit_build)
+    monkeypatch.setattr(launcher.production_builder, "promote_live_database", fake_promote)
+
+    dashboard = launcher.run_game_night(
+        stamp="20260918T010000Z",
+        opener=lambda uri: opened.append(uri) or True,
+    )
+
+    assert events == [
+        "refresh",
+        "cockpit:13082718",
+        "cockpit:13082948",
+        "promote",
+    ]
+    expected = (
+        cockpit_root / "game-night-20260918T010000Z" / "html" / "dashboard.html"
+    ).resolve()
+    assert dashboard == expected
+    assert opened == [expected.as_uri()]
+
+    hub = dashboard.read_text(encoding="utf-8")
+    assert "My Team" in hub
+    assert "Brunch Ballers" in hub
+    assert "Mark It Up" in hub
+    assert "13082718" in hub
+    assert "13082948" in hub
+    assert 'src="../teams/13082718/html/dashboard.html"' in hub
+
+    run_dir = cockpit_root / "game-night-20260918T010000Z"
+    hub_manifest = launcher.verify_game_night_hub(run_dir, launcher._sha256(staging_db))
+    assert hub_manifest["selected_team_id"] == "13082718"
+    assert hub_manifest["team_count"] == 2
+    assert (run_dir / launcher.HUB_READY_NAME).is_file()
+
+
+def test_multi_team_child_failure_never_promotes_or_opens(tmp_path, monkeypatch):
+    demo_root = tmp_path / "demo-runs"
+    cockpit_root = tmp_path / "cockpit-runs"
+    staging_db = tmp_path / "data" / "apa_tracker_regenerated.db"
+    staging_db.parent.mkdir(parents=True)
+
+    monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
+    monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
+    monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
+    monkeypatch.setattr(
+        launcher,
+        "_discover_viewer_teams",
+        lambda: [
+            {"team_id": "team-a", "team_name": "Team A", "division_type": "EIGHT", "session_name": "Fall"},
+            {"team_id": "team-b", "team_name": "Team B", "division_type": "NINE", "session_name": "Fall"},
+        ],
+    )
+
+    def fake_production_build(*args, **kwargs):
+        with sqlite3.connect(staging_db) as conn:
+            conn.execute(
+                """
+                CREATE TABLE matches (
+                    external_id TEXT, home_team_id TEXT, away_team_id TEXT,
+                    home_team_name TEXT, away_team_name TEXT, match_date TEXT,
+                    is_bye INTEGER, is_scored INTEGER, is_finalized INTEGER
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO matches VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)",
+                ("next", "team-a", "opp", "Team A", "Opponent", "2026-09-20T11:00:00-06:00"),
+            )
+
+    def fake_cockpit_build(db_path, team_id, run_dir, run_root, **kwargs):
+        if team_id == "team-b":
+            raise launcher.cockpit_builder.BuildError("team build failed", 11)
+        _write_bundle(run_dir, staging_db)
+
+    promoted: list[Path] = []
+    opened: list[str] = []
+    monkeypatch.setattr(launcher.production_builder, "run_build", fake_production_build)
+    monkeypatch.setattr(launcher.cockpit_builder, "run_build", fake_cockpit_build)
+    monkeypatch.setattr(
+        launcher.production_builder,
+        "promote_live_database",
+        lambda path: promoted.append(path),
+    )
+
+    with pytest.raises(launcher.cockpit_builder.BuildError, match="team build failed"):
+        launcher.run_game_night(
+            stamp="20260918T010001Z",
+            opener=lambda uri: opened.append(uri) or True,
+        )
+
+    assert promoted == []
+    assert opened == []
+    assert not (
+        cockpit_root / "game-night-20260918T010001Z" / launcher.HUB_READY_NAME
+    ).exists()
+
+
+def test_hub_verification_rejects_tampered_child_dashboard(tmp_path):
+    run_dir = tmp_path / "game-night-test"
+    staging_db = tmp_path / "staging.db"
+    staging_db.write_bytes(b"verified staging database")
+    db_hash = launcher._sha256(staging_db)
+    teams = [
+        {"team_id": "team-a", "team_name": "Team A", "division_type": "EIGHT", "session_name": "Fall"},
+        {"team_id": "team-b", "team_name": "Team B", "division_type": "NINE", "session_name": "Fall"},
+    ]
+    for team in teams:
+        _write_bundle(run_dir / "teams" / team["team_id"], staging_db)
+
+    launcher._write_team_hub(run_dir, teams, "team-a", db_hash)
+    launcher.verify_game_night_hub(run_dir, db_hash)
+
+    tampered = run_dir / "teams" / "team-b" / "html" / "dashboard.html"
+    tampered.write_text("tampered", encoding="utf-8")
+
+    with pytest.raises(launcher.GameNightError, match="checksum mismatch"):
+        launcher.verify_game_night_hub(run_dir, db_hash)
+
+
 def test_browser_login_handoff_keeps_token_in_process_only(monkeypatch):
     from tools import capture_apa_graphql
 
