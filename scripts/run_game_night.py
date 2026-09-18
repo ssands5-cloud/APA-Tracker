@@ -20,18 +20,21 @@ import argparse
 import hashlib
 import json
 import logging
+import sqlite3
 import sys
 import webbrowser
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
+
+import yaml
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scraper.graphql_scraper import dashboard_teams_rows, fetch_dashboard_teams
 from scripts import build_coach_advantage_bundle as cockpit_builder
 from scripts import build_full_production_demo as production_builder
-from scripts.build_captain_first_edge import _configured_our_team_id
 
 logger = logging.getLogger("run_game_night")
 
@@ -60,6 +63,103 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _discover_viewer_team_ids() -> list[str]:
+    """Return current APA team ids for the authenticated viewer account.
+
+    This is resolved before staging refresh. The refreshed database contains
+    every team in each division, so it cannot by itself identify which teams
+    belong to the logged-in member. No token or response payload is logged.
+    """
+    try:
+        with (PROJECT_ROOT / "apa_config.yaml").open("r", encoding="utf-8") as handle:
+            config = yaml.safe_load(handle) or {}
+        rows = dashboard_teams_rows(fetch_dashboard_teams(config))
+    except Exception as exc:  # noqa: BLE001 - category only, never auth payload
+        raise GameNightError(
+            f"could not discover current APA teams: {type(exc).__name__}"
+        ) from None
+
+    team_ids = [str(row["team_id"]) for row in rows if row.get("team_id")]
+    if not team_ids:
+        raise GameNightError("the logged-in APA account has no current league teams")
+    return team_ids
+
+
+def _select_game_night_team(
+    db_path: Path,
+    viewer_team_ids: list[str],
+    *,
+    now: Optional[datetime] = None,
+) -> tuple[str, dict]:
+    """Pick the viewer team with the nearest upcoming unplayed real match.
+
+    A match that started within the last 12 hours remains eligible so launching
+    during league night does not jump ahead to the next scheduled match.
+    """
+    viewer_ids = {str(team_id) for team_id in viewer_team_ids if str(team_id)}
+    if not viewer_ids:
+        raise GameNightError("no current APA team ids are available for game-night selection")
+
+    now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    cutoff = now_utc - timedelta(hours=12)
+
+    try:
+        uri = f"file:{db_path.resolve().as_posix()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as conn:
+            rows = conn.execute(
+                """
+                SELECT external_id, home_team_id, away_team_id,
+                       home_team_name, away_team_name, match_date
+                FROM matches
+                WHERE COALESCE(is_bye, 0) = 0
+                  AND COALESCE(is_scored, 0) = 0
+                  AND COALESCE(is_finalized, 0) = 0
+                """
+            ).fetchall()
+    except (OSError, sqlite3.Error) as exc:
+        raise GameNightError(
+            f"could not inspect refreshed schedule: {type(exc).__name__}"
+        ) from None
+
+    candidates: list[tuple[datetime, str, dict]] = []
+    for external_id, home_id, away_id, home_name, away_name, match_date in rows:
+        home_id = str(home_id or "")
+        away_id = str(away_id or "")
+        owned_sides = [team_id for team_id in (home_id, away_id) if team_id in viewer_ids]
+        if not owned_sides or not match_date:
+            continue
+        try:
+            scheduled = datetime.fromisoformat(str(match_date).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=timezone.utc)
+        scheduled_utc = scheduled.astimezone(timezone.utc)
+        if scheduled_utc < cutoff:
+            continue
+
+        for team_id in owned_sides:
+            opponent_name = away_name if team_id == home_id else home_name
+            candidates.append(
+                (
+                    scheduled_utc,
+                    team_id,
+                    {
+                        "external_id": str(external_id),
+                        "match_date": str(match_date),
+                        "opponent_name": str(opponent_name or "unknown opponent"),
+                    },
+                )
+            )
+
+    if not candidates:
+        raise GameNightError("no upcoming unplayed match found for the account's current APA teams")
+
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]["external_id"]))
+    _scheduled, team_id, match = candidates[0]
+    return team_id, match
 
 
 def verify_cockpit_bundle(run_dir: Path) -> dict:
@@ -115,11 +215,14 @@ def run_game_night(
     open_browser: bool = True,
     opener: Callable[[str], bool] = webbrowser.open,
     stamp: Optional[str] = None,
+    our_team_id: Optional[str] = None,
 ) -> Path:
     """Build a fresh verified game-night Cockpit and return dashboard.html."""
     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     demo_run = DEMO_RUN_ROOT / f"game-night-refresh-{stamp}"
     cockpit_run = COCKPIT_RUN_ROOT / f"game-night-{stamp}"
+
+    viewer_team_ids = [str(our_team_id)] if our_team_id else _discover_viewer_team_ids()
 
     logger.info("1/4 Refreshing APA data into a staging database...")
     production_builder.run_build(
@@ -133,9 +236,17 @@ def run_game_night(
     if not LIVE_STAGING_DB.is_file() or LIVE_STAGING_DB.stat().st_size == 0:
         raise GameNightError("live refresh finished without a staging database")
 
-    team_id = _configured_our_team_id()
-    if not team_id:
-        raise GameNightError("apa_config.yaml has no team.team_id for the Coach Cockpit")
+    if our_team_id:
+        team_id = str(our_team_id)
+        logger.info("Game-night team explicitly selected: %s", team_id)
+    else:
+        team_id, selected_match = _select_game_night_team(LIVE_STAGING_DB, viewer_team_ids)
+        logger.info(
+            "Game-night team selected from nearest upcoming match: team %s vs %s at %s",
+            team_id,
+            selected_match["opponent_name"],
+            selected_match["match_date"],
+        )
 
     staged_hash_before = _sha256(LIVE_STAGING_DB)
     logger.info("2/4 Building Coach Cockpit from the verified staging database...")
@@ -191,6 +302,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Resume an interrupted live staging refresh instead of starting the staging DB over.",
     )
     parser.add_argument(
+        "--our-team-id",
+        help=(
+            "Build for this specific current APA team instead of automatically selecting "
+            "the team with the nearest upcoming unplayed match."
+        ),
+    )
+    parser.add_argument(
         "--no-open",
         action="store_true",
         help="Build and verify the Cockpit but do not open the browser.",
@@ -198,7 +316,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        run_game_night(resume=args.resume, open_browser=not args.no_open)
+        run_game_night(
+            resume=args.resume,
+            open_browser=not args.no_open,
+            our_team_id=args.our_team_id,
+        )
     except GameNightError as exc:
         logger.error("GAME NIGHT FAILED: %s", exc)
         return exc.code
