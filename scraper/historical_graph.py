@@ -27,7 +27,6 @@ from typing import Any
 
 from scraper.graphql_scraper import (
     alias_session_rows,
-    division_roster_team_rows,
     fetch_alias_sessions,
     fetch_division_rosters,
     fetch_formats_by_member_id,
@@ -98,6 +97,31 @@ def _catalog_indexes(seed: dict[str, Any]):
         divisions[key] = row
 
     return sessions, divisions
+
+
+def _explicit_roster_member_ids(division: dict[str, Any]) -> tuple[list[str], int]:
+    """Return only canonical roster[].member.id values from a division roster.
+
+    The existing division_roster_team_rows() mapper intentionally falls back to
+    the roster row's own id when member.id is absent. That fallback must NOT be
+    used here: FormatsByMemberId requires the canonical member id, and a roster
+    entry id is a different identifier. Missing/non-numeric member ids are
+    skipped and counted rather than reinterpreted.
+    """
+    member_ids: set[str] = set()
+    missing = 0
+    for team in division.get("teams") or []:
+        team = team or {}
+        if team.get("isBye"):
+            continue
+        for player in team.get("roster") or []:
+            player = player or {}
+            member_id = str((player.get("member") or {}).get("id") or "").strip()
+            if not member_id.isdigit():
+                missing += 1
+                continue
+            member_ids.add(member_id)
+    return sorted(member_ids, key=int), missing
 
 
 def _same_league_aliases(
@@ -219,8 +243,11 @@ def expand_historical_catalog(
             continue
 
         roster_payload = fetch_division_rosters(config, division_id)
-        teams = division_roster_team_rows(roster_payload)
-        if not teams:
+        real_teams = [
+            team for team in (roster_payload.get("teams") or [])
+            if not (team or {}).get("isBye")
+        ]
+        if not real_teams:
             source_limitations.append(
                 f"division {division_id} session {session_id}: APA returned zero roster teams during graph expansion"
             )
@@ -238,15 +265,13 @@ def expand_historical_catalog(
             )
             continue
 
-        member_ids = sorted(
-            {
-                str(player.get("player_id") or "")
-                for team in teams
-                for player in (team.get("roster") or [])
-                if str(player.get("player_id") or "").isdigit()
-            },
-            key=int,
-        )
+        member_ids, missing_member_ids = _explicit_roster_member_ids(roster_payload)
+        if missing_member_ids:
+            source_limitations.append(
+                f"division {division_id} session {session_id}: "
+                f"{missing_member_ids} roster row(s) lacked a canonical numeric member.id "
+                "and were excluded from history-graph expansion"
+            )
 
         for member_id in member_ids:
             scope_key = f"{member_id}|{league_id}|{league_slug}"
