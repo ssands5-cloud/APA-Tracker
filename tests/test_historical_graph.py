@@ -349,3 +349,92 @@ def test_roster_entry_id_is_never_used_as_member_id_fallback(monkeypatch, tmp_pa
         "lacked a canonical numeric member.id" in item
         for item in report["source_limitations"]
     )
+
+
+def test_zero_division_session_is_queried_only_once_across_many_members(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [
+                {
+                    "id": 1,
+                    "name": "T",
+                    "isBye": False,
+                    "roster": [
+                        {"member": {"id": 111}, "displayName": "A"},
+                        {"member": {"id": 222}, "displayName": "B"},
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        graph,
+        "fetch_formats_by_member_id",
+        lambda config, member_id: {
+            "aliases": [
+                {
+                    "id": member_id + 1000,
+                    "formats": ["EIGHT"],
+                    "league": {"id": 12, "slug": "test-league"},
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        graph,
+        "fetch_alias_sessions",
+        lambda config, alias_id, format_name: {
+            "id": alias_id,
+            "sessions": [
+                {"id": 200, "name": "Fall 2026"},
+                {"id": 177, "name": "Old Empty"},
+            ],
+        },
+    )
+    calls = []
+
+    def fake_divisions(config, slug, session_id):
+        calls.append(session_id)
+        return {"id": 12, "divisions": []}
+
+    monkeypatch.setattr(graph, "fetch_league_divisions", fake_divisions)
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert calls == [177]
+    assert report["counts"]["processed_session_catalogs"] >= 2
+
+
+def test_resume_requires_expanded_catalog_when_checkpoint_exists(tmp_path):
+    seed_path = _write_seed(tmp_path)
+    report_path = tmp_path / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "seed_catalog_sha256": graph.sha256_file(seed_path),
+                "processed_division_keys": ["test-league|200|500"],
+                "processed_member_league_keys": [],
+                "processed_session_catalog_keys": ["test-league|200"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(graph.HistoryGraphError, match="expanded catalog is missing"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=_seed(),
+            seed_catalog_path=seed_path,
+            output_path=tmp_path / "missing-expanded.json",
+            report_path=report_path,
+            resume=True,
+        )
