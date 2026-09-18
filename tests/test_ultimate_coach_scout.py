@@ -264,3 +264,39 @@ def test_conflicted_catalog_scope_cannot_be_reintroduced_by_later_row():
     index, conflicts = catalog_scope_index(catalog)
     assert ("10", "Fall 2026") not in index
     assert len(conflicts) == 1
+
+
+def test_direct_opponent_payload_contains_real_meeting_ledger_and_recent5(tmp_path):
+    engine = create_db_engine({"database": {"path": str(tmp_path / "x.db")}})
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="101", name="A")
+            b = Player(external_id="102", name="B")
+            db.add_all([a, b])
+            db.flush()
+            for idx, result in enumerate(["W", "L", "W"], start=1):
+                match = Match(
+                    external_id=f"M{idx}",
+                    match_date=f"2026-08-{idx:02d}T19:00:00-06:00",
+                    format="EIGHT",
+                    session_name="Fall 2026",
+                    is_scored=True,
+                    is_finalized=True,
+                )
+                db.add(match)
+                db.flush()
+                _add_game(db, match, a, b, result, "EIGHT", 4, 5)
+            db.commit()
+
+            payload = build_scout_payload(db, catalog=_catalog())
+            arow = next(x for x in payload["players"] if x["name"] == "A")
+            fmt = arow["formats"]["EIGHT"]
+            direct = fmt["opponents"][str(b.id)]
+
+            assert fmt["recent5_games"] == 3
+            assert fmt["recent5_wins"] == 2
+            assert direct["games"] == 3
+            assert [m["result"] for m in direct["meetings"]] == ["W", "L", "W"]
+            assert direct["meetings"][0]["match_external_id"] == "M1"
+    finally:
+        engine.dispose()
