@@ -101,7 +101,7 @@ class TestPlayerVsPlayerSelectors:
 
         result_text = page.locator("#pme-result").inner_text()
         assert "Evidence" in result_text
-        assert "No data" not in result_text or "Observed win rate" in result_text
+        assert "Head-to-head record" in result_text
 
     def test_opposing_team_then_player_selector_matches_exact_scope(self, page):
         player_data, opponent_index = page.evaluate(
@@ -203,11 +203,17 @@ class TestPlayerVsPlayerSelectors:
         threshold = real_skill_levels[len(real_skill_levels) // 2]
 
         player_id = page.locator("#pme-player").input_value()
+        selected_scope = page.locator("#pme-opponent-team").input_value()
         candidates = opponent_index.get(player_id, [])
         expected_keys = {
-            c["key"] for c in candidates
-            if player_data.get(c["key"], {}).get("opponent", {}).get("skill_level") is not None
-            and player_data[c["key"]]["opponent"]["skill_level"] >= threshold
+            choice["key"] for choice in candidates
+            if player_data.get(choice["key"], {}).get("opponent", {}).get("skill_level") is not None
+            and (
+                f'{player_data[choice["key"]]["opponent_team_id"]}|'
+                f'{player_data[choice["key"]]["format"]}|'
+                f'{player_data[choice["key"]]["session_name"]}'
+            ) == selected_scope
+            and player_data[choice["key"]]["opponent"]["skill_level"] >= threshold
         }
         # expected_keys may legitimately be empty for this player -- the
         # equality check below still passes/fails correctly either way.
