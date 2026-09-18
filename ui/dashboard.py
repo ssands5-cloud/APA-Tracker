@@ -182,10 +182,13 @@ sparkline of the player's whole skill-level history.</p>
 
 <h2>Player vs Player</h2>
 <div class="cd-controls">
-<label>Player: <select id="pme-player">{player_options}</select></label>
+<label>Your player: <select id="pme-player">{player_options}</select></label>
 &nbsp;
-<label>Opponent: <select id="pme-opponent"></select></label>
+<label>Opposing team: <select id="pme-opponent-team"></select></label>
+&nbsp;
+<label>Opponent player: <select id="pme-opponent"></select></label>
 </div>
+<p class="cd-note">Choose your player, then the opposing team, then the opposing player. Head-to-head is the real direct record captured for that exact pairing and scope; no direct history is shown explicitly rather than inferred.</p>
 <div class="cd-filters">
 <strong>Opponent filters:</strong>
 <label>SL min <input type="number" id="pme-filter-sl-min" min="0" max="9"></label>
@@ -323,17 +326,60 @@ toughest first -- never a categorical "danger" label
     return true;
   }}
 
+  function pmeScopeKey(r) {{
+    return String(r.opponent_team_id) + "|" + String(r.format) + "|" + String(r.session_name);
+  }}
+
+  function pmeScopeLabel(r) {{
+    var team = r.opponent_team_name || r.opponent_team_id || "Unknown team";
+    return team + " (" + r.format + ", " + r.session_name + ")";
+  }}
+
+  function refreshOpponentTeams() {{
+    var playerId = document.getElementById("pme-player").value;
+    var choices = PLAYER_OPPONENT_INDEX[playerId] || [];
+    var previous = document.getElementById("pme-opponent-team").value;
+    var seen = {{}};
+    var teams = [];
+    choices.forEach(function (choice) {{
+      var r = PLAYER_DATA[choice.key];
+      if (!r) return;
+      var key = pmeScopeKey(r);
+      if (seen[key]) return;
+      seen[key] = true;
+      teams.push({{key: key, label: pmeScopeLabel(r)}});
+    }});
+    teams.sort(function (a, b) {{ return a.label.localeCompare(b.label); }});
+
+    var select = document.getElementById("pme-opponent-team");
+    select.innerHTML = teams.length
+      ? teams.map(function (team) {{
+          return "<option value=\\\"" + esc(team.key) + "\\\">" + esc(team.label) + "</option>";
+        }}).join("")
+      : "<option value=\\\"\\\">No opposing teams available</option>";
+    if (teams.some(function (team) {{ return team.key === previous; }})) {{
+      select.value = previous;
+    }}
+    refreshOpponents();
+  }}
+
   function refreshOpponents() {{
     var playerId = document.getElementById("pme-player").value;
-    var choices = (PLAYER_OPPONENT_INDEX[playerId] || []).filter(function (c) {{
-      return passesFilters(c, opponentFilters());
+    var scopeKey = document.getElementById("pme-opponent-team").value;
+    var choices = (PLAYER_OPPONENT_INDEX[playerId] || []).filter(function (choice) {{
+      var r = PLAYER_DATA[choice.key];
+      return r && pmeScopeKey(r) === scopeKey && passesFilters(choice, opponentFilters());
     }});
     var select = document.getElementById("pme-opponent");
     select.innerHTML = choices.length
-      ? choices.map(function (c) {{
-          return "<option value=\\"" + esc(c.key) + "\\">" + esc(c.label) + "</option>";
+      ? choices.map(function (choice) {{
+          var r = PLAYER_DATA[choice.key];
+          var label = r && r.opponent
+            ? r.opponent.name + " (SL " + orNoData(r.opponent.skill_level) + ")"
+            : choice.label;
+          return "<option value=\\\"" + esc(choice.key) + "\\\">" + esc(label) + "</option>";
         }}).join("")
-      : "<option value=\\"\\">No opponents match these filters</option>";
+      : "<option value=\\\"\\\">No opponents match this team/filter selection</option>";
     renderPlayer();
   }}
 
@@ -351,9 +397,12 @@ toughest first -- never a categorical "danger" label
     html += "<tr><th>" + esc(r.opponent.name) + "</th><td>SL " + orNoData(r.opponent.skill_level)
          + " &middot; " + trendBadge(r.opponent.trend) + "</td></tr>";
     html += "<tr><th>Evidence</th><td>" + esc(r.evidence_label) + "</td></tr>";
-    html += "<tr><th>Observed win rate</th><td>" + pct(r.observed_win_rate)
-         + (r.direct_wins !== null ? " (" + r.direct_wins + "-" + r.direct_losses + ")" : "")
-         + " across " + r.direct_evidence_count + " recorded match(es)</td></tr>";
+    html += "<tr><th>Head-to-head record</th><td>"
+         + (r.direct_wins !== null
+            ? r.direct_wins + "-" + r.direct_losses + " &middot; " + pct(r.observed_win_rate)
+              + " observed win rate across " + r.direct_evidence_count + " recorded direct match(es)"
+            : "No direct history (" + r.direct_evidence_count + " recorded direct match(es))")
+         + "</td></tr>";
     html += "<tr><th>Modeled probability</th><td>" + pct(r.modeled_win_probability) + "</td></tr>";
     html += "</tbody></table><p class='cd-summary-box'>" + esc(r.summary) + "</p>";
     target.innerHTML = html;
@@ -1349,7 +1398,8 @@ toughest first -- never a categorical "danger" label
   }});
   document.getElementById("mn-print").addEventListener("click", function () {{ window.print(); }});
 
-  document.getElementById("pme-player").addEventListener("change", refreshOpponents);
+  document.getElementById("pme-player").addEventListener("change", refreshOpponentTeams);
+  document.getElementById("pme-opponent-team").addEventListener("change", refreshOpponents);
   document.getElementById("pme-opponent").addEventListener("change", renderPlayer);
   document.getElementById("tme-scope").addEventListener("change", renderTeam);
   ["pme-filter-sl-min", "pme-filter-sl-max", "pme-filter-vol-min"].forEach(function (id) {{
@@ -1358,7 +1408,7 @@ toughest first -- never a categorical "danger" label
   document.querySelectorAll(".pme-filter-trend").forEach(function (cb) {{
     cb.addEventListener("change", refreshOpponents);
   }});
-  refreshOpponents();
+  refreshOpponentTeams();
   renderTeam();
   mnRestoreActiveSelectionOnLoad();
 
