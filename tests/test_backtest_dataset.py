@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from analytics.backtest_dataset import build_backtest_examples
+from analytics.backtest_dataset import build_backtest_dataset, build_backtest_examples
 from database.engine import create_db_engine
 from database.models import Match, Player, PlayerHeadToHead
 
@@ -187,5 +187,59 @@ def test_unparseable_or_timezone_naive_dates_are_excluded(tmp_path):
             rows = build_backtest_examples(db)
             assert [row.match_external_id for row in rows] == ["103"]
             assert rows[0].direct_games_before == 0
+    finally:
+        engine.dispose()
+
+
+def test_repeated_same_pair_rows_are_excluded_and_reported(tmp_path):
+    engine = create_db_engine({"database": {"path": str(tmp_path / "x.db")}})
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="1", name="A")
+            b = Player(external_id="2", name="B")
+            db.add_all([a, b])
+            db.flush()
+            match = Match(external_id="101", match_date="2024-01-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            db.add(match)
+            db.flush()
+            _add_game(db, match, a, b, "W")
+            _add_game(db, match, a, b, "W")
+            db.commit()
+
+            dataset = build_backtest_dataset(db)
+            assert dataset.examples == ()
+            assert dataset.exclusions["non_bijective_or_repeated_pair_rows"] == 1
+    finally:
+        engine.dispose()
+
+
+def test_missing_reverse_row_is_excluded_not_assumed(tmp_path):
+    engine = create_db_engine({"database": {"path": str(tmp_path / "x.db")}})
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="1", name="A")
+            b = Player(external_id="2", name="B")
+            db.add_all([a, b])
+            db.flush()
+            match = Match(external_id="101", match_date="2024-01-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            db.add(match)
+            db.flush()
+            db.add(
+                PlayerHeadToHead(
+                    player_id=a.id,
+                    opponent_id=b.id,
+                    match_id=match.id,
+                    result="W",
+                    own_skill_level=4,
+                    opponent_skill_level=5,
+                    format="EIGHT",
+                    session_name="S1",
+                )
+            )
+            db.commit()
+
+            dataset = build_backtest_dataset(db)
+            assert dataset.examples == ()
+            assert dataset.exclusions["non_bijective_or_repeated_pair_rows"] == 1
     finally:
         engine.dispose()
