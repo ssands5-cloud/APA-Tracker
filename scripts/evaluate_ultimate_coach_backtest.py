@@ -10,7 +10,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from analytics.backtest_dataset import build_backtest_examples
+from analytics.backtest_dataset import build_backtest_dataset
 from analytics.baseline_evaluation import evaluate_skill_only_baseline
 from database.engine import create_db_engine
 
@@ -36,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     engine = create_db_engine({"database": {"path": str(args.db)}}, create_tables=False)
     try:
         with Session(engine) as db:
-            examples = build_backtest_examples(db)
+            dataset = build_backtest_dataset(db)
+            examples = list(dataset.examples)
     finally:
         engine.dispose()
 
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         "schema": "ultimate-coach-backtest-v1",
         "database": str(args.db),
         "example_count": len(examples),
+        "exclusions": dataset.exclusions,
         "example_counts_by_format": {
             "EIGHT": sum(1 for row in examples if row.format == "EIGHT"),
             "NINE": sum(1 for row in examples if row.format == "NINE"),
