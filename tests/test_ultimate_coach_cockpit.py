@@ -26,7 +26,7 @@ def test_payload_preserves_real_profile_and_format_evidence(tmp_path):
 
             payload=build_ultimate_coach_payload(db)
             assert payload["probability_status"]=="NOT_CALIBRATED"
-            assert payload["counts"]=={"players":2,"head_to_head_rows":1}
+            assert payload["counts"]["players"] == 2\n            assert payload["counts"]["head_to_head_rows"] == 1\n            assert payload["counts"]["all_games"] == 1\n            assert payload["source_contract_schema"] == "ultimate-coach-data-contract-v1"
             alpha=next(p for p in payload["players"] if p["name"]=="Alpha")
             assert alpha["career_stats"][0]["matches_played"]==20
             assert alpha["team_history"][0]["session_name"]=="Fall 2026"
