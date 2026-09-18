@@ -159,6 +159,17 @@ def enrich_all_players(
                     }
                 )
                 completed.add(key)
+                _write_report(
+                    report_path,
+                    status="enrichment_in_progress",
+                    catalog_path=catalog_path,
+                    catalog_sha256=catalog_sha,
+                    staging_db=staging_db,
+                    completed_keys=completed,
+                    rows=rows,
+                    unresolved=unresolved,
+                    players_without_catalog_context=players_without_context,
+                )
             continue
 
         member = fetch_formats_by_member_id(config, int(external_id))
@@ -210,6 +221,17 @@ def enrich_all_players(
                     }
                 )
                 completed.add(key)
+                _write_report(
+                    report_path,
+                    status="enrichment_in_progress",
+                    catalog_path=catalog_path,
+                    catalog_sha256=catalog_sha,
+                    staging_db=staging_db,
+                    completed_keys=completed,
+                    rows=rows,
+                    unresolved=unresolved,
+                    players_without_catalog_context=players_without_context,
+                )
                 continue
 
             stats = fetch_eight_ball_stats(config, int(alias_id))
