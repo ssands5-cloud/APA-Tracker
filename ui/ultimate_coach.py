@@ -29,7 +29,8 @@ main {{ max-width:1400px; margin:auto; padding:18px; }}
 .card {{ background:white; border:1px solid #dfe5ee; border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
 .controls {{ display:grid; grid-template-columns:1fr 1fr 180px; gap:12px; }}
 label {{ font-size:12px; font-weight:700; color:#526070; display:block; }}
-select {{ width:100%; margin-top:5px; padding:10px; font-size:15px; }}
+select,input[type="search"] {{ width:100%; margin-top:5px; padding:10px; font-size:15px; box-sizing:border-box; }}
+input[type="search"] {{ margin-bottom:6px; }}
 .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }}
 .metric {{ background:#f5f7fb; border-radius:7px; padding:10px; }}
@@ -51,8 +52,8 @@ h2,h3 {{ margin-top:0; }}
 <main>
 <div class="card">
   <div class="controls">
-    <label>Player A<select id="player-a"></select></label>
-    <label>Player B<select id="player-b"></select></label>
+    <label>Player A<input id="search-a" type="search" placeholder="Search player A"><select id="player-a"></select></label>
+    <label>Player B<input id="search-b" type="search" placeholder="Search player B"><select id="player-b"></select></label>
     <label>Format<select id="format"><option value="EIGHT">8-Ball</option><option value="NINE">9-Ball</option></select></label>
   </div>
 </div>
@@ -74,8 +75,10 @@ h2,h3 {{ margin-top:0; }}
   var A=document.getElementById("player-a"), B=document.getElementById("player-b"), F=document.getElementById("format");
   function esc(v){{return String(v===null||v===undefined?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}}
   function pct(w,g){{return g?((w/g)*100).toFixed(1)+"%":"No data";}}
-  function options(){{return DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}}).map(function(p){{return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}}).join("");}}
-  A.innerHTML=options(); B.innerHTML=options(); if(B.options.length>1) B.selectedIndex=1;
+  var SORTED=DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}});
+  function options(filter){{var q=String(filter||"").trim().toLowerCase();return SORTED.filter(function(p){{return !q||p.name.toLowerCase().indexOf(q)!==-1;}}).map(function(p){{return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}}).join("");}}
+  function applySearch(input,select){{var previous=select.value;select.innerHTML=options(input.value);if(Array.prototype.some.call(select.options,function(o){{return o.value===previous;}}))select.value=previous;compare();}}
+  A.innerHTML=options(""); B.innerHTML=options(""); if(B.options.length>1) B.selectedIndex=1;
 
   function rowsFor(pid,fmt){{return DATA.evidence.filter(function(r){{return String(r.player_id)===String(pid)&&r.format===fmt;}});}}
   function record(rows){{var w=rows.filter(function(r){{return r.result==="W";}}).length;return {{w:w,l:rows.length-w,g:rows.length}};}}
@@ -108,6 +111,9 @@ h2,h3 {{ margin-top:0; }}
     document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(r.match_date||'—')+'</td><td>'+esc(r.session_name||'—')+'</td><td>'+esc(r.result)+'</td><td>'+esc(r.own_skill_level===null?'—':r.own_skill_level)+'</td><td>'+esc(r.opponent_skill_level===null?'—':r.opponent_skill_level)+'</td><td>'+esc(r.points_earned===null?'—':r.points_earned)+'</td></tr>';}}).join('')+'</tbody></table>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
     document.getElementById("status").innerHTML='<strong>Probability status: NOT CALIBRATED.</strong> Scout & Compare is showing real source evidence only. The future odds model must pass chronological backtesting before a percentage appears here.';
   }}
-  [A,B,F].forEach(function(el){{el.addEventListener("change",compare);}}); compare();
+  [A,B,F].forEach(function(el){{el.addEventListener("change",compare);}});
+  document.getElementById("search-a").addEventListener("input",function(){{applySearch(this,A);}});
+  document.getElementById("search-b").addEventListener("input",function(){{applySearch(this,B);}});
+  compare();
 }})();
 </script></body></html>"""
