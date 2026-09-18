@@ -56,7 +56,7 @@ main {{ max-width:1500px; margin:20px auto 48px; padding:0 18px; }}
 .controls > * {{ min-width:0; }}
 label {{ display:block; font-size:12px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }}
 input,select {{ width:100%; min-width:0; max-width:100%; min-height:42px; border:1px solid #bcc9d8; border-radius:9px; padding:8px 10px; background:white; color:var(--ink); }}
-.checkbox-wrap {{ min-height:42px; display:flex; align-items:center; gap:8px; white-space:nowrap; }}
+.checkbox-wrap {{ min-height:42px; display:flex; align-items:center; gap:8px; white-space:normal; overflow-wrap:anywhere; }}
 .checkbox-wrap input {{ width:auto; min-height:auto; }}
 .grid {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-top:16px; }}
 .card {{ padding:16px; min-width:0; }}
