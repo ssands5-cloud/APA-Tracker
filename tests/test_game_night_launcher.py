@@ -199,3 +199,20 @@ def test_browser_failure_happens_only_after_verified_promotion(tmp_path, monkeyp
 
     assert exc.value.code == launcher.EXIT_PRESENTATION
     assert promoted == [staging_db]
+
+
+def test_browser_login_handoff_keeps_token_in_process_only(monkeypatch):
+    from tools import capture_apa_graphql
+
+    seen: list[tuple[list[str], str | None]] = []
+    monkeypatch.delenv("APA_ACCESS_TOKEN", raising=False)
+    monkeypatch.setattr(
+        launcher,
+        "main",
+        lambda argv: seen.append((argv, os.environ.get("APA_ACCESS_TOKEN"))) or 0,
+    )
+
+    capture_apa_graphql._run_game_night("secret-token")
+
+    assert seen == [([], "secret-token")]
+    assert "APA_ACCESS_TOKEN" not in os.environ
