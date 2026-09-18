@@ -438,3 +438,37 @@ def test_resume_requires_expanded_catalog_when_checkpoint_exists(tmp_path):
             report_path=report_path,
             resume=True,
         )
+
+
+def test_early_source_limitation_is_persisted_before_later_interruption(monkeypatch, tmp_path):
+    seed = _seed()
+    second = dict(seed["divisions"][0])
+    second["division_id"] = "501"
+    seed["divisions"].append(second)
+    seed["counts"] = {"aliases": 0, "sessions": 1, "divisions": 2}
+
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(json.dumps(seed), encoding="utf-8")
+    output = tmp_path / "expanded.json"
+    report = tmp_path / "report.json"
+
+    def fake_roster(config, division_id):
+        if str(division_id) == "500":
+            return {"teams": []}
+        raise RuntimeError("simulated later interruption")
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", fake_roster)
+
+    with pytest.raises(RuntimeError, match="simulated later interruption"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=seed,
+            seed_catalog_path=seed_path,
+            output_path=output,
+            report_path=report,
+        )
+
+    persisted = json.loads(output.read_text(encoding="utf-8"))
+    checkpoint = json.loads(report.read_text(encoding="utf-8"))
+    assert any("zero roster teams" in x for x in persisted["source_limitations"])
+    assert "test-league|200|500" in checkpoint["processed_division_keys"]
