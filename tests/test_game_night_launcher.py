@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -54,7 +56,6 @@ def test_run_game_night_promotes_only_after_both_verified_builds(tmp_path, monke
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
-    monkeypatch.setattr(launcher, "_configured_our_team_id", lambda: "13082948")
 
     events: list[str] = []
 
@@ -87,6 +88,7 @@ def test_run_game_night_promotes_only_after_both_verified_builds(tmp_path, monke
     dashboard = launcher.run_game_night(
         stamp="20260918T000000Z",
         opener=lambda uri: opened.append(uri) or True,
+        our_team_id="13082948",
     )
 
     assert events == ["refresh", "cockpit", "promote"]
@@ -105,7 +107,6 @@ def test_cockpit_failure_never_promotes(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
-    monkeypatch.setattr(launcher, "_configured_our_team_id", lambda: "13082948")
 
     def fake_production_build(*args, **kwargs):
         staging_db.write_bytes(b"fresh verified database")
@@ -123,7 +124,9 @@ def test_cockpit_failure_never_promotes(tmp_path, monkeypatch):
     )
 
     with pytest.raises(launcher.cockpit_builder.BuildError):
-        launcher.run_game_night(stamp="20260918T000001Z", open_browser=False)
+        launcher.run_game_night(
+            stamp="20260918T000001Z", open_browser=False, our_team_id="13082948"
+        )
 
     assert promoted == []
 
@@ -137,7 +140,6 @@ def test_checksum_failure_never_promotes_or_opens(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
-    monkeypatch.setattr(launcher, "_configured_our_team_id", lambda: "13082948")
 
     def fake_production_build(*args, **kwargs):
         staging_db.write_bytes(b"fresh verified database")
@@ -160,6 +162,7 @@ def test_checksum_failure_never_promotes_or_opens(tmp_path, monkeypatch):
         launcher.run_game_night(
             stamp="20260918T000002Z",
             opener=lambda uri: opened.append(uri) or True,
+            our_team_id="13082948",
         )
 
     assert promoted == []
@@ -175,7 +178,6 @@ def test_browser_failure_happens_only_after_verified_promotion(tmp_path, monkeyp
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
-    monkeypatch.setattr(launcher, "_configured_our_team_id", lambda: "13082948")
 
     def fake_production_build(*args, **kwargs):
         staging_db.write_bytes(b"fresh verified database")
@@ -196,10 +198,59 @@ def test_browser_failure_happens_only_after_verified_promotion(tmp_path, monkeyp
         launcher.run_game_night(
             stamp="20260918T000003Z",
             opener=lambda uri: False,
+            our_team_id="13082948",
         )
 
     assert exc.value.code == launcher.EXIT_PRESENTATION
     assert promoted == [staging_db]
+
+
+def test_auto_selects_nearest_upcoming_match_across_current_teams(tmp_path):
+    staging_db = tmp_path / "apa_tracker_regenerated.db"
+    with sqlite3.connect(staging_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE matches (
+                external_id TEXT,
+                home_team_id TEXT,
+                away_team_id TEXT,
+                home_team_name TEXT,
+                away_team_name TEXT,
+                match_date TEXT,
+                is_bye INTEGER,
+                is_scored INTEGER,
+                is_finalized INTEGER
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO matches VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)",
+            [
+                (
+                    "friday-match", "friday-team", "opponent-f",
+                    "Friday Team", "Friday Opponent", "2026-09-18T19:00:00-06:00",
+                ),
+                (
+                    "monday-match", "13082948", "opponent-m",
+                    "Mark It Up", "Monday Opponent", "2026-09-21T19:00:00-06:00",
+                ),
+                (
+                    "other-earlier", "not-ours", "opponent-x",
+                    "Not Ours", "Other", "2026-09-18T18:00:00-06:00",
+                ),
+            ],
+        )
+
+    team_id, selected = launcher._select_game_night_team(
+        staging_db,
+        ["13082948", "friday-team"],
+        now=datetime.fromisoformat("2026-09-17T18:00:00-06:00"),
+    )
+
+    assert team_id == "friday-team"
+    assert selected["external_id"] == "friday-match"
+    assert selected["match_date"] == "2026-09-18T19:00:00-06:00"
+    assert selected["opponent_name"] == "Friday Opponent"
 
 
 def test_browser_login_handoff_keeps_token_in_process_only(monkeypatch):
