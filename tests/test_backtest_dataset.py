@@ -44,8 +44,8 @@ def test_second_match_sees_first_but_first_sees_no_future(tmp_path):
             b = Player(external_id="2", name="B")
             db.add_all([a, b])
             db.flush()
-            m1 = Match(external_id="101", match_date="2024-01-01", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
-            m2 = Match(external_id="102", match_date="2024-02-01", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            m1 = Match(external_id="101", match_date="2024-01-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            m2 = Match(external_id="102", match_date="2024-02-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
             db.add_all([m1, m2])
             db.flush()
             _add_game(db, m1, a, b, "W")
@@ -71,7 +71,7 @@ def test_same_team_match_does_not_leak_between_slots(tmp_path):
             c = Player(external_id="3", name="C")
             db.add_all([a, b, c])
             db.flush()
-            match = Match(external_id="101", match_date="2024-01-01", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            match = Match(external_id="101", match_date="2024-01-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
             db.add(match)
             db.flush()
             _add_game(db, match, a, b, "W")
@@ -95,7 +95,7 @@ def test_shared_opponent_only_uses_prior_matches(tmp_path):
             shared = Player(external_id="3", name="Shared")
             db.add_all([a, b, shared])
             db.flush()
-            dates = ["2024-01-01", "2024-02-01", "2024-03-01"]
+            dates = ["2024-01-01T19:00:00-07:00", "2024-02-01T19:00:00-07:00", "2024-03-01T19:00:00-07:00"]
             matches = [
                 Match(external_id=str(101+i), match_date=date, format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
                 for i, date in enumerate(dates)
@@ -126,8 +126,8 @@ def test_formats_never_cross_contaminate(tmp_path):
             b = Player(external_id="2", name="B")
             db.add_all([a, b])
             db.flush()
-            eight = Match(external_id="101", match_date="2024-01-01", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
-            nine = Match(external_id="102", match_date="2024-02-01", format="NINE", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            eight = Match(external_id="101", match_date="2024-01-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            nine = Match(external_id="102", match_date="2024-02-01T19:00:00-07:00", format="NINE", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
             db.add_all([eight, nine])
             db.flush()
             _add_game(db, eight, a, b, "W", fmt="EIGHT")
@@ -137,5 +137,55 @@ def test_formats_never_cross_contaminate(tmp_path):
             rows = build_backtest_examples(db)
             nine_row = next(row for row in rows if row.format == "NINE")
             assert nine_row.direct_games_before == 0
+    finally:
+        engine.dispose()
+
+
+def test_same_timestamp_across_different_matches_is_one_withheld_batch(tmp_path):
+    engine = create_db_engine({"database": {"path": str(tmp_path / "x.db")}})
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="1", name="A")
+            b = Player(external_id="2", name="B")
+            c = Player(external_id="3", name="C")
+            db.add_all([a, b, c])
+            db.flush()
+            when = "2024-01-01T19:00:00-07:00"
+            m1 = Match(external_id="101", match_date=when, format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            m2 = Match(external_id="102", match_date=when, format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            db.add_all([m1, m2])
+            db.flush()
+            _add_game(db, m1, a, b, "W")
+            _add_game(db, m2, a, c, "L")
+            db.commit()
+
+            rows = build_backtest_examples(db)
+            assert len(rows) == 2
+            assert all(row.player_games_before == 0 for row in rows)
+    finally:
+        engine.dispose()
+
+
+def test_unparseable_or_timezone_naive_dates_are_excluded(tmp_path):
+    engine = create_db_engine({"database": {"path": str(tmp_path / "x.db")}})
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="1", name="A")
+            b = Player(external_id="2", name="B")
+            db.add_all([a, b])
+            db.flush()
+            bad = Match(external_id="101", match_date="01/02/2024", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            naive = Match(external_id="102", match_date="2024-02-01T19:00:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            good = Match(external_id="103", match_date="2024-03-01T19:00:00-07:00", format="EIGHT", session_name="S1", is_scored=True, is_finalized=True, is_bye=False)
+            db.add_all([bad, naive, good])
+            db.flush()
+            _add_game(db, bad, a, b, "W")
+            _add_game(db, naive, a, b, "W")
+            _add_game(db, good, a, b, "L")
+            db.commit()
+
+            rows = build_backtest_examples(db)
+            assert [row.match_external_id for row in rows] == ["103"]
+            assert rows[0].direct_games_before == 0
     finally:
         engine.dispose()
