@@ -221,7 +221,15 @@ def _fit_calibrator(
     y: np.ndarray,
     *,
     l2: float = 0.05,
+    max_iter: int = 100,
+    tol: float = 1e-8,
 ) -> CalibratorArtifact:
+    """Fit Platt scaling directly on one normalized raw-model logit.
+
+    The saved intercept/slope are the exact parameters used by
+    _apply_calibrator. No hidden second scaler exists between training and
+    inference.
+    """
     if len(raw_probabilities) != len(y) or not len(y):
         raise ValueError("calibration arrays are invalid")
     if len(np.unique(y)) < 2:
@@ -233,19 +241,32 @@ def _fit_calibrator(
     scale = float(logits.std())
     if scale < 1e-12:
         scale = 1.0
-    x = ((logits - mean) / scale).reshape(-1, 1)
+    x = (logits - mean) / scale
+    design = np.column_stack([np.ones(len(x)), x])
+    beta = np.zeros(2, dtype=float)
+    regularizer = np.diag([0.0, float(l2)])
 
-    # Reuse the tested Newton fitter. Its internal standardization sees a
-    # one-dimensional already-standardized column, so artifact conversion is
-    # deterministic.
-    fitted = _fit_logistic(x, y, l2=l2)
+    iterations = 0
+    for iterations in range(1, max_iter + 1):
+        predicted = _sigmoid(design @ beta)
+        weights = np.clip(predicted * (1.0 - predicted), 1e-6, None)
+        gradient = design.T @ (y - predicted) - regularizer @ beta
+        information = design.T @ (design * weights[:, None]) + regularizer
+        try:
+            step = np.linalg.solve(information, gradient)
+        except np.linalg.LinAlgError:
+            step = np.linalg.pinv(information) @ gradient
+        beta = beta + step
+        if float(np.max(np.abs(step))) < tol:
+            break
+
     return CalibratorArtifact(
         mean_logit=mean,
         scale_logit=scale,
-        intercept=fitted.intercept,
-        slope=fitted.coefficients[0],
+        intercept=float(beta[0]),
+        slope=float(beta[1]),
         l2=float(l2),
-        iterations=fitted.iterations,
+        iterations=iterations,
     )
 
 
