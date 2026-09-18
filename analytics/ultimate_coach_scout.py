@@ -73,6 +73,7 @@ def catalog_scope_index(
     conflict list rather than picking whichever row happened to appear last.
     """
     index: dict[tuple[str, str], dict[str, str]] = {}
+    conflicted_keys: set[tuple[str, str]] = set()
     conflicts: list[dict[str, Any]] = []
 
     for row in (catalog or {}).get("divisions") or []:
@@ -90,6 +91,8 @@ def catalog_scope_index(
             "league_slug": str(row.get("league_slug") or ""),
         }
         key = (division_id, session_name)
+        if key in conflicted_keys:
+            continue
         previous = index.get(key)
         if previous is None:
             index[key] = context
@@ -102,6 +105,7 @@ def catalog_scope_index(
                     "second": context,
                 }
             )
+            conflicted_keys.add(key)
             index.pop(key, None)
 
     return index, conflicts
