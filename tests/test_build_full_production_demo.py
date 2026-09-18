@@ -493,11 +493,47 @@ class TestAcquireExisting:
 
 
 class TestLiveModeResume:
-    def test_without_resume_an_existing_staging_file_is_deleted_first(self, monkeypatch, tmp_path):
+    def test_without_resume_seeds_from_production_and_syncs_incrementally(self, monkeypatch, tmp_path):
         monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
         staging_db = tmp_path / "staged.db"
         staging_db.write_bytes(b"stale partial data")
+        production_db = tmp_path / "production.db"
+
+        from database.engine import create_db_engine
+        create_db_engine({"database": {"path": str(production_db)}}).dispose()
+        production_bytes = production_db.read_bytes()
+
         monkeypatch.setattr(builder, "LIVE_STAGING_DB", staging_db)
+        monkeypatch.setattr(builder, "LIVE_PRODUCTION_DB", production_db)
+
+        import scheduler.graphql_sync as sync_module
+
+        seen_resume = {}
+
+        def fake_run_division_wide(config_path, export=False, db_path=None, resume=False):
+            seen_resume["value"] = resume
+            seen_resume["file_existed_at_call_time"] = Path(db_path).exists()
+            seen_resume["seed_matches_production"] = Path(db_path).read_bytes() == production_bytes
+            return {"coverage_gaps": [], "division_wide": {
+                "teams_ingested": 0, "matches_ingested": 0, "scored_matches_with_scoresheet": 0,
+            }}
+
+        monkeypatch.setattr(sync_module, "run_division_wide", fake_run_division_wide)
+
+        _, result = builder.acquire_live(resume=False)
+
+        assert seen_resume["value"] is True
+        assert seen_resume["file_existed_at_call_time"] is True
+        assert seen_resume["seed_matches_production"] is True
+        assert "incremental seed" in result.detail
+
+    def test_without_production_database_first_run_still_starts_clean(self, monkeypatch, tmp_path):
+        monkeypatch.setenv(builder.TOKEN_ENV, "test-token")
+        staging_db = tmp_path / "staged.db"
+        staging_db.write_bytes(b"stale partial data")
+        production_db = tmp_path / "missing-production.db"
+        monkeypatch.setattr(builder, "LIVE_STAGING_DB", staging_db)
+        monkeypatch.setattr(builder, "LIVE_PRODUCTION_DB", production_db)
 
         import scheduler.graphql_sync as sync_module
 
@@ -507,8 +543,7 @@ class TestLiveModeResume:
             seen_resume["value"] = resume
             seen_resume["file_existed_at_call_time"] = Path(db_path).exists()
             from database.engine import create_db_engine
-            engine = create_db_engine({"database": {"path": db_path}})
-            engine.dispose()
+            create_db_engine({"database": {"path": db_path}}).dispose()
             return {"coverage_gaps": [], "division_wide": {
                 "teams_ingested": 0, "matches_ingested": 0, "scored_matches_with_scoresheet": 0,
             }}

@@ -501,3 +501,37 @@ cockpit infers from incomplete data.
 
 This project uses a builder/auditor handshake between GPT/Jeeves and Claude.
 See [docs/gpt_claude_handshake.md](docs/gpt_claude_handshake.md) for details.
+
+
+## One-time career-history backfill
+
+The normal game-night refresh is intentionally optimized for current teams and
+current divisions. To build the permanent career archive, run the dedicated
+backfill against a fresh APA access token:
+
+```powershell
+python scripts/backfill_career_history.py
+```
+
+The command discovers every per-league alias on the logged-in member, paginates
+all TeamStat past teams, walks each distinct historical division, ingests its
+rosters/schedules/finalized scoresheets, and rebuilds player-vs-player matchup
+history. It stages into `data/apa_tracker_career_staging.db` and writes
+`data/apa_tracker_career_backfill_report.json`. It does **not** replace
+production unless `--promote` is explicitly supplied and the report has zero
+coverage gaps.
+
+If the short-lived APA token expires during the initial career crawl, capture a
+fresh token and continue with:
+
+```powershell
+python scripts/backfill_career_history.py --resume
+```
+
+Historical roster memberships are stored with `is_current=False`; current
+captain views continue to require a real current membership. Once the complete
+career staging database is independently verified and promoted, ordinary
+game-night refreshes seed staging from that career-complete production database
+and apply current changes incrementally. Already-captured scoresheets are
+skipped, so future refreshes preserve years of history instead of rebuilding or
+discarding it.
