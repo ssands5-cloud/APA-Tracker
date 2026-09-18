@@ -103,6 +103,65 @@ class TestPlayerVsPlayerSelectors:
         assert "Evidence" in result_text
         assert "No data" not in result_text or "Observed win rate" in result_text
 
+    def test_opposing_team_then_player_selector_matches_exact_scope(self, page):
+        player_data, opponent_index = page.evaluate(
+            "() => [JSON.parse(document.getElementById('cd-player-data').textContent),"
+            " JSON.parse(document.getElementById('cd-player-opponent-index').textContent)]"
+        )
+        player_id = page.locator("#pme-player").input_value()
+        choices = opponent_index.get(player_id, [])
+        assert choices, "selected player must have at least one real pairing"
+
+        expected_by_scope = {}
+        for choice in choices:
+            report = player_data[choice["key"]]
+            scope_key = (
+                f'{report["opponent_team_id"]}|{report["format"]}|{report["session_name"]}'
+            )
+            expected_by_scope.setdefault(scope_key, set()).add(choice["key"])
+
+        team_select = page.locator("#pme-opponent-team")
+        team_values = set(team_select.locator("option").evaluate_all(
+            "options => options.map(o => o.value).filter(Boolean)"
+        ))
+        assert team_values == set(expected_by_scope)
+
+        chosen_scope = sorted(team_values)[0]
+        team_select.select_option(chosen_scope)
+        opponent_keys = set(page.locator("#pme-opponent option").evaluate_all(
+            "options => options.map(o => o.value).filter(Boolean)"
+        ))
+        assert opponent_keys == expected_by_scope[chosen_scope]
+        assert page.console_errors == []
+
+    def test_player_matchup_card_shows_exact_direct_record_when_history_exists(self, page):
+        player_data = page.evaluate(
+            "JSON.parse(document.getElementById('cd-player-data').textContent)"
+        )
+        direct_key = next(
+            (
+                key for key, report in player_data.items()
+                if report["direct_wins"] is not None and report["direct_losses"] is not None
+            ),
+            None,
+        )
+        if direct_key is None:
+            pytest.skip("coherent fixture has no DIRECT player pairing")
+
+        report = player_data[direct_key]
+        page.select_option("#pme-player", str(report["player"]["id"]))
+        scope_key = (
+            f'{report["opponent_team_id"]}|{report["format"]}|{report["session_name"]}'
+        )
+        page.select_option("#pme-opponent-team", scope_key)
+        page.select_option("#pme-opponent", direct_key)
+
+        result_text = page.locator("#pme-result").inner_text()
+        assert "Head-to-head record" in result_text
+        assert f'{report["direct_wins"]}-{report["direct_losses"]}' in result_text
+        assert f'{report["direct_evidence_count"]} recorded direct match(es)' in result_text
+        assert page.console_errors == []
+
     def test_switching_players_narrows_to_that_players_real_opponents(self, page):
         player_select = page.locator("#pme-player")
         option_values = player_select.locator("option").evaluate_all(
