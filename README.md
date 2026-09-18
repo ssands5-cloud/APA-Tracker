@@ -360,18 +360,20 @@ before it ships, not asserted in the code.
 `Refresh_APA_Cockpit.bat`. It selects a supported Python 3.12/3.13
 interpreter, opens the real APA site so you can log in normally, keeps the
 captured access token in memory only, performs the existing division-wide live
-staging refresh, refuses incomplete coverage, then chooses the logged-in
-account team with the nearest upcoming unplayed real match before building the
-Coach Cockpit. This matters for accounts that play on multiple league teams:
-a Friday match is no longer hidden just because `apa_config.yaml` names a
-Monday team. Pass `--our-team-id TEAM_ID` only when you intentionally want to
-override that automatic game-night choice. The launcher verifies the Cockpit
-against that exact staged database, then promotes the database with the
-existing timestamped-backup protection and opens the verified
-`html/dashboard.html`. A failure before promotion leaves the current
-production database untouched, and every Cockpit build uses a new run directory
-so the previous known-good Cockpit is not overwritten. The equivalent
-token-already-available CLI is:
+staging refresh, refuses incomplete coverage, then discovers every current
+league team owned by the logged-in viewer. It builds and independently verifies
+one Coach Cockpit per owned team from the exact same staged database, chooses
+the team with the nearest upcoming unplayed real match as the default, and
+opens a small **My Team** selector shell above those verified Cockpits. Changing
+that selector switches team views without recomputing analytics or mixing one
+team's Match Night state into another. Duplicate team names are disambiguated
+with format/session/team id. Pass `--our-team-id TEAM_ID` only when you
+intentionally want the original single-team build instead of the multi-team
+selector. Promotion remains blocked until every child Cockpit and the selector
+hub revalidate against the same staging DB hash. A failure before promotion
+leaves the current production database untouched, and every build uses a new
+run directory so the previous known-good Cockpit is not overwritten. The
+equivalent token-already-available CLI is:
 
 ```powershell
 python scripts/run_game_night.py
