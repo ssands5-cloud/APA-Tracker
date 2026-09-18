@@ -29,8 +29,9 @@ USAGE
     pip install playwright
     python -m playwright install chromium
 
-    python tools/capture_apa_graphql.py           # capture only
-    python tools/capture_apa_graphql.py --sync    # capture, then sync live
+    python tools/capture_apa_graphql.py              # capture only
+    python tools/capture_apa_graphql.py --sync       # capture, then sync live
+    python tools/capture_apa_graphql.py --game-night # login, refresh, verify, build + open Cockpit
 
 Be a normal user while it runs: visit the pages you want captured, at the pace
 you would anyway. This is not a crawler and must not be used as one.
@@ -100,7 +101,7 @@ def _record(captures: dict, operation: str, variables: Any, query: str, response
     }
 
 
-def capture(sync: bool = False) -> dict:
+def capture(sync: bool = False, game_night: bool = False) -> dict:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -202,8 +203,30 @@ def capture(sync: bool = False) -> dict:
 
     if sync:
         _run_sync(token_holder.get("token"))
+    elif game_night:
+        _run_game_night(token_holder.get("token"))
 
     return captures
+
+
+def _run_game_night(token: str | None) -> None:
+    """Run the fail-closed game-night launcher with this in-memory token."""
+    if not token:
+        print("\nNo access token was seen, so game-night refresh cannot start.")
+        return
+
+    import os
+
+    print("\nStarting verified game-night refresh and Coach Cockpit build...")
+    os.environ["APA_ACCESS_TOKEN"] = token  # this process only; never persisted
+    try:
+        from scripts.run_game_night import main as game_night_main
+
+        code = game_night_main([])
+        if code:
+            raise SystemExit(code)
+    finally:
+        os.environ.pop("APA_ACCESS_TOKEN", None)
 
 
 def _run_sync(token: str | None) -> None:
@@ -230,9 +253,20 @@ def _run_sync(token: str | None) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Capture APA GraphQL traffic.")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--sync",
         action="store_true",
-        help="After capturing, run the live sync using the open session.",
+        help="After capturing, run the existing live sync using the open session.",
     )
-    capture(sync=parser.parse_args().sync)
+    mode.add_argument(
+        "--game-night",
+        action="store_true",
+        help=(
+            "After login, use the in-memory session token to stage a division-wide "
+            "refresh, verify it, build the Coach Cockpit, promote with backup "
+            "protection, and open the verified dashboard."
+        ),
+    )
+    args = parser.parse_args()
+    capture(sync=args.sync, game_night=args.game_night)
