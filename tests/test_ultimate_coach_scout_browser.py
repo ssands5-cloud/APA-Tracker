@@ -194,6 +194,34 @@ def test_scoresheet_only_player_hidden_until_opt_in(browser, scout_path):
 def test_mobile_layout_has_no_horizontal_overflow(browser, scout_path):
     page = browser.new_page(viewport={"width": 390, "height": 844})
     page.goto(scout_path.as_uri())
-    overflow = page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
-    assert overflow is False
+    diagnostic = page.evaluate(
+        """() => {
+          const viewport = document.documentElement.clientWidth;
+          const offenders = [...document.querySelectorAll("body *")]
+            .filter(el => {
+              const r = el.getBoundingClientRect();
+              const style = getComputedStyle(el);
+              const intentionallyScrollable =
+                el.classList.contains("scroll") &&
+                ["auto", "scroll"].includes(style.overflowX);
+              return !intentionallyScrollable && (r.right > viewport + 0.5 || r.left < -0.5);
+            })
+            .slice(0, 12)
+            .map(el => ({
+              tag: el.tagName,
+              id: el.id,
+              cls: el.className,
+              text: (el.textContent || "").trim().slice(0, 80),
+              rect: el.getBoundingClientRect().toJSON(),
+            }));
+          return {
+            overflow: document.documentElement.scrollWidth > viewport,
+            viewport,
+            scrollWidth: document.documentElement.scrollWidth,
+            offenders,
+          };
+        }"""
+    )
+    assert diagnostic["overflow"] is False, diagnostic
+    assert diagnostic["offenders"] == [], diagnostic
     page.close()
