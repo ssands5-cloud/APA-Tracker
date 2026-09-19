@@ -23,7 +23,7 @@ def ready_kwargs():
     }
 
 
-def test_expanding_fold_is_strictly_chronological_and_traceable():
+def test_expanding_folds_are_strictly_chronological_and_traceable():
     rows = [
         game(f"g{i}", f"2026-01-0{i}T19:00:00Z", 1, 2, 1 if i % 2 else 2)
         for i in range(1, 7)
@@ -35,9 +35,18 @@ def test_expanding_fold_is_strictly_chronological_and_traceable():
     assert plan["status"] == "PLAN_READY"
     assert plan["probability_publication"] == "FORBIDDEN"
     assert plan["evaluation_executed"] is False
-    assert plan["folds"][0]["train_game_keys"] == ["g1", "g2", "g3", "g4"]
-    assert plan["folds"][0]["holdout_game_keys"] == ["g5", "g6"]
-    assert plan["folds"][0]["train_end_time"] < plan["folds"][0]["holdout_start_time"]
+
+    # The planner is genuinely expanding-window: once the minimum training
+    # history exists, every subsequent holdout block is retained.  Do not
+    # silently discard the earlier valid fold just to keep the terminal one.
+    assert len(plan["folds"]) == 2
+    assert plan["folds"][0]["train_game_keys"] == ["g1", "g2", "g3"]
+    assert plan["folds"][0]["holdout_game_keys"] == ["g4", "g5"]
+    assert plan["folds"][1]["train_game_keys"] == ["g1", "g2", "g3", "g4", "g5"]
+    assert plan["folds"][1]["holdout_game_keys"] == ["g6"]
+    for fold in plan["folds"]:
+        assert fold["train_end_time"] < fold["holdout_start_time"]
+        assert not (set(fold["train_game_keys"]) & set(fold["holdout_game_keys"]))
 
 
 def test_same_instant_batch_is_never_split_between_train_and_holdout():
