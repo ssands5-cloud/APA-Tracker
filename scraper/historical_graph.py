@@ -26,11 +26,13 @@ from pathlib import Path
 from typing import Any
 
 from scraper.graphql_scraper import (
+    AccessTokenExpired,
     alias_session_rows,
     fetch_alias_sessions,
     fetch_division_rosters,
     fetch_formats_by_member_id,
     fetch_league_divisions,
+    fetch_dashboard_teams,
     league_division_rows,
     member_aliases_rows,
 )
@@ -42,6 +44,38 @@ _SUPPORTED_FORMATS = {"EIGHT", "NINE", "MASTERS"}
 
 class HistoryGraphError(RuntimeError):
     """A structural/resume safety problem that must stop graph expansion."""
+
+
+def _auth_error_detail(exc: AccessTokenExpired) -> str:
+    """Return the server's auth message without ever exposing the token."""
+    cause = exc.__cause__
+    errors = getattr(cause, "errors", None)
+    if isinstance(errors, list):
+        messages = [
+            str((row or {}).get("message") or "").strip()
+            for row in errors
+            if isinstance(row, dict)
+        ]
+        text = "; ".join(message for message in messages if message)
+        if text:
+            return text
+    return str(exc)
+
+
+def _viewer_session_still_valid(config: dict) -> bool:
+    """Revalidate the SAME token after a scope request reports auth failure.
+
+    APA can use FORBIDDEN for both a dead login and a scope/object denial.
+    If dashboardTeams still returns an authenticated viewer with the same
+    token, the token is globally valid and only the attempted historical
+    scope is unavailable. If viewer validation also fails, the token really
+    is dead and the caller must re-raise so normal resume semantics apply.
+    """
+    try:
+        viewer = fetch_dashboard_teams(config)
+    except AccessTokenExpired:
+        return False
+    return bool((viewer or {}).get("id"))
 
 
 def sha256_file(path: Path) -> str:
@@ -343,7 +377,32 @@ def expand_historical_catalog(
             )
             continue
 
-        roster_payload = fetch_division_rosters(config, division_id)
+        try:
+            roster_payload = fetch_division_rosters(config, division_id)
+        except AccessTokenExpired as exc:
+            if not _viewer_session_still_valid(config):
+                raise
+            source_limitations.append(
+                f"division {division_id} session {session_id}: APA denied roster scope "
+                f"while viewer authentication remained valid ({_auth_error_detail(exc)})"
+            )
+            processed_divisions.add(key_text)
+            _persist_state(
+                output_path=output_path,
+                report_path=report_path,
+                seed_catalog=seed_catalog,
+                seed_catalog_path=seed_catalog_path,
+                seed_sha=seed_sha,
+                sessions=sessions,
+                divisions=divisions,
+                source_limitations=source_limitations,
+                processed_divisions=processed_divisions,
+                processed_member_leagues=processed_member_leagues,
+                processed_session_catalogs=processed_session_catalogs,
+                status="expansion_in_progress",
+            )
+            continue
+
         real_teams = [
             team for team in (roster_payload.get("teams") or [])
             if not (team or {}).get("isBye")
@@ -382,7 +441,31 @@ def expand_historical_catalog(
             if scope_key in processed_member_leagues:
                 continue
 
-            member = fetch_formats_by_member_id(config, int(member_id))
+            try:
+                member = fetch_formats_by_member_id(config, int(member_id))
+            except AccessTokenExpired as exc:
+                if not _viewer_session_still_valid(config):
+                    raise
+                source_limitations.append(
+                    f"member {member_id} league {league_id}/{league_slug}: APA denied member "
+                    f"scope while viewer authentication remained valid ({_auth_error_detail(exc)})"
+                )
+                processed_member_leagues.add(scope_key)
+                _persist_state(
+                    output_path=output_path,
+                    report_path=report_path,
+                    seed_catalog=seed_catalog,
+                    seed_catalog_path=seed_catalog_path,
+                    seed_sha=seed_sha,
+                    sessions=sessions,
+                    divisions=divisions,
+                    source_limitations=source_limitations,
+                    processed_divisions=processed_divisions,
+                    processed_member_leagues=processed_member_leagues,
+                    processed_session_catalogs=processed_session_catalogs,
+                    status="expansion_in_progress",
+                )
+                continue
             aliases = member_aliases_rows(member)
             candidates = _same_league_aliases(
                 aliases,
@@ -438,7 +521,17 @@ def expand_historical_catalog(
 
             discovered_rows: list[dict[str, Any]] = []
             for format_name in formats:
-                alias_sessions = fetch_alias_sessions(config, int(alias_id), format_name)
+                try:
+                    alias_sessions = fetch_alias_sessions(config, int(alias_id), format_name)
+                except AccessTokenExpired as exc:
+                    if not _viewer_session_still_valid(config):
+                        raise
+                    source_limitations.append(
+                        f"member {member_id} alias {alias_id} format {format_name}: APA denied "
+                        f"session-history scope while viewer authentication remained valid "
+                        f"({_auth_error_detail(exc)})"
+                    )
+                    continue
                 discovered_rows.extend(alias_session_rows(alias_sessions, format_name))
 
             unique_session_ids = sorted(
@@ -496,11 +589,22 @@ def expand_historical_catalog(
                     processed_session_catalogs.add(session_catalog_key)
                     continue
 
-                league = fetch_league_divisions(
-                    config,
-                    league_slug,
-                    int(discovered_session_id),
-                )
+                try:
+                    league = fetch_league_divisions(
+                        config,
+                        league_slug,
+                        int(discovered_session_id),
+                    )
+                except AccessTokenExpired as exc:
+                    if not _viewer_session_still_valid(config):
+                        raise
+                    processed_session_catalogs.add(session_catalog_key)
+                    source_limitations.append(
+                        f"league {league_slug} session {discovered_session_id} "
+                        f"({discovered_name}): APA denied division catalog scope while viewer "
+                        f"authentication remained valid ({_auth_error_detail(exc)})"
+                    )
+                    continue
                 new_rows = league_division_rows(league)
                 processed_session_catalogs.add(session_catalog_key)
                 if not new_rows:

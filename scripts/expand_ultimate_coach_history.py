@@ -19,7 +19,7 @@ DEFAULT_REPORT = PROJECT_ROOT / "data" / "ultimate_coach_history_graph_report.js
 logger = logging.getLogger("expand_ultimate_coach_history")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, raise_auth: bool = False) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "apa_config.yaml"))
     parser.add_argument("--seed", type=Path, default=DEFAULT_SEED)
@@ -46,7 +46,12 @@ def main(argv: list[str] | None = None) -> int:
             report_path=args.report,
             resume=args.resume,
         )
-    except (HistoryGraphError, AccessTokenMissing, AccessTokenExpired, ValueError) as exc:
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        if raise_auth:
+            raise
+        logger.error("%s", exc)
+        return 1
+    except (HistoryGraphError, ValueError) as exc:
         logger.error("%s", exc)
         return 1
 

@@ -472,3 +472,99 @@ def test_early_source_limitation_is_persisted_before_later_interruption(monkeypa
     checkpoint = json.loads(report.read_text(encoding="utf-8"))
     assert any("zero roster teams" in x for x in persisted["source_limitations"])
     assert "test-league|200|500" in checkpoint["processed_division_keys"]
+
+
+
+def test_member_forbidden_is_scope_limitation_when_same_token_still_has_viewer(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Restricted", "member": {"id": 111}}],
+            }]
+        },
+    )
+
+    def denied_member(config, member_id):
+        raise graph.AccessTokenExpired("scope request was rejected")
+
+    monkeypatch.setattr(graph, "fetch_formats_by_member_id", denied_member)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    expanded, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert expanded["counts"]["divisions"] == 1
+    assert report["status"] == "expansion_complete"
+    assert report["counts"]["processed_divisions"] == 1
+    assert report["counts"]["processed_member_league_scopes"] == 1
+    assert any(
+        "denied member scope while viewer authentication remained valid" in item
+        for item in report["source_limitations"]
+    )
+
+
+def test_member_auth_failure_still_raises_when_same_token_cannot_validate_viewer(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Player", "member": {"id": 111}}],
+            }]
+        },
+    )
+
+    def auth_failure(*args, **kwargs):
+        raise graph.AccessTokenExpired("expired")
+
+    monkeypatch.setattr(graph, "fetch_formats_by_member_id", auth_failure)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", auth_failure)
+
+    with pytest.raises(graph.AccessTokenExpired, match="expired"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=_seed(),
+            seed_catalog_path=seed_path,
+            output_path=tmp_path / "expanded.json",
+            report_path=tmp_path / "report.json",
+        )
+
+
+def test_division_roster_forbidden_is_checkpointed_when_viewer_remains_valid(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+
+    def denied_roster(config, division_id):
+        raise graph.AccessTokenExpired("division forbidden")
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", denied_roster)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert report["status"] == "expansion_complete"
+    assert report["counts"]["processed_divisions"] == 1
+    assert any(
+        "denied roster scope while viewer authentication remained valid" in item
+        for item in report["source_limitations"]
+    )
