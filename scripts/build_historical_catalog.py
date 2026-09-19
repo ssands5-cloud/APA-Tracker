@@ -24,7 +24,7 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "data" / "ultimate_coach_historical_catalog.json
 logger = logging.getLogger("build_historical_catalog")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, raise_auth: bool = False) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "apa_config.yaml"))
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -39,7 +39,12 @@ def main(argv: list[str] | None = None) -> int:
         if not member_id:
             raise RuntimeError("dashboardTeams returned no authenticated viewer id")
         report = build_historical_catalog(config, int(member_id))
-    except (AccessTokenMissing, AccessTokenExpired, RuntimeError, ValueError) as exc:
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        if raise_auth:
+            raise
+        logger.error("%s", exc)
+        return 1
+    except (RuntimeError, ValueError) as exc:
         logger.error("%s", exc)
         return 1
 
