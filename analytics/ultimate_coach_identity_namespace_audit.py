@@ -245,7 +245,8 @@ def audit_identity_namespace(
     INDETERMINATE means the audit lacks enough source scope to decide.
     """
     games, team_matches = _validate_contract(contract)
-    manifest = manifest or build_verified_identity_manifest(contract)
+    if manifest is None:
+        manifest = build_verified_identity_manifest(contract)
     identities = _validate_manifest(manifest, contract)
 
     identity_by_id, duplicate_manifest_ids = _identity_index(identities)
