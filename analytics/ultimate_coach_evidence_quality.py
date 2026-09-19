@@ -30,6 +30,13 @@ def _required_format(value: str | None) -> str:
     return wanted
 
 
+def _required_player_id(value: Any, label: str) -> int:
+    """Require a canonical integer identity; bool must never alias player 0/1."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{label} must be an integer canonical player identity")
+    return value
+
+
 def _perspective(game: dict[str, Any], player_id: int) -> tuple[int | None, str]:
     if game.get("participant_a_id") == player_id:
         return game.get("participant_b_id"), str(game.get("participant_a_result") or "").upper()
@@ -57,7 +64,9 @@ def _unsafe_keys(games: list[dict[str, Any]]) -> tuple[str | None, list[Any]]:
 def direct_evidence(all_games: list[dict[str, Any]], player_id: int, opponent_id: int, fmt: str) -> dict[str, Any]:
     """Return a traceable direct record, or fail closed on unsafe evidence."""
     wanted = _required_format(fmt)
-    if player_id is None or opponent_id is None or player_id == opponent_id:
+    player_id = _required_player_id(player_id, "player_id")
+    opponent_id = _required_player_id(opponent_id, "opponent_id")
+    if player_id == opponent_id:
         raise ValueError("two distinct canonical player identities are required")
 
     candidates: list[dict[str, Any]] = []
@@ -106,7 +115,9 @@ def shared_opponent_evidence(all_games: list[dict[str, Any]], player_a_id: int, 
     uncertain evidence to leak into a coaching recommendation.
     """
     wanted = _required_format(fmt)
-    if player_a_id is None or player_b_id is None or player_a_id == player_b_id:
+    player_a_id = _required_player_id(player_a_id, "player_a_id")
+    player_b_id = _required_player_id(player_b_id, "player_b_id")
+    if player_a_id == player_b_id:
         raise ValueError("two distinct canonical player identities are required")
 
     by_player: dict[int, dict[int, list[tuple[dict[str, Any], str]]]] = defaultdict(lambda: defaultdict(list))
