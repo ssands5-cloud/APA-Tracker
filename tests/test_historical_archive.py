@@ -208,9 +208,9 @@ def test_confirmed_division_denial_is_checkpointed_and_crawl_continues(monkeypat
     the whole runner treat this as a full auth expiry forever. This test
     proves: (1) the call is retried once after confirming the SAME token
     is still viewer-valid, (2) after BOTH attempts fail with a confirmed-
-    valid viewer, the division is checkpointed as a real limitation rather
-    than raising, and (3) the crawl continues to the NEXT division instead
-    of stopping."""
+    valid viewer, the division is tracked as PERMANENTLY DENIED -- never
+    as completed -- and (3) the crawl continues to the NEXT division
+    instead of stopping."""
     from scraper import auth_classification
     from scraper.graphql_scraper import AccessTokenExpired
 
@@ -258,9 +258,21 @@ def test_confirmed_division_denial_is_checkpointed_and_crawl_continues(monkeypat
     assert sync_calls.count("502") == 1, "the crawl must continue to the next division"
     assert viewer_calls["count"] == 2, "viewer validity must be checked before AND after the retry"
     assert result["status"] == "crawl_complete"
-    assert result["divisions_crawled"] == 2
+
+    denied_key = ":134:501"
+    assert denied_key in result["permanently_denied_division_keys"]
+    assert denied_key not in result["completed_division_keys"], (
+        "a confirmed denial must NEVER be counted as completed -- "
+        "sync_division_wide's own ingest helpers commit internally, so "
+        "partial rows may already be durable even though the division "
+        "itself never finished"
+    )
+    assert result["divisions_crawled"] == 1
+    assert result["divisions_permanently_denied"] == 1
 
     denied_result = next(r for r in result["division_results"] if r["division_id"] == "501")
+    assert denied_result["confirmed_denial"] is True
+    assert denied_result["data_completeness"] == "partial_or_none_unreliable"
     assert any(
         "confirmed-valid viewer token" in obs
         for obs in denied_result["coverage_observations"]
@@ -308,6 +320,119 @@ def test_genuine_expiry_during_stage3_retry_still_raises_for_reauth(monkeypatch,
         )
 
     assert viewer_calls["count"] == 2
-    assert not report.is_file() or not json.loads(report.read_text())["completed_division_keys"], (
-        "a genuine expiry must never checkpoint the division as processed"
+    if report.is_file():
+        saved = json.loads(report.read_text())
+        assert not saved.get("completed_division_keys")
+        assert not saved.get("permanently_denied_division_keys"), (
+            "a genuine expiry must never be recorded as a confirmed denial"
+        )
+
+
+def test_confirmed_denial_partway_through_real_ingestion_leaves_only_partial_durable_rows(
+    monkeypatch, tmp_path
+):
+    """GPT independent-review finding on the first version of this fix:
+    sync_division_wide's own ingest helpers (upsert_team, upsert_player,
+    ingest_match, ...) COMMIT INTERNALLY as they run -- a db.rollback()
+    after the fact cannot undo them. This test exercises the REAL
+    sync_division_wide function (only the fetch_*() GraphQL calls are
+    mocked, exactly like tests/test_division_wide_sync.py's own pattern)
+    so a roster and a scored match's schedule row are genuinely committed
+    to the real staging database before fetch_match_detail (the scoresheet
+    call) is denied twice. Proves: (1) the team/player/match rows really
+    are present and durable afterward -- the partial-commit claim is real,
+    not hypothetical -- and (2) the division is correctly tracked as
+    permanently denied, never as completed, so that real partial data is
+    never mistaken for complete coverage."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    division = _division(division_id="501", session_id="134")
+    catalog_path.write_text(json.dumps(_catalog([division])), encoding="utf-8")
+
+    rosters_payload = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+                {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+                 "skillLevel": 6, "member": {"id": 9001}},
+            ]},
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+    schedule_payload = {
+        "schedule": [
+            {"weekOfPlay": 1, "matches": [
+                {
+                    "id": 90401, "isBye": False, "status": "COMPLETED", "startTime": "2026-01-15",
+                    "isScored": True, "isFinalized": True,
+                    "results": [{"homeAway": "HOME", "points": {"total": 18}},
+                                {"homeAway": "AWAY", "points": {"total": 12}}],
+                    "home": {"id": 301, "name": "Fixture Sharks"},
+                    "away": {"id": 302, "name": "Fixture Renegades"},
+                },
+            ]},
+        ],
+    }
+
+    import scheduler.graphql_sync as sync_module
+
+    def denied_match_detail(config, match_id):
+        raise AccessTokenExpired("scoresheet forbidden")
+
+    viewer_calls = {"count": 0}
+
+    def always_valid_viewer(config):
+        viewer_calls["count"] += 1
+        return {"id": 999}
+
+    monkeypatch.setattr(sync_module, "fetch_division_rosters", lambda config, division_id: rosters_payload)
+    monkeypatch.setattr(sync_module, "fetch_division_schedule", lambda config, division_id: schedule_payload)
+    monkeypatch.setattr(sync_module, "fetch_match_detail", denied_match_detail)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", always_valid_viewer)
+
+    result = archive.run_archive(
+        {},
+        catalog_path=catalog_path,
+        staging_db=staging,
+        report_path=report,
+        seed_db=None,
+        resume=False,
     )
+
+    denied_key = ":134:501"
+    assert denied_key in result["permanently_denied_division_keys"]
+    assert denied_key not in result["completed_division_keys"]
+
+    from database.engine import create_db_engine
+    from database.models import Match, Player, Team
+    from sqlalchemy.orm import Session as ORMSession
+
+    engine = create_db_engine({"database": {"path": str(staging)}})
+    try:
+        with ORMSession(engine) as db:
+            teams = db.query(Team).all()
+            players = db.query(Player).all()
+            matches = db.query(Match).all()
+
+            # The real, exact partial-commit scenario GPT identified: roster
+            # and schedule ingestion (upsert_team/upsert_player/ingest_match)
+            # DID commit before the scoresheet fetch was denied.
+            assert len(teams) == 2, "roster ingestion's team commits are real and durable"
+            assert len(players) == 2, "roster ingestion's player commits are real and durable"
+            assert len(matches) == 1, "schedule ingestion's match commit is real and durable"
+
+            # But the scoresheet-level detail (the thing that was actually
+            # denied) never arrived -- no PlayerMatch/head-to-head rows.
+            from database.models import PlayerHeadToHead, PlayerMatch
+
+            assert db.query(PlayerMatch).count() == 0
+            assert db.query(PlayerHeadToHead).count() == 0
+    finally:
+        engine.dispose()
