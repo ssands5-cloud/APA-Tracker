@@ -45,7 +45,7 @@ def test_unsafe_invalid_time_and_unknown_outcome_are_excluded():
     assert row["verified_games"] == 1
     assert row["excluded"] == {
         "MISSING_OR_INVALID_TIME": 1,
-        "UNKNOWN_OUTCOME": 1,
+        "UNKNOWN_OR_INVALID_OUTCOME": 1,
         "UNVERIFIED_EVIDENCE": 1,
     }
 
@@ -70,3 +70,49 @@ def test_invalid_format_and_fraction_are_rejected():
         assert False
     except ValueError:
         pass
+
+
+def test_naive_timestamp_is_rejected_instead_of_assuming_timezone():
+    games = [
+        game("naive", "2026-01-01T19:00:00"),
+        game("aware", "2026-01-02T19:00:00-07:00"),
+    ]
+    row = chronological_archive_gate(games, "EIGHT", min_verified_games=1, min_holdout_games=1)
+    assert row["verified_games"] == 1
+    assert row["excluded"]["MISSING_OR_INVALID_TIME"] == 1
+
+
+def test_duplicate_and_blank_provenance_are_not_admitted():
+    games = [
+        game("", "2026-01-01T00:00:00Z"),
+        game("dup", "2026-01-02T00:00:00Z"),
+        game("dup", "2026-01-03T00:00:00Z"),
+        game("safe", "2026-01-04T00:00:00Z"),
+    ]
+    row = chronological_archive_gate(games, "EIGHT", min_verified_games=1, min_holdout_games=1)
+    assert row["verified_games"] == 1
+    assert row["holdout_game_keys"] == ["safe"]
+    assert row["excluded"]["MISSING_GAME_KEY"] == 1
+    assert row["excluded"]["DUPLICATE_GAME_KEY"] == 2
+
+
+def test_same_instant_batch_is_atomic_across_equivalent_offsets():
+    games = [
+        game("early", "2026-01-01T00:00:00Z"),
+        game("same-a", "2026-02-01T19:00:00-07:00"),
+        game("same-b", "2026-02-02T02:00:00+00:00"),
+        game("late", "2026-03-01T00:00:00Z"),
+    ]
+    row = chronological_archive_gate(
+        games,
+        "EIGHT",
+        holdout_fraction=0.5,
+        min_verified_games=4,
+        min_holdout_games=2,
+    )
+    assert row["status"] == "READY_FOR_BACKTEST"
+    assert row["train_game_keys"] == ["early"]
+    assert row["holdout_game_keys"] == ["same-a", "same-b", "late"]
+    assert row["train_end"] < row["holdout_start"]
+    assert row["same_instant_atomic"] is True
+    assert row["probability_publication"] == "FORBIDDEN"
