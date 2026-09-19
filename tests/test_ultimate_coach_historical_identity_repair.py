@@ -272,3 +272,46 @@ def test_report_explicitly_stays_offline_and_probability_locked(db):
     assert payload["identity_scope_rule"] == "EXACT_TEAM_SESSION_MATCH_SCOPE"
     assert payload["probability_publication"] == "FORBIDDEN"
     assert report.resolution_rate is None
+
+
+def test_duplicate_alias_player_match_scope_is_blocked(db):
+    roster_player(db, "1001", "Ann", "TA")
+    alias = alias_player(db, "90001", "Ann")
+    m = match(db, "M1")
+    pm1 = player_match(db, alias, m, "TA")
+    pm2 = player_match(db, alias, m, "TA")
+    db.commit()
+
+    report = repair_historical_identities(db, apply=True)
+
+    assert report.duplicate_alias_match_scopes == 1
+    assert report.scopes_blocked_collision == 1
+    assert report.scopes_rewrite_planned == 0
+    assert report.blocked_scopes[0]["reason"] == "DUPLICATE_ALIAS_MATCH_SCOPE"
+    assert db.get(PlayerMatch, pm1.id).player_id == alias.id
+    assert db.get(PlayerMatch, pm2.id).player_id == alias.id
+
+
+def test_h2h_rewrite_never_crosses_match_scope_for_reused_alias(db):
+    real_a = roster_player(db, "1001", "Alex Same", "TA", division="D1")
+    real_b = roster_player(db, "1002", "Alex Same", "TB", division="D2")
+    opp_a = roster_player(db, "2001", "Opponent A", "TX", division="DX")
+    opp_b = roster_player(db, "2002", "Opponent B", "TY", division="DY")
+    alias = alias_player(db, "99999", "Alex Same")
+
+    m1 = match(db, "M1", home="TA", away="TX")
+    m2 = match(db, "M2", home="TB", away="TY")
+    player_match(db, alias, m1, "TA")
+    player_match(db, alias, m2, "TB")
+    row1 = h2h(db, alias, opp_a, m1, "W")
+    row2 = h2h(db, alias, opp_b, m2, "L")
+    db.commit()
+
+    report = repair_historical_identities(db, apply=True)
+
+    assert report.scopes_rewrite_planned == 2
+    assert report.h2h_id_fields_rewritten == 2
+    assert db.get(PlayerHeadToHead, row1.id).player_id == real_a.id
+    assert db.get(PlayerHeadToHead, row1.id).opponent_id == opp_a.id
+    assert db.get(PlayerHeadToHead, row2.id).player_id == real_b.id
+    assert db.get(PlayerHeadToHead, row2.id).opponent_id == opp_b.id
