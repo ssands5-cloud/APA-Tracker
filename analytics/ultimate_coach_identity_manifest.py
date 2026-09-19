@@ -177,8 +177,8 @@ def build_verified_identity_manifest(contract: dict[str, Any]) -> dict[str, Any]
         conflicting_rows = [
             row
             for row in rows
-            if _text(row.get("member_external_id"))
-            and _text(row.get("member_external_id")) != member_id
+            if _canonical_member_id(row.get("member_external_id")) is not None
+            and _canonical_member_id(row.get("member_external_id")) != member_id
         ]
         if conflicting_rows:
             exclusions.append(
@@ -187,7 +187,11 @@ def build_verified_identity_manifest(contract: dict[str, Any]) -> dict[str, Any]
                     "member_external_id": member_id,
                     "reason": "TEAM_HISTORY_MEMBER_ID_CONFLICT",
                     "conflicting_member_ids": sorted(
-                        {_text(row.get("member_external_id")) for row in conflicting_rows}
+                        {
+                            _canonical_member_id(row.get("member_external_id"))
+                            for row in conflicting_rows
+                            if _canonical_member_id(row.get("member_external_id")) is not None
+                        }
                     ),
                 }
             )
@@ -196,7 +200,7 @@ def build_verified_identity_manifest(contract: dict[str, Any]) -> dict[str, Any]
         scopes_by_key: dict[tuple[str, str, str, bool], dict[str, Any]] = {}
         invalid_scope_rows = 0
         for row in rows:
-            if _text(row.get("member_external_id")) != member_id:
+            if _canonical_member_id(row.get("member_external_id")) != member_id:
                 invalid_scope_rows += 1
                 continue
             team_id = _text(row.get("team_external_id"))
