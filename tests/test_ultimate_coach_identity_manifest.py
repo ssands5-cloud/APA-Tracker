@@ -192,3 +192,13 @@ def test_manifest_remains_offline_and_probability_locked():
     out = build_verified_identity_manifest(contract([player()], [hist()]))
     assert out["requires_live_apa_login"] is False
     assert out["probability_publication"] == "FORBIDDEN"
+
+
+def test_malformed_history_member_id_type_cannot_verify_player():
+    bad = hist(pid=1, member="1001")
+    bad["member_external_id"] = 1001
+    out = build_verified_identity_manifest(contract([player(pid=1, member="1001")], [bad]))
+    assert out["identity_count"] == 0
+    row = out["identity_exclusions"][0]
+    assert row["reason"] == "NO_COMPLETE_ROSTER_PROVENANCE"
+    assert row["invalid_scope_rows"] == 1
