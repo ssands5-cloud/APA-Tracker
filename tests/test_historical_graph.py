@@ -745,3 +745,51 @@ def test_league_division_catalog_forbidden_is_checkpointed_when_viewer_remains_v
         "denied division catalog scope twice with a confirmed-valid viewer token" in item
         for item in report["source_limitations"]
     )
+
+
+def test_genuine_expiry_during_retry_still_raises_for_reauth(monkeypatch, tmp_path):
+    """The narrower race an independent reviewer found in the first version
+    of the retry fix: the token can genuinely, globally expire in the
+    window between the first viewer revalidation and the retry call
+    itself. That must still raise for normal reauth/resume -- NOT be
+    converted into a permanent _ConfirmedScopeDenial/source limitation --
+    because the second failure was never actually confirmed against a
+    still-valid viewer.
+
+    Sequence: scoped call #1 fails -> viewer check #1 succeeds -> retry
+    fails -> viewer check #2 fails (genuine expiry) -> original
+    AccessTokenExpired must propagate; nothing is checkpointed as denied.
+    """
+    seed_path = _write_seed(tmp_path)
+
+    roster_calls = {"count": 0}
+
+    def fails_twice_roster(config, division_id):
+        roster_calls["count"] += 1
+        raise graph.AccessTokenExpired("expired")
+
+    viewer_calls = {"count": 0}
+
+    def viewer_valid_once_then_dead(config):
+        viewer_calls["count"] += 1
+        if viewer_calls["count"] == 1:
+            return {"id": 999}
+        raise graph.AccessTokenExpired("viewer session is dead now")
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", fails_twice_roster)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", viewer_valid_once_then_dead)
+
+    with pytest.raises(graph.AccessTokenExpired, match="expired"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=_seed(),
+            seed_catalog_path=seed_path,
+            output_path=tmp_path / "expanded.json",
+            report_path=tmp_path / "report.json",
+        )
+
+    assert roster_calls["count"] == 2, "must retry exactly once before giving up"
+    assert viewer_calls["count"] == 2, (
+        "viewer validity must be re-checked after the retry's own failure, "
+        "not assumed from the first check"
+    )

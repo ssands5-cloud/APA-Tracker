@@ -101,13 +101,19 @@ def _call_with_confirmed_denial_retry(config: dict, fetch_call):
     single flaky rejection must never be allowed to permanently exclude
     real, available history.
 
-    Raises the ORIGINAL AccessTokenExpired unchanged (so normal resume/
-    reauth semantics apply) if the SAME token cannot be revalidated as
-    still viewer-valid -- that is a genuine, global auth expiry, not a
-    per-scope question, and must never be retried here.
+    Raises the ORIGINAL (or retry's) AccessTokenExpired unchanged -- so
+    normal resume/reauth semantics apply -- if the SAME token cannot be
+    revalidated as still viewer-valid at EITHER failure. Viewer validity
+    is re-checked after the retry's own failure too: the token can
+    genuinely, globally expire in the window between the first
+    revalidation and the retry call, and treating that second failure as
+    a confirmed per-scope denial without re-confirming the viewer would
+    reopen the exact same permanent-mislabeling risk this function exists
+    to close, just at a narrower window.
 
-    Raises _ConfirmedScopeDenial only after BOTH the original call and the
-    confirmed-valid-token retry failed with AccessTokenExpired.
+    Raises _ConfirmedScopeDenial only after the original call failed, the
+    SAME token was confirmed viewer-valid, the retry ALSO failed, and the
+    SAME token was confirmed viewer-valid AGAIN immediately afterward.
     """
     try:
         return fetch_call()
@@ -117,6 +123,8 @@ def _call_with_confirmed_denial_retry(config: dict, fetch_call):
         try:
             return fetch_call()
         except AccessTokenExpired as retry_exc:
+            if not _viewer_session_still_valid(config):
+                raise
             raise _ConfirmedScopeDenial(_auth_error_detail(retry_exc)) from retry_exc
 
 
