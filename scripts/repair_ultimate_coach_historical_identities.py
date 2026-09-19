@@ -226,12 +226,54 @@ def repair_historical_identities(
                 )
             )
 
-    report.scopes_rewrite_planned = len(proposed_rewrites)
-
     h2h_rows = db.query(PlayerHeadToHead).order_by(PlayerHeadToHead.id).all()
     report.h2h_rows_examined = len(h2h_rows)
-    h2h_plan: list[tuple[PlayerHeadToHead, int, int]] = []
 
+    # First pass: if any proposed identity rewrite would collapse a real H2H
+    # row into player==opponent, block the ENTIRE source player/match scope.
+    # Blocking only the H2H row while still rewriting PlayerMatch would leave
+    # the database internally inconsistent.
+    self_pair_blocked_scopes: set[tuple[int, int]] = set()
+    for row in h2h_rows:
+        player_scope = (row.player_id, row.match_id)
+        opponent_scope = (row.opponent_id, row.match_id)
+        player_target = scope_resolution.get(player_scope, row.player_id)
+        opponent_target = scope_resolution.get(opponent_scope, row.opponent_id)
+        player_changed = player_target != row.player_id
+        opponent_changed = opponent_target != row.opponent_id
+        if not player_changed and not opponent_changed:
+            continue
+        if player_target != opponent_target:
+            continue
+
+        report.h2h_rows_blocked_self_pairing += 1
+        if player_changed and player_scope in proposed_rewrites:
+            self_pair_blocked_scopes.add(player_scope)
+        if opponent_changed and opponent_scope in proposed_rewrites:
+            self_pair_blocked_scopes.add(opponent_scope)
+
+    for source_key in sorted(self_pair_blocked_scopes):
+        resolved_id = proposed_rewrites.pop(source_key, None)
+        scope_resolution.pop(source_key, None)
+        if resolved_id is None:
+            continue
+        player_match, match, player = scope_row[source_key]
+        report.scopes_blocked_collision += 1
+        report.blocked_scopes.append(
+            _scope_detail(
+                player_match,
+                match,
+                player,
+                "H2H_SELF_PAIRING_AFTER_RESOLUTION",
+                resolved_player_id=resolved_id,
+            )
+        )
+
+    report.scopes_rewrite_planned = len(proposed_rewrites)
+
+    # Second pass: build the actual H2H rewrite plan from only still-approved
+    # scope mappings.
+    h2h_plan: list[tuple[PlayerHeadToHead, int, int]] = []
     for row in h2h_rows:
         player_target = scope_resolution.get((row.player_id, row.match_id), row.player_id)
         opponent_target = scope_resolution.get((row.opponent_id, row.match_id), row.opponent_id)
@@ -240,7 +282,8 @@ def repair_historical_identities(
         if not player_changed and not opponent_changed:
             continue
         if player_target == opponent_target:
-            report.h2h_rows_blocked_self_pairing += 1
+            # Defensive only: all changed scopes capable of this should have
+            # been removed in the first pass.
             continue
         report.h2h_id_fields_rewrite_planned += int(player_changed) + int(opponent_changed)
         h2h_plan.append((row, player_target, opponent_target))
