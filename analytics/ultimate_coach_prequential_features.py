@@ -1,14 +1,14 @@
 """Leakage-safe prequential feature snapshots for future Ultimate Coach backtests.
 
-This module emits descriptive features only.  For a target game, every feature
+This module emits descriptive features only. For a target game, every feature
 is derived exclusively from VERIFIED_UNIQUE games strictly earlier than that
-game's timestamp and from the same APA format.  It does not train a model,
+game's timestamp and from the same APA format. It does not train a model,
 score a matchup, or emit a probability.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -25,13 +25,22 @@ def _fmt(value: Any) -> str:
 
 
 def _time(value: Any) -> datetime | None:
+    """Parse only offset-aware ISO timestamps.
+
+    A naive timestamp cannot be placed safely on one global chronological
+    axis beside offset-aware APA timestamps. Treating it as local or UTC would
+    be an invented fact, so historical backtesting excludes it.
+    """
     text = str(value or "").strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
 
 
 def _participants(game: dict[str, Any]) -> tuple[int | None, int | None]:
@@ -57,38 +66,60 @@ def _record(history: list[dict[str, Any]], player_id: int) -> tuple[int, int]:
     return wins, losses
 
 
+def _complete_target(game: dict[str, Any]) -> bool:
+    a_id, b_id = _participants(game)
+    winner = game.get("winner_id")
+    loser = game.get("loser_id")
+    return (
+        a_id is not None
+        and b_id is not None
+        and a_id != b_id
+        and winner in {a_id, b_id}
+        and loser in {a_id, b_id}
+        and winner != loser
+    )
+
+
 def build_prequential_feature_rows(
     all_games: list[dict[str, Any]], fmt: str
 ) -> dict[str, Any]:
     """Return one auditable pre-game feature row per trusted target game.
 
     Same-timestamp games cannot see one another: the history boundary is
-    strictly ``prior_time < target_time``.  This matters for doubleheaders and
-    protects against accidental within-night leakage.
+    strictly ``prior_time < target_time``. Duplicate or blank game keys,
+    timezone-naive timestamps, self-pairings and inconsistent outcomes all
+    fail closed instead of being repaired or ordered heuristically.
     """
     wanted = _fmt(fmt)
     if wanted not in {"EIGHT", "NINE"}:
         raise ValueError("format must resolve to EIGHT or NINE")
 
+    scoped = [game for game in all_games if _fmt(game.get("format")) == wanted]
+    key_counts = Counter(str(game.get("game_key") or "").strip() for game in scoped)
+
     eligible: list[tuple[datetime, dict[str, Any]]] = []
     excluded = defaultdict(int)
-    for game in all_games:
-        if _fmt(game.get("format")) != wanted:
+    for game in scoped:
+        key = str(game.get("game_key") or "").strip()
+        if not key:
+            excluded["MISSING_GAME_KEY"] += 1
+            continue
+        if key_counts[key] > 1:
+            excluded["DUPLICATE_GAME_KEY"] += 1
             continue
         if game.get("mirror_status") not in TRUSTED:
             excluded["UNVERIFIED_EVIDENCE"] += 1
             continue
         when = _time(game.get("match_date"))
-        a_id, b_id = _participants(game)
         if when is None:
-            excluded["MISSING_OR_INVALID_TIME"] += 1
+            excluded["MISSING_INVALID_OR_NAIVE_TIME"] += 1
             continue
-        if a_id is None or b_id is None or game.get("winner_id") is None or game.get("loser_id") is None:
-            excluded["INCOMPLETE_TARGET"] += 1
+        if not _complete_target(game):
+            excluded["INCOMPLETE_OR_INCONSISTENT_TARGET"] += 1
             continue
         eligible.append((when, game))
 
-    eligible.sort(key=lambda item: (item[0], str(item[1].get("game_key") or "")))
+    eligible.sort(key=lambda item: (item[0], str(item[1]["game_key"])))
     rows: list[dict[str, Any]] = []
 
     for target_time, target in eligible:
@@ -102,21 +133,17 @@ def build_prequential_feature_rows(
         direct_a_wins, direct_a_losses = _record(direct, a_id)
 
         a_opponents = {
-            other
-            for g in a_history
-            for other in _participants(g)
+            other for g in a_history for other in _participants(g)
             if other is not None and other != a_id
         }
         b_opponents = {
-            other
-            for g in b_history
-            for other in _participants(g)
+            other for g in b_history for other in _participants(g)
             if other is not None and other != b_id
         }
         shared = sorted(a_opponents & b_opponents)
 
         rows.append({
-            "target_game_key": target.get("game_key"),
+            "target_game_key": target["game_key"],
             "target_time": target_time.isoformat(),
             "format": wanted,
             "participant_a_id": a_id,
@@ -135,12 +162,12 @@ def build_prequential_feature_rows(
             "direct_a_prior_losses": direct_a_losses,
             "shared_opponent_count": len(shared),
             "shared_opponent_ids": shared,
-            "prior_game_keys": [g.get("game_key") for g in prior],
-            "direct_prior_game_keys": [g.get("game_key") for g in direct],
+            "prior_game_keys": [g["game_key"] for g in prior],
+            "direct_prior_game_keys": [g["game_key"] for g in direct],
         })
 
     return {
-        "schema": "ultimate-coach-prequential-features-v1",
+        "schema": "ultimate-coach-prequential-features-v2",
         "format": wanted,
         "probability_publication": "FORBIDDEN",
         "feature_rows": rows,
