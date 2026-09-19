@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from scheduler.graphql_sync import reconcile_division_wide_coverage, sync_division_wide
+from scraper.auth_classification import ConfirmedScopeDenial, call_with_confirmed_denial_retry
 
 CATALOG_SCHEMA = "ultimate-coach-historical-catalog-v1"
 CATALOG_SCHEMAS = {CATALOG_SCHEMA, "ultimate-coach-historical-catalog-v2"}
@@ -208,16 +209,60 @@ def run_archive(
                 current_session_id = str(division.get("current_session_id") or "")
                 is_current = bool(current_session_id and current_session_id == session_id)
 
-                counts = sync_division_wide(
-                    run_config,
-                    db,
-                    division_id,
-                    format_name,
-                    session_name,
-                    resume=True,
-                    roster_is_current=is_current,
-                    identity_current_only=is_current,
-                )
+                try:
+                    counts = call_with_confirmed_denial_retry(
+                        run_config,
+                        lambda: sync_division_wide(
+                            run_config,
+                            db,
+                            division_id,
+                            format_name,
+                            session_name,
+                            resume=True,
+                            roster_is_current=is_current,
+                            identity_current_only=is_current,
+                        ),
+                    )
+                except ConfirmedScopeDenial as denial:
+                    # A division discovered through another roster member's
+                    # own cross-league history can be genuinely, permanently
+                    # inaccessible to THIS viewer even though the viewer's
+                    # own token is otherwise completely valid. Without this,
+                    # sync_division_wide's own bare re-raise (shared,
+                    # already-audited code used by other, unrelated sync
+                    # paths -- intentionally not modified here) would make
+                    # the outer runner treat this as a full auth expiry
+                    # forever, forcing endless reauthentication with zero
+                    # forward progress. Roll back any partial work from the
+                    # two failed attempts before recording the division as a
+                    # confirmed, permanent limitation and moving on.
+                    db.rollback()
+                    result = {
+                        "division_id": division_id,
+                        "session_id": session_id,
+                        "session_name": session_name,
+                        "format": format_name,
+                        "is_current_session": is_current,
+                        "coverage_observations": [
+                            f"APA denied this division twice with a confirmed-valid "
+                            f"viewer token ({denial})"
+                        ],
+                    }
+                    division_results.append(result)
+                    completed_keys.add(key)
+                    _checkpoint(
+                        report_path,
+                        status="crawl_in_progress",
+                        staging_db=staging_db,
+                        catalog_path=catalog_path,
+                        catalog_sha256=catalog_sha,
+                        preparation=preparation,
+                        completed_keys=completed_keys,
+                        division_results=division_results,
+                        catalog_source_limitations=list(catalog.get("source_limitations") or []),
+                    )
+                    continue
+
                 db.commit()
                 observations = reconcile_division_wide_coverage(counts)
                 result = {

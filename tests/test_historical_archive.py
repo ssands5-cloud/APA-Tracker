@@ -197,3 +197,117 @@ def test_division_plan_keeps_same_numeric_ids_from_different_leagues():
 
     assert len(plan) == 2
     assert {row["league_slug"] for row in plan} == {"league-a", "league-b"}
+
+
+def test_confirmed_division_denial_is_checkpointed_and_crawl_continues(monkeypatch, tmp_path):
+    """Stage 3's own auth-classification gap: a division discovered through
+    another roster member's cross-league history can be genuinely,
+    permanently inaccessible to THIS viewer even though the viewer's own
+    token is otherwise valid. Without this fix, sync_division_wide's own
+    bare AccessTokenExpired re-raise (shared, unmodified code) would make
+    the whole runner treat this as a full auth expiry forever. This test
+    proves: (1) the call is retried once after confirming the SAME token
+    is still viewer-valid, (2) after BOTH attempts fail with a confirmed-
+    valid viewer, the division is checkpointed as a real limitation rather
+    than raising, and (3) the crawl continues to the NEXT division instead
+    of stopping."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    denied = _division(division_id="501", session_id="134")
+    healthy = _division(division_id="502", session_id="134")
+    catalog_path.write_text(json.dumps(_catalog([denied, healthy])), encoding="utf-8")
+
+    sync_calls = []
+
+    def fake_sync(config, db, division_id, format_name, session_name, resume, **kwargs):
+        sync_calls.append(division_id)
+        if division_id == "501":
+            raise AccessTokenExpired("division forbidden")
+        return {
+            "teams_discovered": 1, "teams_ingested": 1,
+            "roster_players_discovered": 1, "roster_players_ingested": 1,
+            "matches_discovered": 0, "matches_ingested": 0,
+            "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
+            "head_to_head_rows": 0, "identity_resolved": 0, "identity_unresolved": 0,
+        }
+
+    viewer_calls = {"count": 0}
+
+    def always_valid_viewer(config):
+        viewer_calls["count"] += 1
+        return {"id": 999}
+
+    monkeypatch.setattr(archive, "sync_division_wide", fake_sync)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", always_valid_viewer)
+
+    result = archive.run_archive(
+        {},
+        catalog_path=catalog_path,
+        staging_db=staging,
+        report_path=report,
+        seed_db=None,
+        resume=False,
+    )
+
+    assert sync_calls.count("501") == 2, "must retry the denied division exactly once"
+    assert sync_calls.count("502") == 1, "the crawl must continue to the next division"
+    assert viewer_calls["count"] == 2, "viewer validity must be checked before AND after the retry"
+    assert result["status"] == "crawl_complete"
+    assert result["divisions_crawled"] == 2
+
+    denied_result = next(r for r in result["division_results"] if r["division_id"] == "501")
+    assert any(
+        "confirmed-valid viewer token" in obs
+        for obs in denied_result["coverage_observations"]
+    )
+    healthy_result = next(r for r in result["division_results"] if r["division_id"] == "502")
+    assert healthy_result.get("teams_ingested") == 1
+
+
+def test_genuine_expiry_during_stage3_retry_still_raises_for_reauth(monkeypatch, tmp_path):
+    """The narrower race form: the token can genuinely, globally expire in
+    the window between the first viewer revalidation and the retry call
+    itself. That must still raise for normal reauth/resume, never be
+    converted into a permanent per-division limitation."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    catalog_path.write_text(json.dumps(_catalog([_division()])), encoding="utf-8")
+
+    def fails_twice(config, db, division_id, format_name, session_name, resume, **kwargs):
+        raise AccessTokenExpired("expired")
+
+    viewer_calls = {"count": 0}
+
+    def viewer_valid_once_then_dead(config):
+        viewer_calls["count"] += 1
+        if viewer_calls["count"] == 1:
+            return {"id": 999}
+        raise AccessTokenExpired("viewer session is dead now")
+
+    monkeypatch.setattr(archive, "sync_division_wide", fails_twice)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", viewer_valid_once_then_dead)
+
+    with pytest.raises(AccessTokenExpired, match="expired"):
+        archive.run_archive(
+            {},
+            catalog_path=catalog_path,
+            staging_db=staging,
+            report_path=report,
+            seed_db=None,
+            resume=False,
+        )
+
+    assert viewer_calls["count"] == 2
+    assert not report.is_file() or not json.loads(report.read_text())["completed_division_keys"], (
+        "a genuine expiry must never checkpoint the division as processed"
+    )
