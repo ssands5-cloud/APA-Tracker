@@ -326,7 +326,78 @@ def test_persistent_capture_clicks_continue_to_member_services(monkeypatch):
     token = runner.capture_access_token_persistent(timeout_s=5)
 
     assert token == "real-token-abc"
-    assert continue_button.click_calls >= 1
+    assert continue_button.click_calls == 1
+
+
+def test_persistent_capture_debounces_repeated_continue_click(monkeypatch):
+    """Regression test for the live-acceptance finding: the same still-
+    visible Continue control must not be clicked on every polling tick
+    while APA is still navigating away from it."""
+    continue_button = _FakeLocator(count=1, visible=True)
+    page = _FakePage(continue_locator=continue_button)
+    context = _FakeContext(page)
+
+    TOKEN_ARRIVES_AT_TICK = 15
+
+    def on_tick(n):
+        if n == TOKEN_ARRIVES_AT_TICK:
+            context.emit_response(_FakeResponse(
+                f"https://{runner.GRAPHQL_HOST}/graphql", {"authorization": "real-token-abc"}
+            ))
+
+    page._on_tick = on_tick
+
+    monkeypatch.setattr(
+        playwright_sync_api, "sync_playwright", lambda: _FakeSyncPlaywrightCM(context)
+    )
+    monkeypatch.setattr("builtins.input", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("must not call input()")
+    ))
+
+    token = runner.capture_access_token_persistent(timeout_s=30)
+
+    assert token == "real-token-abc"
+    assert page.tick_count >= TOKEN_ARRIVES_AT_TICK
+    assert continue_button.click_calls == 1, (
+        "the same unchanged Continue control must be clicked exactly once, "
+        f"not once per poll (got {continue_button.click_calls} clicks over "
+        f"{page.tick_count} polls)"
+    )
+
+
+def test_persistent_capture_reclicks_continue_after_it_genuinely_reappears(monkeypatch):
+    """A later click is still allowed if the control disappears and then
+    genuinely reappears -- a new transitional page, not the same one still
+    loading."""
+    continue_button = _FakeLocator(count=1, visible=True)
+    page = _FakePage(continue_locator=continue_button)
+    context = _FakeContext(page)
+
+    def on_tick(n):
+        if n == 3:
+            continue_button._visible = False  # first transitional page navigated away
+        elif n == 4:
+            continue_button._visible = True  # a second, genuinely new transitional page
+        elif n == 6:
+            context.emit_response(_FakeResponse(
+                f"https://{runner.GRAPHQL_HOST}/graphql", {"authorization": "real-token-abc"}
+            ))
+
+    page._on_tick = on_tick
+
+    monkeypatch.setattr(
+        playwright_sync_api, "sync_playwright", lambda: _FakeSyncPlaywrightCM(context)
+    )
+    monkeypatch.setattr("builtins.input", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("must not call input()")
+    ))
+
+    token = runner.capture_access_token_persistent(timeout_s=10)
+
+    assert token == "real-token-abc"
+    assert continue_button.click_calls == 2, (
+        "a genuinely new appearance of the control must still be clickable"
+    )
 
 
 def test_persistent_capture_times_out_without_any_credential_handling(monkeypatch, capsys):

@@ -125,7 +125,13 @@ def capture_access_token_persistent(
       - If APA shows the real "Continue to Member Services" transitional
         page (existing, already-confirmed UI text from the manual flow's
         own instructions), clicks it automatically -- explicitly
-        authorized, and not a credential-handling action.
+        authorized, and not a credential-handling action. This click is
+        debounced by visibility transition: it fires once when the control
+        first becomes actionable, then withholds further clicks for as
+        long as that same control remains visible, and is only willing to
+        click again if the control disappears and later genuinely
+        reappears (a new transitional page, not the same one still
+        loading).
       - Never reads, requests, fills, or even looks for a username or
         password field. If the real APA login form is what's actually
         showing (because the persistent web session itself has expired,
@@ -192,6 +198,14 @@ def capture_access_token_persistent(
             page.goto(LEAGUE_URL)
 
             deadline = time.monotonic() + timeout_s
+            # Debounced by visibility transition, not by a sleep: click once
+            # when the control first becomes actionable, then withhold
+            # further clicks for as long as that same visible control is
+            # still on screen (APA hasn't navigated away from it yet). A
+            # later click is allowed again only if the control disappears
+            # and then genuinely reappears -- a new transitional page, not
+            # the same one still loading.
+            continue_button_was_visible = False
             while time.monotonic() < deadline and not token_holder.get("token"):
                 page.wait_for_timeout(500)
                 if not token_holder.get("token"):
@@ -199,11 +213,15 @@ def capture_access_token_persistent(
                         continue_button = page.get_by_text(
                             "Continue to Member Services", exact=False
                         )
-                        if continue_button.count() and continue_button.first.is_visible():
+                        is_visible = bool(
+                            continue_button.count() and continue_button.first.is_visible()
+                        )
+                        if is_visible and not continue_button_was_visible:
                             continue_button.first.click(timeout=2000)
                             print("  clicked 'Continue to Member Services'.")
+                        continue_button_was_visible = is_visible
                     except Exception:
-                        pass  # not shown for every account/session -- not an error
+                        continue_button_was_visible = False  # not shown for every account/session -- not an error
 
             if not token_holder.get("token"):
                 print("\nMANUAL APA LOGIN REQUIRED")
