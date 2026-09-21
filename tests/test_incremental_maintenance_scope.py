@@ -56,3 +56,9 @@ def test_division_wide_scope_is_discovered_from_viewers_current_teams():
     assert "viewer_teams = fetch_dashboard_teams(config)" in text
     assert "team_rows = dashboard_teams_rows(viewer_teams)" in text
     assert 'division_ids = sorted({row["division_id"] for row in team_rows if row["division_id"]})' in text
+
+
+def test_game_night_refresh_delegates_to_live_production_builder():
+    text = (ROOT / "scripts/run_game_night.py").read_text(encoding="utf-8")
+    assert "production_builder.run_build(" in text
+    assert '"live",' in text
