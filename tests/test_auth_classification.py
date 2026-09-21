@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from auth.graphql_client import GraphQLTransportError
 from scraper import auth_classification
 from scraper.graphql_scraper import AccessTokenExpired
 
@@ -28,7 +29,7 @@ class TestViewerRevalidationTransientFailure:
             raise AccessTokenExpired("original scope failure")
 
         def flaky_revalidation(config):
-            raise ConnectionError("simulated transient network failure")
+            raise GraphQLTransportError("simulated transient network failure")
 
         monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", flaky_revalidation)
 
@@ -64,7 +65,7 @@ class TestViewerRevalidationTransientFailure:
             revalidation_calls["count"] += 1
             if revalidation_calls["count"] == 1:
                 return {"id": 999}
-            raise TimeoutError("simulated transient failure on the second check")
+            raise GraphQLTransportError("simulated transient failure on the second check")
 
         def scope_call():
             raise AccessTokenExpired("scope denied again")
@@ -90,4 +91,24 @@ class TestViewerRevalidationTransientFailure:
         monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", dead_viewer)
 
         with pytest.raises(AccessTokenExpired, match="scope failure while token is dead"):
+            auth_classification.call_with_confirmed_denial_retry({}, scope_call)
+
+    def test_unexpected_programming_defect_is_not_swallowed(self, monkeypatch):
+        """A TypeError/AttributeError-shaped bug during revalidation is a
+        real programming defect, not a transient auth/network condition --
+        it must propagate out of viewer_session_still_valid and out of
+        call_with_confirmed_denial_retry, never be silently converted into
+        'cannot confirm the viewer' (False) the way a genuine transient
+        failure is. Swallowing it would hide the bug behind the exact same
+        safe-looking behavior as a legitimate transient failure."""
+
+        def scope_call():
+            raise AccessTokenExpired("original scope failure")
+
+        def buggy_revalidation(config):
+            raise TypeError("simulated real programming defect, not an auth/network failure")
+
+        monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", buggy_revalidation)
+
+        with pytest.raises(TypeError, match="simulated real programming defect"):
             auth_classification.call_with_confirmed_denial_retry({}, scope_call)

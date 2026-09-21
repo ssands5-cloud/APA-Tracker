@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from auth.graphql_client import GraphQLTransportError
 from scraper import historical_graph as graph
 
 
@@ -814,7 +815,7 @@ class TestViewerRevalidationTransientFailure:
             raise graph.AccessTokenExpired("original scope failure")
 
         def flaky_revalidation(config):
-            raise ConnectionError("simulated transient network failure")
+            raise GraphQLTransportError("simulated transient network failure")
 
         monkeypatch.setattr(graph, "fetch_dashboard_teams", flaky_revalidation)
 
@@ -850,7 +851,7 @@ class TestViewerRevalidationTransientFailure:
             revalidation_calls["count"] += 1
             if revalidation_calls["count"] == 1:
                 return {"id": 999}
-            raise TimeoutError("simulated transient failure on the second check")
+            raise GraphQLTransportError("simulated transient failure on the second check")
 
         def scope_call():
             raise graph.AccessTokenExpired("scope denied again")
@@ -860,3 +861,23 @@ class TestViewerRevalidationTransientFailure:
         with pytest.raises(graph.AccessTokenExpired, match="scope denied again"):
             graph._call_with_confirmed_denial_retry({}, scope_call)
         assert revalidation_calls["count"] == 2
+
+    def test_unexpected_programming_defect_is_not_swallowed(self, monkeypatch):
+        """A TypeError/AttributeError-shaped bug during revalidation is a
+        real programming defect, not a transient auth/network condition --
+        it must propagate out of _viewer_session_still_valid and out of
+        _call_with_confirmed_denial_retry, never be silently converted into
+        'cannot confirm the viewer' (False) the way a genuine transient
+        failure is. Swallowing it would hide the bug behind the exact same
+        safe-looking behavior as a legitimate transient failure."""
+
+        def scope_call():
+            raise graph.AccessTokenExpired("original scope failure")
+
+        def buggy_revalidation(config):
+            raise TypeError("simulated real programming defect, not an auth/network failure")
+
+        monkeypatch.setattr(graph, "fetch_dashboard_teams", buggy_revalidation)
+
+        with pytest.raises(TypeError, match="simulated real programming defect"):
+            graph._call_with_confirmed_denial_retry({}, scope_call)
