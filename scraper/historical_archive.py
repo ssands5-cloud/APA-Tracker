@@ -22,6 +22,7 @@ from database.engine import create_db_engine
 from scheduler.graphql_sync import reconcile_division_wide_coverage, sync_division_wide
 
 CATALOG_SCHEMA = "ultimate-coach-historical-catalog-v1"
+CATALOG_SCHEMAS = {CATALOG_SCHEMA, "ultimate-coach-historical-catalog-v2"}
 REPORT_SCHEMA = "ultimate-coach-archive-v1"
 
 
@@ -39,9 +40,10 @@ def sha256_file(path: Path) -> str:
 
 def load_catalog(path: Path) -> dict[str, Any]:
     catalog = json.loads(path.read_text(encoding="utf-8"))
-    if catalog.get("schema") != CATALOG_SCHEMA:
+    if catalog.get("schema") not in CATALOG_SCHEMAS:
         raise ArchiveError(
-            f"unsupported catalog schema {catalog.get('schema')!r}; expected {CATALOG_SCHEMA!r}"
+            f"unsupported catalog schema {catalog.get('schema')!r}; "
+            f"expected one of {sorted(CATALOG_SCHEMAS)!r}"
         )
     if not isinstance(catalog.get("divisions"), list):
         raise ArchiveError("catalog divisions must be a list")
@@ -67,7 +69,16 @@ def prepare_staging(staging_db: Path, *, resume: bool, seed_db: Path | None) -> 
 
 
 def _division_key(row: dict[str, Any]) -> str:
-    return f"{row.get('catalog_session_id') or row.get('session_id') or ''}:{row.get('division_id') or ''}"
+    """League-aware checkpoint key.
+
+    APA ids are treated as source identifiers, not assumed globally unique
+    across leagues. Including league context prevents an unrelated league from
+    being skipped on resume if it happens to reuse a session/division number.
+    """
+    league = row.get("league_slug") or row.get("league_id") or ""
+    session = row.get("catalog_session_id") or row.get("session_id") or ""
+    division = row.get("division_id") or ""
+    return f"{league}:{session}:{division}"
 
 
 def division_plan(catalog: dict[str, Any]) -> list[dict[str, Any]]:
