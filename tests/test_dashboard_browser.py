@@ -55,94 +55,97 @@ SECOND_SCOPE_MATCH_ID = "90501"
 def _add_second_opposing_team_scope(db_path: str) -> None:
     """Add one finalized scored match against a second real test-team scope."""
     engine = create_db_engine({"database": {"path": db_path}})
-    with Session(engine) as db:
-        our_ext, our_name, our_skill = build_coherent_demo.OUR_ROSTER[0]
-        opp_ext, opp_name, opp_skill = SECOND_OPP_PLAYER
+    try:
+        with Session(engine) as db:
+            our_ext, our_name, our_skill = build_coherent_demo.OUR_ROSTER[0]
+            opp_ext, opp_name, opp_skill = SECOND_OPP_PLAYER
 
-        ingest_match(
-            db,
-            match_id=SECOND_SCOPE_MATCH_ID,
-            home_team_id=build_coherent_demo.OUR_TEAM_ID,
-            away_team_id=SECOND_OPP_TEAM_ID,
-            home_team_name=build_coherent_demo.OUR_TEAM_NAME,
-            away_team_name=SECOND_OPP_TEAM_NAME,
-            match_date="2026-08-15",
-            status="COMPLETED",
-            home_score=3,
-            away_score=1,
-            week=8,
-            is_bye=False,
-            is_scored=True,
-            is_finalized=True,
-            format=build_coherent_demo.FORMAT_NAME,
-            session_name=build_coherent_demo.SESSION_NAME,
-        )
-        ingest_match_scores(
-            db,
-            SECOND_SCOPE_MATCH_ID,
-            [
-                {
-                    "player_id": our_ext,
-                    "player_name": our_name,
-                    "team_id": build_coherent_demo.OUR_TEAM_ID,
-                    "team_name": build_coherent_demo.OUR_TEAM_NAME,
-                    "skill_level": our_skill,
-                    "result": "W",
-                    "points_earned": 3,
-                },
-                {
-                    "player_id": opp_ext,
-                    "player_name": opp_name,
+            ingest_match(
+                db,
+                match_id=SECOND_SCOPE_MATCH_ID,
+                home_team_id=build_coherent_demo.OUR_TEAM_ID,
+                away_team_id=SECOND_OPP_TEAM_ID,
+                home_team_name=build_coherent_demo.OUR_TEAM_NAME,
+                away_team_name=SECOND_OPP_TEAM_NAME,
+                match_date="2026-08-15",
+                status="COMPLETED",
+                home_score=3,
+                away_score=1,
+                week=8,
+                is_bye=False,
+                is_scored=True,
+                is_finalized=True,
+                format=build_coherent_demo.FORMAT_NAME,
+                session_name=build_coherent_demo.SESSION_NAME,
+            )
+            ingest_match_scores(
+                db,
+                SECOND_SCOPE_MATCH_ID,
+                [
+                    {
+                        "player_id": our_ext,
+                        "player_name": our_name,
+                        "team_id": build_coherent_demo.OUR_TEAM_ID,
+                        "team_name": build_coherent_demo.OUR_TEAM_NAME,
+                        "skill_level": our_skill,
+                        "result": "W",
+                        "points_earned": 3,
+                    },
+                    {
+                        "player_id": opp_ext,
+                        "player_name": opp_name,
+                        "team_id": SECOND_OPP_TEAM_ID,
+                        "team_name": SECOND_OPP_TEAM_NAME,
+                        "skill_level": opp_skill,
+                        "result": "L",
+                        "points_earned": 1,
+                    },
+                ],
+            )
+            ingest_head_to_head(
+                db,
+                SECOND_SCOPE_MATCH_ID,
+                [
+                    {
+                        "player_id": our_ext,
+                        "player_name": our_name,
+                        "opponent_id": opp_ext,
+                        "opponent_name": opp_name,
+                        "own_skill_level": our_skill,
+                        "opponent_skill_level": opp_skill,
+                        "result": "W",
+                        "points_earned": 3,
+                    },
+                    {
+                        "player_id": opp_ext,
+                        "player_name": opp_name,
+                        "opponent_id": our_ext,
+                        "opponent_name": our_name,
+                        "own_skill_level": opp_skill,
+                        "opponent_skill_level": our_skill,
+                        "result": "L",
+                        "points_earned": 1,
+                    },
+                ],
+            )
+            player = upsert_player(db, opp_ext, opp_name)
+            ingest_player_team_history(
+                db,
+                player,
+                [{
                     "team_id": SECOND_OPP_TEAM_ID,
                     "team_name": SECOND_OPP_TEAM_NAME,
+                    "division_id": build_coherent_demo.DIVISION_ID,
+                    "session_name": build_coherent_demo.SESSION_NAME,
+                    "is_current": True,
                     "skill_level": opp_skill,
-                    "result": "L",
-                    "points_earned": 1,
-                },
-            ],
-        )
-        ingest_head_to_head(
-            db,
-            SECOND_SCOPE_MATCH_ID,
-            [
-                {
-                    "player_id": our_ext,
-                    "player_name": our_name,
-                    "opponent_id": opp_ext,
-                    "opponent_name": opp_name,
-                    "own_skill_level": our_skill,
-                    "opponent_skill_level": opp_skill,
-                    "result": "W",
-                    "points_earned": 3,
-                },
-                {
-                    "player_id": opp_ext,
-                    "player_name": opp_name,
-                    "opponent_id": our_ext,
-                    "opponent_name": our_name,
-                    "own_skill_level": opp_skill,
-                    "opponent_skill_level": our_skill,
-                    "result": "L",
-                    "points_earned": 1,
-                },
-            ],
-        )
-        player = upsert_player(db, opp_ext, opp_name)
-        ingest_player_team_history(
-            db,
-            player,
-            [{
-                "team_id": SECOND_OPP_TEAM_ID,
-                "team_name": SECOND_OPP_TEAM_NAME,
-                "division_id": build_coherent_demo.DIVISION_ID,
-                "session_name": build_coherent_demo.SESSION_NAME,
-                "is_current": True,
-                "skill_level": opp_skill,
-                "matches_won": 0,
-                "matches_played": 1,
-            }],
-        )
-        build_matchups(db)
+                    "matches_won": 0,
+                    "matches_played": 1,
+                }],
+            )
+            build_matchups(db)
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="module")
