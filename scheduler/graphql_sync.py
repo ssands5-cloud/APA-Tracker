@@ -692,8 +692,18 @@ def sync_division_wide(
         counts["identity_unresolved"] += unresolved_n
         scores = apply_identity_mapping(scores, identity_map, ("player_id",))
         if scores:
-            ingest_match_scores(db, match["match_id"], scores)
-            counts["scored_matches_with_scoresheet"] += 1
+            created, updated = ingest_match_scores(db, match["match_id"], scores)
+            # A non-empty `scores` list only proves APA returned scoresheet
+            # rows to fetch -- it does not prove any were persisted.
+            # ingest_match_scores() silently skips every entry with a blank
+            # player_id (vacant/forfeited/malformed rows), and can legally
+            # return (0, 0) even though `scores` itself was truthy. Counting
+            # coverage on `scores` alone let reconcile_division_wide_coverage()
+            # -- the actual promotion gate -- report a division complete while
+            # some of its matches had zero real PlayerMatch rows. Count only
+            # matches that actually got at least one persisted row.
+            if created or updated:
+                counts["scored_matches_with_scoresheet"] += 1
         h2h_rows = apply_identity_mapping(
             head_to_head_rows(detail), identity_map, ("player_id", "opponent_id")
         )
