@@ -77,6 +77,49 @@ MATCH_DETAIL_PAYLOAD = {
 }
 
 
+MATCH_DETAIL_NO_USABLE_PLAYER_ID_PAYLOAD = {
+    # Every position vacated/forfeited: APA still returns non-empty score
+    # rows for a scored match, but neither carries a "player" id at all --
+    # the exact shape match_player_scores() turns into player_id == "".
+    "id": 90401,
+    "home": {"id": 301, "name": "Fixture Sharks"},
+    "away": {"id": 302, "name": "Fixture Renegades"},
+    "results": [
+        {"homeAway": "HOME", "scores": [
+            {"player": {}, "matchPositionNumber": 1, "skillLevel": 6,
+             "winLoss": "W", "points": {"total": 3}, "matchForfeited": True},
+        ]},
+        {"homeAway": "AWAY", "scores": [
+            {"player": {}, "matchPositionNumber": 1, "skillLevel": 5,
+             "winLoss": "L", "points": {"total": 0}, "matchForfeited": True},
+        ]},
+    ],
+}
+
+MATCH_DETAIL_UNRESOLVED_ALIAS_PAYLOAD = {
+    # A real scoresheet id that does not match anyone on this session's
+    # canonical roster -- resolve_scoresheet_identities leaves it exactly
+    # as reported (never guessed), but it is still a real, non-blank alias
+    # id, so ingest_match_scores() must still persist it as honest,
+    # unresolved evidence.
+    "id": 90401,
+    "home": {"id": 301, "name": "Fixture Sharks"},
+    "away": {"id": 302, "name": "Fixture Renegades"},
+    "results": [
+        {"homeAway": "HOME", "scores": [
+            {"player": {"id": 9999, "displayName": "Zed Stranger"},
+             "matchPositionNumber": 1, "skillLevel": 6, "winLoss": "W",
+             "points": {"total": 3}},
+        ]},
+        {"homeAway": "AWAY", "scores": [
+            {"player": {"id": 9002, "displayName": "Uma Sample"},
+             "matchPositionNumber": 1, "skillLevel": 5, "winLoss": "L",
+             "points": {"total": 1}},
+        ]},
+    ],
+}
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")
@@ -282,6 +325,60 @@ class TestSyncDivisionWide:
 
         assert counts["scored_matches_discovered"] == 1
         assert counts["scored_matches_with_scoresheet"] == 0
+
+    def test_nonempty_scores_with_no_usable_player_id_is_not_counted_as_covered(
+        self, db, monkeypatch
+    ):
+        """The exact false-positive this PR fixes: match_player_scores()
+        returns non-empty rows (APA had something to say about this match),
+        but every row lacks a real player id, so ingest_match_scores() skips
+        all of them and persists zero PlayerMatch rows. Coverage must not be
+        reported complete for a match with zero real evidence."""
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(
+            sync, "fetch_match_detail",
+            lambda config, match_id: MATCH_DETAIL_NO_USABLE_PLAYER_ID_PAYLOAD,
+        )
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["scored_matches_discovered"] == 1
+        assert counts["scored_matches_with_scoresheet"] == 0
+
+        from database.models import PlayerMatch
+        assert db.query(PlayerMatch).count() == 0
+
+        gaps = sync.reconcile_division_wide_coverage(counts)
+        assert any("scoresheet" in g for g in gaps)
+
+    def test_a_valid_unresolved_alias_still_counts_as_real_coverage(self, db, monkeypatch):
+        """The repair must not overcorrect: a scoresheet alias id that is
+        real (non-blank) but fails to resolve to the canonical roster is
+        still honest, persisted evidence -- resolve_scoresheet_identities
+        deliberately leaves it exactly as reported rather than guessing,
+        and this alone must not turn a real match into a coverage gap."""
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: ROSTERS_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(
+            sync, "fetch_match_detail",
+            lambda config, match_id: MATCH_DETAIL_UNRESOLVED_ALIAS_PAYLOAD,
+        )
+
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["identity_unresolved"] >= 1
+        assert counts["scored_matches_with_scoresheet"] == 1
+
+        from database.models import Player, PlayerMatch
+        stranger = db.query(Player).filter_by(external_id="9999").one_or_none()
+        assert stranger is not None, "the real, unresolved alias id must still be persisted honestly"
+        assert db.query(PlayerMatch).filter_by(player_id=stranger.id).count() == 1
+
+        gaps = sync.reconcile_division_wide_coverage(counts)
+        assert not any("scoresheet" in g for g in gaps)
 
 
 class TestMatchAlreadyHasScoresheet:

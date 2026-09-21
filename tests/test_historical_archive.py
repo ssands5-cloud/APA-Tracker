@@ -172,3 +172,267 @@ def test_runner_marks_current_session_current(monkeypatch, tmp_path):
 
     assert seen["roster_is_current"] is True
     assert seen["identity_current_only"] is True
+
+
+def test_load_catalog_accepts_recursive_v2_schema(tmp_path):
+    path = tmp_path / "catalog.json"
+    payload = _catalog([_division()])
+    payload["schema"] = "ultimate-coach-historical-catalog-v2"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = archive.load_catalog(path)
+
+    assert loaded["schema"] == "ultimate-coach-historical-catalog-v2"
+
+
+def test_division_plan_keeps_same_numeric_ids_from_different_leagues():
+    left = _division()
+    left["league_id"] = "12"
+    left["league_slug"] = "league-a"
+    right = dict(left)
+    right["league_id"] = "99"
+    right["league_slug"] = "league-b"
+
+    plan = archive.division_plan(_catalog([left, right]))
+
+    assert len(plan) == 2
+    assert {row["league_slug"] for row in plan} == {"league-a", "league-b"}
+
+
+def test_confirmed_division_denial_is_checkpointed_and_crawl_continues(monkeypatch, tmp_path):
+    """Stage 3's own auth-classification gap: a division discovered through
+    another roster member's cross-league history can be genuinely,
+    permanently inaccessible to THIS viewer even though the viewer's own
+    token is otherwise valid. Without this fix, sync_division_wide's own
+    bare AccessTokenExpired re-raise (shared, unmodified code) would make
+    the whole runner treat this as a full auth expiry forever. This test
+    proves: (1) the call is retried once after confirming the SAME token
+    is still viewer-valid, (2) after BOTH attempts fail with a confirmed-
+    valid viewer, the division is tracked as PERMANENTLY DENIED -- never
+    as completed -- and (3) the crawl continues to the NEXT division
+    instead of stopping."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    denied = _division(division_id="501", session_id="134")
+    healthy = _division(division_id="502", session_id="134")
+    catalog_path.write_text(json.dumps(_catalog([denied, healthy])), encoding="utf-8")
+
+    sync_calls = []
+
+    def fake_sync(config, db, division_id, format_name, session_name, resume, **kwargs):
+        sync_calls.append(division_id)
+        if division_id == "501":
+            raise AccessTokenExpired("division forbidden")
+        return {
+            "teams_discovered": 1, "teams_ingested": 1,
+            "roster_players_discovered": 1, "roster_players_ingested": 1,
+            "matches_discovered": 0, "matches_ingested": 0,
+            "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
+            "head_to_head_rows": 0, "identity_resolved": 0, "identity_unresolved": 0,
+        }
+
+    viewer_calls = {"count": 0}
+
+    def always_valid_viewer(config):
+        viewer_calls["count"] += 1
+        return {"id": 999}
+
+    monkeypatch.setattr(archive, "sync_division_wide", fake_sync)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", always_valid_viewer)
+
+    result = archive.run_archive(
+        {},
+        catalog_path=catalog_path,
+        staging_db=staging,
+        report_path=report,
+        seed_db=None,
+        resume=False,
+    )
+
+    assert sync_calls.count("501") == 2, "must retry the denied division exactly once"
+    assert sync_calls.count("502") == 1, "the crawl must continue to the next division"
+    assert viewer_calls["count"] == 2, "viewer validity must be checked before AND after the retry"
+    assert result["status"] == "crawl_complete"
+
+    denied_key = ":134:501"
+    assert denied_key in result["permanently_denied_division_keys"]
+    assert denied_key not in result["completed_division_keys"], (
+        "a confirmed denial must NEVER be counted as completed -- "
+        "sync_division_wide's own ingest helpers commit internally, so "
+        "partial rows may already be durable even though the division "
+        "itself never finished"
+    )
+    assert result["divisions_crawled"] == 1
+    assert result["divisions_permanently_denied"] == 1
+
+    denied_result = next(r for r in result["division_results"] if r["division_id"] == "501")
+    assert denied_result["confirmed_denial"] is True
+    assert denied_result["data_completeness"] == "partial_or_none_unreliable"
+    assert any(
+        "confirmed-valid viewer token" in obs
+        for obs in denied_result["coverage_observations"]
+    )
+    healthy_result = next(r for r in result["division_results"] if r["division_id"] == "502")
+    assert healthy_result.get("teams_ingested") == 1
+
+
+def test_genuine_expiry_during_stage3_retry_still_raises_for_reauth(monkeypatch, tmp_path):
+    """The narrower race form: the token can genuinely, globally expire in
+    the window between the first viewer revalidation and the retry call
+    itself. That must still raise for normal reauth/resume, never be
+    converted into a permanent per-division limitation."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    catalog_path.write_text(json.dumps(_catalog([_division()])), encoding="utf-8")
+
+    def fails_twice(config, db, division_id, format_name, session_name, resume, **kwargs):
+        raise AccessTokenExpired("expired")
+
+    viewer_calls = {"count": 0}
+
+    def viewer_valid_once_then_dead(config):
+        viewer_calls["count"] += 1
+        if viewer_calls["count"] == 1:
+            return {"id": 999}
+        raise AccessTokenExpired("viewer session is dead now")
+
+    monkeypatch.setattr(archive, "sync_division_wide", fails_twice)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", viewer_valid_once_then_dead)
+
+    with pytest.raises(AccessTokenExpired, match="expired"):
+        archive.run_archive(
+            {},
+            catalog_path=catalog_path,
+            staging_db=staging,
+            report_path=report,
+            seed_db=None,
+            resume=False,
+        )
+
+    assert viewer_calls["count"] == 2
+    if report.is_file():
+        saved = json.loads(report.read_text())
+        assert not saved.get("completed_division_keys")
+        assert not saved.get("permanently_denied_division_keys"), (
+            "a genuine expiry must never be recorded as a confirmed denial"
+        )
+
+
+def test_confirmed_denial_partway_through_real_ingestion_leaves_only_partial_durable_rows(
+    monkeypatch, tmp_path
+):
+    """GPT independent-review finding on the first version of this fix:
+    sync_division_wide's own ingest helpers (upsert_team, upsert_player,
+    ingest_match, ...) COMMIT INTERNALLY as they run -- a db.rollback()
+    after the fact cannot undo them. This test exercises the REAL
+    sync_division_wide function (only the fetch_*() GraphQL calls are
+    mocked, exactly like tests/test_division_wide_sync.py's own pattern)
+    so a roster and a scored match's schedule row are genuinely committed
+    to the real staging database before fetch_match_detail (the scoresheet
+    call) is denied twice. Proves: (1) the team/player/match rows really
+    are present and durable afterward -- the partial-commit claim is real,
+    not hypothetical -- and (2) the division is correctly tracked as
+    permanently denied, never as completed, so that real partial data is
+    never mistaken for complete coverage."""
+    from scraper import auth_classification
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    division = _division(division_id="501", session_id="134")
+    catalog_path.write_text(json.dumps(_catalog([division])), encoding="utf-8")
+
+    rosters_payload = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+                {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+                 "skillLevel": 6, "member": {"id": 9001}},
+            ]},
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+    schedule_payload = {
+        "schedule": [
+            {"weekOfPlay": 1, "matches": [
+                {
+                    "id": 90401, "isBye": False, "status": "COMPLETED", "startTime": "2026-01-15",
+                    "isScored": True, "isFinalized": True,
+                    "results": [{"homeAway": "HOME", "points": {"total": 18}},
+                                {"homeAway": "AWAY", "points": {"total": 12}}],
+                    "home": {"id": 301, "name": "Fixture Sharks"},
+                    "away": {"id": 302, "name": "Fixture Renegades"},
+                },
+            ]},
+        ],
+    }
+
+    import scheduler.graphql_sync as sync_module
+
+    def denied_match_detail(config, match_id):
+        raise AccessTokenExpired("scoresheet forbidden")
+
+    viewer_calls = {"count": 0}
+
+    def always_valid_viewer(config):
+        viewer_calls["count"] += 1
+        return {"id": 999}
+
+    monkeypatch.setattr(sync_module, "fetch_division_rosters", lambda config, division_id: rosters_payload)
+    monkeypatch.setattr(sync_module, "fetch_division_schedule", lambda config, division_id: schedule_payload)
+    monkeypatch.setattr(sync_module, "fetch_match_detail", denied_match_detail)
+    monkeypatch.setattr(archive, "build_matchups", lambda db: [])
+    monkeypatch.setattr(auth_classification, "fetch_dashboard_teams", always_valid_viewer)
+
+    result = archive.run_archive(
+        {},
+        catalog_path=catalog_path,
+        staging_db=staging,
+        report_path=report,
+        seed_db=None,
+        resume=False,
+    )
+
+    denied_key = ":134:501"
+    assert denied_key in result["permanently_denied_division_keys"]
+    assert denied_key not in result["completed_division_keys"]
+
+    from database.engine import create_db_engine
+    from database.models import Match, Player, Team
+    from sqlalchemy.orm import Session as ORMSession
+
+    engine = create_db_engine({"database": {"path": str(staging)}})
+    try:
+        with ORMSession(engine) as db:
+            teams = db.query(Team).all()
+            players = db.query(Player).all()
+            matches = db.query(Match).all()
+
+            # The real, exact partial-commit scenario GPT identified: roster
+            # and schedule ingestion (upsert_team/upsert_player/ingest_match)
+            # DID commit before the scoresheet fetch was denied.
+            assert len(teams) == 2, "roster ingestion's team commits are real and durable"
+            assert len(players) == 2, "roster ingestion's player commits are real and durable"
+            assert len(matches) == 1, "schedule ingestion's match commit is real and durable"
+
+            # But the scoresheet-level detail (the thing that was actually
+            # denied) never arrived -- no PlayerMatch/head-to-head rows.
+            from database.models import PlayerHeadToHead, PlayerMatch
+
+            assert db.query(PlayerMatch).count() == 0
+            assert db.query(PlayerHeadToHead).count() == 0
+    finally:
+        engine.dispose()

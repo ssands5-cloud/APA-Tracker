@@ -19,7 +19,7 @@ DEFAULT_SEED = PROJECT_ROOT / "data" / "apa_tracker_career_staging.db"
 logger = logging.getLogger("build_ultimate_coach_archive")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, raise_auth: bool = False) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "apa_config.yaml"))
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
@@ -41,7 +41,12 @@ def main(argv: list[str] | None = None) -> int:
             seed_db=args.seed_db,
             resume=args.resume,
         )
-    except (ArchiveError, AccessTokenMissing, AccessTokenExpired) as exc:
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        if raise_auth:
+            raise
+        logger.error("%s", exc)
+        return 1
+    except ArchiveError as exc:
         logger.error("%s", exc)
         return 1
 
