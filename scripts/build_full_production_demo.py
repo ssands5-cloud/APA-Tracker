@@ -248,17 +248,19 @@ def acquire_live(resume: bool = False) -> tuple[Path, PhaseResult]:
     coverage_gaps result is a hard refusal: this staging database is never
     handed to the rest of the build, let alone promoted.
 
-    ``resume=True`` preserves an existing staging database instead of
-    deleting it first, and threads through to run_division_wide() so
-    already-fetched scoresheets are skipped: a real APA access token is
-    short-lived and a full division-wide sync (one call per team roster,
-    one per division schedule, and one per scored match -- over a hundred
-    of those alone on a real account) can outlast it. Every ingest call
-    this project makes commits immediately, so a database interrupted
-    mid-run genuinely has everything committed up to that point; resuming
-    is safe to retry as many times as a fresh token requires. Without
-    ``resume``, an existing staging file is still deleted first, exactly as
-    before -- a fresh scrape by default, resumed only on request.
+    ``resume=True`` preserves an existing staging database and continues an
+    interrupted acquisition. A normal non-resume game-night refresh now
+    starts by copying the verified production database into staging when
+    production exists. That production DB is the permanent career archive:
+    current GraphQL data is applied on top and run_division_wide receives
+    resume=True so already-captured scoresheets are skipped. This keeps
+    future refreshes short and prevents a current-season-only rebuild from
+    erasing historical career rows.
+
+    If no production database exists yet, non-resume mode still starts from
+    an empty staging database and performs the original full current sync.
+    A real APA access token is short-lived, so explicit --resume remains
+    available for interrupted first-time acquisitions.
     """
     if not os.environ.get(TOKEN_ENV):
         raise BuildError(
@@ -270,13 +272,21 @@ def acquire_live(resume: bool = False) -> tuple[Path, PhaseResult]:
 
     from scheduler.graphql_sync import run_division_wide
 
-    if LIVE_STAGING_DB.exists() and not resume:
-        LIVE_STAGING_DB.unlink()  # a fresh scrape, never appended to stale state
+    sync_resume = resume
+    seeded_from_production = False
+    if not resume:
+        if LIVE_STAGING_DB.exists():
+            LIVE_STAGING_DB.unlink()
+        if LIVE_PRODUCTION_DB.is_file() and LIVE_PRODUCTION_DB.stat().st_size:
+            LIVE_STAGING_DB.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(LIVE_PRODUCTION_DB, LIVE_STAGING_DB)
+            seeded_from_production = True
+            sync_resume = True
 
     try:
         result = run_division_wide(
             str(PROJECT_ROOT / "apa_config.yaml"), export=False,
-            db_path=str(LIVE_STAGING_DB), resume=resume,
+            db_path=str(LIVE_STAGING_DB), resume=sync_resume,
         )
     except Exception as exc:  # noqa: BLE001 - category, never the payload
         raise BuildError(f"live acquisition failed: {type(exc).__name__}", EXIT_ACQUIRE) from None
@@ -318,7 +328,8 @@ def acquire_live(resume: bool = False) -> tuple[Path, PhaseResult]:
     totals = result["division_wide"]
     return LIVE_STAGING_DB, PhaseResult(
         "acquire", "ok",
-        f"{totals['teams_ingested']} team(s), {totals['matches_ingested']} match(es), "
+        ("incremental seed from career-complete production; " if seeded_from_production else "")
+        + f"{totals['teams_ingested']} team(s), {totals['matches_ingested']} match(es), "
         f"{totals['scored_matches_with_scoresheet']} scoresheet(s); coverage complete",
     )
 

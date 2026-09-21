@@ -89,6 +89,26 @@ class TestNoGuessing:
         db.commit()
 
         assert resolve_roster_identity(db, TEAM, SESSION, "Paul Smith") is None
+    def test_historical_mode_resolves_exact_non_current_membership(self, db):
+        expected = _roster_player(db, "1", "Paul Smith", is_current=False)
+        db.commit()
+
+        resolved = resolve_roster_identity(
+            db, TEAM, SESSION, "Paul Smith", current_only=False
+        )
+
+        assert resolved is not None
+        assert resolved.id == expected.id
+
+    def test_historical_mode_still_rejects_wrong_session(self, db):
+        _roster_player(
+            db, "1", "Paul Smith", session_name="Spring 2025", is_current=False
+        )
+        db.commit()
+
+        assert resolve_roster_identity(
+            db, TEAM, SESSION, "Paul Smith", current_only=False
+        ) is None
 
     def test_a_different_sessions_roster_row_is_not_a_candidate(self, db):
         _roster_player(db, "1", "Paul Smith", session_name="Spring 2027")
