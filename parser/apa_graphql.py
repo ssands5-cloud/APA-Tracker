@@ -343,6 +343,117 @@ query FormatsByMemberId($memberId: Int!, $withMember: Boolean!, $withAlias: Bool
 }
 """
 
+# --- Historical catalog / per-session player discovery -----------------------
+#
+# All three documents below come from real authenticated captures already
+# committed under docs/graphql-captures/. They are intentionally read-only.
+# Together they bridge a per-league alias to the sessions APA exposes, expose
+# that alias's team/stat rows in one session, and enumerate every division the
+# league exposes for a known session. This is the foundation for a league-wide
+# historical archive rather than a viewer-team-only crawl.
+
+ALIAS_SESSION_STATS_DROPDOWN_QUERY = """
+query AliasSessionStatsDropdown($id: Int!, $format: FormatType) {
+  alias(id: $id) {
+    id
+    sessions(format: $format) {
+      id
+      name
+      __typename
+    }
+    __typename
+  }
+}
+"""
+
+ALIAS_SESSION_STATS_QUERY = """
+query AliasSessionStats($id: Int!, $session: Int, $format: FormatType) {
+  alias(id: $id) {
+    id
+    league {
+      id
+      currentSessionId
+      slug
+      __typename
+    }
+    players(session: $session, format: $format, current: null, active: null) {
+      id
+      team {
+        id
+        name
+        number
+        active
+        __typename
+      }
+      ... on MastersPlayer {
+        nineOnSnaps
+        eightOnBreaks
+        nineBallBreakAndRuns
+        eightBallBreakAndRuns
+        nineBallMiniSlams
+        eightBallMiniSlams
+        mastersNineBallWins
+        mastersEightBallWins
+        matchesWon
+        matchesPlayed
+        __typename
+      }
+      ... on NineBallPlayer {
+        pa
+        ppm
+        matchesWon
+        matchesPlayed
+        miniSlams
+        nineBallBreakAndRuns
+        nineBallMatchPointsEarned
+        nineOnSnaps
+        skunks
+        __typename
+      }
+      ... on EightBallPlayer {
+        pa
+        ppm
+        eightBallMatchPointsEarned
+        matchesWon
+        matchesPlayed
+        eightBallBreakAndRuns
+        eightOnBreaks
+        miniSlams
+        rackless
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+"""
+
+LEAGUE_DIVISIONS_QUERY = """
+query leagueDivisions($slug: String!, $session: Int) {
+  league(slug: $slug) {
+    id
+    currentSessionId
+    divisions(session: $session) {
+      id
+      name
+      number
+      format
+      type
+      nightOfPlay
+      isMine
+      session {
+        id
+        name
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+"""
+
 GET_EIGHT_BALL_STATS_QUERY = """
 query getEightBallStats($id: Int!) {
   alias(id: $id) {
