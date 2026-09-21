@@ -34,16 +34,21 @@ script with its own checkpoint file, chained together by
 
 | Stage | Script | Purpose |
 |---|---|---|
-| 1/4 | `scripts/build_historical_catalog.py` | Seed catalog: uses the authenticated viewer's own APA member id to enumerate every division/session the logged-in account's roster has real, authenticated visibility into. |
+| 1/4 | `scripts/build_historical_catalog.py` | Seed catalog: starting from the authenticated viewer's own APA member id, walks that member's real league aliases, each alias's historical sessions, and each session's league divisions to build the seed of divisions/sessions the crawl expands from. |
 | 2/4 | `scripts/expand_ultimate_coach_history.py` | History graph: recursively expands outward from that seed through every real roster member's own team history, discovering opponent teams/divisions not directly visible to the logged-in account. |
 | 3/4 | `scripts/build_ultimate_coach_archive.py` | League-wide archive: crawls every division discovered by Stage 2 into a local staging database of real matches/scoresheets. |
-| 4/4 | `scripts/enrich_ultimate_coach_players.py` | Player enrichment: builds per-player, per-format (8-Ball/9-Ball kept strictly separate) career-stat profiles from the archived evidence, leakage-safe with respect to any requested `as_of` instant. |
+| 4/4 | `scripts/enrich_ultimate_coach_players.py` | Player enrichment: fetches league-scoped real APA career stats for every safely resolvable canonical player discovered by Stage 3 and writes them into the staging database, per format (8-Ball/9-Ball kept strictly separate). |
 
 Each stage only ever consumes evidence the *previous* stage already
-verified; nothing here does live name-matching or guesses at identity —
-see PR #53–#56 (identity manifest and namespace-collision audit) for the
-identity-resolution safeguards this pipeline depends on, and PR #38–#48
-for the evidence-quality/leakage-safety gates Stage 4 enforces.
+verified. Identity is never guessed globally or unscoped — resolution is
+bounded to team/session/display-name evidence within a known scope, and
+an ambiguous case fails closed rather than being guessed — see PR #53–#56
+(identity manifest and namespace-collision audit) for the
+identity-resolution safeguards this pipeline depends on. The broader
+leakage-safe/`as_of`-aware evaluation and calibration work (PR #38–#48)
+is a separate, not-yet-integrated lineage layered on top of this
+data-foundation pipeline — Stage 4 as implemented here does not itself
+take or enforce an `as_of` instant.
 
 The runner chains all four stages under a single captured auth token
 (`run_pipeline(token, resume=resume)`), so one login session (manual or
@@ -105,7 +110,7 @@ whether to build from scratch or continue:
 |---|---|---|
 | 1/4 Seed catalog | `data/ultimate_coach_historical_catalog.json` | If present, reused as-is ("Reusing seed catalog for resume"); otherwise rebuilt from the authenticated viewer. |
 | 2/4 History graph | `data/ultimate_coach_historical_catalog_expanded.json` + `data/ultimate_coach_history_graph_report.json` | Only resumes if *both* files exist; otherwise expansion restarts from the seed catalog. |
-| 3/4 Archive | `data/ultimate_coach_staging.db` (+ `data/ultimate_coach_archive_report.json`) | Resumes crawling remaining divisions into the existing staging database rather than rebuilding it. |
+| 3/4 Archive | `data/ultimate_coach_staging.db` (+ `data/ultimate_coach_archive_report.json`) | Resumes into the existing staging database rather than rebuilding it. If the archive report's `completed_division_keys` is also present, resume uses it as a shortcut to skip already-completed divisions; if the staging DB exists but the report doesn't, the DB is still preserved and per-match resume/idempotency still protects already-ingested work, but that division-level shortcut isn't available. |
 | 4/4 Enrichment | `data/ultimate_coach_player_enrichment_report.json` | Resumes remaining player enrichment against the existing report. |
 
 Why interruption is recoverable: each stage script writes its own
@@ -115,9 +120,12 @@ files were left intact" message and stops (exit code 1) rather than
 corrupting partial state. An authentication interruption
 (`AccessTokenExpired`/`AccessTokenMissing`) is handled one level up, in
 the runner's own retry loop, and does not unwind or discard any stage's
-checkpoint. Only a database write caught mid-flush by an unclean kill
-(e.g. `taskkill`) is a real risk — which is exactly why the operator
-runbook below says not to force-kill during an in-flight write.
+checkpoint. Both the staging database and the JSON checkpoint/report
+files are written during a run, and any of them caught mid-write by an
+unclean kill (e.g. `taskkill`) is a real risk to that specific in-flight
+artifact — which is exactly why the operator runbook below keeps the
+guidance simple: avoid force-killing the process, and prefer one
+`Ctrl+C` at a natural boundary instead.
 
 ## 5. Verified evidence
 
@@ -279,15 +287,17 @@ Guarantees currently enforced and covered by tests:
   updating.
 - **Long crawl runtime and API dependence.** A full four-stage run
   crawls potentially thousands of real divisions (the live run currently
-  in progress has discovered 2,691 divisions to crawl — see §10) and is
+  in progress had discovered 2,691 divisions to crawl as of the snapshot
+  in §10, a number that itself grows as Stage 2 discovers more) and is
   bounded by APA's own API responsiveness, not by anything in this
   codebase.
 - **Source-coverage limitations are real and already tracked, not
   hidden.** The Stage 2/3 reports carry their own
   `source_limitations`/`coverage_observations` arrays (398 catalog-level
-  limitations and 9 coverage observations recorded as of the current
-  in-progress run) — for example, individual completed matches missing a
-  scoresheet. These are reported, not silently dropped.
+  limitations and 9 coverage observations recorded at the same snapshot
+  as §10, and still growing while the crawl runs) — for example,
+  individual completed matches missing a scoresheet. These are reported,
+  not silently dropped.
 - **The real APA login-form/"Continue to Member Services" DOM interaction
   was validated live by Paul, not fabricated** — but only across two
   cycles so far. Extended unattended reliability over many days/weeks of
@@ -309,13 +319,15 @@ As of this writing:
   detached at that same tested exact head while the crawl runs, and is
   not being modified, restarted, or otherwise interfered with while it is
   in flight.
-- **The four-stage crawl has not yet reported completion.** The most
-  recent read-only observation of the live worktree's own report files
-  shows Stage 3/4 (league-wide archive) with `status: crawl_in_progress`,
-  1,953 of 2,691 discovered divisions crawled so far, and no
-  `ultimate_coach_player_enrichment_report.json` yet present (Stage 4/4
-  has not started). This document does **not** claim the crawl is
-  complete — only actual `ULTIMATE COACH DATA FOUNDATION COMPLETE`
+- **The four-stage crawl has not yet reported completion.** As a
+  timestamped snapshot from the most recent read-only observation of the
+  live worktree's own report files (**observed 2026-09-21, ~01:20 UTC** —
+  this number is already stale by the time you read it, since the crawl
+  keeps running): Stage 3/4 (league-wide archive) showed
+  `status: crawl_in_progress`, 1,960 of 2,691 discovered divisions
+  crawled, and no `ultimate_coach_player_enrichment_report.json` yet
+  present (Stage 4/4 had not started). This document does **not** claim
+  the crawl is complete — only actual `ULTIMATE COACH DATA FOUNDATION COMPLETE`
   console/report evidence would justify that claim, and this document
   will be updated if/when that evidence appears.
 - Every other Ultimate Coach PR in the #31–#61 stack referenced in §2 is
