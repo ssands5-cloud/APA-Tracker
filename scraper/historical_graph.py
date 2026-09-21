@@ -78,6 +78,56 @@ def _viewer_session_still_valid(config: dict) -> bool:
     return bool((viewer or {}).get("id"))
 
 
+class _ConfirmedScopeDenial(RuntimeError):
+    """A scoped historical request failed twice -- once originally, once
+    retried after the SAME token was independently revalidated as still
+    viewer-valid -- and both failures were AccessTokenExpired. Only at that
+    point is this treated as a real, permanent APA denial rather than a
+    one-off rejection."""
+
+
+def _call_with_confirmed_denial_retry(config: dict, fetch_call):
+    """Call ``fetch_call()`` (a zero-arg closure), retrying once before a
+    scope denial is trusted enough to permanently checkpoint.
+
+    A bare, single AccessTokenExpired is not reliable proof that a scope is
+    genuinely unavailable: APA's own auth rejection has been observed to be
+    inconsistent right at the token-expiry boundary (see
+    auth/graphql_client.py's own notes on inconsistent rejection wording),
+    and every "source limitation" this graph records is permanent --
+    processed_divisions/processed_member_leagues/processed_session_catalogs
+    are checkpointed forever and never re-attempted, even after the crawl
+    successfully reauthenticates with a brand-new token moments later. A
+    single flaky rejection must never be allowed to permanently exclude
+    real, available history.
+
+    Raises the ORIGINAL (or retry's) AccessTokenExpired unchanged -- so
+    normal resume/reauth semantics apply -- if the SAME token cannot be
+    revalidated as still viewer-valid at EITHER failure. Viewer validity
+    is re-checked after the retry's own failure too: the token can
+    genuinely, globally expire in the window between the first
+    revalidation and the retry call, and treating that second failure as
+    a confirmed per-scope denial without re-confirming the viewer would
+    reopen the exact same permanent-mislabeling risk this function exists
+    to close, just at a narrower window.
+
+    Raises _ConfirmedScopeDenial only after the original call failed, the
+    SAME token was confirmed viewer-valid, the retry ALSO failed, and the
+    SAME token was confirmed viewer-valid AGAIN immediately afterward.
+    """
+    try:
+        return fetch_call()
+    except AccessTokenExpired as exc:
+        if not _viewer_session_still_valid(config):
+            raise
+        try:
+            return fetch_call()
+        except AccessTokenExpired as retry_exc:
+            if not _viewer_session_still_valid(config):
+                raise
+            raise _ConfirmedScopeDenial(_auth_error_detail(retry_exc)) from retry_exc
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -378,13 +428,13 @@ def expand_historical_catalog(
             continue
 
         try:
-            roster_payload = fetch_division_rosters(config, division_id)
-        except AccessTokenExpired as exc:
-            if not _viewer_session_still_valid(config):
-                raise
+            roster_payload = _call_with_confirmed_denial_retry(
+                config, lambda: fetch_division_rosters(config, division_id)
+            )
+        except _ConfirmedScopeDenial as denial:
             source_limitations.append(
                 f"division {division_id} session {session_id}: APA denied roster scope "
-                f"while viewer authentication remained valid ({_auth_error_detail(exc)})"
+                f"twice with a confirmed-valid viewer token ({denial})"
             )
             processed_divisions.add(key_text)
             _persist_state(
@@ -442,13 +492,13 @@ def expand_historical_catalog(
                 continue
 
             try:
-                member = fetch_formats_by_member_id(config, int(member_id))
-            except AccessTokenExpired as exc:
-                if not _viewer_session_still_valid(config):
-                    raise
+                member = _call_with_confirmed_denial_retry(
+                    config, lambda: fetch_formats_by_member_id(config, int(member_id))
+                )
+            except _ConfirmedScopeDenial as denial:
                 source_limitations.append(
                     f"member {member_id} league {league_id}/{league_slug}: APA denied member "
-                    f"scope while viewer authentication remained valid ({_auth_error_detail(exc)})"
+                    f"scope twice with a confirmed-valid viewer token ({denial})"
                 )
                 processed_member_leagues.add(scope_key)
                 _persist_state(
@@ -522,14 +572,14 @@ def expand_historical_catalog(
             discovered_rows: list[dict[str, Any]] = []
             for format_name in formats:
                 try:
-                    alias_sessions = fetch_alias_sessions(config, int(alias_id), format_name)
-                except AccessTokenExpired as exc:
-                    if not _viewer_session_still_valid(config):
-                        raise
+                    alias_sessions = _call_with_confirmed_denial_retry(
+                        config, lambda: fetch_alias_sessions(config, int(alias_id), format_name)
+                    )
+                except _ConfirmedScopeDenial as denial:
                     source_limitations.append(
                         f"member {member_id} alias {alias_id} format {format_name}: APA denied "
-                        f"session-history scope while viewer authentication remained valid "
-                        f"({_auth_error_detail(exc)})"
+                        f"session-history scope twice with a confirmed-valid viewer token "
+                        f"({denial})"
                     )
                     continue
                 discovered_rows.extend(alias_session_rows(alias_sessions, format_name))
@@ -590,19 +640,20 @@ def expand_historical_catalog(
                     continue
 
                 try:
-                    league = fetch_league_divisions(
+                    league = _call_with_confirmed_denial_retry(
                         config,
-                        league_slug,
-                        int(discovered_session_id),
+                        lambda: fetch_league_divisions(
+                            config,
+                            league_slug,
+                            int(discovered_session_id),
+                        ),
                     )
-                except AccessTokenExpired as exc:
-                    if not _viewer_session_still_valid(config):
-                        raise
+                except _ConfirmedScopeDenial as denial:
                     processed_session_catalogs.add(session_catalog_key)
                     source_limitations.append(
                         f"league {league_slug} session {discovered_session_id} "
-                        f"({discovered_name}): APA denied division catalog scope while viewer "
-                        f"authentication remained valid ({_auth_error_detail(exc)})"
+                        f"({discovered_name}): APA denied division catalog scope twice with a "
+                        f"confirmed-valid viewer token ({denial})"
                     )
                     continue
                 new_rows = league_division_rows(league)

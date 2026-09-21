@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from analytics.matchup_builder import build_matchups
 from database.engine import create_db_engine
 from scheduler.graphql_sync import reconcile_division_wide_coverage, sync_division_wide
+from scraper.auth_classification import ConfirmedScopeDenial, call_with_confirmed_denial_retry
 
 CATALOG_SCHEMA = "ultimate-coach-historical-catalog-v1"
 CATALOG_SCHEMAS = {CATALOG_SCHEMA, "ultimate-coach-historical-catalog-v2"}
@@ -121,6 +122,7 @@ def _checkpoint(
     catalog_sha256: str,
     preparation: str,
     completed_keys: set[str],
+    permanently_denied_keys: set[str],
     division_results: list[dict[str, Any]],
     catalog_source_limitations: list[str],
     matchups_rebuilt: int | None = None,
@@ -141,8 +143,20 @@ def _checkpoint(
         "catalog_path": str(catalog_path),
         "catalog_sha256": catalog_sha256,
         "staging_db": str(staging_db),
+        # completed_division_keys is reserved EXCLUSIVELY for divisions whose
+        # sync_division_wide() call returned successfully -- never a
+        # confirmed denial. A confirmed-valid-viewer denial is tracked
+        # SEPARATELY (permanently_denied_division_keys) and is never counted
+        # as "crawled"/"complete": sync_division_wide's own ingest helpers
+        # (upsert_team/upsert_player/ingest_match/...) commit internally as
+        # they go, so a denial reached partway through a division can leave
+        # real, durable, PARTIAL rows behind even though the division itself
+        # never finished. Conflating the two would let that partial data
+        # masquerade as complete coverage for this division.
         "completed_division_keys": sorted(completed_keys),
+        "permanently_denied_division_keys": sorted(permanently_denied_keys),
         "divisions_crawled": len(completed_keys),
+        "divisions_permanently_denied": len(permanently_denied_keys),
         "division_results": division_results,
         "catalog_source_limitations": catalog_source_limitations,
         "coverage_observations": coverage_observations,
@@ -177,6 +191,7 @@ def run_archive(
     preparation = prepare_staging(staging_db, resume=resume, seed_db=seed_db)
 
     completed_keys: set[str] = set()
+    permanently_denied_keys: set[str] = set()
     division_results: list[dict[str, Any]] = []
 
     if resume and report_path.is_file():
@@ -187,6 +202,7 @@ def run_archive(
                 "catalog changed since the prior archive run; refusing to reuse completed checkpoints"
             )
         completed_keys = set(previous.get("completed_division_keys") or [])
+        permanently_denied_keys = set(previous.get("permanently_denied_division_keys") or [])
         division_results = list(previous.get("division_results") or [])
 
     run_config = dict(config)
@@ -198,7 +214,7 @@ def run_archive(
         with Session(engine) as db:
             for division in division_plan(catalog):
                 key = _division_key(division)
-                if key in completed_keys:
+                if key in completed_keys or key in permanently_denied_keys:
                     continue
 
                 division_id = division["division_id"]
@@ -208,16 +224,76 @@ def run_archive(
                 current_session_id = str(division.get("current_session_id") or "")
                 is_current = bool(current_session_id and current_session_id == session_id)
 
-                counts = sync_division_wide(
-                    run_config,
-                    db,
-                    division_id,
-                    format_name,
-                    session_name,
-                    resume=True,
-                    roster_is_current=is_current,
-                    identity_current_only=is_current,
-                )
+                try:
+                    counts = call_with_confirmed_denial_retry(
+                        run_config,
+                        lambda: sync_division_wide(
+                            run_config,
+                            db,
+                            division_id,
+                            format_name,
+                            session_name,
+                            resume=True,
+                            roster_is_current=is_current,
+                            identity_current_only=is_current,
+                        ),
+                    )
+                except ConfirmedScopeDenial as denial:
+                    # A division discovered through another roster member's
+                    # own cross-league history can be genuinely, permanently
+                    # inaccessible to THIS viewer even though the viewer's
+                    # own token is otherwise completely valid. Without this,
+                    # sync_division_wide's own bare re-raise (shared,
+                    # already-audited code used by other, unrelated sync
+                    # paths -- intentionally not modified here) would make
+                    # the outer runner treat this as a full auth expiry
+                    # forever, forcing endless reauthentication with zero
+                    # forward progress.
+                    #
+                    # IMPORTANT: sync_division_wide's own ingest helpers
+                    # (upsert_team/upsert_player/ingest_match/...) commit
+                    # internally as they go -- db.rollback() here CANNOT
+                    # undo rows already committed by an earlier part of this
+                    # same (twice-failed) call. This division is therefore
+                    # NEVER added to completed_keys: it is tracked in the
+                    # SEPARATE permanently_denied_keys set instead, so any
+                    # real partial rows this division may have left behind
+                    # are never mistaken for complete coverage, while the
+                    # crawl still stops retrying it (no infinite reauth
+                    # loop). db.rollback() is still called to end this
+                    # attempt's transaction cleanly for the next division.
+                    db.rollback()
+                    result = {
+                        "division_id": division_id,
+                        "session_id": session_id,
+                        "session_name": session_name,
+                        "format": format_name,
+                        "is_current_session": is_current,
+                        "confirmed_denial": True,
+                        "data_completeness": "partial_or_none_unreliable",
+                        "coverage_observations": [
+                            f"APA denied this division twice with a confirmed-valid viewer "
+                            f"token ({denial}). Any rows already committed for this division "
+                            f"before the denial are real but PARTIAL -- this division's "
+                            f"coverage must never be treated as complete."
+                        ],
+                    }
+                    division_results.append(result)
+                    permanently_denied_keys.add(key)
+                    _checkpoint(
+                        report_path,
+                        status="crawl_in_progress",
+                        staging_db=staging_db,
+                        catalog_path=catalog_path,
+                        catalog_sha256=catalog_sha,
+                        preparation=preparation,
+                        completed_keys=completed_keys,
+                        permanently_denied_keys=permanently_denied_keys,
+                        division_results=division_results,
+                        catalog_source_limitations=list(catalog.get("source_limitations") or []),
+                    )
+                    continue
+
                 db.commit()
                 observations = reconcile_division_wide_coverage(counts)
                 result = {
@@ -239,6 +315,7 @@ def run_archive(
                     catalog_sha256=catalog_sha,
                     preparation=preparation,
                     completed_keys=completed_keys,
+                    permanently_denied_keys=permanently_denied_keys,
                     division_results=division_results,
                     catalog_source_limitations=list(catalog.get("source_limitations") or []),
                 )
@@ -254,6 +331,7 @@ def run_archive(
             catalog_sha256=catalog_sha,
             preparation=preparation,
             completed_keys=completed_keys,
+            permanently_denied_keys=permanently_denied_keys,
             division_results=division_results,
             catalog_source_limitations=list(catalog.get("source_limitations") or []),
             matchups_rebuilt=len(matchup_rows),
