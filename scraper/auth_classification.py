@@ -46,10 +46,21 @@ def viewer_session_still_valid(config: dict) -> bool:
     token, the token is globally valid and only the attempted scope is
     unavailable. If viewer validation also fails, the token really is dead
     and the caller must re-raise so normal resume/reauth semantics apply.
+
+    A revalidation call that raises anything else -- a transient network
+    error, AccessTokenMissing, a raw GraphQLError/GraphQLTransportError --
+    means this call could not PROVE the viewer is still valid, not that it
+    proved the viewer is invalid. "Cannot confirm, so do not confirm the
+    denial either" is the only safe reading: returning False here makes the
+    caller re-raise the ORIGINAL failure and fall back to normal
+    reauth/resume semantics, rather than this function crashing the runner
+    on an unrelated transient error or converting uncertainty into a
+    permanent denial. Only KeyboardInterrupt/SystemExit are allowed to
+    propagate, never swallowed.
     """
     try:
         viewer = fetch_dashboard_teams(config)
-    except AccessTokenExpired:
+    except Exception:
         return False
     return bool((viewer or {}).get("id"))
 

@@ -70,10 +70,25 @@ def _viewer_session_still_valid(config: dict) -> bool:
     token, the token is globally valid and only the attempted historical
     scope is unavailable. If viewer validation also fails, the token really
     is dead and the caller must re-raise so normal resume semantics apply.
+
+    A revalidation call that raises anything else -- a transient network
+    error, AccessTokenMissing, a raw GraphQLError/GraphQLTransportError --
+    means this call could not PROVE the viewer is still valid, not that it
+    proved the viewer is invalid. Treating "uncertain" the same as
+    "confirmed invalid" would misclassify a real scope failure as
+    unconfirmed and let it crash/escape instead of falling back to normal
+    reauth; treating it as "confirmed valid" would risk exactly the
+    permanent-denial mislabeling this whole mechanism exists to prevent.
+    "Cannot confirm, so do not confirm the denial either" is the only safe
+    reading, which is exactly what returning False here does -- the caller
+    re-raises the ORIGINAL failure and normal reauth/resume semantics take
+    over, rather than this function crashing the runner on an unrelated
+    transient error. Only KeyboardInterrupt/SystemExit are allowed to
+    propagate, never swallowed.
     """
     try:
         viewer = fetch_dashboard_teams(config)
-    except AccessTokenExpired:
+    except Exception:
         return False
     return bool((viewer or {}).get("id"))
 
