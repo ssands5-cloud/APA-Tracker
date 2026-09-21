@@ -262,6 +262,16 @@ def test_multi_team_hub_builds_all_owned_teams_and_defaults_nearest(tmp_path, mo
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
+
+    real_select = launcher._select_game_night_team
+    frozen_now = datetime.fromisoformat("2026-09-20T12:00:00-06:00")
+    monkeypatch.setattr(
+        launcher,
+        "_select_game_night_team",
+        lambda db_path, viewer_team_ids: real_select(
+            db_path, viewer_team_ids, now=frozen_now
+        ),
+    )
     monkeypatch.setattr(
         launcher,
         "_discover_viewer_teams",
@@ -373,6 +383,16 @@ def test_multi_team_child_failure_never_promotes_or_opens(tmp_path, monkeypatch)
     monkeypatch.setattr(launcher, "DEMO_RUN_ROOT", demo_root)
     monkeypatch.setattr(launcher, "COCKPIT_RUN_ROOT", cockpit_root)
     monkeypatch.setattr(launcher, "LIVE_STAGING_DB", staging_db)
+
+    real_select = launcher._select_game_night_team
+    frozen_now = datetime.fromisoformat("2026-09-20T12:00:00-06:00")
+    monkeypatch.setattr(
+        launcher,
+        "_select_game_night_team",
+        lambda db_path, viewer_team_ids: real_select(
+            db_path, viewer_team_ids, now=frozen_now
+        ),
+    )
     monkeypatch.setattr(
         launcher,
         "_discover_viewer_teams",

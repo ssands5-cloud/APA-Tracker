@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from auth.graphql_client import GraphQLTransportError
 from scraper import historical_graph as graph
 
 
@@ -793,3 +794,90 @@ def test_genuine_expiry_during_retry_still_raises_for_reauth(monkeypatch, tmp_pa
         "viewer validity must be re-checked after the retry's own failure, "
         "not assumed from the first check"
     )
+
+
+class TestViewerRevalidationTransientFailure:
+    """_call_with_confirmed_denial_retry's safety only holds if
+    _viewer_session_still_valid can actually distinguish "confirmed the
+    viewer is dead" from "could not confirm anything at all" -- these
+    tests exercise that function directly, not through the full
+    expand_historical_catalog pipeline."""
+
+    def test_viewer_revalidation_transient_error_falls_back_to_normal_auth_path(self, monkeypatch):
+        """A transient/non-auth exception during revalidation (a raw
+        network error, GraphQLTransportError, AccessTokenMissing, any
+        exception other than AccessTokenExpired) must not escape
+        _viewer_session_still_valid and must not be treated as proof the
+        scope denial is real. The ORIGINAL AccessTokenExpired must
+        propagate unchanged -- never _ConfirmedScopeDenial."""
+
+        def scope_call():
+            raise graph.AccessTokenExpired("original scope failure")
+
+        def flaky_revalidation(config):
+            raise GraphQLTransportError("simulated transient network failure")
+
+        monkeypatch.setattr(graph, "fetch_dashboard_teams", flaky_revalidation)
+
+        with pytest.raises(graph.AccessTokenExpired, match="original scope failure"):
+            graph._call_with_confirmed_denial_retry({}, scope_call)
+
+    def test_viewer_revalidation_success_still_allows_confirmed_denial_sequence(self, monkeypatch):
+        """Unchanged behavior: a genuinely, repeatedly confirmed-valid
+        viewer still lets two real AccessTokenExpired failures become a
+        real _ConfirmedScopeDenial."""
+        calls = {"scope": 0}
+
+        def scope_call():
+            calls["scope"] += 1
+            raise graph.AccessTokenExpired("scope denied")
+
+        monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+        with pytest.raises(graph._ConfirmedScopeDenial):
+            graph._call_with_confirmed_denial_retry({}, scope_call)
+        assert calls["scope"] == 2
+
+    def test_second_viewer_revalidation_uncertainty_after_retry_prevents_confirmed_denial(self, monkeypatch):
+        """The FIRST revalidation genuinely confirms the viewer is valid,
+        but the SECOND revalidation (after the retry's own failure) hits a
+        transient, non-auth error rather than confirming or denying
+        anything. That uncertainty must not be treated as a confirmed
+        denial -- the retry's own AccessTokenExpired must propagate
+        unchanged, never _ConfirmedScopeDenial."""
+        revalidation_calls = {"count": 0}
+
+        def flaky_second_revalidation(config):
+            revalidation_calls["count"] += 1
+            if revalidation_calls["count"] == 1:
+                return {"id": 999}
+            raise GraphQLTransportError("simulated transient failure on the second check")
+
+        def scope_call():
+            raise graph.AccessTokenExpired("scope denied again")
+
+        monkeypatch.setattr(graph, "fetch_dashboard_teams", flaky_second_revalidation)
+
+        with pytest.raises(graph.AccessTokenExpired, match="scope denied again"):
+            graph._call_with_confirmed_denial_retry({}, scope_call)
+        assert revalidation_calls["count"] == 2
+
+    def test_unexpected_programming_defect_is_not_swallowed(self, monkeypatch):
+        """A TypeError/AttributeError-shaped bug during revalidation is a
+        real programming defect, not a transient auth/network condition --
+        it must propagate out of _viewer_session_still_valid and out of
+        _call_with_confirmed_denial_retry, never be silently converted into
+        'cannot confirm the viewer' (False) the way a genuine transient
+        failure is. Swallowing it would hide the bug behind the exact same
+        safe-looking behavior as a legitimate transient failure."""
+
+        def scope_call():
+            raise graph.AccessTokenExpired("original scope failure")
+
+        def buggy_revalidation(config):
+            raise TypeError("simulated real programming defect, not an auth/network failure")
+
+        monkeypatch.setattr(graph, "fetch_dashboard_teams", buggy_revalidation)
+
+        with pytest.raises(TypeError, match="simulated real programming defect"):
+            graph._call_with_confirmed_denial_retry({}, scope_call)
