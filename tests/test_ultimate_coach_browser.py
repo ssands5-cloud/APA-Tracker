@@ -49,7 +49,11 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             assert page.locator("#player-b option").first.inner_text() == "Charlie Clark"
 
             page.select_option("#format", "NINE")
-            assert "0-0" in page.locator("#direct").inner_text()
+            # No NINE-ball meetings exist in this fixture at all -- the page
+            # must disclose that honestly rather than display a fabricated
+            # "0-0" record for a pairing with zero recorded evidence.
+            assert "No recorded evidence" in page.locator("#direct").inner_text()
+            assert "0-0" not in page.locator("#direct").inner_text()
             assert "No recorded shared opponents" in page.locator("#shared").inner_text()
         finally:
             browser.close()

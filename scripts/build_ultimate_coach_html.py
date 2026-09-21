@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from analytics.ultimate_coach_payload import build_ultimate_coach_payload
+from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
 from database.engine import create_db_engine
 from ui.ultimate_coach import render
 
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     engine = create_db_engine({"database": {"path": str(args.db)}}, create_tables=False)
     try:
         with Session(engine) as db:
-            payload = build_ultimate_coach_payload(db)
+            payload = build_verified_cockpit_payload(db)
     finally:
         engine.dispose()
 

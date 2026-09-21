@@ -8,13 +8,58 @@ from typing import Any
 
 
 def _script_json(value: Any) -> str:
-    return json.dumps(value, separators=(",", ":")).replace("</", "<\/")
+    """Serialize for embedding inside <script type="application/json">.
+
+    json.dumps(..., ensure_ascii=True) (the default) already backslash-
+    escapes every non-ASCII character -- including U+2028/U+2029 LINE/
+    PARAGRAPH SEPARATOR -- as \\uXXXX, so those never reach the page as raw
+    bytes. What it does NOT do is touch plain ASCII '<', '>', '&', which is
+    exactly what a source string containing a literal "</script>" or
+    "<script>" needs to break out of this element. JSON syntax itself never
+    uses '<', '>', or '&' outside a quoted string value, so replacing them
+    globally in the dumped text only ever rewrites string CONTENT, never
+    JSON structure -- and \\uXXXX is valid inside a JSON string, so
+    JSON.parse() on the browser side reconstructs the original character
+    exactly. This closes the '<script>'/'&entity;' cases the previous
+    "</"-only replacement did not cover, without weakening JSON.parse
+    compatibility at all.
+    """
+    text = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+    return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+
+def _trust_card(payload: dict[str, Any]) -> str:
+    """Server-rendered Data Trust/Coverage summary.
+
+    Static per payload -- no client-side JS needed for this card, and it
+    degrades gracefully (all zero counts, no crash) if rendered against an
+    older payload shape that never carried a "trust" section at all.
+    """
+    trust = payload.get("trust") or {}
+
+    def n(key: str) -> int:
+        return int(trust.get(key) or 0)
+
+    return f"""<div class="card">
+  <h2>Data Trust &amp; Coverage</h2>
+  <div class="metric-grid">
+    <div class="metric"><b>{n('verified_identity_count')}</b><span>Verified selectable identities</span></div>
+    <div class="metric"><b>{n('identity_exclusion_count')}</b><span>Identities excluded (unresolved/ambiguous)</span></div>
+    <div class="metric"><b>{n('identity_verified_game_count')}</b><span>Identity-verified games usable as evidence</span></div>
+    <div class="metric"><b>{n('quarantined_game_count')}</b><span>Games quarantined (not used as evidence)</span></div>
+    <div class="metric"><b>{n('suspect_participant_count')}</b><span>Suspect participant rows</span></div>
+    <div class="metric"><b>{n('indeterminate_participant_count')}</b><span>Indeterminate participant rows</span></div>
+    <div class="metric"><b>{n('source_coverage_issue_count')}</b><span>Source coverage issues (contract-level)</span></div>
+  </div>
+  <p class="muted">Only players with roster-backed, uniquely-verified identity provenance are selectable below. Only games that are both mirror-verified and identity-verified feed direct/shared-opponent evidence. Quarantined or unresolved evidence is counted above, never silently dropped or blended in.</p>
+</div>"""
 
 
 def render(payload: dict[str, Any], *, built_at: str = "") -> str:
     data = _script_json(payload)
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
+    trust_card = _trust_card(payload)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -48,8 +93,9 @@ h2,h3 {{ margin-top:0; }}
 </style></head>
 <body>
 <header><h1>Ultimate Coach — Scout & Compare</h1>
-<p>{player_count} captured players · {evidence_count} real head-to-head evidence rows · offline scouting cockpit</p></header>
+<p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></header>
 <main>
+{trust_card}
 <div class="card">
   <div class="controls">
     <label>Player A<input id="search-a" type="search" placeholder="Search player A"><select id="player-a"></select></label>
@@ -88,8 +134,8 @@ h2,h3 {{ margin-top:0; }}
     var teams=(p.team_history||[]).slice().reverse().slice(0,12);
     return '<h2>'+esc(p.name)+'</h2>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
-      +'<div class="metric"><b>'+totalW+'-'+Math.max(0,totalG-totalW)+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
-      +'<div class="metric"><b>'+pct(totalW,totalG)+'</b><span>Lifetime win rate</span></div></div>'
+      +'<div class="metric"><b>'+(c.length?(totalW+'-'+Math.max(0,totalG-totalW)):'No recorded evidence')+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
+      +'<div class="metric"><b>'+(c.length?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
       +'<h3>League stats</h3>'+(c.length?'<table><thead><tr><th>League</th><th>W-L</th><th>Last played</th><th>B&R</th><th>Mini slams</th></tr></thead><tbody>'
         +c.map(function(r){{var w=r.matches_won||0,g=r.matches_played||0;return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+w+'-'+Math.max(0,g-w)+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table>':'<p class="muted">No league-scoped lifetime stats captured for this format.</p>')
       +'<h3>Recent team/session history</h3>'+(teams.length?teams.map(function(t){{return '<span class="tag">'+esc(t.session_name||'Unknown session')+' · '+esc(t.team_name||'Unknown team')+(t.skill_level!==null?' · SL '+t.skill_level:'')+'</span>';}}).join(''):'<p class="muted">No team history captured.</p>');
@@ -102,7 +148,7 @@ h2,h3 {{ margin-top:0; }}
     var ar=rowsFor(pa.id,fmt), br=rowsFor(pb.id,fmt);
     var direct=ar.filter(function(r){{return String(r.opponent_id)===String(pb.id);}});
     var dr=record(direct);
-    document.getElementById("direct").innerHTML='<h2>Direct history</h2><div class="metric-grid"><div class="metric"><b>'+dr.w+'-'+dr.l+'</b><span>'+esc(pa.name)+' record vs '+esc(pb.name)+'</span></div><div class="metric"><b>'+pct(dr.w,dr.g)+'</b><span>Observed direct win rate</span></div><div class="metric"><b>'+dr.g+'</b><span>Recorded meetings</span></div></div>';
+    document.getElementById("direct").innerHTML='<h2>Direct history</h2><div class="metric-grid"><div class="metric"><b>'+(dr.g?(dr.w+'-'+dr.l):'No recorded evidence')+'</b><span>'+esc(pa.name)+' record vs '+esc(pb.name)+'</span></div><div class="metric"><b>'+(dr.g?pct(dr.w,dr.g):'—')+'</b><span>Observed direct win rate</span></div><div class="metric"><b>'+dr.g+'</b><span>Recorded meetings</span></div></div>';
     var ag={{}},bg={{}}; ar.forEach(function(r){{(ag[String(r.opponent_id)]||(ag[String(r.opponent_id)]=[])).push(r);}}); br.forEach(function(r){{(bg[String(r.opponent_id)]||(bg[String(r.opponent_id)]=[])).push(r);}});
     var ids=Object.keys(ag).filter(function(id){{return bg[id]&&id!==String(pa.id)&&id!==String(pb.id);}});
     var sharedRows=ids.map(function(id){{var p=PLAYERS[id],ra=record(ag[id]),rb=record(bg[id]);return '<tr><td>'+esc(p?p.name:id)+'</td><td>'+ra.w+'-'+ra.l+' ('+pct(ra.w,ra.g)+')</td><td>'+rb.w+'-'+rb.l+' ('+pct(rb.w,rb.g)+')</td><td>'+ra.g+' / '+rb.g+'</td></tr>';}}).join('');
