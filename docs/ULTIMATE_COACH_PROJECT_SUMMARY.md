@@ -226,8 +226,9 @@ to stop the crawl, prefer a single `Ctrl+C` at a natural boundary
 (between the bracketed `[n/4]` print blocks) over `taskkill` or a
 process-tree kill — the sub-pipeline scripts write their own
 checkpoint/report files incrementally, and an abrupt kill mid-write to
-the staging database is the one thing that can genuinely corrupt state
-that `--resume` cannot otherwise recover from.
+*any* in-flight generated artifact (the staging database or a JSON
+checkpoint/report file) is what can genuinely corrupt state that
+`--resume` cannot otherwise recover from.
 
 ## 7. Data outputs
 
@@ -236,7 +237,7 @@ which is gitignored:
 
 | File | Written by | Purpose |
 |---|---|---|
-| `ultimate_coach_historical_catalog.json` | Stage 1/4 | Seed catalog: divisions/sessions the authenticated viewer's own roster can see. |
+| `ultimate_coach_historical_catalog.json` | Stage 1/4 | Seed catalog: divisions discovered by walking the authenticated viewer's own member id through their real league aliases, each alias's historical sessions, and each session's league divisions. |
 | `ultimate_coach_historical_catalog_expanded.json` | Stage 2/4 | Full recursively-expanded catalog of divisions discovered through the roster-member history graph. |
 | `ultimate_coach_history_graph_report.json` | Stage 2/4 | Report describing how the expansion reached that catalog (aliases, sessions, discovery mode, source limitations). |
 | `ultimate_coach_staging.db` | Stage 3/4 | SQLite staging database holding every archived match/scoresheet the crawl has collected so far. |
