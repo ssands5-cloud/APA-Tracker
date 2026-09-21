@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database.ingest import ingest_player_league_career_stats
 from database.models import Player, PlayerTeamHistory
+from scraper.auth_classification import ConfirmedScopeDenial, call_with_confirmed_denial_retry
 from scraper.graphql_scraper import (
     eight_ball_stats_row,
     fetch_eight_ball_stats,
@@ -172,7 +173,45 @@ def enrich_all_players(
                 )
             continue
 
-        member = fetch_formats_by_member_id(config, int(external_id))
+        try:
+            member = call_with_confirmed_denial_retry(
+                config, lambda: fetch_formats_by_member_id(config, int(external_id))
+            )
+        except ConfirmedScopeDenial as denial:
+            # This member id was discovered through the historical catalog
+            # (potentially via another roster member's own cross-league
+            # history), and can be genuinely, permanently inaccessible to
+            # THIS viewer even though the viewer's own token is otherwise
+            # valid. Without this, a bare AccessTokenExpired would make the
+            # runner treat this as a full auth expiry forever -- endless
+            # reauthentication with zero forward progress on this player.
+            for league_id, league_slug in league_contexts:
+                key = f"{external_id}:{league_id}"
+                if key in completed:
+                    continue
+                unresolved.append(
+                    {
+                        "player_external_id": external_id,
+                        "player_name": player.name,
+                        "league_id": league_id,
+                        "league_slug": league_slug,
+                        "reason": f"APA denied member scope twice with a confirmed-valid "
+                        f"viewer token ({denial})",
+                    }
+                )
+                completed.add(key)
+            _write_report(
+                report_path,
+                status="enrichment_in_progress",
+                catalog_path=catalog_path,
+                catalog_sha256=catalog_sha,
+                staging_db=staging_db,
+                completed_keys=completed,
+                rows=rows,
+                unresolved=unresolved,
+                players_without_catalog_context=players_without_context,
+            )
+            continue
         aliases = member_aliases_rows(member)
 
         for league_id, league_slug in league_contexts:
@@ -234,7 +273,35 @@ def enrich_all_players(
                 )
                 continue
 
-            stats = fetch_eight_ball_stats(config, int(alias_id))
+            try:
+                stats = call_with_confirmed_denial_retry(
+                    config, lambda: fetch_eight_ball_stats(config, int(alias_id))
+                )
+            except ConfirmedScopeDenial as denial:
+                unresolved.append(
+                    {
+                        "player_external_id": external_id,
+                        "player_name": player.name,
+                        "league_id": league_id,
+                        "league_slug": league_slug,
+                        "alias_id": str(alias_id),
+                        "reason": f"APA denied lifetime-stats scope twice with a "
+                        f"confirmed-valid viewer token ({denial})",
+                    }
+                )
+                completed.add(key)
+                _write_report(
+                    report_path,
+                    status="enrichment_in_progress",
+                    catalog_path=catalog_path,
+                    catalog_sha256=catalog_sha,
+                    staging_db=staging_db,
+                    completed_keys=completed,
+                    rows=rows,
+                    unresolved=unresolved,
+                    players_without_catalog_context=players_without_context,
+                )
+                continue
             stat_row = eight_ball_stats_row(stats)
             written = ingest_player_league_career_stats(
                 db,
