@@ -27,7 +27,24 @@ trusting the denial as permanent.
 
 from __future__ import annotations
 
-from scraper.graphql_scraper import AccessTokenExpired, fetch_dashboard_teams
+from auth.graphql_client import GraphQLError, GraphQLTransportError
+from scraper.graphql_scraper import AccessTokenExpired, AccessTokenMissing, fetch_dashboard_teams
+
+# The only failure modes fetch_dashboard_teams() can legitimately raise for
+# an auth/network/transport reason -- see auth/graphql_client.py: raw
+# requests.exceptions.ConnectionError/Timeout are already caught and
+# retried internally by _post_with_retries(), then converted to
+# GraphQLTransportError once retries are exhausted, so callers never see
+# them directly. GraphQLAuthError is a subclass of GraphQLError, so
+# catching GraphQLError also catches it. Anything NOT in this tuple (a
+# TypeError, AttributeError, etc. from a real programming defect) must
+# propagate rather than be swallowed as "cannot confirm viewer valid".
+_EXPECTED_REVALIDATION_FAILURES = (
+    AccessTokenExpired,
+    AccessTokenMissing,
+    GraphQLError,
+    GraphQLTransportError,
+)
 
 
 class ConfirmedScopeDenial(RuntimeError):
@@ -46,10 +63,28 @@ def viewer_session_still_valid(config: dict) -> bool:
     token, the token is globally valid and only the attempted scope is
     unavailable. If viewer validation also fails, the token really is dead
     and the caller must re-raise so normal resume/reauth semantics apply.
+
+    A revalidation call that raises one of the EXPECTED failure modes --
+    AccessTokenExpired, AccessTokenMissing, a raw GraphQLError (including
+    its GraphQLAuthError subclass), or GraphQLTransportError -- means this
+    call could not PROVE the viewer is still valid, not that it proved the
+    viewer is invalid. "Cannot confirm, so do not confirm the denial
+    either" is the only safe reading: returning False here makes the
+    caller re-raise the ORIGINAL failure and fall back to normal
+    reauth/resume semantics.
+
+    Only these specific, known auth/network/transport failure types are
+    caught. Anything else -- a TypeError, AttributeError, or any other
+    exception indicating a real programming defect rather than a
+    transient/auth condition -- is deliberately NOT caught here and
+    propagates, same as KeyboardInterrupt/SystemExit: silently converting
+    an actual bug into "cannot confirm the viewer" would hide the bug
+    behind the same safe-looking False this function returns for a
+    legitimate transient failure, which is worse than crashing loudly.
     """
     try:
         viewer = fetch_dashboard_teams(config)
-    except AccessTokenExpired:
+    except _EXPECTED_REVALIDATION_FAILURES:
         return False
     return bool((viewer or {}).get("id"))
 
