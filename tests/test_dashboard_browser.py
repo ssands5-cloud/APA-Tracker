@@ -21,13 +21,128 @@ from __future__ import annotations
 import shutil
 
 import pytest
+from sqlalchemy.orm import Session
 
+from analytics.matchup_builder import build_matchups
+from database.engine import create_db_engine
+from database.ingest import (
+    ingest_head_to_head,
+    ingest_match,
+    ingest_match_scores,
+    ingest_player_team_history,
+    upsert_player,
+)
 from scripts import build_coach_advantage_bundle as builder
+from scripts import build_coherent_demo
 from scripts.build_coherent_demo import build as build_coherent
 from scripts.build_full_production_demo import FIXTURE_SCOPE
 
 playwright_sync_api = pytest.importorskip("playwright.sync_api")
 sync_playwright = playwright_sync_api.sync_playwright
+
+
+# A second, real opposing-team scope for one shared player (Ann Fixture /
+# F001, the first entry of build_coherent_demo.OUR_ROSTER), added ONLY to
+# this test module's own private database copy. This makes cross-scope
+# selector filtering deterministic instead of depending on live-account
+# opponent diversity.
+SECOND_OPP_TEAM_ID = "90303"
+SECOND_OPP_TEAM_NAME = "Fixture Night Owls"
+SECOND_OPP_PLAYER = ("F301", "Zed Owls", 5)
+SECOND_SCOPE_MATCH_ID = "90501"
+
+
+def _add_second_opposing_team_scope(db_path: str) -> None:
+    """Add one finalized scored match against a second real test-team scope."""
+    engine = create_db_engine({"database": {"path": db_path}})
+    with Session(engine) as db:
+        our_ext, our_name, our_skill = build_coherent_demo.OUR_ROSTER[0]
+        opp_ext, opp_name, opp_skill = SECOND_OPP_PLAYER
+
+        ingest_match(
+            db,
+            match_id=SECOND_SCOPE_MATCH_ID,
+            home_team_id=build_coherent_demo.OUR_TEAM_ID,
+            away_team_id=SECOND_OPP_TEAM_ID,
+            home_team_name=build_coherent_demo.OUR_TEAM_NAME,
+            away_team_name=SECOND_OPP_TEAM_NAME,
+            match_date="2026-08-15",
+            status="COMPLETED",
+            home_score=3,
+            away_score=1,
+            week=8,
+            is_bye=False,
+            is_scored=True,
+            is_finalized=True,
+            format=build_coherent_demo.FORMAT_NAME,
+            session_name=build_coherent_demo.SESSION_NAME,
+        )
+        ingest_match_scores(
+            db,
+            SECOND_SCOPE_MATCH_ID,
+            [
+                {
+                    "player_id": our_ext,
+                    "player_name": our_name,
+                    "team_id": build_coherent_demo.OUR_TEAM_ID,
+                    "team_name": build_coherent_demo.OUR_TEAM_NAME,
+                    "skill_level": our_skill,
+                    "result": "W",
+                    "points_earned": 3,
+                },
+                {
+                    "player_id": opp_ext,
+                    "player_name": opp_name,
+                    "team_id": SECOND_OPP_TEAM_ID,
+                    "team_name": SECOND_OPP_TEAM_NAME,
+                    "skill_level": opp_skill,
+                    "result": "L",
+                    "points_earned": 1,
+                },
+            ],
+        )
+        ingest_head_to_head(
+            db,
+            SECOND_SCOPE_MATCH_ID,
+            [
+                {
+                    "player_id": our_ext,
+                    "player_name": our_name,
+                    "opponent_id": opp_ext,
+                    "opponent_name": opp_name,
+                    "own_skill_level": our_skill,
+                    "opponent_skill_level": opp_skill,
+                    "result": "W",
+                    "points_earned": 3,
+                },
+                {
+                    "player_id": opp_ext,
+                    "player_name": opp_name,
+                    "opponent_id": our_ext,
+                    "opponent_name": our_name,
+                    "own_skill_level": opp_skill,
+                    "opponent_skill_level": our_skill,
+                    "result": "L",
+                    "points_earned": 1,
+                },
+            ],
+        )
+        player = upsert_player(db, opp_ext, opp_name)
+        ingest_player_team_history(
+            db,
+            player,
+            [{
+                "team_id": SECOND_OPP_TEAM_ID,
+                "team_name": SECOND_OPP_TEAM_NAME,
+                "division_id": build_coherent_demo.DIVISION_ID,
+                "session_name": build_coherent_demo.SESSION_NAME,
+                "is_current": True,
+                "skill_level": opp_skill,
+                "matches_won": 0,
+                "matches_played": 1,
+            }],
+        )
+        build_matchups(db)
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +151,10 @@ def coherent_db(tmp_path_factory):
     data/demo_coherent.db every other test module's fixture also rebuilds
     (see tests/test_build_coach_advantage_bundle.py's own fixture docstring
     for the real Windows file-locking bug that pattern caused)."""
-    return build_coherent(str(tmp_path_factory.mktemp("dashboard_browser") / "demo_coherent.db"))
+    db_path = str(tmp_path_factory.mktemp("dashboard_browser") / "demo_coherent.db")
+    result = build_coherent(db_path)
+    _add_second_opposing_team_scope(db_path)
+    return result
 
 
 @pytest.fixture(scope="module")
@@ -108,17 +226,32 @@ class TestPlayerVsPlayerSelectors:
             "() => [JSON.parse(document.getElementById('cd-player-data').textContent),"
             " JSON.parse(document.getElementById('cd-player-opponent-index').textContent)]"
         )
-        player_id = page.locator("#pme-player").input_value()
-        choices = opponent_index.get(player_id, [])
-        assert choices, "selected player must have at least one real pairing"
+
+        def scope_key_of(choice):
+            report = player_data[choice["key"]]
+            return f'{report["opponent_team_id"]}|{report["format"]}|{report["session_name"]}'
+
+        multi_scope_player_id = None
+        for candidate_id, choices in opponent_index.items():
+            if len({scope_key_of(choice) for choice in choices}) >= 2:
+                multi_scope_player_id = candidate_id
+                break
+        assert multi_scope_player_id is not None, (
+            "fixture must contain a player with 2+ distinct opposing-team scopes"
+        )
+
+        page.select_option("#pme-player", multi_scope_player_id)
+        choices = opponent_index[multi_scope_player_id]
 
         expected_by_scope = {}
         for choice in choices:
-            report = player_data[choice["key"]]
-            scope_key = (
-                f'{report["opponent_team_id"]}|{report["format"]}|{report["session_name"]}'
-            )
-            expected_by_scope.setdefault(scope_key, set()).add(choice["key"])
+            expected_by_scope.setdefault(scope_key_of(choice), set()).add(choice["key"])
+
+        assert len(expected_by_scope) >= 2, "must exercise a genuine multi-scope player"
+        scopes = sorted(expected_by_scope)
+        assert expected_by_scope[scopes[0]] != expected_by_scope[scopes[1]], (
+            "the two scopes' expected opponent sets must be genuinely different"
+        )
 
         team_select = page.locator("#pme-opponent-team")
         team_values = set(team_select.locator("option").evaluate_all(
@@ -126,12 +259,16 @@ class TestPlayerVsPlayerSelectors:
         ))
         assert team_values == set(expected_by_scope)
 
-        chosen_scope = sorted(team_values)[0]
-        team_select.select_option(chosen_scope)
-        opponent_keys = set(page.locator("#pme-opponent option").evaluate_all(
-            "options => options.map(o => o.value).filter(Boolean)"
-        ))
-        assert opponent_keys == expected_by_scope[chosen_scope]
+        for scope in scopes:
+            team_select.select_option(scope)
+            opponent_keys = set(page.locator("#pme-opponent option").evaluate_all(
+                "options => options.map(o => o.value).filter(Boolean)"
+            ))
+            assert opponent_keys == expected_by_scope[scope], (
+                f"scope {scope!r} leaked or dropped opponents: "
+                f"expected {expected_by_scope[scope]}, got {opponent_keys}"
+            )
+
         assert page.console_errors == []
 
     def test_player_matchup_card_shows_exact_direct_record_when_history_exists(self, page):
