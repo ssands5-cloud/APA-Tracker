@@ -2,7 +2,7 @@
 
 Status of this document: **project closeout summary, documentation-only.**
 It describes what has been built and independently tested as of
-2026-09-20, and is explicit everywhere about what is still in progress or
+2026-09-21, and is explicit everywhere about what is still in progress or
 unproven. It does not authorize a release, merge, or production promotion
 by itself — see [Current release/state snapshot](#10-current-releasestate-snapshot).
 
@@ -129,8 +129,12 @@ guidance simple: avoid force-killing the process, and prefer one
 
 ## 5. Verified evidence
 
-Code and CI evidence for the persistent-auth feature, PR #62, exact head
-`26d5c44ceef12f793568c51c30511e33422da777`:
+Persistent-auth evidence has two distinct reference points that must not be conflated:
+
+- **Historical live-site acceptance head:** `26d5c44ceef12f793568c51c30511e33422da777`. This is the exact code the long-running live crawler remains frozen on while the crawl is in flight, and it is the head used for the real two-cycle browser/session acceptance below.
+- **Final integrated PR #62 head:** `62d6ff7d1683a600ec0d059fec1eb02cd62c52e2`, which passed fresh integrated CI run #285 on Python 3.12 and 3.13 before PR #62 merged to `main` as merge commit `e1973b375654ea58120880f1b87fee3def114549`.
+
+The targeted/full-suite and real-site evidence below refers to the historical live-accepted head unless a later integrated head is named explicitly:
 
 - Targeted tests: `pytest tests/test_ultimate_coach_browser_runner.py -v`
   → **17/17 passed** (15 from the initial persistent-auth build + 2 added
@@ -146,8 +150,8 @@ Code and CI evidence for the persistent-auth feature, PR #62, exact head
   `MANUAL APA LOGIN REQUIRED` fail-closed message, the `--persistent-auth`
   CLI dispatch, and the mutual-exclusivity guard are each covered by a
   test that fails without them.
-- CI: GitHub Actions run #265 (id `35492418672`) — both job-level lanes
-  green, `pytest (3.12)` and `pytest (3.13)`.
+- CI on the historical live-accepted head: GitHub Actions run #265 (id `35492418672`) — both job-level lanes green, `pytest (3.12)` and `pytest (3.13)`.
+- Final PR #62 integration check: branch head `62d6ff7d1683a600ec0d059fec1eb02cd62c52e2` passed fresh integrated CI run #285 on both Python 3.12 and 3.13 before merge to `main`.
 - **Real two-cycle live-site acceptance, performed by Paul directly
   against APA (not simulated):**
   - Cycle 1: one manual login bootstrap in the persistent profile → token
@@ -312,29 +316,12 @@ Guarantees currently enforced and covered by tests:
 
 As of this writing:
 
-- **PR #62 remains draft and unmerged** at exact head
-  `26d5c44ceef12f793568c51c30511e33422da777`. No merge has been performed
-  or requested.
-- The live crawl worktree
-  (`APA-Tracker-Ultimate-Coach-Live`) is deliberately checked out
-  detached at that same tested exact head while the crawl runs, and is
-  not being modified, restarted, or otherwise interfered with while it is
-  in flight.
-- **The four-stage crawl has not yet reported completion.** As a
-  timestamped snapshot from the most recent read-only observation of the
-  live worktree's own report files (**observed 2026-09-21, ~01:20 UTC** —
-  this number is already stale by the time you read it, since the crawl
-  keeps running): Stage 3/4 (league-wide archive) showed
-  `status: crawl_in_progress`, 1,960 of 2,691 discovered divisions
-  crawled, and no `ultimate_coach_player_enrichment_report.json` yet
-  present (Stage 4/4 had not started). This document does **not** claim
-  the crawl is complete — only actual `ULTIMATE COACH DATA FOUNDATION COMPLETE`
-  console/report evidence would justify that claim, and this document
-  will be updated if/when that evidence appears.
-- Every other Ultimate Coach PR in the #31–#61 stack referenced in §2 is
-  also open and draft; none of that work has been merged to `main`
-  either. This document describes what has been built and tested on
-  those branches, not what is currently live in `main`.
+- **The core data-foundation/auth line is integrated into `main`.** PRs #30, #31, #33, #60, #61, #62, the research-only PR #35, and current-main viewer-revalidation integration PR #73 have merged. After PR #73, the exact `main` SHA is `2ac5d9dd8f4b57f710a05e5c8880003c3af9d46f`.
+- PR #71 is closed as superseded by #73. #73 preserved the accepted #71 hardening, then exposed and fixed two unrelated date-sensitive game-night tests on current `main`; fresh CI run #295 passed on Python 3.12 and 3.13 before merge.
+- The canonical offline cockpit / identity / leakage-safe enrichment work is being collapsed from the older stacked PRs into current-main integration PR #74. PR #74 is not yet merged at this snapshot, so this document does not describe that surface as production-integrated yet. The maintenance-scope regression guard is separately staged in PR #75.
+- The live crawl worktree (`APA-Tracker-Ultimate-Coach-Live`) remains deliberately detached at historical live-accepted head `26d5c44ceef12f793568c51c30511e33422da777` while the crawl runs. It is intentionally not being updated to newer `main` during the in-flight four-stage crawl.
+- **The four-stage crawl has not yet reported completion.** The latest meaningful read-only progress posted to Issue #24 before this documentation refresh showed Stage 3/4 still at `status: crawl_in_progress`, **2,011 of 2,691** discovered divisions crawled. No Stage 4 completion evidence and no explicit `ULTIMATE COACH DATA FOUNDATION COMPLETE` banner/report evidence has been posted. This document therefore does **not** claim the data foundation is complete.
+- PR #63 itself remains documentation-only and intentionally unmerged until the live crawl reaches a meaningful terminal state so this runtime snapshot can receive one final factual refresh.
 
 ## 11. What this enables for Paul
 
