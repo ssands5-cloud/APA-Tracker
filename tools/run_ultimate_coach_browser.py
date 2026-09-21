@@ -6,8 +6,11 @@ APA login page and the access token stays in memory for this Python process.
 Fresh:
     python tools/run_ultimate_coach_browser.py
 
-Resume after token expiry/interruption:
+Resume after interruption:
     python tools/run_ultimate_coach_browser.py --resume
+
+A confirmed token expiry no longer exits the runner. It reopens the real APA
+login bridge and continues from checkpoints after authentication succeeds.
 
 This runner has no production-promotion step.
 """
@@ -102,7 +105,7 @@ def run_pipeline(token: str, *, resume: bool) -> int:
 
         if not resume or not SEED_CATALOG.is_file():
             print("\n[1/4] Building authenticated-member seed catalog...")
-            if catalog_main([]):
+            if catalog_main([], raise_auth=True):
                 return 1
         else:
             print(f"\n[1/4] Reusing seed catalog for resume: {SEED_CATALOG}")
@@ -114,10 +117,9 @@ def run_pipeline(token: str, *, resume: bool) -> int:
         )
         print("\n[2/4] Recursively expanding history through real roster members...")
         graph_args = ["--resume"] if graph_resume else []
-        if history_graph_main(graph_args):
-            print("\nHistory graph expansion stopped before completion.")
-            print("Get a fresh APA session and run:")
-            print("  python tools/run_ultimate_coach_browser.py --resume")
+        if history_graph_main(graph_args, raise_auth=True):
+            print("\nHistory graph expansion stopped for a non-authentication error.")
+            print("Checkpoint files were left intact.")
             return 1
 
         archive_resume = resume and DEFAULT_STAGING.is_file()
@@ -125,10 +127,9 @@ def run_pipeline(token: str, *, resume: bool) -> int:
         archive_args = ["--catalog", str(EXPANDED_CATALOG)]
         if archive_resume:
             archive_args.append("--resume")
-        if archive_main(archive_args):
-            print("\nArchive stopped before completion.")
-            print("Get a fresh APA session and run:")
-            print("  python tools/run_ultimate_coach_browser.py --resume")
+        if archive_main(archive_args, raise_auth=True):
+            print("\nArchive stopped for a non-authentication error.")
+            print("Checkpoint files were left intact.")
             return 1
 
         enrich_resume = resume and ENRICHMENT_REPORT.is_file()
@@ -136,10 +137,9 @@ def run_pipeline(token: str, *, resume: bool) -> int:
         enrich_args = ["--catalog", str(EXPANDED_CATALOG)]
         if enrich_resume:
             enrich_args.append("--resume")
-        if enrichment_main(enrich_args):
-            print("\nPlayer enrichment stopped before completion.")
-            print("Get a fresh APA session and run:")
-            print("  python tools/run_ultimate_coach_browser.py --resume")
+        if enrichment_main(enrich_args, raise_auth=True):
+            print("\nPlayer enrichment stopped for a non-authentication error.")
+            print("Checkpoint files were left intact.")
             return 1
 
         print("\nULTIMATE COACH DATA FOUNDATION COMPLETE")
@@ -151,16 +151,45 @@ def run_pipeline(token: str, *, resume: bool) -> int:
         os.environ.pop("APA_ACCESS_TOKEN", None)
 
 
+def _auth_failure_detail(exc: BaseException) -> str:
+    """Return the server error text without printing the token itself."""
+    cause = exc.__cause__
+    if cause is not None:
+        return str(cause)
+    return str(exc)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
 
-    token = capture_access_token()
-    if not token:
-        print("\nNo authenticated GraphQL token was observed. Nothing was run.")
-        return 1
-    return run_pipeline(token, resume=args.resume)
+    from scraper.graphql_scraper import AccessTokenExpired, AccessTokenMissing
+
+    resume = bool(args.resume)
+    refresh_count = 0
+
+    while True:
+        token = capture_access_token()
+        if not token:
+            print("\nNo authenticated GraphQL token was observed. Nothing was run.")
+            return 1
+
+        try:
+            return run_pipeline(token, resume=resume)
+        except (AccessTokenMissing, AccessTokenExpired) as exc:
+            refresh_count += 1
+            resume = True
+            print("\n" + "=" * 72)
+            print("APA AUTHENTICATION NEEDS REFRESH")
+            print(f"  confirmed auth interruption #{refresh_count}")
+            print(f"  server signal: {_auth_failure_detail(exc)}")
+            print("  crawl checkpoints are preserved.")
+            print("  the authentication browser will reopen automatically.")
+            print("  after Member Services loads, press Enter and the crawl will resume.")
+            print("  no PowerShell command is required.")
+            print("=" * 72)
+            continue
 
 
 if __name__ == "__main__":

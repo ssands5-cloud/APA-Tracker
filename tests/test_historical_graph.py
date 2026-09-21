@@ -472,3 +472,324 @@ def test_early_source_limitation_is_persisted_before_later_interruption(monkeypa
     checkpoint = json.loads(report.read_text(encoding="utf-8"))
     assert any("zero roster teams" in x for x in persisted["source_limitations"])
     assert "test-league|200|500" in checkpoint["processed_division_keys"]
+
+
+
+def test_member_forbidden_is_scope_limitation_when_same_token_still_has_viewer(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Restricted", "member": {"id": 111}}],
+            }]
+        },
+    )
+
+    member_calls = {"count": 0}
+
+    def denied_member(config, member_id):
+        member_calls["count"] += 1
+        raise graph.AccessTokenExpired("scope request was rejected")
+
+    monkeypatch.setattr(graph, "fetch_formats_by_member_id", denied_member)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    expanded, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert expanded["counts"]["divisions"] == 1
+    assert report["status"] == "expansion_complete"
+    assert report["counts"]["processed_divisions"] == 1
+    assert report["counts"]["processed_member_league_scopes"] == 1
+    assert any(
+        "denied member scope twice with a confirmed-valid viewer token" in item
+        for item in report["source_limitations"]
+    )
+    assert member_calls["count"] == 2, (
+        "a single AccessTokenExpired must be retried once (with the same "
+        "confirmed-valid token) before being trusted as a real, permanent "
+        "denial -- see _call_with_confirmed_denial_retry"
+    )
+
+
+def test_member_auth_failure_still_raises_when_same_token_cannot_validate_viewer(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Player", "member": {"id": 111}}],
+            }]
+        },
+    )
+
+    def auth_failure(*args, **kwargs):
+        raise graph.AccessTokenExpired("expired")
+
+    monkeypatch.setattr(graph, "fetch_formats_by_member_id", auth_failure)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", auth_failure)
+
+    with pytest.raises(graph.AccessTokenExpired, match="expired"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=_seed(),
+            seed_catalog_path=seed_path,
+            output_path=tmp_path / "expanded.json",
+            report_path=tmp_path / "report.json",
+        )
+
+
+def test_division_roster_forbidden_is_checkpointed_when_viewer_remains_valid(monkeypatch, tmp_path):
+    seed_path = _write_seed(tmp_path)
+
+    roster_calls = {"count": 0}
+
+    def denied_roster(config, division_id):
+        roster_calls["count"] += 1
+        raise graph.AccessTokenExpired("division forbidden")
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", denied_roster)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert report["status"] == "expansion_complete"
+    assert report["counts"]["processed_divisions"] == 1
+    assert any(
+        "denied roster scope twice with a confirmed-valid viewer token" in item
+        for item in report["source_limitations"]
+    )
+    assert roster_calls["count"] == 2, (
+        "a single AccessTokenExpired must be retried once (with the same "
+        "confirmed-valid token) before being trusted as a real, permanent "
+        "denial -- see _call_with_confirmed_denial_retry"
+    )
+
+
+def test_transient_scope_denial_recovers_on_retry_without_recording_a_limitation(
+    monkeypatch, tmp_path
+):
+    """The exact defect this fix targets: APA's FORBIDDEN response can be a
+    one-off/timing-flaky rejection, not a real denial. If the SAME call
+    succeeds on retry (after the SAME token is confirmed still viewer-valid),
+    the division must be processed normally -- real roster data discovered,
+    NOT permanently checkpointed as an unrecoverable source limitation."""
+    seed_path = _write_seed(tmp_path)
+    roster_calls = {"count": 0}
+
+    def flaky_then_ok_roster(config, division_id):
+        roster_calls["count"] += 1
+        if roster_calls["count"] == 1:
+            raise graph.AccessTokenExpired("transient rejection")
+        return {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Player", "member": {"id": 111}}],
+            }]
+        }
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", flaky_then_ok_roster)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+    monkeypatch.setattr(
+        graph,
+        "fetch_formats_by_member_id",
+        lambda config, member_id: {"aliases": []},
+    )
+
+    expanded, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert roster_calls["count"] == 2
+    assert report["status"] == "expansion_complete"
+    assert report["counts"]["processed_divisions"] == 1
+    assert not any(
+        "denied roster scope" in item for item in report["source_limitations"]
+    ), "a recovered retry must never be recorded as a source limitation"
+    # Real proof the recovered roster payload was actually used, not discarded:
+    # the member-scope loop must have run for the roster's real member id.
+    assert report["counts"]["processed_member_league_scopes"] == 1
+
+
+def test_alias_session_history_forbidden_is_checkpointed_when_viewer_remains_valid(
+    monkeypatch, tmp_path
+):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Player", "member": {"id": 111}}],
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        graph,
+        "fetch_formats_by_member_id",
+        lambda config, member_id: {
+            "aliases": [
+                {"id": 1111, "formats": ["EIGHT"], "league": {"id": 12, "slug": "test-league"}}
+            ]
+        },
+    )
+
+    alias_calls = {"count": 0}
+
+    def denied_alias_sessions(config, alias_id, format_name):
+        alias_calls["count"] += 1
+        raise graph.AccessTokenExpired("alias session history forbidden")
+
+    monkeypatch.setattr(graph, "fetch_alias_sessions", denied_alias_sessions)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert report["status"] == "expansion_complete"
+    assert alias_calls["count"] == 2
+    assert any(
+        "denied session-history scope twice with a confirmed-valid viewer token" in item
+        for item in report["source_limitations"]
+    )
+
+
+def test_league_division_catalog_forbidden_is_checkpointed_when_viewer_remains_valid(
+    monkeypatch, tmp_path
+):
+    seed_path = _write_seed(tmp_path)
+    monkeypatch.setattr(
+        graph,
+        "fetch_division_rosters",
+        lambda config, division_id: {
+            "teams": [{
+                "id": 1,
+                "name": "T",
+                "isBye": False,
+                "roster": [{"displayName": "Player", "member": {"id": 111}}],
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        graph,
+        "fetch_formats_by_member_id",
+        lambda config, member_id: {
+            "aliases": [
+                {"id": 1111, "formats": ["EIGHT"], "league": {"id": 12, "slug": "test-league"}}
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        graph,
+        "fetch_alias_sessions",
+        lambda config, alias_id, format_name: {
+            "id": alias_id,
+            "sessions": [{"id": 150, "name": "Spring 2025"}],
+        },
+    )
+
+    league_calls = {"count": 0}
+
+    def denied_league_divisions(config, league_slug, session_id):
+        league_calls["count"] += 1
+        raise graph.AccessTokenExpired("division catalog forbidden")
+
+    monkeypatch.setattr(graph, "fetch_league_divisions", denied_league_divisions)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", lambda config: {"id": 999})
+
+    _, report = graph.expand_historical_catalog(
+        {},
+        seed_catalog=_seed(),
+        seed_catalog_path=seed_path,
+        output_path=tmp_path / "expanded.json",
+        report_path=tmp_path / "report.json",
+    )
+
+    assert report["status"] == "expansion_complete"
+    assert league_calls["count"] == 2
+    assert any(
+        "denied division catalog scope twice with a confirmed-valid viewer token" in item
+        for item in report["source_limitations"]
+    )
+
+
+def test_genuine_expiry_during_retry_still_raises_for_reauth(monkeypatch, tmp_path):
+    """The narrower race an independent reviewer found in the first version
+    of the retry fix: the token can genuinely, globally expire in the
+    window between the first viewer revalidation and the retry call
+    itself. That must still raise for normal reauth/resume -- NOT be
+    converted into a permanent _ConfirmedScopeDenial/source limitation --
+    because the second failure was never actually confirmed against a
+    still-valid viewer.
+
+    Sequence: scoped call #1 fails -> viewer check #1 succeeds -> retry
+    fails -> viewer check #2 fails (genuine expiry) -> original
+    AccessTokenExpired must propagate; nothing is checkpointed as denied.
+    """
+    seed_path = _write_seed(tmp_path)
+
+    roster_calls = {"count": 0}
+
+    def fails_twice_roster(config, division_id):
+        roster_calls["count"] += 1
+        raise graph.AccessTokenExpired("expired")
+
+    viewer_calls = {"count": 0}
+
+    def viewer_valid_once_then_dead(config):
+        viewer_calls["count"] += 1
+        if viewer_calls["count"] == 1:
+            return {"id": 999}
+        raise graph.AccessTokenExpired("viewer session is dead now")
+
+    monkeypatch.setattr(graph, "fetch_division_rosters", fails_twice_roster)
+    monkeypatch.setattr(graph, "fetch_dashboard_teams", viewer_valid_once_then_dead)
+
+    with pytest.raises(graph.AccessTokenExpired, match="expired"):
+        graph.expand_historical_catalog(
+            {},
+            seed_catalog=_seed(),
+            seed_catalog_path=seed_path,
+            output_path=tmp_path / "expanded.json",
+            report_path=tmp_path / "report.json",
+        )
+
+    assert roster_calls["count"] == 2, "must retry exactly once before giving up"
+    assert viewer_calls["count"] == 2, (
+        "viewer validity must be re-checked after the retry's own failure, "
+        "not assumed from the first check"
+    )
