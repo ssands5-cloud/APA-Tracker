@@ -49,3 +49,10 @@ def test_daily_sync_delegates_only_to_narrow_live_sync():
     text = (ROOT / "scheduler/daily_sync.py").read_text(encoding="utf-8")
     assert "from scheduler.graphql_sync import run as run_live" in text
     assert "run_live(config_path, export=True)" in text
+
+
+def test_division_wide_scope_is_discovered_from_viewers_current_teams():
+    text = (ROOT / "scheduler/graphql_sync.py").read_text(encoding="utf-8")
+    assert "viewer_teams = fetch_dashboard_teams(config)" in text
+    assert "team_rows = dashboard_teams_rows(viewer_teams)" in text
+    assert 'division_ids = sorted({row["division_id"] for row in team_rows if row["division_id"]})' in text
