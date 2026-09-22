@@ -52,7 +52,7 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
     """
     contract = build_contract(db)
     manifest = build_verified_identity_manifest(contract)
-    audit = audit_identity_namespace(contract, manifest=manifest)
+    audit = audit_identity_namespace(\n        contract, manifest=manifest, include_participant_details=False\n    )
 
     verified_game_keys = set(audit["identity_verified_game_keys"])
     quarantined_game_keys = set(audit["quarantined_game_keys"])
