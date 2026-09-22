@@ -361,9 +361,22 @@ def _coach_dashboard_sheet(wb: Workbook, player_count: int, pvp_count: int) -> N
         sheet.cell(row=row, column=1).font = MUTED_FONT
 
     sheet["A17"] = "Player A current SL"
-    sheet["B17"] = '=IFERROR(INDEX(Players_Table[Current SL],MATCH(B4,Players_Table[Player Label],0)),"—")'
+    # A plain IFERROR(INDEX(...),"—") only catches a failed MATCH (unknown
+    # player). When the player IS found but their Current SL cell was never
+    # written (current_skill_level is None -- openpyxl leaves the cell
+    # truly empty rather than writing 0), INDEX returns numeric 0 for that
+    # blank cell, which is not an error and reads as a real skill level 0 --
+    # not a valid APA skill level, but easy to misread as "verified SL 0"
+    # rather than "not captured". Test the indexed value against "" first.
+    sheet["B17"] = (
+        '=IFERROR(IF(INDEX(Players_Table[Current SL],MATCH(B4,Players_Table[Player Label],0))="",'
+        '"—",INDEX(Players_Table[Current SL],MATCH(B4,Players_Table[Player Label],0))),"—")'
+    )
     sheet["A18"] = "Player B current SL"
-    sheet["B18"] = '=IFERROR(INDEX(Players_Table[Current SL],MATCH(B5,Players_Table[Player Label],0)),"—")'
+    sheet["B18"] = (
+        '=IFERROR(IF(INDEX(Players_Table[Current SL],MATCH(B5,Players_Table[Player Label],0))="",'
+        '"—",INDEX(Players_Table[Current SL],MATCH(B5,Players_Table[Player Label],0))),"—")'
+    )
 
     sheet["A20"] = "Direct record (Player A perspective)"
     sheet["A20"].font = LABEL_FONT

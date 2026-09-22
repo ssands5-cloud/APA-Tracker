@@ -186,6 +186,11 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         # The disclosure explicitly explains it is NOT a real 0-0 record --
         # an absence of evidence, never fabricated evidence of a tie.
         assert "not evidence of a tie" in str(dash.Range("B25").Value)
+        # Bea's current_skill_level is None -- must read as "not captured"
+        # ("—"), never as a real skill level 0 (not a valid APA skill
+        # level, but easy to misread if a blank INDEX result silently
+        # reads back as numeric 0 instead of triggering the fallback).
+        assert dash.Range("B18").Value == "—"
 
         night = wb.Worksheets("Match Night")
         night.Range("B5").Value = "Sharks"
