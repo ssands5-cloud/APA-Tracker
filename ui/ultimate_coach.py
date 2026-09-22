@@ -152,25 +152,34 @@ h2,h3 {{ margin-top:0; }}
   var BSCOPE=document.getElementById("player-b-scope");
   var SA=document.getElementById("search-a"), SB=document.getElementById("search-b");
   var SSA=document.getElementById("search-status-a"), SSB=document.getElementById("search-status-b");
-  var MAX_OPTIONS=250;
+  var MAX_OPTIONS=75;
+  var SEARCH_DEBOUNCE_MS=300;
   function esc(v){{return String(v===null||v===undefined?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}}
   function pct(w,g){{return g?((w/g)*100).toFixed(1)+"%":"No data";}}
   function val(row,name){{return row[EC[name]];}}
   var SORTED=DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}});
+  var SEARCH_NAMES={{}}; SORTED.forEach(function(p){{SEARCH_NAMES[String(p.id)]=p.name.toLowerCase();}});
 
   function formatName(fmt){{return fmt==="EIGHT"?"8-Ball":fmt==="NINE"?"9-Ball":fmt;}}
   function matchingPlayers(filter,candidates) {{
     var q=String(filter||"").trim().toLowerCase();
-    var matches=(candidates||SORTED).filter(function(p){{return !q||p.name.toLowerCase().indexOf(q)!==-1;}});
+    var matches=(candidates||SORTED).filter(function(p){{return !q||SEARCH_NAMES[String(p.id)].indexOf(q)!==-1;}});
     return {{rows:matches.slice(0,MAX_OPTIONS),total:matches.length}};
+  }}
+  function selectMarkup(found,previous,labeler) {{
+    var keep=previous&&found.rows.some(function(p){{return String(p.id)===String(previous);}});
+    var placeholder='<option value="">Select a player...</option>';
+    var rows=found.rows.map(function(p){{return '<option value="'+p.id+'">'+esc(labeler?labeler(p):p.name)+'</option>';}}).join("");
+    return {{html:placeholder+rows,value:keep?String(previous):""}};
   }}
   function applyPlayerASearch() {{
     var previous=A.value, found=matchingPlayers(SA.value,SORTED);
-    A.innerHTML=found.rows.map(function(p){{return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}}).join("");
-    if(Array.prototype.some.call(A.options,function(o){{return o.value===previous;}})) A.value=previous;
+    var rendered=selectMarkup(found,previous,null);
+    A.innerHTML=rendered.html;
+    A.value=rendered.value;
     SSA.textContent=found.total>MAX_OPTIONS
-      ? "Showing first "+MAX_OPTIONS+" of "+found.total+" matches. Keep typing to narrow."
-      : found.total+" matching player"+(found.total===1?"":"s")+".";
+      ? "Showing first "+MAX_OPTIONS+" of "+found.total+" matches. Keep typing, then choose a player."
+      : found.total+" matching player"+(found.total===1?"":"s")+". Choose a player to load opponents.";
   }}
   function rowsFor(pid,fmt){{return EVIDENCE_INDEX[String(pid)+"|"+fmt]||[];}}
   function playerBPool() {{
@@ -192,14 +201,15 @@ h2,h3 {{ margin-top:0; }}
   function refreshPlayerB(preserveSelection) {{
     var previous=preserveSelection?B.value:"";
     var pool=playerBPool(), found=matchingPlayers(SB.value,pool.players);
-    B.innerHTML=found.rows.map(function(p){{
+    var rendered=selectMarkup(found,previous,function(p){{
       var count=pool.counts[String(p.id)]||0;
       var suffix=BSCOPE.value==="played"&&count
         ? " · "+count+" meeting"+(count===1?"":"s")
         : "";
-      return '<option value="'+p.id+'">'+esc(p.name+suffix)+'</option>';
-    }}).join("");
-    if(previous&&Array.prototype.some.call(B.options,function(o){{return o.value===previous;}})) B.value=previous;
+      return p.name+suffix;
+    }});
+    B.innerHTML=rendered.html;
+    B.value=rendered.value;
     var pa=PLAYERS[A.value], fmt=formatName(F.value);
     if(BSCOPE.value==="played") {{
       if(!pool.players.length) {{
@@ -292,8 +302,18 @@ h2,h3 {{ margin-top:0; }}
   F.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});
   BSCOPE.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});
   var searchTimers={{a:null,b:null}};
-  SA.addEventListener("input",function(){{clearTimeout(searchTimers.a);searchTimers.a=setTimeout(function(){{var before=A.value;applyPlayerASearch();if(A.value!==before){{SB.value="";refreshPlayerB(false);compare();}}}},120);}});
-  SB.addEventListener("input",function(){{clearTimeout(searchTimers.b);searchTimers.b=setTimeout(function(){{refreshPlayerB(true);compare();}},120);}});
+  SA.addEventListener("input",function(){{
+    clearTimeout(searchTimers.a);
+    searchTimers.a=setTimeout(function(){{
+      applyPlayerASearch();
+    }},SEARCH_DEBOUNCE_MS);
+  }});
+  SB.addEventListener("input",function(){{
+    clearTimeout(searchTimers.b);
+    searchTimers.b=setTimeout(function(){{
+      refreshPlayerB(true);
+    }},SEARCH_DEBOUNCE_MS);
+  }});
   compare();
 }})();
 </script></body></html>"""
