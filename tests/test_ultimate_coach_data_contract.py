@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from sqlalchemy.orm import Session
 
-from analytics.ultimate_coach_data_contract import build_contract
+from analytics.ultimate_coach_data_contract import build_contract, normalize_format
 from database.engine import create_db_engine
 from database.models import Match, Player, PlayerHeadToHead, PlayerMatch
 
@@ -121,5 +123,98 @@ def test_null_source_values_remain_null_not_zero(tmp_path):
             row = build_contract(db)["tables"]["all_games"][0]
             assert row["participant_a_skill_level"] is None
             assert row["participant_a_points_earned"] is None
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("8-BALL OPEN", "EIGHT"),
+        ("8-Ball Open Tournament", "EIGHT"),
+        ("8-BALL DOUBLES", "EIGHT"),
+        ("8-BALL LADIES ALT", "EIGHT"),
+        ("8 BALL OPEN", "EIGHT"),
+        ("9-BALL OPEN", "NINE"),
+        ("9-Ball Open Tournament", "NINE"),
+        ("9 BALL OPEN", "NINE"),
+        ("MASTERS", "MASTERS"),
+    ],
+)
+def test_normalize_format_recognizes_real_apa_labels_without_reclassifying_other_formats(
+    source, expected
+):
+    assert normalize_format(source) == expected
+
+
+def test_real_apa_open_format_reaches_all_games_as_eight(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        with Session(engine) as db:
+            a = Player(external_id="1", name="Alpha")
+            b = Player(external_id="2", name="Bravo")
+            db.add_all([a, b])
+            db.flush()
+            match = Match(
+                external_id="real-format-500",
+                match_date="2026-09-01T19:00:00-06:00",
+                format="8-BALL OPEN",
+                session_name="Fall 2026",
+                week=1,
+                is_scored=True,
+                is_finalized=True,
+            )
+            db.add(match)
+            db.flush()
+            db.add_all(
+                [
+                    PlayerMatch(
+                        player_id=a.id,
+                        match_id=match.id,
+                        team_id="TA",
+                        team_name="Team A",
+                        skill_level=4,
+                    ),
+                    PlayerMatch(
+                        player_id=b.id,
+                        match_id=match.id,
+                        team_id="TB",
+                        team_name="Team B",
+                        skill_level=5,
+                    ),
+                    PlayerHeadToHead(
+                        player_id=a.id,
+                        opponent_id=b.id,
+                        match_id=match.id,
+                        result="W",
+                        own_skill_level=4,
+                        opponent_skill_level=5,
+                        points_earned=3,
+                        format="8-BALL OPEN",
+                        session_name="Fall 2026",
+                    ),
+                    PlayerHeadToHead(
+                        player_id=b.id,
+                        opponent_id=a.id,
+                        match_id=match.id,
+                        result="L",
+                        own_skill_level=5,
+                        opponent_skill_level=4,
+                        points_earned=0,
+                        format="8-BALL OPEN",
+                        session_name="Fall 2026",
+                    ),
+                ]
+            )
+            db.commit()
+
+            contract = build_contract(db)
+
+            assert {row["format"] for row in contract["tables"]["raw_h2h_evidence"]} == {
+                "EIGHT"
+            }
+            assert [row["format"] for row in contract["tables"]["all_games"]] == [
+                "EIGHT"
+            ]
     finally:
         engine.dispose()

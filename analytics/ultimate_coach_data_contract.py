@@ -27,9 +27,17 @@ from database.models import (
 
 def normalize_format(value: str | None) -> str:
     text = str(value or "").strip().upper()
-    if "EIGHT" in text or text in {"8", "8-BALL", "8 BALL", "EIGHT_BALL"}:
+    if (
+        "EIGHT" in text
+        or text in {"8", "8-BALL", "8 BALL", "EIGHT_BALL"}
+        or text.startswith(("8-BALL ", "8 BALL ", "8BALL "))
+    ):
         return "EIGHT"
-    if "NINE" in text or text in {"9", "9-BALL", "9 BALL", "NINE_BALL"}:
+    if (
+        "NINE" in text
+        or text in {"9", "9-BALL", "9 BALL", "NINE_BALL"}
+        or text.startswith(("9-BALL ", "9 BALL ", "9BALL "))
+    ):
         return "NINE"
     return text
 
