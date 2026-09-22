@@ -138,6 +138,18 @@ def test_browser_payload_compacts_and_preindexes_evidence():
     assert player_one[0][result_i] == "W"
 
 
+
+def test_production_render_can_drain_raw_evidence_after_compaction():
+    payload = _payload()
+    original_rows = len(payload["evidence"])
+    html = render(payload, built_at="test", consume_evidence=True)
+
+    assert original_rows == 3
+    assert payload["evidence"] == []
+    assert "evidence_index" in html
+    assert "Alpha Adams" in html
+
+
 def test_rendered_browser_never_scans_full_evidence_array_per_compare():
     html = render(_payload(), built_at="test")
 
