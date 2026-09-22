@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    html = render(payload, built_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    html = render(\n        payload,\n        built_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),\n        consume_evidence=True,\n    )
     args.output.write_text(html, encoding="utf-8")
     print(
         f"Ultimate Coach HTML written: {payload['counts']['players']} players, "
