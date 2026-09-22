@@ -51,7 +51,7 @@ def test_candidate_uses_snapshot_and_never_publishes_database(monkeypatch, tmp_p
     monkeypatch.setattr(
         builder,
         "render",
-        lambda payload, built_at: "<html><body>Ultimate Coach</body></html>",
+        lambda payload, built_at, consume_evidence=False: "<html><body>Ultimate Coach</body></html>",
     )
 
     completed = builder.build_candidate(source, out)
@@ -71,6 +71,24 @@ def test_candidate_uses_snapshot_and_never_publishes_database(monkeypatch, tmp_p
     assert manifest["safety"]["probability_publication"] == "FORBIDDEN"
     assert ready["manifest_sha256"] == builder._sha256(out / builder.MANIFEST_NAME)
     assert ready["html_sha256"] == builder._sha256(out / builder.HTML_NAME)
+
+
+def test_candidate_uses_low_memory_render_mode(monkeypatch, tmp_path):
+    source = _source_db(tmp_path / "ultimate.db")
+    out = tmp_path / "candidate"
+    seen = {}
+
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
+
+    def fake_render(payload, *, built_at, consume_evidence=False):
+        seen["consume_evidence"] = consume_evidence
+        return "<html><body>Ultimate Coach</body></html>"
+
+    monkeypatch.setattr(builder, "render", fake_render)
+
+    builder.build_candidate(source, out)
+
+    assert seen["consume_evidence"] is True
 
 
 def test_candidate_refuses_probability_unlock_and_publishes_nothing(monkeypatch, tmp_path):
@@ -136,7 +154,7 @@ def test_candidate_is_not_published_if_ready_write_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(
         builder,
         "render",
-        lambda payload, built_at: "<html><body>Ultimate Coach</body></html>",
+        lambda payload, built_at, consume_evidence=False: "<html><body>Ultimate Coach</body></html>",
     )
 
     original_write_text = Path.write_text
