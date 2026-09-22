@@ -256,6 +256,22 @@ def test_output_is_deterministic_for_equivalent_input_order():
     assert audit_identity_namespace(c1) == audit_identity_namespace(c2)
 
 
+
+def test_compact_mode_preserves_counts_without_retaining_participant_details():
+    c = verified_contract(games=[game(), game(key="g2", a_ext="9999", match_id=11)], team_matches=[team_match(10), team_match(11)])
+    full = audit_identity_namespace(c)
+    compact = audit_identity_namespace(c, include_participant_details=False)
+
+    assert compact["counts"] == full["counts"]
+    assert compact["participant_status_counts"] == full["participant_status_counts"]
+    assert compact["participant_reason_counts"] == full["participant_reason_counts"]
+    assert compact["identity_verified_game_keys"] == full["identity_verified_game_keys"]
+    assert compact["quarantined_game_keys"] == full["quarantined_game_keys"]
+    assert compact["participant_audits"] == []
+    assert compact["suspect_participants"] == []
+    assert compact["indeterminate_participants"] == []
+
+
 def test_probability_and_live_login_remain_forbidden():
     out = audit_identity_namespace(verified_contract())
     assert out["matchup_probability"] is None
