@@ -40,7 +40,7 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             page.wait_for_load_state("load")
 
             page.select_option("#player-a", "1")
-            assert page.locator("#player-b option").count() == 2
+            assert page.locator("#player-b option").count() == 4
             assert "2 recorded opponents for Alpha Adams in 8-Ball" in page.locator("#search-status-b").inner_text()
             assert "Delta Dunn" not in page.locator("#player-b").inner_text()
 
@@ -53,15 +53,17 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
 
             page.fill("#search-b", "Charlie")
             page.wait_for_timeout(250)
-            assert page.locator("#player-b option").count() == 1
-            assert "Charlie Clark" in page.locator("#player-b option").first.inner_text()
-            assert "1 meeting" in page.locator("#player-b option").first.inner_text()
+            assert page.locator("#player-b option").count() == 2
+            assert page.locator("#player-b").input_value() == ""
+            assert "Charlie Clark" in page.locator("#player-b option").nth(1).inner_text()
+            assert "1 meeting" in page.locator("#player-b option").nth(1).inner_text()
 
             page.select_option("#format", "NINE")
             # Played-opponents mode is the default. With no NINE-ball history
             # for Alpha, Player B must become empty instead of retaining stale
             # EIGHT-ball choices/results.
-            assert page.locator("#player-b option").count() == 0
+            assert page.locator("#player-b option").count() == 1
+            assert page.locator("#player-b").input_value() == ""
             assert "No recorded opponents for Alpha Adams in 9-Ball" in page.locator("#search-status-b").inner_text()
             assert "Switch Player B to" in page.locator("#summary").inner_text()
             assert page.locator("#direct").inner_text() == ""
@@ -78,6 +80,44 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
         finally:
             browser.close()
 
+
+
+def test_typing_only_filters_and_never_runs_matchup_until_selection(tmp_path: Path):
+    path = tmp_path / "ultimate_coach_search_idle.html"
+    path.write_text(render(_payload(), built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#player-a", "1")
+            page.select_option("#player-b", "2")
+            before_summary = page.locator("#summary").inner_text()
+            before_direct = page.locator("#direct").inner_text()
+
+            # Typing narrows the UI only. It must not silently select Charlie,
+            # rebuild the matchup, or render a new comparison.
+            page.fill("#search-b", "Charlie")
+            page.wait_for_timeout(400)
+            assert page.locator("#player-b").input_value() == ""
+            assert page.locator("#summary").inner_text() == before_summary
+            assert page.locator("#direct").inner_text() == before_direct
+
+            # The expensive comparison happens only after an explicit choice.
+            page.select_option("#player-b", "3")
+            assert "Alpha Adams and Charlie Clark" in page.locator("#summary").inner_text()
+
+            # Same rule for Player A search: typing may clear the visible
+            # selection but must not rebuild Player B or run a comparison.
+            page.fill("#search-a", "Bravo")
+            page.wait_for_timeout(400)
+            assert page.locator("#player-a").input_value() == ""
+            assert "Alpha Adams and Charlie Clark" in page.locator("#summary").inner_text()
+        finally:
+            browser.close()
 
 
 def test_browser_payload_compacts_and_preindexes_evidence():
@@ -133,12 +173,13 @@ def test_search_is_bounded_for_large_player_lists(tmp_path: Path):
             page.goto(path.as_uri())
             page.wait_for_load_state("load")
 
-            assert page.locator("#player-a option").count() == 250
-            assert "Showing first 250 of 600" in page.locator("#search-status-a").inner_text()
+            assert page.locator("#player-a option").count() == 76
+            assert "Showing first 75 of 600" in page.locator("#search-status-a").inner_text()
 
             page.fill("#search-a", "Player 0599")
-            page.wait_for_timeout(250)
-            assert page.locator("#player-a option").count() == 1
-            assert page.locator("#player-a option").first.inner_text() == "Player 0599"
+            page.wait_for_timeout(400)
+            assert page.locator("#player-a option").count() == 2
+            assert page.locator("#player-a").input_value() == ""
+            assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599"
         finally:
             browser.close()
