@@ -357,8 +357,16 @@ h2,h3 {{ margin-top:0; }}
       (p.team_history||[]).forEach(function(t){{
         if(!t.is_current||!t.team_name) return;
         var key=t.team_name;
-        if(!idx[key]) idx[key]={{name:t.team_name,division_id:t.division_id||"",session_name:t.session_name||"",players:[]}};
-        idx[key].players.push({{id:p.id,name:p.name,skill_level:t.skill_level,current_skill_level:p.current_skill_level,matches_won:t.matches_won,matches_played:t.matches_played}});
+        if(!idx[key]) idx[key]={{name:t.team_name,division_id:t.division_id||"",session_name:t.session_name||"",seen:{{}},players:[]}};
+        // A player can be rostered on the same-named team in more than one
+        // division/session at once (e.g. separate 8-ball and 9-ball
+        // divisions sharing a team name) -- team_history carries one row
+        // per division, so dedupe by player id or they would be listed,
+        // counted, and summed into the skill total twice.
+        if(idx[key].seen[p.id]) return;
+        idx[key].seen[p.id]=true;
+        var sl=p.current_skill_level!==null&&p.current_skill_level!==undefined?p.current_skill_level:t.skill_level;
+        idx[key].players.push({{id:p.id,name:p.name,skill_level:sl,skill_level_is_live:p.current_skill_level!==null&&p.current_skill_level!==undefined,matches_won:t.matches_won,matches_played:t.matches_played}});
       }});
     }});
     return idx;
@@ -395,13 +403,20 @@ h2,h3 {{ margin-top:0; }}
 
   function rosterTable(title,team,fmt) {{
     if(!team) return '<h2>'+esc(title)+'</h2><p class="muted">Choose a team to load its current roster.</p>';
-    var totalSkill=team.players.reduce(function(sum,m){{return sum+(m.current_skill_level||0);}},0);
-    var rows=team.players.slice().sort(function(x,y){{return (y.current_skill_level||0)-(x.current_skill_level||0);}}).map(function(m){{
+    var known=team.players.filter(function(m){{return m.skill_level!==null&&m.skill_level!==undefined;}});
+    var totalSkill=known.reduce(function(sum,m){{return sum+m.skill_level;}},0);
+    var totalNote=known.length===team.players.length
+      ? 'full-roster skill total '+totalSkill
+      : 'full-roster skill total '+totalSkill+' from '+known.length+' of '+team.players.length+' players with a captured skill level (missing players excluded, not counted as 0)';
+    var rows=team.players.slice().sort(function(x,y){{return (y.skill_level||0)-(x.skill_level||0);}}).map(function(m){{
       var evid=rowsFor(m.id,fmt).length;
-      return '<tr><td>'+esc(m.name)+'</td><td>'+(m.current_skill_level===null?'—':m.current_skill_level)+'</td><td>'+(m.matches_won===null||m.matches_played===null?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won))+'</td><td>'+evid+'</td></tr>';
+      var slLabel=m.skill_level===null||m.skill_level===undefined?'—':(m.skill_level+(m.skill_level_is_live?'':'*'));
+      return '<tr><td>'+esc(m.name)+'</td><td>'+slLabel+'</td><td>'+(m.matches_won===null||m.matches_played===null?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won))+'</td><td>'+evid+'</td></tr>';
     }}).join("");
-    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(team.name)+' · '+team.players.length+' rostered · full-roster skill total '+totalSkill+
-      ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).</p>'+
+    var liveMissing=team.players.some(function(m){{return !m.skill_level_is_live&&m.skill_level!==null&&m.skill_level!==undefined;}});
+    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(team.name)+' · '+team.players.length+' rostered · '+totalNote+
+      ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).'+
+      (liveMissing?' * = division-scoped skill level, no live current rating captured for that player.':'')+'</p>'+
       '<table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table>';
   }}
 

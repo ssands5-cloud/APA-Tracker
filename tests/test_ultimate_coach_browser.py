@@ -302,3 +302,51 @@ def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
             assert "Choose both teams" in page.locator("#team-matchups").inner_text()
         finally:
             browser.close()
+
+
+def test_team_roster_dedupes_player_rostered_in_two_divisions(tmp_path: Path):
+    # Real staging data surfaced this: a player can be rostered on a
+    # same-named team in two divisions at once (e.g. separate 8-ball and
+    # 9-ball divisions), so team_history carries two "is_current" rows for
+    # that one player on that one team. Without dedup, the roster listed
+    # him twice, double-counted his skill level in the roster total, and
+    # produced a nonsensical "recommended send" tie against himself.
+    payload = _team_payload()
+    payload["players"].append(
+        {
+            "id": 7,
+            "external_id": "7",
+            "name": "Gale Grant",
+            "current_skill_level": None,
+            "current_matches_won": None,
+            "current_matches_played": None,
+            "team_history": [
+                {"team_external_id": "sharks-div-a", "team_name": "Sharks", "division_id": "da", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
+                {"team_external_id": "sharks-div-b", "team_name": "Sharks", "division_id": "db", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
+            ],
+            "career_stats": [],
+        }
+    )
+
+    path = tmp_path / "ultimate_coach_teams_dedupe.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#team-a", "Sharks")
+            rosters = page.locator("#team-rosters").inner_text()
+            assert rosters.count("Gale Grant") == 1
+            assert "3 rostered" in rosters
+            # current_skill_level is null for Gale, but a division-scoped
+            # skill_level (5) is available -- it must be used, disclosed
+            # with a "*" marker, and included in the roster total exactly
+            # once (Ann 4 + Bea 5 + Gale 5 = 14), never twice (19).
+            assert "5*" in rosters
+            assert "full-roster skill total 14" in rosters
+        finally:
+            browser.close()
