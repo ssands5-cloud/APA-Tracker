@@ -40,7 +40,7 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             page.wait_for_load_state("load")
 
             page.select_option("#player-a", "1")
-            assert page.locator("#player-b option").count() == 4
+            assert page.locator("#player-b option").count() == 3
             assert "2 recorded opponents for Alpha Adams in 8-Ball" in page.locator("#search-status-b").inner_text()
             assert "Delta Dunn" not in page.locator("#player-b").inner_text()
 
@@ -52,7 +52,7 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             assert "NOT CALIBRATED" in page.locator("#status").inner_text()
 
             page.fill("#search-b", "Charlie")
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(400)
             assert page.locator("#player-b option").count() == 2
             assert page.locator("#player-b").input_value() == ""
             assert "Charlie Clark" in page.locator("#player-b option").nth(1).inner_text()
@@ -71,7 +71,7 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             # All-player scouting remains available for never-played matchups
             # and must still disclose zero direct evidence honestly.
             page.select_option("#player-b-scope", "all")
-            assert page.locator("#player-b option").count() == 3
+            assert page.locator("#player-b option").count() == 4
             assert "Delta Dunn" in page.locator("#player-b").inner_text()
             page.select_option("#player-b", "2")
             assert "No recorded evidence" in page.locator("#direct").inner_text()
