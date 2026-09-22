@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_data_contract import build_contract, normalize_format
