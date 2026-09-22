@@ -147,7 +147,10 @@ def build_candidate(source_db: Path, out_dir: Path) -> Path:
 
         built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         html_path = temp_dir / HTML_NAME
-        html_path.write_text(\n            render(payload, built_at=built_at, consume_evidence=True),\n            encoding="utf-8",\n        )
+        html_path.write_text(
+            render(payload, built_at=built_at, consume_evidence=True),
+            encoding="utf-8",
+        )
 
         html_sha = _sha256(html_path)
         manifest = {
