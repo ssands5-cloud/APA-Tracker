@@ -156,6 +156,17 @@ h2,h3 {{ margin-top:0; }}
 <div id="direct" class="card"></div>
 <div id="shared" class="card"></div>
 <div id="meetings" class="card"></div>
+
+<div class="card">
+  <h2>Team vs Team — Match Night Lineup</h2>
+  <div class="controls">
+    <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
+    <label>Opponent Team<input id="search-team-b" type="search" placeholder="Search opponent team"><select id="team-b"></select><span id="search-status-team-b" class="muted"></span></label>
+    <label>Format<select id="team-format"><option value="EIGHT">8-Ball</option><option value="NINE">9-Ball</option></select></label>
+  </div>
+</div>
+<div id="team-rosters" class="grid"></div>
+<div id="team-matchups" class="card"></div>
 <p class="muted">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes.</p>
 </main>
 <script id="uc-data" type="application/json">{data}</script>
@@ -333,5 +344,149 @@ h2,h3 {{ margin-top:0; }}
     }},SEARCH_DEBOUNCE_MS);
   }});
   compare();
+
+  // ---- Team vs Team ----
+  // Rosters are derived entirely from data already embedded above
+  // (p.team_history) -- no additional server payload, so this carries no
+  // extra memory cost for the standalone build. Built once at load, not
+  // per keystroke: same responsive-search contract as Player A/B (debounced
+  // input, capped rendered options, no expensive work while typing).
+  var TEAM_INDEX=(function(){{
+    var idx={{}};
+    DATA.players.forEach(function(p){{
+      (p.team_history||[]).forEach(function(t){{
+        if(!t.is_current||!t.team_name) return;
+        var key=t.team_name;
+        if(!idx[key]) idx[key]={{name:t.team_name,division_id:t.division_id||"",session_name:t.session_name||"",players:[]}};
+        idx[key].players.push({{id:p.id,name:p.name,skill_level:t.skill_level,current_skill_level:p.current_skill_level,matches_won:t.matches_won,matches_played:t.matches_played}});
+      }});
+    }});
+    return idx;
+  }})();
+  var TEAM_NAMES=Object.keys(TEAM_INDEX).sort(function(x,y){{return x.localeCompare(y);}});
+  var TEAM_SEARCH_NAMES={{}}; TEAM_NAMES.forEach(function(n){{TEAM_SEARCH_NAMES[n]=n.toLowerCase();}});
+  var TA=document.getElementById("team-a"),TB=document.getElementById("team-b"),TF=document.getElementById("team-format");
+  var STA=document.getElementById("search-team-a"),STB=document.getElementById("search-team-b");
+  var SSTA=document.getElementById("search-status-team-a"),SSTB=document.getElementById("search-status-team-b");
+  var STANDARD_SKILL_CAP=23;
+
+  function matchingTeams(filter) {{
+    var q=String(filter||"").trim().toLowerCase();
+    var matches=TEAM_NAMES.filter(function(n){{return !q||TEAM_SEARCH_NAMES[n].indexOf(q)!==-1;}});
+    return {{rows:matches.slice(0,MAX_OPTIONS),total:matches.length}};
+  }}
+  function teamSelectMarkup(found,previous) {{
+    var keep=previous&&found.rows.indexOf(previous)!==-1;
+    var placeholder='<option value="">Select a team...</option>';
+    var rows=found.rows.map(function(n){{return '<option value="'+esc(n)+'">'+esc(n)+' · '+TEAM_INDEX[n].players.length+' rostered</option>';}}).join("");
+    return {{html:placeholder+rows,value:keep?previous:""}};
+  }}
+  function applyTeamSearch(input,select,status) {{
+    var previous=select.value,found=matchingTeams(input.value);
+    var rendered=teamSelectMarkup(found,previous);
+    select.innerHTML=rendered.html;
+    select.value=rendered.value;
+    status.textContent=found.total>MAX_OPTIONS
+      ? "Showing first "+MAX_OPTIONS+" of "+found.total+" matches. Keep typing, then choose a team."
+      : found.total+" matching team"+(found.total===1?"":"s")+".";
+  }}
+  applyTeamSearch(STA,TA,SSTA);
+  applyTeamSearch(STB,TB,SSTB);
+
+  function rosterTable(title,team,fmt) {{
+    if(!team) return '<h2>'+esc(title)+'</h2><p class="muted">Choose a team to load its current roster.</p>';
+    var totalSkill=team.players.reduce(function(sum,m){{return sum+(m.current_skill_level||0);}},0);
+    var rows=team.players.slice().sort(function(x,y){{return (y.current_skill_level||0)-(x.current_skill_level||0);}}).map(function(m){{
+      var evid=rowsFor(m.id,fmt).length;
+      return '<tr><td>'+esc(m.name)+'</td><td>'+(m.current_skill_level===null?'—':m.current_skill_level)+'</td><td>'+(m.matches_won===null||m.matches_played===null?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won))+'</td><td>'+evid+'</td></tr>';
+    }}).join("");
+    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(team.name)+' · '+team.players.length+' rostered · full-roster skill total '+totalSkill+
+      ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).</p>'+
+      '<table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }}
+
+  function sharedOpponentRecord(rowsA,rowsB) {{
+    var oppRowsA={{}};
+    rowsA.forEach(function(r){{var id=String(val(r,"opponent_id"));(oppRowsA[id]||(oppRowsA[id]=[])).push(r);}});
+    var oppIdsB={{}};
+    rowsB.forEach(function(r){{oppIdsB[String(val(r,"opponent_id"))]=true;}});
+    var shared=[],combined=[];
+    Object.keys(oppRowsA).forEach(function(id){{
+      if(oppIdsB[id]) {{ shared.push(id); combined=combined.concat(oppRowsA[id]); }}
+    }});
+    return {{sharedCount:shared.length,record:record(combined)}};
+  }}
+
+  function bestSendFor(opponent,ourRoster,fmt) {{
+    var oppRows=rowsFor(opponent.id,fmt);
+    var candidates=ourRoster.map(function(p){{
+      var direct=rowsFor(p.id,fmt).filter(function(r){{return String(val(r,"opponent_id"))===String(opponent.id);}});
+      if(direct.length) {{
+        var dr=record(direct);
+        return {{player:p,kind:"direct",count:direct.length,record:dr,rank:[3,dr.g?dr.w/dr.g:0,dr.g]}};
+      }}
+      var shared=sharedOpponentRecord(rowsFor(p.id,fmt),oppRows);
+      if(shared.sharedCount) {{
+        var sr=shared.record;
+        return {{player:p,kind:"shared",sharedCount:shared.sharedCount,record:sr,rank:[2,sr.g?sr.w/sr.g:0,shared.sharedCount]}};
+      }}
+      return {{player:p,kind:"none",rank:[1,0,0]}};
+    }});
+    candidates.sort(function(x,y){{
+      for(var i=0;i<3;i++) {{ if(y.rank[i]!==x.rank[i]) return y.rank[i]-x.rank[i]; }}
+      return 0;
+    }});
+    return candidates;
+  }}
+
+  function explainSend(opponent,candidates) {{
+    var best=candidates[0];
+    if(best.kind==="direct") {{
+      return esc(best.player.name)+' — strongest evidence-backed option: '+best.record.w+'-'+best.record.l+' direct ('+best.count+' meeting'+(best.count===1?'':'s')+') vs '+esc(opponent.name)+'.';
+    }}
+    if(best.kind==="shared") {{
+      var tie=candidates.filter(function(c){{return c.kind==="shared"&&c.sharedCount===best.sharedCount&&c.record.g===best.record.g;}});
+      if(tie.length>1) return 'Insufficient evidence to distinguish '+tie.map(function(c){{return esc(c.player.name);}}).join(' / ')+' against '+esc(opponent.name)+' — no direct history; '+best.sharedCount+' shared opponent(s) each, evidence too similar to rank.';
+      return esc(best.player.name)+' — no direct history vs '+esc(opponent.name)+'; best-supported by '+best.sharedCount+' shared-opponent result'+(best.sharedCount===1?'':'s')+' ('+best.record.w+'-'+best.record.l+' vs those shared opponents).';
+    }}
+    return 'No direct or shared-opponent evidence for any of our roster against '+esc(opponent.name)+' in this format yet.';
+  }}
+
+  function renderTeamMatchups() {{
+    var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value],fmt=TF.value;
+    document.getElementById("team-rosters").innerHTML=
+      '<div class="card">'+rosterTable("Our roster",ta,fmt)+'</div>'+
+      '<div class="card">'+rosterTable("Opponent roster",tb,fmt)+'</div>';
+    var out=document.getElementById("team-matchups");
+    if(!ta||!tb) {{
+      out.innerHTML='<h2>Recommended sends</h2><p class="muted">Choose both teams to see evidence-backed send recommendations per opponent player.</p>';
+      return;
+    }}
+    if(!ta.players.length||!tb.players.length) {{
+      out.innerHTML='<h2>Recommended sends</h2><p class="muted">One of these rosters has no current players captured — insufficient roster data to recommend sends.</p>';
+      return;
+    }}
+    var rows=tb.players.map(function(opp){{
+      var candidates=bestSendFor(opp,ta.players,fmt);
+      return '<tr><td>'+esc(opp.name)+(opp.current_skill_level===null?'':' (SL '+opp.current_skill_level+')')+'</td><td>'+explainSend(opp,candidates)+'</td></tr>';
+    }}).join("");
+    out.innerHTML='<h2>Recommended sends</h2>'+
+      '<p class="muted">Per opponent player, the best-supported send from our roster. Captain-assistance only — never a solved optimal lineup and never a win-probability claim; probability_publication stays FORBIDDEN throughout.</p>'+
+      '<table><thead><tr><th>Opponent player</th><th>Suggested send &amp; evidence</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }}
+  renderTeamMatchups();
+
+  TA.addEventListener("change",renderTeamMatchups);
+  TB.addEventListener("change",renderTeamMatchups);
+  TF.addEventListener("change",renderTeamMatchups);
+  var teamSearchTimers={{a:null,b:null}};
+  STA.addEventListener("input",function(){{
+    clearTimeout(teamSearchTimers.a);
+    teamSearchTimers.a=setTimeout(function(){{applyTeamSearch(STA,TA,SSTA);}},SEARCH_DEBOUNCE_MS);
+  }});
+  STB.addEventListener("input",function(){{
+    clearTimeout(teamSearchTimers.b);
+    teamSearchTimers.b=setTimeout(function(){{applyTeamSearch(STB,TB,SSTB);}},SEARCH_DEBOUNCE_MS);
+  }});
 }})();
 </script></body></html>"""

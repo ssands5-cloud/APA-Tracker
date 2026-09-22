@@ -195,3 +195,110 @@ def test_search_is_bounded_for_large_player_lists(tmp_path: Path):
             assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599"
         finally:
             browser.close()
+
+
+def _team_payload():
+    def hist(team, sl):
+        return [{"team_external_id": team, "team_name": team, "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": sl, "matches_won": sl, "matches_played": sl + 2}]
+
+    return {
+        "schema": "ultimate-coach-cockpit-v1",
+        "probability_status": "NOT_CALIBRATED",
+        "players": [
+            {"id": 1, "external_id": "1", "name": "Ann Archer", "current_skill_level": 4, "current_matches_won": 4, "current_matches_played": 6, "team_history": hist("Sharks", 4), "career_stats": []},
+            {"id": 2, "external_id": "2", "name": "Bea Baker", "current_skill_level": 5, "current_matches_won": 5, "current_matches_played": 7, "team_history": hist("Sharks", 5), "career_stats": []},
+            {"id": 3, "external_id": "3", "name": "Cam Cole", "current_skill_level": 3, "current_matches_won": 3, "current_matches_played": 5, "team_history": hist("Falcons", 3), "career_stats": []},
+            {"id": 4, "external_id": "4", "name": "Drew Diaz", "current_skill_level": 6, "current_matches_won": 6, "current_matches_played": 8, "team_history": hist("Falcons", 6), "career_stats": []},
+            {"id": 5, "external_id": "5", "name": "Finn Frost", "current_skill_level": 4, "current_matches_won": 4, "current_matches_played": 6, "team_history": hist("Falcons", 4), "career_stats": []},
+            {"id": 6, "external_id": "6", "name": "Evan Ellis", "current_skill_level": 4, "current_matches_won": 4, "current_matches_played": 6, "team_history": [], "career_stats": []},
+        ],
+        "evidence": [
+            # Ann beats Cam twice -- direct evidence for the Cam matchup.
+            {"player_id": 1, "opponent_id": 3, "match_id": 20, "match_external_id": "20", "match_date": "2026-01-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 3, "points_earned": 3, "nine_ball_points": None},
+            {"player_id": 3, "opponent_id": 1, "match_id": 20, "match_external_id": "20", "match_date": "2026-01-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "L", "own_skill_level": 3, "opponent_skill_level": 4, "points_earned": None, "nine_ball_points": None},
+            {"player_id": 1, "opponent_id": 3, "match_id": 21, "match_external_id": "21", "match_date": "2026-02-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 3, "points_earned": 3, "nine_ball_points": None},
+            {"player_id": 3, "opponent_id": 1, "match_id": 21, "match_external_id": "21", "match_date": "2026-02-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "L", "own_skill_level": 3, "opponent_skill_level": 4, "points_earned": None, "nine_ball_points": None},
+            # Bea and Drew never met directly, but both have faced Evan --
+            # shared-opponent evidence for the Drew matchup.
+            {"player_id": 2, "opponent_id": 6, "match_id": 22, "match_external_id": "22", "match_date": "2026-01-15T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "W", "own_skill_level": 5, "opponent_skill_level": 4, "points_earned": 3, "nine_ball_points": None},
+            {"player_id": 6, "opponent_id": 2, "match_id": 22, "match_external_id": "22", "match_date": "2026-01-15T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "L", "own_skill_level": 4, "opponent_skill_level": 5, "points_earned": None, "nine_ball_points": None},
+            {"player_id": 4, "opponent_id": 6, "match_id": 23, "match_external_id": "23", "match_date": "2026-01-20T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "L", "own_skill_level": 6, "opponent_skill_level": 4, "points_earned": None, "nine_ball_points": None},
+            {"player_id": 6, "opponent_id": 4, "match_id": 23, "match_external_id": "23", "match_date": "2026-01-20T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 6, "points_earned": 3, "nine_ball_points": None},
+        ],
+        "counts": {"players": 6, "head_to_head_rows": 8},
+    }
+
+
+def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: Path):
+    path = tmp_path / "ultimate_coach_teams.html"
+    path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#team-a", "Sharks")
+            page.select_option("#team-b", "Falcons")
+
+            rosters = page.locator("#team-rosters").inner_text()
+            assert "Sharks" in rosters and "2 rostered" in rosters
+            assert "Falcons" in rosters and "3 rostered" in rosters
+            assert "Ann Archer" in rosters and "Bea Baker" in rosters
+            assert "Cam Cole" in rosters and "Drew Diaz" in rosters and "Finn Frost" in rosters
+
+            matchups = page.locator("#team-matchups").inner_text()
+            # Cam: Ann has 2 direct wins, must be the strongest-evidence pick.
+            assert "Ann Archer — strongest evidence-backed option: 2-0 direct (2 meetings)" in matchups
+            # Drew: no direct history for anyone, but Bea shares Evan with Drew.
+            assert "Bea Baker — no direct history vs Drew Diaz; best-supported by 1 shared-opponent result (1-0 vs those shared opponents)" in matchups
+            # Finn: nobody on our roster has any direct or shared evidence at all.
+            assert "No direct or shared-opponent evidence for any of our roster against Finn Frost" in matchups
+
+            assert "FORBIDDEN" in matchups
+        finally:
+            browser.close()
+
+
+def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
+    path = tmp_path / "ultimate_coach_teams_search.html"
+    path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#team-a", "Sharks")
+            page.select_option("#team-b", "Falcons")
+            before = page.locator("#team-matchups").inner_text()
+
+            # Typing narrows the team list only -- it must not clear the
+            # rendered matchup or silently reselect a different team. The
+            # current selection is preserved when it still matches the filter.
+            page.fill("#search-team-b", "Fal")
+            page.wait_for_timeout(400)
+            assert page.locator("#team-b").input_value() == "Falcons"
+            assert page.locator("#team-matchups").inner_text() == before
+
+            # A filter that excludes the current selection clears the visible
+            # dropdown value (same contract as Player A/B search) but still
+            # must not itself trigger a matchup rebuild -- only an explicit
+            # change event does that.
+            page.fill("#search-team-b", "Sha")
+            page.wait_for_timeout(400)
+            assert page.locator("#team-b").input_value() == ""
+            assert page.locator("#team-matchups").inner_text() == before
+
+            # Switching teams must clear the stale matchup rather than
+            # leaving the old opponent's recommendations on screen.
+            page.fill("#search-team-b", "")
+            page.wait_for_timeout(400)
+            page.select_option("#team-b", "")
+            assert "Choose both teams" in page.locator("#team-matchups").inner_text()
+        finally:
+            browser.close()
