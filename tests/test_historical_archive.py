@@ -436,3 +436,93 @@ def test_confirmed_denial_partway_through_real_ingestion_leaves_only_partial_dur
             assert db.query(PlayerHeadToHead).count() == 0
     finally:
         engine.dispose()
+
+
+def test_resume_complete_archive_with_matching_hash_returns_without_rebuilding(monkeypatch, tmp_path):
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    division = _division()
+    catalog_path.write_text(json.dumps(_catalog([division])), encoding="utf-8")
+    staging.write_bytes(b"stable-final-archive")
+
+    key = archive._division_key(archive.division_plan(_catalog([division]))[0])
+    previous = {
+        "schema": archive.REPORT_SCHEMA,
+        "status": "crawl_complete",
+        "catalog_sha256": archive.sha256_file(catalog_path),
+        "staging_sha256": archive.sha256_file(staging),
+        "completed_division_keys": [key],
+        "permanently_denied_division_keys": [],
+        "divisions_crawled": 1,
+        "division_results": [],
+        "catalog_source_limitations": [],
+        "coverage_observations": [],
+        "matchups_rebuilt": 42,
+    }
+    report.write_text(json.dumps(previous), encoding="utf-8")
+
+    monkeypatch.setattr(
+        archive,
+        "create_db_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("verified-complete resume must not open the staging DB")
+        ),
+    )
+    monkeypatch.setattr(
+        archive,
+        "build_matchups",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("verified-complete resume must not rebuild matchups")
+        ),
+    )
+
+    result = archive.run_archive(
+        {},
+        catalog_path=catalog_path,
+        staging_db=staging,
+        report_path=report,
+        seed_db=None,
+        resume=True,
+    )
+
+    assert result == previous
+
+
+def test_resume_complete_archive_hash_mismatch_does_not_take_fast_path(monkeypatch, tmp_path):
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    division = _division()
+    catalog_path.write_text(json.dumps(_catalog([division])), encoding="utf-8")
+    staging.write_bytes(b"changed-after-report")
+
+    key = archive._division_key(archive.division_plan(_catalog([division]))[0])
+    previous = {
+        "schema": archive.REPORT_SCHEMA,
+        "status": "crawl_complete",
+        "catalog_sha256": archive.sha256_file(catalog_path),
+        "staging_sha256": "not-the-current-staging-hash",
+        "completed_division_keys": [key],
+        "permanently_denied_division_keys": [],
+        "matchups_rebuilt": 42,
+    }
+    report.write_text(json.dumps(previous), encoding="utf-8")
+
+    monkeypatch.setattr(
+        archive,
+        "create_db_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("normal-resume-path-entered")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="normal-resume-path-entered"):
+        archive.run_archive(
+            {},
+            catalog_path=catalog_path,
+            staging_db=staging,
+            report_path=report,
+            seed_db=None,
+            resume=True,
+        )
