@@ -205,6 +205,30 @@ def run_archive(
         permanently_denied_keys = set(previous.get("permanently_denied_division_keys") or [])
         division_results = list(previous.get("division_results") or [])
 
+        # A completed archive with an unchanged catalog and byte-identical
+        # staging database is already finalized. Returning the verified
+        # checkpoint here is critical for auth-refresh resume: otherwise every
+        # fresh token re-enters Stage 3, skips all completed divisions, then
+        # needlessly rebuilds the entire matchup table before Stage 4 can make
+        # its first authenticated request. On a large archive that local
+        # rebuild can consume the token's useful lifetime and create a
+        # self-sustaining Stage-3/reauth loop.
+        planned_keys = {_division_key(row) for row in division_plan(catalog)}
+        accounted_keys = completed_keys | permanently_denied_keys
+        recorded_staging_sha = str(previous.get("staging_sha256") or "")
+        staging_unchanged = bool(
+            recorded_staging_sha
+            and staging_db.is_file()
+            and sha256_file(staging_db) == recorded_staging_sha
+        )
+        if (
+            previous.get("status") == "crawl_complete"
+            and accounted_keys == planned_keys
+            and previous.get("matchups_rebuilt") is not None
+            and staging_unchanged
+        ):
+            return previous
+
     run_config = dict(config)
     run_config["database"] = dict(config.get("database") or {})
     run_config["database"]["path"] = str(staging_db)
