@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -119,3 +120,38 @@ def test_snapshot_detects_source_change_and_deletes_snapshot(monkeypatch, tmp_pa
         builder._snapshot_sqlite(source.resolve(), destination)
 
     assert not destination.exists()
+
+
+def test_candidate_is_not_published_if_ready_write_fails(monkeypatch, tmp_path):
+    """READY must be written inside the private temp directory before publish.
+
+    A failure at the READY write boundary must leave no public candidate
+    directory behind. This catches any future reordering that publishes the
+    temp directory first and only then attempts to create READY.
+    """
+    source = _source_db(tmp_path / "ultimate.db")
+    out = tmp_path / "candidate"
+
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
+    monkeypatch.setattr(
+        builder,
+        "render",
+        lambda payload, built_at: "<html><body>Ultimate Coach</body></html>",
+    )
+
+    original_write_text = Path.write_text
+
+    def fail_ready(self, *args, **kwargs):
+        if self.name == builder.READY_NAME:
+            raise OSError("simulated READY write failure")
+        return original_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fail_ready)
+
+    with pytest.raises(OSError, match="simulated READY write failure"):
+        builder.build_candidate(source, out)
+
+    assert not out.exists(), "candidate must not become public before READY succeeds"
+    assert not any(
+        child.name.startswith(".uc-candidate-") for child in tmp_path.iterdir()
+    ), "failed private build directory must be cleaned up"
