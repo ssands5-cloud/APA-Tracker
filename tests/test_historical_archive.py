@@ -526,3 +526,89 @@ def test_resume_complete_archive_hash_mismatch_does_not_take_fast_path(monkeypat
             seed_db=None,
             resume=True,
         )
+
+
+def test_resume_in_progress_report_does_not_take_complete_fast_path(monkeypatch, tmp_path):
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    division = _division()
+    catalog_payload = _catalog([division])
+    catalog_path.write_text(json.dumps(catalog_payload), encoding="utf-8")
+    staging.write_bytes(b"stable-final-archive")
+
+    key = archive._division_key(archive.division_plan(catalog_payload)[0])
+    previous = {
+        "schema": archive.REPORT_SCHEMA,
+        "status": "crawl_in_progress",
+        "catalog_sha256": archive.sha256_file(catalog_path),
+        "staging_sha256": archive.sha256_file(staging),
+        "completed_division_keys": [key],
+        "permanently_denied_division_keys": [],
+        "matchups_rebuilt": 42,
+    }
+    report.write_text(json.dumps(previous), encoding="utf-8")
+
+    monkeypatch.setattr(
+        archive,
+        "create_db_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("normal-resume-path-entered")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="normal-resume-path-entered"):
+        archive.run_archive(
+            {},
+            catalog_path=catalog_path,
+            staging_db=staging,
+            report_path=report,
+            seed_db=None,
+            resume=True,
+        )
+
+
+def test_resume_complete_report_with_unaccounted_division_does_not_take_fast_path(
+    monkeypatch, tmp_path
+):
+    catalog_path = tmp_path / "catalog.json"
+    staging = tmp_path / "ultimate.db"
+    report = tmp_path / "report.json"
+    first = _division(division_id="501")
+    second = _division(division_id="502")
+    catalog_payload = _catalog([first, second])
+    catalog_path.write_text(json.dumps(catalog_payload), encoding="utf-8")
+    staging.write_bytes(b"stable-final-archive")
+
+    planned = archive.division_plan(catalog_payload)
+    first_key = archive._division_key(planned[0])
+    assert len(planned) == 2
+
+    previous = {
+        "schema": archive.REPORT_SCHEMA,
+        "status": "crawl_complete",
+        "catalog_sha256": archive.sha256_file(catalog_path),
+        "staging_sha256": archive.sha256_file(staging),
+        "completed_division_keys": [first_key],
+        "permanently_denied_division_keys": [],
+        "matchups_rebuilt": 42,
+    }
+    report.write_text(json.dumps(previous), encoding="utf-8")
+
+    monkeypatch.setattr(
+        archive,
+        "create_db_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("normal-resume-path-entered")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="normal-resume-path-entered"):
+        archive.run_archive(
+            {},
+            catalog_path=catalog_path,
+            staging_db=staging,
+            report_path=report,
+            seed_db=None,
+            resume=True,
+        )
