@@ -6,7 +6,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from ui.ultimate_coach import render
+from ui.ultimate_coach import _browser_payload, render
 
 
 def _payload():
@@ -42,9 +42,12 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             page.select_option("#player-b", "2")
             assert "1-0" in page.locator("#direct").inner_text()
             assert "Charlie Clark" in page.locator("#shared").inner_text()
+            assert "1 recorded direct meeting" in page.locator("#summary").inner_text()
+            assert "1 recorded opponent" in page.locator("#summary").inner_text()
             assert "NOT CALIBRATED" in page.locator("#status").inner_text()
 
             page.fill("#search-b", "Charlie")
+            page.wait_for_timeout(250)
             assert page.locator("#player-b option").count() == 1
             assert page.locator("#player-b option").first.inner_text() == "Charlie Clark"
 
@@ -55,5 +58,70 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
             assert "No recorded evidence" in page.locator("#direct").inner_text()
             assert "0-0" not in page.locator("#direct").inner_text()
             assert "No recorded shared opponents" in page.locator("#shared").inner_text()
+        finally:
+            browser.close()
+
+
+
+def test_browser_payload_compacts_and_preindexes_evidence():
+    payload = _payload()
+    compact = _browser_payload(payload)
+
+    assert "evidence" not in compact
+    assert compact["browser_payload_schema"] == "ultimate-coach-browser-compact-v1"
+    assert compact["counts"] == payload["counts"]
+
+    fields = compact["evidence_row_fields"]
+    opponent_i = fields.index("opponent_id")
+    result_i = fields.index("result")
+
+    player_one = compact["evidence_index"]["1|EIGHT"]
+    assert len(player_one) == 2
+    assert player_one[0][opponent_i] == 2
+    assert player_one[0][result_i] == "W"
+
+
+def test_rendered_browser_never_scans_full_evidence_array_per_compare():
+    html = render(_payload(), built_at="test")
+
+    assert "DATA.evidence.filter" not in html
+    assert "EVIDENCE_INDEX[String(pid)+\"|\"+fmt]" in html
+    assert "evidence_index" in html
+
+
+def test_search_is_bounded_for_large_player_lists(tmp_path: Path):
+    payload = _payload()
+    payload["players"] = [
+        {
+            "id": i,
+            "external_id": str(i),
+            "name": f"Player {i:04d}",
+            "current_skill_level": 4,
+            "current_matches_won": None,
+            "current_matches_played": None,
+            "team_history": [],
+            "career_stats": [],
+        }
+        for i in range(1, 601)
+    ]
+    payload["counts"]["players"] = len(payload["players"])
+
+    path = tmp_path / "ultimate_coach_large.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            assert page.locator("#player-a option").count() == 250
+            assert "Showing first 250 of 600" in page.locator("#search-status-a").inner_text()
+
+            page.fill("#search-a", "Player 0599")
+            page.wait_for_timeout(250)
+            assert page.locator("#player-a option").count() == 1
+            assert page.locator("#player-a option").first.inner_text() == "Player 0599"
         finally:
             browser.close()
