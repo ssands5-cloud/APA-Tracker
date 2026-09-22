@@ -39,15 +39,31 @@ _BROWSER_EVIDENCE_FIELDS = (
 )
 
 
-def _browser_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Compact and pre-index evidence for fast standalone-browser use."""
+def _browser_payload(
+    payload: dict[str, Any], *, consume_evidence: bool = False
+) -> dict[str, Any]:
+    """Compact and pre-index evidence for fast standalone-browser use.
+
+    Production builders may drain the large raw evidence list while it is
+    compacted so the dict-heavy source rows and compact browser index do not
+    remain resident in memory at the same time.
+    """
     compact = {key: value for key, value in payload.items() if key != "evidence"}
     index: dict[str, list[list[Any]]] = {}
-    for row in payload.get("evidence") or []:
-        key = f"{row.get('player_id')}|{row.get('format') or ''}"
-        index.setdefault(key, []).append(
-            [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
-        )
+    evidence = payload.get("evidence") or []
+    if consume_evidence and isinstance(evidence, list):
+        while evidence:
+            row = evidence.pop()
+            key = f"{row.get('player_id')}|{row.get('format') or ''}"
+            index.setdefault(key, []).append(
+                [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
+            )
+    else:
+        for row in evidence:
+            key = f"{row.get('player_id')}|{row.get('format') or ''}"
+            index.setdefault(key, []).append(
+                [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
+            )
     compact["browser_payload_schema"] = "ultimate-coach-browser-compact-v1"
     compact["evidence_row_fields"] = list(_BROWSER_EVIDENCE_FIELDS)
     compact["evidence_index"] = index
@@ -81,8 +97,10 @@ def _trust_card(payload: dict[str, Any]) -> str:
 </div>"""
 
 
-def render(payload: dict[str, Any], *, built_at: str = "") -> str:
-    data = _script_json(_browser_payload(payload))
+def render(
+    payload: dict[str, Any], *, built_at: str = "", consume_evidence: bool = False
+) -> str:
+    data = _script_json(_browser_payload(payload, consume_evidence=consume_evidence))
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
     trust_card = _trust_card(payload)
