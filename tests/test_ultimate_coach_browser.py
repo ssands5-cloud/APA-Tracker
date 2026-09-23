@@ -258,6 +258,16 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             assert "No direct or shared-opponent evidence for any of our roster against Finn Frost" in matchups
 
             assert "FORBIDDEN" in matchups
+
+            # Opponent roster labels must show the real skill level from
+            # their team_history row (the roster-member object's own
+            # "skill_level" field), never "undefined" -- a real bug found
+            # against real staging data where the opponent-row template
+            # read a "current_skill_level" field roster-member objects
+            # never carry (only "skill_level" does).
+            assert "Cam Cole (SL 3)" in matchups
+            assert "Drew Diaz (SL 6)" in matchups
+            assert "undefined" not in matchups
         finally:
             browser.close()
 

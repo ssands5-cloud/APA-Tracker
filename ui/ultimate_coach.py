@@ -483,7 +483,7 @@ h2,h3 {{ margin-top:0; }}
     }}
     var rows=tb.players.map(function(opp){{
       var candidates=bestSendFor(opp,ta.players,fmt);
-      return '<tr><td>'+esc(opp.name)+(opp.current_skill_level===null?'':' (SL '+opp.current_skill_level+')')+'</td><td>'+explainSend(opp,candidates)+'</td></tr>';
+      return '<tr><td>'+esc(opp.name)+(opp.skill_level===null||opp.skill_level===undefined?'':' (SL '+opp.skill_level+')')+'</td><td>'+explainSend(opp,candidates)+'</td></tr>';
     }}).join("");
     out.innerHTML='<h2>Recommended sends</h2>'+
       '<p class="muted">Per opponent player, the best-supported send from our roster. Captain-assistance only — never a solved optimal lineup and never a win-probability claim; probability_publication stays FORBIDDEN throughout.</p>'+
