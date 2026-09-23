@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sys
 import hashlib
 import json
 import shutil
@@ -22,6 +23,9 @@ import sqlite3
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.orm import Session
 
