@@ -240,8 +240,8 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             page.goto(path.as_uri())
             page.wait_for_load_state("load")
 
-            page.select_option("#team-a", "Sharks")
-            page.select_option("#team-b", "Falcons")
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
 
             rosters = page.locator("#team-rosters").inner_text()
             assert "Sharks" in rosters and "2 rostered" in rosters
@@ -283,8 +283,8 @@ def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
             page.goto(path.as_uri())
             page.wait_for_load_state("load")
 
-            page.select_option("#team-a", "Sharks")
-            page.select_option("#team-b", "Falcons")
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
             before = page.locator("#team-matchups").inner_text()
 
             # Typing narrows the team list only -- it must not clear the
@@ -292,7 +292,7 @@ def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
             # current selection is preserved when it still matches the filter.
             page.fill("#search-team-b", "Fal")
             page.wait_for_timeout(400)
-            assert page.locator("#team-b").input_value() == "Falcons"
+            assert page.locator("#team-b").input_value() == "Falcons|d1|Spring 2026"
             assert page.locator("#team-matchups").inner_text() == before
 
             # A filter that excludes the current selection clears the visible
@@ -314,13 +314,10 @@ def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
             browser.close()
 
 
-def test_team_roster_dedupes_player_rostered_in_two_divisions(tmp_path: Path):
-    # Real staging data surfaced this: a player can be rostered on a
-    # same-named team in two divisions at once (e.g. separate 8-ball and
-    # 9-ball divisions), so team_history carries two "is_current" rows for
-    # that one player on that one team. Without dedup, the roster listed
-    # him twice, double-counted his skill level in the roster total, and
-    # produced a nonsensical "recommended send" tie against himself.
+def test_same_named_teams_in_different_divisions_never_merge_rosters(tmp_path: Path):
+    # Real UAT surfaced impossible 16/21-player "teams" because the browser
+    # keyed TEAM_INDEX by display name alone. Same-named teams in different
+    # divisions/sessions are distinct roster scopes and must stay separate.
     payload = _team_payload()
     payload["players"].append(
         {
@@ -338,7 +335,7 @@ def test_team_roster_dedupes_player_rostered_in_two_divisions(tmp_path: Path):
         }
     )
 
-    path = tmp_path / "ultimate_coach_teams_dedupe.html"
+    path = tmp_path / "ultimate_coach_team_scopes.html"
     path.write_text(render(payload, built_at="test"), encoding="utf-8")
 
     with sync_playwright() as pw:
@@ -348,15 +345,22 @@ def test_team_roster_dedupes_player_rostered_in_two_divisions(tmp_path: Path):
             page.goto(path.as_uri())
             page.wait_for_load_state("load")
 
-            page.select_option("#team-a", "Sharks")
-            rosters = page.locator("#team-rosters").inner_text()
-            assert rosters.count("Gale Grant") == 1
-            assert "3 rostered" in rosters
-            # current_skill_level is null for Gale, but a division-scoped
-            # skill_level (5) is available -- it must be used, disclosed
-            # with a "*" marker, and included in the roster total exactly
-            # once (Ann 4 + Bea 5 + Gale 5 = 14), never twice (19).
-            assert "5*" in rosters
-            assert "full-roster skill total 14" in rosters
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            base_roster = page.locator("#team-rosters").inner_text()
+            assert "2 rostered" in base_roster
+            assert "Ann Archer" in base_roster and "Bea Baker" in base_roster
+            assert "Gale Grant" not in base_roster
+
+            page.select_option("#team-a", "sharks-div-a|da|Spring 2026")
+            roster_a = page.locator("#team-rosters").inner_text()
+            assert roster_a.count("Gale Grant") == 1
+            assert "1 rostered" in roster_a
+            assert "full-roster skill total 5" in roster_a
+            assert "5*" in roster_a
+
+            page.select_option("#team-a", "sharks-div-b|db|Spring 2026")
+            roster_b = page.locator("#team-rosters").inner_text()
+            assert roster_b.count("Gale Grant") == 1
+            assert "1 rostered" in roster_b
         finally:
             browser.close()
