@@ -40,7 +40,14 @@ $BuildRoot = Join-Path $DestinationRoot ("build-" + $ShortHead)
 $TempRoot = Join-Path $DestinationRoot (".build-" + $ShortHead + "-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 
 New-Item -ItemType Directory -Force -Path $DestinationRoot | Out-Null
-New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
+
+# The production builder intentionally refuses to write into a pre-existing
+# output directory. Reserve only the parent here; let the builder create
+# $TempRoot atomically. If a stale temp folder somehow exists from a prior
+# interrupted attempt, remove that temp-only path before starting.
+if (Test-Path $TempRoot) {
+    Remove-Item $TempRoot -Recurse -Force
+}
 
 $Before = (Get-FileHash $SourceDb -Algorithm SHA256).Hash
 $DbSize = (Get-Item $SourceDb).Length
