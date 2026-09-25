@@ -230,7 +230,7 @@ def _team_rosters_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[str,
         external_id = players_by_id.get(row["player_id"], {}).get("external_id")
         sheet.append(
             [
-                row["team_name"], row["division_id"], row["session_name"],
+                row["team_label"], row["division_id"], row["session_name"],
                 _player_label(row["player_name"], external_id), row["player_name"],
                 row["skill_level"], row["skill_level_is_live"],
                 row["matches_won"], row["matches_played"],
@@ -252,7 +252,7 @@ def _teams_sheet(wb: Workbook, rosters: list[dict[str, Any]]) -> list[dict[str, 
     for t in teams:
         sheet.append(
             [
-                t["team_name"], t["division_id"], t["session_name"],
+                t["team_label"], t["division_id"], t["session_name"],
                 t["roster_count"], t["known_skill_count"], t["skill_total"],
             ]
         )
@@ -487,7 +487,7 @@ def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: st
     _player_vs_player_sheet(wb, payload)
 
     player_count = len(payload.get("players") or [])
-    team_count = len({r["team_name"] for r in rosters})
+    team_count = len({r["team_scope_key"] for r in rosters})
 
     # Excel's data-validation list source cannot reliably reference a Table
     # on a different sheet than the dropdown cell itself -- confirmed via
