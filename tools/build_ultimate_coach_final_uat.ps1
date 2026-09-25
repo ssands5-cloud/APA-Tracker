@@ -5,6 +5,27 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-Sha256WithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$Attempts = 30,
+        [int]$DelaySeconds = 2
+    )
+
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try {
+            return (Get-FileHash $Path -Algorithm SHA256 -ErrorAction Stop).Hash
+        }
+        catch {
+            if ($i -eq $Attempts) {
+                throw "Could not read SHA256 for '$Path' after $Attempts attempts. Last error: $($_.Exception.Message)"
+            }
+            Write-Host "Source DB temporarily busy; retrying SHA256 ($i/$Attempts)..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+}
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Branch = "integration/ultimate-coach-pr81-pr82-reconciliation"
 
@@ -49,7 +70,7 @@ if (Test-Path $TempRoot) {
     Remove-Item $TempRoot -Recurse -Force
 }
 
-$Before = (Get-FileHash $SourceDb -Algorithm SHA256).Hash
+$Before = Get-Sha256WithRetry -Path $SourceDb
 $DbSize = (Get-Item $SourceDb).Length
 
 Write-Host ""
@@ -73,7 +94,7 @@ finally {
     Pop-Location
 }
 
-$After = (Get-FileHash $SourceDb -Algorithm SHA256).Hash
+$After = Get-Sha256WithRetry -Path $SourceDb
 if ($Before -ne $After) {
     throw "Source DB hash changed during the build. Candidate NOT promoted to the Desktop UAT folder."
 }
