@@ -62,6 +62,31 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
 
     tables = contract["tables"]
 
+    team_formats_by_scope: dict[tuple[str, str], set[str]] = defaultdict(set)
+    team_formats_by_id: dict[str, set[str]] = defaultdict(set)
+    for match in tables["team_matches"]:
+        fmt = str(match.get("format") or "").upper()
+        if fmt not in {"EIGHT", "NINE"}:
+            continue
+        session_name = str(match.get("session_name") or "")
+        for field in ("home_team_id", "away_team_id"):
+            team_id = str(match.get(field) or "")
+            if not team_id:
+                continue
+            team_formats_by_scope[(team_id, session_name)].add(fmt)
+            team_formats_by_id[team_id].add(fmt)
+
+    def _team_history_format(row: dict[str, Any]) -> str:
+        team_id = str(row.get("team_external_id") or "")
+        session_name = str(row.get("session_name") or "")
+        scoped = team_formats_by_scope.get((team_id, session_name), set())
+        if len(scoped) == 1:
+            return next(iter(scoped))
+        global_formats = team_formats_by_id.get(team_id, set())
+        if len(global_formats) == 1:
+            return next(iter(global_formats))
+        return ""
+
     history_by_player: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for row in tables["team_history"]:
         history_by_player[int(row["player_id"])].append(
@@ -70,6 +95,7 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
                 "team_name": row["team_name"] or "",
                 "division_id": row["division_id"] or "",
                 "session_name": row["session_name"] or "",
+                "format": _team_history_format(row),
                 "is_current": bool(row["is_current"]),
                 "skill_level": row["skill_level"],
                 "matches_won": row["matches_won"],
