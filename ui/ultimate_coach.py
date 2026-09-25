@@ -260,7 +260,13 @@ h2,h3 {{ margin-top:0; }}
   function career(p,fmt){{return (p.career_stats||[]).filter(function(r){{return r.format===fmt;}});}}
   function profile(p,fmt) {{
     var c=career(p,fmt), totalW=0,totalG=0; c.forEach(function(r){{if(r.matches_won!==null) totalW+=r.matches_won;if(r.matches_played!==null) totalG+=r.matches_played;}});
-    var teams=(p.team_history||[]).slice().reverse().slice(0,12);
+    var seenTeamTags={{}};
+    var teams=(p.team_history||[]).slice().reverse().filter(function(t){{
+      var tag=[t.session_name||"",t.team_name||"",t.skill_level===null?"":t.skill_level].join("|");
+      if(seenTeamTags[tag]) return false;
+      seenTeamTags[tag]=true;
+      return true;
+    }}).slice(0,12);
     return '<h2>'+esc(p.name)+'</h2>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
       +'<div class="metric"><b>'+(c.length?(totalW+'-'+Math.max(0,totalG-totalW)):'Pending')+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
@@ -351,18 +357,33 @@ h2,h3 {{ margin-top:0; }}
   // extra memory cost for the standalone build. Built once at load, not
   // per keystroke: same responsive-search contract as Player A/B (debounced
   // input, capped rendered options, no expensive work while typing).
+  function teamScopeKey(t){{
+    return [String(t.team_external_id||t.team_name||""),String(t.division_id||""),String(t.session_name||"")].join("|");
+  }}
+  function teamDisplay(team){{
+    var parts=[team.name];
+    if(team.session_name) parts.push(team.session_name);
+    if(team.division_id) parts.push("Div "+team.division_id);
+    return parts.join(" · ");
+  }}
   var TEAM_INDEX=(function(){{
     var idx={{}};
     DATA.players.forEach(function(p){{
       (p.team_history||[]).forEach(function(t){{
         if(!t.is_current||!t.team_name) return;
-        var key=t.team_name;
-        if(!idx[key]) idx[key]={{name:t.team_name,division_id:t.division_id||"",session_name:t.session_name||"",seen:{{}},players:[]}};
-        // A player can be rostered on the same-named team in more than one
-        // division/session at once (e.g. separate 8-ball and 9-ball
-        // divisions sharing a team name) -- team_history carries one row
-        // per division, so dedupe by player id or they would be listed,
-        // counted, and summed into the skill total twice.
+        var key=teamScopeKey(t);
+        if(!idx[key]) idx[key]={{
+          key:key,
+          name:t.team_name,
+          team_external_id:t.team_external_id||"",
+          division_id:t.division_id||"",
+          session_name:t.session_name||"",
+          seen:{{}},
+          players:[]
+        }};
+        // Team display names are not identities. Same-named teams in
+        // different divisions/sessions remain separate roster scopes.
+        // Within one exact scope, dedupe repeated history rows by player id.
         if(idx[key].seen[p.id]) return;
         idx[key].seen[p.id]=true;
         var sl=p.current_skill_level!==null&&p.current_skill_level!==undefined?p.current_skill_level:t.skill_level;
@@ -371,8 +392,8 @@ h2,h3 {{ margin-top:0; }}
     }});
     return idx;
   }})();
-  var TEAM_NAMES=Object.keys(TEAM_INDEX).sort(function(x,y){{return x.localeCompare(y);}});
-  var TEAM_SEARCH_NAMES={{}}; TEAM_NAMES.forEach(function(n){{TEAM_SEARCH_NAMES[n]=n.toLowerCase();}});
+  var TEAM_KEYS=Object.keys(TEAM_INDEX).sort(function(x,y){{return teamDisplay(TEAM_INDEX[x]).localeCompare(teamDisplay(TEAM_INDEX[y]));}});
+  var TEAM_SEARCH_NAMES={{}}; TEAM_KEYS.forEach(function(k){{TEAM_SEARCH_NAMES[k]=teamDisplay(TEAM_INDEX[k]).toLowerCase();}});
   var TA=document.getElementById("team-a"),TB=document.getElementById("team-b"),TF=document.getElementById("team-format");
   var STA=document.getElementById("search-team-a"),STB=document.getElementById("search-team-b");
   var SSTA=document.getElementById("search-status-team-a"),SSTB=document.getElementById("search-status-team-b");
@@ -380,13 +401,13 @@ h2,h3 {{ margin-top:0; }}
 
   function matchingTeams(filter) {{
     var q=String(filter||"").trim().toLowerCase();
-    var matches=TEAM_NAMES.filter(function(n){{return !q||TEAM_SEARCH_NAMES[n].indexOf(q)!==-1;}});
+    var matches=TEAM_KEYS.filter(function(k){{return !q||TEAM_SEARCH_NAMES[k].indexOf(q)!==-1;}});
     return {{rows:matches.slice(0,MAX_OPTIONS),total:matches.length}};
   }}
   function teamSelectMarkup(found,previous) {{
     var keep=previous&&found.rows.indexOf(previous)!==-1;
     var placeholder='<option value="">Select a team...</option>';
-    var rows=found.rows.map(function(n){{return '<option value="'+esc(n)+'">'+esc(n)+' · '+TEAM_INDEX[n].players.length+' rostered</option>';}}).join("");
+    var rows=found.rows.map(function(k){{var team=TEAM_INDEX[k];return '<option value="'+esc(k)+'">'+esc(teamDisplay(team))+' · '+team.players.length+' rostered</option>';}}).join("");
     return {{html:placeholder+rows,value:keep?previous:""}};
   }}
   function applyTeamSearch(input,select,status) {{
@@ -414,7 +435,7 @@ h2,h3 {{ margin-top:0; }}
       return '<tr><td>'+esc(m.name)+'</td><td>'+slLabel+'</td><td>'+(m.matches_won===null||m.matches_played===null?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won))+'</td><td>'+evid+'</td></tr>';
     }}).join("");
     var liveMissing=team.players.some(function(m){{return !m.skill_level_is_live&&m.skill_level!==null&&m.skill_level!==undefined;}});
-    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(team.name)+' · '+team.players.length+' rostered · '+totalNote+
+    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(teamDisplay(team))+' · '+team.players.length+' rostered · '+totalNote+
       ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).'+
       (liveMissing?' * = division-scoped skill level, no live current rating captured for that player.':'')+'</p>'+
       '<table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table>';
