@@ -120,6 +120,36 @@ def test_typing_only_filters_and_never_runs_matchup_until_selection(tmp_path: Pa
             browser.close()
 
 
+def test_profile_history_dedupes_repeated_display_rows(tmp_path: Path):
+    payload = _payload()
+    repeated = {
+        "team_external_id": "mark-it-up",
+        "team_name": "Mark It Up",
+        "division_id": "d1",
+        "session_name": "Summer 2026",
+        "is_current": True,
+        "skill_level": 4,
+        "matches_won": 1,
+        "matches_played": 2,
+    }
+    payload["players"][0]["team_history"] = [dict(repeated), dict(repeated), dict(repeated)]
+
+    path = tmp_path / "ultimate_coach_profile_history.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.select_option("#player-a", "1")
+            profile = page.locator("#profile-a").inner_text()
+            assert profile.count("Summer 2026 · Mark It Up · SL 4") == 1
+        finally:
+            browser.close()
+
+
 def test_browser_payload_compacts_and_preindexes_evidence():
     payload = _payload()
     compact = _browser_payload(payload)
