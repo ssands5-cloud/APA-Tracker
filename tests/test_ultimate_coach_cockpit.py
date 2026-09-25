@@ -19,7 +19,7 @@ def test_payload_preserves_real_profile_and_format_evidence(tmp_path):
             db.add_all([a,b]); db.flush()
             db.add(PlayerTeamHistory(player_id=a.id,team_external_id="10",team_name="Team A",division_id="99",session_name="Fall 2026",skill_level=4,is_current=True))
             db.add(PlayerLeagueCareerStats(player_id=a.id,league_id="12",league_slug="league",alias_external_id="100",format="EIGHT",matches_won=10,matches_played=20,break_and_runs=2))
-            match=Match(external_id="500",match_date="2026-09-01T19:00:00-06:00",format="EIGHT",session_name="Fall 2026",is_scored=True,is_finalized=True)
+            match=Match(external_id="500",home_team_id="10",away_team_id="20",match_date="2026-09-01T19:00:00-06:00",format="EIGHT",session_name="Fall 2026",is_scored=True,is_finalized=True)
             db.add(match); db.flush()
             db.add(PlayerHeadToHead(player_id=a.id,opponent_id=b.id,match_id=match.id,result="W",format="EIGHT",session_name="Fall 2026",own_skill_level=4,opponent_skill_level=5,points_earned=3))
             db.commit()
@@ -33,6 +33,7 @@ def test_payload_preserves_real_profile_and_format_evidence(tmp_path):
             alpha=next(p for p in payload["players"] if p["name"]=="Alpha")
             assert alpha["career_stats"][0]["matches_played"]==20
             assert alpha["team_history"][0]["session_name"]=="Fall 2026"
+            assert alpha["team_history"][0]["format"]=="EIGHT"
             assert payload["evidence"][0]["format"]=="EIGHT"
     finally:
         engine.dispose()
