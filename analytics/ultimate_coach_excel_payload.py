@@ -15,15 +15,34 @@ from collections import defaultdict
 from typing import Any
 
 
-def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """One row per (team, player) current-roster membership, deduped.
+def _team_scope_key(hist: dict[str, Any]) -> str:
+    """Stable current-roster scope identity; never key a team by display name alone."""
+    return "|".join(
+        [
+            str(hist.get("team_external_id") or hist.get("team_name") or ""),
+            str(hist.get("division_id") or ""),
+            str(hist.get("session_name") or ""),
+        ]
+    )
 
-    A player can be rostered on a same-named team in two divisions at once
-    (e.g. separate 8-ball and 9-ball divisions), so team_history can carry
-    two is_current rows for one player on one team -- this was a real bug
-    found in the HTML Team vs Team build against real staging data (see
-    ui/ultimate_coach.py's TEAM_INDEX comment). Keep only the first
-    membership row per (team_name, player_id) pair.
+
+def _team_label(hist: dict[str, Any]) -> str:
+    """Human-readable disambiguated team scope for dropdowns and sheets."""
+    parts = [str(hist.get("team_name") or "Unknown team")]
+    if hist.get("session_name"):
+        parts.append(str(hist["session_name"]))
+    if hist.get("division_id"):
+        parts.append(f"Div {hist['division_id']}")
+    return " · ".join(parts)
+
+
+def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per exact current team-scope/player membership, deduped.
+
+    Team display names are not identities. The same name can exist in more
+    than one division/session with different rosters. Preserve those scopes
+    separately using team_external_id + division_id + session_name, then
+    dedupe only duplicate rows for the same player inside the same scope.
     """
     seen: set[tuple[str, int]] = set()
     rows: list[dict[str, Any]] = []
@@ -32,7 +51,8 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for hist in player.get("team_history") or []:
             if not hist.get("is_current") or not hist.get("team_name"):
                 continue
-            key = (hist["team_name"], pid)
+            scope_key = _team_scope_key(hist)
+            key = (scope_key, pid)
             if key in seen:
                 continue
             seen.add(key)
@@ -40,6 +60,9 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
             skill_level = live_sl if live_sl is not None else hist.get("skill_level")
             rows.append(
                 {
+                    "team_scope_key": scope_key,
+                    "team_label": _team_label(hist),
+                    "team_external_id": hist.get("team_external_id") or "",
                     "team_name": hist["team_name"],
                     "division_id": hist.get("division_id") or "",
                     "session_name": hist.get("session_name") or "",
@@ -51,17 +74,20 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "matches_played": hist.get("matches_played"),
                 }
             )
-    rows.sort(key=lambda r: (r["team_name"], r["player_name"]))
+    rows.sort(key=lambda r: (r["team_label"], r["player_name"]))
     return rows
 
 
 def build_teams_summary(team_rosters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per current team: roster size and known-skill total."""
+    """One row per exact current team scope: roster size and known-skill total."""
     by_team: dict[str, dict[str, Any]] = {}
     for row in team_rosters:
         team = by_team.setdefault(
-            row["team_name"],
+            row["team_scope_key"],
             {
+                "team_scope_key": row["team_scope_key"],
+                "team_label": row["team_label"],
+                "team_external_id": row["team_external_id"],
                 "team_name": row["team_name"],
                 "division_id": row["division_id"],
                 "session_name": row["session_name"],
@@ -75,7 +101,7 @@ def build_teams_summary(team_rosters: list[dict[str, Any]]) -> list[dict[str, An
             team["known_skill_count"] += 1
             team["skill_total"] += row["skill_level"]
     teams = list(by_team.values())
-    teams.sort(key=lambda r: r["team_name"])
+    teams.sort(key=lambda r: r["team_label"])
     return teams
 
 
