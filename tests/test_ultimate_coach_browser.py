@@ -302,6 +302,61 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             browser.close()
 
 
+def test_team_dropdown_filters_same_named_scopes_by_selected_format(tmp_path: Path):
+    payload = _team_payload()
+    payload["players"].append(
+        {
+            "id": 7,
+            "external_id": "7",
+            "name": "Nina Nine",
+            "current_skill_level": 4,
+            "current_matches_won": 1,
+            "current_matches_played": 2,
+            "team_history": [
+                {
+                    "team_external_id": "Sharks-NINE",
+                    "team_name": "Sharks",
+                    "division_id": "d9",
+                    "session_name": "Spring 2026",
+                    "format": "NINE",
+                    "is_current": True,
+                    "skill_level": 4,
+                    "matches_won": 1,
+                    "matches_played": 2,
+                }
+            ],
+            "career_stats": [],
+        }
+    )
+    for player in payload["players"]:
+        for hist in player.get("team_history") or []:
+            hist.setdefault("format", "EIGHT")
+
+    path = tmp_path / "ultimate_coach_team_format_filter.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#search-team-a", "Sharks")
+            page.wait_for_timeout(400)
+            options = page.locator("#team-a option").all_inner_texts()
+            assert any("8-Ball" in text and "Div d1" in text for text in options)
+            assert not any("9-Ball" in text or "Div d9" in text for text in options)
+
+            page.select_option("#team-format", "NINE")
+            page.wait_for_timeout(50)
+            options = page.locator("#team-a option").all_inner_texts()
+            assert any("9-Ball" in text and "Div d9" in text for text in options)
+            assert not any("8-Ball" in text or "Div d1" in text for text in options)
+        finally:
+            browser.close()
+
+
 def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
     path = tmp_path / "ultimate_coach_teams_search.html"
     path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
