@@ -17,7 +17,7 @@ def _payload():
                 "name": "Ann Archer",
                 "current_skill_level": 4,
                 "team_history": [
-                    {"team_name": "Sharks", "division_id": "d1", "session_name": "Spring", "is_current": True, "skill_level": 4, "matches_won": 4, "matches_played": 6},
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring", "is_current": True, "skill_level": 4, "matches_won": 4, "matches_played": 6},
                 ],
             },
             {
@@ -26,8 +26,8 @@ def _payload():
                 "current_skill_level": None,
                 "team_history": [
                     # Same team, two divisions at once -- must dedupe to one row.
-                    {"team_name": "Sharks", "division_id": "da", "session_name": "Spring", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
-                    {"team_name": "Sharks", "division_id": "db", "session_name": "Spring", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
+                    {"team_external_id": "sharks-b", "team_name": "Sharks", "division_id": "db", "session_name": "Spring", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
                     # Stale (not current) membership on a different team -- excluded.
                     {"team_name": "Old Team", "division_id": "d0", "session_name": "Fall 2025", "is_current": False, "skill_level": 5, "matches_won": 1, "matches_played": 2},
                 ],
@@ -37,7 +37,7 @@ def _payload():
                 "name": "Cam Cole",
                 "current_skill_level": 3,
                 "team_history": [
-                    {"team_name": "Falcons", "division_id": "d2", "session_name": "Spring", "is_current": True, "skill_level": 3, "matches_won": 1, "matches_played": 4},
+                    {"team_external_id": "falcons-a", "team_name": "Falcons", "division_id": "d2", "session_name": "Spring", "is_current": True, "skill_level": 3, "matches_won": 1, "matches_played": 4},
                 ],
             },
         ],
@@ -50,34 +50,40 @@ def _payload():
     }
 
 
-def test_team_rosters_dedupes_multi_division_membership():
+def test_team_rosters_keep_same_named_division_scopes_separate():
     rosters = build_team_rosters(_payload())
     sharks = [r for r in rosters if r["team_name"] == "Sharks"]
 
-    assert len(sharks) == 2
-    bea_rows = [r for r in sharks if r["player_name"] == "Bea Baker"]
-    assert len(bea_rows) == 1
-    # current_skill_level is null for Bea -- must fall back to the
-    # division-scoped team_history skill_level rather than showing nothing.
-    assert bea_rows[0]["skill_level"] == 5
-    assert bea_rows[0]["skill_level_is_live"] is False
+    # Ann + Bea share the exact d1 scope; Bea is also legitimately rostered
+    # on a different same-named team scope in db. Never merge those scopes.
+    assert len(sharks) == 3
+    scope_a = [r for r in sharks if r["team_scope_key"] == "sharks-a|d1|Spring"]
+    scope_b = [r for r in sharks if r["team_scope_key"] == "sharks-b|db|Spring"]
+    assert {r["player_name"] for r in scope_a} == {"Ann Archer", "Bea Baker"}
+    assert {r["player_name"] for r in scope_b} == {"Bea Baker"}
 
-    ann_rows = [r for r in sharks if r["player_name"] == "Ann Archer"]
-    assert ann_rows[0]["skill_level"] == 4
-    assert ann_rows[0]["skill_level_is_live"] is True
+    bea_a = next(r for r in scope_a if r["player_name"] == "Bea Baker")
+    assert bea_a["skill_level"] == 5
+    assert bea_a["skill_level_is_live"] is False
+
+    ann = next(r for r in scope_a if r["player_name"] == "Ann Archer")
+    assert ann["skill_level"] == 4
+    assert ann["skill_level_is_live"] is True
 
     # Stale (non-current) membership must never appear.
     assert not any(r["team_name"] == "Old Team" for r in rosters)
 
 
-def test_teams_summary_sums_known_skill_only():
+def test_teams_summary_sums_each_team_scope_independently():
     rosters = build_team_rosters(_payload())
     teams = build_teams_summary(rosters)
-    sharks = next(t for t in teams if t["team_name"] == "Sharks")
+    by_scope = {t["team_scope_key"]: t for t in teams}
 
-    assert sharks["roster_count"] == 2
-    assert sharks["known_skill_count"] == 2
-    assert sharks["skill_total"] == 9  # Ann 4 + Bea 5, counted once each
+    assert by_scope["sharks-a|d1|Spring"]["roster_count"] == 2
+    assert by_scope["sharks-a|d1|Spring"]["known_skill_count"] == 2
+    assert by_scope["sharks-a|d1|Spring"]["skill_total"] == 9
+    assert by_scope["sharks-b|db|Spring"]["roster_count"] == 1
+    assert by_scope["sharks-b|db|Spring"]["skill_total"] == 5
 
 
 def test_player_vs_player_pairs_aggregate_both_perspectives():
