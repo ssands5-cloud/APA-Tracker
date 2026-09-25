@@ -363,6 +363,7 @@ h2,h3 {{ margin-top:0; }}
   function teamDisplay(team){{
     var parts=[team.name];
     if(team.session_name) parts.push(team.session_name);
+    if(team.format) parts.push(formatName(team.format));
     if(team.division_id) parts.push("Div "+team.division_id);
     return parts.join(" · ");
   }}
@@ -378,6 +379,7 @@ h2,h3 {{ margin-top:0; }}
           team_external_id:t.team_external_id||"",
           division_id:t.division_id||"",
           session_name:t.session_name||"",
+          format:t.format||"",
           seen:{{}},
           players:[]
         }};
@@ -401,7 +403,11 @@ h2,h3 {{ margin-top:0; }}
 
   function matchingTeams(filter) {{
     var q=String(filter||"").trim().toLowerCase();
-    var matches=TEAM_KEYS.filter(function(k){{return !q||TEAM_SEARCH_NAMES[k].indexOf(q)!==-1;}});
+    var matches=TEAM_KEYS.filter(function(k){{
+      var team=TEAM_INDEX[k];
+      var formatMatches=!team.format||team.format===TF.value;
+      return formatMatches&&(!q||TEAM_SEARCH_NAMES[k].indexOf(q)!==-1);
+    }});
     return {{rows:matches.slice(0,MAX_OPTIONS),total:matches.length}};
   }}
   function teamSelectMarkup(found,previous) {{
@@ -514,7 +520,11 @@ h2,h3 {{ margin-top:0; }}
 
   TA.addEventListener("change",renderTeamMatchups);
   TB.addEventListener("change",renderTeamMatchups);
-  TF.addEventListener("change",renderTeamMatchups);
+  TF.addEventListener("change",function(){{
+    applyTeamSearch(STA,TA,SSTA);
+    applyTeamSearch(STB,TB,SSTB);
+    renderTeamMatchups();
+  }});
   var teamSearchTimers={{a:null,b:null}};
   STA.addEventListener("input",function(){{
     clearTimeout(teamSearchTimers.a);
