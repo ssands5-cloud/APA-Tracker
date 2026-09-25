@@ -50,7 +50,7 @@ def _payload():
                 "id": 1, "external_id": "1001", "name": "Ann Archer",
                 "current_skill_level": 4, "current_matches_won": 10, "current_matches_played": 15,
                 "team_history": [
-                    {"team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": 4, "matches_won": 10, "matches_played": 15},
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": 4, "matches_won": 10, "matches_played": 15},
                 ],
             },
             {
@@ -58,15 +58,15 @@ def _payload():
                 "current_skill_level": None, "current_matches_won": None, "current_matches_played": None,
                 "team_history": [
                     # Same team, two divisions -- must dedupe on the Team Rosters sheet.
-                    {"team_name": "Sharks", "division_id": "da", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
-                    {"team_name": "Sharks", "division_id": "db", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
+                    {"team_external_id": "sharks-b", "team_name": "Sharks", "division_id": "db", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
                 ],
             },
             {
                 "id": 3, "external_id": "1003", "name": "Cam Cole",
                 "current_skill_level": 3, "current_matches_won": 3, "current_matches_played": 5,
                 "team_history": [
-                    {"team_name": "Falcons", "division_id": "d2", "session_name": "Spring 2026", "is_current": True, "skill_level": 3, "matches_won": 3, "matches_played": 5},
+                    {"team_external_id": "falcons-a", "team_name": "Falcons", "division_id": "d2", "session_name": "Spring 2026", "is_current": True, "skill_level": 3, "matches_won": 3, "matches_played": 5},
                 ],
             },
             {
@@ -114,17 +114,21 @@ def test_players_sheet_disambiguates_duplicate_names(tmp_path):
     assert len(labels) == len(set(labels))
 
 
-def test_team_rosters_sheet_dedupes_multi_division_membership(tmp_path):
+def test_team_rosters_sheet_keeps_same_named_scopes_separate(tmp_path):
     path = write_workbook(_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db")
     wb = load_workbook(path)
 
     rows = list(wb["Team Rosters"].iter_rows(min_row=2, values_only=True))
-    sharks_rows = [r for r in rows if r[0] == "Sharks"]
-    assert len(sharks_rows) == 2  # Ann + Bea once each, never Bea twice
+    scope_a = "Sharks · Spring 2026 · Div d1"
+    scope_b = "Sharks · Spring 2026 · Div db"
+    assert len([r for r in rows if r[0] == scope_a]) == 2  # Ann + Bea
+    assert len([r for r in rows if r[0] == scope_b]) == 1  # Bea in another exact scope
 
     teams_rows = {r[0]: r for r in wb["Teams"].iter_rows(min_row=2, values_only=True)}
-    assert teams_rows["Sharks"][3] == 2  # Roster Count
-    assert teams_rows["Sharks"][5] == 9  # Skill Total: Ann 4 + Bea 5, once each
+    assert teams_rows[scope_a][3] == 2
+    assert teams_rows[scope_a][5] == 9
+    assert teams_rows[scope_b][3] == 1
+    assert teams_rows[scope_b][5] == 5
 
 
 def test_player_vs_player_sheet_has_pair_key_for_lookup(tmp_path):
@@ -193,12 +197,12 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         assert dash.Range("B18").Value == "—"
 
         night = wb.Worksheets("Match Night")
-        night.Range("B5").Value = "Sharks"
-        night.Range("C5").Value = "Falcons"
+        night.Range("B5").Value = "Sharks · Spring 2026 · Div d1"
+        night.Range("C5").Value = "Falcons · Spring 2026 · Div d2"
         excel.CalculateFullRebuild()
-        assert night.Range("B7").Value == 2  # Sharks roster count (deduped)
+        assert night.Range("B7").Value == 2  # exact Sharks d1 scope only
         assert night.Range("C7").Value == 1  # Falcons roster count
-        assert night.Range("B9").Value == 9  # Sharks skill total: 4 + 5
+        assert night.Range("B9").Value == 9  # exact Sharks d1 skill total: 4 + 5
         assert night.Range("C9").Value == 3  # Falcons skill total
     finally:
         wb.Close(False)
