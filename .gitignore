@@ -26,6 +26,11 @@ demo-runs/
 # Same reasoning as demo-runs/ above -- all build output, none of it source.
 coach-advantage-runs/
 
+# Verified Ultimate Coach production candidates from
+# scripts/build_ultimate_coach_production.py -- generated HTML/manifest/READY
+# bundles, all build output, none of it source.
+ultimate-coach-runs/
+
 # Local scratch state from agent tooling; not part of the project.
 .superpowers/
 

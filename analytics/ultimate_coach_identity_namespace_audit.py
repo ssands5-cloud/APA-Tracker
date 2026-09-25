@@ -234,6 +234,7 @@ def audit_identity_namespace(
     contract: dict[str, Any],
     *,
     manifest: dict[str, Any] | None = None,
+    include_participant_details: bool = True,
 ) -> dict[str, Any]:
     """Audit participant identity provenance without changing any source data.
 
@@ -254,6 +255,8 @@ def audit_identity_namespace(
 
     game_key_counts = Counter(_text(row.get("game_key")) for row in games if isinstance(row, dict))
     participant_rows: list[dict[str, Any]] = []
+    status_counts: Counter[str] = Counter()
+    reason_counts: Counter[str] = Counter()
     quarantined_game_keys: set[str] = set()
     identity_verified_game_keys: set[str] = set()
     structural_issues: list[dict[str, Any]] = []
@@ -314,7 +317,11 @@ def audit_identity_namespace(
             duplicate_manifest_ids=duplicate_manifest_ids,
             team_match=team_match,
         )
-        participant_rows.extend([a, b])
+        for participant in (a, b):
+            status_counts[participant["status"]] += 1
+            reason_counts[participant["reason"]] += 1
+            if include_participant_details:
+                participant_rows.append(participant)
 
         statuses = {a["status"], b["status"]}
         mirror_ok = game.get("mirror_status") == _TRUSTED_MIRROR_STATUS
@@ -323,9 +330,6 @@ def audit_identity_namespace(
             quarantined_game_keys.add(game_key)
         elif statuses == {"EXACT_ROSTER_SCOPE"} and mirror_ok:
             identity_verified_game_keys.add(game_key)
-
-    status_counts = Counter(row["status"] for row in participant_rows)
-    reason_counts = Counter(row["reason"] for row in participant_rows)
 
     suspect_rows = [row for row in participant_rows if row["status"] == "SUSPECT"]
     indeterminate_rows = [row for row in participant_rows if row["status"] == "INDETERMINATE"]
@@ -376,10 +380,10 @@ def audit_identity_namespace(
         "quarantined_game_keys": sorted(quarantined_game_keys),
         "counts": {
             "all_games_rows": len(games),
-            "participant_audits": len(participant_rows),
-            "exact_roster_scope_participants": len(exact_rows),
-            "suspect_participants": len(suspect_rows),
-            "indeterminate_participants": len(indeterminate_rows),
+            "participant_audits": sum(status_counts.values()),
+            "exact_roster_scope_participants": status_counts["EXACT_ROSTER_SCOPE"],
+            "suspect_participants": status_counts["SUSPECT"],
+            "indeterminate_participants": status_counts["INDETERMINATE"],
             "structural_issues": len(structural_issues),
             "identity_verified_games": len(identity_verified_game_keys),
             "quarantined_games": len(quarantined_game_keys),
