@@ -72,6 +72,35 @@ def _player_label(name: str, external_id: Any) -> str:
     return f"{name} (Member #{external_id})"
 
 
+# EIGHT/NINE are always offered even with zero matching evidence -- they are
+# the two primary APA team formats. Any other raw format recorded in the
+# source data (e.g. "MASTERS", "MASTERS ALT" -- both are real APA formats,
+# see scraper.graphql_scraper._VALID_FORMATS) is appended rather than
+# dropped, so a real recorded meeting can never be unreachable from the
+# dashboard's Format dropdown just because it happened outside 8-Ball/9-Ball.
+BASE_FORMAT_ORDER = ["EIGHT", "NINE"]
+FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
+
+
+def _format_label(fmt: str) -> str:
+    return FORMAT_LABELS.get(fmt, fmt)
+
+
+def _dashboard_format_options(pairs: list[dict[str, Any]]) -> list[str]:
+    present = {row["format"] for row in pairs if row.get("format")}
+    extra = sorted(present - set(BASE_FORMAT_ORDER))
+    return BASE_FORMAT_ORDER + extra
+
+
+def _format_code_formula(options: list[str], cell: str) -> str:
+    expr = '"EIGHT"'
+    for fmt in reversed(options):
+        if fmt == "EIGHT":
+            continue
+        expr = f'IF({cell}="{_format_label(fmt)}","{fmt}",{expr})'
+    return "=" + expr
+
+
 def _style_header(sheet: Worksheet, columns: list[str], *, freeze: str = "A2") -> None:
     sheet.append(columns)
     for cell in sheet[1]:
@@ -285,7 +314,7 @@ def _player_vs_player_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[
         sheet.append(
             [
                 _player_label(row["player_name"], player.get("external_id")),
-                "8-Ball" if row["format"] == "EIGHT" else "9-Ball" if row["format"] == "NINE" else row["format"],
+                _format_label(row["format"]),
                 _player_label(row["opponent_name"], opponent.get("external_id")),
                 row["wins"], row["losses"], row["games"], row["win_rate"],
                 row["pair_key"],
@@ -306,7 +335,7 @@ def _add_dropdown(sheet: Worksheet, cell: str, source_ref: str, *, title: str, m
     validation.add(cell)
 
 
-def _coach_dashboard_sheet(wb: Workbook, player_count: int, pvp_count: int) -> None:
+def _coach_dashboard_sheet(wb: Workbook, player_count: int, format_options: list[str]) -> None:
     sheet = wb.create_sheet("Coach Dashboard", 0)
     sheet.sheet_view.showGridLines = False
     sheet.column_dimensions["A"].width = 22
@@ -327,7 +356,7 @@ def _coach_dashboard_sheet(wb: Workbook, player_count: int, pvp_count: int) -> N
     sheet["A6"].font = LABEL_FONT
     sheet["B4"] = ""
     sheet["B5"] = ""
-    sheet["B6"] = "8-Ball"
+    sheet["B6"] = _format_label(format_options[0])
 
     if player_count:
         _add_dropdown(
@@ -338,7 +367,11 @@ def _coach_dashboard_sheet(wb: Workbook, player_count: int, pvp_count: int) -> N
             sheet, "B5", "PlayerLabelList",
             title="Unknown player", message="Choose a player already listed on the Players sheet.",
         )
-    _add_dropdown(sheet, "B6", '"8-Ball,9-Ball"', title="Format", message="Choose 8-Ball or 9-Ball.")
+    format_labels = [_format_label(fmt) for fmt in format_options]
+    _add_dropdown(
+        sheet, "B6", '"' + ",".join(format_labels) + '"',
+        title="Format", message="Choose " + " / ".join(format_labels) + ".",
+    )
 
     # Helper block: resolve dropdown labels to canonical IDs and build the
     # same pair key the Player vs Player sheet was written with. Kept on the
@@ -352,7 +385,7 @@ def _coach_dashboard_sheet(wb: Workbook, player_count: int, pvp_count: int) -> N
     sheet["A11"] = "Player B ID"
     sheet["B11"] = '=IFERROR(INDEX(Players_Table[Player ID],MATCH(B5,Players_Table[Player Label],0)),"")'
     sheet["A12"] = "Format code"
-    sheet["B12"] = '=IF(B6="9-Ball","NINE","EIGHT")'
+    sheet["B12"] = _format_code_formula(format_options, "B6")
     sheet["A13"] = "Pair key"
     sheet["B13"] = '=B10&"|"&B12&"|"&B11'
     sheet["A14"] = "Pair row in Player vs Player"
@@ -484,7 +517,7 @@ def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: st
     _players_sheet(wb, payload)
     rosters = _team_rosters_sheet(wb, payload)
     _teams_sheet(wb, rosters)
-    _player_vs_player_sheet(wb, payload)
+    pairs = _player_vs_player_sheet(wb, payload)
 
     player_count = len(payload.get("players") or [])
     team_count = len({r["team_scope_key"] for r in rosters})
@@ -505,7 +538,7 @@ def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: st
         )
 
     _match_night_sheet(wb, team_count)
-    _coach_dashboard_sheet(wb, player_count, len(rosters))
+    _coach_dashboard_sheet(wb, player_count, _dashboard_format_options(pairs))
 
     wb.active = wb["Coach Dashboard"]
     return wb

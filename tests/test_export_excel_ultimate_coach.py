@@ -85,6 +85,12 @@ def _payload():
             {"player_id": 3, "opponent_id": 1, "format": "EIGHT", "result": "L"},
             {"player_id": 1, "opponent_id": 3, "format": "EIGHT", "result": "L"},
             {"player_id": 3, "opponent_id": 1, "format": "EIGHT", "result": "W"},
+            # A real, distinct APA format outside 8-Ball/9-Ball (see
+            # scraper.graphql_scraper._VALID_FORMATS) -- these two players
+            # have NO 8-Ball/9-Ball history together, only this one. Must
+            # stay reachable from the Coach Dashboard's Format dropdown
+            # rather than silently reading as "no recorded direct meeting".
+            {"player_id": 2, "opponent_id": 3, "format": "MASTERS", "result": "W"},
         ],
     }
 
@@ -141,6 +147,28 @@ def test_player_vs_player_sheet_has_pair_key_for_lookup(tmp_path):
     assert "3|EIGHT|1" in keys
 
 
+def test_coach_dashboard_format_dropdown_includes_non_eight_nine_formats(tmp_path):
+    path = write_workbook(_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db")
+    wb = load_workbook(path)
+    dash = wb["Coach Dashboard"]
+
+    validations = [dv for dv in dash.data_validations.dataValidation if "B6" in dv.sqref]
+    assert len(validations) == 1
+    # "MASTERS" evidence exists in the fixture with no matching 8-Ball/9-Ball
+    # history -- if the dropdown only ever offered 8-Ball/9-Ball, that real
+    # recorded meeting would be permanently unreachable from this sheet.
+    assert validations[0].formula1 == '"8-Ball,9-Ball,Masters"'
+
+    assert dash["B12"].value == (
+        '=IF(B6="9-Ball","NINE",IF(B6="Masters","MASTERS","EIGHT"))'
+    )
+
+    rows = list(wb["Player vs Player"].iter_rows(min_row=2, values_only=True))
+    masters_rows = [r for r in rows if r[7] == "2|MASTERS|3"]
+    assert len(masters_rows) == 1
+    assert masters_rows[0][1] == "Masters"  # display label, not raw "MASTERS"
+
+
 def test_returns_none_workbook_gracefully_handles_no_players(tmp_path):
     payload = _payload()
     payload["players"] = []
@@ -195,6 +223,16 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         # level, but easy to misread if a blank INDEX result silently
         # reads back as numeric 0 instead of triggering the fallback).
         assert dash.Range("B18").Value == "—"
+
+        dash.Range("B4").Value = "Bea Baker (Member #1002)"
+        dash.Range("B5").Value = "Cam Cole (Member #1003)"
+        dash.Range("B6").Value = "Masters"
+        excel.CalculateFullRebuild()
+        # Real recorded evidence exists for this pair only under "Masters" --
+        # must be reachable via the dropdown, not reported as no evidence.
+        assert dash.Range("B21").Value == 1  # Wins
+        assert dash.Range("B23").Value == 1  # Recorded meetings
+        assert "Direct evidence found" in str(dash.Range("B25").Value)
 
         night = wb.Worksheets("Match Night")
         night.Range("B5").Value = "Sharks · Spring 2026 · Div d1"
