@@ -65,8 +65,14 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
     team_formats_by_scope: dict[tuple[str, str], set[str]] = defaultdict(set)
     team_formats_by_id: dict[str, set[str]] = defaultdict(set)
     for match in tables["team_matches"]:
+        # Real team_matches rows carry MASTERS/MASTERS ALT too (see
+        # scraper.graphql_scraper._VALID_FORMATS) -- a team-vs-team match in
+        # one of those formats is just as real as an EIGHT/NINE one and
+        # must count toward that team's derived format. Only a genuinely
+        # blank/unrecognized format is excluded; nothing is hardcoded to a
+        # 2-value allowlist.
         fmt = str(match.get("format") or "").upper()
-        if fmt not in {"EIGHT", "NINE"}:
+        if not fmt:
             continue
         session_name = str(match.get("session_name") or "")
         for field in ("home_team_id", "away_team_id"):

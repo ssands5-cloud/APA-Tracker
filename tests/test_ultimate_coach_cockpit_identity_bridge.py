@@ -265,6 +265,58 @@ class TestEvidenceFiltering:
         assert eight_ball_rows_from_that_game == []
 
 
+class TestTeamFormatDerivation:
+    """Real team_matches rows can carry MASTERS/MASTERS ALT, not just
+    EIGHT/NINE (see scraper.graphql_scraper._VALID_FORMATS) -- a hardcoded
+    {"EIGHT","NINE"} allowlist previously discarded those rows before they
+    ever reached team_formats_by_scope/by_id, so a team whose only matches
+    were Masters/Masters Alt always derived an empty format instead of the
+    real one."""
+
+    def _fixture(self, *, team_matches: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "schema": CONTRACT_SCHEMA,
+            "tables": {
+                "players": [_player_row(1, "1001", "Ann Fixture")],
+                "team_matches": team_matches,
+                "player_match_stats": [],
+                "raw_h2h_evidence": [],
+                "all_games": [],
+                "career_stats": [],
+                "team_history": [_history_row(1, "T1", "Fall 2026", member_external_id="1001")],
+                "coverage_issues": [],
+            },
+            "counts": {"players": 1, "team_matches": len(team_matches), "all_games": 0, "coverage_issues": 0},
+            "notes": {},
+        }
+
+    def _derived_format(self, monkeypatch, *, format: str) -> str:
+        fixture = self._fixture(
+            team_matches=[{"match_id": 900, "home_team_id": "T1", "away_team_id": "T2", "format": format}]
+        )
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        payload = bridge.build_verified_cockpit_payload(db=None)
+        return payload["players"][0]["team_history"][0]["format"]
+
+    def test_masters_format_team_match_is_no_longer_discarded(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="MASTERS") == "MASTERS"
+
+    def test_masters_alt_format_team_match_is_no_longer_discarded(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="MASTERS ALT") == "MASTERS ALT"
+
+    def test_eight_and_nine_still_derive_correctly(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="EIGHT") == "EIGHT"
+        assert self._derived_format(monkeypatch, format="NINE") == "NINE"
+
+    def test_blank_format_still_derives_to_unknown(self, monkeypatch):
+        fixture = self._fixture(
+            team_matches=[{"match_id": 900, "home_team_id": "T1", "away_team_id": "T2"}]
+        )
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        payload = bridge.build_verified_cockpit_payload(db=None)
+        assert payload["players"][0]["team_history"][0]["format"] == ""
+
+
 class TestProbabilityLocks:
     def test_locks_are_hardcoded_not_derived_from_payload_content(self, payload):
         """Case 9: matchup_probability/predictive_confidence/

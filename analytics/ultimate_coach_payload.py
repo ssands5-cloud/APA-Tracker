@@ -29,8 +29,12 @@ def build_ultimate_coach_payload(db: Session) -> dict[str, Any]:
     team_formats_by_scope: dict[tuple[str, str], set[str]] = defaultdict(set)
     team_formats_by_id: dict[str, set[str]] = defaultdict(set)
     for match in tables["team_matches"]:
+        # Kept in sync with analytics.ultimate_coach_cockpit_identity_bridge:
+        # real team_matches rows carry MASTERS/MASTERS ALT too, not just
+        # EIGHT/NINE -- only a genuinely blank/unrecognized format is
+        # excluded here, never a hardcoded 2-value allowlist.
         fmt = str(match.get("format") or "").upper()
-        if fmt not in {"EIGHT", "NINE"}:
+        if not fmt:
             continue
         session_name = str(match.get("session_name") or "")
         for field in ("home_team_id", "away_team_id"):
