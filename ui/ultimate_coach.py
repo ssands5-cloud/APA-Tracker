@@ -467,9 +467,19 @@ h2,h3 {{ margin-top:0; }}
     var rendered=teamSelectMarkup(found,previous);
     select.innerHTML=rendered.html;
     select.value=rendered.value;
-    status.textContent=found.total>MAX_OPTIONS
-      ? "Showing first "+MAX_OPTIONS+" of "+found.total+" matches. Keep typing, then choose a team."
-      : found.total+" matching team"+(found.total===1?"":"s")+".";
+    if(found.total>MAX_OPTIONS) {{
+      status.textContent="Showing first "+MAX_OPTIONS+" of "+found.total+" matches. Keep typing, then choose a team.";
+    }} else if(found.total===0 && matchingTeams("").total===0) {{
+      // Zero results even with an empty search term means no CURRENTLY
+      // ROSTERED team has this format at all -- not a search-text miss, and
+      // not necessarily a bug: a format can have real recorded evidence
+      // (reachable from Player A/B scouting) while no team actively plays
+      // it right now. Say so plainly instead of leaving an opaque "0
+      // matching teams." that reads like a broken selector.
+      status.textContent="No currently-rostered team plays "+esc(formatName(TF.value))+" right now.";
+    }} else {{
+      status.textContent=found.total+" matching team"+(found.total===1?"":"s")+".";
+    }}
   }}
   applyTeamSearch(STA,TA,SSTA);
   applyTeamSearch(STB,TB,SSTB);

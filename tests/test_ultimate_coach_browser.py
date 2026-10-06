@@ -456,6 +456,59 @@ def test_team_dropdown_filters_same_named_scopes_by_selected_format(tmp_path: Pa
             browser.close()
 
 
+def test_team_format_search_explains_zero_current_teams(tmp_path: Path):
+    payload = _team_payload()
+    for player in payload["players"]:
+        for hist in player.get("team_history") or []:
+            hist["format"] = "EIGHT"
+    # No team in this fixture ever plays Masters Alt -- but a real recorded
+    # meeting under that format must still exist so "Masters Alt" is a real
+    # offered <option> (reachable for Player A/B scouting), exercising the
+    # exact real-world shape: a format with real evidence but zero current
+    # team rosters, not an absent/fabricated option.
+    payload["evidence"].append(
+        {"player_id": 1, "opponent_id": 3, "match_id": 99, "match_external_id": "99", "match_date": "2026-05-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "MASTERS ALT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 3, "points_earned": 3, "nine_ball_points": None},
+    )
+
+    path = tmp_path / "ultimate_coach_team_format_empty_state.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            # Baseline under 8-Ball (the default): real teams exist, plain
+            # count (2 current scopes: Sharks, Falcons -- Evan has no team).
+            assert page.locator("#search-status-team-a").inner_text() == "2 matching teams."
+
+            page.select_option("#team-format", "MASTERS ALT")
+            # select_option itself raises if "MASTERS ALT" is not a real
+            # <option> -- the regression guard for evidence staying
+            # reachable even though no team plays this format.
+            assert page.locator("#search-status-team-a").inner_text() == (
+                "No currently-rostered team plays Masters Alt right now."
+            )
+            assert page.locator("#search-status-team-b").inner_text() == (
+                "No currently-rostered team plays Masters Alt right now."
+            )
+            # Only the "Select a team..." placeholder -- never a stale list
+            # left over from the previous format.
+            assert page.locator("#team-a option").count() == 1
+
+            # Must not be confused with a plain search-text miss: typing a
+            # non-matching term under a format that DOES have teams stays
+            # the ordinary zero-count message, not the format-availability one.
+            page.select_option("#team-format", "EIGHT")
+            page.fill("#search-team-a", "zzz-no-such-team")
+            page.wait_for_timeout(400)
+            assert page.locator("#search-status-team-a").inner_text() == "0 matching teams."
+        finally:
+            browser.close()
+
+
 def test_team_search_only_filters_until_explicit_selection(tmp_path: Path):
     path = tmp_path / "ultimate_coach_teams_search.html"
     path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
