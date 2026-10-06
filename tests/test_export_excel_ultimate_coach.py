@@ -50,23 +50,26 @@ def _payload():
                 "id": 1, "external_id": "1001", "name": "Ann Archer",
                 "current_skill_level": 4, "current_matches_won": 10, "current_matches_played": 15,
                 "team_history": [
-                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": 4, "matches_won": 10, "matches_played": 15},
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "format": "EIGHT", "is_current": True, "skill_level": 4, "matches_won": 10, "matches_played": 15},
                 ],
             },
             {
                 "id": 2, "external_id": "1002", "name": "Bea Baker",
                 "current_skill_level": None, "current_matches_won": None, "current_matches_played": None,
                 "team_history": [
-                    # Same team, two divisions -- must dedupe on the Team Rosters sheet.
-                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
-                    {"team_external_id": "sharks-b", "team_name": "Sharks", "division_id": "db", "session_name": "Spring 2026", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
+                    # Same team name, two genuinely different division/format
+                    # scopes (real data has exactly this shape -- a same-named
+                    # team split across an 8-Ball and a 9-Ball division) --
+                    # must dedupe on the Team Rosters sheet, never merge.
+                    {"team_external_id": "sharks-a", "team_name": "Sharks", "division_id": "d1", "session_name": "Spring 2026", "format": "EIGHT", "is_current": True, "skill_level": 5, "matches_won": 2, "matches_played": 6},
+                    {"team_external_id": "sharks-b", "team_name": "Sharks", "division_id": "db", "session_name": "Spring 2026", "format": "NINE", "is_current": True, "skill_level": 5, "matches_won": 3, "matches_played": 6},
                 ],
             },
             {
                 "id": 3, "external_id": "1003", "name": "Cam Cole",
                 "current_skill_level": 3, "current_matches_won": 3, "current_matches_played": 5,
                 "team_history": [
-                    {"team_external_id": "falcons-a", "team_name": "Falcons", "division_id": "d2", "session_name": "Spring 2026", "is_current": True, "skill_level": 3, "matches_won": 3, "matches_played": 5},
+                    {"team_external_id": "falcons-a", "team_name": "Falcons", "division_id": "d2", "session_name": "Spring 2026", "format": "EIGHT", "is_current": True, "skill_level": 3, "matches_won": 3, "matches_played": 5},
                 ],
             },
             {
@@ -125,8 +128,12 @@ def test_team_rosters_sheet_keeps_same_named_scopes_separate(tmp_path):
     wb = load_workbook(path)
 
     rows = list(wb["Team Rosters"].iter_rows(min_row=2, values_only=True))
-    scope_a = "Sharks · Spring 2026 · Div d1"
-    scope_b = "Sharks · Spring 2026 · Div db"
+    # Team, session, and recorded format -- division only gets appended when
+    # two scopes would otherwise produce an identical label. These two
+    # scopes already differ by format (8-Ball vs 9-Ball), so neither needs
+    # the "· Div" suffix.
+    scope_a = "Sharks · Spring 2026 · 8-Ball"
+    scope_b = "Sharks · Spring 2026 · 9-Ball"
     assert len([r for r in rows if r[0] == scope_a]) == 2  # Ann + Bea
     assert len([r for r in rows if r[0] == scope_b]) == 1  # Bea in another exact scope
 
@@ -235,8 +242,8 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         assert "Direct evidence found" in str(dash.Range("B25").Value)
 
         night = wb.Worksheets("Match Night")
-        night.Range("B5").Value = "Sharks · Spring 2026 · Div d1"
-        night.Range("C5").Value = "Falcons · Spring 2026 · Div d2"
+        night.Range("B5").Value = "Sharks · Spring 2026 · 8-Ball"
+        night.Range("C5").Value = "Falcons · Spring 2026 · 8-Ball"
         excel.CalculateFullRebuild()
         assert night.Range("B7").Value == 2  # exact Sharks d1 scope only
         assert night.Range("C7").Value == 1  # Falcons roster count

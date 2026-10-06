@@ -101,3 +101,23 @@ def test_player_vs_player_pairs_aggregate_both_perspectives():
     cam_vs_ann = by_key["3|EIGHT|1"]
     assert cam_vs_ann["wins"] == 1
     assert cam_vs_ann["losses"] == 1
+
+
+def test_team_labels_show_recorded_format_and_keep_ambiguous_scopes_distinct():
+    payload = _payload()
+    for player in payload["players"]:
+        for hist in player["team_history"]:
+            hist["format"] = "EIGHT" if hist.get("division_id") == "d1" else "NINE"
+    rows = build_team_rosters(payload)
+    labels = {r["team_scope_key"]: r["team_label"] for r in rows}
+    assert labels["sharks-a|d1|Spring"] == "Sharks \u00b7 Spring \u00b7 8-Ball"
+    assert labels["sharks-b|db|Spring"] == "Sharks \u00b7 Spring \u00b7 9-Ball"
+    payload["players"][1]["team_history"][1]["format"] = "EIGHT"
+    rows = build_team_rosters(payload)
+    labels = {r["team_scope_key"]: r["team_label"] for r in rows}
+    assert labels["sharks-a|d1|Spring"] != labels["sharks-b|db|Spring"]
+
+
+def test_team_label_missing_format_is_not_guessed():
+    rows = build_team_rosters(_payload())
+    assert all("No data" in row["team_label"] for row in rows)

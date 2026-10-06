@@ -31,8 +31,9 @@ def _team_label(hist: dict[str, Any]) -> str:
     parts = [str(hist.get("team_name") or "Unknown team")]
     if hist.get("session_name"):
         parts.append(str(hist["session_name"]))
-    if hist.get("division_id"):
-        parts.append(f"Div {hist['division_id']}")
+    fmt = hist.get("format")
+    labels = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
+    parts.append(labels.get(fmt, fmt) if fmt else "No data")
     return " · ".join(parts)
 
 
@@ -74,6 +75,12 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "matches_played": hist.get("matches_played"),
                 }
             )
+    scopes_by_label: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        scopes_by_label[row["team_label"]].add(row["team_scope_key"])
+    for row in rows:
+        if len(scopes_by_label[row["team_label"]]) > 1:
+            row["team_label"] += f" · Div {row['division_id']}"
     rows.sort(key=lambda r: (r["team_label"], r["player_name"]))
     return rows
 
