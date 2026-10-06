@@ -82,6 +82,50 @@ def test_search_compare_and_format_switch_work_in_real_browser(tmp_path: Path):
 
 
 
+def test_format_switch_reaches_non_eight_nine_evidence_in_real_browser(tmp_path: Path):
+    payload = _payload()
+    payload["players"].append(
+        {"id": 5, "external_id": "5", "name": "Echo Evans", "current_skill_level": 6, "current_matches_won": None, "current_matches_played": None, "team_history": [], "career_stats": []}
+    )
+    # Alpha and Echo have no 8-Ball/9-Ball history together -- only this one
+    # real, distinct APA format (see scraper.graphql_scraper._VALID_FORMATS).
+    # Before this fix, the Format <select> only ever offered EIGHT/NINE, so
+    # this real recorded meeting was permanently unreachable through the UI
+    # and the tool would falsely read as "no recorded direct meeting".
+    payload["evidence"].append(
+        {"player_id": 1, "opponent_id": 5, "match_id": 20, "match_external_id": "20", "match_date": "2026-04-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "MASTERS ALT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 6, "points_earned": 3, "nine_ball_points": None},
+    )
+    payload["counts"]["players"] = 5
+    payload["counts"]["head_to_head_rows"] = 4
+
+    path = tmp_path / "ultimate_coach_masters_alt.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#player-a", "1")
+            page.select_option("#player-b-scope", "all")
+            page.select_option("#player-b", "5")
+            assert "No recorded direct meeting" in page.locator("#summary").inner_text()
+
+            # select_option raises if "MASTERS ALT" is not an actual <option>
+            # on this <select> -- the real regression guard.
+            page.select_option("#format", "MASTERS ALT")
+            page.select_option("#player-b", "5")
+            assert "1 recorded direct meeting" in page.locator("#summary").inner_text()
+            assert "1-0" in page.locator("#direct").inner_text()
+
+            # Same real option must exist on the Team vs Team format select.
+            page.select_option("#team-format", "MASTERS ALT")
+        finally:
+            browser.close()
+
+
 def test_typing_only_filters_and_never_runs_matchup_until_selection(tmp_path: Path):
     path = tmp_path / "ultimate_coach_search_idle.html"
     path.write_text(render(_payload(), built_at="test"), encoding="utf-8")

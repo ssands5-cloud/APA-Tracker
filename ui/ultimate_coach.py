@@ -38,6 +38,25 @@ _BROWSER_EVIDENCE_FIELDS = (
     "points_earned",
 )
 
+# EIGHT/NINE are always offered even with zero matching evidence -- they are
+# the two primary APA team formats. Any other raw format recorded in the
+# source data (e.g. "MASTERS", "MASTERS ALT" -- both are real APA formats,
+# see scraper.graphql_scraper._VALID_FORMATS) is appended rather than
+# dropped, so a real recorded meeting can never be unreachable from the
+# Format selectors just because it happened outside 8-Ball/9-Ball. Mirrors
+# the equivalent fix in ui/export_excel_ultimate_coach.py.
+BASE_FORMAT_ORDER = ["EIGHT", "NINE"]
+FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
+
+
+def _format_label(fmt: str) -> str:
+    return FORMAT_LABELS.get(fmt, fmt)
+
+
+def _format_options(formats_present: list[str]) -> list[str]:
+    extra = sorted(set(formats_present) - set(BASE_FORMAT_ORDER))
+    return BASE_FORMAT_ORDER + extra
+
 
 def _browser_payload(
     payload: dict[str, Any], *, consume_evidence: bool = False
@@ -50,23 +69,32 @@ def _browser_payload(
     """
     compact = {key: value for key, value in payload.items() if key != "evidence"}
     index: dict[str, list[list[Any]]] = {}
+    formats_present: set[str] = set()
     evidence = payload.get("evidence") or []
     if consume_evidence and isinstance(evidence, list):
         while evidence:
             row = evidence.pop()
-            key = f"{row.get('player_id')}|{row.get('format') or ''}"
+            fmt = row.get("format") or ""
+            if fmt:
+                formats_present.add(fmt)
+            key = f"{row.get('player_id')}|{fmt}"
             index.setdefault(key, []).append(
                 [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
             )
     else:
         for row in evidence:
-            key = f"{row.get('player_id')}|{row.get('format') or ''}"
+            fmt = row.get("format") or ""
+            if fmt:
+                formats_present.add(fmt)
+            key = f"{row.get('player_id')}|{fmt}"
             index.setdefault(key, []).append(
                 [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
             )
     compact["browser_payload_schema"] = "ultimate-coach-browser-compact-v1"
     compact["evidence_row_fields"] = list(_BROWSER_EVIDENCE_FIELDS)
     compact["evidence_index"] = index
+    compact["formats_present"] = sorted(formats_present)
+    compact["format_labels"] = FORMAT_LABELS
     return compact
 
 
@@ -100,7 +128,13 @@ def _trust_card(payload: dict[str, Any]) -> str:
 def render(
     payload: dict[str, Any], *, built_at: str = "", consume_evidence: bool = False
 ) -> str:
-    data = _script_json(_browser_payload(payload, consume_evidence=consume_evidence))
+    compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
+    format_options = _format_options(compact_payload.get("formats_present") or [])
+    format_options_markup = "".join(
+        f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
+        for fmt in format_options
+    )
+    data = _script_json(compact_payload)
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
     trust_card = _trust_card(payload)
@@ -144,7 +178,7 @@ h2,h3 {{ margin-top:0; }}
   <div class="controls">
     <label>Player A<input id="search-a" type="search" placeholder="Search player A"><select id="player-a"></select><span id="search-status-a" class="muted"></span></label>
     <label>Player B<select id="player-b-scope" aria-label="Player B pool"><option value="played">Played opponents</option><option value="all">All players</option></select><input id="search-b" type="search" placeholder="Search player B"><select id="player-b"></select><span id="search-status-b" class="muted"></span></label>
-    <label>Format<select id="format"><option value="EIGHT">8-Ball</option><option value="NINE">9-Ball</option></select></label>
+    <label>Format<select id="format">{format_options_markup}</select></label>
   </div>
 </div>
 <div id="status" class="card warn"></div>
@@ -162,7 +196,7 @@ h2,h3 {{ margin-top:0; }}
   <div class="controls">
     <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
     <label>Opponent Team<input id="search-team-b" type="search" placeholder="Search opponent team"><select id="team-b"></select><span id="search-status-team-b" class="muted"></span></label>
-    <label>Format<select id="team-format"><option value="EIGHT">8-Ball</option><option value="NINE">9-Ball</option></select></label>
+    <label>Format<select id="team-format">{format_options_markup}</select></label>
   </div>
 </div>
 <div id="team-rosters" class="grid"></div>
@@ -189,7 +223,8 @@ h2,h3 {{ margin-top:0; }}
   var SORTED=DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}});
   var SEARCH_NAMES={{}}; SORTED.forEach(function(p){{SEARCH_NAMES[String(p.id)]=p.name.toLowerCase();}});
 
-  function formatName(fmt){{return fmt==="EIGHT"?"8-Ball":fmt==="NINE"?"9-Ball":fmt;}}
+  var FORMAT_LABELS=DATA.format_labels||{{}};
+  function formatName(fmt){{return FORMAT_LABELS[fmt]||fmt;}}
   function matchingPlayers(filter,candidates) {{
     var q=String(filter||"").trim().toLowerCase();
     var matches=(candidates||SORTED).filter(function(p){{return !q||SEARCH_NAMES[String(p.id)].indexOf(q)!==-1;}});
