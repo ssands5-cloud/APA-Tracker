@@ -369,7 +369,18 @@ h2,h3 {{ margin-top:0; }}
 
   A.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});
   B.addEventListener("change",compare);
-  F.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});
+  F.addEventListener("change",function(){{
+    // "All players" mode's candidate pool (SORTED minus Player A) does not
+    // depend on format at all -- only "played opponents" mode does. So a
+    // format switch while scouting "all" must keep the selected Player B
+    // and search text, and simply recompute the comparison against the new
+    // format's evidence. Only "played" mode's selection and search get
+    // cleared, since that pool genuinely can change under a new format.
+    var preserve=BSCOPE.value==="all";
+    if(!preserve) SB.value="";
+    refreshPlayerB(preserve);
+    compare();
+  }});
   BSCOPE.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});
   var searchTimers={{a:null,b:null}};
   SA.addEventListener("input",function(){{

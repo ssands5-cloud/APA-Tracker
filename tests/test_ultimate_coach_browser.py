@@ -114,14 +114,69 @@ def test_format_switch_reaches_non_eight_nine_evidence_in_real_browser(tmp_path:
             assert "No recorded direct meeting" in page.locator("#summary").inner_text()
 
             # select_option raises if "MASTERS ALT" is not an actual <option>
-            # on this <select> -- the real regression guard.
+            # on this <select> -- the real regression guard. No re-selection
+            # of Player B here: "all players" mode must keep it selected
+            # across the format switch (see the dedicated preservation test
+            # below), so if that broke this assertion would fail too.
             page.select_option("#format", "MASTERS ALT")
-            page.select_option("#player-b", "5")
             assert "1 recorded direct meeting" in page.locator("#summary").inner_text()
             assert "1-0" in page.locator("#direct").inner_text()
 
             # Same real option must exist on the Team vs Team format select.
             page.select_option("#team-format", "MASTERS ALT")
+        finally:
+            browser.close()
+
+
+def test_format_switch_preserves_player_b_and_search_in_all_players_mode(tmp_path: Path):
+    payload = _payload()
+    payload["players"].append(
+        {"id": 5, "external_id": "5", "name": "Echo Evans", "current_skill_level": 6, "current_matches_won": None, "current_matches_played": None, "team_history": [], "career_stats": []}
+    )
+    # Echo has no EIGHT evidence vs Alpha at all -- only this one MASTERS ALT
+    # meeting. "All players" mode's candidate pool never depended on format,
+    # so switching format while Echo is selected must keep both the
+    # selection and the typed search text, and simply refresh the
+    # comparison -- not silently reset Player B back to "Select a player...".
+    payload["evidence"].append(
+        {"player_id": 1, "opponent_id": 5, "match_id": 20, "match_external_id": "20", "match_date": "2026-04-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "MASTERS ALT", "result": "W", "own_skill_level": 4, "opponent_skill_level": 6, "points_earned": 3, "nine_ball_points": None},
+    )
+    payload["counts"]["players"] = 5
+    payload["counts"]["head_to_head_rows"] = 4
+
+    path = tmp_path / "ultimate_coach_format_switch_preserve.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.select_option("#player-a", "1")
+            page.select_option("#player-b-scope", "all")
+            page.fill("#search-b", "Echo")
+            page.wait_for_timeout(400)
+            page.select_option("#player-b", "5")
+            assert "No recorded direct meeting" in page.locator("#summary").inner_text()
+
+            page.select_option("#format", "MASTERS ALT")
+
+            assert page.locator("#search-b").input_value() == "Echo"
+            assert page.locator("#player-b").input_value() == "5"
+            assert "1 recorded direct meeting" in page.locator("#summary").inner_text()
+            assert "1-0" in page.locator("#direct").inner_text()
+
+            # "Played opponents" mode is unaffected by this fix: its pool is
+            # format-dependent, so the prior selection/search must still
+            # clear when it's the active mode.
+            page.select_option("#player-b-scope", "played")
+            page.fill("#search-b", "Echo")
+            page.wait_for_timeout(400)
+            page.select_option("#format", "EIGHT")
+            assert page.locator("#search-b").input_value() == ""
+            assert page.locator("#player-b").input_value() == ""
         finally:
             browser.close()
 
