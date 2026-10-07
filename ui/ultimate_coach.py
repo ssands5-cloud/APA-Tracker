@@ -1146,7 +1146,22 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     MD_TEAM.innerHTML=(scopes.length>1?'<option value="'+ALL_MY_TEAMS+'">All my current teams ('+scopes.length+')</option>':'')
       +scopes.map(function(s){{return '<option value="'+esc(s.key)+'">'+esc(s.display)+'</option>';}}).join("");
     var keep=previous&&(previous===ALL_MY_TEAMS&&scopes.length>1||scopes.some(function(s){{return s.key===previous;}}));
-    MD_TEAM.value=keep?previous:(scopes.length>1?ALL_MY_TEAMS:scopes[0].key);
+    MD_TEAM.value=keep?previous:defaultTeamKey(scopes);
+  }}
+  // Same rule as analytics.ultimate_coach_war_room.default_matchup (the Excel default): the team
+  // of the viewer's next 8-Ball/9-Ball fixture on or after the build date -- earliest date, then
+  // kickoff, then team label. Otherwise one team, or all teams to browse.
+  function defaultTeamKey(scopes){{
+    var best=null,b=(DATA.build||{{}}).build_local||"";
+    scopes.forEach(function(s){{
+      (SCHEDULE[s.key]||[]).forEach(function(side){{
+        var f=FIXTURES[side.fixture_index];
+        if(!f||(f.format!=="EIGHT"&&f.format!=="NINE")||!f.local_date||(b&&f.local_date<b)) return;
+        var k=[f.local_date,f.local_sort||"",s.display];
+        if(!best||k[0]<best.k[0]||(k[0]===best.k[0]&&(k[1]<best.k[1]||(k[1]===best.k[1]&&k[2]<best.k[2])))) best={{k:k,key:s.key}};
+      }});
+    }});
+    return best?best.key:(scopes.length>1?ALL_MY_TEAMS:scopes[0].key);
   }}
   function selectedScopes(){{
     var scopes=viewerScopes();

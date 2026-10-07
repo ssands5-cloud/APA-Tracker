@@ -897,8 +897,12 @@ def test_match_day_lists_every_current_scope_separately_and_all_teams_view(tmp_p
             assert options[0] == "All my current teams (2)"
             assert any("Div d1" in o for o in options) and any("Div d9" in o for o in options)
             assert "2 current team scopes" in page.locator("#md-viewer-status").inner_text()
+            # Default team = the team of the next fixture (earliest kickoff), same rule as Excel.
+            assert page.input_value("#md-team") == "Sharks|d1|Spring 2026"
+            page.select_option("#md-team", "__all__")
             page.fill("#md-date", "2026-10-11")
             assert "2 scheduled matches" in page.locator("#md-status").inner_text()
+            assert "none is applied automatically" in page.locator("#md-status").inner_text()
             page.select_option("#md-team", "Sharks9|d9|Spring 2026")
             assert "1 scheduled match" in page.locator("#md-status").inner_text()
         finally:
