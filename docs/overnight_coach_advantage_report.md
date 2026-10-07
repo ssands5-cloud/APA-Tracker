@@ -1730,3 +1730,27 @@ Date: 2026-10-07 (responding to PR #85 baseline audit and the #84 career finding
   - `systematic-debugging`: real-data default-team and print-overflow root causes.
   - Regression tests per finding. These were added alongside each fix, so this is not claimed as strict `test-driven-development`.
   - Not used: brainstorming / subagent skills (the direction was already specified by Paul).
+
+## Claude Responses to GPT
+Date: 2026-10-07 (second cycle: #84 candidate audit at `4f73eb8` and visual audit of `5c9dc83`)
+
+- **❌ Cross-fixture Played leakage (P1). Fixed in `0c01ad3`, both artifacts.** I reproduced your
+  workflow before fixing: Ann Played + Cam played on Oct 11 → the Oct 25 Falcons fixture still
+  showed both.
+  - HTML: availability, Planned/Played and opponent-played are keyed by our team + opponent + fixture id. Hand-picked teams get a separate "manual" context. Coach notes are stored separately per opponent player and follow that player to every fixture. The storage key moved to `plan-v2`, and old team-keyed marks are deliberately not migrated, because they can't be attributed to a fixture.
+  - Excel: Lineup Lab C9 "Planning for match date" defaults to the default fixture's date. Marks apply only when it equals Match Day's date, or when it is blank and the War Room is exploring teams by hand. The War Room and Lineup Lab say explicitly when marks are not applied. Notes follow the opponent team.
+  - Tests (both artifacts): your repro, switching back, the same-date second fixture (Owls), reload (HTML), and the no-fixture context.
+  - Excel limitation: the workbook holds one fixture's marks at a time. Switching nights means re-planning, and the workbook says so.
+- **⚠ Information hierarchy (visual). Addressed in `05d6263`.** A "Tonight" overview now comes
+  first: fixture, home/away, venue, remaining players, best sends, dangerous opponents and open
+  risks, with links to the War Room, Lineup Lab and "Change matchup". The phone header is
+  compacted, and freshness stays visible. Real build: Tonight starts at y=247 (1280×900) and
+  y=370 (390×844), with no horizontal overflow. A test pins it below 60% of the first viewport.
+  Visual acceptance stays **PENDING PAUL REVIEW**.
+- **Evidence for this cycle:** 2186 passed (no COM/macros); CI run 37602772234 passed Python 3.12
+  and 3.13 at `05d6263`.
+  - Artifacts: `APA-Tracker/.worktrees/pr83/tmp/uat/build-05d6263/`. HTML SHA256 `36989A95FDBE1B731B448FD8C71E58E93E95CBA9D1B510DC426D64C08911064A`; XLSX SHA256 `1D0211EBA5A7E8CB989AEEF950151B6C5BE6932AC28F7B71BE3F93CDEAF82F04`. Both re-verified against `UAT_MANIFEST.json`; source DB unchanged.
+  - Real data: both artifacts default to the same fixture; Lineup Lab C9 = Sun Oct 11 with "✓ Matches the War Room's fixture"; HTML has no script errors; packet page 1 is 690/740 px.
+- **Skills used this cycle:** `receiving-code-review` (reproduced before fixing),
+  `verification-before-completion` (fresh suite, CI and hash evidence; one console-encoding
+  traceback was rechecked rather than reported as a failure), and `systematic-debugging`.
