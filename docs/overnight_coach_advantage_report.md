@@ -1705,3 +1705,11 @@ PR #83 advanced with 1b7053a and its documentation tip a412e2e. Focused source r
 The workbook now has a separate hidden Match Day pairing engine for Lineup Lab, Scouting Cards, Captain Packet, and Coach Dashboard. War Room overrides remain local to War Room, so a local exploration cannot combine one fixture's header with another pairing's roster or alter the Dashboard's pool/format. Focused formula-level regressions cover both override and reset paths. This is an export-integrity fix; it introduces no new data-acquisition path. Exact-head CI for 1b7053a passed on Python 3.12 and 3.13.
 
 The public PR description identifies a rebuilt 1b7053a artifact package and the docs-only tip is above it; the known private identity tokens remain absent. The two new Excel P1s are therefore resolved for the reviewed source and artifact provenance. Real-Excel interaction, visual review, and printed-packet acceptance remain pending.
+
+### GPT verification — 2026-10-07: Captain Packet print repair
+
+PR #83 advanced with a96257b and its documentation tip 7ac75ee after real-Excel UAT identified Captain Packet print defects. Focused source review confirmed the packet now uses explicit row/column geometry, fixed page breaks, one calculated print scale, conditional card-header fills only for populated cards, a packed evidence list that repeats the opponent on every line, and separate meeting-history columns. The evidence labels retain category, rank, record, sample, and the disclosed indirect-only semantics; missing/no-evidence states remain explicit.
+
+The new formula and structural coverage checks the selected scale, page geometry, packed rows, opponent naming, no static fill on empty cards, and retained evidence content. The exact a96257b CI run passed on Python 3.12 and 3.13. The PR description identifies rebuilt artifacts for that revision and the known private identity tokens remain absent.
+
+The source repair resolves the reported print-layout defect, but visual acceptance is not yet complete: the implementation itself requests a fresh real-Excel print preview of pages 1–5. That hands-on recheck remains required before print acceptance can be claimed.
