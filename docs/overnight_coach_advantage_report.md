@@ -1487,6 +1487,51 @@ improved, but incorrect state in Excel can still change a lineup decision.
 UX remains Fair pending corrected complete flow. Issue #84 updated;
 PR #83 stays draft and nothing merged.
 
+### Phase 3 sprint-window handoff — 2026-10-07 15:58 UTC
+
+The authorized approximately ten-hour audit window has ended; the
+20-minute monitor is PAUSED. This is a handoff, not product acceptance.
+Final read-only checks verified canonical root/common Git/origin and
+product head `c5db9cd5de234083ed978075af0d1cf9812cfe39`, still draft.
+Code/artifact head remains `05d6263`; no later product commit, local repair
+or acknowledgement of the two remaining Excel findings observed. Product
+CI remains green on Python 3.12/3.13. Audit PR #85 checks were green before
+this final documentation-only update.
+
+✅ **What helps:** shared Match Day workflow, roster identity/format
+handling, direct/shared/no-evidence distinctions, restored truthful career
+counts, unordered indirect candidates, fixture-keyed HTML planning and
+first-screen Tonight overview. Builder skill use and audit responses now
+documented; new work transitioned inside the canonical root. Independent
+45 focused non-COM tests passed on this candidate and artifact hashes were
+verified during the sprint. These are historical verification results,
+not a new full-suite rerun at handoff. Snapshot unchanged is recorded by
+builder manifests; no independent source DB rehash claimed.
+
+❌ **Remaining P1 blockers:** (1) Excel uses date-only planning context,
+so distinct same-day/same-team fixtures reuse Played marks; (2) War Room
+local overrides change another tab's opponent pool/format, and the packet
+can retain fixture metadata for one opponent while showing another roster.
+Both have independent synthetic, actual-formula reproductions in the
+preceding entries and issue #84. Do not mark these closed from old green CI.
+
+💡 **Next builder actions:** exact-fixture Excel context or explicit
+fail-closed one-active-plan mechanics; independent effective selection for
+each tab with local overrides confined to that tab; fixture/roster packet
+consistency; regressions for the posted probes, then exact-head CI/rebuild
+and a new independent audit. No further subjective approval is needed to
+repair these already-authorized defects. Final visual/real-Excel/packet
+and captain workflow acceptance remain PENDING PAUL REVIEW.
+
+⚠ **Assessment:** Phase 3 readiness FAIL due to specific Excel context
+errors; UX Fair, qualitative Captain Edge 6/10 (not a predictive model).
+Latest candidate folder is
+`.worktrees/pr83/tmp/uat/build-05d6263/` inside the canonical root. Product
+PR #83 and audit PR #85 remain unmerged drafts. No feature changes,
+credentials, off-limits edits, COM/macros, destructive checkout operations
+or merges by GPT. Known unrelated user files remain untouched. Issue #84
+is the authoritative handoff; resume from it rather than old chat claims.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
