@@ -1047,7 +1047,13 @@ def test_focused_printable_matchup_shows_fixture_and_both_labeled_rosters_only(t
             visible = lambda sel: page.locator(sel).first.is_visible()
             assert visible("#matchup-head") and visible("#team-rosters") and visible("#matchup-notes")
             assert visible("#team-comparison") and visible("#team-matchups")  # comparison + ranking are printed
-            assert page.evaluate("getComputedStyle(document.getElementById('team-matchups')).breakBefore") == "page"
+            # Captain Packet: page 1 = fixture, both rosters, best sends, top risks; detail starts on page 2.
+            for shown in ("#wr-opportunities", "#wr-risks", "#wr-matrix", "#lineup-lab", "#scouting-cards", "#wr-meetings"):
+                assert visible(shown), shown
+            assert page.evaluate("getComputedStyle(document.getElementById('wr-matrix')).breakBefore") == "page"
+            # Planning inputs print as plain text, never as form controls.
+            assert not page.locator("#lineup-lab select.plan").first.is_visible()
+            assert page.locator("#lineup-lab .print-only").first.is_visible()
             for hidden in ("#match-day-card", "#player-section", "#trust-section", "header.hero",
                            "#team-section", "#print-matchup"):
                 assert not visible(hidden), hidden
@@ -1103,9 +1109,16 @@ def test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_com
             page.click("#md-compare-0")
             page.evaluate("document.body.classList.add('print-matchup')")
             page.emulate_media(media="print")
+            # Landscape Letter less 10 mm margins at 96 dpi: ~980 x 740 CSS px. Page 1 must hold the
+            # fixture header, both 9-player rosters, best sends and top risks.
+            page.set_viewport_size({"width": 980, "height": 740})
+            page_one = page.evaluate("""() => {
+                const top = document.getElementById('matchup-head').getBoundingClientRect().top;
+                return document.getElementById('wr-risks').getBoundingClientRect().bottom - top; }""")
+            assert page_one <= 740, page_one
             pdf = page.pdf(prefer_css_page_size=True, print_background=True)
             pages = len(re.findall(rb"/Type\s*/Page[^s]", pdf))
-            assert 2 <= pages <= 5, pages  # page 1: matchup + comparison; then the compact two-column ranking
+            assert 2 <= pages <= 9, pages  # then matrix, Lineup Lab, comparison, ranking, scouting cards, meetings
         finally:
             browser.close()
 

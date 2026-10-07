@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from html import escape
+from pathlib import Path
 from typing import Any
 
 from analytics.ultimate_coach_match_day import (
@@ -16,6 +17,82 @@ from analytics.ultimate_coach_match_day import (
     viewer_current_teams,
     viewer_player,
 )
+from analytics.ultimate_coach_war_room import build_local_date, freshness
+
+# The Captain's War Room script (matrix, best sends, risks, Lineup Lab, scouting
+# cards, meetings) lives in its own file so it is plain JavaScript, not an
+# f-string; it is embedded inside the page's single script at render time.
+_WAR_ROOM_JS = Path(__file__).with_name("ultimate_coach_war_room.js").read_text(encoding="utf-8")
+_WAR_ROOM_CSS = """
+.cat-G { background:#CFE8D4; } .cat-R { background:#F4CCCC; } .cat-E,.cat-I { background:#FFF0B3; } .cat-X { background:#E3E3E3; color:#555; }
+.cat-dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin:0 5px 0 8px; vertical-align:-1px; border:1px solid rgba(0,0,0,.25); }
+.legend { font-size:12.5px; color:var(--muted); line-height:1.9; }
+.matrix th,.matrix td { padding:3px; text-align:center; vertical-align:middle; }
+.matrix tbody th { text-align:left; min-width:140px; }
+.matrix thead th { min-width:96px; font-size:11px; text-transform:none; letter-spacing:0; }
+.matrix th a { color:var(--felt-deep); }
+.mcell { width:100%; min-height:44px; border:1px solid rgba(0,0,0,.12); border-radius:6px; font-size:12.5px; font-weight:700; color:#1d2b22; padding:6px 4px; }
+.mcell:hover,.mcell:focus-visible { outline:3px solid #2b5d8f; background-image:none; }
+.mcell.cat-G:hover,.mcell.cat-G:focus-visible { background:#CFE8D4; } .mcell.cat-R:hover { background:#F4CCCC; } .mcell.cat-E:hover,.mcell.cat-I:hover { background:#FFF0B3; } .mcell.cat-X:hover { background:#E3E3E3; }
+.mcell.on { outline:3px solid var(--ink); }
+tr.out td,tr.out th,.mcell.out,th.out,.scout.out { opacity:.5; }
+.send { display:inline-block; margin:2px 0; }
+.send-table td:first-child { white-space:nowrap; font-weight:600; }
+.risk-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+.risk-grid h3 { margin:0 0 2px; }
+.wr-list { margin:6px 0 0; padding-left:18px; font-size:13.5px; }
+.pair { margin-top:14px; border:1px solid var(--line); border-left:6px solid #999; border-radius:10px; padding:12px 14px; }
+.cat-border-G { border-left-color:#5aa86b; } .cat-border-R { border-left-color:#c0504d; } .cat-border-E,.cat-border-I { border-left-color:#d9b44a; }
+.pair h4 { margin:10px 0 4px; font-size:13px; color:var(--felt-deep); }
+select.plan { width:auto; margin:0; padding:5px 8px; font-size:13.5px; background:#FFF4CC; }
+textarea.plan { width:100%; font:inherit; font-size:13px; padding:6px; border:1px solid var(--line-strong); border-radius:6px; background:#FFF4CC; }
+input#ll-cap { width:160px; display:block; margin-top:6px; padding:8px; font-size:14px; border:1px solid var(--line-strong); border-radius:8px; background:#FFF4CC; }
+label.inline { text-transform:none; font-weight:600; letter-spacing:0; display:inline; }
+.cap-label { margin-top:10px; }
+button.secondary { background:#fff; color:var(--felt-deep); border-color:#bcd5c4; }
+button.secondary:hover { background:var(--felt-soft); }
+.print-only { display:none; }
+.scout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+.scout { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.scout-head { background:var(--rail); color:#fff; font-weight:800; padding:8px 12px; }
+.scout dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:0; padding:10px 12px; font-size:13px; }
+.scout dt { color:var(--muted); } .scout dd { margin:0; overflow-wrap:anywhere; }
+.md-date-list { margin-top:10px; }
+@media print {
+  select.plan,textarea.plan,input#ll-cap,label.inline input,#ll-clear { display:none !important; }
+  .print-only { display:inline; }
+  .cat-G,.cat-R,.cat-E,.cat-I,.cat-X,.cat-dot,.scout-head { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body.print-matchup #wr-matrix { break-before:page; }
+  body.print-matchup .mcell { min-height:0; padding:2px; font-size:9px; }
+  body.print-matchup .matrix thead th { font-size:8.5px; min-width:0; }
+  body.print-matchup .matrix tbody th { font-size:9px; min-width:0; }
+  body.print-matchup .send-table,body.print-matchup .wr-list,body.print-matchup .legend { font-size:10px; }
+  body.print-matchup .risk-grid { grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  body.print-matchup .risk-grid h3 { font-size:11px; }
+  body.print-matchup .scout-grid { grid-template-columns:1fr 1fr; gap:6px; }
+  body.print-matchup .scout { break-inside:avoid; }
+  body.print-matchup .scout dl { font-size:9.5px; padding:4px 8px; }
+  body.print-matchup .scout-head { padding:3px 8px; font-size:11px; }
+  /* Page 1 density: explanations live in the notes page; keep the decision content. */
+  body.print-matchup #matchup-head > p.muted,body.print-matchup .roster-scope,body.print-matchup #wr-opportunities > p.muted,
+  body.print-matchup #wr-risks p.muted { display:none; }
+  body.print-matchup #team-rosters th:nth-child(6),body.print-matchup #team-rosters td:nth-child(6) { display:none; }
+  body.print-matchup #team-rosters td,body.print-matchup #team-rosters th { padding:1px 4px; font-size:9.5px; }
+  body.print-matchup .send-table td,body.print-matchup .send-table th { padding:1px 4px; font-size:9px; }
+  body.print-matchup .send-table td:first-child { white-space:nowrap; width:42%; }
+  body.print-matchup .wr-list { font-size:9px; margin:0; padding-left:14px; }
+  body.print-matchup #wr-opportunities h2,body.print-matchup #wr-risks h2 { font-size:12px; margin:0 0 2px; }
+  body.print-matchup .matchup-teams { gap:4px; }
+  body.print-matchup .matchup-facts { margin-top:2px; }
+  body.print-matchup .matchup-side b { display:inline; margin:0 6px; font-size:12px; }
+  body.print-matchup .matchup-teams { grid-template-columns:1fr auto 1fr; }
+  body.print-matchup #matchup-print > .card,body.print-matchup #team-rosters > .card { padding:4px 8px; margin-bottom:4px; }
+  body.print-matchup #team-rosters h2 { font-size:12px; }
+  body.print-matchup .roster-summary { font-size:9.5px; }
+  body.print-matchup .send { margin:0; }
+  body.print-matchup #team-rosters,body.print-matchup #wr-opportunities,body.print-matchup #wr-risks { line-height:1.25; }
+}
+"""
 
 
 def _script_json(value: Any) -> str:
@@ -176,6 +253,11 @@ def render(
         "player_name": resolved_viewer.get("name") if resolved_viewer else None,
         "teams": viewer_current_teams(players, viewer_member_external_id),
     }
+    tz_name = str(match_day.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE)
+    build_local = build_local_date(built_at, tz_name) if built_at else None
+    fresh = freshness(match_day, build_local)
+    compact_payload["build"] = {"built_at": built_at, "build_local": build_local, **{k: fresh[k] for k in (
+        "build_date", "latest_result", "unplayed_before_build")}}
     data = _script_json(compact_payload)
     built_label_js = _script_json(f"Ultimate Coach · built {built_at}" if built_at else "Ultimate Coach · offline build")
     player_count = int((payload.get("counts") or {}).get("players") or 0)
@@ -339,7 +421,6 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .matchup-notes h3 {{ font-size:12px; margin:0 0 2px; }}
   body.print-matchup .matchup-notes ul {{ font-size:10px; margin:2px 0; columns:2; column-gap:18px; }}
   /* The evidence ranking starts on its own page; each opponent's table stays together. */
-  body.print-matchup #team-matchups {{ break-before:page; }}
   body.print-matchup .rank-blocks {{ columns:2; column-gap:14px; }}
   body.print-matchup .rank-block {{ break-inside:avoid; margin:0 0 8px; }}
   body.print-matchup .rank-block h3 {{ font-size:11px; margin:0; }}
@@ -349,13 +430,13 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
-</style></head>
+{_WAR_ROOM_CSS}</style></head>
 <body>
 <header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
 <div><h1>Ultimate Coach — Scout & Compare</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
-<nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">Team vs Team</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-<div class="freshness"><span>Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+<nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
+<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 <section class="card card-feature" id="match-day-card">
   <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
@@ -368,6 +449,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     <label>2 · My Team<select id="md-team"></select></label>
     <label>3 · Format<select id="md-format">{md_format_options_markup}</select></label>
   </div>
+  <label class="md-date-list">Scheduled dates for this team &amp; format<select id="md-date-list"></select></label>
   <div id="md-team-dates" class="chips" aria-label="Dates this team plays"></div>
   <p id="md-status" class="status-line"></p>
   <div id="md-fixtures"></div>
@@ -380,7 +462,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   </ul></details>
 </section>
 
-<div class="section-title" id="team-section"><h2>Team vs Team — Match Night Lineup</h2><p>Current captured rosters side by side, with evidence-backed send suggestions.</p></div>
+<div class="section-title" id="team-section"><h2>Captain's War Room</h2><p>Who do I put up next? Follows Match Day; pick other teams here to explore.</p></div>
 <div class="card">
   <div class="controls">
     <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
@@ -392,8 +474,14 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <section id="matchup-print" aria-label="Printable matchup">
 <div id="matchup-head" class="card matchup-head"></div>
 <div id="team-rosters" class="grid"></div>
+<div id="wr-opportunities" class="card"></div>
+<div id="wr-risks" class="card"></div>
+<div id="wr-matrix" class="card"></div>
+<div id="lineup-lab" class="card"></div>
 <div id="team-comparison" class="card"></div>
 <div id="team-matchups" class="card"></div>
+<div id="scouting-cards" class="card"></div>
+<div id="wr-meetings" class="card"></div>
 <div id="matchup-notes" class="card matchup-notes"></div>
 </section>
 
@@ -844,6 +932,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return 'None of our roster has met '+playerRef(opp)+' directly. '+plural(ind,'player')+(ind===1?' has':' have')+' shared-opponent evidence only — not ranked against each other; compare ours vs theirs in the matrix.';
   }}
 
+{_WAR_ROOM_JS}
   // ---- Matchup header + focused print ----
   // MATCHUP_CONTEXT is set only by Match Day's Compare button and is kept
   // only while both team selectors still hold exactly those roster scopes.
@@ -860,7 +949,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     if(!ctx) MATCHUP_CONTEXT=null;
     var f=ctx?ctx.fixture:null, tz=(DATA.match_day&&DATA.match_day.display_timezone)||"";
     var oppSide=ctx?(ctx.ourSide==="home"?"away":"home"):"";
-    head.innerHTML='<div class="card-head"><h2>Matchup</h2>'+(ta&&tb?'<button type="button" id="print-matchup">Print this matchup</button>':'')+'</div>'
+    head.innerHTML='<div class="card-head"><h2>Matchup</h2>'+(ta&&tb?'<button type="button" id="print-matchup">Print Captain Packet</button>':'')+'</div>'
       +(ctx?'<p class="matchup-when">'+(f.date_status==="ok"?esc(f.local_display)+' <span class="muted">('+esc(tz)+')</span>':'Undated fixture')+'</p>'
           :'<p class="muted">Teams chosen manually — not tied to a scheduled fixture. Use Match Day → Compare to load a specific fixture with its date and time.</p>')
       +'<div class="matchup-teams">'
@@ -891,6 +980,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   window.addEventListener("afterprint",function(){{document.body.classList.remove("print-matchup");}});
 
   function renderTeamMatchups() {{
+    renderTeamMatchupsCore();
+    renderWarRoom(TEAM_INDEX[TA.value]||null,TEAM_INDEX[TB.value]||null,TF.value);
+  }}
+  function renderTeamMatchupsCore() {{
     var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value],fmt=TF.value;
     var ctx=renderMatchupHead(ta,tb,fmt);
     document.getElementById("team-rosters").innerHTML=
@@ -1119,7 +1212,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     select.value=key;
     return true;
   }}
-  function mdApplyFixture(item) {{
+  function mdApplyFixture(item,auto) {{
     STA.value="";
     STB.value="";
     forceSelectTeam(TA,item.scope.key);
@@ -1134,12 +1227,30 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     SSTA.textContent=fromMatchDay;
     SSTB.textContent=fromMatchDay;
     renderTeamMatchups();
-    document.getElementById("matchup-print").scrollIntoView({{behavior:"smooth"}});
+    if(!auto) document.getElementById("matchup-print").scrollIntoView({{behavior:"smooth"}});
   }}
-  function renderDateChips(scopes){{
+  var MD_DATE_LIST=document.getElementById("md-date-list");
+  var BUILD=DATA.build||{{}};
+  function scheduledDates(scopes){{
     var dates={{}};
     sidesFor(scopes).forEach(function(it){{if(it.fixture.local_date) dates[it.fixture.local_date]=true;}});
-    var list=Object.keys(dates).sort();
+    return Object.keys(dates).sort();
+  }}
+  function suggestedDate(list){{
+    if(!BUILD.build_local) return "";
+    for(var i=0;i<list.length;i++) if(list[i]>=BUILD.build_local) return list[i];
+    return "";
+  }}
+  function renderDateList(scopes){{
+    var list=scheduledDates(scopes),sugg=suggestedDate(list);
+    MD_DATE_LIST.innerHTML='<option value="">'+(list.length?'Choose a scheduled date…':'No scheduled dates captured')+'</option>'
+      +list.map(function(d){{return '<option value="'+d+'">'+esc(isoDateLabel(d))+(d===sugg?' · suggested (next on or after the build date)':(BUILD.build_local&&d<BUILD.build_local?' · before the build date':''))+'</option>';}}).join("");
+    MD_DATE_LIST.disabled=!list.length;
+    MD_DATE_LIST.value=list.indexOf(MD_DATE.value)!==-1?MD_DATE.value:"";
+    return {{list:list,sugg:sugg}};
+  }}
+  function renderDateChips(scopes){{
+    var list=scheduledDates(scopes);
     if(!list.length) {{ MD_DATES_EL.innerHTML=""; return; }}
     MD_DATES_EL.innerHTML='<span class="muted" style="align-self:center;">Scheduled dates ('+list.length+'):</span>'+list.map(function(d){{
       return '<button type="button" class="chip" data-date="'+d+'" aria-pressed="'+(d===MD_DATE.value?'true':'false')+'">'+esc(isoDateLabel(d).replace(/^(\\w{{3}})\\w*/,"$1"))+'</button>';
@@ -1162,6 +1273,17 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       MD_FIXTURES_EL.innerHTML=""; MD_DATES_EL.innerHTML="";
       return;
     }}
+    var dl=renderDateList(scopes);
+    var dateNote="";
+    if(MD_DATE.value&&dl.list.indexOf(MD_DATE.value)===-1&&dl.list.length&&MD_AUTO_DATE) {{
+      dateNote=isoDateLabel(MD_DATE.value)+" has no fixture for this team and format — ";
+      MD_DATE.value="";
+    }}
+    if(!MD_DATE.value&&dl.sugg&&MD_AUTO_DATE) {{
+      MD_DATE.value=dl.sugg;
+      dateNote+="Suggested: the earliest scheduled date on or after the build date. ";
+    }} else if(dateNote) {{ dateNote+="choose a date. "; }}
+    MD_DATE_LIST.value=dl.list.indexOf(MD_DATE.value)!==-1?MD_DATE.value:"";
     renderDateChips(scopes);
     var teamText=scopes.length>1?"all "+scopes.length+" of your current teams":scopes[0].display;
     var undated=sidesFor(scopes).filter(function(it){{return it.fixture.date_status!=="ok";}});
@@ -1178,12 +1300,18 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       MD_FIXTURES_EL.innerHTML="";
       return;
     }}
-    MD_STATUS.textContent=found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+"). "+(found.length>1?"All are listed — none is applied automatically; choose which one to compare.":"Choose Compare to load both rosters.");
+    MD_STATUS.textContent=dateNote+found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+"). "+(found.length>1?"All are listed — none is applied automatically; choose which one to compare.":"Choose Compare to load both rosters.");
     MD_FIXTURES_EL.innerHTML=found.map(function(it,i){{return mdFixtureCard(it,i,scopes.length>1);}}).join("");
     found.forEach(function(it,i){{
       var btn=document.getElementById("md-compare-"+i);
       if(btn) btn.addEventListener("click",function(){{mdApplyFixture(it);}});
     }});
+    // Exactly one fixture with a rostered opponent: the War Room follows it automatically
+    // (several fixtures are never chosen for you).
+    if(found.length===1&&(found[0].side.opponent||{{}}).status==="resolved") {{
+      mdApplyFixture(found[0],true);
+      MD_STATUS.textContent+=" The War Room below now follows this fixture.";
+    }}
   }}
   MD_DATES_EL.addEventListener("click",function(e){{
     var t=e.target&&e.target.closest?e.target.closest("button[data-date]"):null;
@@ -1202,8 +1330,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     clearTimeout(viewerSearchTimer);
     viewerSearchTimer=setTimeout(function(){{renderViewerStatus(renderViewerOptions());}},SEARCH_DEBOUNCE_MS);
   }});
-  MD_DATE.addEventListener("change",renderMatchDay);
-  MD_DATE.addEventListener("input",renderMatchDay);
+  var MD_AUTO_DATE=true;
+  MD_DATE.addEventListener("change",function(){{MD_AUTO_DATE=false;renderMatchDay();MD_AUTO_DATE=true;}});
+  MD_DATE.addEventListener("input",function(){{MD_AUTO_DATE=false;renderMatchDay();MD_AUTO_DATE=true;}});
+  MD_DATE_LIST.addEventListener("change",function(){{if(MD_DATE_LIST.value){{MD_DATE.value=MD_DATE_LIST.value;MD_AUTO_DATE=false;renderMatchDay();MD_AUTO_DATE=true;}}}});
   MD_TEAM.addEventListener("change",renderMatchDay);
   MD_FORMAT.addEventListener("change",renderMatchDay);
   renderMatchDay();

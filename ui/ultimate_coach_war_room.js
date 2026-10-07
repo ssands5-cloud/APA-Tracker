@@ -1,0 +1,270 @@
+  // ---- Captain's War Room (embedded by ui/ultimate_coach.py inside the page script) ----
+  // Mirrors analytics/ultimate_coach_war_room.py and the Excel War Room / Lineup Lab texts:
+  // evidence category = the sign of a recorded direct record only (G/R/E), else I (shared
+  // opponents only) or X (nothing). No thresholds, weights, odds or confidence. Planning marks
+  // (availability / lineup / opponent played / notes) are the captain's inputs, kept per team
+  // scope in this browser only, and never change any evidence.
+  var WR_CAT_LABELS={G:"Favorable direct record",R:"Concerning direct record",E:"Even direct record",I:"Indirect evidence only",X:"Insufficient evidence"};
+  var WR_SENDABLE={G:true,E:true,I:true};
+  var WR_TZ=(DATA.match_day&&DATA.match_day.display_timezone)||"America/Denver";
+  var WR_STATE={pair:null};
+  function wrKnown(x){return x!==null&&x!==undefined;}
+  function wrCategory(c){if(c.direct){var w=c.direct.w,l=c.direct.g-w;return w>l?"G":(w<l?"R":"E");}return c.shared?"I":"X";}
+  function wrCell(c){
+    if(c.direct) return wlText(c.direct.w,c.direct.g)+" ("+c.direct.g+")";
+    if(c.shared) return "≈ "+wlText(c.ow,c.og)+" vs "+wlText(c.tw,c.tg)+" ("+c.shared+" shared)";
+    return "No evidence";
+  }
+  function wrExplain(c){
+    return [c.direct?"Direct: "+wlText(c.direct.w,c.direct.g)+" in "+plural(c.direct.g,"meeting"):"No direct meetings",
+      c.shared?"Indirect: "+plural(c.shared,"shared opponent")+" — ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+"), theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"no shared opponents"].join(" · ");
+  }
+  // Calendar day in the disclosed display timezone for an offset-aware source timestamp
+  // (same accept rule as analytics.ultimate_coach_match_day.parse_match_date: naive -> No data).
+  var WR_DAY=(function(){try{return new Intl.DateTimeFormat("en-US",{timeZone:WR_TZ,year:"numeric",month:"2-digit",day:"2-digit"});}catch(e){return null;}})();
+  var WR_AWARE=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+  var WR_WD=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],WR_MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function wrInstant(raw){var s=String(raw||"").trim();if(!WR_AWARE.test(s)) return null;s=s.replace(" ","T").replace(/([+-]\d{2})(\d{2})$/,"$1:$2");var t=Date.parse(s);return isFinite(t)?t:null;}
+  function wrDayLabel(t){
+    if(t===null||!WR_DAY) return "No data";
+    var p={};WR_DAY.formatToParts(new Date(t)).forEach(function(x){p[x.type]=x.value;});
+    var d=new Date(Date.UTC(+p.year,+p.month-1,+p.day));
+    return WR_WD[d.getUTCDay()]+" "+WR_MON[+p.month-1]+" "+(+p.day)+", "+p.year;
+  }
+  function wrCmpTime(a,b){if(a===b) return 0;if(a===null) return -1;if(b===null) return 1;return a<b?-1:1;}
+  function wrBuckets(pid,fmt){
+    var b={};
+    rowsFor(pid,fmt).forEach(function(r){var sl=val(r,"opponent_skill_level");var ok=typeof sl==="number"&&sl>0;var k=ok?String(sl):"";var e=b[k]||(b[k]={sl:ok?sl:null,w:0,g:0});e.g+=1;if(val(r,"result")==="W") e.w+=1;});
+    var known=Object.keys(b).filter(function(k){return k!=="";}).map(function(k){return b[k];}).sort(function(x,y){return x.sl-y.sl;});
+    if(!known.length) return ["No opponent skill levels recorded","—","—"];
+    function lab(e){return "SL"+Math.trunc(e.sl)+" ("+wlText(e.w,e.g)+")";}
+    return [known.map(function(e){return "vs SL"+Math.trunc(e.sl)+" "+wlText(e.w,e.g);}).join(" · "),
+      known.filter(function(e){return e.w>e.g-e.w;}).map(lab).join(", ")||"None recorded",
+      known.filter(function(e){return e.w<e.g-e.w;}).map(lab).join(", ")||"None recorded"];
+  }
+  function wrCareer(p,fmt){
+    var rows=((p&&p.career_stats)||[]).filter(function(r){return r.format===fmt;}),w=0,g=0;
+    rows.forEach(function(r){if(wrKnown(r.matches_won)) w+=r.matches_won||0;if(wrKnown(r.matches_played)) g+=r.matches_played||0;});
+    return rows.length&&g?wlText(w,g)+" (league-scoped lifetime "+fmtLabel(fmt)+")":"No career stats captured";
+  }
+  function warRoomPair(ta,tb,fmt){
+    var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
+    var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
+    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
+    var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
+    var concerning=[];
+    blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
+      concerning.push({our:r.member,opp:b.opponent,j:j,w:w,g:g,text:r.player+" vs "+b.opponent_label+": "+wlText(w,g)+" direct ("+plural(g,"meeting")+")"});});});
+    concerning.sort(function(x,y){var a=x.g-2*x.w,b=y.g-2*y.w;if(a!==b) return b-a;if(x.g!==y.g) return y.g-x.g;var mo=memberOrder(x.our,y.our);return mo!==0?mo:x.j-y.j;});
+    var cards=blocks.map(function(b,j){
+      var opp=b.opponent;
+      var met=b.rows.filter(function(r){return !!r.c.direct;}).sort(function(x,y){return memberOrder(x.member,y.member);});
+      var tw=0,tg=0;met.forEach(function(r){tw+=r.c.direct.g-r.c.direct.w;tg+=r.c.direct.g;});
+      var sharedN=b.rows.filter(function(r){return !!r.c.shared;}).length,bk=wrBuckets(opp.id,fmt),missing=[];
+      if(!wrKnown(opp.skill_level)) missing.push("No captured SL on this team's roster");
+      if(b.opponent_games===0) missing.push("No recorded "+fmtLabel(fmt)+" games in the verified evidence");
+      if(!tg) missing.push("No meetings with our roster");
+      var session=tb.session_name||"";
+      return {j:j,opponent:opp,label:b.opponent_label,sl:wrKnown(opp.skill_level)?String(opp.skill_level):"No data",
+        team_record:(!wrKnown(opp.matches_won)||!wrKnown(opp.matches_played))?"No data":wlText(opp.matches_won,opp.matches_played)+" (this team"+(session?", "+session+")":")"),
+        lifetime:wrCareer(PLAYERS[String(opp.id)],fmt),sample:b.opponent_sample,
+        vs_ours:tg?wlText(tw,tg)+" in "+plural(tg,"meeting")+" with "+met.length+" of our "+ours.length+" players":"No recorded meetings with our roster — unknown, not a sign of weakness",
+        met_list:tg?met.map(function(r){return "vs "+r.player+": "+wlText(r.c.direct.g-r.c.direct.w,r.c.direct.g);}).join(" · "):"—",
+        their_wins:tw,their_games:tg,players_met:met.length,
+        shared_summary:sharedN?"Shared opponents with "+sharedN+" of our "+ours.length+" players":"No shared opponents with our roster",
+        by_sl:bk[0],winning_sl:bk[1],losing_sl:bk[2],missing:missing.join("; ")||"None noted"};
+    });
+    var threats=cards.filter(function(c){return c.their_games&&c.their_wins>c.their_games-c.their_wins;});
+    threats.sort(function(x,y){var a=2*x.their_wins-x.their_games,b=2*y.their_wins-y.their_games;if(a!==b) return b-a;
+      if(x.their_wins!==y.their_wins) return y.their_wins-x.their_wins;if(x.their_games!==y.their_games) return y.their_games-x.their_games;return memberOrder(x.opponent,y.opponent);});
+    threats.forEach(function(c){c.threat_text=c.label+" · SL "+c.sl+" · "+wlText(c.their_wins,c.their_games)+" vs our roster ("+plural(c.their_games,"meeting")+", "+c.players_met+" of our players)";});
+    var meetings=[];
+    ours.forEach(function(m){theirs.forEach(function(o){
+      var games=rowsFor(m.id,fmt).filter(function(r){return String(val(r,"opponent_id"))===String(o.id);}).map(function(r){
+        var t=wrInstant(val(r,"match_date"));
+        return {t:t,date:wrDayLabel(t),session:val(r,"session_name")||"No data",result:val(r,"result")||"No data",
+          own_sl:val(r,"own_skill_level"),opp_sl:val(r,"opponent_skill_level"),points:val(r,"points_earned"),our:m,opp:o};
+      });
+      games.sort(function(x,y){return wrCmpTime(y.t,x.t);});
+      meetings=meetings.concat(games);
+    });});
+    meetings.sort(function(x,y){var c=wrCmpTime(y.t,x.t);return c!==0?c:memberOrder(y.our,x.our);});
+    return {format:fmt,ours:ours,theirs:theirs,blocks:blocks,matrix:matrix,concerning:concerning,cards:cards,threats:threats,meetings:meetings};
+  }
+  window.__ucWarRoomPair=function(ourKey,oppKey,fmt){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
+    return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation];});}),
+      best:w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category];}).map(function(r){return r.player;});}),
+      concerning:w.concerning.map(function(c){return c.text;}),threats:w.threats.map(function(c){return c.threat_text;}),
+      cards:w.cards.map(function(c){return [c.sl,c.team_record,c.lifetime,c.sample,c.vs_ours,c.met_list,c.shared_summary,c.by_sl,c.winning_sl,c.losing_sl,c.missing];}),
+      meetings:w.meetings.map(function(g){return [g.date,g.our.id,g.opp.id,g.result,g.session];})};
+  };
+
+  // ---- planning marks: per team scope, this browser only, never evidence ----
+  var WR_PLAN=(function(){try{var o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v1")||"null");if(o&&typeof o==="object") return {our:o.our||{},opp:o.opp||{},cap:o.cap||{}};}catch(e){}return {our:{},opp:{},cap:{}};})();
+  function wrSave(){try{window.localStorage.setItem("ultimate-coach:plan-v1",JSON.stringify(WR_PLAN));}catch(e){}}
+  function wrMark(kind,scope,pid){var s=WR_PLAN[kind][scope];return (s&&s[String(pid)])||{};}
+  function wrSetMark(kind,scope,pid,field,value){var s=WR_PLAN[kind][scope]||(WR_PLAN[kind][scope]={});var m=s[String(pid)]||(s[String(pid)]={});if(value) m[field]=value; else delete m[field];wrSave();}
+  function wrAvail(scope,pid){var a=wrMark("our",scope,pid).a;return a==="Available"||a==="Unavailable"?a:"Unknown";}
+  function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
+  function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
+  function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
+  function wrNote(scope,pid){return String(wrMark("opp",scope,pid).n||"");}
+
+  function wrPlan(w,ta,tb){
+    var rem={};w.ours.forEach(function(m){rem[String(m.id)]=wrRemaining(ta.key,m.id);});
+    var unplayed=w.theirs.map(function(o){return !wrPlayed(tb.key,o.id);});
+    var sends=w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category]&&rem[String(r.member.id)];});});
+    var green=w.blocks.map(function(b){return b.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];}).length;});
+    var risks=[],unique=[];
+    w.theirs.forEach(function(o,j){if(unplayed[j]&&green[j]===0) risks.push(w.blocks[j].opponent_label+" — "+(sends[j].length>0?"only even or indirect evidence left":"no evidence-backed option left"));});
+    w.ours.forEach(function(m,i){
+      if(!rem[String(m.id)]) return;
+      var js=[];w.blocks.forEach(function(b,j){if(unplayed[j]&&green[j]===1&&w.matrix[i].cells[j].category==="G") js.push(j);});
+      if(js.length) unique.push(playerRef(m)+" — only favorable direct option vs "+w.blocks[js[0]].opponent_label+(js.length>1?" (and "+(js.length-1)+" more)":""));
+    });
+    var remN=0,unk=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
+    w.ours.forEach(function(m){
+      var r=rem[String(m.id)],l=wrLineup(ta.key,m.id),sl=m.skill_level;
+      if(r){remN++;if(wrAvail(ta.key,m.id)==="Unknown") unk++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
+      if(l){selN++;if(wrKnown(sl)) selSL+=sl; else selMiss++;}
+    });
+    var cap=WR_PLAN.cap[ta.key],openN=unplayed.filter(Boolean).length;
+    var greenOpps=0,sendOpps=0;w.theirs.forEach(function(o,j){if(!unplayed[j]) return;if(green[j]>0) greenOpps++;if(sends[j].length>0) sendOpps++;});
+    var n=w.ours.length;
+    return {rem:rem,unplayed:unplayed,sends:sends,risks:risks,unique:unique,
+      threats:w.threats.filter(function(c){return unplayed[c.j];}).slice(0,3),
+      concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}).slice(0,5),
+      metrics:[
+        ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
+        ["Remaining skill total",!n?"—":(remMiss===0?remSL+" (all remaining players have a captured SL)":remSL+" known subtotal · "+remMiss+" remaining player(s) without a captured SL — not a complete total")],
+        ["Selected lineup (Planned + Played)",selN===0?"No players marked Planned or Played yet.":(selMiss===0?"Skill total "+selSL+" for "+selN+" selected player(s)":"Known subtotal "+selSL+" · "+selMiss+" selected player(s) without a captured SL")+(cap?" · your reference cap: "+cap+" (user-entered, not verified)":"")+" — not a lineup-legality check."],
+        ["Roster flexibility",openN===0?"—":"Favorable direct option left vs "+greenOpps+" of "+openN+" unplayed opponents · any evidence-backed option vs "+sendOpps+" of "+openN]
+      ]};
+  }
+
+  function wrList(items,empty){return '<ul class="wr-list">'+(items.length?items.map(function(t){return '<li>'+esc(t)+'</li>';}).join(""):'<li class="muted">'+esc(empty)+'</li>')+'</ul>';}
+  function wrChip(cat){return '<span class="cat-dot cat-'+cat+'" title="'+esc(WR_CAT_LABELS[cat])+'"></span>';}
+  function wrClear(){["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
+
+  function renderWarRoom(ta,tb,fmt){
+    var opEl=document.getElementById("wr-opportunities");
+    if(!opEl) return;
+    if(!ta){wrClear();return;}
+    if(!tb||!ta.players.length||!tb.players.length){
+      wrClear();
+      opEl.innerHTML='<h2>Best sends</h2><p class="muted">'+(!tb?'No opponent roster for the selected fixture — choose a fixture with a rostered opponent on Match Day, or pick an opponent team above.':'One of these rosters has no current players captured.')+'</p>';
+      return;
+    }
+    var w=warRoomPair(ta,tb,fmt),plan=wrPlan(w,ta,tb);
+    // Best sends (ranking order, sendable + remaining, unplayed opponents)
+    opEl.innerHTML='<h2>Best sends — top opportunities per opponent</h2>'
+      +'<p class="muted">Favorable direct records first, then even direct, then indirect-only evidence (not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
+      +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Best-supported sends among our remaining players</th></tr></thead><tbody>'
+      +w.blocks.map(function(b,j){
+        var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
+          :(plan.sends[j].length?plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc((k+1)+". "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>')
+          :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
+        return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+'</td><td>'+cell+'</td></tr>';
+      }).join("")+'</tbody></table></div>';
+    document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
+      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against our roster (unplayed only).</p>'+wrList(plan.threats.map(function(c){return c.threat_text;}),"No unplayed opponent has a winning recorded record against our roster.")+'</div>'
+      +'<div><h3>Avoid sends</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents).</p>'+wrList(plan.concerning.map(function(c){return c.text;}),"No concerning direct records among remaining pairings.")+'</div>'
+      +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
+    // Matrix
+    var pair=WR_STATE.pair,pairHtml="";
+    var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a><span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';}).join("")+'</tr>';
+    var body=w.matrix.map(function(row,i){
+      var m=row.member,out=!plan.rem[String(m.id)];
+      return '<tr class="'+(out?'out':'')+'"><th>'+esc(m.name)+'<span class="id-line">SL '+esc(slText(m))+' · ID '+esc(recordIdText(m))+'</span></th>'
+        +row.cells.map(function(c,j){
+          var on=pair&&pair.our===String(m.id)&&pair.opp===String(w.theirs[j].id);
+          if(on) pairHtml=wrPairDetail(w,c,w.blocks[j],fmt);
+          return '<td><button type="button" class="mcell cat-'+c.category+(on?' on':'')+(plan.unplayed[j]?'':' out')+'" data-our="'+esc(m.id)+'" data-opp="'+esc(w.theirs[j].id)+'" title="'+esc(WR_CAT_LABELS[c.category]+" — "+c.explanation)+'">'+esc(c.cell)+'</button></td>';
+        }).join("")+'</tr>';
+    }).join("");
+    document.getElementById("wr-matrix").innerHTML='<h2>Matchup matrix</h2>'
+      +'<p class="legend"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no evidence. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Tap a cell for the evidence behind it.</p>'
+      +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+      +'<div id="wr-pair">'+pairHtml+'</div>';
+    // Lineup Lab
+    var ourRows=w.ours.map(function(m){
+      var a=wrAvail(ta.key,m.id),l=wrLineup(ta.key,m.id),pid=esc(m.id);
+      return '<tr class="'+(plan.rem[String(m.id)]?'':'out')+'"><td>'+esc(playerRef(m))+'</td><td>'+esc(slText(m))+'</td>'
+        +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(m.name)+'">'+["Unknown","Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
+        +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(m.name)+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td></tr>';
+    }).join("");
+    var oppRows=w.theirs.map(function(o,j){
+      return '<tr class="'+(plan.unplayed[j]?'':'out')+'"><td>'+esc(playerRef(o))+'</td><td>'+esc(slText(o))+'</td><td><label class="inline"><input type="checkbox" class="plan" data-plan="played" data-pid="'+esc(o.id)+'"'+(plan.unplayed[j]?'':' checked')+'> Played</label><span class="print-only">'+(plan.unplayed[j]?'—':'Played')+'</span></td></tr>';
+    }).join("");
+    var cap=WR_PLAN.cap[ta.key];
+    document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for these teams</button></div>'
+      +'<p class="muted">Your marks, saved in this browser for '+esc(teamDisplay(ta))+' and '+esc(teamDisplay(tb))+' only. They change which candidates count as remaining — never the evidence. Unknown is not Unavailable.</p>'
+      +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player (APA record ID)</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
+      +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player (APA record ID)</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
+      +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
+      +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
+      +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
+    // Scouting cards
+    document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
+      +w.cards.map(function(c,j){
+        var note=wrNote(tb.key,c.opponent.id),played=!plan.unplayed[j];
+        var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
+        return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div><dl>'
+          +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
+          +'<dt>Coach observations</dt><dd><textarea class="plan" data-plan="note" data-pid="'+esc(c.opponent.id)+'" rows="2" placeholder="Your notes">'+esc(note)+'</textarea><span class="print-only">'+esc(note||"—")+'</span></dd></dl></div>';
+      }).join("")+'</div>';
+    // Meetings
+    document.getElementById("wr-meetings").innerHTML='<h2>Direct meetings between the rosters</h2>'+(w.meetings.length
+      ?'<p class="muted">Newest first · dates in '+esc(WR_TZ)+'.</p><div class="table-wrap"><table><thead><tr><th>Date</th><th>Our player</th><th>Opponent</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'
+        +w.meetings.slice(0,60).map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(playerRef(g.our))+'</td><td>'+esc(playerRef(g.opp))+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>'
+        +(w.meetings.length>60?'<p class="muted">Showing the newest 60 of '+w.meetings.length+'; Player vs Player lists every meeting.</p>':'')
+      :'<p class="muted">No recorded direct meetings between these rosters in '+esc(fmtLabel(fmt))+'.</p>');
+  }
+  function wrPairDetail(w,row,block,fmt){
+    var m=row.member,o=block.opponent,mm=oppMap(m.id,fmt),om=oppMap(o.id,fmt);
+    var shared=Object.keys(mm).filter(function(k){return !!om[k];}).sort(function(a,b){var d=(mm[b].g+om[b].g)-(mm[a].g+om[a].g);if(d) return d;var na=PLAYERS[a]?PLAYERS[a].name:a,nb=PLAYERS[b]?PLAYERS[b].name:b;return na<nb?-1:(na>nb?1:0);});
+    var games=w.meetings.filter(function(g){return String(g.our.id)===String(m.id)&&String(g.opp.id)===String(o.id);});
+    return '<div class="pair cat-border-'+row.category+'"><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
+      +'<p>'+wrChip(row.category)+' <b>'+esc(WR_CAT_LABELS[row.category])+'</b> · rank '+esc(row.rank)+' of '+block.rows.length+' vs this opponent · '+esc(row.explanation)+'</p>'
+      +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No direct meetings.</p>')
+      +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(m.name)+' vs them</th><th>'+esc(o.name)+' vs them</th></tr></thead><tbody>'
+        +shared.slice(0,25).map(function(k){return '<tr><td>'+esc(PLAYERS[k]?playerRef(PLAYERS[k]):k)+'</td><td>'+esc(wlText(mm[k].w,mm[k].g)+" ("+plural(mm[k].g,"game")+")")+'</td><td>'+esc(wlText(om[k].w,om[k].g)+" ("+plural(om[k].g,"game")+")")+'</td></tr>';}).join("")+'</tbody></table></div>'
+        +(shared.length>25?'<p class="muted">Showing 25 of '+shared.length+' (largest combined samples).</p>':''):'<p class="muted">No shared opponents.</p>')
+      +'</div>';
+  }
+  (function(){
+    var root=document.getElementById("matchup-print");
+    if(!root) return;
+    function current(){return {ta:TEAM_INDEX[TA.value],tb:TEAM_INDEX[TB.value]};}
+    root.addEventListener("change",function(ev){
+      var t=ev.target,k=t&&t.getAttribute&&t.getAttribute("data-plan"),cur=current();
+      if(t&&t.id==="ll-cap"&&cur.ta){var v=parseFloat(t.value);if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];wrSave();renderTeamMatchups();return;}
+      if(!k||!cur.ta) return;
+      var pid=t.getAttribute("data-pid");
+      if(k==="avail") wrSetMark("our",cur.ta.key,pid,"a",t.value==="Unknown"?"":t.value);
+      else if(k==="lineup") wrSetMark("our",cur.ta.key,pid,"l",t.value);
+      else if(k==="played"&&cur.tb) wrSetMark("opp",cur.tb.key,pid,"p",t.checked?true:"");
+      else return;
+      renderTeamMatchups();
+      var again=root.querySelector('[data-plan="'+k+'"][data-pid="'+pid+'"]');if(again) again.focus();
+    });
+    root.addEventListener("input",function(ev){
+      var t=ev.target,cur=current();
+      if(!t||!t.getAttribute||t.getAttribute("data-plan")!=="note"||!cur.tb) return;
+      wrSetMark("opp",cur.tb.key,t.getAttribute("data-pid"),"n",t.value);
+      var span=t.nextElementSibling;if(span) span.textContent=t.value||"—";
+    });
+    root.addEventListener("click",function(ev){
+      var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
+      if(!t) return;
+      var cur=current();
+      if(t.id==="ll-clear"&&cur.ta&&cur.tb){delete WR_PLAN.our[cur.ta.key];delete WR_PLAN.opp[cur.tb.key];delete WR_PLAN.cap[cur.ta.key];wrSave();renderTeamMatchups();return;}
+      if(t.classList.contains("mcell")){
+        var p={our:t.getAttribute("data-our"),opp:t.getAttribute("data-opp")};
+        WR_STATE.pair=(WR_STATE.pair&&WR_STATE.pair.our===p.our&&WR_STATE.pair.opp===p.opp)?null:p;
+        renderTeamMatchups();
+        var d=document.getElementById("wr-pair");if(d&&d.scrollIntoView&&WR_STATE.pair) d.scrollIntoView({block:"nearest"});
+      }
+    });
+  })();
