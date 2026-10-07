@@ -108,8 +108,9 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
     assert set(wb.sheetnames) == {
         "Build Info", "Data Trust", "Players", "Team Rosters", "Teams",
         "Player vs Player", "Coach Dashboard", "Match Night",
-        "Match Day", "Player Teams", "Schedule", "Schedule Keys", "Lists",
+        "Match Day", "Print Matchup", "Player Teams", "Schedule", "Schedule Keys", "Lists",
     }
+    assert wb.sheetnames[:4] == ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard"]
 
     build_info = {row[0].value: row[1].value for row in wb["Build Info"].iter_rows(min_row=2, max_col=2) if row[0].value}
     assert build_info["Probability publication"] == "FORBIDDEN"
@@ -276,7 +277,7 @@ def test_every_column_match_day_reads_through_index_is_fully_populated(tmp_path)
         for name, ref in ws.tables.items():
             tables[name] = (ws, ref)
     referenced = set()
-    for sheet_name in ("Match Day", "Match Night"):
+    for sheet_name in ("Match Day", "Match Night", "Print Matchup"):
         for row in wb[sheet_name].iter_rows():
             for cell in row:
                 if isinstance(cell.value, str) and cell.value.startswith("="):
@@ -380,14 +381,15 @@ def test_match_day_sheet_inputs_dropdowns_and_viewer_default(tmp_path):
     assert wb.active.title == "Match Day"
     md = wb["Match Day"]
     sources = {str(dv.sqref): dv.formula1 for dv in md.data_validations.dataValidation}
+    assert sources["B7"] == "PlayerLabelList"  # pick "Name (APA record ID n)" or type the ID
     assert sources["B8"] == "MyTeamSlotList"
     assert sources["B9"] == "FormatFilterList"
     assert sources["B10"] == "FixtureNumberList"
     assert [dv.type for dv in md.data_validations.dataValidation if str(dv.sqref) == "B6"] == ["date"]
-    assert md["B7"].value == "1001"  # configured, verified viewer pre-filled
+    assert md["B7"].value == "Ann Archer (APA record ID 1001)"  # name shown alongside the verified record ID
     assert md["B9"].value == "8-Ball & 9-Ball"
     assert "80000001" in md["B15"].value and "never used as identity" in md["B15"].value
-    assert md["A7"].value == "2 · I am (APA record ID)"
+    assert md["A7"].value == "2 · I am"
     for name in ("MyTeamSlotList", "FormatFilterList", "FixtureNumberList", "PlayerLabelList", "TeamNameList"):
         assert name in wb.defined_names
     assert md.print_area and md.page_setup.orientation == "landscape"
@@ -515,3 +517,22 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
     finally:
         wb.Close(False)
         excel.Quit()
+
+
+def test_print_matchup_sheet_is_a_focused_one_page_landscape_print(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="1001"))
+    sheet = wb["Print Matchup"]
+    assert sheet.print_area.endswith("$A$1:$K$" + sheet.print_area.rsplit("$", 1)[1])
+    assert sheet.page_setup.orientation == "landscape"
+    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 1)
+    assert sheet.sheet_properties.pageSetUpPr.fitToPage is True
+    assert sheet["A6"].value == "OUR TEAM" and sheet["G6"].value == "OPPONENT"
+    for left in ("A", "G"):
+        row = [sheet[f"{chr(ord(left) + i)}9"].value for i in range(5)]
+        assert row == ["#", "Player", "APA record ID", "SL", "Current W-L"]
+    legend = " ".join(str(c.value) for c in sheet["A"] if isinstance(c.value, str) and c.value.startswith(("Legend", "Rosters", "No win")))
+    assert "“No data”: not captured" in legend and "SL with *" in legend and "never counted as 0" in legend
+    assert "NOT CALIBRATED" in legend and "CURRENT captured roster" in legend
+    # Helper/lookup cells and navigation stay outside the printed range.
+    last_print_row = int(sheet.print_area.rsplit("$", 1)[1])
+    assert any(c.hyperlink for c in sheet[last_print_row + 2])

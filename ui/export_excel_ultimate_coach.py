@@ -10,6 +10,10 @@ Sheets (user-facing first):
                        team's season schedule. Formula-driven, but every
                        formula is a plain INDEX/MATCH/COUNTIF against a
                        pre-built key column (see "Excel constraints").
+    Print Matchup      The focused one-page printable matchup for the fixture
+                       chosen on Match Day: clearly labeled OUR TEAM and
+                       OPPONENT rosters (name + APA record ID), with every
+                       missing-data disclosure.
     Match Night        Any two teams side by side (roster lists + totals).
     Coach Dashboard    Two player dropdowns + a format dropdown; pulls the
                        real direct-evidence record for that exact pair, or
@@ -107,7 +111,12 @@ CELL_BORDER = Border(bottom=_THIN)
 WRAP_TOP = Alignment(wrap_text=True, vertical="top")
 TABLE_STYLE = "TableStyleMedium7"  # green, matches the felt palette
 
-NAV_SHEETS = ["Match Day", "Match Night", "Coach Dashboard", "Schedule", "Team Rosters", "Players", "Data Trust", "Build Info"]
+NAV_SHEETS = ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard", "Schedule", "Team Rosters", "Players",
+              "Data Trust", "Build Info"]
+SHEET_ORDER = ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard", "Schedule", "Team Rosters", "Teams",
+               "Players", "Player vs Player", "Player Teams", "Schedule Keys", "Lists", "Data Trust", "Build Info"]
+RAIL = "5A3A1F"
+OPPONENT_FILL = PatternFill("solid", fgColor=RAIL)
 
 NO_DATA = "No data"
 BYE_TEXT = "Bye — no opponent"
@@ -929,7 +938,9 @@ def _match_day_sheet(
     viewer_member_external_id: str | None,
     viewer_card_number: str | None,
     viewer_resolved: bool,
-) -> dict[str, int]:
+    viewer_label: str | None = None,
+    has_players: bool = True,
+) -> dict[str, Any]:
     """Date -> APA record ID -> my team -> format -> every real fixture ->
     printable roster matchup -> season schedule. Every lookup is a plain
     INDEX/MATCH/COUNTIF against a static key column; no dynamic arrays, no
@@ -956,8 +967,9 @@ def _match_day_sheet(
     _section(sheet, 5, "Your selection (yellow cells)", last_col=11)
     inputs = [
         (6, "1 · Date", "Type a date such as 10/11/2026, or pick one from your season schedule further down this sheet."),
-        (7, "2 · I am (APA record ID)", "Your APA member record ID (see the Players sheet: “Name (APA record ID …)”). "
-                                         "This is not the league card number on your member card."),
+        (7, "2 · I am", "Pick your own name from the list — every entry shows that player's APA record ID, so "
+                        "same-name players stay distinct — or type just your APA record ID. (The record ID is not the "
+                        "league card number printed on your member card.)"),
         (8, "3 · My team", "Choose one of your current teams (the list fills in once your record ID is recognized)."),
         (9, "4 · Format", f"“{FORMAT_FILTER_EIGHT_NINE_LABEL}” (default) includes every 8-Ball and 9-Ball variant; "
                           "other recorded formats are listed too."),
@@ -975,8 +987,13 @@ def _match_day_sheet(
     date_validation.prompt = "Type a calendar date, e.g. 10/11/2026."
     sheet.add_data_validation(date_validation)
     date_validation.add("B6")
-    _input(sheet["B7"], viewer_member_external_id if viewer_resolved else "")
+    # Pre-filled with the configured, verified viewer as "Name (APA record ID n)" -- the name is shown next
+    # to the ID, but the lookup below still resolves to the record ID (never to the name).
+    _input(sheet["B7"], (viewer_label or "") if viewer_resolved else "")
     sheet["B7"].number_format = "@"
+    if has_players:
+        _add_dropdown(sheet, "B7", "PlayerLabelList", title="I am",
+                      message="Pick your name (APA record ID shown), or type just your APA record ID.")
     _input(sheet["B8"])
     _input(sheet["B9"], FORMAT_FILTER_EIGHT_NINE_LABEL)
     _input(sheet["B10"], 1)
@@ -986,7 +1003,10 @@ def _match_day_sheet(
                   message="Choose which listed fixture to compare.")
 
     serial = helper(6, "Date serial", '=IF(B6="","",IF(ISNUMBER(B6),INT(B6),IFERROR(INT(DATEVALUE(B6)),"bad")))')
-    vkey = helper(7, "Record ID key", '=IF(ISNUMBER(B7),TEXT(B7,"0"),TRIM(B7))')
+    # A picked "Name (APA record ID n)" label resolves to its record ID through the unique Player Label
+    # column; anything else typed is treated as a record ID. A bare name never matches a record ID.
+    vkey = helper(7, "Record ID key", '=IF(B7="","",IF(ISNUMBER(B7),TEXT(B7,"0"),'
+                                      'IFERROR(INDEX(Players_Table[External ID],MATCH(TRIM(B7),Players_Table[Player Label],0)),TRIM(B7))))')
     name_row = helper(8, "Verified player name",
                       f'=IF({vkey}="","",IFERROR(INDEX(Players_Table[Player Name],MATCH({vkey},Players_Table[External ID],0)),""))')
     team_list_top = 18
@@ -1101,7 +1121,10 @@ def _match_day_sheet(
 
     # ---- printable matchup ----
     mu = last_slot_row + 2
-    _section(sheet, mu, "Printable matchup", last_col=11)
+    _section(sheet, mu, "Matchup preview", last_col=11)
+    print_link = sheet.cell(row=mu, column=7, value="Print-ready page: Print Matchup sheet →")
+    print_link.hyperlink = Hyperlink(ref=f"G{mu}", location="'Print Matchup'!A1", display="Print-ready page: Print Matchup sheet →")
+    print_link.font = Font(bold=True, color="FFFFFF", underline="single")
     cmp_row = f"$O${mu}"
     sheet.cell(row=mu, column=14, value="Compared schedule row").font = HELPER_FONT
     sheet.cell(row=mu, column=15, value=(
@@ -1126,9 +1149,13 @@ def _match_day_sheet(
     sheet.merge_cells(f"A{mu + 2}:K{mu + 2}")
     roster_top = mu + 3
     _roster_block(sheet, top=roster_top, left=1, scope_ref=scope, slots=roster_slots, helper_col=16,
-                  title_formula=f'=IF({scope}="","Our roster","Our roster — "&B8)')
+                  title_formula=(f'=IF({scope}="","OUR TEAM — choose your team (step 3)","OUR TEAM — "&B8&'
+                                 f'IF({cmp_row}="",""," ("&INDEX(Schedule_Table[Home/Away],{cmp_row})&")"))'))
     _roster_block(sheet, top=roster_top, left=7, scope_ref=opp_scope, slots=roster_slots, helper_col=17,
-                  title_formula=f'=IF({opp_scope}="","Opponent roster — not available","Opponent roster — "&INDEX(Schedule_Table[Opponent Team],{cmp_row}))')
+                  title_formula=(f'=IF({cmp_row}="","OPPONENT — choose a fixture above",IF({opp_scope}="",'
+                                 f'"OPPONENT — "&INDEX(Schedule_Table[Opponent],{cmp_row})&" · "&INDEX(Schedule_Table[Opponent Roster],{cmp_row}),'
+                                 f'"OPPONENT — "&INDEX(Schedule_Table[Opponent Team],{cmp_row})&" ("&'
+                                 f'IF(INDEX(Schedule_Table[Home/Away],{cmp_row})="Home","Away","Home")&")"))'))
     totals_row = roster_top + roster_slots + 2
     sheet.cell(row=totals_row, column=1, value=(
         f'=IF({scope}="","",IFERROR(INDEX(Teams_Table[Summary],MATCH({scope},Teams_Table[Scope Key],0)),""))'
@@ -1200,7 +1227,149 @@ def _match_day_sheet(
     return {
         "status_row": status_row, "first_slot_row": first_slot_row, "matchup_row": mu,
         "roster_top": roster_top, "season_row": ss, "team_list_top": team_list_top,
+        "scope": scope, "compare_n": compare_n, "count": count, "cmp": cmp_row, "opp_scope": opp_scope,
     }
+
+
+def _print_matchup_sheet(wb: Workbook, *, refs: dict[str, Any], roster_slots: int, tz_name: str, built_at: str) -> dict[str, int]:
+    """A focused, one-page printable matchup for the fixture chosen on Match
+    Day: a fixture header, then clearly labeled OUR TEAM / OPPONENT panels,
+    each with team, side and roster (name + APA record ID + SL + current
+    W-L), the stated reason when no opponent roster exists (bye, no current
+    roster, ambiguous), and the missing-data legend. It reads Match Day's own
+    identity-backed selection (roster scope keys and the compared schedule
+    row) and never looks anything up by name."""
+    sheet = wb.create_sheet("Print Matchup", 1)
+    sheet.sheet_view.showGridLines = False
+    for letter, width in {"A": 5, "B": 28, "C": 16, "D": 8, "E": 13, "F": 3, "G": 5, "H": 28, "I": 16, "J": 8,
+                          "K": 13, "L": 3, "M": 28, "N": 34, "O": 9, "P": 9}.items():
+        sheet.column_dimensions[letter].width = width
+    md = "'Match Day'!"
+
+    def mirror(row: int, label: str, ref: str) -> str:
+        # Guarded so a blank Match Day input never reads back here as 0.
+        sheet.cell(row=row, column=13, value=label).font = HELPER_FONT
+        sheet.cell(row=row, column=14, value=f'=IF({md}{ref}="","",{md}{ref})').font = HELPER_FONT
+        return f"$N${row}"
+
+    sheet["M1"] = "Lookup detail (from Match Day)"
+    sheet["M1"].font = LABEL_FONT
+    cmp = mirror(2, "Compared schedule row", refs["cmp"])
+    opp = mirror(3, "Opponent scope key", refs["opp_scope"])
+    ours = mirror(4, "Our team scope key", refs["scope"])
+    team = mirror(5, "Our team label", "$B$8")
+    number = mirror(6, "Fixture #", refs["compare_n"])
+    count = mirror(7, "Fixtures found", refs["count"])
+    back = sheet.cell(row=9, column=13, value="← Back to Match Day")
+    back.hyperlink = Hyperlink(ref="M9", location="'Match Day'!A1", display="← Back to Match Day")
+    back.font = LINK_FONT
+
+    sheet["A1"] = "Ultimate Coach — Matchup"
+    sheet["A1"].font = TITLE_FONT
+    sheet.merge_cells("A1:K1")
+    sheet.row_dimensions[1].height = 30
+    sheet["A2"] = (
+        f'=IF({cmp}="",IF({ours}="","Choose a date, your team and a fixture on the Match Day sheet — this page then shows that matchup, ready to print.",'
+        f'"No fixture selected for "&{team}&" — choose a date with a scheduled fixture on Match Day (step 1) and the fixture # (step 5)."),'
+        f'INDEX(Schedule_Table[Date Display],{cmp})&" · "&INDEX(Schedule_Table[Kickoff],{cmp})&" ({tz_name})")'
+    )
+    sheet["A2"].font = Font(bold=True, size=14, color=FELT_DEEP)
+    sheet["A2"].alignment = WRAP_TOP
+    sheet.merge_cells("A2:K2")
+    sheet.row_dimensions[2].height = 24
+    sheet["A3"] = (
+        f'=IF({cmp}="","",INDEX(Schedule_Table[Format],{cmp})&" · "&INDEX(Schedule_Table[Session],{cmp})&'
+        f'" · Venue: "&INDEX(Schedule_Table[Venue],{cmp})&" · Status: "&INDEX(Schedule_Table[Status],{cmp})&'
+        f'" · Score (home–away): "&INDEX(Schedule_Table[Score (home–away)],{cmp}))'
+    )
+    sheet["A3"].alignment = WRAP_TOP
+    sheet.merge_cells("A3:K3")
+    sheet["A4"] = (
+        f'=IF({cmp}="","","Source timestamp: "&INDEX(Schedule_Table[Source Timestamp],{cmp})&" · fixture #"&{number}&'
+        f'" of "&{count}&" on Match Day · built {built_at or "unknown"}")'
+    )
+    sheet["A4"].font = MUTED_FONT
+    sheet.merge_cells("A4:K4")
+
+    for left, fill, label in ((1, SECTION_FILL, "OUR TEAM"), (7, OPPONENT_FILL, "OPPONENT")):
+        for col in range(left, left + 5):
+            sheet.cell(row=6, column=col).fill = fill
+        cell = sheet.cell(row=6, column=left, value=label)
+        cell.font = SECTION_FONT
+        sheet.merge_cells(start_row=6, start_column=left, end_row=6, end_column=left + 4)
+    sheet.row_dimensions[6].height = 22
+    sheet["A7"] = (
+        f'=IF({ours}="","Not chosen — pick your team on Match Day (step 3).",{team}&'
+        f'IF({cmp}="",""," — "&INDEX(Schedule_Table[Home/Away],{cmp})))'
+    )
+    sheet["G7"] = (
+        f'=IF({cmp}="","Not chosen — pick a fixture on Match Day.",IF({opp}="",INDEX(Schedule_Table[Opponent],{cmp}),'
+        f'INDEX(Schedule_Table[Opponent Team],{cmp})&" — "&IF(INDEX(Schedule_Table[Home/Away],{cmp})="Home","Away","Home")))'
+    )
+    sheet["A8"] = f'=IF({ours}="","",IFERROR(INDEX(Teams_Table[Summary],MATCH({ours},Teams_Table[Scope Key],0)),""))'
+    sheet["G8"] = (
+        f'=IF({cmp}="","",IF({opp}="","Opponent roster: "&INDEX(Schedule_Table[Opponent Roster],{cmp})&".",'
+        f'IFERROR(INDEX(Teams_Table[Summary],MATCH({opp},Teams_Table[Scope Key],0)),"")))'
+    )
+    for ref in ("A7", "G7"):
+        sheet[ref].font = Font(bold=True, size=13)
+        sheet[ref].alignment = WRAP_TOP
+    for ref in ("A8", "G8"):
+        sheet[ref].font = MUTED_FONT
+        sheet[ref].alignment = WRAP_TOP
+    for row in (7, 8):
+        sheet.merge_cells(f"A{row}:E{row}")
+        sheet.merge_cells(f"G{row}:K{row}")
+    sheet.row_dimensions[7].height = 34
+    sheet.row_dimensions[8].height = 30
+
+    header_row = 9
+    for left in (1, 7):
+        _subheader(sheet, header_row, [(left, "#"), (left + 1, "Player"), (left + 2, "APA record ID"),
+                                        (left + 3, "SL"), (left + 4, "Current W-L")])
+    first = header_row + 1
+    for k in range(1, roster_slots + 1):
+        r = first + k - 1
+        for left, helper_col, scope in ((1, 15, ours), (7, 16, opp)):
+            row_ref = f"${get_column_letter(helper_col)}{r}"
+            sheet.cell(row=r, column=helper_col, value=(
+                f'=IF({scope}="","",IFERROR(MATCH({scope}&"|{k}",TeamRosters_Table[Roster Slot Key],0),""))'
+            )).font = HELPER_FONT
+            sheet.cell(row=r, column=left, value=f'=IF({row_ref}="","",{k})')
+            for offset, column_name in enumerate(("Player Name", "APA Record ID", "SL Display", "W-L Display"), start=1):
+                sheet.cell(row=r, column=left + offset,
+                           value=f'=IF({row_ref}="","",INDEX(TeamRosters_Table[{column_name}],{row_ref}))')
+            for col in range(left, left + 5):
+                sheet.cell(row=r, column=col).border = CELL_BORDER
+        if k == 1:
+            # The opponent panel says so explicitly when there is nothing to list.
+            sheet.cell(row=r, column=8, value=(
+                f'=IF($P{r}="",IF(AND({opp}="",{cmp}<>""),"No opponent roster to list — see above.",""),'
+                f'INDEX(TeamRosters_Table[Player Name],$P{r}))'
+            ))
+    legend_top = first + roster_slots + 1
+    legend = [
+        "Legend — “No data”: not captured in the source. SL with *: division-scoped skill level (no live current "
+        "rating captured). Players without a captured SL are left out of skill totals, never counted as 0.",
+        "Rosters are each team's CURRENT captured roster, not a reconstruction of who actually played on this date. "
+        "Skill totals are informational, not a 5-player lineup cap check (the commonly used APA default is 23; "
+        "verify your division's rules).",
+        f"No win probability is shown: NOT CALIBRATED. Dates and times are in {tz_name}. Players are identified by "
+        "APA record ID (not the league card number printed on a member card).",
+    ]
+    for i, text in enumerate(legend):
+        _note(sheet, f"A{legend_top + i}", text, merge_to=f"K{legend_top + i}", height=30)
+    last = legend_top + len(legend) - 1
+    sheet.print_area = f"A1:K{last}"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 1
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.print_options.horizontalCentered = True
+    sheet.page_margins.left = sheet.page_margins.right = 0.4
+    sheet.page_margins.top = sheet.page_margins.bottom = 0.5
+    _nav_row(sheet, last + 2, current="Print Matchup")
+    return {"header_row": header_row, "first_roster_row": first, "legend_row": legend_top}
 
 
 def build_workbook(
@@ -1248,8 +1417,9 @@ def build_workbook(
     roster_slots = max(8, min(max_roster, 16))
     _match_night_sheet(wb, team_count, roster_slots)
     _coach_dashboard_sheet(wb, player_count, _dashboard_format_options(pairs))
-    resolved = viewer_player(players, viewer_member_external_id) is not None
-    _match_day_sheet(
+    viewer = viewer_player(players, viewer_member_external_id)
+    resolved = viewer is not None
+    refs = _match_day_sheet(
         wb,
         match_day=match_day,
         format_filter_options=format_filter_options,
@@ -1260,8 +1430,16 @@ def build_workbook(
         viewer_member_external_id=viewer_member_external_id,
         viewer_card_number=viewer_card_number,
         viewer_resolved=resolved,
+        viewer_label=_player_label(viewer["name"], viewer["external_id"]) if viewer else None,
+        has_players=bool(player_count),
+    )
+    _print_matchup_sheet(
+        wb, refs=refs, roster_slots=roster_slots,
+        tz_name=match_day.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE, built_at=built_at,
     )
 
+    for target, name in enumerate(SHEET_ORDER):
+        wb.move_sheet(wb[name], offset=target - wb.sheetnames.index(name))
     wb.active = wb["Match Day"]
     return wb
 

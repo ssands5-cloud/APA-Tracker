@@ -177,6 +177,7 @@ def render(
         "teams": viewer_current_teams(players, viewer_member_external_id),
     }
     data = _script_json(compact_payload)
+    built_label_js = _script_json(f"Ultimate Coach · built {built_at}" if built_at else "Ultimate Coach · offline build")
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
     trust_card = _trust_card(payload)
@@ -243,6 +244,7 @@ button.chip:hover,button.chip[aria-pressed="true"] {{ background:var(--felt-soft
 .chips {{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }}
 .chips:empty {{ display:none; }}
 .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
+.grid > * {{ min-width:0; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }}
 .metric {{ background:#f7f5ef; border:1px solid #ece6d8; border-radius:9px; padding:10px 12px; }}
 .metric b {{ display:block; font-size:18px; color:var(--felt-deep); }}
@@ -278,7 +280,25 @@ details.disclosure {{ margin-top:14px; border-top:1px solid var(--line); padding
 details.disclosure summary {{ cursor:pointer; font-weight:700; color:var(--felt-deep); font-size:13.5px; }}
 details.disclosure ul {{ margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:13px; }}
 footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); padding-top:12px; }}
+.id-line {{ margin:-6px 0 10px; color:var(--muted); font-size:13px; font-weight:600; }}
+td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }}
+.roster-head {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }}
+.role {{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:#fff; background:var(--felt); padding:3px 8px; border-radius:6px; }}
+.role.opp,#team-rosters > .card:nth-child(2) .role {{ background:var(--rail); }}
+.badge.side.opp,#team-rosters > .card:nth-child(2) .badge.side {{ background:var(--rail); border-color:var(--rail); }}
+.roster-scope {{ margin:4px 0; font-weight:600; }}
+.roster-summary {{ margin:4px 0; font-size:13px; }}
+.matchup-head .matchup-when {{ font-size:18px; font-weight:800; margin:2px 0 10px; }}
+.matchup-teams {{ display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:center; }}
+.matchup-side b {{ display:block; font-size:16px; margin:4px 0; }}
+.matchup-vs {{ font-weight:800; color:var(--muted); }}
+.matchup-facts {{ display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; font-size:13.5px; margin:12px 0 0; }}
+.matchup-facts dt {{ color:var(--muted); }}
+.matchup-facts dd {{ margin:0; overflow-wrap:anywhere; }}
+.matchup-notes ul {{ margin:6px 0 8px; padding-left:18px; color:var(--muted); font-size:13px; }}
 @media(max-width:760px) {{
+  .matchup-teams {{ grid-template-columns:1fr; }}
+  .matchup-vs {{ display:none; }}
   header.hero {{ padding:16px 16px 14px; }}
   header h1 {{ font-size:21px; }}
   .freshness {{ padding:0 12px; }}
@@ -290,9 +310,29 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   .fixture dt {{ margin-top:6px; }}
 }}
 @media print {{
+  @page {{ size:landscape; margin:10mm; }}
   header.hero,.freshness,#player-section,#trust-section,button,.viewer-box,details.disclosure {{ display:none !important; }}
   body {{ background:#fff; }}
   .card {{ box-shadow:none; break-inside:avoid; }}
+  .role,.badge.side {{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+  /* "Print this matchup": only the fixture header, both labeled rosters and the data notes. */
+  body.print-matchup main > :not(#matchup-print) {{ display:none !important; }}
+  body.print-matchup main {{ padding:0; max-width:none; }}
+  body.print-matchup #team-rosters {{ grid-template-columns:1fr 1fr !important; gap:8px; margin:0; }}
+  body.print-matchup .card {{ border:1px solid #bbb; border-radius:6px; padding:7px 10px; margin-bottom:6px; break-inside:auto; }}
+  body.print-matchup h2 {{ font-size:15px; margin:0 0 3px; }}
+  body.print-matchup .card-head {{ margin-bottom:2px; }}
+  body.print-matchup .matchup-when {{ font-size:14px; margin:0 0 4px; }}
+  body.print-matchup .matchup-side b {{ font-size:13px; margin:2px 0; }}
+  body.print-matchup .matchup-facts {{ grid-template-columns:repeat(3,max-content 1fr); gap:1px 10px; font-size:11px; margin-top:4px; }}
+  body.print-matchup .roster-fineprint {{ display:none; }}
+  body.print-matchup .roster-scope,body.print-matchup .roster-summary,body.print-matchup .muted {{ font-size:10.5px; margin:1px 0; }}
+  body.print-matchup table {{ font-size:10.5px; }}
+  body.print-matchup th,body.print-matchup td {{ padding:2px 5px; }}
+  body.print-matchup td {{ white-space:nowrap; }}
+  body.print-matchup .table-wrap {{ overflow:visible; }}
+  body.print-matchup .matchup-notes h3 {{ font-size:12px; margin:0 0 2px; }}
+  body.print-matchup .matchup-notes ul {{ font-size:10px; margin:2px 0; columns:2; column-gap:18px; }}
 }}
 </style></head>
 <body>
@@ -334,7 +374,11 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   </div>
   <p class="muted">Rosters are each team's current captured roster, not who played on any particular past date.</p>
 </div>
+<section id="matchup-print" aria-label="Printable matchup">
+<div id="matchup-head" class="card matchup-head"></div>
 <div id="team-rosters" class="grid"></div>
+<div id="matchup-notes" class="card matchup-notes"></div>
+</section>
 <div id="team-matchups" class="card"></div>
 
 <div id="player-section">
@@ -367,6 +411,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
 <script>
 (function() {{
   var DATA=JSON.parse(document.getElementById("uc-data").textContent);
+  var BUILT_LABEL={built_label_js};
   var PLAYERS={{}}; DATA.players.forEach(function(p){{PLAYERS[String(p.id)]=p;}});
   var EVIDENCE_INDEX=DATA.evidence_index||{{}};
   var EVIDENCE_FIELDS=DATA.evidence_row_fields||[];
@@ -380,8 +425,13 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   function esc(v){{return String(v===null||v===undefined?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}}
   function pct(w,g){{return g?((w/g)*100).toFixed(1)+"%":"No data";}}
   function val(row,name){{return row[EC[name]];}}
+  // Names are shown next to the APA record ID everywhere a player is picked
+  // or listed; every lookup still keys on the player's id, never the name.
+  function recordIdText(p){{var x=p&&p.external_id;return x===null||x===undefined||x===""?"not captured":String(x);}}
+  function playerLabel(p){{return p.name+" · APA record ID "+recordIdText(p);}}
+  function playerRef(p){{return p.name+" (APA record ID "+recordIdText(p)+")";}}
   var SORTED=DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}});
-  var SEARCH_NAMES={{}}; SORTED.forEach(function(p){{SEARCH_NAMES[String(p.id)]=p.name.toLowerCase();}});
+  var SEARCH_NAMES={{}}; SORTED.forEach(function(p){{SEARCH_NAMES[String(p.id)]=(p.name+" "+recordIdText(p)).toLowerCase();}});
 
   var FORMAT_LABELS=DATA.format_labels||{{}};
   function formatName(fmt){{return FORMAT_LABELS[fmt]||fmt;}}
@@ -393,7 +443,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   function selectMarkup(found,previous,labeler) {{
     var keep=previous&&found.rows.some(function(p){{return String(p.id)===String(previous);}});
     var placeholder='<option value="">Select a player...</option>';
-    var rows=found.rows.map(function(p){{return '<option value="'+p.id+'">'+esc(labeler?labeler(p):p.name)+'</option>';}}).join("");
+    var rows=found.rows.map(function(p){{return '<option value="'+p.id+'">'+esc(labeler?labeler(p):playerLabel(p))+'</option>';}}).join("");
     return {{html:placeholder+rows,value:keep?String(previous):""}};
   }}
   function applyPlayerASearch() {{
@@ -430,7 +480,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
       var suffix=BSCOPE.value==="played"&&count
         ? " · "+count+" meeting"+(count===1?"":"s")
         : "";
-      return p.name+suffix;
+      return playerLabel(p)+suffix;
     }});
     B.innerHTML=rendered.html;
     B.value=rendered.value;
@@ -462,7 +512,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
       seenTeamTags[tag]=true;
       return true;
     }}).slice(0,12);
-    return '<h2>'+esc(p.name)+'</h2>'
+    return '<h2>'+esc(p.name)+'</h2><p class="id-line">APA record ID '+esc(recordIdText(p))+'</p>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
       +'<div class="metric"><b>'+(c.length?(totalW+'-'+Math.max(0,totalG-totalW)):'Pending')+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
       +'<div class="metric"><b>'+(c.length?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
@@ -517,7 +567,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
     document.getElementById("direct").innerHTML='<h2>Direct history</h2><div class="metric-grid"><div class="metric"><b>'+(dr.g?(dr.w+'-'+dr.l):'No recorded evidence')+'</b><span>'+esc(pa.name)+' record vs '+esc(pb.name)+'</span></div><div class="metric"><b>'+(dr.g?pct(dr.w,dr.g):'—')+'</b><span>Observed direct win rate</span></div><div class="metric"><b>'+dr.g+'</b><span>Recorded meetings</span></div></div>';
 
     var visibleIds=ids.slice(0,100);
-    var sharedRows=visibleIds.map(function(id){{var p=PLAYERS[id],ra=record(ag[id]),rb=record(bg[id]);return '<tr><td>'+esc(p?p.name:id)+'</td><td>'+ra.w+'-'+ra.l+' ('+pct(ra.w,ra.g)+')</td><td>'+rb.w+'-'+rb.l+' ('+pct(rb.w,rb.g)+')</td><td>'+ra.g+' / '+rb.g+'</td></tr>';}}).join('');
+    var sharedRows=visibleIds.map(function(id){{var p=PLAYERS[id],ra=record(ag[id]),rb=record(bg[id]);return '<tr><td>'+esc(p?playerLabel(p):id)+'</td><td>'+ra.w+'-'+ra.l+' ('+pct(ra.w,ra.g)+')</td><td>'+rb.w+'-'+rb.l+' ('+pct(rb.w,rb.g)+')</td><td>'+ra.g+' / '+rb.g+'</td></tr>';}}).join('');
     var limitNote=ids.length>visibleIds.length?'<p class="muted">Showing the 100 shared opponents with the largest combined samples.</p>':'';
     document.getElementById("shared").innerHTML='<h2>Shared-opponent evidence</h2>'+(ids.length?'<p class="muted">'+ids.length+' opponent(s) both players have actually faced in '+esc(fmt)+'.</p>'+limitNote+'<div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(pa.name)+'</th><th>'+esc(pb.name)+'</th><th>Samples A/B</th></tr></thead><tbody>'+sharedRows+'</tbody></table></div>':'<p class="muted">No recorded shared opponents in this format.</p>');
 
@@ -595,7 +645,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
         if(idx[key].seen[p.id]) return;
         idx[key].seen[p.id]=true;
         var sl=p.current_skill_level!==null&&p.current_skill_level!==undefined?p.current_skill_level:t.skill_level;
-        idx[key].players.push({{id:p.id,name:p.name,skill_level:sl,skill_level_is_live:p.current_skill_level!==null&&p.current_skill_level!==undefined,matches_won:t.matches_won,matches_played:t.matches_played}});
+        idx[key].players.push({{id:p.id,external_id:p.external_id,name:p.name,skill_level:sl,skill_level_is_live:p.current_skill_level!==null&&p.current_skill_level!==undefined,matches_won:t.matches_won,matches_played:t.matches_played}});
       }});
     }});
     return idx;
@@ -644,23 +694,28 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   applyTeamSearch(STA,TA,SSTA);
   applyTeamSearch(STB,TB,SSTB);
 
-  function rosterTable(title,team,fmt) {{
-    if(!team) return '<h2>'+esc(title)+'</h2><p class="muted">Choose a team to load its current roster.</p>';
+  function rosterTable(role,team,fmt,side) {{
+    var head='<h2 class="roster-head"><span class="role">'+esc(role)+'</span>'+(team?'<span>'+esc(team.name)+'</span>':'')+(side?'<span class="badge side">'+esc(side)+'</span>':'')+'</h2>';
+    if(!team) return head+'<p class="muted">Choose a team to load its current roster.</p>';
     var known=team.players.filter(function(m){{return m.skill_level!==null&&m.skill_level!==undefined;}});
     var totalSkill=known.reduce(function(sum,m){{return sum+m.skill_level;}},0);
     var totalNote=known.length===team.players.length
       ? 'full-roster skill total '+totalSkill
       : 'full-roster skill total '+totalSkill+' from '+known.length+' of '+team.players.length+' players with a captured skill level (missing players excluded, not counted as 0)';
-    var rows=team.players.slice().sort(function(x,y){{return (y.skill_level||0)-(x.skill_level||0);}}).map(function(m){{
+    var rows=team.players.slice().sort(function(x,y){{return (y.skill_level||0)-(x.skill_level||0);}}).map(function(m,i){{
       var evid=rowsFor(m.id,fmt).length;
       var slLabel=m.skill_level===null||m.skill_level===undefined?'—':(m.skill_level+(m.skill_level_is_live?'':'*'));
-      return '<tr><td>'+esc(m.name)+'</td><td>'+slLabel+'</td><td>'+(m.matches_won===null||m.matches_played===null?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won))+'</td><td>'+evid+'</td></tr>';
+      var wl=m.matches_won===null||m.matches_won===undefined||m.matches_played===null||m.matches_played===undefined?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won);
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(m.name)+'</td><td>'+esc(recordIdText(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td></tr>';
     }}).join("");
     var liveMissing=team.players.some(function(m){{return !m.skill_level_is_live&&m.skill_level!==null&&m.skill_level!==undefined;}});
-    return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(teamDisplay(team))+' · '+team.players.length+' rostered · '+totalNote+
-      ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).'+
+    // The team-specific summary (including any "from k of n players" missing-SL disclosure) always stays with
+    // the roster; the generic cap/asterisk fine print is repeated in the matchup notes, so the focused print
+    // hides only this copy of it.
+    return head+'<p class="roster-scope">'+esc(teamDisplay(team))+'</p><p class="roster-summary">'+team.players.length+' rostered · '+totalNote+'</p>'+
+      '<p class="muted roster-fineprint">Not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules.'+
       (liveMissing?' * = division-scoped skill level, no live current rating captured for that player.':'')+'</p>'+
-      '<div class="table-wrap"><table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>APA record ID</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
   function sharedOpponentRecord(rowsA,rowsB) {{
@@ -700,21 +755,67 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
   function explainSend(opponent,candidates) {{
     var best=candidates[0];
     if(best.kind==="direct") {{
-      return esc(best.player.name)+' — strongest evidence-backed option: '+best.record.w+'-'+best.record.l+' direct ('+best.count+' meeting'+(best.count===1?'':'s')+') vs '+esc(opponent.name)+'.';
+      return esc(playerRef(best.player))+' — strongest evidence-backed option: '+best.record.w+'-'+best.record.l+' direct ('+best.count+' meeting'+(best.count===1?'':'s')+') vs '+esc(playerRef(opponent))+'.';
     }}
     if(best.kind==="shared") {{
       var tie=candidates.filter(function(c){{return c.kind==="shared"&&c.sharedCount===best.sharedCount&&c.record.g===best.record.g;}});
-      if(tie.length>1) return 'Insufficient evidence to distinguish '+tie.map(function(c){{return esc(c.player.name);}}).join(' / ')+' against '+esc(opponent.name)+' — no direct history; '+best.sharedCount+' shared opponent(s) each, evidence too similar to rank.';
-      return esc(best.player.name)+' — no direct history vs '+esc(opponent.name)+'; best-supported by '+best.sharedCount+' shared-opponent result'+(best.sharedCount===1?'':'s')+' ('+best.record.w+'-'+best.record.l+' vs those shared opponents).';
+      if(tie.length>1) return 'Insufficient evidence to distinguish '+tie.map(function(c){{return esc(playerRef(c.player));}}).join(' / ')+' against '+esc(playerRef(opponent))+' — no direct history; '+best.sharedCount+' shared opponent(s) each, evidence too similar to rank.';
+      return esc(playerRef(best.player))+' — no direct history vs '+esc(playerRef(opponent))+'; best-supported by '+best.sharedCount+' shared-opponent result'+(best.sharedCount===1?'':'s')+' ('+best.record.w+'-'+best.record.l+' vs those shared opponents).';
     }}
-    return 'No direct or shared-opponent evidence for any of our roster against '+esc(opponent.name)+' in this format yet.';
+    return 'No direct or shared-opponent evidence for any of our roster against '+esc(playerRef(opponent))+' in this format yet.';
   }}
+
+  // ---- Matchup header + focused print ----
+  // MATCHUP_CONTEXT is set only by Match Day's Compare button and is kept
+  // only while both team selectors still hold exactly those roster scopes.
+  var MATCHUP_CONTEXT=null;
+  function sideLabel(s){{return s==="home"?"Home":(s==="away"?"Away":"");}}
+  function fixtureResultText(f){{
+    var scored=f.is_scored&&f.home_score!==null&&f.home_score!==undefined&&f.away_score!==null&&f.away_score!==undefined;
+    return scored?(f.home_team_name||"Home")+' '+f.home_score+' – '+f.away_score+' '+(f.away_team_name||"Away"):'Not recorded';
+  }}
+  function renderMatchupHead(ta,tb,fmt) {{
+    var head=document.getElementById("matchup-head"),notes=document.getElementById("matchup-notes");
+    if(!ta&&!tb) {{ head.innerHTML=""; notes.innerHTML=""; return null; }}
+    var ctx=(MATCHUP_CONTEXT&&ta&&tb&&MATCHUP_CONTEXT.ourKey===ta.key&&MATCHUP_CONTEXT.oppKey===tb.key)?MATCHUP_CONTEXT:null;
+    if(!ctx) MATCHUP_CONTEXT=null;
+    var f=ctx?ctx.fixture:null, tz=(DATA.match_day&&DATA.match_day.display_timezone)||"";
+    var oppSide=ctx?(ctx.ourSide==="home"?"away":"home"):"";
+    head.innerHTML='<div class="card-head"><h2>Matchup</h2>'+(ta&&tb?'<button type="button" id="print-matchup">Print this matchup</button>':'')+'</div>'
+      +(ctx?'<p class="matchup-when">'+(f.date_status==="ok"?esc(f.local_display)+' <span class="muted">('+esc(tz)+')</span>':'Undated fixture')+'</p>'
+          :'<p class="muted">Teams chosen manually — not tied to a scheduled fixture. Use Match Day → Compare to load a specific fixture with its date and time.</p>')
+      +'<div class="matchup-teams">'
+      +'<div class="matchup-side"><span class="role">Our team</span><b>'+(ta?esc(teamDisplay(ta)):'Not chosen')+'</b>'+(ctx?'<span class="badge side">'+sideLabel(ctx.ourSide)+'</span>':'')+'</div>'
+      +'<div class="matchup-vs">vs</div>'
+      +'<div class="matchup-side"><span class="role opp">Opponent</span><b>'+(tb?esc(teamDisplay(tb)):'Not chosen')+'</b>'+(ctx?'<span class="badge side opp">'+sideLabel(oppSide)+'</span>':'')+'</div>'
+      +'</div>'
+      +(ctx?'<dl class="matchup-facts"><dt>Format</dt><dd>'+esc(f.format_display||f.format_raw||formatName(f.format)||"No data")+'</dd>'
+          +'<dt>Session</dt><dd>'+esc(f.session_name||"No data")+'</dd>'
+          +'<dt>Venue</dt><dd>'+esc(f.location||"No data")+'</dd>'
+          +'<dt>Status</dt><dd>'+esc(f.status||"No data")+'</dd>'
+          +'<dt>Result</dt><dd>'+esc(fixtureResultText(f))+'</dd>'
+          +'<dt>Source timestamp</dt><dd>'+esc(f.match_date||"No data")+'</dd></dl>':'')
+      +'<p class="muted">Evidence counts in the rosters use '+esc(formatName(fmt))+'.</p>';
+    notes.innerHTML='<h3>About these rosters</h3><ul>'
+      +'<li>— = not captured in the source data.</li>'
+      +'<li>SL with * = division-scoped skill level; no live current rating was captured for that player.</li>'
+      +'<li>Skill totals count only players with a captured skill level — missing players are excluded, never counted as 0. Totals are informational, not a 5-player lineup cap check (the commonly used APA default is '+STANDARD_SKILL_CAP+'; verify your division\\'s rules).</li>'
+      +'<li>Rosters are each team\\'s CURRENT captured roster, not a reconstruction of who actually played on any particular date.</li>'
+      +'<li>Players are identified by APA record ID — not by name, and not by the league card number printed on a member card.</li>'
+      +'<li>No win probability is shown: NOT CALIBRATED.</li></ul>'
+      +'<p class="muted">'+esc(BUILT_LABEL)+'</p>';
+    var btn=document.getElementById("print-matchup");
+    if(btn) btn.addEventListener("click",function(){{document.body.classList.add("print-matchup");window.print();}});
+    return ctx;
+  }}
+  window.addEventListener("afterprint",function(){{document.body.classList.remove("print-matchup");}});
 
   function renderTeamMatchups() {{
     var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value],fmt=TF.value;
+    var ctx=renderMatchupHead(ta,tb,fmt);
     document.getElementById("team-rosters").innerHTML=
-      '<div class="card">'+rosterTable("Our roster",ta,fmt)+'</div>'+
-      '<div class="card">'+rosterTable("Opponent roster",tb,fmt)+'</div>';
+      '<div class="card">'+rosterTable("Our team",ta,fmt,ctx?sideLabel(ctx.ourSide):"")+'</div>'+
+      '<div class="card">'+rosterTable("Opponent",tb,fmt,ctx?sideLabel(ctx.ourSide==="home"?"away":"home"):"")+'</div>';
     var out=document.getElementById("team-matchups");
     if(!ta||!tb) {{
       out.innerHTML='<h2>Recommended sends</h2><p class="muted">Choose both teams to see evidence-backed send recommendations per opponent player.</p>';
@@ -726,7 +827,7 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
     }}
     var rows=tb.players.map(function(opp){{
       var candidates=bestSendFor(opp,ta.players,fmt);
-      return '<tr><td>'+esc(opp.name)+(opp.skill_level===null||opp.skill_level===undefined?'':' (SL '+opp.skill_level+')')+'</td><td>'+explainSend(opp,candidates)+'</td></tr>';
+      return '<tr><td>'+esc(opp.name)+(opp.skill_level===null||opp.skill_level===undefined?'':' (SL '+opp.skill_level+')')+'<span class="id-line">APA record ID '+esc(recordIdText(opp))+'</span></td><td>'+explainSend(opp,candidates)+'</td></tr>';
     }}).join("");
     out.innerHTML='<h2>Recommended sends</h2>'+
       '<p class="muted">Per opponent player, the best-supported send from our roster. Captain-assistance only — never a solved optimal lineup and never a win-probability claim; probability_publication stays FORBIDDEN throughout.</p>'+
@@ -927,11 +1028,12 @@ footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid v
     }}
     if(fmt) TF.value=fmt;
     forceSelectTeam(TB,item.side.opponent.scope_key);
+    MATCHUP_CONTEXT={{fixture:item.fixture,ourKey:item.scope.key,oppKey:item.side.opponent.scope_key,ourSide:item.side.side}};
     var fromMatchDay="Loaded from Match Day ("+(item.fixture.local_display||"undated fixture")+"). Search to pick a different team.";
     SSTA.textContent=fromMatchDay;
     SSTB.textContent=fromMatchDay;
     renderTeamMatchups();
-    document.getElementById("team-rosters").scrollIntoView({{behavior:"smooth"}});
+    document.getElementById("matchup-print").scrollIntoView({{behavior:"smooth"}});
   }}
   function renderDateChips(scopes){{
     var dates={{}};

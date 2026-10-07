@@ -36,7 +36,7 @@ def _find_row(wb, predicate, sheet=MD):
 def _layout(wb):
     status = _find_row(wb, lambda v: isinstance(v, str) and v.startswith('=IF(B6="","Step 1'))
     header = _find_row(wb, lambda v: v == "# · Date")
-    matchup = _find_row(wb, lambda v: v == "Printable matchup")
+    matchup = _find_row(wb, lambda v: v == "Matchup preview")
     return {"status": status, "slot1": header + 1, "matchup": matchup, "roster1": matchup + 5}
 
 
@@ -60,7 +60,7 @@ def _choose(book, *, day=None, team=None, fmt=None, compare=None, viewer=None):
 def test_single_fixture_is_found_listed_and_compared(tmp_path):
     book, wb = _book(tmp_path, [_team_match()], card="80000001")
     rows = _layout(wb)
-    assert book.display(MD, "B7") == "1001"
+    assert book.display(MD, "B7") == "Ann Archer (APA record ID 1001)"
     assert book.display(MD, "B13") == "Ann Archer (APA record ID 1001)"
     assert book.display(MD, "B14").startswith("2 verified players share this name")
     assert "Card #80000001" in book.display(MD, "B15")
@@ -111,7 +111,7 @@ def test_bye_says_no_opponent_and_offers_no_opponent_roster(tmp_path):
     assert fixture["J"] == "Not applicable (bye)"
     assert 0 not in fixture.values()
     assert book.display(MD, f"A{rows['matchup'] + 2}") == "Opponent roster: Not applicable (bye)."
-    assert book.display(MD, f"G{rows['matchup'] + 3}") == "Opponent roster — not available"
+    assert book.display(MD, f"G{rows['matchup'] + 3}") == "OPPONENT — Bye — no opponent · Not applicable (bye)"
     assert [book.display(MD, f"{c}{rows['roster1']}") for c in "GHIJ"] == ["", "", "", ""]
 
 
@@ -199,3 +199,93 @@ def test_coach_dashboard_pair_lookup_and_missing_sl(tmp_path):
     assert book.display(dash, "B21") == "0"
     assert "not evidence of a tie" in book.display(dash, "B25")
     assert book.display(dash, "B18") == "—"  # blank SL is "not captured", never 0
+
+
+PM = "Print Matchup"
+
+
+def _print_cells(book, row, cols="ABCDE"):
+    return [book.display(PM, f"{c}{row}") for c in cols]
+
+
+def test_identity_picker_shows_names_but_resolves_by_record_id(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()])
+    # The other "Ann Archer" (record 1004, no teams) is a different identity.
+    _choose(book, viewer="Ann Archer (APA record ID 1004)")
+    assert book.display(MD, "B13") == "Ann Archer (APA record ID 1004)"
+    assert book.display(MD, "B16") == "No current team captured for this player."
+    assert book.display(MD, "B18") == ""
+    # A bare name is never treated as an identity.
+    _choose(book, viewer="Ann Archer")
+    assert book.display(MD, "B13") == "No verified player has APA record ID Ann Archer in this build."
+    # Picking the label of record 1001 resolves to her teams.
+    _choose(book, viewer="Ann Archer (APA record ID 1001)")
+    assert book.display(MD, "B18") == SHARKS_8
+
+
+def test_print_matchup_shows_fixture_and_clearly_labeled_rosters_for_both_teams(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()])
+    _choose(book, day=date(2026, 10, 11), team=SHARKS_8)
+    assert book.display(PM, "A1") == "Ultimate Coach — Matchup"
+    assert book.display(PM, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver)"
+    assert book.display(PM, "A3") == (
+        "8-Ball Open · Spring 2026 · Venue: No data · Status: UNPLAYED · Score (home–away): Not recorded"
+    )
+    assert book.display(PM, "A4").startswith("Source timestamp: 2026-10-11T11:00:00-06:00 · fixture #1 of 1 on Match Day")
+    assert (book.display(PM, "A6"), book.display(PM, "G6")) == ("OUR TEAM", "OPPONENT")
+    assert book.display(PM, "A7") == f"{SHARKS_8} — Home"
+    assert book.display(PM, "G7") == f"{FALCONS_8} — Away"
+    assert book.display(PM, "A8") == "2 rostered · full-roster SL total 9"
+    assert book.display(PM, "G8") == "1 rostered · full-roster SL total 3"
+    assert _print_cells(book, 10) == [1, "Bea Baker", "1002", "5*", "2-4"]
+    assert _print_cells(book, 11) == [2, "Ann Archer", "1001", "4", "10-5"]
+    assert _print_cells(book, 12) == ["", "", "", "", ""]
+    assert _print_cells(book, 10, "GHIJK") == [1, "Cam Cole", "1003", "3", "3-2"]
+    assert _print_cells(book, 11, "GHIJK") == ["", "", "", "", ""]
+    last = int(wb[PM].print_area.rsplit("$", 1)[1])
+    shown = [book.display(PM, f"{c}{r}") for r in range(1, last + 1) for c in "ABCDEGHIJK"]
+    assert 0 not in shown and "#N/A" not in shown and "#REF!" not in shown
+
+
+def test_print_matchup_states_why_there_is_no_opponent_roster(tmp_path):
+    book, wb = _book(tmp_path, [
+        _team_match(match_id=1, match_external_id="1", is_bye=True, away_team_id="x", away_team_name="BYE"),
+        _team_match(match_id=2, match_external_id="2", away_team_id="ghosts", away_team_name="Ghosts",
+                    match_date="2026-10-18T11:00:00-06:00"),
+    ])
+    _choose(book, day=date(2026, 10, 11), team=SHARKS_8)
+    assert book.display(PM, "G7") == "Bye — no opponent"
+    assert book.display(PM, "G8") == "Opponent roster: Not applicable (bye)."
+    assert book.display(PM, "H10") == "No opponent roster to list — see above."
+    assert _print_cells(book, 10)[1] == "Bea Baker"  # our roster still printed
+    _choose(book, day=date(2026, 10, 18))
+    assert book.display(PM, "G7") == "Ghosts"
+    assert book.display(PM, "G8") == "Opponent roster: No current roster captured."
+    assert book.display(PM, "H10") == "No opponent roster to list — see above."
+
+
+def test_print_matchup_keeps_no_data_disclosures_for_missing_roster_values(tmp_path):
+    payload = _payload()
+    payload["players"].append({
+        "id": 9, "external_id": "1009", "name": "Nia Null", "current_skill_level": None,
+        "current_matches_won": None, "current_matches_played": None,
+        "team_history": [{"team_external_id": "falcons-a", "team_name": "Falcons", "division_id": "d2",
+                          "session_name": "Spring 2026", "format": "EIGHT", "is_current": True,
+                          "skill_level": None, "matches_won": None, "matches_played": None}],
+    })
+    book, wb = _book(tmp_path, [_team_match()], payload=payload)
+    _choose(book, day=date(2026, 10, 11), team=SHARKS_8)
+    rows = [_print_cells(book, r, "GHIJK") for r in (10, 11)]
+    assert [1, "Cam Cole", "1003", "3", "3-2"] in rows
+    assert [2, "Nia Null", "1009", "No data", "No data"] in rows
+    assert book.display(PM, "G8") == (
+        "2 rostered · SL total 3 from 1 players with a captured SL (missing excluded, not counted as 0)"
+    )
+
+
+def test_print_matchup_without_a_selection_explains_what_to_do(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()], viewer=None)
+    assert book.display(PM, "A2").startswith("Choose a date, your team and a fixture on the Match Day sheet")
+    assert book.display(PM, "A7") == "Not chosen — pick your team on Match Day (step 3)."
+    assert book.display(PM, "G7") == "Not chosen — pick a fixture on Match Day."
+    assert _print_cells(book, 10) == ["", "", "", "", ""]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -322,7 +323,7 @@ def test_search_is_bounded_for_large_player_lists(tmp_path: Path):
             page.wait_for_timeout(400)
             assert page.locator("#player-a option").count() == 2
             assert page.locator("#player-a").input_value() == ""
-            assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599"
+            assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599 · APA record ID 599"
         finally:
             browser.close()
 
@@ -381,11 +382,13 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
 
             matchups = page.locator("#team-matchups").inner_text()
             # Cam: Ann has 2 direct wins, must be the strongest-evidence pick.
-            assert "Ann Archer — strongest evidence-backed option: 2-0 direct (2 meetings)" in matchups
+            assert ("Ann Archer (APA record ID 1) — strongest evidence-backed option: 2-0 direct (2 meetings) "
+                    "vs Cam Cole (APA record ID 3)") in matchups
             # Drew: no direct history for anyone, but Bea shares Evan with Drew.
-            assert "Bea Baker — no direct history vs Drew Diaz; best-supported by 1 shared-opponent result (1-0 vs those shared opponents)" in matchups
+            assert ("Bea Baker (APA record ID 2) — no direct history vs Drew Diaz (APA record ID 4); best-supported by "
+                    "1 shared-opponent result (1-0 vs those shared opponents)") in matchups
             # Finn: nobody on our roster has any direct or shared evidence at all.
-            assert "No direct or shared-opponent evidence for any of our roster against Finn Frost" in matchups
+            assert "No direct or shared-opponent evidence for any of our roster against Finn Frost (APA record ID 5)" in matchups
 
             assert "FORBIDDEN" in matchups
 
@@ -396,6 +399,7 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             # read a "current_skill_level" field roster-member objects
             # never carry (only "skill_level" does).
             assert "Cam Cole (SL 3)" in matchups
+            assert "APA record ID 3" in matchups
             assert "Drew Diaz (SL 6)" in matchups
             assert "undefined" not in matchups
         finally:
@@ -942,5 +946,160 @@ def test_match_day_page_has_no_horizontal_scroll_on_a_phone(tmp_path: Path):
             overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             assert overflow <= 0
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_player_selectors_show_record_ids_and_keep_duplicate_names_distinct(tmp_path: Path):
+    payload = _payload()
+    payload["players"].append({"id": 5, "external_id": "5005", "name": "Alpha Adams", "current_skill_level": 6,
+                               "current_matches_won": None, "current_matches_played": None, "team_history": [],
+                               "career_stats": []})
+    payload["counts"]["players"] = 5
+    path = tmp_path / "uc_names.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            labels = page.locator("#player-a option").all_inner_texts()[1:]
+            assert "Alpha Adams · APA record ID 1" in labels
+            assert "Alpha Adams · APA record ID 5005" in labels
+            # Searching by record ID finds exactly that identity.
+            page.fill("#search-a", "5005")
+            page.wait_for_timeout(400)
+            assert page.locator("#player-a option").all_inner_texts()[1:] == ["Alpha Adams · APA record ID 5005"]
+            page.select_option("#player-a", "5")
+            profile = page.locator("#profile-a").inner_text()
+            assert "Alpha Adams" in profile and "APA record ID 5005" in profile
+            # The other Alpha (record 1) keeps her own evidence -- selection is by id, never by name.
+            page.fill("#search-a", "")
+            page.wait_for_timeout(400)
+            page.select_option("#player-a", "1")
+            assert "APA record ID 1" in page.locator("#profile-a").inner_text()
+            assert "Bravo Brown · APA record ID 2 · 1 meeting" in page.locator("#player-b").inner_text()
+            page.select_option("#player-b", "2")
+            assert "Charlie Clark · APA record ID 3" in page.locator("#shared").inner_text()
+        finally:
+            browser.close()
+
+
+def test_team_rosters_are_labeled_and_list_record_ids(tmp_path: Path):
+    payload = _team_payload()
+    payload["players"].append({"id": 7, "external_id": "7007", "name": "Nia Null", "current_skill_level": None,
+                               "current_matches_won": None, "current_matches_played": None, "career_stats": [],
+                               "team_history": [{"team_external_id": "Falcons", "team_name": "Falcons", "division_id": "d1",
+                                                 "session_name": "Spring 2026", "is_current": True, "skill_level": None,
+                                                 "matches_won": None, "matches_played": None}]})
+    path = tmp_path / "uc_rosters.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
+            cards = page.locator("#team-rosters > .card")
+            ours, theirs = cards.nth(0).inner_text(), cards.nth(1).inner_text()
+            assert ours.startswith("OUR TEAM") and "Sharks" in ours
+            assert theirs.startswith("OPPONENT") and "Falcons" in theirs
+            headers = cards.nth(1).locator("th").all_inner_texts()
+            assert [h.upper() for h in headers][:5] == ["#", "PLAYER", "APA RECORD ID", "CURRENT SL", "CURRENT W-L"]
+            nia = [r for r in cards.nth(1).locator("tbody tr").all_inner_texts() if "Nia Null" in r][0]
+            assert "7007" in nia and nia.count("—") == 2  # missing SL and W-L are disclosed, never 0
+            assert "Drew Diaz\t4" in theirs  # name next to its record ID
+            head = page.locator("#matchup-head").inner_text()
+            assert "Teams chosen manually" in head
+            notes = page.locator("#matchup-notes").inner_text()
+            assert "— = not captured in the source data." in notes
+            assert "never counted as 0" in notes and "NOT CALIBRATED" in notes
+            assert "Players are identified by APA record ID" in notes
+        finally:
+            browser.close()
+
+
+def test_focused_printable_matchup_shows_fixture_and_both_labeled_rosters_only(tmp_path: Path):
+    path = _match_day_page(tmp_path, "md_print.html", [_team_match()], viewer="1")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _open(browser, path)
+            page.fill("#md-date", "2026-10-11")
+            page.click("#md-compare-0")
+            page.wait_for_timeout(100)
+            head = page.locator("#matchup-head").inner_text()
+            assert "Sun Oct 11, 2026 · 11:00 AM MDT" in head and "America/Denver" in head
+            assert "OUR TEAM" in head.upper() and "OPPONENT" in head.upper()
+            assert "Sharks · Spring 2026 · Div d1" in head and "Falcons · Spring 2026 · Div d1" in head
+            assert "Home" in head and "Away" in head
+            assert "2026-10-11T11:00:00-06:00" in head and "No data" in head  # source time + missing venue
+            ours = page.locator("#team-rosters > .card").nth(0).inner_text()
+            assert "Home" in ours and "Ann Archer" in ours and "\t1\t" in ours
+
+            page.evaluate("window.print = () => { window.__printed = true; }")
+            page.click("#print-matchup")
+            assert page.evaluate("window.__printed === true")
+            assert page.evaluate("document.body.classList.contains('print-matchup')")
+            page.emulate_media(media="print")
+            visible = lambda sel: page.locator(sel).first.is_visible()
+            assert visible("#matchup-head") and visible("#team-rosters") and visible("#matchup-notes")
+            for hidden in ("#match-day-card", "#player-section", "#trust-section", "#team-matchups", "header.hero",
+                           "#team-section", "#print-matchup"):
+                assert not visible(hidden), hidden
+            # Leaving print mode restores the normal page.
+            page.evaluate("window.dispatchEvent(new Event('afterprint'))")
+            assert not page.evaluate("document.body.classList.contains('print-matchup')")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_changing_teams_by_hand_drops_the_fixture_context(tmp_path: Path):
+    path = _match_day_page(tmp_path, "md_ctx.html", [_team_match()], viewer="1")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, _ = _open(browser, path)
+            page.fill("#md-date", "2026-10-11")
+            page.click("#md-compare-0")
+            assert "11:00 AM MDT" in page.locator("#matchup-head").inner_text()
+            page.select_option("#team-format", "NINE")  # same teams: context kept
+            assert "11:00 AM MDT" in page.locator("#matchup-head").inner_text()
+            page.fill("#search-team-b", "")
+            page.wait_for_timeout(400)
+            page.select_option("#team-b", "")
+            head = page.locator("#matchup-head").inner_text()
+            assert "11:00 AM MDT" not in head and "Teams chosen manually" in head
+        finally:
+            browser.close()
+
+
+
+def test_focused_print_of_two_full_rosters_fits_one_landscape_page(tmp_path: Path):
+    payload = _team_payload()
+    for team in ("Sharks", "Falcons"):
+        for n in range(9):
+            pid = 100 + len(payload["players"])
+            payload["players"].append({
+                "id": pid, "external_id": str(3000000 + pid), "name": f"Longname Player-{team}-{n} Hyphenated",
+                "current_skill_level": (n % 7) + 1, "current_matches_won": 3, "current_matches_played": 5,
+                "career_stats": [],
+                "team_history": [{"team_external_id": team, "team_name": team, "division_id": "d1",
+                                  "session_name": "Spring 2026", "is_current": True, "skill_level": (n % 7) + 1,
+                                  "matches_won": 3, "matches_played": 5}],
+            })
+    path = _match_day_page(tmp_path, "md_print_pages.html", [_team_match()], viewer="1", payload=payload)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, _ = _open(browser, path)
+            page.fill("#md-date", "2026-10-11")
+            page.click("#md-compare-0")
+            page.evaluate("document.body.classList.add('print-matchup')")
+            page.emulate_media(media="print")
+            pdf = page.pdf(prefer_css_page_size=True, print_background=True)
+            assert len(re.findall(rb"/Type\s*/Page[^s]", pdf)) == 1
         finally:
             browser.close()

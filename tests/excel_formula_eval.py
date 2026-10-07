@@ -35,6 +35,7 @@ _TOKEN = re.compile(r"""
     (?P<ws>\s+)
   | (?P<string>"(?:[^"]|"")*")
   | (?P<number>\d+(?:\.\d+)?)
+  | (?P<sheetcell>(?:'[^']+'|[A-Za-z_][A-Za-z0-9_]*)!\$?[A-Z]{1,3}\$?\d+)
   | (?P<structured>[A-Za-z_][A-Za-z0-9_]*\[[^\]]+\])
   | (?P<range>\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+)
   | (?P<cell>\$?[A-Z]{1,3}\$?\d+(?![A-Za-z0-9_(]))
@@ -269,6 +270,9 @@ class _Parser:
             return text == "TRUE"
         if kind == "cell":
             return self.book.value(self.sheet, text)
+        if kind == "sheetcell":
+            sheet_name, ref = text.rsplit("!", 1)
+            return self.book.value(sheet_name.strip("'"), ref)
         if kind == "range":
             return self.range_cells(text)
         if kind == "structured":
