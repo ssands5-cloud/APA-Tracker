@@ -1699,6 +1699,18 @@ This entry supersedes the earlier OPEN HTML stale-context assessment only at the
 - `.github/skills/validator/SKILL.md` -> deterministic rooted non-COM probes and preserved reproduction output.
 - Normal reviewed GitHub coordination restored; Paul's away/directive handoff posted in6047580616. Monitor remains active until2026-10-08 06:13:08 UTC(12:13AM MDT), then pauses. No duplicate handoff, no feature edits or off-limits changes.
 
+### First-screen mobile captain-flow audit - 2026-10-07
+
+**Verified:** At documentation head44890ce, no new feature repair/response for the two reported P2s was present; no unchanged correctness tests were rerun. Both documentation-head CI jobs are now SUCCESS(run37693941931). New read-only headless layout audit loaded the real45659f4 HTML, verified SHA2568A35EAF05FE53737E0B07DC0AFD81FC4E79B6EC274983F1633F8E71C4D70258F, and measured first-visit viewports1280x900 and390x844. No script errors or horizontal overflow. Desktop Tonight startsy247.1, all six cards fit within900px; Best sends card spansy356.6-544.2. Saved and visually inspected actual headless screenshots at `.git/gpt-layout-45659f4-20261007/desktop-first-screen.png` and `phone-first-screen.png`; measurements/script at `result.json` and `first-screen-probe.py` in the same folder. These are headless-browser observations, not native Excel printing or human acceptance.
+
+**Needs Improvement:** Expanded availability/evidence/roster cards provide useful detail, but the phone's first screen does not answer the primary captain question. This is layout priority, not lack of data, predictions or a measured30-second human failure.
+
+**Problem - OPEN P2 mobile first-screen action visibility:** At390x844, Tonight startsy369.8; Our team spansy497.1-628.2, Evidence across all pairingsy638.2-769.4, Opponent rostery779.4-872.8. Best sends now startsy882.8 and endsy976.3, entirely below the first viewport. Dangerous opponents beginsy986.3 and Open risksy1052.1. The screenshot confirms the first viewport shows counts/metadata rather than the proposed sends. Older top-of-Tonight visibility checks alone do not establish first-screen captain utility.
+
+**Recommendation:** Reorder the existing mobile cards so actionable sends follow fixture information, with concise availability/used/unknown context visible alongside them. Keep freshness, evidence counts, roster/missing information and risks reachable and retain all data; use the current components. Add a meaningful phone first-screen assertion for the actual send card rather than only Tonight's top edge. Human30-second flow/3-minute onboarding, visual preference and native packet print remain PENDING PAUL REVIEW. The two other P2 findings(note resurrection and unordered/tied single-send explanation) remain OPEN; original HTML/Excel P1s remain closed within their verified scopes. Qualitative Edge stays provisional7/10; no new production acceptance.
+
+**Skills:** `.github/skills/red-team/SKILL.md` -> challenge feature-existence versus primary captain task; `.github/skills/verification-before-completion/SKILL.md` -> exact artifact/screenshot/geometry evidence and separate human acceptance; `.github/skills/validator/SKILL.md` -> rooted reproducible viewport probe. No feature code edits, no COM, no new files outside canonical root.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
