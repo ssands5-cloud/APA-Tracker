@@ -387,3 +387,70 @@ def freshness(match_day: dict[str, Any], build_local: str | None) -> dict[str, A
         "build_date": date_label(build_local) if build_local else "unknown",
         "excel_serial_build": excel_date_serial(build_local) if build_local else None,
     }
+
+
+# ---- onboarding shared by the Excel START HERE tab and the HTML "Start here" card ----
+
+ONBOARDING_WHAT = [
+    "• Prepare for tonight's match from one setup point",
+    "• Compare both rosters side by side",
+    "• Review direct head-to-head history",
+    "• Review shared-opponent evidence",
+    "• Plan your lineup as the night goes",
+    "• Scout every opponent",
+    "• Print a match-night packet",
+]
+ONBOARDING_LIMITS = [
+    "• Historical records are not predictions. A favorable record is not a promise.",
+    "• Evidence can be missing: unscored matches, uncaptured skill levels, players with few games.",
+    "• No validated win-probability model exists — no odds or percentages are shown anywhere (NOT CALIBRATED).",
+    "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
+    "• Rosters are current captured rosters, not who played on a past date.",
+    "• Unknown availability is not Unavailable, and neither is a prediction. No lineup-legality or skill cap is assumed.",
+    "• Planning marks belong to one fixture: clear old marks before planning another night.",
+    "• Coach Notes are your opinions, never APA facts.",
+]
+COACH_TAGS = ["Slow shooter", "Fast shooter", "Strong safety player", "Good under pressure", "Struggles under pressure",
+              "Consistent breaker", "Aggressive style", "Defensive style", "Runs out often", "Misses long shots"]
+
+
+def build_version() -> str:
+    """The code revision an artifact was built from (short git SHA), or "unversioned" outside a checkout."""
+    import subprocess
+    from pathlib import Path
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=10,
+                             cwd=Path(__file__).resolve().parent).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        sha = ""
+    return f"PR #83 · {sha}" if sha else "unversioned"
+
+
+def worked_example(match_day: dict[str, Any], default: dict[str, Any] | None, viewer_label: str | None,
+                   label_by_scope: dict[str, str]) -> list[str] | None:
+    """What Match Day picks for this build's configured viewer (default_matchup): selections only, never
+    results, so the example is always true to the data it ships with."""
+    from analytics.ultimate_coach_match_day import FORMAT_FILTER_EIGHT_NINE_LABEL
+    if not default or not viewer_label:
+        return None
+    fixtures = match_day.get("fixtures") or []
+    side = default["side"]
+    opponent = side.get("opponent") or {}
+    if opponent.get("status") == "bye":
+        opp_text = "Bye (no opponent)"
+    else:
+        opp_text = (("Home" if side.get("side") == "home" else "Away") + " vs "
+                    + (label_by_scope.get(opponent.get("scope_key") or "") or opponent.get("team_name")
+                       or "an opponent without a captured roster"))
+    same_day = [s for s in (match_day.get("schedule") or {}).get(default["scope"], [])
+                if fixtures[s["fixture_index"]].get("local_date") == default["date"]
+                and fixtures[s["fixture_index"]].get("format") in EIGHT_NINE_CATEGORIES]
+    return [
+        f"1 · Player: {viewer_label}",
+        f"2 · Team: {label_by_scope.get(default['scope'], default['scope'])}",
+        f"3 · Format: {FORMAT_FILTER_EIGHT_NINE_LABEL} (the default)",
+        f"4 · Scheduled date: {date_label(default['date'])} — the earliest scheduled date on or after the build date",
+        "5 · Fixture: " + opp_text + (" (the only fixture that day, so it is used automatically)" if len(same_day) == 1
+                                      else f" ({len(same_day)} fixtures that day — you choose one)"),
+        "Then the Command Center, Lineup Lab, War Room and Captain Packet all show this fixture.",
+    ]

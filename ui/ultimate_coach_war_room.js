@@ -121,7 +121,23 @@
   // Match Day fixture, use their own "manual" context. Coach notes describe a player, so they are kept
   // separately per opponent team + player and follow that player to every fixture. v1 (team-keyed) marks
   // are deliberately not migrated: they cannot be attributed to a fixture.
-  var WR_PLAN=(function(){try{var o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");if(o&&typeof o==="object") return {our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{}};}catch(e){}return {our:{},opp:{},notes:{},cap:{}};})();
+  // Coach notes (tags + observation) describe a PLAYER: kept per player id in plan.coach and shown on every
+  // fixture's card. Notes written by the earlier per-team version (plan.notes[team][player].n) are carried over.
+  var WR_PLAN=(function(){
+    var o=null;try{o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");}catch(e){o=null;}
+    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{}}:{our:{},opp:{},notes:{},cap:{},coach:{}};
+    Object.keys(p.notes).forEach(function(scope){var s=p.notes[scope]||{};Object.keys(s).forEach(function(pid){
+      var n=s[pid]&&s[pid].n;if(n&&!(p.coach[pid]&&p.coach[pid].n)){(p.coach[pid]||(p.coach[pid]={})).n=n;}});});
+    return p;
+  })();
+  var WR_COACH_TAGS=DATA.coach_tags||[];
+  function wrCoach(pid){return WR_PLAN.coach[String(pid)]||{};}
+  function wrCoachSummary(pid){
+    var c=wrCoach(pid),t1=c.t1||"",t2=c.t2||"",n=String(c.n||"").trim();
+    var s=(t1+(t1&&t2?" · ":"")+t2+((t1||t2)&&n?": ":"")+n).trim();
+    return s?"Coach: "+s:"";
+  }
+  function wrSetCoach(pid,field,value){var c=WR_PLAN.coach[String(pid)]||(WR_PLAN.coach[String(pid)]={});if(value) c[field]=value; else delete c[field];wrSave();}
   function wrSave(){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));}catch(e){}}
   function wrCtx(ta,tb){
     var c=MATCHUP_CONTEXT,fixture="manual";
@@ -134,7 +150,7 @@
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
   function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
-  function wrNote(scope,pid){return String(wrMark("notes",scope,pid).n||"");}
+
 
   function wrPlan(w,ta,tb){
     var ck=wrCtx(ta,tb);
@@ -178,12 +194,20 @@
     if(!w){el.innerHTML="";return;}
     var c=MATCHUP_CONTEXT,ctx=c&&c.ourKey===ta.key&&c.oppKey===tb.key&&c.fixture?c:null,f=ctx?ctx.fixture:null;
     var remN=w.ours.filter(function(m){return plan.rem[String(m.id)];}).length;
+    var av={Available:0,Unavailable:0,Unknown:0},used=0,planned=0;
+    w.ours.forEach(function(m){av[wrAvail(plan.ck,m.id)]++;var l=wrLineup(plan.ck,m.id);if(l==="Played") used++;else if(l==="Planned") planned++;});
+    var cat={G:0,R:0,E:0,I:0,X:0};w.matrix.forEach(function(row){row.cells.forEach(function(c){cat[c.category]++;});});
+    var noSL=w.theirs.filter(function(o){return !wrKnown(o.skill_level);}).length,unplayedN=plan.unplayed.filter(Boolean).length;
     var sends=[];w.blocks.forEach(function(b,j){if(plan.unplayed[j]&&plan.sends[j].length&&sends.length<3) sends.push(plan.sends[j][0].member.name+" vs "+b.opponent.name+" ("+plan.sends[j][0].cell+")");});
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
       +'<div class="tonight-grid">'
-      +'<div><b>Our remaining players</b>'+remN+' of '+w.ours.length+'</div>'
+      +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
+      +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
+      +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
+      +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient evidence (nothing recorded): '+cat.X+'</span></div>'
+      +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
       +'<div><b>Best sends now</b>'+(sends.length?sends.map(esc).join('<br>'):'No evidence-backed send left')+'</div>'
       +'<div><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return esc(t.opponent.name+" ("+wlText(t.their_wins,t.their_games)+" vs us)");}).join('<br>'):'None recorded')+'</div>'
       +'<div><b>Open risks</b>'+(plan.risks.length?plural(plan.risks.length,"opponent")+' with no favorable option left':'None')+'</div>'
@@ -258,11 +282,15 @@
     // Scouting cards
     document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
       +w.cards.map(function(c,j){
-        var note=wrNote(tb.key,c.opponent.id),played=!plan.unplayed[j];
+        var pid=esc(c.opponent.id),cc=wrCoach(c.opponent.id),played=!plan.unplayed[j];
+        var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
+          +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div><dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
-          +'<dt>Coach observations</dt><dd><textarea class="plan" data-plan="note" data-pid="'+esc(c.opponent.id)+'" rows="2" placeholder="Your notes">'+esc(note)+'</textarea><span class="print-only">'+esc(note||"—")+'</span></dd></dl></div>';
+          +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
+          +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'
+          +'<div class="coach-summary">'+esc(wrCoachSummary(c.opponent.id))+'</div></dd></dl></div>';
       }).join("")+'</div>';
     // Meetings
     document.getElementById("wr-meetings").innerHTML='<h2>Direct meetings between the rosters</h2>'+(w.meetings.length
@@ -295,6 +323,11 @@
     root.addEventListener("change",function(ev){
       var t=ev.target,k=t&&t.getAttribute&&t.getAttribute("data-plan"),cur=current();
       if(t&&t.id==="ll-cap"&&cur.ta){var v=parseFloat(t.value);if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];wrSave();renderTeamMatchups();return;}
+      if((k==="tag1"||k==="tag2")&&t.getAttribute("data-pid")){
+        wrSetCoach(t.getAttribute("data-pid"),k==="tag1"?"t1":"t2",t.value);
+        var sbox=t.parentNode.querySelector(".coach-summary");if(sbox) sbox.textContent=wrCoachSummary(t.getAttribute("data-pid"));
+        return;
+      }
       if(!k||!cur.ta||!cur.tb) return;
       var pid=t.getAttribute("data-pid"),ck=wrCtx(cur.ta,cur.tb);
       if(k==="avail") wrSetMark("our",ck,pid,"a",t.value==="Unknown"?"":t.value);
@@ -307,8 +340,9 @@
     root.addEventListener("input",function(ev){
       var t=ev.target,cur=current();
       if(!t||!t.getAttribute||t.getAttribute("data-plan")!=="note"||!cur.tb) return;
-      wrSetMark("notes",cur.tb.key,t.getAttribute("data-pid"),"n",t.value);
-      var span=t.nextElementSibling;if(span) span.textContent=t.value||"—";
+      var npid=t.getAttribute("data-pid");
+      wrSetCoach(npid,"n",t.value);
+      var box=t.parentNode.querySelector(".coach-summary");if(box) box.textContent=wrCoachSummary(npid);
     });
     root.addEventListener("click",function(ev){
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
@@ -322,4 +356,11 @@
         var d=document.getElementById("wr-pair");if(d&&d.scrollIntoView&&WR_STATE.pair) d.scrollIntoView({block:"nearest"});
       }
     });
+  })();
+  // "Start here" opens on a first visit; once closed it stays closed on this device.
+  (function(){
+    var sh=document.getElementById("start-here"),key="ultimate-coach:start-here-closed";
+    if(!sh) return;
+    try{if(window.localStorage.getItem(key)==="1") sh.removeAttribute("open");}catch(e){}
+    sh.addEventListener("toggle",function(){try{if(sh.open) window.localStorage.removeItem(key); else window.localStorage.setItem(key,"1");}catch(e){}});
   })();

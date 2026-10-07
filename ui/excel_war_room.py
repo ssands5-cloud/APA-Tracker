@@ -61,6 +61,9 @@ from analytics.ultimate_coach_war_room import (
     sl_bucket_index,
     suggested_date,
     war_room_pair,
+    COACH_TAGS,
+    ONBOARDING_LIMITS,
+    ONBOARDING_WHAT,
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
@@ -1681,10 +1684,7 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str, example: list[s
                        f"{fresh['latest_result']} · times in {stats['tz']} · this file never refreshes itself.",
           font=Font(size=10, color="5B6A61"), height=18)
     top = 5
-    what = ["• Prepare for tonight's match from one setup point", "• Compare both rosters side by side",
-            "• Review direct head-to-head history", "• Review shared-opponent evidence", "• Plan your lineup as the night goes",
-            "• Scout every opponent", "• Print a match-night packet"]
-    a = _card(ws, top, 2, 3, "1 · What Ultimate Coach does", what)
+    a = _card(ws, top, 2, 3, "1 · What Ultimate Coach does", list(ONBOARDING_WHAT))
     steps = ["Step 1 · Go to Match Day", "Step 2 · Select Player (you)", "Step 3 · Select Team (and Format)",
              "Step 4 · Select Match Date (and Fixture if two share a day)", "Step 5 · Review the Command Center",
              "Step 6 · Lineup Lab: mark who's here — marks belong to that one fixture", "Step 7 · Review the War Room matchups",
@@ -1710,15 +1710,7 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str, example: list[s
             cell.font = Font(bold=True, size=11, color="1F5C99", underline="single")
         _span(ws, r, 3, 9, text, font=Font(size=11), height=20)
     r += 2
-    limits = ["• Historical records are not predictions. A favorable record is not a promise.",
-              "• Evidence can be missing: unscored matches, uncaptured skill levels, players with few games.",
-              "• No validated win-probability model exists — no odds or percentages are shown anywhere (NOT CALIBRATED).",
-              "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
-              "• Rosters are current captured rosters, not who played on a past date.",
-              "• Unknown availability is not Unavailable, and neither is a prediction. No lineup-legality or skill cap is assumed.",
-              "• Planning marks belong to one fixture: clear old marks before planning another night.",
-              "• Coach Notes are your opinions, never APA facts."]
-    lim = _card(ws, r, 2, 9, "5 · Important limitations", limits, title_fill=PatternFill("solid", fgColor="8A5A00"))
+    lim = _card(ws, r, 2, 9, "5 · Important limitations", list(ONBOARDING_LIMITS), title_fill=PatternFill("solid", fgColor="8A5A00"))
     r = lim + 2
     _card(ws, r, 2, 9, "6 · Build information",
           [f"Workbook version: {version}", f"Build date: {fresh['build_date']}",
@@ -1796,8 +1788,6 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
-COACH_TAGS = ["Slow shooter", "Fast shooter", "Strong safety player", "Good under pressure", "Struggles under pressure",
-              "Consistent breaker", "Aggressive style", "Defensive style", "Runs out often", "Misses long shots"]
 COACH_NOTE_ROWS = 200
 
 

@@ -329,3 +329,85 @@ def test_manual_exploration_is_labelled_and_a_match_day_change_returns_to_follow
             assert errors == []
         finally:
             browser.close()
+
+
+# ---- HTML parity with the Excel START HERE / Command Center / Coach Notes (plan:
+# docs/superpowers/plans/2026-10-07-html-onboarding-command-center-coach-notes.md) ----
+
+def test_start_here_card_explains_the_cockpit_and_remembers_being_closed(tmp_path: Path):
+    from analytics.ultimate_coach_war_room import ONBOARDING_LIMITS
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            card = page.locator("#start-here")
+            assert card.get_attribute("open") is not None                     # open on a first visit
+            text = card.inner_text()
+            for needle in ("What Ultimate Coach does", "Quick start", "Match Day", "Lineup Lab", "Print",
+                           "Build date: Wed Oct 7, 2026", "latest recorded result Sun Sep 27, 2026", "Version: ",
+                           f"1 · Player: {ANN}", "4 · Scheduled date: Sun Oct 11, 2026",
+                           "5 · Fixture: Home vs Falcons · Fall 2026 · 8-Ball (the only fixture that day"):
+                assert needle in text, needle
+            for line in ONBOARDING_LIMITS:                                      # same limitations as Excel
+                assert line.lstrip("• ") in text, line
+            for href in ("#match-day-card", "#team-section", "#lineup-lab", "#scouting-cards"):
+                assert card.locator(f'a[href="{href}"]').count() >= 1, href
+            page.click("#start-here summary")
+            page.wait_for_function("localStorage.getItem('ultimate-coach:start-here-closed') === '1'")
+            page.reload(); page.wait_for_load_state("load")
+            assert page.locator("#start-here").get_attribute("open") is None    # remembered closed
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_tonight_is_a_command_center_with_excels_counts(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            t = page.inner_text("#tonight")
+            for needle in ("Available: 0", "Unavailable: 0", "Unknown: 3 (not the same as unavailable)",
+                           "Already used: 0 · planned: 0",
+                           "Favorable direct record (any sample size): 1", "Concerning (more direct losses than wins): 2",
+                           "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient evidence (nothing recorded): 1",
+                           "Missing information: 0 player(s) without a captured SL · 2 not yet played"):
+                assert needle in t, needle
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
+            page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Played")
+            t = page.inner_text("#tonight")
+            assert "Unavailable: 1" in t and "Unknown: 2 (not the same as unavailable)" in t and "Already used: 1 · planned: 0" in t
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_coach_notes_are_tagged_per_player_durable_and_never_evidence(tmp_path: Path):
+    from analytics.ultimate_coach_war_room import COACH_TAGS
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            before = page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))")
+            card = page.locator("#scouting-cards .scout").first
+            assert "Your opinion, not APA facts." in card.inner_text()
+            options = card.locator('select[data-plan="tag1"] option').all_text_contents()
+            assert options[1:] == COACH_TAGS
+            card.locator('select[data-plan="tag1"]').select_option("Slow shooter")
+            card.locator('select[data-plan="tag2"]').select_option("Strong safety player")
+            card.locator('textarea[data-plan="note"]').fill("Plays the long game")
+            summary = "Coach: Slow shooter · Strong safety player: Plays the long game"
+            assert card.locator(".coach-summary").inner_text() == summary
+            assert page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))") == before
+            page.fill("#md-date", "2026-10-25"); page.click("#md-compare-1")        # another fixture, same player
+            assert page.locator("#scouting-cards .scout").first.locator(".coach-summary").inner_text() == summary
+            page.reload(); page.wait_for_load_state("load")
+            assert page.locator("#scouting-cards .scout").first.locator(".coach-summary").inner_text() == summary
+            # Notes written by the earlier (per-team) version are kept, now on the player.
+            page.evaluate("""() => { const k='ultimate-coach:plan-v2'; const o=JSON.parse(localStorage.getItem(k));
+                o.coach={}; o.notes={'falcons-a|d1|Fall 2026': {'11': {n: 'Old note'}}}; localStorage.setItem(k, JSON.stringify(o)); }""")
+            page.reload(); page.wait_for_load_state("load")
+            assert page.locator("#scouting-cards .scout").nth(1).locator(".coach-summary").inner_text() == "Coach: Old note"
+            assert errors == []
+        finally:
+            browser.close()

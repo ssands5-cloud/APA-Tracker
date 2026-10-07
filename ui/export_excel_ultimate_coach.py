@@ -767,15 +767,7 @@ def _lists_sheet(wb: Workbook, format_filter_options: list[str], compare_slots: 
 
 
 
-def _workbook_version() -> str:
-    """The code revision the workbook was built from (short git SHA), or "unversioned" outside a checkout."""
-    import subprocess
-    try:
-        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=10,
-                             cwd=Path(__file__).resolve().parent).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        sha = ""
-    return f"PR #83 · {sha}" if sha else "unversioned"
+from analytics.ultimate_coach_war_room import build_version, worked_example  # noqa: E402  (after base helpers)
 
 
 def build_workbook(
@@ -835,21 +827,7 @@ def build_workbook(
             default_opp = label_by_scope.get(default["opponent_scope"] or "")
             default_date = (str(f.get("match_external_id")) if (f := (match_day.get("fixtures") or [])[
                 default["side"]["fixture_index"]]) else None)
-            same_day = [s for s in (match_day.get("schedule") or {}).get(default["scope"], [])
-                        if (match_day["fixtures"][s["fixture_index"]].get("local_date") == default["date"]
-                            and match_day["fixtures"][s["fixture_index"]].get("format") in ("EIGHT", "NINE"))]
-            opponent = default["side"]["opponent"]
-            example = [
-                f"1 · Player: {viewer_label}",
-                f"2 · Team: {default_team}",
-                f"3 · Format: {FORMAT_FILTER_EIGHT_NINE_LABEL} (the default)",
-                f"4 · Scheduled date: {war.date_label(default['date'])} — the earliest scheduled date on or after the build date",
-                "5 · Fixture: " + ("Home" if default["side"]["side"] == "home" else "Away") + " vs "
-                + (default_opp or opponent.get("team_name") or "an opponent without a captured roster")
-                + (" (the only fixture that day, so it is used automatically)" if len(same_day) == 1
-                   else f" ({len(same_day)} fixtures that day — you choose one)"),
-                "Then: Command Center → Lineup Lab → War Room → Captain Packet all show this fixture.",
-            ]
+            example = worked_example(match_day, default, viewer_label, label_by_scope)
         elif len(scopes) == 1:
             default_team = label_by_scope.get(scopes[0])
 
@@ -865,7 +843,7 @@ def build_workbook(
     war.build_coach_dashboard(wb, format_options=_dashboard_format_options(pairs))
     war.build_coach_notes(wb)
     war.build_command_center(wb, slots=slots, stats=stats)
-    war.build_start_here(wb, stats=stats, version=_workbook_version(), example=example)
+    war.build_start_here(wb, stats=stats, version=build_version(), example=example)
     if default_team and default_date:
         # Lineup Lab plans for the default fixture: its exact plan key, read from the Schedule rows
         # (the same cells uc_PlanKey concatenates, so the two are identical by construction).

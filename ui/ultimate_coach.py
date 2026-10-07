@@ -17,7 +17,18 @@ from analytics.ultimate_coach_match_day import (
     viewer_current_teams,
     viewer_player,
 )
-from analytics.ultimate_coach_war_room import build_local_date, freshness
+from analytics.ultimate_coach_excel_payload import build_team_rosters
+from analytics.ultimate_coach_matchup_evidence import player_ref
+from analytics.ultimate_coach_war_room import (
+    COACH_TAGS,
+    ONBOARDING_LIMITS,
+    ONBOARDING_WHAT,
+    build_local_date,
+    build_version,
+    default_matchup,
+    freshness,
+    worked_example,
+)
 
 # The Captain's War Room script (matrix, best sends, risks, Lineup Lab, scouting
 # cards, meetings) lives in its own file so it is plain JavaScript, not an
@@ -68,7 +79,15 @@ button.secondary:hover { background:var(--felt-soft); }
 .tonight-grid b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:3px; }
 .tonight-links { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-weight:700; font-size:13.5px; }
 .tonight-links a { color:var(--felt-deep); }
-@media print { #tonight { display:none !important; } }
+@media print { #tonight,#start-here { display:none !important; } }
+.start-here summary { cursor:pointer; font-size:15px; color:var(--felt-deep); }
+.start-here[open] summary { margin-bottom:10px; }
+.sh-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+.start-here ul,.start-here ol { margin:4px 0 0; padding-left:20px; font-size:13.5px; }
+.start-here h3 { margin:6px 0 2px; }
+.coach-summary { font-weight:600; color:#5d4413; margin-top:4px; }
+.coach-summary:empty { display:none; }
+.tonight-grid b + span { display:block; }
 @media (max-width:760px) {
   header.hero p { display:none; }
   header.hero .ball { width:32px; height:32px; }
@@ -278,6 +297,41 @@ def render(
     fresh = freshness(match_day, build_local)
     compact_payload["build"] = {"built_at": built_at, "build_local": build_local, **{k: fresh[k] for k in (
         "build_date", "latest_result", "unplayed_before_build")}}
+    # Start here: the same onboarding text, worked example and version as the Excel START HERE tab.
+    rosters = build_team_rosters(payload)
+    label_by_scope = {r["team_scope_key"]: r["team_label"] for r in rosters}
+    example = None
+    if resolved_viewer:
+        viewer_scopes = sorted({r["team_scope_key"] for r in rosters if r["player_id"] == resolved_viewer["id"]})
+        example = worked_example(match_day, default_matchup(match_day, viewer_scopes, build_local, label_by_scope),
+                                 player_ref(resolved_viewer), label_by_scope)
+    version = build_version()
+    compact_payload["coach_tags"] = COACH_TAGS
+    li = lambda items: "".join(f"<li>{escape(x.lstrip('• '))}</li>" for x in items)
+    steps = [
+        ('#match-day-card', "Match Day", "pick yourself, team, format and date (and the fixture if two share a day)."),
+        ('#tonight', "Tonight", "opponent, availability, evidence counts and best sends at a glance."),
+        ('#lineup-lab', "Lineup Lab", "mark who's here and who has played — marks belong to that one fixture."),
+        ('#team-section', "War Room", "best sends, risks and the colour matrix — tap a cell for the evidence."),
+        ('#scouting-cards', "Scouting cards", "every opponent, plus your own coach notes."),
+    ]
+    start_here = (
+        '<details class="card start-here" id="start-here" open><summary><b>Start here</b> — what Ultimate Coach does '
+        'and how to use it in three minutes</summary><div class="sh-grid">'
+        f'<div><h3>What Ultimate Coach does</h3><ul>{li(ONBOARDING_WHAT)}</ul></div>'
+        '<div><h3>Quick start</h3><ol>'
+        + "".join(f'<li><a href="{href}">{escape(name)}</a>: {escape(text)}</li>' for href, name, text in steps)
+        + '<li>Print the Captain Packet (button at the top of the War Room).</li></ol></div>'
+        '<div><h3>Worked example from this build</h3><ul>'
+        + (li(example) if example else "<li>No viewer is configured for this build: pick yourself on Match Day and it "
+           "fills in team, date and fixture the same way.</li>")
+        + f'</ul></div></div><h3>Important limitations</h3><ul>{li(ONBOARDING_LIMITS)}</ul>'
+        f'<p class="muted">Version: {escape(version)} · Build date: {escape(fresh["build_date"])} · data current to the '
+        f'latest recorded result {escape(fresh["latest_result"])}'
+        + (f' · {fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED in this snapshot'
+           if fresh["unplayed_before_build"] else "")
+        + ' · this page never refreshes itself.</p></details>'
+    )
     data = _script_json(compact_payload)
     built_label_js = _script_json(f"Ultimate Coach · built {built_at}" if built_at else "Ultimate Coach · offline build")
     player_count = int((payload.get("counts") or {}).get("players") or 0)
@@ -459,6 +513,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 <section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
+{start_here}
 <section class="card card-feature" id="match-day-card">
   <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
   <div class="viewer-box">
