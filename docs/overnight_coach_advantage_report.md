@@ -1579,6 +1579,53 @@ flows, Captain Edge 7/10 (qualitative, not a predicted win advantage), with
 manual Excel plan handling and visual acceptance still limiting the score.
 Issue #84 updated; PR #83 remains unmerged draft.
 
+### Real-Excel captain workflow and packet UAT — 2026-10-07
+
+Paul resumed hands-on UAT; background monitor PAUSED. Candidate
+`1b7053a`, docs head `a412e2e`, confirmed by current GitHub/source reads.
+Evidence: user-provided real Excel screenshots of Match Day, War Room,
+Coach Dashboard, Lineup Lab, Captain Packet and five print-preview pages.
+No new full-suite/CI, artifact hash or automated visual PASS claimed here.
+Applied previously reviewed verification/red-team/validator standards.
+
+✅ **Observed functional checks:** October11 Brunch Ballers 8-Ball fixture
+propagates to correct Spiraling Out Of Control roster. War Room-only
+Adams Family override changes that view; Coach Dashboard remains Paul
+Smith vs Bob Waldvogel in 8-Ball and packet retains the original fixture
+and roster. Clearing override restores Follow Match Day. Paul Unavailable
+and Bob Played propagate without changing shown recorded W-L. October18
+switches to away vs Inglorious Poolsters, ignoring old marks; October11
+return restores Paul/Bob marks. These support the prior technical repair
+checks; they do not reopen resolved context P1s.
+
+⚠ **Print page1:** focused match header, both rosters, planning marks,
+opportunities and risks are present, with no setup controls. Body text
+is small and requires user readability judgment at actual print scale.
+
+❌ **New P2 print-detail problem:** real preview page3 clips the rightmost
+Basis text, frequently ending at "not". Rebecca Dehart's heading is at
+page3 bottom, while her candidate rows continue page4 without a repeated
+opponent heading. Page3 has an empty brown band/large gap before evidence;
+page5 is mostly blank apart from meeting history, while other pages are
+very dense. Formula PASS does not establish printable captain usability.
+Source `build_captain_packet()` in `ui/excel_war_room.py` allocates every
+roster slot and long basis strings to narrow merged ranges with fixed
+layout; empty slots and auto-pagination need appropriate treatment.
+
+💡 **Repair:** wrap and allocate sufficient row/column space; keep opponent
+headers with candidate rows or repeat continuation headings; avoid empty
+slot bands and extreme shrink-to-fit. Compact or redistribute detail to
+readable pages, keeping record identity, samples and limitations intact.
+Check new real-Excel print preview before claiming print acceptance. No
+COM/macros, new predictive rules or expanded feature scope authorized.
+
+Print-detail UAT FAIL / requires layout fix. Overall acceptance remains
+PENDING PAUL REVIEW, qualitative Edge provisionally 7/10 with this print
+limitation. Finding posted to issue #84; user test marks must be cleared
+before real league use. No implementation/source-data/off-limits edits,
+credential access or merge by GPT. Native user UAT is distinguished from
+previous headless tests; no inference of physical-paper readability.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
