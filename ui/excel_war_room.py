@@ -1519,12 +1519,12 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
             k = i * 2 + side + 1
             row = f'IFERROR(MATCH(wr_PairKey&"|{k}",Meetings_Table[Key],0),"")'
             cond = f'OR(NOT(wr_HasEvidence),{row}="")'
-            f12 = font(12)
+            f12 = font(11.5)
             _span(ws, r, c0, cd, f'=IF({cond},"","{k}. "&INDEX(Meetings_Table[Date],{row})&CHAR(10)&INDEX(Meetings_Table[Result],{row})&'
                                  f'" · SL "&INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))', font=f12)
             _span(ws, r, cn, c9, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row})&CHAR(10)&"vs "&'
                                  f'INDEX(Meetings_Table[Opponent],{row}))', font=f12)
-        h(r, 30)
+        h(r, 28.5)
     meet_last = meet_first + rows_per_side - 1
     # Dividers and subtle alternating shading on rows that hold a meeting; black rules print in black & white.
     from openpyxl.styles import Border, Side

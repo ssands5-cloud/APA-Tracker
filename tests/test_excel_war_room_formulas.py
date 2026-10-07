@@ -496,7 +496,7 @@ def test_packet_meeting_page_shows_every_record_two_across_with_dividers(book, b
     assert one.startswith("1. Sun Sep 20, 2026\n") and two.startswith("2. ") and three.startswith("3. ")
     assert " · SL " in one and "\nvs " in book.display(CP, f"B{first}")
     assert book.display(CP, f"A{first + 4}") == "" and book.display(CP, f"G{first + 4}") == ""   # 8 meetings = 4 rows
-    assert ws[f"A{first}"].font.sz == 12 and ws.row_dimensions[first].height == 30
+    assert ws[f"A{first}"].font.sz == 11.5 and ws.row_dimensions[first].height == 28.5
     rules = [r for cf in ws.conditional_formatting for r in cf.rules
              if str(cf.sqref).startswith(f"A{first}") or str(cf.sqref).startswith(f"G{first}")]
     assert rules and all(r.dxf.border.bottom.style == "thin" and r.dxf.border.bottom.color.rgb.endswith("000000") for r in rules)
