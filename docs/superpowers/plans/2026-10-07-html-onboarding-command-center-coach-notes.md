@@ -23,7 +23,7 @@ formula evaluator. No COM, no macros.
   `build_version()`, `worked_example()`.
 - `ui/export_excel_ultimate_coach.py` — use `worked_example()` / `build_version()` (remove inline copies).
 - `ui/excel_war_room.py` — START HERE and Coach Notes read the shared lists.
-- `ui/ultimate_coach.py` — `DATA.onboarding`, a "Start here" card (open on first visit, remembered closed).
+- `ui/ultimate_coach.py` — server-rendered "Start here" card + `DATA.coach_tags` (open on first visit, remembered closed).
 - `ui/ultimate_coach_war_room.js` — Command Center counts in Tonight; coach tags + observation per player.
 - Tests: `tests/test_ultimate_coach_war_room.py`, `tests/test_ultimate_coach_war_room_browser.py`,
   `tests/test_excel_war_room_formulas.py`.
@@ -36,7 +36,7 @@ formula evaluator. No COM, no macros.
 - [x] 3. HTML Start-here card. Run task-1 tests for onboarding → green.
 - [x] 4. Tonight Command Center counts → green.
 - [x] 5. Coach tags/notes per player (migrate earlier per-team notes) → green.
-- [ ] 6. Full suite; commit; push; CI 3.12/3.13; rebuild; verify hashes, real data, no script errors.
+- [x] 6. Full suite; commit; push; CI 3.12/3.13; rebuild; verify hashes, real data, no script errors.
 - [ ] 7. Report + #84 with provenance; visual acceptance PENDING PAUL REVIEW.
 
 ## Deviations (justified)

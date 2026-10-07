@@ -87,7 +87,7 @@ button.secondary:hover { background:var(--felt-soft); }
 .start-here h3 { margin:6px 0 2px; }
 .coach-summary { font-weight:600; color:#5d4413; margin-top:4px; }
 .coach-summary:empty { display:none; }
-.tonight-grid b + span { display:block; }
+.tonight-grid span { display:block; }
 @media (max-width:760px) {
   header.hero p { display:none; }
   header.hero .ball { width:32px; height:32px; }

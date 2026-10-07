@@ -373,6 +373,9 @@ def test_tonight_is_a_command_center_with_excels_counts(tmp_path: Path):
                            "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient evidence (nothing recorded): 1",
                            "Missing information: 0 player(s) without a captured SL · 2 not yet played"):
                 assert needle in t, needle
+            lines = t.splitlines()                                         # each count on its own line
+            for needle in ("Available: 0", "Unavailable: 0", "Concerning (more direct losses than wins): 2"):
+                assert needle in lines, needle
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Played")
             t = page.inner_text("#tonight")
