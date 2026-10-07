@@ -25,7 +25,7 @@ def _configs(tmp_path: Path, *, timezone: str = "America/Phoenix") -> Path:
         encoding="utf-8",
     )
     (tmp_path / "apa_config.local.yaml").write_text(
-        'ultimate_coach:\n  viewer_member_external_id: "3349374"\n  viewer_card_number: "80202016"\n',
+        'ultimate_coach:\n  viewer_member_external_id: "9000001"\n  viewer_card_number: "80000001"\n',
         encoding="utf-8",
     )
     return config
@@ -75,8 +75,8 @@ def test_html_entrypoint_passes_configured_viewer_and_timezone(monkeypatch, tmp_
     db.write_bytes(b"")
     assert html_entry.main(["--db", str(db), "--output", str(tmp_path / "uc.html"), "--config", str(_configs(tmp_path))]) == 0
     assert seen["payload_timezone"] == "America/Phoenix"
-    assert seen["viewer_member_external_id"] == "3349374"
-    assert seen["viewer_card_number"] == "80202016"
+    assert seen["viewer_member_external_id"] == "9000001"
+    assert seen["viewer_card_number"] == "80000001"
 
 
 def test_excel_entrypoint_passes_the_same_viewer_and_timezone(monkeypatch, tmp_path):
@@ -92,8 +92,8 @@ def test_excel_entrypoint_passes_the_same_viewer_and_timezone(monkeypatch, tmp_p
     db.write_bytes(b"")
     assert excel_entry.main(["--db", str(db), "--output", str(tmp_path / "uc.xlsx"), "--config", str(_configs(tmp_path))]) == 0
     assert seen["payload_timezone"] == "America/Phoenix"
-    assert seen["viewer_member_external_id"] == "3349374"
-    assert seen["viewer_card_number"] == "80202016"
+    assert seen["viewer_member_external_id"] == "9000001"
+    assert seen["viewer_card_number"] == "80000001"
 
 
 def test_production_entrypoint_passes_the_same_settings(monkeypatch, tmp_path):
@@ -107,8 +107,8 @@ def test_production_entrypoint_passes_the_same_settings(monkeypatch, tmp_path):
     assert production_entry.main(["--db", str(tmp_path / "x.db"), "--out", str(tmp_path / "out"),
                                   "--config", str(_configs(tmp_path))]) == 0
     settings = seen["settings"]
-    assert settings.viewer_member_external_id == "3349374"
-    assert settings.viewer_card_number == "80202016"
+    assert settings.viewer_member_external_id == "9000001"
+    assert settings.viewer_card_number == "80000001"
     assert settings.timezone == "America/Phoenix"
     assert settings.viewer_source == "apa_config.local.yaml"
 
@@ -139,17 +139,17 @@ def test_production_candidate_renders_with_settings_and_records_them_in_the_mani
 
     monkeypatch.setattr(production_entry, "_build_payload", fake_build_payload)
     monkeypatch.setattr(production_entry, "render", fake_render)
-    settings = MatchDaySettings("3349374", "80202016", "America/Denver", "apa_config.local.yaml")
+    settings = MatchDaySettings("9000001", "80000001", "America/Denver", "apa_config.local.yaml")
     out = production_entry.build_candidate(source, tmp_path / "candidate", settings=settings)
     assert seen["payload_timezone"] == "America/Denver"
-    assert seen["viewer_member_external_id"] == "3349374"
-    assert seen["viewer_card_number"] == "80202016"
+    assert seen["viewer_member_external_id"] == "9000001"
+    assert seen["viewer_card_number"] == "80000001"
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["match_day"]["display_timezone"] == "America/Denver"
     assert manifest["match_day"]["viewer_configured"] is True
     assert manifest["match_day"]["coverage"]["embedded_fixture_count"] == 2
     # The identity itself is never written into the manifest.
-    assert "3349374" not in json.dumps(manifest)
+    assert "9000001" not in json.dumps(manifest)
 
 
 def test_invalid_configured_timezone_stops_the_build(monkeypatch, tmp_path):

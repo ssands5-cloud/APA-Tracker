@@ -14,7 +14,7 @@ disclosed, never defaulted.
 Two different APA identifiers exist and must never be conflated:
 - the member RECORD ID (`member.id`, stored here as `external_id`) -- one per
   person, the identity key every artifact uses;
-- the member CARD NUMBER (`alias.memberNumber`, e.g. "80202016") -- one per
+- the member CARD NUMBER (`alias.memberNumber`, e.g. "80100001") -- one per
   league alias, printed on the player's card, and NOT stored in the staging
   database at all. A configured card number is display provenance only.
 

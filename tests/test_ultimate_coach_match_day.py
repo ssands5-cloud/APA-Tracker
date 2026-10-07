@@ -284,10 +284,10 @@ def test_local_override_supplies_viewer_and_card_without_touching_the_shared_con
         'ultimate_coach:\n  viewer_member_external_id: "CHANGE_ME"\n  viewer_card_number: "CHANGE_ME"\n'
         '  match_day_timezone: "America/Denver"\n', encoding="utf-8")
     (tmp_path / "apa_config.local.yaml").write_text(
-        'ultimate_coach:\n  viewer_member_external_id: "3349374"\n  viewer_card_number: "80202016"\n', encoding="utf-8")
+        'ultimate_coach:\n  viewer_member_external_id: "9000001"\n  viewer_card_number: "80000001"\n', encoding="utf-8")
     settings = load_match_day_settings(tmp_path / "apa_config.yaml")
-    assert settings.viewer_member_external_id == "3349374"
-    assert settings.viewer_card_number == "80202016"
+    assert settings.viewer_member_external_id == "9000001"
+    assert settings.viewer_card_number == "80000001"
     assert settings.viewer_source == "apa_config.local.yaml"
     assert settings.timezone == "America/Denver"
 
