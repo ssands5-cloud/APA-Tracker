@@ -486,8 +486,23 @@ class _Parser:
             return Ref(sheet, ref)
         if name == "MATCH":
             needle, refs = self.scalar(args[0]), self.cells(args[1])
-            if len(args) < 3 or _to_number(self.scalar(args[2])) != 0:
-                raise NotImplementedError("only exact MATCH(...,0) is supported")
+            kind = 1 if len(args) < 3 else _to_number(self.scalar(args[2]))
+            if kind == 1:
+                # Excel's default approximate match on an ascending range: the last position whose
+                # value is <= the lookup value (numbers only here; text/mixed is not needed).
+                found = None
+                for i, (s, r) in enumerate(refs, start=1):
+                    v = self.book.value(s, r)
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and isinstance(needle, (int, float)):
+                        if v <= needle:
+                            found = float(i)
+                        else:
+                            break
+                if found is None:
+                    raise ExcelError("#N/A")
+                return found
+            if kind != 0:
+                raise NotImplementedError("MATCH match_type -1 is not supported")
             for i, (s, r) in enumerate(refs, start=1):
                 v = self.book.value(s, r)
                 if v is not BLANK and _compare(v, needle, "="):

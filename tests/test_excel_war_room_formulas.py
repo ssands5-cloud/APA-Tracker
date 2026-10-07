@@ -120,6 +120,16 @@ def _roster(book, sheet, first, R=8):
     return [x for x in ours if x[0]], [x for x in theirs if x[0]]
 
 
+def _packet_roster(book, R=8):
+    """Captain Packet page-1 rosters: ours (A, C, D, E); theirs (G, K = "SL n · W-L", L = played)."""
+    first = 7
+    ours = [(book.display(CP, f"A{r}"), book.display(CP, f"C{r}"), book.display(CP, f"D{r}"),
+             book.display(CP, f"E{r}")) for r in range(first, first + R)]
+    theirs = [(book.display(CP, f"G{r}"), book.display(CP, f"K{r}"), book.display(CP, f"L{r}"))
+              for r in range(first, first + R)]
+    return [x for x in ours if x[0]], [x for x in theirs if x[0]]
+
+
 def _opportunities(book, wb):
     top = _row(wb, WR, "Top opportunities — best-supported sends (favorable direct first, then even, then indirect)")
     return [(book.display(WR, f"A{r}"), book.display(WR, f"C{r}")) for r in range(top + 1, top + 3)]
@@ -171,7 +181,7 @@ def test_every_interactive_tab_follows_match_day(book, built):
     assert theirs == [(CAM, "6", "7-1", "—"), (EVE, "3", "2-2", "—")]
     assert book.display(SC, "A6") == f"{CAM} · SL 6"
     assert book.display(CP, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
-    assert _roster(book, CP, 7) == (ours, theirs)
+    assert _packet_roster(book) == (ours, [(n, f"SL {sl} · {wl}", pl) for n, sl, wl, pl in theirs])
     assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
     assert book.display(LL, "D5") == "✓ Matches Match Day’s team."
     assert book.display(LL, "C9") == "Sun Oct 11, 2026 · 11:00 AM MDT · Home vs Falcons · match 1"  # marks belong to the exact default fixture
@@ -423,7 +433,7 @@ def test_two_matches_on_the_same_day_never_share_marks(tmp_path):
     assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"
     assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 9:00 PM MDT")
     assert "· match 4 — not applied to this fixture." in book.display(WR, "A23")
-    assert _roster(book, CP, 7)[0][0][3] == "Unknown · —"     # the packet agrees
+    assert _packet_roster(book)[0][0][3] == "Unknown · —"     # the packet agrees
     book.set(MD, "B10", first)             # back to the first match: its marks return
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
     book.set(LL, "C9", "")                 # no fixture named: nothing applies (fail-closed)
@@ -435,17 +445,17 @@ def test_war_room_overrides_never_change_other_tabs(book, built):
     the scouting cards or the Captain Packet -- and the packet never mixes one fixture's heading with
     another opponent's roster."""
     pool = lambda: [book.value(s, r) for s, r in book.name("cd_PlayerBList")][:2]
-    packet_heading, packet_rosters = book.display(CP, "A2"), _roster(book, CP, 7)
+    packet_heading, packet_rosters = book.display(CP, "A2"), _packet_roster(book)
     card = book.display(SC, "A6")
     assert pool() == [CAM, EVE]
     book.set(WR, "C6", OWLS)
     assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]   # War Room changed
     assert pool() == [CAM, EVE]                                   # Coach Dashboard did not
-    assert book.display(CP, "A2") == packet_heading and _roster(book, CP, 7) == packet_rosters
+    assert book.display(CP, "A2") == packet_heading and _packet_roster(book) == packet_rosters
     assert book.display(SC, "A6") == card and book.display(SC, "A4").startswith("Following Match Day")
     book.set(WR, "C5", SHARKS9)
     assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
-    assert book.display(CP, "A2") == packet_heading and _roster(book, CP, 7) == packet_rosters
+    assert book.display(CP, "A2") == packet_heading and _packet_roster(book) == packet_rosters
     # The Coach Dashboard's own override still works and clears back.
     book.set(CD, "C8", "9-Ball")
     assert book.display(CD, "A4").startswith("Using local selections") and book.display(CD, "A4").endswith("· 9-Ball")
@@ -453,3 +463,23 @@ def test_war_room_overrides_never_change_other_tabs(book, built):
     assert book.display(CD, "A4").startswith("Following Match Day")
     book.set(WR, "C5", ""); book.set(WR, "C6", "")
     assert _no_bad_values(book, built) == []
+
+
+def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built):
+    ws = built[CP]
+    first = next(c.row for c in ws["A"] if c.value == "Opponent (APA record ID)") + 1
+    lines = [[book.display(CP, f"{c}{r}") for c in "ACDHK"] for r in range(first, first + 8)]
+    assert lines[:6] == [
+        [f"vs {CAM}", "1", ANN, "2-0 (2)", "Favorable direct"],
+        [f"vs {CAM}", "2", DEE, "1-1 (2)", "Even direct"],
+        [f"vs {CAM}", "3", BEA, "0-2 (2)", "Concerning direct"],
+        [f"vs {EVE}", "1", DEE, "0-2 (2)", "Concerning direct"],
+        [f"vs {EVE}", "≈", ANN, "≈ 1-0 vs 0-1 (1 shared)", "Indirect only"],
+        [f"vs {EVE}", "—", BEA, "No evidence", "No evidence"],
+    ]
+    assert lines[6:] == [["", "", "", "", ""]] * 2                     # packed: nothing after the last line
+    # Meeting history uses real columns; the opponent card shows notes with the missing-information line.
+    book.set(LL, "D23", "Breaks hard")
+    cards_row = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Scouting cards")) + 1
+    texts = [book.display(CP, f"B{r}") for r in range(cards_row, cards_row + 5)]
+    assert any("Notes: Breaks hard" in t for t in texts if isinstance(t, str))

@@ -545,6 +545,11 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_RiskRun", lambda k, r: f'={"0" if k == 1 else f"E{r - 1}"}+IF(D{r},1,0)'),
     ])
     e.cell("wr_RiskCount", "Open risks", "=MAX(wr_RiskRun)")
+    # Captain Packet evidence list: where each opponent's rows start in one continuous, packed list.
+    e.block("Packet evidence start", R, [
+        ("wr_PkStart", lambda k, r: "=1" if k == 1 else f"=B{r - 1}+INDEX(wr_OppCount,{k - 1})"),
+    ])
+    e.cell("wr_PkTotal", "Packet evidence lines", "=SUM(wr_OppCount)")
 
     # ---- best-supported sends per opponent (ranking order, sendable + remaining) ----
     e.section("Best-supported sends (per opponent: candidate rows in ranking order)")
@@ -1282,89 +1287,260 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
 # Captain Packet (print)
 # ---------------------------------------------------------------------------
 
-def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) -> dict[str, int]:
+# Captain Packet layout constants (Excel width units, points). Paul's real-Excel UAT (#84): readable
+# text, no clipped Basis, no orphan opponent headings, no empty bands, keep the five-page grouping.
+PACKET_WIDTHS = (26, 22, 7, 11, 24, 2, 14, 10, 9, 10, 22, 10)        # A..L
+PACKET_PRINTABLE = ((11 - 2 * 0.35) * 72, (8.5 - 2 * 0.45) * 72)     # landscape Letter, margins below
+PACKET_TITLE_ROWS = (26, 20)                                          # rows 1-2 repeat on every page
+
+
+def _width_pt(width: float) -> float:
+    return int(width * 7 + 5) * 0.75
+
+
+def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) -> dict[str, Any]:
+    """Printable Captain Packet that follows Match Day (md_* after split_match_day_engine).
+
+    Every printed row has an explicit height and every column an explicit width, so the page geometry
+    is known at build time; one print scale is then chosen so the tallest page fits, and each page uses
+    the largest font its row heights allow. Variable-length sections are PACKED (no reserved blank slot
+    bands): evidence is one continuous list in which every line names its opponent, so a page break can
+    never orphan an opponent heading. Facts are unchanged; only presentation differs from the War Room.
+    """
     R = slots["roster"]
     ws = wb.create_sheet("Captain Packet", 4)
-    for letter, width in zip("ABCDEFGHIJKL", (30, 15, 9, 11, 22, 3, 15, 15, 9, 11, 30, 10)):
+    for letter, width in zip("ABCDEFGHIJKL", PACKET_WIDTHS):
         ws.column_dimensions[letter].width = width
+    for letter in "PQR":
+        ws.column_dimensions[letter].width = 6
     ws.sheet_view.showGridLines = False
+    heights: dict[int, float] = {}
+
+    def h(row: int, pt: float) -> None:
+        ws.row_dimensions[row].height = pt
+        heights[row] = pt
+
+    def font(size: float, **kw) -> Font:
+        return Font(size=size, **kw)
+
+    white = "FFFFFF"
     ws["A1"] = "Captain Packet — Match Night"
-    ws["A1"].font = base.TITLE_FONT
+    ws["A1"].font = font(16, bold=True, color=base.FELT_DEEP)
     ws.merge_cells("A1:L1")
-    _span(ws, 2, 1, 12, '=IF(wr_Local,"⚠ War Room is using local selections — clear them to print Match Day’s fixture. ","")&'
-                        'IF(uc_Fixture="","Choose a fixture on Match Day.",uc_Fixture)', font=Font(bold=True, size=13, color=base.FELT_DEEP))
-    _span(ws, 3, 1, 12, '=IF(wr_Local,wr_Status,uc_Venue)', font=base.MUTED_FONT)
-    end = _roster_section(ws, 5, R, title_ours="=wr_OurLabel", title_theirs="=wr_OppLabel")
-    top = end + 1
-    base._section(ws, top, "Top opportunities (best-supported sends)", last_col=12)
+    h(1, PACKET_TITLE_ROWS[0])
+    _span(ws, 2, 1, 12, '=IF(uc_Fixture="","Choose a fixture on Match Day.",uc_Fixture)',
+          font=font(12, bold=True, color=base.FELT_DEEP))
+    h(2, PACKET_TITLE_ROWS[1])
+    _span(ws, 3, 1, 12, '=uc_Venue', font=font(9.5, color="5B6A61"))
+    h(3, 15)
+    h(4, 4)
+
+    # ---------------- page 1: rosters, best sends, risks ----------------
+    r = 5
+    for c1, c2, text, sub, fill in ((1, 1, "OUR TEAM", "=wr_OurLabel", base.SECTION_FILL),
+                                    (7, 7, "OPPONENT", "=wr_OppLabel", base.OPPONENT_FILL)):
+        ws.cell(row=r, column=c1, value=text).font = font(10.5, bold=True, color=white)
+        ws.cell(row=r, column=c1).fill = fill
+        _span(ws, r, c1 + 1, c1 + 4 if c1 == 1 else 12, sub, font=font(10.5, bold=True, color=base.FELT_DEEP))
+    h(r, 18)
+    r += 1
+    for col, text in ((1, "Player (APA record ID)"), (3, "SL"), (4, "Team W-L"), (5, "Availability · lineup"),
+                      (7, "Player (APA record ID)"), (11, "SL · Team W-L"), (12, "Played")):
+        cell = ws.cell(row=r, column=col, value=text)
+        cell.font = font(9, bold=True, color=base.FELT_DEEP)
+        cell.fill = base.SUBHEAD_FILL
+    h(r, 16)
+    roster_first = r + 1
     for k in range(1, R + 1):
-        r = top + k
-        _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=SMALL)
-        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",IF(INDEX(wr_Send1,{k})="",'
-                            f'"No evidence-backed option left.","1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k})))))',
-              font=SMALL)
-    top = top + R + 1
-    base._section(ws, top, "Top risks", last_col=12)
-    for n in range(1, 4):
-        _span(ws, top + n, 1, 12, f'=IFERROR("Threat: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")', font=SMALL)
-    for n in range(1, 4):
-        _span(ws, top + 3 + n, 1, 12, f'=IFERROR("Concerning: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")',
-              font=SMALL)
-    _span(ws, top + 7, 1, 12, '=IF(wr_UnplayedCount=0,"","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable direct option left.")',
-          font=SMALL)
-    foot = top + 8
+        r = roster_first + k - 1
+        f11 = font(11)
+        _span(ws, r, 1, 2, f'=INDEX(wr_OurLabels,{k})', font=f11, wrap=False)
+        ws.cell(row=r, column=3, value=f'=INDEX(wr_OurSL,{k})').font = f11
+        ws.cell(row=r, column=4, value=f'=INDEX(wr_OurWL,{k})').font = f11
+        ws.cell(row=r, column=5, value=f'=IF(INDEX(wr_OurLabels,{k})="","",INDEX(wr_OurAvail,{k})&" · "&INDEX(wr_OurLineup,{k}))').font = f11
+        _span(ws, r, 7, 10, f'=INDEX(wr_OppLabels,{k})', font=f11, wrap=False)
+        ws.cell(row=r, column=11, value=f'=IF(INDEX(wr_OppLabels,{k})="","","SL "&INDEX(wr_OppSL,{k})&" · "&INDEX(wr_OppWL,{k}))').font = f11
+        ws.cell(row=r, column=12, value=f'=INDEX(wr_OppPlayed,{k})').font = f11
+        for c in range(1, 13):
+            if c != 6:
+                ws.cell(row=r, column=c).border = base.CELL_BORDER
+        h(r, 16)
+    r = roster_first + R
+    _span(ws, r, 1, 12, '=IF(AND(ll_OurTeamOK,ll_OppTeamOK,NOT(ll_FixOK)),"⚠ Lineup Lab marks are for another fixture — not '
+                        'applied here. ","")&"Team W-L = this team’s captured record this session · “No data” = not captured · '
+                        'availability, lineup and played are your Lineup Lab marks for this fixture, never evidence; Unknown is '
+                        'not Unavailable."', font=font(9, color="5B6A61"))
+    h(r, 26)
+    r += 1
+    base._section(ws, r, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)",
+                  last_col=12)
+    h(r, 18)
+    for k in range(1, R + 1):
+        r += 1
+        _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
+        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
+                            f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
+                            f'"1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k})))))',
+              font=font(10))
+        h(r, 27)
+    r += 1
+    base._section(ws, r, "Top risks", last_col=12)
+    h(r, 18)
+    risk_lines = [f'=IFERROR("Dangerous: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")'
+                  for n in range(1, 4)]
+    risk_lines += [f'=IFERROR("Avoid: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")'
+                   for n in range(1, 4)]
+    risk_lines.append('=IF(wr_UnplayedCount=0,"","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable '
+                      'direct option left among our remaining players.")')
+    for formula in risk_lines:
+        r += 1
+        _span(ws, r, 1, 12, formula, font=font(10.5), wrap=False)
+        h(r, 15)
+    r += 1
     fresh = stats["freshness"]
-    _span(ws, foot, 1, 12, f"Built {fresh['build_date']} · offline snapshot (latest recorded result {fresh['latest_result']}) · "
-                           f"times {stats['tz']} · rosters = current captured rosters · SL = team-scope, format-specific · "
-                           "“No data” = not captured · colors/ranks = recorded evidence only, NOT CALIBRATED odds.",
-          font=base.MUTED_FONT, height=30)
-    page1_end = foot
-    # ---- page 2+: scouting cards, evidence by opponent, meeting history ----
-    p2 = page1_end + 2
+    _span(ws, r, 1, 12, f"Built {fresh['build_date']} · offline snapshot (latest recorded result {fresh['latest_result']}) · "
+                        f"times {stats['tz']} · rosters = current captured rosters · SL = team-scope, format-specific · "
+                        "colors/ranks = recorded evidence only, NOT CALIBRATED odds.", font=font(9, color="5B6A61"))
+    h(r, 24)
+    pages = [(1, r)]
+
+    # ---------------- page 2: scouting cards, two across ----------------
+    p2 = r + 1
     ws.row_breaks.append(Break(id=p2 - 1))
-    base._section(ws, p2, "Scouting cards", last_col=12)
-    top = p2 + 1
-    for k in range(1, R + 1):
-        top = _card_block(ws, top, k, compact=True)
-    base._section(ws, top + 1, "Evidence by opponent (ranking: direct first, then shared-opponent; ties named)", last_col=12)
-    top += 2
-    for j in range(1, R + 1):
-        s = f"INDEX(wr_OppStart,{j})"
-        n = f"INDEX(wr_OppCount,{j})"
-        _span(ws, top, 1, 12, f'=IF({s}="","","vs "&INDEX(MatchupEvidence_Table[Player],{s})&" · "&INDEX(MatchupEvidence_Table[Direct Record],{s}))',
-              font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
-        for rr in range(1, R + 1):
-            r = top + rr
-            cond = f'OR({s}="",{rr}>{n})'
-            ws.cell(row=r, column=1, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[Rank],{s}+{rr})&"  "&INDEX(MatchupEvidence_Table[Player],{s}+{rr}))').font = SMALL
-            _span(ws, r, 2, 5, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Direct Record],{s}+{rr}))', font=SMALL)
-            _span(ws, r, 7, 10, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Shared-Opponent Evidence],{s}+{rr}))', font=SMALL)
-            _span(ws, r, 11, 12, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Basis],{s}+{rr}))', font=SMALL)
-        top += R + 1
-    base._section(ws, top, "Meeting history (direct meetings between the rosters)", last_col=12)
+    base._section(ws, p2, "Scouting cards — the full cards are on the Scouting Cards sheet", last_col=12)
+    h(p2, 18)
+    r = p2
+    card_fields = [("Vs our roster", "Vs Our Roster", 24), ("Met", "Met List", 36), ("By opponent SL", "By SL", 24),
+                   ("Missing · notes", None, 24)]
+    sides = ((1, 1, 2, 5), (7, 8, 9, 12))            # (header from, label from, value from, to)
+    header_rows = []
+    for band in range((R + 1) // 2):
+        r += 1
+        header_rows.append(r)
+        h(r, 18)
+        for side, (c0, cl, cv, c9) in enumerate(sides):
+            k = band * 2 + side + 1
+            if k > R:
+                continue
+            lbl = f"INDEX(wr_OppLabels,{k})"
+            _span(ws, r, c0, c9, f'=IF({lbl}="","",{lbl}&" · SL "&INDEX(wr_OppSL,{k})&IF(INDEX(wr_OppPlayed,{k})="Played",'
+                                 f'" · already played",""))', font=font(10.5, bold=True, color=white), wrap=False)
+        for i, (label, col, pt) in enumerate(card_fields, start=1):
+            rr = r + i
+            h(rr, pt)
+            for side, (c0, cl, cv, c9) in enumerate(sides):
+                k = band * 2 + side + 1
+                if k > R:
+                    continue
+                lbl, card = f"INDEX(wr_OppLabels,{k})", f"INDEX(wr_OppCard,{k})"
+                _span(ws, rr, cl, cv - 1, f'=IF({lbl}="","","{label}")', font=font(9, bold=True, color="5B6A61"))
+                value = (f'INDEX(Scouting_Table[{col}],{card})' if col else
+                         f'INDEX(Scouting_Table[Missing],{card})&IF(INDEX(wr_OppNotes,{k})="",""," · Notes: "&INDEX(wr_OppNotes,{k}))')
+                _span(ws, rr, cv, c9, f'=IF(OR({lbl}="",{card}=""),IF({lbl}="","","Not precomputed for this pairing"),{value})',
+                      font=font(9.5))
+        r += len(card_fields)
+    for hr in header_rows:
+        for c0, c9 in ((1, 5), (7, 12)):
+            first, last = get_column_letter(c0), get_column_letter(c9)
+            ws.conditional_formatting.add(f"{first}{hr}:{last}{hr}",
+                                          FormulaRule(formula=[f'${first}${hr}<>""'], fill=base.OPPONENT_FILL))
+    pages.append((p2, r))
+
+    # ---------------- pages 3-4: evidence, packed, opponent named on every line ----------------
+    p3 = r + 1
+    ws.row_breaks.append(Break(id=p3 - 1))
+    base._section(ws, p3, "Evidence by opponent — every line names the opponent", last_col=12)
+    h(p3, 18)
+    _span(ws, p3 + 1, 1, 12, "Rank: direct meetings first (by record, then more meetings) · “≈” = shared-opponent evidence "
+                             "only, NOT ordered among themselves · “—” = no evidence · “2=” = tied (every row with the same "
+                             "“n=” under one opponent is tied). Evidence: W-L (meetings) = direct record; ≈ ours vs theirs "
+                             "(n shared) = records against shared opponents. Basis = the evidence category.",
+          font=font(9, color="5B6A61"))
+    h(p3 + 1, 26)
+    hdr = p3 + 2
+    for col, text in ((1, "Opponent (APA record ID)"), (3, "Rank"), (4, "Our player (APA record ID)"), (8, "Evidence"),
+                      (11, "Basis")):
+        cell = ws.cell(row=hdr, column=col, value=text)
+        cell.font = font(9, bold=True, color=base.FELT_DEEP)
+    for c in range(1, 13):
+        ws.cell(row=hdr, column=c).fill = base.SUBHEAD_FILL
+    h(hdr, 16)
+    ev_first = hdr + 1
+    for n in range(1, R * R + 1):
+        r = ev_first + n - 1
+        ws.cell(row=r, column=16, value=f'=IF({n}>wr_PkTotal,"",MATCH({n},wr_PkStart,1))').font = base.HELPER_FONT
+        ws.cell(row=r, column=17, value=f'=IF(P{r}="","",{n}-INDEX(wr_PkStart,P{r})+1)').font = base.HELPER_FONT
+        ws.cell(row=r, column=18, value=f'=IF(P{r}="","",INDEX(wr_OppStart,P{r})+Q{r})').font = base.HELPER_FONT
+        f10 = font(10.5)
+        _span(ws, r, 1, 2, f'=IF(P{r}="","","vs "&INDEX(wr_OppLabels,P{r}))', font=f10, wrap=False)
+        ws.cell(row=r, column=3, value=f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Rank],R{r}))').font = f10
+        _span(ws, r, 4, 7, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Player],R{r}))', font=f10, wrap=False)
+        _span(ws, r, 8, 10, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Cell],R{r}))', font=f10, wrap=False)
+        cat = f'INDEX(MatchupEvidence_Table[Category],R{r})'
+        _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
+                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No evidence")))))', font=f10, wrap=False)
+        h(r, 14.5)
+    last_ev = ev_first + R * R - 1
+    ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
+                                  FormulaRule(formula=[f'AND($P{ev_first}<>"",$Q{ev_first}=1)'], fill=base.SUBHEAD_FILL,
+                                              font=Font(bold=True)))
+    pages.append((p3, last_ev))
+
+    # ---------------- page 5: meeting history ----------------
+    p5 = last_ev + 1
+    ws.row_breaks.append(Break(id=p5 - 1))
+    base._section(ws, p5, "Meeting history — direct meetings between the rosters (newest first)", last_col=12)
+    h(p5, 18)
+    hdr = p5 + 1
+    for col, text in ((1, "Date"), (2, "Our player (APA record ID)"), (7, "Opponent (APA record ID)"), (11, "Result (ours)"),
+                      (12, "SL ours/theirs")):
+        cell = ws.cell(row=hdr, column=col, value=text)
+        cell.font = font(9, bold=True, color=base.FELT_DEEP)
+    for c in range(1, 13):
+        ws.cell(row=hdr, column=c).fill = base.SUBHEAD_FILL
+    h(hdr, 16)
     for k in range(1, MEETING_SLOTS + 1):
-        r = top + k
+        r = hdr + k
         row = f'IFERROR(MATCH(wr_PairKey&"|{k}",Meetings_Table[Key],0),"")'
         cond = f'OR(NOT(wr_HasEvidence),{row}="")'
-        _span(ws, r, 1, 12, f'=IF({cond},"",INDEX(Meetings_Table[Date],{row})&" · "&INDEX(Meetings_Table[Our Player],{row})&" vs "&'
-                            f'INDEX(Meetings_Table[Opponent],{row})&" · "&INDEX(Meetings_Table[Result],{row})&" · SL "&INDEX(Meetings_Table[Our SL],{row})&'
-                            f'"/"&INDEX(Meetings_Table[Their SL],{row}))', font=SMALL, wrap=False)
-    last = top + MEETING_SLOTS + 1
-    _span(ws, last, 1, 12, "Shared-opponent analysis: totals per pairing are in the evidence section above; the per-opponent "
-                           "breakdown is available in the HTML cockpit (too large to precompute into Excel).", font=base.MUTED_FONT)
+        f11 = font(11)
+        ws.cell(row=r, column=1, value=f'=IF({cond},"",INDEX(Meetings_Table[Date],{row}))').font = f11
+        _span(ws, r, 2, 5, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row}))', font=f11, wrap=False)
+        _span(ws, r, 7, 10, f'=IF({cond},"",INDEX(Meetings_Table[Opponent],{row}))', font=f11, wrap=False)
+        ws.cell(row=r, column=11, value=f'=IF({cond},"",INDEX(Meetings_Table[Result],{row}))').font = f11
+        ws.cell(row=r, column=12, value=f'=IF({cond},"",INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))').font = f11
+        h(r, 14.5)
+    last = hdr + MEETING_SLOTS + 1
+    _span(ws, last, 1, 12, '=IF(AND(wr_HasEvidence,ISNUMBER(MATCH(wr_PairKey&"|' + str(MEETING_SLOTS + 1) + '",Meetings_Table[Key],0))),'
+                           '"More meetings exist than fit here — see the Meetings sheet. ","")&"Shared-opponent totals per pairing are in '
+                           'the evidence pages; the per-opponent breakdown is in the HTML cockpit."', font=font(9, color="5B6A61"))
+    h(last, 24)
+    pages.append((p5, last))
+
+    # ---------------- one print scale for the whole sheet ----------------
+    width_pt = sum(_width_pt(w) for w in PACKET_WIDTHS)
+    title_pt = sum(PACKET_TITLE_ROWS)
+    page_heights = []
+    for i, (a, b) in enumerate(pages):
+        body = sum(heights.get(x, 15) for x in range(a, b + 1))
+        page_heights.append(body if i == 0 else body + title_pt)
+    # Evidence (pages 3-4) is one section spread over two printed pages.
+    budget = [ph / (2 if i == 2 else 1) for i, ph in enumerate(page_heights)]
+    scale = min(1.0, PACKET_PRINTABLE[0] / width_pt, *(PACKET_PRINTABLE[1] / b for b in budget))
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    ws.page_setup.scale = max(10, int(scale * 100))
     ws.print_area = f"A1:L{last}"
     ws.print_title_rows = "1:2"
-    ws.page_setup.orientation = "landscape"
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = ws.page_margins.right = 0.35
     ws.page_margins.top = ws.page_margins.bottom = 0.45
-    # Navigation stays outside the print area.
+    ws.page_margins.header = ws.page_margins.footer = 0.2
     _link(ws, 1, 14, "← Match Day", "Match Day")
     _link(ws, 2, 14, "← War Room", "War Room")
-    return {"page1_end": page1_end, "page2": p2}
+    return {"pages": pages, "page_heights": page_heights, "width_pt": width_pt, "scale": ws.page_setup.scale,
+            "roster_first": roster_first, "evidence_first": ev_first}
 
 
 # ---------------------------------------------------------------------------

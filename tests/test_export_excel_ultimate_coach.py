@@ -463,19 +463,40 @@ def test_returns_none_workbook_gracefully_handles_no_players(tmp_path):
     assert wb["Players"]["A2"].value == "(no rows)"
 
 
-def test_captain_packet_prints_landscape_with_page_one_summary_then_detail(tmp_path):
+def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp_path):
+    """Paul's real-Excel UAT (#84): no shrink-to-fit of everything, no clipped Basis, no orphan opponent
+    headings, no empty bands. Every printed row has an explicit height, so the pages are computable."""
+    from ui.excel_war_room import PACKET_PRINTABLE, PACKET_TITLE_ROWS, PACKET_WIDTHS, _width_pt
     wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="2026-10-07 18:00 UTC",
                                       viewer_member_external_id="1001"))
     sheet = wb["Captain Packet"]
-    assert sheet.print_area.startswith("'Captain Packet'!$A$1:$L$")
-    assert sheet.page_setup.orientation == "landscape"
-    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 0)  # detail continues on more pages
-    assert sheet.print_title_rows == "$1:$2"
-    breaks = [b.id for b in sheet.row_breaks.brk]
-    assert len(breaks) == 1
-    page_two = next(c.row for c in sheet["A"] if c.value == "Scouting cards")
-    assert breaks == [page_two - 1]
+    last = int(sheet.print_area.split("$")[-1])
+    assert sheet.print_area == f"'Captain Packet'!$A$1:$L${last}"
+    assert sheet.page_setup.orientation == "landscape" and sheet.print_title_rows == "$1:$2"
+    assert not sheet.sheet_properties.pageSetUpPr.fitToPage          # one fixed scale, not fit-to-width
+    scale = sheet.page_setup.scale / 100
+    width = sum(_width_pt(w) for w in PACKET_WIDTHS)
+    assert width * scale <= PACKET_PRINTABLE[0]
+    starts = {c.value: c.row for c in sheet["A"] if isinstance(c.value, str)}
+    cards = next(r for v, r in starts.items() if v.startswith("Scouting cards"))
+    evidence = next(r for v, r in starts.items() if v.startswith("Evidence by opponent"))
+    meetings = next(r for v, r in starts.items() if v.startswith("Meeting history"))
+    assert [b.id for b in sheet.row_breaks.brk] == [cards - 1, evidence - 1, meetings - 1]
+    for row in range(1, last + 1):
+        assert sheet.row_dimensions[row].height, row                  # nothing left to auto-height
+    hpt = lambda a, b: sum(sheet.row_dimensions[r].height for r in range(a, b + 1))
+    title = sum(PACKET_TITLE_ROWS)
+    pages = [hpt(1, cards - 1), title + hpt(cards, evidence - 1), (title * 2 + hpt(evidence, meetings - 1)) / 2,
+             title + hpt(meetings, last)]
+    for n, page in enumerate(pages, start=1):
+        assert page * scale <= PACKET_PRINTABLE[1] + 0.5, (n, page, scale)
+    assert scale >= 0.75                                               # was ~0.75 with 9pt text before
+    # Card headers are colored only when a card exists (conditional), never as empty bands.
+    header_rows = [r for r in range(cards + 1, evidence) if isinstance(sheet[f"A{r}"].value, str)
+                   and "already played" in sheet[f"A{r}"].value]
+    assert header_rows and all(sheet[f"A{r}"].fill.fgColor.rgb in (None, "00000000") for r in header_rows)
+    # Every evidence line names its own opponent (no separate heading rows that a page break can orphan).
+    ev_rows = [r for r in range(evidence + 3, meetings) if isinstance(sheet[f"A{r}"].value, str)]
+    assert ev_rows and all('"vs "&INDEX(md_OppLabels,P' in sheet[f"A{r}"].value for r in ev_rows)
     assert any(c.value == "OUR TEAM" for c in sheet["A"]) and any(c.value == "OPPONENT" for c in sheet["G"])
-    # Navigation sits outside the printed columns; no input cells live on this sheet.
     assert sheet["N1"].hyperlink is not None and sheet.data_validations.dataValidation == []
-
