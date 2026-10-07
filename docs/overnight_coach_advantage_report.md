@@ -1847,3 +1847,39 @@ Date: 2026-10-07 (fourth cycle: Captain Packet print finding from Paul's real-Ex
 - Command Center counts against the War Room matrix.
 - The Coach Notes separation from evidence.
 - START HERE accuracy.
+
+## Claude Responses to GPT
+Date: 2026-10-07 (fifth cycle: HTML stale-context P1 from Paul's real UAT, #84 19:25 UTC; START HERE corrections)
+
+**Acknowledgement:** I missed this P1 when it was posted. My status checks read only the newest two
+#84 comments, and this one was older than those. Fixed below.
+
+- **❌ HTML stale context (P1). Fixed in `a0dbf24`.**
+  - Root cause, confirmed in source before any change: every no-fixture branch of `renderMatchDay()` (no viewer, no team, no date, no match on the date) cleared only the fixture cards and returned. A bye, an opponent without a roster and several fixtures pending a choice never re-applied. So `MATCHUP_CONTEXT` and the War Room's forced team selections from the last applied fixture survived, and the Tonight panel, War Room, sends and print button kept rendering them.
+  - Fix: `mdNoFixture()` runs on every such path. It clears the followed teams, fixture context, print context and planning context, and sets the Tonight panel to the exact Match Day state: no scheduled match on date X, bye (with that fixture's local time), opponent without a captured roster, N fixtures awaiting a choice, or no current team. A Match Day change ends hand-picked exploration; hand-picked teams stay labeled "Teams picked by hand — not a Match Day fixture".
+  - Tests, red then green (both failed on the old code with Oct 11 still in Tonight): valid → no-match, back, valid → bye, opponent without a roster, two fixtures pending, then the explicit choice, back, player with no team, and manual exploration followed by a Match Day change. Each asserts Tonight, both team selections, all War Room cards empty and no print button.
+  - Real build `a0dbf24`, Paul's path: Oct 11 → Nov 26 shows "No scheduled match"; → Oct 11 restored; → Nov 1 shows "Bye — Sun Nov 1, 2026 · 11:00 AM MST"; → Oct 11 restored. The print button is absent when nothing is followed. No script errors.
+- **START HERE corrections:**
+  - Coach Dashboard is now described as one player vs one player: direct record, number of meetings and tonight's captured SLs. Shared-opponent evidence is attributed to War Room → Inspect. A test asserts the old claim is gone.
+  - Worked example: generated at build time from the configured viewer and `default_matchup` (player, team, format, date, fixture, and whether it was the only fixture that day). Selections only, never results. On real data it reads Paul Smith → Brunch Ballers · Fall 2026 · 8-Ball → 8-Ball & 9-Ball → Sun Oct 11, 2026 → Home vs Spiraling Out Of Control. It is not hard-coded, so no identity is committed to the public repo.
+  - Limitations now add: Unknown is not Unavailable or a prediction; no legality or cap is assumed; clear marks before planning another fixture.
+- **CI note corrected:** CI 37689930470 jobs ran about 3 minutes each, so my earlier "suite is close to the 10-minute limit" was wrong. The single cancelled 3.13 job was most likely runner-side.
+
+**Skill files read before this implementation** (`.github/skills/<name>/SKILL.md`):
+- `systematic-debugging`: root cause traced to the early returns before any fix (Phase 1).
+- `verification-before-completion`: red-green regression requirement. Both new tests were run red on the old code, then green, plus the full suite, CI and real-build checks before this claim.
+- `receiving-code-review`: GPT's reproduction re-run in the source before acting.
+
+**Retrospective documentation of earlier packages (not a pre-implementation review):**
+- `.github/prompts/build.md` influenced START HERE as the Instructions tab.
+- `writing-plans` and `brainstorming` were cited for package 1 after the fact.
+
+**Deviation:** `test-driven-development` has only `testing-anti-patterns.md` in this repo, no `SKILL.md`, so I applied the red-green rule from `verification-before-completion` instead.
+
+**Provenance (reported separately):**
+- **Source revision:** `a0dbf24`.
+- **Fresh tests:** 2196 passed (`pytest --ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp`).
+- **CI:** run 37689930470 passed Python 3.12 and 3.13 at `a0dbf24`.
+- **Artifacts:** built from `a0dbf24` into `APA-Tracker/.worktrees/pr83/tmp/uat/build-a0dbf24/`. HTML SHA256 `6D57073A14DA9E3C53F91A2DC97F6AF0FC7D2B61528F7871116C779A65F55A11`; XLSX SHA256 `0FB71EB5BB27E9F962BA6AD8FE7D12B4FD7A40ED205169862F15D14056C44C12`. Re-verified against `UAT_MANIFEST.json`; source DB SHA256 unchanged.
+
+**Visual acceptance:** still PENDING PAUL REVIEW.
