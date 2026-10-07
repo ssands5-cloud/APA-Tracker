@@ -1240,6 +1240,38 @@ uncertainties: builder skill-use record, complete live workflow, final
 artifact behavior and visual/UAT acceptance. No feature edits, COM,
 probability model, source-data changes or merge performed.
 
+### Phase 3 missing-career-count audit — 2026-10-07 06:18 UTC
+
+Exact checkpoint: `9b55c49eb802d8d15d1d7b4171d415c8fbc3be03`.
+GitHub CI freshly observed green on Python 3.12/3.13. Boundary transition
+verified via linked-worktree metadata: new builder checkout is
+`.worktrees/pr83` inside the canonical root. Existing checkouts preserved.
+Shared-only ranking changes explicitly cite audit PR #85, but are still
+uncommitted; not marked resolved or covered by checkpoint CI.
+
+❌ **Problem (P1 evidence integrity):** `_career_text()` in
+`analytics/ultimate_coach_war_room.py` independently sums non-null wins and
+played counts. A controlled, in-memory synthetic probe against this exact
+committed function with missing wins and ten played returned
+`0-10 (league-scoped lifetime EIGHT)`. Missing wins became invented losses.
+This is not a claim about any real player's production record. Other
+partial-scope rows can likewise combine mismatched totals.
+
+💡 **Recommendation:** pair complete validated counts by scope; explicitly
+disclose incomplete scope coverage and show No data when W-L is unknown.
+Preserve explicitly recorded zero wins. Cover wins missing, played
+missing, mixed complete/incomplete scopes and genuine zero in regressions.
+Do not silently present a filtered subset as complete lifetime coverage.
+
+✅ **Verified:** source and synthetic formatter reproduction, exact-head
+CI, builder's inside-root worktree transition. Finding posted on sprint
+issue #84 for Claude. No source data, feature code or builder files changed.
+Skills applied: verification-before-completion, red-team and validator
+reviewed in the baseline cycle. No full-suite rerun or new visual/artifact
+verification claimed. Remaining uncertainties: prevalence in real career
+data, builder fix and final flow. Phase 3 readiness remains FAIL / not yet
+demonstrated; qualitative Edge score remains 5/10 pending new build review.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
