@@ -382,11 +382,11 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
 
             matchups = page.locator("#team-matchups").inner_text()
             # Cam: Ann has 2 direct wins, must be the strongest-evidence pick.
-            assert ("Ann Archer (APA record ID 1) — strongest evidence-backed option: 2-0 direct (2 meetings) "
+            assert ("Ann Archer (APA record ID 1) — ranks first on direct evidence: 2-0 direct (2 meetings) "
                     "vs Cam Cole (APA record ID 3)") in matchups
             # Drew: no direct history for anyone, but Bea shares Evan with Drew.
-            assert ("Bea Baker (APA record ID 2) — no direct history vs Drew Diaz (APA record ID 4); best-supported by "
-                    "1 shared-opponent result (1-0 vs those shared opponents)") in matchups
+            assert ("Bea Baker (APA record ID 2) — none of our roster has met Drew Diaz (APA record ID 4) directly; "
+                    "ranks first on shared-opponent evidence: 1 shared opponent (ours 1-0 vs those shared opponents)") in matchups
             # Finn: nobody on our roster has any direct or shared evidence at all.
             assert "No direct or shared-opponent evidence for any of our roster against Finn Frost (APA record ID 5)" in matchups
 
@@ -1045,7 +1045,9 @@ def test_focused_printable_matchup_shows_fixture_and_both_labeled_rosters_only(t
             page.emulate_media(media="print")
             visible = lambda sel: page.locator(sel).first.is_visible()
             assert visible("#matchup-head") and visible("#team-rosters") and visible("#matchup-notes")
-            for hidden in ("#match-day-card", "#player-section", "#trust-section", "#team-matchups", "header.hero",
+            assert visible("#team-comparison") and visible("#team-matchups")  # comparison + ranking are printed
+            assert page.evaluate("getComputedStyle(document.getElementById('team-matchups')).breakBefore") == "page"
+            for hidden in ("#match-day-card", "#player-section", "#trust-section", "header.hero",
                            "#team-section", "#print-matchup"):
                 assert not visible(hidden), hidden
             # Leaving print mode restores the normal page.
@@ -1077,10 +1079,11 @@ def test_changing_teams_by_hand_drops_the_fixture_context(tmp_path: Path):
 
 
 
-def test_focused_print_of_two_full_rosters_fits_one_landscape_page(tmp_path: Path):
+def test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_compact(tmp_path: Path):
     payload = _team_payload()
-    for team in ("Sharks", "Falcons"):
-        for n in range(9):
+    # Real rosters top out at 9 players: Sharks 2 + 7 = 9, Falcons 3 + 5 = 8.
+    for team, extra in (("Sharks", 7), ("Falcons", 5)):
+        for n in range(extra):
             pid = 100 + len(payload["players"])
             payload["players"].append({
                 "id": pid, "external_id": str(3000000 + pid), "name": f"Longname Player-{team}-{n} Hyphenated",
@@ -1100,6 +1103,138 @@ def test_focused_print_of_two_full_rosters_fits_one_landscape_page(tmp_path: Pat
             page.evaluate("document.body.classList.add('print-matchup')")
             page.emulate_media(media="print")
             pdf = page.pdf(prefer_css_page_size=True, print_background=True)
-            assert len(re.findall(rb"/Type\s*/Page[^s]", pdf)) == 1
+            pages = len(re.findall(rb"/Type\s*/Page[^s]", pdf))
+            assert 2 <= pages <= 5, pages  # page 1: matchup + comparison; then the compact two-column ranking
         finally:
             browser.close()
+
+
+def _ranking_rows(page, block_index):
+    rows = page.locator(f"#rank-block-{block_index} tbody tr").all_inner_texts()
+    return [r.split("\t") for r in rows]
+
+
+def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_path: Path):
+    path = tmp_path / "uc_rank.html"
+    path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
+            heads = page.locator(".rank-block h3").all_inner_texts()
+            # Opponents in roster order (SL high to low): Drew 6, Finn 4, Cam 3.
+            assert heads == [
+                "vs Drew Diaz (APA record ID 4) · SL 6 · 1 recorded game in 8-Ball",
+                "vs Finn Frost (APA record ID 5) · SL 4 · 0 recorded games in 8-Ball",
+                "vs Cam Cole (APA record ID 3) · SL 3 · 2 recorded games in 8-Ball",
+            ]
+            assert _ranking_rows(page, 0) == [
+                ["1", "Bea Baker (APA record ID 2)", "5", "No direct meetings",
+                 "1 shared opponent · ours 1-0 (1 game) · theirs 0-1 (1 game)",
+                 "Shared-opponent results only (no direct meetings)"],
+                ["—", "Ann Archer (APA record ID 1)", "4", "No direct meetings", "No shared opponents",
+                 "No direct or shared-opponent evidence"],
+            ]
+            notes = page.locator(".rank-block p.muted").all_inner_texts()
+            assert notes[0] == "1 of 2 of our players have direct or shared-opponent evidence against this opponent."
+            assert notes[1] == "No recorded 8-Ball games for this opponent in the verified evidence — nothing to rank on."
+            assert _ranking_rows(page, 2)[0] == ["1", "Ann Archer (APA record ID 1)", "4", "2-0 (2 meetings)",
+                                                "No shared opponents", "Direct record"]
+            text = page.locator("#team-matchups").inner_text()
+            assert "not a win probability" in text and "not a guaranteed or optimal lineup" in text
+            assert "ranks ahead of shared-opponent results even when it is small or a loss" in text
+            assert "%" not in text  # records and sample counts only -- no odds-like percentages
+            comparison = page.locator("#team-comparison").inner_text()
+            assert "Players rostered\t2\t3" in comparison
+            assert "Skill total (captured SLs only)\t9\t13" in comparison
+            assert "Recorded 8-Ball games (all opponents)\t3\t3" in comparison
+            assert "Players with no recorded 8-Ball games\t0\t1" in comparison
+            assert "2 games · our players 2-0" in comparison
+            assert "1 of 3" in comparison
+            assert "1 direct · 1 shared-opponent only · 4 no evidence (6 total)" in comparison
+        finally:
+            browser.close()
+
+
+def _tie_payload():
+    payload = _team_payload()
+    # Gia joins Sharks with the same 2-0 direct record against Cam as Ann.
+    payload["players"].append({"id": 9, "external_id": "9", "name": "Gia Green", "current_skill_level": 4,
+                               "current_matches_won": 1, "current_matches_played": 2, "career_stats": [],
+                               "team_history": [{"team_external_id": "Sharks", "team_name": "Sharks", "division_id": "d1",
+                                                 "session_name": "Spring 2026", "is_current": True, "skill_level": 4,
+                                                 "matches_won": 1, "matches_played": 2}]})
+    for match_id in (30, 31):
+        payload["evidence"] += [
+            {"player_id": 9, "opponent_id": 3, "match_id": match_id, "match_external_id": str(match_id),
+             "match_date": "2026-03-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "W",
+             "own_skill_level": 4, "opponent_skill_level": 3, "points_earned": 3, "nine_ball_points": None},
+            {"player_id": 3, "opponent_id": 9, "match_id": match_id, "match_external_id": str(match_id),
+             "match_date": "2026-03-01T19:00:00-07:00", "session_name": "Spring 2026", "format": "EIGHT", "result": "L",
+             "own_skill_level": 3, "opponent_skill_level": 4, "points_earned": None, "nine_ball_points": None},
+        ]
+    return payload
+
+
+def test_ties_are_marked_and_explained_never_broken_silently(tmp_path: Path):
+    path = tmp_path / "uc_tie.html"
+    path.write_text(render(_tie_payload(), built_at="test"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
+            cam = _ranking_rows(page, 2)
+            assert [r[0] for r in cam[:2]] == ["1=", "1="]
+            assert cam[0][5] == ("Direct record · Tied with Gia Green (APA record ID 9) — same evidence; "
+                                 "the ranking can't separate them")
+            assert cam[1][5] == ("Direct record · Tied with Ann Archer (APA record ID 1) — same evidence; "
+                                 "the ranking can't separate them")
+            assert cam[2][0] == "—"  # Bea: no evidence, unranked
+            glance = page.locator("#team-matchups table").first.inner_text()
+            assert ("Insufficient evidence to distinguish Ann Archer (APA record ID 1) / Gia Green (APA record ID 9) "
+                    "against Cam Cole (APA record ID 3) — identical direct records (2-0, 2 meetings each).") in glance
+        finally:
+            browser.close()
+
+
+def test_html_ranking_matches_the_shared_python_module_exactly(tmp_path: Path):
+    """The HTML computes the ranking live in JavaScript; the Excel workbook
+    uses analytics.ultimate_coach_matchup_evidence. Same rosters -> same
+    order, rank labels, texts and comparison."""
+    from analytics.ultimate_coach_excel_payload import build_player_vs_player_pairs, build_team_rosters
+    from analytics.ultimate_coach_matchup_evidence import build_pair_index, matchup_evidence, members_by_scope
+
+    payload = _tie_payload()
+    path = tmp_path / "uc_cross.html"
+    path.write_text(render(payload, built_at="test"), encoding="utf-8")
+    members = members_by_scope(build_team_rosters(payload), payload["players"])
+    expected = matchup_evidence(members["Sharks|d1|Spring 2026"], members["Falcons|d1|Spring 2026"],
+                                build_pair_index(build_player_vs_player_pairs(payload)), "EIGHT")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
+            for i, block in enumerate(expected["opponents"]):
+                assert page.locator(f"#rank-block-{i} h3").inner_text().startswith("vs " + block["opponent_label"])
+                assert page.locator(f"#rank-block-{i} p.muted").inner_text() == block["note"]
+                got = [(r[0], r[1], r[3], r[4], r[5]) for r in _ranking_rows(page, i)]
+                want = [(r["rank"], r["player"], r["direct_text"], r["shared_text"], r["basis"]) for r in block["rows"]]
+                assert got == want
+            comparison = page.locator("#team-comparison").inner_text()
+            c = expected["comparison"]
+            for value in (c["direct_meetings"], c["opponents_met"], c["pairings"]):
+                assert value in comparison
+            for key in ("rostered", "captured_sl", "sl_total", "games", "no_games"):
+                assert f"\t{c['ours'][key]}\t{c['theirs'][key]}" in comparison
+        finally:
+            browser.close()
+

@@ -296,6 +296,11 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 .matchup-facts dt {{ color:var(--muted); }}
 .matchup-facts dd {{ margin:0; overflow-wrap:anywhere; }}
 .matchup-notes ul {{ margin:6px 0 8px; padding-left:18px; color:var(--muted); font-size:13px; }}
+.compare-table td:first-child {{ font-weight:600; color:#3f4a44; }}
+.rank-block {{ margin-top:16px; }}
+.rank-block h3 {{ margin-bottom:2px; }}
+.rank-table td:first-child {{ font-weight:800; white-space:nowrap; }}
+.rank-table tr.tier-1 td {{ color:var(--muted); }}
 @media(max-width:760px) {{
   .matchup-teams {{ grid-template-columns:1fr; }}
   .matchup-vs {{ display:none; }}
@@ -333,6 +338,16 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .table-wrap {{ overflow:visible; }}
   body.print-matchup .matchup-notes h3 {{ font-size:12px; margin:0 0 2px; }}
   body.print-matchup .matchup-notes ul {{ font-size:10px; margin:2px 0; columns:2; column-gap:18px; }}
+  /* The evidence ranking starts on its own page; each opponent's table stays together. */
+  body.print-matchup #team-matchups {{ break-before:page; }}
+  body.print-matchup .rank-blocks {{ columns:2; column-gap:14px; }}
+  body.print-matchup .rank-block {{ break-inside:avoid; margin:0 0 8px; }}
+  body.print-matchup .rank-block h3 {{ font-size:11px; margin:0; }}
+  body.print-matchup .rank-block .muted {{ font-size:9.5px; }}
+  body.print-matchup .rank-table {{ font-size:9px; }}
+  body.print-matchup .rank-table th,body.print-matchup .rank-table td {{ padding:1px 3px; white-space:normal; }}
+  body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
+  body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
 </style></head>
 <body>
@@ -377,9 +392,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <section id="matchup-print" aria-label="Printable matchup">
 <div id="matchup-head" class="card matchup-head"></div>
 <div id="team-rosters" class="grid"></div>
+<div id="team-comparison" class="card"></div>
+<div id="team-matchups" class="card"></div>
 <div id="matchup-notes" class="card matchup-notes"></div>
 </section>
-<div id="team-matchups" class="card"></div>
 
 <div id="player-section">
 <div class="section-title"><h2>Player vs Player</h2><p>Direct and shared-opponent history between any two verified players.</p></div>
@@ -718,51 +734,114 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>APA record ID</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
-  function sharedOpponentRecord(rowsA,rowsB) {{
-    var oppRowsA={{}};
-    rowsA.forEach(function(r){{var id=String(val(r,"opponent_id"));(oppRowsA[id]||(oppRowsA[id]=[])).push(r);}});
-    var oppIdsB={{}};
-    rowsB.forEach(function(r){{oppIdsB[String(val(r,"opponent_id"))]=true;}});
-    var shared=[],combined=[];
-    Object.keys(oppRowsA).forEach(function(id){{
-      if(oppIdsB[id]) {{ shared.push(id); combined=combined.concat(oppRowsA[id]); }}
-    }});
-    return {{sharedCount:shared.length,record:record(combined)}};
+  // ---- Match Night evidence: team comparison + ranking ----
+  // Mirrors analytics/ultimate_coach_matchup_evidence.py exactly -- same
+  // ordering rule, tie handling and texts (a browser test cross-checks the
+  // two). Recorded facts only: not win odds, not a guaranteed lineup.
+  var OPP_MAP_CACHE={{}};
+  function oppMap(pid,fmt){{
+    var key=String(pid)+"|"+fmt;
+    if(OPP_MAP_CACHE[key]) return OPP_MAP_CACHE[key];
+    var m={{}};
+    rowsFor(pid,fmt).forEach(function(r){{var id=String(val(r,"opponent_id"));var e=m[id]||(m[id]={{w:0,g:0}});e.g+=1;if(val(r,"result")==="W") e.w+=1;}});
+    OPP_MAP_CACHE[key]=m;
+    return m;
   }}
-
-  function bestSendFor(opponent,ourRoster,fmt) {{
-    var oppRows=rowsFor(opponent.id,fmt);
-    var candidates=ourRoster.map(function(p){{
-      var direct=rowsFor(p.id,fmt).filter(function(r){{return String(val(r,"opponent_id"))===String(opponent.id);}});
-      if(direct.length) {{
-        var dr=record(direct);
-        return {{player:p,kind:"direct",count:direct.length,record:dr,rank:[3,dr.g?dr.w/dr.g:0,dr.g]}};
-      }}
-      var shared=sharedOpponentRecord(rowsFor(p.id,fmt),oppRows);
-      if(shared.sharedCount) {{
-        var sr=shared.record;
-        return {{player:p,kind:"shared",sharedCount:shared.sharedCount,record:sr,rank:[2,sr.g?sr.w/sr.g:0,shared.sharedCount]}};
-      }}
-      return {{player:p,kind:"none",rank:[1,0,0]}};
-    }});
-    candidates.sort(function(x,y){{
-      for(var i=0;i<3;i++) {{ if(y.rank[i]!==x.rank[i]) return y.rank[i]-x.rank[i]; }}
-      return 0;
-    }});
-    return candidates;
+  function plural(n,word){{return n+" "+word+(n===1?"":"s");}}
+  function wlText(w,g){{return w+"-"+(g-w);}}
+  function fmtLabel(fmt){{return FORMAT_LABELS[fmt]||fmt||"this format";}}
+  function slText(m){{return m.skill_level===null||m.skill_level===undefined?"—":(m.skill_level+(m.skill_level_is_live?"":"*"));}}
+  function memberOrder(x,y){{
+    var xs=x.skill_level,ys=y.skill_level,xn=xs===null||xs===undefined,yn=ys===null||ys===undefined;
+    if(xn!==yn) return xn?1:-1;
+    if(!xn&&xs!==ys) return ys-xs;
+    var a=String(x.name).toLowerCase(),b=String(y.name).toLowerCase();
+    if(a!==b) return a<b?-1:1;
+    var ea=String(x.external_id===null||x.external_id===undefined?"":x.external_id),eb=String(y.external_id===null||y.external_id===undefined?"":y.external_id);
+    return ea<eb?-1:(ea>eb?1:0);
   }}
-
-  function explainSend(opponent,candidates) {{
-    var best=candidates[0];
-    if(best.kind==="direct") {{
-      return esc(playerRef(best.player))+' — strongest evidence-backed option: '+best.record.w+'-'+best.record.l+' direct ('+best.count+' meeting'+(best.count===1?'':'s')+') vs '+esc(playerRef(opponent))+'.';
+  function rankKeyCmp(a,b){{
+    if(a.tier!==b.tier) return b.tier-a.tier;
+    var f=b.rw*a.rg-a.rw*b.rg;
+    if(f!==0) return f;
+    if(a.n!==b.n) return b.n-a.n;
+    if(a.extra!==b.extra) return b.extra-a.extra;
+    return 0;
+  }}
+  function rankVsOpponent(ours,opp,fmt){{
+    var om=oppMap(opp.id,fmt),oppTotal=0;
+    Object.keys(om).forEach(function(k){{oppTotal+=om[k].g;}});
+    var cands=ours.map(function(m){{
+      var mm=oppMap(m.id,fmt),d=mm[String(opp.id)];
+      var shared=Object.keys(mm).filter(function(k){{return !!om[k];}});
+      var ow=0,og=0,tw=0,tg=0;
+      shared.forEach(function(k){{ow+=mm[k].w;og+=mm[k].g;tw+=om[k].w;tg+=om[k].g;}});
+      var c={{member:m,direct:(d&&d.g>0)?d:null,shared:shared.length,ow:ow,og:og,tw:tw,tg:tg}};
+      if(c.direct) {{c.tier=3;c.rw=d.w;c.rg=d.g;c.n=d.g;c.extra=0;}}
+      else if(shared.length&&og>0) {{c.tier=2;c.rw=ow;c.rg=og;c.n=shared.length;c.extra=og;}}
+      else {{c.tier=1;c.rw=0;c.rg=1;c.n=0;c.extra=0;}}
+      return c;
+    }});
+    cands.sort(function(a,b){{var k=rankKeyCmp(a,b);return k!==0?k:memberOrder(a.member,b.member);}});
+    var rows=[],i=0,position=0;
+    while(i<cands.length){{
+      var j=i;
+      while(j+1<cands.length&&rankKeyCmp(cands[j+1],cands[i])===0) j++;
+      var group=cands.slice(i,j+1);
+      position+=group.length;
+      var start=position-group.length+1;
+      group.forEach(function(c){{
+        var ranked=c.tier!==1,tied=ranked&&group.length>1;
+        var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no direct meetings)":"No direct or shared-opponent evidence");
+        if(tied) basis+=" · Tied with "+group.filter(function(o){{return o!==c;}}).map(function(o){{return playerRef(o.member);}}).join(", ")+" — same evidence; the ranking can't separate them";
+        rows.push({{
+          rank:ranked?(tied?start+"=":String(start)):"—",
+          member:c.member,player:playerRef(c.member),tier:c.tier,c:c,
+          direct_text:c.direct?wlText(c.direct.w,c.direct.g)+" ("+plural(c.direct.g,"meeting")+")":"No direct meetings",
+          shared_text:c.shared?plural(c.shared,"shared opponent")+" · ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+") · theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"No shared opponents",
+          basis:basis
+        }});
+      }});
+      i=j+1;
     }}
-    if(best.kind==="shared") {{
-      var tie=candidates.filter(function(c){{return c.kind==="shared"&&c.sharedCount===best.sharedCount&&c.record.g===best.record.g;}});
-      if(tie.length>1) return 'Insufficient evidence to distinguish '+tie.map(function(c){{return esc(playerRef(c.player));}}).join(' / ')+' against '+esc(playerRef(opponent))+' — no direct history; '+best.sharedCount+' shared opponent(s) each, evidence too similar to rank.';
-      return esc(playerRef(best.player))+' — no direct history vs '+esc(playerRef(opponent))+'; best-supported by '+best.sharedCount+' shared-opponent result'+(best.sharedCount===1?'':'s')+' ('+best.record.w+'-'+best.record.l+' vs those shared opponents).';
+    var withEvidence=rows.filter(function(r){{return r.tier!==1;}}).length;
+    var note=!ours.length?"Our roster has no current players captured — nothing to rank."
+      :(oppTotal===0?"No recorded "+fmtLabel(fmt)+" games for this opponent in the verified evidence — nothing to rank on."
+      :withEvidence+" of "+ours.length+" of our players have direct or shared-opponent evidence against this opponent.");
+    return {{opponent:opp,opponent_label:playerRef(opp),opponent_sample:plural(oppTotal,"recorded game")+" in "+fmtLabel(fmt),opponent_games:oppTotal,note:note,rows:rows,with_evidence:withEvidence}};
+  }}
+  function teamComparison(ours,theirs,fmt){{
+    function side(members){{
+      var known=members.filter(function(m){{return m.skill_level!==null&&m.skill_level!==undefined;}});
+      var total=known.reduce(function(sum,m){{return sum+m.skill_level;}},0);
+      var games=members.map(function(m){{var om=oppMap(m.id,fmt),g=0;Object.keys(om).forEach(function(k){{g+=om[k].g;}});return g;}});
+      return {{rostered:String(members.length),captured_sl:known.length+" of "+members.length,
+        sl_total:known.length===members.length?String(total):total+" (from "+known.length+" of "+members.length+")",
+        games:String(games.reduce(function(sum,g){{return sum+g;}},0)),
+        no_games:String(games.filter(function(g){{return g===0;}}).length)}};
     }}
-    return 'No direct or shared-opponent evidence for any of our roster against '+esc(playerRef(opponent))+' in this format yet.';
+    var dw=0,dg=0,met={{}},direct=0,sharedOnly=0,none=0;
+    ours.forEach(function(m){{
+      var mm=oppMap(m.id,fmt);
+      theirs.forEach(function(q){{
+        var rec=mm[String(q.id)];
+        if(rec&&rec.g>0) {{dw+=rec.w;dg+=rec.g;met[String(q.id)]=true;direct++;}}
+        else {{var qm=oppMap(q.id,fmt); if(Object.keys(mm).some(function(k){{return !!qm[k];}})) sharedOnly++; else none++;}}
+      }});
+    }});
+    return {{format:fmtLabel(fmt),ours:side(ours),theirs:side(theirs),
+      direct_meetings:dg?plural(dg,"game")+" · our players "+wlText(dw,dg):"No direct meetings between these rosters",
+      opponents_met:Object.keys(met).length+" of "+theirs.length,
+      pairings:direct+" direct · "+sharedOnly+" shared-opponent only · "+none+" no evidence ("+(ours.length*theirs.length)+" total)"}};
+  }}
+  function evidenceLeader(b){{
+    var opp=b.opponent,rows=b.rows;
+    if(!rows.length||rows[0].tier===1) return 'No direct or shared-opponent evidence for any of our roster against '+playerRef(opp)+' in this format yet.';
+    var top=rows.filter(function(r){{return r.rank===rows[0].rank;}}),c=rows[0].c;
+    if(top.length>1) return 'Insufficient evidence to distinguish '+top.map(function(r){{return r.player;}}).join(' / ')+' against '+playerRef(opp)+' — '
+      +(c.tier===3?'identical direct records ('+wlText(c.rw,c.rg)+', '+plural(c.rg,'meeting')+' each)':'identical shared-opponent evidence ('+plural(c.n,'shared opponent')+', ours '+wlText(c.ow,c.og)+')')+'.';
+    if(c.tier===3) return rows[0].player+' — ranks first on direct evidence: '+wlText(c.rw,c.rg)+' direct ('+plural(c.rg,'meeting')+') vs '+playerRef(opp)+'.';
+    return rows[0].player+' — none of our roster has met '+playerRef(opp)+' directly; ranks first on shared-opponent evidence: '+plural(c.n,'shared opponent')+' (ours '+wlText(c.ow,c.og)+' vs those shared opponents).';
   }}
 
   // ---- Matchup header + focused print ----
@@ -802,6 +881,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       +'<li>Skill totals count only players with a captured skill level — missing players are excluded, never counted as 0. Totals are informational, not a 5-player lineup cap check (the commonly used APA default is '+STANDARD_SKILL_CAP+'; verify your division\\'s rules).</li>'
       +'<li>Rosters are each team\\'s CURRENT captured roster, not a reconstruction of who actually played on any particular date.</li>'
       +'<li>Players are identified by APA record ID — not by name, and not by the league card number printed on a member card.</li>'
+      +'<li>The evidence ranking orders our players by recorded direct and shared-opponent results only; ties and missing evidence are labeled. It is not win odds and not a guaranteed or optimal lineup.</li>'
       +'<li>No win probability is shown: NOT CALIBRATED.</li></ul>'
       +'<p class="muted">'+esc(BUILT_LABEL)+'</p>';
     var btn=document.getElementById("print-matchup");
@@ -816,22 +896,43 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     document.getElementById("team-rosters").innerHTML=
       '<div class="card">'+rosterTable("Our team",ta,fmt,ctx?sideLabel(ctx.ourSide):"")+'</div>'+
       '<div class="card">'+rosterTable("Opponent",tb,fmt,ctx?sideLabel(ctx.ourSide==="home"?"away":"home"):"")+'</div>';
-    var out=document.getElementById("team-matchups");
+    var cmpEl=document.getElementById("team-comparison"),out=document.getElementById("team-matchups");
     if(!ta||!tb) {{
-      out.innerHTML='<h2>Recommended sends</h2><p class="muted">Choose both teams to see evidence-backed send recommendations per opponent player.</p>';
+      cmpEl.innerHTML="";
+      out.innerHTML='<h2>Evidence ranking vs each opponent</h2><p class="muted">Choose both teams to see the evidence ranking of our players against each opponent player.</p>';
       return;
     }}
+    var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
+    var cmp=teamComparison(ours,theirs,fmt);
+    cmpEl.innerHTML='<h2>Team comparison</h2><p class="muted">Format: '+esc(cmp.format)+' · recorded facts from identity-verified games — not a prediction.</p>'
+      +'<div class="table-wrap"><table class="compare-table"><thead><tr><th></th><th>Our team: '+esc(teamDisplay(ta))+'</th><th>Opponent: '+esc(teamDisplay(tb))+'</th></tr></thead><tbody>'
+      +[["Players rostered","rostered"],["Players with a captured SL","captured_sl"],["Skill total (captured SLs only)","sl_total"],
+        ["Recorded "+cmp.format+" games (all opponents)","games"],["Players with no recorded "+cmp.format+" games","no_games"]].map(function(r){{
+        return '<tr><td>'+esc(r[0])+'</td><td>'+esc(cmp.ours[r[1]])+'</td><td>'+esc(cmp.theirs[r[1]])+'</td></tr>';
+      }}).join("")
+      +'</tbody></table></div><h3>Between the two rosters</h3><dl class="matchup-facts">'
+      +'<dt>Direct meetings between the rosters</dt><dd>'+esc(cmp.direct_meetings)+'</dd>'
+      +'<dt>Opponent players our roster has met directly</dt><dd>'+esc(cmp.opponents_met)+'</dd>'
+      +'<dt>Player pairings by evidence</dt><dd>'+esc(cmp.pairings)+'</dd></dl>';
     if(!ta.players.length||!tb.players.length) {{
-      out.innerHTML='<h2>Recommended sends</h2><p class="muted">One of these rosters has no current players captured — insufficient roster data to recommend sends.</p>';
+      out.innerHTML='<h2>Evidence ranking vs each opponent</h2><p class="muted">One of these rosters has no current players captured — insufficient roster data to rank.</p>';
       return;
     }}
-    var rows=tb.players.map(function(opp){{
-      var candidates=bestSendFor(opp,ta.players,fmt);
-      return '<tr><td>'+esc(opp.name)+(opp.skill_level===null||opp.skill_level===undefined?'':' (SL '+opp.skill_level+')')+'<span class="id-line">APA record ID '+esc(recordIdText(opp))+'</span></td><td>'+explainSend(opp,candidates)+'</td></tr>';
+    var blocks=theirs.map(function(opp){{return rankVsOpponent(ours,opp,fmt);}});
+    var glance=blocks.map(function(b){{
+      return '<tr><td>'+esc(b.opponent.name)+(b.opponent.skill_level===null||b.opponent.skill_level===undefined?'':' (SL '+b.opponent.skill_level+')')+'<span class="id-line">APA record ID '+esc(recordIdText(b.opponent))+'</span></td><td>'+esc(evidenceLeader(b))+'</td></tr>';
     }}).join("");
-    out.innerHTML='<h2>Recommended sends</h2>'+
-      '<p class="muted">Per opponent player, the best-supported send from our roster. Captain-assistance only — never a solved optimal lineup and never a win-probability claim; probability_publication stays FORBIDDEN throughout.</p>'+
-      '<div class="table-wrap"><table><thead><tr><th>Opponent player</th><th>Suggested send &amp; evidence</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    var detail=blocks.map(function(b,bi){{
+      return '<div class="rank-block" id="rank-block-'+bi+'"><h3>vs '+esc(b.opponent_label)+' · SL '+esc(slText(b.opponent))+' · '+esc(b.opponent_sample)+'</h3><p class="muted">'+esc(b.note)+'</p>'
+        +'<div class="table-wrap"><table class="rank-table"><thead><tr><th>Rank</th><th>Our player (APA record ID)</th><th>SL</th><th>Direct record (meetings)</th><th>Shared-opponent evidence (samples)</th><th>Basis · ties · missing evidence</th></tr></thead><tbody>'
+        +b.rows.map(function(r){{return '<tr class="tier-'+r.tier+'"><td>'+esc(r.rank)+'</td><td>'+esc(r.player)+'</td><td>'+esc(slText(r.member))+'</td><td>'+esc(r.direct_text)+'</td><td>'+esc(r.shared_text)+'</td><td>'+esc(r.basis)+'</td></tr>';}}).join("")
+        +'</tbody></table></div></div>';
+    }}).join("");
+    out.innerHTML='<h2>Evidence ranking vs each opponent</h2>'
+      +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
+      +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (by our player\\'s record against opponents both players have faced, then more shared opponents, then more games); players with no evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
+      +'<h3>At a glance</h3><div class="table-wrap"><table><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
+      +'<div class="rank-blocks">'+detail+'</div>';
   }}
   renderTeamMatchups();
 

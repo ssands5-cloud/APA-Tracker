@@ -289,3 +289,93 @@ def test_print_matchup_without_a_selection_explains_what_to_do(tmp_path):
     assert book.display(PM, "A7") == "Not chosen — pick your team on Match Day (step 3)."
     assert book.display(PM, "G7") == "Not chosen — pick a fixture on Match Day."
     assert _print_cells(book, 10) == ["", "", "", "", ""]
+
+
+PAIR_COMPARISON = {
+    "Players rostered": ("2", "1"),
+    "Players with a captured SL": ("2 of 2", "1 of 1"),
+    "Skill total (captured SLs only)": ("9", "3"),
+    "Recorded 8-Ball games (all opponents)": ("2", "2"),
+    "Players with no recorded 8-Ball games": ("1", "0"),
+}
+
+
+def _comparison_rows(book, sheet, top, label_col, ours_col, theirs_col):
+    out = {}
+    for r in range(top + 3, top + 8):
+        out[book.display(sheet, f"{label_col}{r}")] = (book.display(sheet, f"{ours_col}{r}"),
+                                                        book.display(sheet, f"{theirs_col}{r}"))
+    between = [book.display(sheet, f"{ours_col}{r}") for r in range(top + 9, top + 12)]
+    return out, between
+
+
+def _ranking_block(book, sheet, top, block, slots, cols):
+    start = top + 4 + (block - 1) * (3 + slots + 1)
+    header = book.display(sheet, f"A{start}")
+    note = book.display(sheet, f"A{start + 1}")
+    rows = [[book.display(sheet, f"{c}{start + 2 + r}") for c in cols] for r in range(1, slots + 1)]
+    return header, note, rows
+
+
+def _section_row(wb, sheet, title):
+    return next(c.row for c in wb[sheet]["A"] if c.value == title)
+
+
+RANK_TITLE = "Evidence ranking vs each opponent (not win odds)"
+ANN_ROW = ["1", "Ann Archer (APA record ID 1001)", "4", "1-1 (2 meetings)", "No shared opponents", "Direct record"]
+BEA_ROW = ["—", "Bea Baker (APA record ID 1002)", "5*", "No direct meetings", "No shared opponents",
+           "No direct or shared-opponent evidence"]
+
+
+def test_print_matchup_includes_team_comparison_and_evidence_ranking(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()])
+    _choose(book, day=date(2026, 10, 11), team=SHARKS_8)
+    top = _section_row(wb, PM, "Team comparison")
+    assert book.display(PM, f"A{top + 1}").startswith("Format: 8-Ball · recorded facts")
+    assert book.display(PM, f"C{top + 2}") == f"Our team: {SHARKS_8}"
+    assert book.display(PM, f"G{top + 2}") == f"Opponent: {FALCONS_8}"
+    metrics, between = _comparison_rows(book, PM, top, "A", "C", "G")
+    assert metrics == PAIR_COMPARISON
+    assert between == ["2 games · our players 1-1", "1 of 1", "1 direct · 0 shared-opponent only · 1 no evidence (2 total)"]
+
+    rank_top = _section_row(wb, PM, RANK_TITLE)
+    slots = 8
+    header, note, rows = _ranking_block(book, PM, rank_top, 1, slots, "ABCDGI")
+    assert header == "vs Cam Cole (APA record ID 1003) · SL 3 · 2 recorded games in 8-Ball"
+    assert note == "1 of 2 of our players have direct or shared-opponent evidence against this opponent."
+    assert rows[0] == ANN_ROW and rows[1] == BEA_ROW
+    assert set(rows[2]) == {""}
+    header2, _, rows2 = _ranking_block(book, PM, rank_top, 2, slots, "ABCDGI")
+    assert header2 == "" and all(set(r) == {""} for r in rows2)  # Falcons has one rostered player
+    last = int(wb[PM].print_area.rsplit("$", 1)[1])
+    shown = [book.display(PM, f"{c}{r}") for r in range(1, last + 1) for c in "ABCDEGHIJK"]
+    assert 0 not in shown and "#N/A" not in shown and "#REF!" not in shown
+
+
+def test_match_night_shows_comparison_and_ranking_for_a_scheduled_pairing(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()])
+    book.set("Match Night", "B5", SHARKS_8)
+    book.set("Match Night", "C5", FALCONS_8)
+    top = _section_row(wb, "Match Night", "Team comparison")
+    assert book.display("Match Night", f"B{top + 2}") == f"Our team: {SHARKS_8}"
+    metrics, between = _comparison_rows(book, "Match Night", top, "A", "B", "C")
+    assert metrics == PAIR_COMPARISON
+    assert between[0] == "2 games · our players 1-1"
+    rank_top = _section_row(wb, "Match Night", RANK_TITLE)
+    header, note, rows = _ranking_block(book, "Match Night", rank_top, 1, 8, "ABCDEF")
+    assert header.startswith("vs Cam Cole (APA record ID 1003)")
+    assert rows[0] == ANN_ROW and rows[1] == BEA_ROW
+
+
+def test_match_night_explains_when_a_pairing_has_no_precomputed_evidence(tmp_path):
+    book, wb = _book(tmp_path, [_team_match()])
+    book.set("Match Night", "B5", "Sharks · Spring 2026 · 9-Ball")  # no fixture vs Falcons in 9-Ball
+    book.set("Match Night", "C5", FALCONS_8)
+    top = _section_row(wb, "Match Night", "Team comparison")
+    assert book.display("Match Night", f"A{top + 1}").startswith("Team comparison and evidence ranking are precomputed")
+    rank_top = _section_row(wb, "Match Night", RANK_TITLE)
+    assert book.display("Match Night", f"A{rank_top + 3}").startswith("Team comparison and evidence ranking are precomputed")
+    header, _, rows = _ranking_block(book, "Match Night", rank_top, 1, 8, "ABCDEF")
+    assert header == "" and set(rows[0]) == {""}
+    # Ranked rows never show a bare 0 from an empty lookup.
+    assert 0 not in [book.display("Match Night", f"{c}{r}") for r in range(top, rank_top + 20) for c in "ABCDEF"]

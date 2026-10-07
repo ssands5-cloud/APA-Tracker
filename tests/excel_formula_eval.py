@@ -311,9 +311,13 @@ class _Parser:
             self.i += 1
 
     def arg_value(self):
+        # An error can surface deep inside nested calls; rewind to the start
+        # of this argument before skipping it so parsing stays in sync.
+        start = self.i
         try:
             return self.comparison()
         except ExcelError as exc:
+            self.i = start
             self.skip_arg()
             return exc
 
@@ -358,6 +362,8 @@ class _Parser:
             if self.peek()[1] == ",":
                 self.take(",")
         self.take(")")
+        if name == "ISNUMBER" and len(args) == 1 and isinstance(args[0], ExcelError):
+            return False  # Excel: ISNUMBER(#N/A) is FALSE, not an error
         for a in args:
             if isinstance(a, ExcelError):
                 raise a

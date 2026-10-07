@@ -14,7 +14,10 @@ Sheets (user-facing first):
                        chosen on Match Day: clearly labeled OUR TEAM and
                        OPPONENT rosters (name + APA record ID), with every
                        missing-data disclosure.
-    Match Night        Any two teams side by side (roster lists + totals).
+    Match Night        Any two teams side by side: roster lists + totals, a team
+                       comparison, and an evidence ranking of our players
+                       against each opponent player (precomputed for every
+                       pairing with a scheduled fixture).
     Coach Dashboard    Two player dropdowns + a format dropdown; pulls the
                        real direct-evidence record for that exact pair, or
                        discloses "no recorded direct meeting" -- never a
@@ -23,6 +26,9 @@ Sheets (user-facing first):
                        value pre-rendered for display ("No data", "Bye -- no
                        opponent", scores as text), AutoFilter-ready.
     Schedule Keys      Static lookup keys driving Match Day's fixture list.
+    Team Comparison / Matchup Evidence
+                       Precomputed comparison + ranking blocks per directed
+                       team pairing (analytics.ultimate_coach_matchup_evidence).
     Team Rosters       One row per (team scope, player) current membership.
     Teams              One row per current team scope.
     Player Teams       Each verified player's current team scopes, keyed for
@@ -62,6 +68,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.hyperlink import Hyperlink
+from openpyxl.worksheet.pagebreak import Break
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -69,6 +76,12 @@ from analytics.ultimate_coach_excel_payload import (
     build_player_vs_player_pairs,
     build_team_rosters,
     build_teams_summary,
+)
+from analytics.ultimate_coach_matchup_evidence import (
+    build_pair_index,
+    fixture_scope_pairs,
+    matchup_evidence,
+    members_by_scope,
 )
 from analytics.ultimate_coach_match_day import (
     DEFAULT_MATCH_DAY_TIMEZONE,
@@ -114,7 +127,8 @@ TABLE_STYLE = "TableStyleMedium7"  # green, matches the felt palette
 NAV_SHEETS = ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard", "Schedule", "Team Rosters", "Players",
               "Data Trust", "Build Info"]
 SHEET_ORDER = ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard", "Schedule", "Team Rosters", "Teams",
-               "Players", "Player vs Player", "Player Teams", "Schedule Keys", "Lists", "Data Trust", "Build Info"]
+               "Players", "Player vs Player", "Player Teams", "Schedule Keys", "Team Comparison",
+               "Matchup Evidence", "Lists", "Data Trust", "Build Info"]
 RAIL = "5A3A1F"
 OPPONENT_FILL = PatternFill("solid", fgColor=RAIL)
 
@@ -453,11 +467,12 @@ TEAMS_COLUMNS = [
     "Team", "Division ID", "Session", "Roster Count", "Known-Skill Players", "Skill Total (known only)",
     # Appended at the end (never inserted earlier) so existing positional
     # column indices elsewhere stay correct.
-    "Team External ID", "Combo Key", "Scope Key", "Summary",
+    "Team External ID", "Combo Key", "Scope Key", "Summary", "Format Category",
 ]
 TEAMS_WIDTHS = {
     "Team": 34, "Division ID": 12, "Session": 14, "Roster Count": 12, "Known-Skill Players": 15,
     "Skill Total (known only)": 18, "Team External ID": 16, "Combo Key": 24, "Scope Key": 30, "Summary": 44,
+    "Format Category": 14,
 }
 
 
@@ -484,7 +499,7 @@ def _teams_sheet(wb: Workbook, rosters: list[dict[str, Any]]) -> list[dict[str, 
                 t["team_label"], t["division_id"], t["session_name"],
                 t["roster_count"], t["known_skill_count"], t["skill_total"],
                 t["team_external_id"], f"{t['team_external_id']}|{t['session_name']}",
-                t["team_scope_key"], _team_summary_text(t),
+                t["team_scope_key"], _team_summary_text(t), t.get("format") or "No data",
             ]
         )
     _apply_widths(sheet, TEAMS_COLUMNS, TEAMS_WIDTHS)
@@ -855,7 +870,7 @@ def _roster_block(sheet: Worksheet, *, top: int, left: int, scope_ref: str, slot
 
 def _match_night_sheet(wb: Workbook, team_count: int, roster_slots: int) -> None:
     sheet = wb.create_sheet("Match Night", 1)
-    for letter, width in zip("ABCDEFGHIJ", (26, 34, 34, 14, 6, 6, 30, 16, 10, 14)):
+    for letter, width in zip("ABCDEFGHIJKL", (30, 36, 34, 18, 44, 48, 4, 18, 26, 4, 10, 10)):
         sheet.column_dimensions[letter].width = width
     _title(sheet, "Ultimate Coach — Match Night",
            "Pick our team and the opponent team in the yellow cells for a side-by-side roster comparison.",
@@ -919,11 +934,213 @@ def _match_night_sheet(wb: Workbook, team_count: int, roster_slots: int) -> None
                   title_formula='=IF(B5="","Our team: choose a team above","Our team: "&B5)')
     _roster_block(sheet, top=22 + roster_slots + 1, left=1, scope_ref="$I$6", slots=roster_slots, helper_col=8,
                   title_formula='=IF(C5="","Opponent: choose a team above","Opponent: "&C5)')
+    sheet["H7"] = "Format category"
+    sheet["I7"] = '=IF(B5="","",IFERROR(INDEX(Teams_Table[Format Category],MATCH(B5,Teams_Table[Team],0)),""))'
+    sheet["H8"] = "Evidence pair key"
+    sheet["I8"] = '=IF(OR($I$5="",$I$6="",$I$7="",$I$7="No data"),"",$I$5&"|"&$I$6&"|"&$I$7)'
+    for ref in ("H7", "I7", "H8", "I8"):
+        sheet[ref].font = HELPER_FONT
+    rosters_end = 24 + 2 * roster_slots
+    comparison_end = _comparison_block(
+        sheet, top=rosters_end + 2, pair_ref="$I$8",
+        layout={"label": (1, 1), "ours": (2, 2), "theirs": (3, 3)}, helper_col=11, last_col=6,
+    )
+    _ranking_blocks(
+        sheet, top=comparison_end + 1, pair_ref="$I$8", slots=roster_slots,
+        layout={"rank": (1, 1), "player": (2, 2), "sl": (3, 3), "direct": (4, 4), "shared": (5, 5), "basis": (6, 6)},
+        helper_col=11, last_col=6,
+    )
     sheet.freeze_panes = "A4"
 
     if not team_count:
         sheet["A18"] = "No current team rosters were available when this workbook was built."
         sheet["A18"].font = MUTED_FONT
+
+
+TC_COLUMNS = [
+    "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
+    "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
+    "Opp No-Game Players", "Direct Meetings", "Opponents Met", "Pairings",
+]
+ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows"]
+
+
+def _matchup_evidence_sheets(wb: Workbook, *, match_day: dict[str, Any], rosters: list[dict[str, Any]],
+                             players: list[dict[str, Any]], pairs: list[dict[str, Any]],
+                             teams: list[dict[str, Any]]) -> dict[str, int]:
+    """Precomputed Match Night evidence for every directed team pairing that
+    has a scheduled fixture (analytics.ultimate_coach_matchup_evidence) --
+    Excel has no dynamic arrays, so shared-opponent evidence can't be
+    derived live. Team Comparison: one row per pairing. Matchup Evidence:
+    per opponent player a header row keyed "<pair key>|<n>" followed by our
+    players in ranked order. Every displayed column is fully populated text."""
+    index = build_pair_index(pairs)
+    members = members_by_scope(rosters, players)
+    label_by_scope = {t["team_scope_key"]: t["team_label"] for t in teams}
+    tc_rows: list[list[Any]] = []
+    me_rows: list[list[Any]] = []
+    for our, opp, fmt in fixture_scope_pairs(match_day):
+        if our not in members or opp not in members:
+            continue
+        evidence = matchup_evidence(members[our], members[opp], index, fmt)
+        key = f"{our}|{opp}|{fmt}"
+        c = evidence["comparison"]
+        tc_rows.append([
+            key, c["format"], label_by_scope.get(our, our), label_by_scope.get(opp, opp),
+            c["ours"]["rostered"], c["theirs"]["rostered"], c["ours"]["captured_sl"], c["theirs"]["captured_sl"],
+            c["ours"]["sl_total"], c["theirs"]["sl_total"], c["ours"]["games"], c["theirs"]["games"],
+            c["ours"]["no_games"], c["theirs"]["no_games"], c["direct_meetings"], c["opponents_met"], c["pairings"],
+        ])
+        for j, block in enumerate(evidence["opponents"], start=1):
+            me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], _sl_display(block["opponent"]),
+                            block["opponent_sample"], "—", block["note"], len(block["rows"])])
+            for r, row in enumerate(block["rows"], start=1):
+                me_rows.append([None, row["rank"], row["player"], _sl_display(row["member"]), row["direct_text"],
+                                row["shared_text"], row["basis"], r])
+
+    tc = wb.create_sheet("Team Comparison")
+    _style_header(tc, TC_COLUMNS)
+    for row in tc_rows:
+        tc.append(row)
+    _apply_widths(tc, TC_COLUMNS, {"Pair Key": 40, "Our Team": 32, "Opponent Team": 32, "Direct Meetings": 28,
+                                    "Pairings": 44})
+    _autotable(tc, "TeamComparison_Table", TC_COLUMNS, len(tc_rows))
+
+    me = wb.create_sheet("Matchup Evidence")
+    _style_header(me, ME_COLUMNS)
+    for row in me_rows:
+        me.append(row)
+    _apply_widths(me, ME_COLUMNS, {"Key": 44, "Rank": 6, "Player": 40, "SL": 8, "Direct Record": 20,
+                                    "Shared-Opponent Evidence": 60, "Basis": 70, "Rows": 6})
+    _autotable(me, "MatchupEvidence_Table", ME_COLUMNS, len(me_rows))
+    return {"pairs": len(tc_rows), "rows": len(me_rows)}
+
+
+RANKING_DISCLAIMER = (
+    "Captain assistance only — this orders our players by recorded evidence. It is not a win probability "
+    "(none is calibrated or published) and not a guaranteed or optimal lineup. Small samples are noisy. "
+    "A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank."
+)
+RANKING_ORDER_RULE = (
+    "Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results "
+    "(by our player's record against opponents both players have faced, then more shared opponents, then more "
+    "games); players with no evidence are listed last and not ranked (—). “2=” marks a tie the evidence can't "
+    "separate — the Basis column names who is tied."
+)
+NOT_PRECOMPUTED = (
+    "Team comparison and evidence ranking are precomputed for teams scheduled to play each other this session; "
+    "this pairing has no scheduled fixture (or the teams' formats differ). Roster sizes and skill totals are "
+    "shown above — use Coach Dashboard for individual players."
+)
+
+
+def _span(sheet: Worksheet, row: int, cols: tuple[int, int], value: Any, *, font: Font | None = None,
+          wrap: bool = True) -> None:
+    cell = sheet.cell(row=row, column=cols[0], value=value)
+    if font is not None:
+        cell.font = font
+    if wrap:
+        cell.alignment = WRAP_TOP
+    if cols[1] > cols[0]:
+        sheet.merge_cells(start_row=row, start_column=cols[0], end_row=row, end_column=cols[1])
+
+
+def _comparison_block(sheet: Worksheet, *, top: int, pair_ref: str, layout: dict[str, tuple[int, int]],
+                      helper_col: int, last_col: int) -> int:
+    """Team comparison for the pairing in `pair_ref`, read from TeamComparison_Table. Returns the next free row."""
+    t = f"${get_column_letter(helper_col)}${top}"
+    sheet.cell(row=top, column=helper_col,
+               value=f'=IF({pair_ref}="","",IFERROR(MATCH({pair_ref},TeamComparison_Table[Pair Key],0),""))').font = HELPER_FONT
+    _section(sheet, top, "Team comparison", last_col=last_col)
+    _span(sheet, top + 1, (1, last_col),
+          f'=IF({t}<>"","Format: "&INDEX(TeamComparison_Table[Format],{t})&" · recorded facts from identity-verified '
+          f'games — not a prediction.",IF({pair_ref}="","Choose both teams (or a fixture on Match Day) to compare them.",'
+          f'"{NOT_PRECOMPUTED}"))', font=MUTED_FONT)
+    sheet.row_dimensions[top + 1].height = 30
+    head = top + 2
+    _span(sheet, head, layout["ours"], f'=IF({t}="","","Our team: "&INDEX(TeamComparison_Table[Our Team],{t}))',
+          font=SUBHEAD_FONT)
+    _span(sheet, head, layout["theirs"], f'=IF({t}="","","Opponent: "&INDEX(TeamComparison_Table[Opponent Team],{t}))',
+          font=SUBHEAD_FONT)
+    sheet.row_dimensions[head].height = 30
+    metric_rows = [
+        ('"Players rostered"', "Our Rostered", "Opp Rostered"),
+        ('"Players with a captured SL"', "Our Captured SL", "Opp Captured SL"),
+        ('"Skill total (captured SLs only)"', "Our SL Total", "Opp SL Total"),
+        ('"Recorded "&INDEX(TeamComparison_Table[Format],{t})&" games (all opponents)"', "Our Games", "Opp Games"),
+        ('"Players with no recorded "&INDEX(TeamComparison_Table[Format],{t})&" games"', "Our No-Game Players",
+         "Opp No-Game Players"),
+    ]
+    row = head + 1
+    for label, ours_col, theirs_col in metric_rows:
+        _span(sheet, row, layout["label"], f'=IF({t}="","",{label.format(t=t)})', font=LABEL_FONT)
+        _span(sheet, row, layout["ours"], f'=IF({t}="","",INDEX(TeamComparison_Table[{ours_col}],{t}))', wrap=False)
+        _span(sheet, row, layout["theirs"], f'=IF({t}="","",INDEX(TeamComparison_Table[{theirs_col}],{t}))', wrap=False)
+        for c in range(1, last_col + 1):
+            sheet.cell(row=row, column=c).border = CELL_BORDER
+        row += 1
+    _span(sheet, row, (1, last_col), f'=IF({t}="","","Between the two rosters")', font=SUBHEAD_FONT)
+    row += 1
+    for label, col in (("Direct meetings between the rosters", "Direct Meetings"),
+                       ("Opponent players our roster has met directly", "Opponents Met"),
+                       ("Player pairings by evidence", "Pairings")):
+        _span(sheet, row, layout["label"], f'=IF({t}="","","{label}")', font=LABEL_FONT)
+        _span(sheet, row, (layout["ours"][0], layout["theirs"][1]),
+              f'=IF({t}="","",INDEX(TeamComparison_Table[{col}],{t}))', wrap=False)
+        for c in range(1, last_col + 1):
+            sheet.cell(row=row, column=c).border = CELL_BORDER
+        row += 1
+    return row
+
+
+def _ranking_blocks(sheet: Worksheet, *, top: int, pair_ref: str, slots: int, layout: dict[str, tuple[int, int]],
+                    helper_col: int, last_col: int) -> int:
+    """Evidence ranking of our players against each opponent player, read from
+    MatchupEvidence_Table: one block per opponent (header line, note, column
+    headers, ranked rows). Plain MATCH/INDEX only. Returns the next free row."""
+    _section(sheet, top, "Evidence ranking vs each opponent (not win odds)", last_col=last_col)
+    _span(sheet, top + 1, (1, last_col), RANKING_DISCLAIMER, font=Font(bold=True, color="6B4D00"))
+    sheet.cell(row=top + 1, column=1).fill = NOTE_FILL
+    sheet.row_dimensions[top + 1].height = 30
+    _span(sheet, top + 2, (1, last_col), RANKING_ORDER_RULE, font=MUTED_FONT)
+    sheet.row_dimensions[top + 2].height = 44
+    _span(sheet, top + 3, (1, last_col),
+          f'=IF({pair_ref}="","Choose both teams (or a fixture on Match Day) to rank our players.",'
+          f'IF(ISNUMBER(MATCH({pair_ref}&"|1",MatchupEvidence_Table[Key],0)),"","{NOT_PRECOMPUTED}"))', font=MUTED_FONT)
+    row = top + 4
+    s_col, n_col = get_column_letter(helper_col), get_column_letter(helper_col + 1)
+    fields = [("rank", "Rank", "Rank"), ("player", "Our player (APA record ID)", "Player"), ("sl", "SL", "SL"),
+              ("direct", "Direct record (meetings)", "Direct Record"),
+              ("shared", "Shared-opponent evidence (samples)", "Shared-Opponent Evidence"),
+              ("basis", "Basis · ties · missing evidence", "Basis")]
+    small = Font(size=9)
+    for j in range(1, slots + 1):
+        s_ref, n_ref = f"${s_col}${row}", f"${n_col}${row}"
+        sheet.cell(row=row, column=helper_col, value=(
+            f'=IF({pair_ref}="","",IFERROR(MATCH({pair_ref}&"|{j}",MatchupEvidence_Table[Key],0),""))'
+        )).font = HELPER_FONT
+        sheet.cell(row=row, column=helper_col + 1,
+                   value=f'=IF({s_ref}="",0,INDEX(MatchupEvidence_Table[Rows],{s_ref}))').font = HELPER_FONT
+        _span(sheet, row, (1, last_col),
+              f'=IF({s_ref}="","","vs "&INDEX(MatchupEvidence_Table[Player],{s_ref})&" · SL "&'
+              f'INDEX(MatchupEvidence_Table[SL],{s_ref})&" · "&INDEX(MatchupEvidence_Table[Direct Record],{s_ref}))',
+              font=Font(bold=True, size=11, color=FELT_DEEP), wrap=False)
+        _span(sheet, row + 1, (1, last_col), f'=IF({s_ref}="","",INDEX(MatchupEvidence_Table[Basis],{s_ref}))',
+              font=MUTED_FONT, wrap=False)
+        for key, header, _ in fields:
+            _span(sheet, row + 2, layout[key], f'=IF({s_ref}="","","{header}")', font=SUBHEAD_FONT)
+            for c in range(layout[key][0], layout[key][1] + 1):
+                sheet.cell(row=row + 2, column=c).fill = SUBHEAD_FILL
+        for r in range(1, slots + 1):
+            rr = row + 2 + r
+            for key, _, column in fields:
+                _span(sheet, rr, layout[key],
+                      f'=IF({r}>{n_ref},"",INDEX(MatchupEvidence_Table[{column}],{s_ref}+{r}))', font=small)
+            for c in range(1, last_col + 1):
+                sheet.cell(row=rr, column=c).border = CELL_BORDER
+            sheet.row_dimensions[rr].height = 26
+        row += 3 + slots + 1
+    return row
 
 
 def _match_day_sheet(
@@ -1347,7 +1564,19 @@ def _print_matchup_sheet(wb: Workbook, *, refs: dict[str, Any], roster_slots: in
                 f'=IF($P{r}="",IF(AND({opp}="",{cmp}<>""),"No opponent roster to list — see above.",""),'
                 f'INDEX(TeamRosters_Table[Player Name],$P{r}))'
             ))
-    legend_top = first + roster_slots + 1
+    sheet["M8"] = "Format category"
+    sheet["M8"].font = HELPER_FONT
+    sheet["N8"] = f'=IF({cmp}="","",INDEX(Schedule_Table[Format Category],{cmp}))'
+    sheet["N8"].font = HELPER_FONT
+    sheet["M10"] = "Evidence pair key"
+    sheet["M10"].font = HELPER_FONT
+    sheet["N10"] = f'=IF(OR({ours}="",{opp}="",$N$8=""),"",{ours}&"|"&{opp}&"|"&$N$8)'
+    sheet["N10"].font = HELPER_FONT
+    comparison_top = first + roster_slots + 1
+    legend_top = _comparison_block(
+        sheet, top=comparison_top, pair_ref="$N$10",
+        layout={"label": (1, 2), "ours": (3, 5), "theirs": (7, 9)}, helper_col=15, last_col=11,
+    ) + 1
     legend = [
         "Legend — “No data”: not captured in the source. SL with *: division-scoped skill level (no live current "
         "rating captured). Players without a captured SL are left out of skill totals, never counted as 0.",
@@ -1359,17 +1588,26 @@ def _print_matchup_sheet(wb: Workbook, *, refs: dict[str, Any], roster_slots: in
     ]
     for i, text in enumerate(legend):
         _note(sheet, f"A{legend_top + i}", text, merge_to=f"K{legend_top + i}", height=30)
-    last = legend_top + len(legend) - 1
+    ranking_top = legend_top + len(legend) + 1
+    # The ranking starts on its own printed page; the fixture headline repeats on every page.
+    sheet.row_breaks.append(Break(id=ranking_top - 1))
+    last = _ranking_blocks(
+        sheet, top=ranking_top, pair_ref="$N$10", slots=roster_slots,
+        layout={"rank": (1, 1), "player": (2, 2), "sl": (3, 3), "direct": (4, 6), "shared": (7, 8), "basis": (9, 11)},
+        helper_col=15, last_col=11,
+    ) - 1
     sheet.print_area = f"A1:K{last}"
+    sheet.print_title_rows = "1:2"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
-    sheet.page_setup.fitToHeight = 1
+    sheet.page_setup.fitToHeight = 0
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.print_options.horizontalCentered = True
     sheet.page_margins.left = sheet.page_margins.right = 0.4
     sheet.page_margins.top = sheet.page_margins.bottom = 0.5
     _nav_row(sheet, last + 2, current="Print Matchup")
-    return {"header_row": header_row, "first_roster_row": first, "legend_row": legend_top}
+    return {"header_row": header_row, "first_roster_row": first, "comparison_row": comparison_top,
+            "legend_row": legend_top, "ranking_row": ranking_top}
 
 
 def build_workbook(
@@ -1392,6 +1630,7 @@ def build_workbook(
     pairs = _player_vs_player_sheet(wb, payload)
     max_teams = _player_teams_sheet(wb, payload, teams)
     schedule_stats = _schedule_sheets(wb, match_day, teams)
+    _matchup_evidence_sheets(wb, match_day=match_day, rosters=rosters, players=players, pairs=pairs, teams=teams)
 
     raw_formats = sorted({str(f.get("format_raw") or "") for f in match_day.get("fixtures") or []} - {""})
     format_filter_options = [FORMAT_FILTER_EIGHT_NINE_LABEL, FORMAT_FILTER_ALL_LABEL] + raw_formats

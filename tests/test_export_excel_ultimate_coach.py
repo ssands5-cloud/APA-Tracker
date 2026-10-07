@@ -109,6 +109,7 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
         "Build Info", "Data Trust", "Players", "Team Rosters", "Teams",
         "Player vs Player", "Coach Dashboard", "Match Night",
         "Match Day", "Print Matchup", "Player Teams", "Schedule", "Schedule Keys", "Lists",
+        "Team Comparison", "Matchup Evidence",
     }
     assert wb.sheetnames[:4] == ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard"]
 
@@ -519,12 +520,18 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         excel.Quit()
 
 
-def test_print_matchup_sheet_is_a_focused_one_page_landscape_print(tmp_path):
+def test_print_matchup_sheet_is_a_focused_landscape_print_with_ranking_on_its_own_pages(tmp_path):
     wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="1001"))
     sheet = wb["Print Matchup"]
     assert sheet.print_area.endswith("$A$1:$K$" + sheet.print_area.rsplit("$", 1)[1])
     assert sheet.page_setup.orientation == "landscape"
-    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 1)
+    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 0)  # as many pages as needed
+    assert sheet.print_title_rows == "$1:$2"  # fixture headline repeats on every printed page
+    ranking_row = next(c.row for c in sheet["A"] if c.value == "Evidence ranking vs each opponent (not win odds)")
+    assert [b.id for b in sheet.row_breaks.brk] == [ranking_row - 1]  # ranking starts a new page
+    assert "not a win probability" in sheet.cell(row=ranking_row + 1, column=1).value
+    assert "even when it is small or a loss" in sheet.cell(row=ranking_row + 1, column=1).value
+    assert any(c.value == "Team comparison" for c in sheet["A"])
     assert sheet.sheet_properties.pageSetUpPr.fitToPage is True
     assert sheet["A6"].value == "OUR TEAM" and sheet["G6"].value == "OPPONENT"
     for left in ("A", "G"):
