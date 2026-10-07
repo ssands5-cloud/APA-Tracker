@@ -106,12 +106,15 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
     wb = load_workbook(path)
 
     assert set(wb.sheetnames) == {
-        "Build Info", "Data Trust", "Players", "Team Rosters", "Teams",
-        "Player vs Player", "Coach Dashboard", "Match Night",
-        "Match Day", "Print Matchup", "Player Teams", "Schedule", "Schedule Keys", "Lists",
-        "Team Comparison", "Matchup Evidence",
+        "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
+        "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
+        "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
+        "Meetings", "Scouting", "Lists", "Engine", "Data Trust", "Build Info",
     }
-    assert wb.sheetnames[:4] == ["Match Day", "Print Matchup", "Match Night", "Coach Dashboard"]
+    # Coach-facing sheets first, Match Day (the control panel) active.
+    assert wb.sheetnames[:6] == ["Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
+                                 "Coach Dashboard"]
+    assert wb.active.title == "Match Day"
 
     build_info = {row[0].value: row[1].value for row in wb["Build Info"].iter_rows(min_row=2, max_col=2) if row[0].value}
     assert build_info["Probability publication"] == "FORBIDDEN"
@@ -165,16 +168,13 @@ def test_coach_dashboard_format_dropdown_includes_non_eight_nine_formats(tmp_pat
     wb = load_workbook(path)
     dash = wb["Coach Dashboard"]
 
-    validations = [dv for dv in dash.data_validations.dataValidation if "B6" in dv.sqref]
+    validations = [dv for dv in dash.data_validations.dataValidation if "C8" in dv.sqref]
     assert len(validations) == 1
     # "MASTERS" evidence exists in the fixture with no matching 8-Ball/9-Ball
     # history -- if the dropdown only ever offered 8-Ball/9-Ball, that real
     # recorded meeting would be permanently unreachable from this sheet.
     assert validations[0].formula1 == '"8-Ball,9-Ball,Masters"'
-
-    assert dash["B12"].value == (
-        '=IF(B6="9-Ball","NINE",IF(B6="Masters","MASTERS","EIGHT"))'
-    )
+    assert 'IF(cd_FmtLabel="9-Ball","NINE",IF(cd_FmtLabel="Masters","MASTERS","EIGHT"))' in dash["C15"].value
 
     rows = list(wb["Player vs Player"].iter_rows(min_row=2, values_only=True))
     masters_rows = [r for r in rows if r[7] == "2|MASTERS|3"]
@@ -278,13 +278,18 @@ def test_every_column_match_day_reads_through_index_is_fully_populated(tmp_path)
         for name, ref in ws.tables.items():
             tables[name] = (ws, ref)
     referenced = set()
-    for sheet_name in ("Match Day", "Match Night", "Print Matchup"):
+    for sheet_name in ("Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
+                       "Engine"):
         for row in wb[sheet_name].iter_rows():
             for cell in row:
                 if isinstance(cell.value, str) and cell.value.startswith("="):
                     referenced.update(re.findall(r"INDEX\((\w+)\[([^\]]+)\]", cell.value))
     assert ("Schedule_Table", "Opponent") in referenced
     assert ("TeamRosters_Table", "SL Display") in referenced
+    assert ("MatchupEvidence_Table", "Category") in referenced and ("Scouting_Table", "Missing") in referenced
+    # Skill Level is numeric (blank when not captured); every read of it is guarded by the
+    # fully populated "SL Display" column, which this same test checks.
+    referenced.discard(("TeamRosters_Table", "Skill Level"))
     for table_name, column in referenced:
         ws, ref = tables[table_name]
         values = [r for r in ws[ref]]
@@ -367,9 +372,9 @@ def test_team_rosters_have_slot_keys_and_display_text_for_missing_values(tmp_pat
     wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
     rows = _rows_by_header(wb["Team Rosters"])
     sharks = sorted((r for r in rows if r["Team Scope Key"] == "sharks-a|d1|Spring 2026"), key=lambda r: r["Roster Slot Key"])
-    # Highest skill level first: Bea's division SL 5 (no live rating -> "5*"), then Ann's live SL 4.
+    # Highest skill level first: Bea's 8-Ball team SL 5, then Ann's 4.
     assert [(r["Roster Slot Key"], r["Player Name"], r["SL Display"]) for r in sharks] == [
-        ("sharks-a|d1|Spring 2026|1", "Bea Baker", "5*"),
+        ("sharks-a|d1|Spring 2026|1", "Bea Baker", "5"),  # this team's format-specific SL
         ("sharks-a|d1|Spring 2026|2", "Ann Archer", "4"),
     ]
     assert sharks[1]["W-L Display"] == "10-5"
@@ -382,28 +387,30 @@ def test_match_day_sheet_inputs_dropdowns_and_viewer_default(tmp_path):
     assert wb.active.title == "Match Day"
     md = wb["Match Day"]
     sources = {str(dv.sqref): dv.formula1 for dv in md.data_validations.dataValidation}
-    assert sources["B7"] == "PlayerLabelList"  # pick "Name (APA record ID n)" or type the ID
-    assert sources["B8"] == "MyTeamSlotList"
-    assert sources["B9"] == "FormatFilterList"
-    assert sources["B10"] == "FixtureNumberList"
-    assert [dv.type for dv in md.data_validations.dataValidation if str(dv.sqref) == "B6"] == ["date"]
-    assert md["B7"].value == "Ann Archer (APA record ID 1001)"  # name shown alongside the verified record ID
-    assert md["B9"].value == "8-Ball & 9-Ball"
-    assert "80000001" in md["B15"].value and "never used as identity" in md["B15"].value
-    assert md["A7"].value == "2 · I am"
-    for name in ("MyTeamSlotList", "FormatFilterList", "FixtureNumberList", "PlayerLabelList", "TeamNameList"):
+    assert sources == {"B6": "PlayerLabelList", "B7": "uc_TeamList", "B8": "FormatFilterList", "B9": "uc_DateList",
+                       "B10": "uc_FixtureList"}
+    assert [md[f"A{r}"].value for r in range(6, 11)] == ["Player", "Team", "Format", "Scheduled date", "Fixture"]
+    assert md["B6"].value == "Ann Archer (APA record ID 1001)"  # name shown alongside the verified record ID
+    assert md["B7"].value == "Sharks · Spring 2026 · 8-Ball"   # the viewer's next fixture's team
+    assert md["B8"].value == "8-Ball & 9-Ball" and md["B9"].value in (None, "") and md["B10"].value in (None, "")
+    for r in range(6, 11):
+        assert md[f"B{r}"].fill.fgColor.rgb.endswith("FFF4CC")  # inputs are visibly editable
+    for r in range(13, 20):
+        assert md[f"B{r}"].fill.fgColor.rgb.endswith("EEF3EF")  # effective selections are visibly calculated
+    assert "80000001" in md["C13"].value and "never used as identity" in md["C13"].value
+    for name in ("uc_TeamList", "uc_DateList", "uc_FixtureList", "FormatFilterList", "PlayerLabelList", "TeamNameList",
+                 "uc_PairKey", "wr_PairKey"):
         assert name in wb.defined_names
-    assert md.print_area and md.page_setup.orientation == "landscape"
     links = [c.hyperlink.location for c in md[3] if c.hyperlink]
-    assert "'Match Night'!A1" in links and "'Schedule'!A1" in links
+    assert "'War Room'!A1" in links and "'Captain Packet'!A1" in links
 
 
 def test_unresolved_viewer_is_never_prefilled_or_guessed(tmp_path):
     wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="99999"))
-    assert wb["Match Day"]["B7"].value in (None, "")
-    assert wb["Match Day"]["B15"].value == "—"
+    assert wb["Match Day"]["B6"].value in (None, "") and wb["Match Day"]["B7"].value in (None, "")
+    assert wb["Match Day"]["C13"].value == '=""'
     wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc2.xlsx"))
-    assert wb["Match Day"]["B7"].value in (None, "")
+    assert wb["Match Day"]["B6"].value in (None, "")
 
 
 FORBIDDEN_FUNCTIONS = ("FILTER(", "SORT(", "UNIQUE(", "SEQUENCE(", "XLOOKUP(", "LET(", "LAMBDA(",
@@ -448,98 +455,27 @@ def test_returns_none_workbook_gracefully_handles_no_players(tmp_path):
     payload["evidence"] = []
     path = write_workbook(payload, tmp_path / "uc_empty.xlsx", built_at="test", source_db="test.db")
     wb = load_workbook(path)
-    # Still a valid workbook with all sheets -- no crash, no fabricated rows.
+    # Still a valid workbook with all sheets -- no crash, no fabricated rows: an
+    # empty table keeps one clearly marked sentinel row so formulas that name
+    # the table still resolve when Excel opens the file.
     assert "Coach Dashboard" in wb.sheetnames
-    assert wb["Players"].max_row == 1  # header only
+    assert wb["Players"].max_row == 2
+    assert wb["Players"]["A2"].value == "(no rows)"
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Excel COM automation requires Windows")
-def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_path):
-    win32com_client = pytest.importorskip("win32com.client", reason="pywin32/Excel not available")
-
-    path = write_workbook(_payload(), tmp_path / "uc_com.xlsx", built_at="test", source_db="test.db")
-
-    try:
-        excel = win32com_client.Dispatch("Excel.Application")
-    except Exception:
-        pytest.skip("Excel is not installed/registered on this machine")
-
-    excel.Visible = False
-    excel.DisplayAlerts = False
-    try:
-        wb = excel.Workbooks.Open(str(path))
-    except Exception as exc:
-        excel.Quit()
-        pytest.fail(f"Real Excel refused to open the generated workbook: {exc}")
-
-    try:
-        dash = wb.Worksheets("Coach Dashboard")
-
-        dash.Range("B4").Value = "Ann Archer (APA record ID 1001)"
-        dash.Range("B5").Value = "Cam Cole (APA record ID 1003)"
-        dash.Range("B6").Value = "8-Ball"
-        excel.CalculateFullRebuild()
-        assert dash.Range("B21").Value == 1  # Wins
-        assert dash.Range("B22").Value == 1  # Losses
-        assert dash.Range("B23").Value == 2  # Recorded meetings
-        assert "50.0%" in str(dash.Range("B24").Value)
-
-        dash.Range("B5").Value = "Bea Baker (APA record ID 1002)"
-        excel.CalculateFullRebuild()
-        assert dash.Range("B21").Value == "0"
-        assert "No recorded direct meeting" in str(dash.Range("B25").Value)
-        # The disclosure explicitly explains it is NOT a real 0-0 record --
-        # an absence of evidence, never fabricated evidence of a tie.
-        assert "not evidence of a tie" in str(dash.Range("B25").Value)
-        # Bea's current_skill_level is None -- must read as "not captured"
-        # ("—"), never as a real skill level 0 (not a valid APA skill
-        # level, but easy to misread if a blank INDEX result silently
-        # reads back as numeric 0 instead of triggering the fallback).
-        assert dash.Range("B18").Value == "—"
-
-        dash.Range("B4").Value = "Bea Baker (APA record ID 1002)"
-        dash.Range("B5").Value = "Cam Cole (APA record ID 1003)"
-        dash.Range("B6").Value = "Masters"
-        excel.CalculateFullRebuild()
-        # Real recorded evidence exists for this pair only under "Masters" --
-        # must be reachable via the dropdown, not reported as no evidence.
-        assert dash.Range("B21").Value == 1  # Wins
-        assert dash.Range("B23").Value == 1  # Recorded meetings
-        assert "Direct evidence found" in str(dash.Range("B25").Value)
-
-        night = wb.Worksheets("Match Night")
-        night.Range("B5").Value = "Sharks · Spring 2026 · 8-Ball"
-        night.Range("C5").Value = "Falcons · Spring 2026 · 8-Ball"
-        excel.CalculateFullRebuild()
-        assert night.Range("B7").Value == 2  # exact Sharks d1 scope only
-        assert night.Range("C7").Value == 1  # Falcons roster count
-        assert night.Range("B9").Value == 9  # exact Sharks d1 skill total: 4 + 5
-        assert night.Range("C9").Value == 3  # Falcons skill total
-    finally:
-        wb.Close(False)
-        excel.Quit()
-
-
-def test_print_matchup_sheet_is_a_focused_landscape_print_with_ranking_on_its_own_pages(tmp_path):
-    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="1001"))
-    sheet = wb["Print Matchup"]
-    assert sheet.print_area.endswith("$A$1:$K$" + sheet.print_area.rsplit("$", 1)[1])
+def test_captain_packet_prints_landscape_with_page_one_summary_then_detail(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="2026-10-07 18:00 UTC",
+                                      viewer_member_external_id="1001"))
+    sheet = wb["Captain Packet"]
+    assert sheet.print_area.startswith("'Captain Packet'!$A$1:$L$")
     assert sheet.page_setup.orientation == "landscape"
-    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 0)  # as many pages as needed
-    assert sheet.print_title_rows == "$1:$2"  # fixture headline repeats on every printed page
-    ranking_row = next(c.row for c in sheet["A"] if c.value == "Evidence ranking vs each opponent (not win odds)")
-    assert [b.id for b in sheet.row_breaks.brk] == [ranking_row - 1]  # ranking starts a new page
-    assert "not a win probability" in sheet.cell(row=ranking_row + 1, column=1).value
-    assert "even when it is small or a loss" in sheet.cell(row=ranking_row + 1, column=1).value
-    assert any(c.value == "Team comparison" for c in sheet["A"])
-    assert sheet.sheet_properties.pageSetUpPr.fitToPage is True
-    assert sheet["A6"].value == "OUR TEAM" and sheet["G6"].value == "OPPONENT"
-    for left in ("A", "G"):
-        row = [sheet[f"{chr(ord(left) + i)}9"].value for i in range(5)]
-        assert row == ["#", "Player", "APA record ID", "SL", "Current W-L"]
-    legend = " ".join(str(c.value) for c in sheet["A"] if isinstance(c.value, str) and c.value.startswith(("Legend", "Rosters", "No win")))
-    assert "“No data”: not captured" in legend and "SL with *" in legend and "never counted as 0" in legend
-    assert "NOT CALIBRATED" in legend and "CURRENT captured roster" in legend
-    # Helper/lookup cells and navigation stay outside the printed range.
-    last_print_row = int(sheet.print_area.rsplit("$", 1)[1])
-    assert any(c.hyperlink for c in sheet[last_print_row + 2])
+    assert (sheet.page_setup.fitToWidth, sheet.page_setup.fitToHeight) == (1, 0)  # detail continues on more pages
+    assert sheet.print_title_rows == "$1:$2"
+    breaks = [b.id for b in sheet.row_breaks.brk]
+    assert len(breaks) == 1
+    page_two = next(c.row for c in sheet["A"] if c.value == "Scouting cards")
+    assert breaks == [page_two - 1]
+    assert any(c.value == "OUR TEAM" for c in sheet["A"]) and any(c.value == "OPPONENT" for c in sheet["G"])
+    # Navigation sits outside the printed columns; no input cells live on this sheet.
+    assert sheet["N1"].hyperlink is not None and sheet.data_validations.dataValidation == []
+

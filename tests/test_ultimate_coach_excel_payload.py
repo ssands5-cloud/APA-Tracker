@@ -64,11 +64,9 @@ def test_team_rosters_keep_same_named_division_scopes_separate():
 
     bea_a = next(r for r in scope_a if r["player_name"] == "Bea Baker")
     assert bea_a["skill_level"] == 5
-    assert bea_a["skill_level_is_live"] is False
 
     ann = next(r for r in scope_a if r["player_name"] == "Ann Archer")
     assert ann["skill_level"] == 4
-    assert ann["skill_level_is_live"] is True
 
     # Stale (non-current) membership must never appear.
     assert not any(r["team_name"] == "Old Team" for r in rosters)
@@ -121,3 +119,18 @@ def test_team_labels_show_recorded_format_and_keep_ambiguous_scopes_distinct():
 def test_team_label_missing_format_is_not_guessed():
     rows = build_team_rosters(_payload())
     assert all("No data" in row["team_label"] for row in rows)
+
+
+def test_roster_skill_level_is_the_team_scopes_format_specific_level_never_the_player_level_one():
+    payload = _payload()
+    # Real shape (Dave Gallardo): player-level SL 5, but his 8-Ball team's roster says 6.
+    payload["players"][0]["current_skill_level"] = 5
+    payload["players"][0]["team_history"][0]["skill_level"] = 6
+    # Real shape (Kaiden Fitzgerald): a recorded 0 is not a valid APA skill level.
+    payload["players"][2]["team_history"][0]["skill_level"] = 0
+    rosters = build_team_rosters(payload)
+    ann = next(r for r in rosters if r["player_name"] == "Ann Archer")
+    cam = next(r for r in rosters if r["player_name"] == "Cam Cole")
+    assert ann["skill_level"] == 6
+    assert cam["skill_level"] is None
+    assert "skill_level_is_live" not in ann

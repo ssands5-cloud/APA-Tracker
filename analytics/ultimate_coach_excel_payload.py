@@ -57,8 +57,14 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
             if key in seen:
                 continue
             seen.add(key)
-            live_sl = player.get("current_skill_level")
-            skill_level = live_sl if live_sl is not None else hist.get("skill_level")
+            # Format-specific: a team scope is one division -- one format --
+            # so the skill level captured on that team's roster IS the
+            # player's SL for this format. The player-level "current" SL is
+            # not tied to a format (it can be the other format's rating), so
+            # it is never used for a roster. A recorded 0 is not a valid APA
+            # skill level and reads as missing, never as a real 0.
+            scope_sl = hist.get("skill_level")
+            skill_level = scope_sl if isinstance(scope_sl, (int, float)) and scope_sl > 0 else None
             rows.append(
                 {
                     "team_scope_key": scope_key,
@@ -71,7 +77,6 @@ def build_team_rosters(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "player_id": pid,
                     "player_name": player["name"],
                     "skill_level": skill_level,
-                    "skill_level_is_live": live_sl is not None,
                     "matches_won": hist.get("matches_won"),
                     "matches_played": hist.get("matches_played"),
                 }

@@ -1,0 +1,365 @@
+"""End-to-end Match Day / War Room / Lineup Lab / Scouting Cards / Captain
+Packet / Coach Dashboard formula results, computed by tests/excel_formula_eval.py
+(no Excel, COM, pywin32 or macros) on the workbook's real formulas and lookup
+sheets.
+
+The rosters are built so the matrix holds every evidence category:
+
+    our \\ their     Cam Cole (SL6)          Eve Ellis (SL3)
+    Ann (SL5)       2-0 direct  -> G        shared opp Zed only -> I
+    Bea (SL4)       0-2 direct  -> R        nothing             -> X
+    Dee (no SL)     1-1 direct  -> E        0-2 direct          -> R
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from openpyxl import load_workbook
+
+from analytics.ultimate_coach_match_day import build_match_day_section
+from tests.excel_formula_eval import Workbook, serial
+from ui.export_excel_ultimate_coach import write_workbook
+
+MD, WR, LL, SC, CP, CD = "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard"
+SHARKS = "Sharks · Fall 2026 · 8-Ball"
+SHARKS9 = "Sharks · Fall 2026 · 9-Ball"
+FALCONS = "Falcons · Fall 2026 · 8-Ball"
+OWLS = "Owls · Fall 2026 · 8-Ball"
+ANN, BEA, DEE = "Ann Archer (APA record ID 1001)", "Bea Baker (APA record ID 1002)", "Dee Diaz (APA record ID 1003)"
+ANN2 = "Ann Archer (APA record ID 1004)"
+CAM, EVE, ZED = "Cam Cole (APA record ID 2001)", "Eve Ellis (APA record ID 2002)", "Zed Zane (APA record ID 2003)"
+
+
+def _hist(team, div, fmt, sl, won=None, played=None):
+    return {"team_external_id": team, "team_name": team.split("-")[0].capitalize(), "division_id": div,
+            "session_name": "Fall 2026", "format": fmt, "is_current": True, "skill_level": sl,
+            "matches_won": won, "matches_played": played}
+
+
+def _player(pid, ext, name, history):
+    return {"id": pid, "external_id": ext, "name": name, "current_skill_level": None, "current_matches_won": None,
+            "current_matches_played": None, "team_history": history, "career_stats": []}
+
+
+def _games(a, b, results, date="2026-09-20T19:00:00-06:00"):
+    rows = []
+    for n, result in enumerate(results):
+        flip = "L" if result == "W" else "W"
+        rows += [
+            {"player_id": a, "opponent_id": b, "format": "EIGHT", "result": result, "match_date": date,
+             "session_name": "Fall 2026", "own_skill_level": 5, "opponent_skill_level": 4, "points_earned": 3 - n},
+            {"player_id": b, "opponent_id": a, "format": "EIGHT", "result": flip, "match_date": date,
+             "session_name": "Fall 2026", "own_skill_level": 4, "opponent_skill_level": 5, "points_earned": None},
+        ]
+    return rows
+
+
+def _fixture(mid, date, home, away, *, bye=False, status="UNPLAYED", scored=False, hs=None, as_=None):
+    names = {"sharks-a": "Sharks", "falcons-a": "Falcons", "owls-a": "Owls", "bye": "BYE"}
+    return {"match_id": mid, "match_external_id": str(mid), "match_date": date, "format": "EIGHT",
+            "format_raw": "8-Ball Open", "session_name": "Fall 2026", "week": mid, "status": status, "location": None,
+            "home_team_id": home, "home_team_name": names[home], "away_team_id": away, "away_team_name": names[away],
+            "home_score": hs, "away_score": as_, "is_bye": bye, "is_scored": scored, "is_finalized": scored}
+
+
+def _payload():
+    players = [
+        _player(1, "1001", "Ann Archer", [_hist("sharks-a", "d1", "EIGHT", 5, 6, 8), _hist("sharks-b", "d9", "NINE", 4)]),
+        _player(2, "1002", "Bea Baker", [_hist("sharks-a", "d1", "EIGHT", 4, 3, 6)]),
+        _player(3, "1003", "Dee Diaz", [_hist("sharks-a", "d1", "EIGHT", None)]),
+        _player(4, "1004", "Ann Archer", []),
+        _player(10, "2001", "Cam Cole", [_hist("falcons-a", "d1", "EIGHT", 6, 7, 8)]),
+        _player(11, "2002", "Eve Ellis", [_hist("falcons-a", "d1", "EIGHT", 3, 2, 4)]),
+        _player(12, "2003", "Zed Zane", [_hist("owls-a", "d1", "EIGHT", 4, 1, 2)]),
+        _player(13, "2004", "Gus Gale", [_hist("owls-a", "d1", "EIGHT", 5, 2, 2)]),
+    ]
+    evidence = (_games(1, 10, "WW") + _games(2, 10, "LL") + _games(3, 10, "WL") + _games(1, 12, "W")
+                + _games(11, 12, "L") + _games(3, 11, "LL"))
+    payload = {
+        "schema": "test", "probability_publication": "FORBIDDEN", "matchup_probability": None,
+        "predictive_confidence": None, "requires_live_apa_login": False, "database_mutated": False,
+        "name_matching_used": False, "trust": {}, "counts": {"players": len(players), "head_to_head_rows": len(evidence)},
+        "players": players, "evidence": evidence,
+    }
+    payload["match_day"] = build_match_day_section([
+        _fixture(1, "2026-10-11T11:00:00-06:00", "sharks-a", "falcons-a"),
+        _fixture(2, "2026-10-18T11:00:00-06:00", "sharks-a", "bye", bye=True),
+        _fixture(3, "2026-10-25T11:00:00-06:00", "sharks-a", "owls-a"),
+        _fixture(4, "2026-10-25T19:00:00-06:00", "sharks-a", "falcons-a"),
+        _fixture(5, "2026-09-27T11:00:00-06:00", "owls-a", "sharks-a", status="COMPLETED", scored=True, hs=3, as_=2),
+    ], players)
+    return payload
+
+
+@pytest.fixture(scope="module")
+def built(tmp_path_factory):
+    path = write_workbook(_payload(), tmp_path_factory.mktemp("wr") / "uc.xlsx", built_at="2026-10-07 18:00 UTC",
+                          viewer_member_external_id="1001", viewer_card_number="80000001")
+    return load_workbook(path)
+
+
+@pytest.fixture()
+def book(built):
+    return Workbook(built)
+
+
+def _row(wb, sheet, text, col="A"):
+    for cell in wb[sheet][col]:
+        if cell.value == text:
+            return cell.row
+    raise AssertionError(f"{text!r} not found on {sheet}")
+
+
+def _roster(book, sheet, first, R=8):
+    ours = [(book.display(sheet, f"A{r}"), book.display(sheet, f"C{r}"), book.display(sheet, f"D{r}"),
+             book.display(sheet, f"E{r}")) for r in range(first, first + R)]
+    theirs = [(book.display(sheet, f"G{r}"), book.display(sheet, f"I{r}"), book.display(sheet, f"J{r}"),
+               book.display(sheet, f"L{r}")) for r in range(first, first + R)]
+    return [x for x in ours if x[0]], [x for x in theirs if x[0]]
+
+
+def _opportunities(book, wb):
+    top = _row(wb, WR, "Top opportunities — best-supported sends (favorable direct first, then even, then indirect)")
+    return [(book.display(WR, f"A{r}"), book.display(WR, f"C{r}")) for r in range(top + 1, top + 3)]
+
+
+def _list_after(book, wb, title, n, sheet=WR):
+    top = _row(wb, sheet, title)
+    return [v for v in (book.display(sheet, f"A{r}") for r in range(top + 1, top + 1 + n)) if v]
+
+
+def _no_bad_values(book, wb):
+    bad = []
+    for sheet in (MD, WR, LL, SC, CP, CD):
+        ws = wb[sheet]
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("="):
+                    v = book.display(sheet, cell.coordinate)
+                    if v == 0 or (isinstance(v, str) and v.startswith("#")):
+                        bad.append((sheet, cell.coordinate, v))
+    return bad
+
+
+# ---------------------------------------------------------------------------
+
+def test_match_day_defaults_to_the_viewers_next_fixture_and_auto_selects_one(book, built):
+    assert book.display(MD, "B13") == ANN
+    assert "League card #80000001" in book.display(MD, "C13") and "never used as identity" in book.display(MD, "C13")
+    assert book.display(MD, "B14") == SHARKS and book.display(MD, "C14") == "Your choice."
+    assert book.display(MD, "B15") == "8-Ball & 9-Ball"
+    assert book.display(MD, "B16") == "Sun Oct 11, 2026"
+    assert book.display(MD, "C16") == "Suggested: the earliest scheduled date on or after the build date."
+    assert book.display(MD, "B17") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
+    assert book.display(MD, "C17") == "One fixture on this date — used automatically."
+    assert book.display(MD, "B19") == f"Opponent roster: {FALCONS}"
+    fresh = book.display(MD, "A4")
+    assert "Built Wed Oct 7, 2026" in fresh and "latest recorded result Sun Sep 27, 2026" in fresh
+    assert "never refreshes itself" in fresh
+    assert _no_bad_values(book, built) == []
+
+
+def test_every_interactive_tab_follows_match_day(book, built):
+    status = f"Following Match Day: {SHARKS} vs {FALCONS} · Sun Oct 11, 2026 · 8-Ball"
+    assert book.display(WR, "A4") == status
+    assert book.display(SC, "A4") == status
+    ours, theirs = _roster(book, WR, 15)
+    assert ours == [(ANN, "5", "6-2", "Unknown · —"), (BEA, "4", "3-3", "Unknown · —"),
+                    (DEE, "No data", "No data", "Unknown · —")]
+    assert theirs == [(CAM, "6", "7-1", "—"), (EVE, "3", "2-2", "—")]
+    assert book.display(SC, "A6") == f"{CAM} · SL 6"
+    assert book.display(CP, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
+    assert _roster(book, CP, 7) == (ours, theirs)
+    assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
+    assert book.display(LL, "D5") == "✓ Matches the War Room — marks applied."
+    assert book.display(LL, "D6") == "✓ Matches the War Room opponent."
+
+
+def test_matrix_shows_direct_records_indirect_evidence_and_gaps_with_colors(book, built):
+    header = _row(built, WR, "Our player ↓ / opponent →")
+    assert [book.display(WR, f"{c}{header}") for c in "BC"] == [CAM, EVE]
+    cells = [[book.display(WR, f"{c}{header + i}") for c in "BC"] for i in (1, 2, 3)]
+    assert cells == [["2-0 (2)", "≈ 1-0 vs 0-1 (1 shared)"], ["0-2 (2)", "No evidence"], ["1-1 (2)", "0-2 (2)"]]
+    cats = [[book.display(WR, f"{c}{header + i}") for c in "OP"] for i in (1, 2, 3)]
+    assert cats == [["G", "I"], ["R", "X"], ["E", "R"]]
+    rules = built[WR].conditional_formatting
+    ranges = {str(cf.sqref) for cf in rules}
+    assert f"B{header + 1}:B{header + 8}" in ranges and f"C{header + 1}:C{header + 8}" in ranges
+
+
+def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built):
+    assert _opportunities(book, built) == [
+        (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"),
+        (f"vs {EVE} · SL 3", f"1. {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),
+    ]
+    threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
+    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players)"]
+    concerning = _list_after(book, built, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)", 5)
+    assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings)", f"{DEE} vs {EVE}: 0-2 direct (2 meetings)"]
+    risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
+    assert risks == [f"{EVE} — only even or indirect evidence left"]
+    unique = _list_after(book, built, "Unique favorable options — consider saving (the only remaining favorable direct option vs an unplayed opponent)", 8)
+    assert unique == [f"{ANN} — only favorable direct option vs {CAM}"]
+
+
+def test_lineup_marks_change_candidates_but_never_the_evidence(book, built):
+    book.set(LL, "C12", "Unavailable")   # Ann
+    ours, _ = _roster(book, WR, 15)
+    assert ours[0] == (ANN, "5", "6-2", "Unavailable · —") and ours[1][3] == "Unknown · —"
+    assert _opportunities(book, built) == [
+        (f"vs {CAM} · SL 6", f"1. {DEE} — 1-1 (2)"),
+        (f"vs {EVE} · SL 3", "No favorable, even or indirect evidence among our remaining players."),
+    ]
+    risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
+    assert risks == [f"{CAM} — only even or indirect evidence left", f"{EVE} — no evidence-backed option left"]
+    snapshot = _row(built, WR, "Lineup Lab snapshot (your marks applied; edit them on Lineup Lab)")
+    assert book.display(WR, f"C{snapshot + 1}") == ("2 of 3 (2 with unknown availability — still counted as remaining)")
+    # The evidence itself is untouched: inspecting Cam still shows Ann's real 2-0.
+    inspect = _row(built, WR, "Inspect opponent")
+    book.set(WR, f"C{inspect}", CAM)
+    assert [book.display(WR, f"{c}{inspect + 2}") for c in "ACE"] == [ANN, "1", "2-0 (2 meetings)"]
+
+
+def test_lineup_marks_only_apply_to_the_team_they_were_made_for(book, built):
+    book.set(LL, "C12", "Unavailable")
+    book.set(LL, "C5", SHARKS9)
+    ours, _ = _roster(book, WR, 15)
+    assert ours[0][3] == "Unknown · —"
+    end = 15 + 8
+    assert book.display(WR, f"A{end}").startswith(f"⚠ Lineup Lab marks are for {SHARKS9} — not applied to {SHARKS}.")
+    assert book.display(LL, "D5") == f"⚠ War Room shows {SHARKS} — these marks are NOT applied there."
+    assert book.display(LL, "B12") == "Ann Archer (APA record ID 1001)"  # rows list the named (9-Ball) team
+
+
+def test_selected_lineup_and_remaining_totals_disclose_missing_skill_levels(book, built):
+    snapshot = _row(built, WR, "Lineup Lab snapshot (your marks applied; edit them on Lineup Lab)")
+    assert book.display(WR, f"C{snapshot + 2}") == (
+        "9 known subtotal · 1 remaining player(s) without a captured SL — not a complete total")
+    book.set(LL, "D12", "Played")
+    book.set(LL, "D13", "Planned")
+    assert book.display(WR, f"C{snapshot + 3}") == "Skill total 9 for 2 selected player(s) — not a lineup-legality check."
+    book.set(LL, "D14", "Planned")
+    book.set(LL, "C7", 23)
+    assert book.display(WR, f"C{snapshot + 3}") == ("Known subtotal 9 · 1 selected player(s) without a captured SL · "
+                                                    "your reference cap: 23 (user-entered, not verified) — not a lineup-legality check.")
+    assert book.display(WR, f"C{snapshot + 1}") == "2 of 3 (2 with unknown availability — still counted as remaining)"
+
+
+def test_opponent_played_marks_retire_that_opponent(book, built):
+    book.set(LL, "C23", "Played")   # Cam
+    assert _opportunities(book, built)[0] == (f"vs {CAM} · SL 6", "Already played.")
+    risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
+    assert risks == [f"{EVE} — only even or indirect evidence left"]
+    unique = _list_after(book, built, "Unique favorable options — consider saving (the only remaining favorable direct option vs an unplayed opponent)", 8)
+    assert unique == ["None right now."]
+
+
+def test_changing_the_player_rebuilds_team_date_and_opponent_and_explains_stale_inputs(book, built):
+    book.set(MD, "B6", EVE)
+    assert book.display(MD, "B14") == FALCONS
+    assert book.display(MD, "C14").startswith(f"⚠ “{SHARKS}” is not one of Eve Ellis’s current teams — ignored. ")
+    assert book.display(MD, "B17") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Away vs Sharks · 8-Ball Open"
+    assert book.display(WR, "A4") == f"Following Match Day: {FALCONS} vs {SHARKS} · Sun Oct 11, 2026 · 8-Ball"
+    ours, theirs = _roster(book, WR, 15)
+    assert [o[0] for o in ours] == [CAM, EVE] and [t[0] for t in theirs] == [ANN, BEA, DEE]
+    assert book.display(LL, "D5") == f"⚠ War Room shows {FALCONS} — these marks are NOT applied there."
+    book.set(MD, "B6", ANN2)  # same name, different identity, no team
+    assert book.display(MD, "B13") == ANN2 and book.display(MD, "B14") == "—"
+    assert book.display(MD, "C14") == "No current team captured for Ann Archer."
+    assert _roster(book, WR, 15) == ([], [])  # nothing stale left on screen
+    book.set(MD, "B6", "Ann Archer")  # a bare name is never an identity
+    assert book.display(MD, "B13") == "⚠ No verified player matches “Ann Archer”."
+    assert _no_bad_values(book, built) == []
+
+
+def test_bye_multiple_fixtures_and_invalid_dates(book, built):
+    book.set(MD, "B9", "Sun Oct 18, 2026")
+    assert book.display(MD, "B19") == "Opponent roster: Not applicable (bye)."
+    assert book.display(WR, "A7") == "No opponent roster for the selected fixture."
+    assert _roster(book, WR, 15)[1] == []
+    book.set(MD, "B9", "Sun Oct 25, 2026")
+    assert book.display(MD, "C17") == "2 fixtures on this date — pick one in the Fixture cell (none is chosen for you)."
+    assert book.display(MD, "B17") == "—" and _roster(book, WR, 15)[1] == []
+    choice = book.value("Engine", book.name("uc_FixtureList")[1][1])
+    assert choice == "2 · vs Falcons · 7:00 PM MDT · Home · 8-Ball Open"
+    book.set(MD, "B10", choice)
+    assert "7:00 PM MDT" in book.display(MD, "B17") and book.display(MD, "C17") == "Your choice of 2 fixtures on this date."
+    assert [t[0] for t in _roster(book, WR, 15)[1]] == [CAM, EVE]
+    book.set(MD, "B9", serial(date(2026, 10, 12)))
+    assert book.display(MD, "B16") == "—"
+    assert book.display(MD, "C16") == (f"⚠ “Monday, Oct 12, 2026” has no {SHARKS} fixture (8-Ball & 9-Ball) — ignored. "
+                                       "Pick a date from the list.")
+    assert book.display(MD, "B17") == "—" and _no_bad_values(book, built) == []
+
+
+def test_format_and_team_changes_keep_valid_choices_and_explain_empty_schedules(book, built):
+    book.set(MD, "B7", SHARKS9)
+    assert book.display(MD, "B14") == SHARKS9 and book.display(MD, "C14") == "Your choice."
+    assert book.display(MD, "C16") == ("No upcoming scheduled date was captured for this team and format — choose a date.")
+    assert book.display(WR, "A7") == "No opponent roster for the selected fixture."
+    book.set(MD, "B7", SHARKS)
+    book.set(MD, "B8", "All recorded formats")
+    assert book.display(MD, "B16") == "Sun Oct 11, 2026" and book.display(MD, "B15") == "All recorded formats"
+
+
+def test_war_room_local_override_affects_only_that_tab_and_clearing_restores(book, built):
+    book.set(WR, "C6", OWLS)
+    assert book.display(WR, "A4") == f"Using local selections: {SHARKS} vs {OWLS} · 8-Ball"
+    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]
+    assert book.display(MD, "B17").endswith("Home vs Falcons · 8-Ball Open")       # Match Day untouched
+    assert book.display(CD, "A4").startswith("Following Match Day")
+    assert book.display(CP, "A2").startswith("⚠ War Room is using local selections")
+    book.set(WR, "C5", OWLS)  # a pairing with no scheduled fixture -> rosters only, said plainly
+    assert "precomputed for teams scheduled to play each other" in book.display(WR, "A7")
+    book.set(WR, "C5", "")
+    book.set(WR, "C6", "")
+    assert book.display(WR, "A4").startswith("Following Match Day:")
+    book.set(WR, "C6", "Not A Team")
+    assert book.display(WR, "A7").startswith("⚠ “Not A Team” is not a team label — ignored.")
+    assert book.display(WR, "A4").startswith("Following Match Day:")
+
+
+def test_coach_dashboard_defaults_to_the_viewer_and_offers_tonights_opponents(book, built):
+    choices = [book.value(s, r) for s, r in book.name("cd_PlayerBList")]
+    assert choices[:2] == [CAM, EVE] and choices[-1] == "All players…"
+    assert book.display(CD, "C12") == "Choose Player B above."
+    book.set(CD, "C6", CAM)
+    assert [book.display(CD, f"C{r}") for r in (19, 20, 21)] == ["2-0", 2, "A: 5 · B: 6"]
+    book.set(CD, "C6", "All players…")
+    book.set(CD, "C7", ZED)
+    assert book.display(CD, "C19") == "1-0"
+    book.set(CD, "C5", BEA)
+    assert book.display(CD, "A4") == f"Using local selections: {BEA} vs {ZED} · 8-Ball"
+    assert book.display(CD, "C19") == "No recorded direct meeting in this format"
+    book.set(CD, "C5", "")
+    assert book.display(CD, "A4").startswith("Following Match Day")
+
+
+def test_inspect_views_rank_candidates_and_show_one_players_evidence_vs_all(book, built):
+    inspect = _row(built, WR, "Inspect opponent")
+    book.set(WR, f"C{inspect}", CAM)
+    rows = [[book.display(WR, f"{c}{inspect + 1 + k}") for c in "ACEJ"] for k in (1, 2, 3)]
+    assert rows == [[ANN, "1", "2-0 (2 meetings)", "Direct record"], [DEE, "2", "1-1 (2 meetings)", "Direct record"],
+                    [BEA, "3", "0-2 (2 meetings)", "Direct record"]]
+    ours = _row(built, WR, "Inspect our player")
+    book.set(WR, f"C{ours}", DEE)
+    got = [[book.display(WR, f"{c}{ours + 1 + j}") for c in "ACEJ"] for j in (1, 2)]
+    assert got == [[CAM, "Even direct", "1-1 (2 meetings)", "2"], [EVE, "Concerning direct", "0-2 (2 meetings)", "1"]]
+
+
+def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(book, built):
+    card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 18)}
+    assert card["Team record"] == "7-1 (this team, Fall 2026)"
+    assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
+    assert card["Meetings with our players"] == f"vs {ANN}: 0-2 · vs {BEA}: 2-0 · vs {DEE}: 1-1"
+    assert card["Record by opponent SL"] == "vs SL5 3-3"
+    assert card["Coach observations"] == "(add notes on Lineup Lab)"
+    book.set(LL, "D23", "Breaks hard; slow safeties")
+    assert book.display(SC, "C17") == "Breaks hard; slow safeties"
+    top = _row(built, WR, "Direct meetings between the rosters (newest first)")
+    first = [book.display(WR, f"{c}{top + 2}") for c in "ABEI"]
+    assert first[0] == "Sun Sep 20, 2026" and first[3] in ("W", "L")
+    meetings = [book.display(WR, f"B{r}") for r in range(top + 2, top + 2 + 40)]
+    assert sum(1 for m in meetings if m) == 8  # 2+2+2 vs Cam, 2 vs Eve

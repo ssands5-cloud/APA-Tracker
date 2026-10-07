@@ -15,9 +15,8 @@ from analytics.ultimate_coach_matchup_evidence import (
 )
 
 
-def _m(pid, name, sl=4, live=True, ext=None):
-    return {"id": pid, "external_id": ext if ext is not None else str(1000 + pid), "name": name,
-            "skill_level": sl, "skill_level_is_live": live}
+def _m(pid, name, sl=4, ext=None):
+    return {"id": pid, "external_id": ext if ext is not None else str(1000 + pid), "name": name, "skill_level": sl}
 
 
 def _pairs(*rows):

@@ -239,6 +239,7 @@ def members_by_scope(rosters: list[dict[str, Any]], players: list[dict[str, Any]
     for row in rosters:
         out[row["team_scope_key"]].append({
             "id": row["player_id"], "external_id": external_ids.get(row["player_id"]), "name": row["player_name"],
-            "skill_level": row["skill_level"], "skill_level_is_live": row["skill_level_is_live"],
+            "skill_level": row["skill_level"],
+            "matches_won": row.get("matches_won"), "matches_played": row.get("matches_played"),
         })
     return out

@@ -1,6 +1,6 @@
 """A deliberately small evaluator for the exact Excel formula subset the
-Ultimate Coach workbook uses, so tests can compute Match Day / Match Night
-results end to end without Excel, COM, pywin32 or macros.
+Ultimate Coach workbook uses, so tests can compute every interactive sheet
+end to end without Excel, COM, pywin32 or macros.
 
 It models the Excel behaviours that matter for correctness here:
 - a reference (or INDEX result) landing on a BLANK cell is blank: it
@@ -8,6 +8,9 @@ It models the Excel behaviours that matter for correctness here:
   formula evaluates to a bare blank displays 0 -- the bug class behind the
   old Match Day B19/B26/B31 cells;
 - errors (#N/A from a failed MATCH, #REF!, #VALUE!) propagate until IFERROR;
+  ISNUMBER of an error is FALSE;
+- INDEX returns a reference, so INDEX(...):INDEX(...) builds a range;
+- workbook-scoped defined names resolve to their cell, range or table column;
 - text comparison is case-insensitive.
 
 Anything outside the supported subset raises NotImplementedError, so a new
@@ -16,6 +19,7 @@ formula shape can never silently "pass" here.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -31,17 +35,27 @@ class ExcelError(Exception):
         self.code = code
 
 
+class Ref:
+    """A single-cell reference (what INDEX returns)."""
+
+    __slots__ = ("sheet", "ref")
+
+    def __init__(self, sheet: str, ref: str):
+        self.sheet, self.ref = sheet, ref.replace("$", "")
+
+
 _TOKEN = re.compile(r"""
     (?P<ws>\s+)
   | (?P<string>"(?:[^"]|"")*")
   | (?P<number>\d+(?:\.\d+)?)
-  | (?P<sheetcell>(?:'[^']+'|[A-Za-z_][A-Za-z0-9_]*)!\$?[A-Z]{1,3}\$?\d+)
+  | (?P<sheetcell>(?:'[^']+'|[A-Za-z_][A-Za-z0-9_]*)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)
   | (?P<structured>[A-Za-z_][A-Za-z0-9_]*\[[^\]]+\])
   | (?P<range>\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+)
   | (?P<cell>\$?[A-Z]{1,3}\$?\d+(?![A-Za-z0-9_(]))
   | (?P<func>[A-Z][A-Z0-9.]*(?=\())
-  | (?P<bool>TRUE|FALSE)
-  | (?P<op><>|<=|>=|[=<>&+\-*/(),])
+  | (?P<bool>(?:TRUE|FALSE)(?![A-Za-z0-9_(]))
+  | (?P<name>[A-Za-z_][A-Za-z0-9_.]*)
+  | (?P<op><>|<=|>=|[=<>&+\-*/(),:])
 """, re.VERBOSE)
 
 
@@ -52,14 +66,21 @@ def _tokenize(text: str) -> list[tuple[str, str]]:
         if not m:
             raise NotImplementedError(f"cannot tokenize {text[pos:pos + 30]!r}")
         pos = m.end()
-        kind = m.lastgroup
-        if kind != "ws":
-            out.append((kind, m.group()))
+        if m.lastgroup != "ws":
+            out.append((m.lastgroup, m.group()))
     return out
 
 
 def _excel_serial_to_date(serial: float) -> date:
     return date(1899, 12, 30) + timedelta(days=int(serial))
+
+
+def _column_cells(sheet: str, text: str) -> list[tuple[str, str]]:
+    min_col, min_row, max_col, max_row = range_boundaries(text.replace("$", ""))
+    if min_col != max_col and min_row != max_row:
+        raise NotImplementedError("only single-row or single-column ranges are supported")
+    return [(sheet, f"{get_column_letter(c)}{r}") for r in range(min_row, max_row + 1)
+            for c in range(min_col, max_col + 1)]
 
 
 class Workbook:
@@ -84,6 +105,24 @@ class Workbook:
         self.inputs[(sheet, ref.replace("$", ""))] = value
         self.cache.clear()
 
+    def name(self, name: str):
+        """Resolve a defined name to a value (single cell) or a list of refs."""
+        defined = self.wb.defined_names.get(name)
+        if defined is None:
+            raise NotImplementedError(f"unknown name {name}")
+        text = defined.attr_text
+        m = re.fullmatch(r"(?:'([^']+)'|([A-Za-z_][A-Za-z0-9_ ]*))!(.+)", text)
+        if not m:
+            raise NotImplementedError(f"unsupported name target {text}")
+        sheet, target = m.group(1) or m.group(2), m.group(3)
+        structured = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\[([^\]]+)\]", target)
+        if structured:
+            ws, columns = self.tables[structured.group(1)]
+            return [(ws.title, ref) for ref in columns[structured.group(2)]]
+        if ":" in target:
+            return _column_cells(sheet, target)
+        return Ref(sheet, target)
+
     # -- cell values --
     def raw(self, sheet: str, ref: str) -> Any:
         key = (sheet, ref.replace("$", ""))
@@ -107,11 +146,12 @@ class Workbook:
             raw = self.raw(sheet, ref)
             if isinstance(raw, str) and raw.startswith("="):
                 try:
-                    result = _Parser(self, sheet, raw[1:]).parse()
+                    parser = _Parser(self, sheet, raw[1:])
+                    result = parser.scalar(parser.parse())
                 except ExcelError as exc:
                     result = exc
                 if isinstance(result, list):
-                    raise NotImplementedError("formula returned a range")
+                    raise NotImplementedError(f"formula in {sheet}!{ref} returned a range")
             else:
                 result = raw
             self.cache[key] = result
@@ -129,10 +169,6 @@ class Workbook:
         if value is BLANK and isinstance(raw, str) and raw.startswith("="):
             return 0
         return value
-
-
-def _is_blank(v: Any) -> bool:
-    return v is BLANK
 
 
 def _to_text(v: Any) -> str:
@@ -165,7 +201,13 @@ def _to_bool(v: Any) -> bool:
         return False
     if isinstance(v, (int, float)):
         return v != 0
+    if isinstance(v, str) and v.upper() in ("TRUE", "FALSE"):
+        return v.upper() == "TRUE"
     raise ExcelError("#VALUE!")
+
+
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 def _compare(a: Any, b: Any, op: str) -> bool:
@@ -177,16 +219,42 @@ def _compare(a: Any, b: Any, op: str) -> bool:
         a = 0.0 if not isinstance(b, bool) else False
     if b is BLANK:
         b = 0.0 if not isinstance(a, bool) else False
-    num = (int, float)
     if isinstance(a, str) and isinstance(b, str):
         a, b = a.lower(), b.lower()
-    elif isinstance(a, num) and isinstance(b, num) and not isinstance(a, bool) and not isinstance(b, bool):
+    elif _is_number(a) and _is_number(b):
         a, b = float(a), float(b)
     elif type(a) is not type(b):
         # Excel orders numbers < text < booleans; equality across types is false.
-        rank = lambda v: 0 if isinstance(v, num) and not isinstance(v, bool) else (1 if isinstance(v, str) else 2)
+        rank = lambda v: 0 if _is_number(v) else (1 if isinstance(v, str) else 2)
         a, b = rank(a), rank(b)
     return {"=": a == b, "<>": a != b, "<": a < b, ">": a > b, "<=": a <= b, ">=": a >= b}[op]
+
+
+def _criterion_match(value: Any, criterion: Any) -> bool:
+    """COUNTIF/COUNTIFS/SUMIFS criteria: equality, or an operator prefix."""
+    if isinstance(criterion, str):
+        m = re.match(r"^(<>|>=|<=|>|<|=)(.*)$", criterion)
+        if m:
+            op, rest = m.groups()
+            if rest == "":
+                if op == "<>":
+                    return value is not BLANK and value != ""
+                if op == "=":
+                    return value is BLANK or value == ""
+            try:
+                target: Any = float(rest)
+                if value is BLANK or not _is_number(value):
+                    return op == "<>"
+            except ValueError:
+                target = rest
+                if value is BLANK:
+                    value = ""
+            return _compare(value, target, op)
+        if criterion == "":
+            return value is BLANK or value == ""
+    if value is BLANK:
+        return False
+    return _compare(value, criterion, "=")
 
 
 class _Parser:
@@ -211,8 +279,25 @@ class _Parser:
             raise NotImplementedError(f"trailing tokens {self.tokens[self.i:]}")
         return result
 
-    # Lazy evaluation: each grammar level returns a thunk-free value, but IF /
-    # IFERROR / AND / OR take raw token spans so untaken branches never error.
+    # -- value helpers --
+    def scalar(self, v):
+        if isinstance(v, Ref):
+            return self.book.value(v.sheet, v.ref)
+        if isinstance(v, list):
+            raise ExcelError("#VALUE!")
+        return v
+
+    def cells(self, v) -> list[tuple[str, str]]:
+        if isinstance(v, Ref):
+            return [(v.sheet, v.ref)]
+        if isinstance(v, list):
+            return v
+        raise ExcelError("#VALUE!")
+
+    def values(self, v) -> list[Any]:
+        return [self.book.value(s, r) for s, r in self.cells(v)]
+
+    # -- grammar --
     def comparison(self):
         left = self.concat()
         while self.peek()[1] in ("=", "<>", "<", ">", "<=", ">="):
@@ -253,12 +338,17 @@ class _Parser:
         if self.peek()[1] == "-":
             self.take()
             return -_to_number(self.scalar(self.unary()))
-        return self.primary()
+        return self.range_expr()
 
-    def scalar(self, v):
-        if isinstance(v, list):
-            raise ExcelError("#VALUE!")
-        return v
+    def range_expr(self):
+        left = self.primary()
+        if self.peek()[1] == ":":
+            self.take()
+            right = self.primary()
+            if not (isinstance(left, Ref) and isinstance(right, Ref) and left.sheet == right.sheet):
+                raise NotImplementedError("':' needs two references on one sheet")
+            return _column_cells(left.sheet, f"{left.ref}:{right.ref}")
+        return left
 
     def primary(self):
         kind, text = self.take()
@@ -269,18 +359,23 @@ class _Parser:
         if kind == "bool":
             return text == "TRUE"
         if kind == "cell":
-            return self.book.value(self.sheet, text)
+            return Ref(self.sheet, text)
         if kind == "sheetcell":
             sheet_name, ref = text.rsplit("!", 1)
-            return self.book.value(sheet_name.strip("'"), ref)
+            sheet_name = sheet_name.strip("'")
+            if ":" in ref:
+                return _column_cells(sheet_name, ref)
+            return Ref(sheet_name, ref)
         if kind == "range":
-            return self.range_cells(text)
+            return _column_cells(self.sheet, text)
         if kind == "structured":
             name, column = text[:-1].split("[", 1)
             ws, columns = self.book.tables[name]
             if column not in columns:
                 raise ExcelError("#REF!")
             return [(ws.title, ref) for ref in columns[column]]
+        if kind == "name":
+            return self.book.name(text)
         if kind == "func":
             return self.function(text)
         if text == "(":
@@ -288,13 +383,6 @@ class _Parser:
             self.take(")")
             return value
         raise NotImplementedError(f"unexpected token {text!r}")
-
-    def range_cells(self, text: str):
-        min_col, min_row, max_col, max_row = range_boundaries(text.replace("$", ""))
-        if min_col != max_col:
-            raise NotImplementedError("only single-column ranges are supported")
-        letter = get_column_letter(min_col)
-        return [(self.sheet, f"{letter}{r}") for r in range(min_row, max_row + 1)]
 
     def skip_arg(self):
         depth = 0
@@ -346,6 +434,11 @@ class _Parser:
             return result
         if name == "IFERROR":
             first = self.arg_value()
+            if not isinstance(first, ExcelError):
+                try:
+                    first = self.scalar(first) if isinstance(first, Ref) else first
+                except ExcelError as exc:
+                    first = exc
             self.take(",")
             if isinstance(first, ExcelError):
                 result = self.arg_value()
@@ -362,49 +455,81 @@ class _Parser:
             if self.peek()[1] == ",":
                 self.take(",")
         self.take(")")
-        if name == "ISNUMBER" and len(args) == 1 and isinstance(args[0], ExcelError):
-            return False  # Excel: ISNUMBER(#N/A) is FALSE, not an error
+        if name in ("ISNUMBER", "ISBLANK", "ISERROR") and len(args) == 1:
+            if isinstance(args[0], ExcelError):
+                return name == "ISERROR"
+            try:
+                v = self.scalar(args[0])
+            except ExcelError:
+                return name == "ISERROR"
+            if name == "ISNUMBER":
+                return _is_number(v)
+            if name == "ISBLANK":
+                return v is BLANK
+            return False
         for a in args:
             if isinstance(a, ExcelError):
                 raise a
         return self.call(name, args)
 
-    def cells(self, ref_list):
-        return [self.book.value(s, r) for s, r in ref_list]
-
     def call(self, name: str, args: list[Any]):
         if name in ("OR", "AND"):
             values = [_to_bool(self.scalar(a)) for a in args]
             return any(values) if name == "OR" else all(values)
+        if name == "NOT":
+            return not _to_bool(self.scalar(args[0]))
         if name == "INDEX":
-            refs, n = args[0], int(_to_number(self.scalar(args[1])))
-            if not isinstance(refs, list) or n < 1 or n > len(refs):
+            refs, n = self.cells(args[0]), int(_to_number(self.scalar(args[1])))
+            if n < 1 or n > len(refs):
                 raise ExcelError("#REF!")
             sheet, ref = refs[n - 1]
-            return self.book.value(sheet, ref)
+            return Ref(sheet, ref)
         if name == "MATCH":
-            needle, refs = self.scalar(args[0]), args[1]
-            if len(args) < 3 or _to_number(args[2]) != 0:
+            needle, refs = self.scalar(args[0]), self.cells(args[1])
+            if len(args) < 3 or _to_number(self.scalar(args[2])) != 0:
                 raise NotImplementedError("only exact MATCH(...,0) is supported")
-            for i, v in enumerate(self.cells(refs), start=1):
+            for i, (s, r) in enumerate(refs, start=1):
+                v = self.book.value(s, r)
                 if v is not BLANK and _compare(v, needle, "="):
                     return float(i)
             raise ExcelError("#N/A")
         if name == "COUNTIF":
-            refs, criterion = args[0], self.scalar(args[1])
-            return float(sum(1 for v in self.cells(refs) if v is not BLANK and _compare(v, criterion, "=")))
+            criterion = self.scalar(args[1])
+            return float(sum(1 for v in self.values(args[0]) if _criterion_match(v, criterion)))
         if name == "COUNTIFS":
-            raise NotImplementedError("COUNTIFS")
-        if name == "ISNUMBER":
-            v = self.scalar(args[0])
-            return isinstance(v, (int, float)) and not isinstance(v, bool)
+            ranges = [self.values(args[i]) for i in range(0, len(args), 2)]
+            criteria = [self.scalar(args[i]) for i in range(1, len(args), 2)]
+            if len({len(r) for r in ranges}) != 1:
+                raise ExcelError("#VALUE!")
+            return float(sum(1 for row in zip(*ranges)
+                             if all(_criterion_match(v, c) for v, c in zip(row, criteria))))
+        if name == "SUMIFS":
+            total = self.values(args[0])
+            ranges = [self.values(args[i]) for i in range(1, len(args), 2)]
+            criteria = [self.scalar(args[i]) for i in range(2, len(args), 2)]
+            return float(sum(_to_number(t) for t, *row in zip(total, *ranges)
+                             if _is_number(t) and all(_criterion_match(v, c) for v, c in zip(row, criteria))))
+        if name in ("SUM", "MIN", "MAX"):
+            nums: list[float] = []
+            for a in args:
+                if isinstance(a, (list, Ref)) and not (isinstance(a, Ref) and False):
+                    vals = self.values(a) if isinstance(a, list) else [self.scalar(a)]
+                    nums.extend(float(v) for v in vals if _is_number(v))
+                else:
+                    nums.append(_to_number(self.scalar(a)))
+            if name == "SUM":
+                return float(sum(nums))
+            if not nums:
+                return 0.0
+            return float(min(nums) if name == "MIN" else max(nums))
         if name == "INT":
-            import math
             return float(math.floor(_to_number(self.scalar(args[0]))))
-        if name == "MIN":
-            return min(_to_number(self.scalar(a)) for a in args)
+        if name == "LEN":
+            return float(len(_to_text(self.scalar(args[0]))))
         if name == "TRIM":
             return " ".join(_to_text(self.scalar(args[0])).split())
+        if name == "HYPERLINK":
+            return _to_text(self.scalar(args[1] if len(args) > 1 else args[0]))
         if name == "TEXT":
             value, fmt = self.scalar(args[0]), self.scalar(args[1])
             if fmt == "0":
