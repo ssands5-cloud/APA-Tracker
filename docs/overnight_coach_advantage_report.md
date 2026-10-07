@@ -1532,6 +1532,53 @@ credentials, off-limits edits, COM/macros, destructive checkout operations
 or merges by GPT. Known unrelated user files remain untouched. Issue #84
 is the authoritative handoff; resume from it rather than old chat claims.
 
+### Phase 3 second-block Excel repair verification — 2026-10-07 17:37 UTC
+
+Paul directly authorized a new ten-hour block, 17:16 UTC Oct7 to 03:16:55
+UTC Oct8 (21:16 Denver Oct7). Monitor ACTIVE, every twenty minutes. Prior
+window handoff is historical. Exact head
+`a412e2e834a71714875d9ee4669d665d7292e1ba`; docs-only above repaired
+code/artifact `1b7053a`. Fresh CI observed green on Python 3.12/3.13.
+Canonical root/common Git/origin verified; builder snapshot tracked-clean.
+
+✅ **Verified repairs:** independent focused suite: 47 passed in 12.96s,
+covering Python evidence, actual Excel formulas and Chromium flows. Fresh
+independent synthetic reproductions outside builder tests confirm:
+- Oct25 same teams at 7PM/9PM: marks bound to first fixture are ignored on
+  second; returning restores first; blank planning fixture fails closed.
+- War Room-only opponent/format overrides leave Coach Dashboard pool and
+  format, and Captain Packet fixture heading and roster unchanged.
+Both original Excel P1 findings are resolved at this immutable checkpoint.
+No synthetic data added to production. No COM/macros or feature edits.
+
+✅ **Artifact provenance:** HTML/XLSX SHA256 values independently match
+UAT_MANIFEST in `.worktrees/pr83/tmp/uat/build-1b7053a/`; built head is
+`1b7053a`, distinct from docs-only PR head. Source unchanged is manifest
+reported; no independent source DB rehash claimed in this cycle. Both
+repairs and regressions were verified rather than accepted from self-report.
+
+⚠ **Remaining limitations:** Excel is one explicitly bound active plan;
+its instructions require clearing old marks before selecting another
+Planning for fixture value. Formula-only controls cannot auto-erase inputs
+or preserve unlimited independent editable histories; this is a disclosed
+workflow limit, not an untested claim of full plan persistence. Final real
+Excel interaction, packet appearance and captain usability remain PENDING
+PAUL REVIEW. No new real-Excel/phone/print visual acceptance claimed here.
+Do not call these technical PASS results blanket production readiness.
+
+💡 **Next:** Paul tests revised controls/clear-replan, verifies the packet
+and confirms the captain workflow. Meanwhile audit other already-approved
+items only; no merge or new features. Report any further concrete defects
+with exact head and reproduction. Skills applied: reviewed verification-
+before-completion, red-team and validator. All audit outputs inside the
+canonical root, known unrelated user files untouched.
+
+**Assessment:** technical regression audit PASS for the two open repairs;
+overall readiness PENDING PAUL REVIEW. UX provisionally Good in tested
+flows, Captain Edge 7/10 (qualitative, not a predicted win advantage), with
+manual Excel plan handling and visual acceptance still limiting the score.
+Issue #84 updated; PR #83 remains unmerged draft.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
