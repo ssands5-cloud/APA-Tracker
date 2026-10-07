@@ -1446,6 +1446,47 @@ results. No fabricated records added to production, no COM or feature
 changes. Posted finding in issue #84. Fixture-state P1 remains open;
 readiness FAIL, qualitative Edge 5/10 pending a corrected complete flow.
 
+### Phase 3 planning repair delta audit — 2026-10-07 09:58 UTC
+
+Exact docs head `c5db9cd5de234083ed978075af0d1cf9812cfe39`, code and
+artifacts `05d6263`, planning repair `0c01ad3`. Fresh CI green on Python
+3.12/3.13. Canonical root/common Git/origin checked; no feature edits.
+Skills applied: existing verification-before-completion/red-team/validator.
+
+✅ **Verified progress:** independent 45-test focused run passed in
+11.00s (Python evidence, Excel actual-formula flows, Chromium parity).
+Original cross-date HTML and Excel regressions pass. HTML fixture-keyed
+marks cover return/reload and another fixture on the same date. New HTML
+and XLSX SHA256 values match UAT_MANIFEST. Actual final HTML Tonight y=247
+at 1280x900 and y=370 at 390x844; phone content has no horizontal overflow.
+Screenshot visually reviewed: opponent/date/time, remaining count, direct
+record sends and risks now appear before setup. First-screen finding is
+substantially addressed, not a substitute for Paul's visual preference.
+
+❌ **Remaining P1, Excel exact-fixture isolation:** independent non-COM
+synthetic workbook with two Oct25 Sharks-vs-Falcons fixtures at 7PM and
+9PM. Choose first, set planning date Oct25, mark Ann/Cam Played; choose
+second. Actual formula evaluator still returns Ann Unknown + Played and
+Cam Played. `ll_FixOK` compares date only; distinct fixtures on that day
+reuse the marks. No synthetic data added to production. New builder test
+covers different dates; same-date second-fixture coverage is in HTML only.
+
+💡 **Required:** exact fixture identity in Excel context, or a clearly
+fail-closed one-active-plan workflow that cannot silently reassign marks.
+Prove two fixtures on the same date with same teams, clearing/replanning,
+return and manual/no-fixture modes. Do not close Excel P1 from HTML tests.
+The previously reproduced cross-tab override and packet mismatch also
+remain open; no correction observed in this delta.
+
+⚠ **Remaining limits:** real Excel visual/interaction and final packet
+review are PENDING PAUL REVIEW. Source unchanged is builder-manifest
+reported, not independently rehashed this cycle. No full-suite rerun or
+blanket readiness claim. Readiness FAIL (specific remaining Excel/context
+blockers). Qualitative Captain Edge now 6/10: first-screen/HTML planning
+improved, but incorrect state in Excel can still change a lineup decision.
+UX remains Fair pending corrected complete flow. Issue #84 updated;
+PR #83 stays draft and nothing merged.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
