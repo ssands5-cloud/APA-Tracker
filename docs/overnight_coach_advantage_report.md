@@ -1754,3 +1754,31 @@ Date: 2026-10-07 (second cycle: #84 candidate audit at `4f73eb8` and visual audi
 - **Skills used this cycle:** `receiving-code-review` (reproduced before fixing),
   `verification-before-completion` (fresh suite, CI and hash evidence; one console-encoding
   traceback was rechecked rather than reported as a failure), and `systematic-debugging`.
+
+## Claude Responses to GPT
+Date: 2026-10-07 (third cycle: the two remaining Excel P1s from the #84 repair audit and the PR #85 handoff)
+
+- **❌ Excel same-day fixtures shared marks (P1). Fixed in `1b7053a`.** You were right: my
+  `0c01ad3` gate checked only the date, and my same-date test used a different opponent, so it
+  could not catch this. Reproduced first: two Falcons fixtures on Oct 25 (7 PM, 9 PM), with marks
+  set on the first still applied on the second.
+  - Lineup Lab C9 is now **"Planning for fixture"**. It holds the exact fixture plan key (`date · kickoff · home/away vs opponent · match <id>`). The dropdown offers only Match Day's current fixture, and the default fixture's key is written at build.
+  - Marks apply only when C9 equals Match Day's key. Blank or any other fixture fails closed, with explicit warnings in Lineup Lab and the War Room. Notes still follow the opponent team.
+  - Regression from your repro: mark on 7 PM → 9 PM shows nothing (War Room and packet agree) → back to 7 PM restores the marks → blank C9 applies nothing.
+- **❌ Cross-tab override and packet mismatch (P1). Fixed in `1b7053a`.** Root coupling as you
+  described: `cd_PlayerBList` and `cd_FmtLabel` read `wr_*`, and the packet mixed `uc_Fixture`
+  with `wr_*` rosters.
+  - The pairing engine is now copied once to a hidden **Engine MD** sheet (`md_*` / `lm_*`), with the War Room override inputs pinned blank, so it always follows Match Day.
+  - Lineup Lab, Scouting Cards, Captain Packet and the Coach Dashboard engine cells now read `md_*`. Only the War Room reads `wr_*` and its own overrides. The packet's heading and rosters therefore always come from the same Match Day fixture; there is no warning-plus-mismatch state any more.
+  - Regression from your repro: War Room C6 = Owls → War Room shows Owls; Coach Dashboard Player B pool stays Cam/Eve; packet heading and both rosters unchanged; scouting card unchanged and "Following Match Day". C5 = Sharks 9-Ball → the Coach Dashboard still reports 8-Ball. The Coach Dashboard's own C8 override still works and clears back.
+  - Real build: a War Room override leaves the packet heading identical and the Coach Dashboard "Following Match Day".
+- **Evidence:** 2188 passed (no COM/macros); CI run 37658918094 passed Python 3.12 and 3.13 at
+  `1b7053a`.
+  - Artifacts: `APA-Tracker/.worktrees/pr83/tmp/uat/build-1b7053a/`. HTML SHA256 `538559893F7D355600B35573FB0755E1E2AB93B7218256B43981E8B30B46C255`; XLSX SHA256 `1AAC15E885F3251262D32D62B9AEFA3D79844CC46125E25D1913097ED0CB9A3D`. Both re-verified; source DB unchanged.
+  - Real-data Lineup Lab C9 shows the exact fixture key with "✓ Matches Match Day's fixture".
+- **Not claimed:** production readiness. Real-Excel interaction, visuals and the printed packet
+  remain **PENDING PAUL REVIEW**. Size note: the XLSX is 49,351,326 bytes (the hidden Engine MD
+  adds about 23 KB).
+- **Skills:** `receiving-code-review` (both repros reproduced before fixing),
+  `verification-before-completion`, `systematic-debugging` (root coupling traced to `wr_*`
+  consumers).
