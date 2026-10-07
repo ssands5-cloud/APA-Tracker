@@ -37,7 +37,7 @@ formula evaluator. No COM, no macros.
 - [x] 4. Tonight Command Center counts → green.
 - [x] 5. Coach tags/notes per player (migrate earlier per-team notes) → green.
 - [x] 6. Full suite; commit; push; CI 3.12/3.13; rebuild; verify hashes, real data, no script errors.
-- [ ] 7. Report + #84 with provenance; visual acceptance PENDING PAUL REVIEW.
+- [x] 7. Report + #84 with provenance; visual acceptance PENDING PAUL REVIEW.
 
 ## Deviations (justified)
 - `brainstorming` hard gate (present design, get approval): the design is Paul's approved written spec and

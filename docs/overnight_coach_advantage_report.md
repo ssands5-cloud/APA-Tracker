@@ -1883,3 +1883,32 @@ Date: 2026-10-07 (fifth cycle: HTML stale-context P1 from Paul's real UAT, #84 1
 - **Artifacts:** built from `a0dbf24` into `APA-Tracker/.worktrees/pr83/tmp/uat/build-a0dbf24/`. HTML SHA256 `6D57073A14DA9E3C53F91A2DC97F6AF0FC7D2B61528F7871116C779A65F55A11`; XLSX SHA256 `0FB71EB5BB27E9F962BA6AD8FE7D12B4FD7A40ED205169862F15D14056C44C12`. Re-verified against `UAT_MANIFEST.json`; source DB SHA256 unchanged.
 
 **Visual acceptance:** still PENDING PAUL REVIEW.
+
+### Claude build log — reasons, HTML onboarding / Command Center / Coach Notes — 2026-10-07
+
+**Skill files read before implementation:**
+- `brainstorming`. Applicability: its hard gate requires a user-approved design. Deviation, justified: Paul's written directive is the approved design and he authorized unattended work, so no new question round. The design is recorded in the plan below.
+- `writing-plans`. Applied: `docs/superpowers/plans/2026-10-07-html-onboarding-command-center-coach-notes.md`, written before code, then executed task by task. Deviation: no subagents, to keep one implementation session.
+- `verification-before-completion`. Applied: tests written first and run red. The Command Center line-break fix was red-green verified by stashing the fix.
+- `reducer`. Read; not applicable (it shrinks Python source).
+
+**Changes:**
+- **Explicit reasons** (`f186578`). One shared definition, `analytics.ultimate_coach_war_room.reason()`: the recorded evidence and its sample size only, for example "2-0 direct record (2 meetings) — favorable" or "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no direct meetings)".
+  - Excel: Lineup Lab "Best remaining send … and why" and Command Center send lines.
+  - HTML: Lineup Lab "Best remaining sends — and why".
+  - The HTML↔Python cross-check now includes reasons.
+- **Shared onboarding source** (`9259e4f`). `ONBOARDING_WHAT`, `ONBOARDING_LIMITS`, `COACH_TAGS`, `build_version()` and `worked_example()` are used by both artifacts. Excel START HERE was switched over and is unchanged in content.
+- **HTML "Start here" card** (`9259e4f`): what it does, a linked quick start, the worked example generated from this build, the same limitations as Excel, and version / build date / freshness. It sits below Tonight, so Tonight stays in the first screen (desktop y=247, phone y=370 on real data). Open on a first visit, remembered closed.
+- **HTML Command Center** (`9259e4f`, `45659f4`): Tonight adds our Available / Unavailable / Unknown / used / planned counts, evidence across all pairings, and opponent missing information, worded exactly as the Excel Command Center. Real data matches the Excel numbers (6 favorable, 1 concerning, 2 even direct + 55 shared-only, 8 insufficient).
+- **HTML Coach Notes** (`9259e4f`): two tags from the shared list plus an observation, per player (durable across fixtures and reload). Earlier per-team notes are migrated. Shown as "Coach: …" and labeled "Your opinion, not APA facts"; evidence is unchanged (asserted).
+  - Limitation: HTML notes live in that browser and Excel notes in the workbook; no shared store exists.
+
+**Provenance (reported separately):**
+- **Source revision:** `45659f4`.
+- **Fresh tests:** 2201 passed (`pytest --ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp`).
+- **CI:** run 37693360571 passed Python 3.12 and 3.13 at `45659f4`.
+- **Artifacts:** built from `45659f4` into `APA-Tracker/.worktrees/pr83/tmp/uat/build-45659f4/`. HTML SHA256 `8A35EAF05FE53737E0B07DC0AFD81FC4E79B6EC274983F1633F8E71C4D70258F`; XLSX SHA256 `9E432DB0941F81FB62BC36144CF0F1B2DA9BBADBC849F142BB369170EBFCAF28`. Re-verified against `UAT_MANIFEST.json`; source DB unchanged. Real HTML: no script errors, no horizontal scroll at 1280 or 390 px.
+
+**Process note:** commits from `a0dbf24` on carry the Sonnet 5 co-author footer as Paul instructed; earlier published history is not rewritten.
+
+**PENDING PAUL REVIEW:** visual acceptance of the Start here card, Command Center, coach-notes UI, START HERE tab and the packet print.
