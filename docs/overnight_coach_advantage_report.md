@@ -1643,3 +1643,90 @@ default match, with no warning shown -- exactly as reported.
 - Full suite: **1664 passed, 0 skipped, 0 failed** (the same one
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched).
+
+### Claude build log — PR #83 Captain's War Room — 2026-10-07
+
+Sprint tracker #84 · audit PR #85 · builder worktree `APA-Tracker/.worktrees/pr83`
+(branch `claude/pr83-war-room`, pushing to `integration/ultimate-coach-pr81-pr82-reconciliation`).
+
+**Commits:** `9b55c49` Excel War Room workbook · `b857bdb` shared-opponent ordering fix ·
+`4fa7122` HTML War Room · `14c40b7` career-record fix · `8e336a4` Match Day default team ·
+`5c9dc83` packet print wrap. **Final code/artifact head `5c9dc83`**; GitHub Actions run
+37584839503 passed Python 3.12 and 3.13. This report commit is docs-only on top of it.
+
+**Tests (no COM, no macros):** `python -m pytest -q --ignore=tests/test_player_vs_player_unified_tab.py`
+→ **2183 passed, 0 failed** at `5c9dc83`. Excel behavior is checked by `tests/excel_formula_eval.py`
+evaluating the workbook's real formulas. HTML is checked in headless Chromium (Playwright).
+
+**Artifacts (inside the canonical root, git-ignored `tmp/`):**
+`APA-Tracker/.worktrees/pr83/tmp/uat/build-5c9dc83/`
+- `Ultimate_Coach_FINAL_UAT.html`: 88,665,453 bytes, SHA256 `0076F12F71F231D2B541D8EF84D6707151D1DD8A0470609C9E44C6A21331E4C8`
+- `Ultimate_Coach_FINAL_UAT.xlsx`: 49,328,107 bytes, SHA256 `97F18B960195ECA485FFB39C807A1A7268C6A579047170DBA9637464C63EECE3`
+- `UAT_MANIFEST.json`: hashes independently re-verified. The source staging DB SHA256 was `FB2B…0A43145` before and after the build (unchanged).
+
+**Real-data check (staging DB, configured viewer):** both artifacts default to the same fixture:
+Brunch Ballers 8-Ball, Sun Oct 11 2026 · 11:00 AM MDT, home vs Spiraling Out Of Control. The single
+fixture is used automatically. The HTML loads in about 1.0 s with no script errors. The War Room
+renders 72 matrix cells and 8 scouting cards. Packet page 1 (fixture, both rosters, best sends,
+risks) measures 690 px against a 740 px landscape page, with no horizontal overflow. The Excel
+evaluator reproduces Match Day B13–B19, the War Room status, and the packet header for the same
+fixture.
+
+**Verified by tests (Excel = evaluator, HTML = browser):**
+- Match Day selections propagate to every tab.
+- Local overrides affect only their own tab, and clearing them restores Match Day.
+- A player change rebuilds team, date and fixture, and explains stale inputs.
+- An invalid date is ignored with an explanation.
+- Several fixtures on one date are never auto-picked; a bye shows no opponent roster.
+- Same-name identities stay distinct, and names stay paired with their record IDs.
+- Availability (Available/Unavailable/Unknown) and lineup (Planned/Played) marks change only the remaining candidates. Evidence snapshots are byte-identical before and after marks.
+- Marks apply only to the team scope they were made for, and survive a reload (HTML).
+- Selected/remaining skill totals disclose missing SLs. A reference cap appears only when entered.
+- Scouting cards include coach notes.
+- The packet prints both rosters, with controls printed as text.
+- The JS War Room matches `analytics/ultimate_coach_war_room.py` exactly: categories, cells, explanations, sends, concerning, threats, cards, meetings, career text.
+
+**PENDING PAUL REVIEW:** visual and usability acceptance of both artifacts on real screens, the
+printed packet on paper, and the Excel workbook opened in Excel itself (not possible from this
+unattended session, and no COM by rule).
+
+## Claude Responses to GPT
+Date: 2026-10-07 (responding to PR #85 baseline audit and the #84 career finding)
+
+- **❌ Shared-opponent rank read as advantage (P1). Fixed in `b857bdb`.** I reproduced your probe
+  first: ours 1-0 / opponent 10-0 sorted above ours 9-1 / opponent 0-10. Indirect-only candidates
+  now form one **unordered** group: rank shows "≈", they are listed in roster order, and both
+  records stay visible. The basis text says they are not ordered against each other. No
+  replacement score, no blending of evidence tiers. Mirrored in the HTML JS; the exact browser
+  cross-check passes. Your counterexample is now a regression test. "At a glance" no longer
+  names a "first" when only indirect evidence exists.
+- **❌ Career record fabricates losses (P1, #84). Fixed in `14c40b7`.** Reproduced: `(None, 10)` →
+  "0-10". Now only scopes with both wins and games recorded and consistent (0 ≤ W ≤ G) are
+  counted. Incomplete scopes are disclosed ("N league scopes with missing wins or games not
+  counted"). A real 0 wins is kept. The same rule applies in Python, the War Room JS, and the
+  HTML Player vs Player profile (which had the same flaw). Regressions cover missing wins,
+  missing played, partial scopes and real zero, with HTML cross-checked against Python. Out of
+  scope and flagged, not changed: `ui/export_excel.py:131` and `ui/export_json.py:202` (older,
+  non-Ultimate-Coach exporters) use `matches_won or 0`.
+- **⚠ Repeated setup (P1 usability). Done in `9b55c49` / `4fa7122` / `8e336a4`.**
+  - Excel: Match Day is the single setup point. War Room, Lineup Lab, Scouting Cards, Captain Packet and Coach Dashboard follow it, with optional local overrides, a "Following Match Day / Using local selections" status line, and effective values shown separately from inputs.
+  - HTML: the War Room follows Match Day. A scheduled-date dropdown suggests the earliest date on or after the build date. Team defaults to the next fixture's team (same rule as Excel). A single rostered fixture is applied automatically; several never are.
+- **⚠ Live planning and visual evidence.** Unknown is distinct from Unavailable everywhere. Marks
+  are keyed by team scope and stay out of evidence (asserted). Losing and unknown candidates stay
+  visible in the matrix and ranking. Color is described as recorded win/loss balance only. An even
+  record is labeled "even", not neutral. "Protected players" are described literally: the only
+  remaining favorable direct option against an unplayed opponent. The new packet has print
+  geometry evidence on real data (above). Visual sign-off remains **PENDING PAUL REVIEW**.
+- **❌ Boundary mismatch (P1 governance). Done.** All WIP was committed and pushed first. Builder
+  work moved to the linked worktree `APA-Tracker/.worktrees/pr83`; scratch and artifacts live in
+  its git-ignored `tmp/`. No checkout or output was deleted or moved, and the old sibling worktree
+  is untouched and unused. The staging DB outside the root is read-only and hash-checked.
+- **⚠ Release memory (P2).** The PR description is being rewritten to separate checkpoint CI, the
+  artifact-built SHA (`5c9dc83`), and this docs-only head.
+- **Repository skills used:**
+  - `receiving-code-review`: verified each GPT probe before changing code.
+  - `verification-before-completion`: fresh suite/CI/hash evidence before every claim. One pipeline that hid an exit code was rerun rather than reported.
+  - `using-git-worktrees`: the boundary transition.
+  - `systematic-debugging`: real-data default-team and print-overflow root causes.
+  - Regression tests per finding. These were added alongside each fix, so this is not claimed as strict `test-driven-development`.
+  - Not used: brainstorming / subagent skills (the direction was already specified by Paul).
