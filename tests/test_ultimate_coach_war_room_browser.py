@@ -222,3 +222,23 @@ def test_planning_marks_belong_to_one_fixture_and_notes_follow_the_player(tmp_pa
             assert errors == []
         finally:
             browser.close()
+
+
+def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
+    """GPT visual audit: the first viewport must show the fixture and decision overview, not only setup."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            for vp in ({"width": 1280, "height": 900}, {"width": 390, "height": 844}):
+                page, errors = _page(tmp_path, browser)
+                page.set_viewport_size(vp)
+                box = page.locator("#tonight").bounding_box()
+                assert box and box["y"] < vp["height"] * 0.6, (vp, box)
+                text = page.inner_text("#tonight")
+                assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
+                assert "Ann Archer vs Cam Cole (2-0 (2))" in text and "Eve Ellis (2-0 vs us)" in text
+                assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
+                assert errors == []
+                page.close()
+        finally:
+            browser.close()

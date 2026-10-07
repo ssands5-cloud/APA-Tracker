@@ -58,6 +58,25 @@ button.secondary:hover { background:var(--felt-soft); }
 .scout dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:0; padding:10px 12px; font-size:13px; }
 .scout dt { color:var(--muted); } .scout dd { margin:0; overflow-wrap:anywhere; }
 .md-date-list { margin-top:10px; }
+.tonight { border-top:5px solid var(--brass); }
+.tonight:empty { display:none; }
+.tonight h2 { margin:0 0 4px; font-size:19px; }
+.tonight .when { font-weight:800; font-size:16px; }
+.tonight .vs { font-size:15px; margin:2px 0 8px; }
+.tonight-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+.tonight-grid > div { background:#f7f5ef; border:1px solid #ece6d8; border-radius:9px; padding:8px 10px; font-size:13px; }
+.tonight-grid b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:3px; }
+.tonight-links { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-weight:700; font-size:13.5px; }
+.tonight-links a { color:var(--felt-deep); }
+@media print { #tonight { display:none !important; } }
+@media (max-width:760px) {
+  header.hero p { display:none; }
+  header.hero .ball { width:32px; height:32px; }
+  nav.sections { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:8px; }
+  nav.sections a { white-space:nowrap; padding:5px 10px; font-size:12px; }
+  .freshness { gap:4px; margin-top:8px; font-size:11px; }
+  .freshness span { padding:2px 7px; }
+}
 @media print {
   select.plan,textarea.plan,input#ll-cap,label.inline input,#ll-clear { display:none !important; }
   .print-only { display:inline; }
@@ -439,6 +458,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
 <div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
+<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 <section class="card card-feature" id="match-day-card">
   <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
   <div class="viewer-box">

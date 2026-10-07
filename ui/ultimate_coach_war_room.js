@@ -160,7 +160,25 @@
 
   function wrList(items,empty){return '<ul class="wr-list">'+(items.length?items.map(function(t){return '<li>'+esc(t)+'</li>';}).join(""):'<li class="muted">'+esc(empty)+'</li>')+'</ul>';}
   function wrChip(cat){return '<span class="cat-dot cat-'+cat+'" title="'+esc(WR_CAT_LABELS[cat])+'"></span>';}
-  function wrClear(){["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
+  // "Tonight" at the top of the page: the fixture and the decision overview first, setup below.
+  function wrTonight(w,plan,ta,tb){
+    var el=document.getElementById("tonight");
+    if(!el) return;
+    if(!w){el.innerHTML="";return;}
+    var c=MATCHUP_CONTEXT,ctx=c&&c.ourKey===ta.key&&c.oppKey===tb.key&&c.fixture?c:null,f=ctx?ctx.fixture:null;
+    var remN=w.ours.filter(function(m){return plan.rem[String(m.id)];}).length;
+    var sends=[];w.blocks.forEach(function(b,j){if(plan.unplayed[j]&&plan.sends[j].length&&sends.length<3) sends.push(plan.sends[j][0].member.name+" vs "+b.opponent.name+" ("+plan.sends[j][0].cell+")");});
+    el.innerHTML='<h2>Tonight</h2>'
+      +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
+      +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
+      +'<div class="tonight-grid">'
+      +'<div><b>Our remaining players</b>'+remN+' of '+w.ours.length+'</div>'
+      +'<div><b>Best sends now</b>'+(sends.length?sends.map(esc).join('<br>'):'No evidence-backed send left')+'</div>'
+      +'<div><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return esc(t.opponent.name+" ("+wlText(t.their_wins,t.their_games)+" vs us)");}).join('<br>'):'None recorded')+'</div>'
+      +'<div><b>Open risks</b>'+(plan.risks.length?plural(plan.risks.length,"opponent")+' with no favorable option left':'None')+'</div>'
+      +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
+  }
+  function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML="";["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
 
   function renderWarRoom(ta,tb,fmt){
     var opEl=document.getElementById("wr-opportunities");
@@ -172,6 +190,7 @@
       return;
     }
     var w=warRoomPair(ta,tb,fmt),plan=wrPlan(w,ta,tb);
+    wrTonight(w,plan,ta,tb);
     // Best sends (ranking order, sendable + remaining, unplayed opponents)
     opEl.innerHTML='<h2>Best sends — top opportunities per opponent</h2>'
       +'<p class="muted">Favorable direct records first, then even direct, then indirect-only evidence (not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
