@@ -138,14 +138,24 @@ logging:
   level: "INFO"
   file: "logs/apa_tracker.log"
 
-# Ultimate Coach's Match Day workflow (ui/ultimate_coach.py's "My Team"
-# selector, ui/export_excel_ultimate_coach.py's Match Day sheet): which
-# verified player identity is "me", so fixtures/rosters can be scoped to
-# your own real teams without ever matching on a display name (see
-# analytics/ultimate_coach_match_day.py's module docstring). Set this to
-# your own APA member id -- the same number shown in "Name (Member #id)"
-# labels throughout both artifacts. Leave as CHANGE_ME to disable the "My
-# Team" selector cleanly: everything else keeps working, Match Day just
-# discloses "no viewer identity configured" instead of guessing one.
+# Ultimate Coach's Match Day workflow (ui/ultimate_coach.py's Match Day card,
+# ui/export_excel_ultimate_coach.py's Match Day sheet).
+#
+# viewer_member_external_id: which verified player is "me" by default, so the
+#   "My Team" picker opens on your own current teams. This is the APA member
+#   RECORD ID (GraphQL member.id, shown as "APA record ID" in both artifacts),
+#   NOT the league card number printed on a member card -- card numbers are
+#   per-league aliases and are not stored in the staging database. Both
+#   artifacts also offer an explicit verified-player selector, so leaving this
+#   as CHANGE_ME never disables Match Day; nothing is ever guessed from a name.
+#   This repository is public: put a real identity in the git-ignored
+#   apa_config.local.yaml (same `ultimate_coach:` keys) instead of here.
+# viewer_card_number: optional, display-only provenance for the card number
+#   that was verified to map to the record ID above. Never used as identity.
+# match_day_timezone: the disclosed timezone every Match Day calendar date,
+#   weekday and kickoff time is derived in (an IANA name). Source timestamps
+#   are kept alongside for provenance.
 ultimate_coach:
   viewer_member_external_id: "CHANGE_ME"
+  viewer_card_number: "CHANGE_ME"
+  match_day_timezone: "America/Denver"

@@ -116,7 +116,8 @@ def _base_fixture() -> dict[str, Any]:
         # player 3 intentionally has NO history rows at all.
     ]
     team_matches = [
-        {"match_id": 900, "home_team_id": "T1", "away_team_id": "T2"},
+        {"match_id": 900, "home_team_id": "T1", "away_team_id": "T2",
+         "session_name": "Fall 2026", "match_date": "2026-10-11T19:00:00-06:00"},
     ]
     all_games = [
         # Clean, identity-verified, mirror-safe game -- must appear as evidence.
@@ -318,22 +319,37 @@ class TestTeamFormatDerivation:
 
 
 class TestFixtures:
-    def test_fixtures_section_is_populated_from_team_matches(self, payload):
+    def test_match_day_fixtures_are_populated_from_team_matches(self, payload):
         """The shared payload's base fixture carries one team_matches row
-        (match_id 900, T1 vs T2) -- Match Day's fixtures section must
-        expose it, not a re-derivation that could silently disagree with
-        what evidence/rosters are built from."""
-        assert len(payload["fixtures"]) == 1
-        assert payload["fixtures"][0]["match_id"] == 900
-        assert payload["fixtures"][0]["home_team_id"] == "T1"
-        assert payload["fixtures"][0]["away_team_id"] == "T2"
+        (match_id 900, T1 vs T2, Fall 2026) and T1 is a current roster
+        scope -- Match Day's section must expose it, not a re-derivation
+        that could silently disagree with what evidence/rosters use."""
+        fixtures = payload["match_day"]["fixtures"]
+        assert len(fixtures) == 1
+        assert fixtures[0]["match_id"] == 900
+        assert fixtures[0]["home_team_id"] == "T1"
+        assert fixtures[0]["away_team_id"] == "T2"
+        assert payload["match_day"]["display_timezone"] == "America/Denver"
+        assert payload["match_day"]["coverage"]["stored_fixture_count"] == 1
+        assert payload["match_day"]["coverage"]["excluded_fixture_count"] == 0
 
-    def test_fixtures_section_present_even_with_zero_matches(self, monkeypatch):
+    def test_match_day_section_present_even_with_zero_matches(self, monkeypatch):
         empty_fixture = _base_fixture()
         empty_fixture["tables"]["team_matches"] = []
         monkeypatch.setattr(bridge, "build_contract", lambda db: empty_fixture)
         empty_payload = bridge.build_verified_cockpit_payload(db=None)
-        assert empty_payload["fixtures"] == []
+        assert empty_payload["match_day"]["fixtures"] == []
+        assert empty_payload["match_day"]["schedule"] == {}
+
+    def test_match_day_dates_use_the_requested_display_timezone(self, monkeypatch):
+        fixture = _base_fixture()
+        fixture["tables"]["team_matches"][0]["match_date"] = "2026-08-30T01:00:00Z"
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        denver = bridge.build_verified_cockpit_payload(db=None)["match_day"]["fixtures"][0]
+        assert (denver["local_date"], denver["local_time"], denver["local_tz_abbrev"]) == ("2026-08-29", "7:00 PM", "MDT")
+        utc = bridge.build_verified_cockpit_payload(db=None, match_day_timezone="UTC")["match_day"]["fixtures"][0]
+        assert utc["local_date"] == "2026-08-30"
+        assert denver["match_date"] == utc["match_date"] == "2026-08-30T01:00:00Z"
 
 
 class TestProbabilityLocks:

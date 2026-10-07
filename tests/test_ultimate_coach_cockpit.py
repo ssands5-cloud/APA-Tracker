@@ -79,6 +79,9 @@ def test_format_selectors_offer_real_non_eight_nine_evidence():
     }
     html=render(payload)
 
-    assert html.count('<option value="MASTERS ALT">Masters Alt</option>') == 3  # Player + Team + Match Day selectors
-    assert html.count('<option value="EIGHT">8-Ball</option>') == 3
-    assert html.count('<option value="NINE">9-Ball</option>') == 3
+    # Player + Team selectors use format codes. Match Day's own filter lists
+    # raw recorded fixture labels instead (see analytics.ultimate_coach_match_day),
+    # so it is not counted here.
+    assert html.count('<option value="MASTERS ALT">Masters Alt</option>') == 2
+    assert html.count('<option value="EIGHT">8-Ball</option>') == 2
+    assert html.count('<option value="NINE">9-Ball</option>') == 2

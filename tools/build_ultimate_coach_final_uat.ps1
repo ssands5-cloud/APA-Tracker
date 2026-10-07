@@ -121,12 +121,39 @@ Copy-Item $FinalXlsx (Join-Path $DestinationRoot "Ultimate_Coach_FINAL_UAT.xlsx"
 $HtmlHash = (Get-FileHash $FinalHtml -Algorithm SHA256).Hash
 $XlsxHash = (Get-FileHash $FinalXlsx -Algorithm SHA256).Hash
 
+# The production builder's own manifest pins the HTML it rendered; the copy
+# handed to UAT must be byte-identical to it.
+$ProductionManifest = Get-Content (Join-Path $BuildRoot "manifest.json") -Raw | ConvertFrom-Json
+if ($ProductionManifest.html_sha256.ToUpper() -ne $HtmlHash) {
+    throw "UAT HTML does not match the production manifest's html_sha256."
+}
+
+# One manifest covering BOTH UAT artifacts, so a tester can verify exactly
+# what they opened. The viewer identity itself is deliberately not recorded.
+$UatManifest = [ordered]@{
+    schema = "ultimate-coach-final-uat-v1"
+    pr_head = $LocalHead
+    built_at_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    source_database = $SourceDb
+    source_database_bytes = $DbSize
+    source_database_sha256_before = $Before
+    source_database_sha256_after = $After
+    source_database_unchanged = ($Before -eq $After)
+    match_day = $ProductionManifest.match_day
+    artifacts = @(
+        [ordered]@{ file = "Ultimate_Coach_FINAL_UAT.html"; bytes = (Get-Item $FinalHtml).Length; sha256 = $HtmlHash },
+        [ordered]@{ file = "Ultimate_Coach_FINAL_UAT.xlsx"; bytes = (Get-Item $FinalXlsx).Length; sha256 = $XlsxHash }
+    )
+}
+$UatManifest | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $BuildRoot "UAT_MANIFEST.json") -Encoding UTF8
+
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "ULTIMATE COACH FINAL UAT PACKAGE READY" -ForegroundColor Green
 Write-Host "============================================"
 Write-Host "PR #83 head : $LocalHead"
 Write-Host "Source DB unchanged: YES"
+Write-Host "Manifest : $(Join-Path $BuildRoot 'UAT_MANIFEST.json')"
 Write-Host ""
 Write-Host "HTML : $FinalHtml"
 Write-Host "SHA256: $HtmlHash"

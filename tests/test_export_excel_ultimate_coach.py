@@ -21,11 +21,14 @@ that reliably). Neither would have been caught by openpyxl-only assertions.
 
 from __future__ import annotations
 
+import re
 import sys
+from datetime import date
 
 import pytest
 from openpyxl import load_workbook
 
+from analytics.ultimate_coach_match_day import build_match_day_section
 from ui.export_excel_ultimate_coach import build_workbook, write_workbook
 
 
@@ -95,7 +98,6 @@ def _payload():
             # rather than silently reading as "no recorded direct meeting".
             {"player_id": 2, "opponent_id": 3, "format": "MASTERS", "result": "W"},
         ],
-        "fixtures": [],
     }
 
 
@@ -106,7 +108,7 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
     assert set(wb.sheetnames) == {
         "Build Info", "Data Trust", "Players", "Team Rosters", "Teams",
         "Player vs Player", "Coach Dashboard", "Match Night",
-        "Match Day", "My Teams", "Fixtures",
+        "Match Day", "Player Teams", "Schedule", "Schedule Keys", "Lists",
     }
 
     build_info = {row[0].value: row[1].value for row in wb["Build Info"].iter_rows(min_row=2, max_col=2) if row[0].value}
@@ -120,8 +122,8 @@ def test_players_sheet_disambiguates_duplicate_names(tmp_path):
     wb = load_workbook(path)
 
     labels = [row[0].value for row in wb["Players"].iter_rows(min_row=2, max_col=1)]
-    assert "Ann Archer (Member #1001)" in labels
-    assert "Ann Archer (Member #1004)" in labels
+    assert "Ann Archer (APA record ID 1001)" in labels
+    assert "Ann Archer (APA record ID 1004)" in labels
     assert len(labels) == len(set(labels))
 
 
@@ -178,102 +180,263 @@ def test_coach_dashboard_format_dropdown_includes_non_eight_nine_formats(tmp_pat
     assert masters_rows[0][1] == "Masters"  # display label, not raw "MASTERS"
 
 
-def _match_day_payload():
+def _team_match(**overrides):
+    row = {
+        "match_id": 500, "match_external_id": "500", "match_date": "2026-10-11T11:00:00-06:00",
+        "format": "EIGHT", "format_raw": "8-Ball Open", "session_name": "Spring 2026", "week": 7,
+        "status": "UNPLAYED", "location": None, "home_team_id": "sharks-a", "home_team_name": "Sharks",
+        "away_team_id": "falcons-a", "away_team_name": "Falcons", "home_score": None,
+        "away_score": None, "is_bye": False, "is_scored": False, "is_finalized": False,
+    }
+    row.update(overrides)
+    return row
+
+
+def _match_day_payload(team_matches=None):
     payload = _payload()
-    payload["fixtures"] = [
-        {
-            "match_id": 500, "match_external_id": "500", "match_date": "2026-10-11T11:00:00-06:00",
-            "format": "EIGHT", "session_name": "Spring 2026", "week": 7, "status": "UNPLAYED",
-            "location": None, "home_team_id": "sharks-a", "home_team_name": "Sharks",
-            "away_team_id": "falcons-a", "away_team_name": "Falcons", "home_score": None,
-            "away_score": None, "is_bye": False, "is_scored": False, "is_finalized": False,
-            "local_date": "2026-10-11", "date_unparsed": False,
-        },
-    ]
+    payload["match_day"] = build_match_day_section(
+        team_matches if team_matches is not None else [_team_match()], payload["players"]
+    )
     return payload
 
 
-def test_my_teams_sheet_discloses_when_viewer_unconfigured(tmp_path):
-    path = write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db")
-    wb = load_workbook(path)
-    my_teams = wb["My Teams"]
-    # Zero data rows -- no Table object at all (see _autotable: a Table
-    # needs at least one row to own its own autoFilter; zero rows falls
-    # back to a plain worksheet autoFilter instead), header only.
-    assert "MyTeams_Table" not in my_teams.tables
-    assert my_teams.auto_filter.ref == "A1:E1"
-    notes = [row[0].value for row in my_teams.iter_rows(min_col=1, max_col=1) if row[0].value]
-    assert any("No viewer identity configured" in n for n in notes)
+def _rows_by_header(sheet):
+    rows = list(sheet.iter_rows(values_only=True))
+    header = rows[0]
+    return [dict(zip(header, r)) for r in rows[1:]]
 
 
-def test_my_teams_sheet_identity_backed_never_name_matched(tmp_path):
-    # Ann Archer (external_id "1001") is on "sharks-a" per _payload(). A
-    # second player shares her display name (id 4, external_id "1004",
-    # zero team history) -- the viewer must resolve by external_id only,
-    # never accidentally picking up the other "Ann Archer".
-    path = write_workbook(
-        _match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db",
-        viewer_member_external_id="1001",
-    )
-    wb = load_workbook(path)
-    my_teams = wb["My Teams"]
-    assert my_teams.tables["MyTeams_Table"].ref == "A1:E2"  # exactly one data row
-    label = my_teams["A2"].value
-    assert "Sharks" in label and "8-Ball" in label
+def _sharks_rows(wb):
+    return [r for r in _rows_by_header(wb["Schedule"]) if r["Team Scope Key"] == "sharks-a|d1|Spring 2026"]
 
 
-def test_fixtures_sheet_lists_real_fixtures_with_helper_formulas(tmp_path):
-    path = write_workbook(
-        _match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db",
-        viewer_member_external_id="1001",
-    )
-    wb = load_workbook(path)
-    fx = wb["Fixtures"]
-    rows = list(fx.iter_rows(min_row=2, values_only=True))
-    assert len(rows) == 1
-    assert rows[0][0] == "2026-10-11"  # Local Date
-    assert rows[0][1] == "2026-10-11T11:00:00-06:00"  # source timestamp retained verbatim
-    assert rows[0][6] == "Sharks"  # Home Team Name
-    assert rows[0][8] == "Falcons"  # Away Team Name
-    # Helper formulas reference the Match Day sheet by name, never hardcode
-    # a guessed selection -- inspectable, not a black box.
-    formulas = list(fx.iter_rows(min_row=2, max_row=2))[0]
-    assert "Match Day" in formulas[14].value  # My Team Side?
-    assert "Match Day" in formulas[15].value  # Date Matches?
-    assert "Match Day" in formulas[16].value  # Format Matches?
-    assert formulas[17].value == "=AND(O2,P2,Q2)"  # Match Day Selected?
+SHARKS_8 = "Sharks · Spring 2026 · 8-Ball"
+FALCONS_8 = "Falcons · Spring 2026 · 8-Ball"
 
 
-def test_match_day_sheet_has_dropdowns_and_lookup_chain(tmp_path):
-    path = write_workbook(
-        _match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db",
-        viewer_member_external_id="1001",
-    )
+def test_schedule_uses_display_timezone_for_a_utc_midnight_crossing(tmp_path):
+    payload = _match_day_payload([_team_match(match_date="2026-08-30T01:00:00Z")])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx"))
+    row = _sharks_rows(wb)[0]
+    assert row["Local Date"].date() == date(2026, 8, 29)
+    assert row["Date Display"] == "Sat Aug 29, 2026"
+    assert row["Kickoff"] == "7:00 PM MDT"
+    assert row["Time Zone"] == "America/Denver (UTC-06:00)"
+    assert row["Source Timestamp"] == "2026-08-30T01:00:00Z"
+    keys = {r["Slot Key"] for r in _rows_by_header(wb["Schedule Keys"])}
+    # Keyed on the Denver date's Excel serial (46263 = 2026-08-29), not the UTC day.
+    assert "sharks-a|d1|Spring 2026|46263|89|1" in keys
+    assert not any("|46264|" in k for k in keys)
+
+
+def test_bye_row_says_no_opponent_and_offers_no_roster_lookup(tmp_path):
+    payload = _match_day_payload([_team_match(is_bye=True, away_team_id="13082714", away_team_name="BYE")])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx"))
+    row = _sharks_rows(wb)[0]
+    assert row["Opponent"] == "Bye — no opponent"
+    assert row["Opponent Roster"] == "Not applicable (bye)"
+    assert row["Opponent Team"] == "—"
+    assert row["Opponent Scope Key"] == "—"
+
+
+def test_missing_names_status_and_venue_read_no_data_while_real_zero_scores_survive(tmp_path):
+    payload = _match_day_payload([_team_match(
+        away_team_name="", status=None, location="  ", is_scored=True, home_score=0, away_score=3,
+    )])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx"))
+    row = _sharks_rows(wb)[0]
+    assert row["Opponent"] == "No data"
+    assert row["Status"] == "No data"
+    assert row["Venue"] == "No data"
+    assert row["Score (home–away)"] == "0 – 3"
+    assert row["Home Score"] == 0 and row["Away Score"] == 3  # numeric zero kept, not blanked
+
+
+def test_unscored_fixture_score_reads_not_recorded_never_zero(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    row = _sharks_rows(wb)[0]
+    assert row["Score (home–away)"] == "Not recorded"
+    assert row["Home Score"] is None and row["Away Score"] is None
+
+
+def test_every_column_match_day_reads_through_index_is_fully_populated(tmp_path):
+    """Excel evaluates a blank cell reached through INDEX as 0 -- the bug
+    class behind the old Match Day B19/B26/B31 cells. Every Table column any
+    Match Day / Match Night formula INDEXes must therefore contain no blanks."""
+    payload = _match_day_payload([
+        _team_match(match_id=1, match_external_id="1", away_team_name="", status=None),
+        _team_match(match_id=2, match_external_id="2", is_bye=True, away_team_id="x", away_team_name="BYE",
+                    match_date="2026-10-11T19:00:00-06:00"),
+        _team_match(match_id=3, match_external_id="3", match_date=None),
+        _team_match(match_id=4, match_external_id="4", match_date="garbage"),
+    ])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx", viewer_member_external_id="1001"))
+    tables = {}
+    for ws in wb.worksheets:
+        for name, ref in ws.tables.items():
+            tables[name] = (ws, ref)
+    referenced = set()
+    for sheet_name in ("Match Day", "Match Night"):
+        for row in wb[sheet_name].iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("="):
+                    referenced.update(re.findall(r"INDEX\((\w+)\[([^\]]+)\]", cell.value))
+    assert ("Schedule_Table", "Opponent") in referenced
+    assert ("TeamRosters_Table", "SL Display") in referenced
+    for table_name, column in referenced:
+        ws, ref = tables[table_name]
+        values = [r for r in ws[ref]]
+        header = [c.value for c in values[0]]
+        idx = header.index(column)
+        blanks = [c.coordinate for c in (r[idx] for r in values[1:]) if c.value is None or c.value == ""]
+        assert blanks == [], f"{table_name}[{column}] has blank cells {blanks}"
+
+
+def test_schedule_keys_list_every_fixture_in_kickoff_order_and_never_pick_one(tmp_path):
+    payload = _match_day_payload([
+        _team_match(match_id=1, match_external_id="1", match_date="2026-10-11T19:00:00-06:00"),
+        _team_match(match_id=2, match_external_id="2", match_date="2026-10-11T11:00:00-06:00",
+                    format="EIGHT", format_raw="8-Ball Doubles"),
+        _team_match(match_id=3, match_external_id="3", match_date="2026-10-11T13:00:00-06:00",
+                    format="MASTERS", format_raw="Masters"),
+    ])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx"))
+    schedule = _rows_by_header(wb["Schedule"])
+    keys = {r["Slot Key"]: r["Schedule Row"] for r in _rows_by_header(wb["Schedule Keys"])}
+    serial = 46306  # 2026-10-11
+    group = f"sharks-a|d1|Spring 2026|{serial}"
+    # Default 8-Ball & 9-Ball: both 8-Ball variants, in kickoff order; Masters excluded.
+    assert schedule[keys[f"{group}|89|1"] - 1]["Kickoff"] == "11:00 AM MDT"
+    assert schedule[keys[f"{group}|89|2"] - 1]["Kickoff"] == "7:00 PM MDT"
+    assert f"{group}|89|3" not in keys
+    # All recorded formats: all three. A single raw format: only that one.
+    assert [schedule[keys[f"{group}|ALL|{k}"] - 1]["Format"] for k in (1, 2, 3)] == ["8-Ball Doubles", "Masters", "8-Ball Open"]
+    assert schedule[keys[f"{group}|F:Masters|1"] - 1]["Format"] == "Masters"
+    # Season list for the team uses the same codes.
+    assert "sharks-a|d1|Spring 2026|ALL|89|2" in keys
+    lists = [c.value for c in wb["Lists"]["A"][1:] if c.value]
+    assert lists[:2] == ["8-Ball & 9-Ball", "All recorded formats"]
+    assert {"8-Ball Doubles", "8-Ball Open", "Masters"} <= set(lists)
+
+
+def test_ambiguous_or_missing_opponent_roster_is_disclosed(tmp_path):
+    payload = _payload()
+    for pid, div in ((10, "dA"), (11, "dB")):
+        payload["players"].append({
+            "id": pid, "external_id": str(2000 + pid), "name": f"Owl {pid}", "current_skill_level": 4,
+            "current_matches_won": 1, "current_matches_played": 2,
+            "team_history": [{"team_external_id": "owls", "team_name": "Owls", "division_id": div,
+                              "session_name": "Spring 2026", "format": "EIGHT", "is_current": True,
+                              "skill_level": 4, "matches_won": 1, "matches_played": 2}],
+        })
+    payload["match_day"] = build_match_day_section([
+        _team_match(match_id=1, match_external_id="1", away_team_id="owls", away_team_name="Owls"),
+        _team_match(match_id=2, match_external_id="2", away_team_id="ghosts", away_team_name="Ghosts",
+                    match_date="2026-10-11T19:00:00-06:00"),
+    ], payload["players"])
+    wb = load_workbook(write_workbook(payload, tmp_path / "uc.xlsx"))
+    by_opp = {r["Opponent"]: r for r in _sharks_rows(wb)}
+    assert by_opp["Owls"]["Opponent Roster"] == "Ambiguous: 2 roster scopes match — compare manually"
+    assert by_opp["Owls"]["Opponent Scope Key"] == "—"
+    assert by_opp["Ghosts"]["Opponent Roster"] == "No current roster captured"
+    assert by_opp["Ghosts"]["Opponent Scope Key"] == "—"
+
+
+def test_resolved_opponent_roster_scope_matches_a_teams_label(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    row = _sharks_rows(wb)[0]
+    assert row["Opponent Team"] == FALCONS_8
+    assert row["Opponent Scope Key"] == "falcons-a|d2|Spring 2026"
+    teams = {r["Scope Key"]: r for r in _rows_by_header(wb["Teams"])}
+    assert teams["falcons-a|d2|Spring 2026"]["Team"] == FALCONS_8
+
+
+def test_player_teams_lists_each_current_scope_separately_by_record_id(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    rows = _rows_by_header(wb["Player Teams"])
+    bea = [r for r in rows if r["APA Record ID"] == "1002"]
+    assert [r["Viewer Slot Key"] for r in bea] == ["1002|1", "1002|2"]
+    assert {r["Team"] for r in bea} == {SHARKS_8, "Sharks · Spring 2026 · 9-Ball"}
+    # The second "Ann Archer" (record 1004) has no team -- never inherits the other Ann's.
+    assert not [r for r in rows if r["APA Record ID"] == "1004"]
+
+
+def test_team_rosters_have_slot_keys_and_display_text_for_missing_values(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    rows = _rows_by_header(wb["Team Rosters"])
+    sharks = sorted((r for r in rows if r["Team Scope Key"] == "sharks-a|d1|Spring 2026"), key=lambda r: r["Roster Slot Key"])
+    # Highest skill level first: Bea's division SL 5 (no live rating -> "5*"), then Ann's live SL 4.
+    assert [(r["Roster Slot Key"], r["Player Name"], r["SL Display"]) for r in sharks] == [
+        ("sharks-a|d1|Spring 2026|1", "Bea Baker", "5*"),
+        ("sharks-a|d1|Spring 2026|2", "Ann Archer", "4"),
+    ]
+    assert sharks[1]["W-L Display"] == "10-5"
+
+
+def test_match_day_sheet_inputs_dropdowns_and_viewer_default(tmp_path):
+    path = write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db",
+                          viewer_member_external_id="1001", viewer_card_number="80000001")
     wb = load_workbook(path)
     assert wb.active.title == "Match Day"
     md = wb["Match Day"]
+    sources = {str(dv.sqref): dv.formula1 for dv in md.data_validations.dataValidation}
+    assert sources["B8"] == "MyTeamSlotList"
+    assert sources["B9"] == "FormatFilterList"
+    assert sources["B10"] == "FixtureNumberList"
+    assert [dv.type for dv in md.data_validations.dataValidation if str(dv.sqref) == "B6"] == ["date"]
+    assert md["B7"].value == "1001"  # configured, verified viewer pre-filled
+    assert md["B9"].value == "8-Ball & 9-Ball"
+    assert "80000001" in md["B15"].value and "never used as identity" in md["B15"].value
+    assert md["A7"].value == "2 · I am (APA record ID)"
+    for name in ("MyTeamSlotList", "FormatFilterList", "FixtureNumberList", "PlayerLabelList", "TeamNameList"):
+        assert name in wb.defined_names
+    assert md.print_area and md.page_setup.orientation == "landscape"
+    links = [c.hyperlink.location for c in md[3] if c.hyperlink]
+    assert "'Match Night'!A1" in links and "'Schedule'!A1" in links
 
-    team_validations = [dv for dv in md.data_validations.dataValidation if "B5" in dv.sqref]
-    assert len(team_validations) == 1
-    assert team_validations[0].formula1 == "MyTeamLabelList"
 
-    format_validations = [dv for dv in md.data_validations.dataValidation if "B6" in dv.sqref]
-    assert len(format_validations) == 1
-    assert format_validations[0].formula1 == '"(8-Ball & 9-Ball),8-Ball,9-Ball,Masters"'
-
-    assert "MyTeams_Table" in md["B10"].value
-    assert "Fixtures_Table" in md["B13"].value
-    assert "Teams_Table" in md["B31"].value
+def test_unresolved_viewer_is_never_prefilled_or_guessed(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="99999"))
+    assert wb["Match Day"]["B7"].value in (None, "")
+    assert wb["Match Day"]["B15"].value == "—"
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc2.xlsx"))
+    assert wb["Match Day"]["B7"].value in (None, "")
 
 
-def test_match_day_disabled_cleanly_with_no_fabricated_dropdown_when_unconfigured(tmp_path):
-    path = write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db")
-    wb = load_workbook(path)
-    md = wb["Match Day"]
-    team_validations = [dv for dv in md.data_validations.dataValidation if "B5" in dv.sqref]
-    assert team_validations == []  # no dropdown added when there's no viewer team to choose from
-    notes = [row[0].value for row in md.iter_rows(min_col=1, max_col=1) if row[0].value]
-    assert any("No viewer identity configured or no current team found" in n for n in notes)
+FORBIDDEN_FUNCTIONS = ("FILTER(", "SORT(", "UNIQUE(", "SEQUENCE(", "XLOOKUP(", "LET(", "LAMBDA(",
+                       "OFFSET(", "INDIRECT(", "TODAY(", "NOW(", "RAND(", "RANDBETWEEN(")
+
+
+def test_workbook_uses_no_dynamic_array_volatile_or_unbalanced_formulas(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", viewer_member_external_id="1001"))
+    checked = 0
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                value = cell.value
+                if not (isinstance(value, str) and value.startswith("=")):
+                    continue
+                checked += 1
+                outside_strings = re.sub(r'"[^"]*"', '""', value)
+                assert not any(fn in outside_strings.upper() for fn in FORBIDDEN_FUNCTIONS), cell.coordinate
+                assert outside_strings.count("(") == outside_strings.count(")"), f"{ws.title}!{cell.coordinate}"
+                assert value.count('"') % 2 == 0, f"{ws.title}!{cell.coordinate}"
+    assert checked > 100
+    assert not wb.vba_archive if hasattr(wb, "vba_archive") else True
+
+
+def test_reference_sheets_freeze_headers_and_use_the_shared_palette(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    for name in ("Players", "Team Rosters", "Teams", "Player vs Player", "Schedule", "Schedule Keys", "Player Teams"):
+        ws = wb[name]
+        assert ws.freeze_panes in ("A2", "B2"), name
+        assert ws["A1"].fill.fgColor.rgb.endswith("14532D"), name
+
+
+def test_players_record_id_is_text_so_a_typed_id_matches_exactly(tmp_path):
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx"))
+    rows = _rows_by_header(wb["Players"])
+    assert all(isinstance(r["External ID"], str) for r in rows)
 
 
 def test_returns_none_workbook_gracefully_handles_no_players(tmp_path):
@@ -309,8 +472,8 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
     try:
         dash = wb.Worksheets("Coach Dashboard")
 
-        dash.Range("B4").Value = "Ann Archer (Member #1001)"
-        dash.Range("B5").Value = "Cam Cole (Member #1003)"
+        dash.Range("B4").Value = "Ann Archer (APA record ID 1001)"
+        dash.Range("B5").Value = "Cam Cole (APA record ID 1003)"
         dash.Range("B6").Value = "8-Ball"
         excel.CalculateFullRebuild()
         assert dash.Range("B21").Value == 1  # Wins
@@ -318,7 +481,7 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         assert dash.Range("B23").Value == 2  # Recorded meetings
         assert "50.0%" in str(dash.Range("B24").Value)
 
-        dash.Range("B5").Value = "Bea Baker (Member #1002)"
+        dash.Range("B5").Value = "Bea Baker (APA record ID 1002)"
         excel.CalculateFullRebuild()
         assert dash.Range("B21").Value == "0"
         assert "No recorded direct meeting" in str(dash.Range("B25").Value)
@@ -331,8 +494,8 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         # reads back as numeric 0 instead of triggering the fallback).
         assert dash.Range("B18").Value == "—"
 
-        dash.Range("B4").Value = "Bea Baker (Member #1002)"
-        dash.Range("B5").Value = "Cam Cole (Member #1003)"
+        dash.Range("B4").Value = "Bea Baker (APA record ID 1002)"
+        dash.Range("B5").Value = "Cam Cole (APA record ID 1003)"
         dash.Range("B6").Value = "Masters"
         excel.CalculateFullRebuild()
         # Real recorded evidence exists for this pair only under "Masters" --
@@ -349,65 +512,6 @@ def test_coach_dashboard_and_match_night_compute_correctly_in_real_excel(tmp_pat
         assert night.Range("C7").Value == 1  # Falcons roster count
         assert night.Range("B9").Value == 9  # exact Sharks d1 skill total: 4 + 5
         assert night.Range("C9").Value == 3  # Falcons skill total
-    finally:
-        wb.Close(False)
-        excel.Quit()
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Excel COM automation requires Windows")
-def test_match_day_computes_correctly_in_real_excel(tmp_path):
-    win32com_client = pytest.importorskip("win32com.client", reason="pywin32/Excel not available")
-
-    path = write_workbook(
-        _match_day_payload(), tmp_path / "uc_match_day_com.xlsx", built_at="test", source_db="test.db",
-        viewer_member_external_id="1001",  # Ann Archer, on "sharks-a"
-    )
-
-    try:
-        excel = win32com_client.Dispatch("Excel.Application")
-    except Exception:
-        pytest.skip("Excel is not installed/registered on this machine")
-
-    excel.Visible = False
-    excel.DisplayAlerts = False
-    try:
-        wb = excel.Workbooks.Open(str(path))
-    except Exception as exc:
-        excel.Quit()
-        pytest.fail(f"Real Excel refused to open the generated workbook: {exc}")
-
-    try:
-        assert wb.ActiveSheet.Name == "Match Day"
-        md = wb.Worksheets("Match Day")
-
-        md.Range("B4").Value = "2026-10-11"
-        md.Range("B5").Value = "Sharks · Spring 2026 · 8-Ball"
-        excel.CalculateFullRebuild()
-        assert md.Range("B10").Value == "sharks-a"
-        assert md.Range("B11").Value == "Spring 2026"
-        assert md.Range("B13").Value == 1  # exactly one real fixture
-        assert "1 fixture found" in str(md.Range("B16").Value)
-        assert md.Range("B19").Value == "Falcons"  # opponent
-        assert md.Range("B20").Value == "Home"
-        assert md.Range("B23").Value == "2026-10-11T11:00:00-06:00"  # source timezone retained verbatim
-        assert md.Range("B30").Value == "Sharks · Spring 2026 · 8-Ball"
-        # The exact label Match Night's own Opponent Team dropdown offers --
-        # proves the cross-sheet Combo Key lookup actually resolves in real
-        # Excel, not just in openpyxl's own (lenient) reader.
-        assert md.Range("B31").Value == "Falcons · Spring 2026 · 8-Ball"
-
-        # Wrong format: the real fixture is EIGHT, so 9-Ball finds nothing.
-        md.Range("B6").Value = "9-Ball"
-        excel.CalculateFullRebuild()
-        assert md.Range("B13").Value == 0
-        assert "No scheduled match found" in str(md.Range("B16").Value)
-
-        # Wrong date: same honest zero, never a stale leftover opponent.
-        md.Range("B6").Value = "8-Ball"
-        md.Range("B4").Value = "2099-01-01"
-        excel.CalculateFullRebuild()
-        assert md.Range("B13").Value == 0
-        assert md.Range("B19").Value == ""
     finally:
         wb.Close(False)
         excel.Quit()

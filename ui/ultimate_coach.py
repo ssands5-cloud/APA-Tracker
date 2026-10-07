@@ -6,7 +6,16 @@ import json
 from html import escape
 from typing import Any
 
-from analytics.ultimate_coach_match_day import viewer_current_teams, viewer_player
+from analytics.ultimate_coach_match_day import (
+    DEFAULT_MATCH_DAY_TIMEZONE,
+    FORMAT_FILTER_ALL,
+    FORMAT_FILTER_ALL_LABEL,
+    FORMAT_FILTER_EIGHT_NINE,
+    FORMAT_FILTER_EIGHT_NINE_LABEL,
+    build_match_day_section,
+    viewer_current_teams,
+    viewer_player,
+)
 
 
 def _script_json(value: Any) -> str:
@@ -53,6 +62,10 @@ FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MAS
 
 def _format_label(fmt: str) -> str:
     return FORMAT_LABELS.get(fmt, fmt)
+
+
+def _raw_format_option_label(raw: str) -> str:
+    return f"{FORMAT_LABELS[raw]} (recorded as {raw})" if raw in FORMAT_LABELS else raw
 
 
 def _format_options(formats_present: list[str]) -> list[str]:
@@ -133,6 +146,7 @@ def render(
     built_at: str = "",
     consume_evidence: bool = False,
     viewer_member_external_id: str | None = None,
+    viewer_card_number: str | None = None,
 ) -> str:
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -140,21 +154,25 @@ def render(
         f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
         for fmt in format_options
     )
-    # Match Day filters FIXTURES, not evidence -- a scheduled-but-unplayed
-    # match can carry a real format with zero evidence rows yet, so its own
-    # filter's options must include fixture formats too, not just whatever
-    # evidence happens to already exist.
-    fixture_formats = {f.get("format") for f in (payload.get("fixtures") or []) if f.get("format")}
-    md_format_options = _format_options(list(set(format_options) | fixture_formats))
-    md_format_options_markup = "".join(
-        f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
-        for fmt in md_format_options
-    )
     players = payload.get("players") or []
+    match_day = payload.get("match_day") or build_match_day_section([], players)
+    compact_payload["match_day"] = match_day
+    # Match Day filters FIXTURES by their raw recorded label ("8-Ball
+    # Doubles", "9-Ball Open", ...): the default keeps every 8-Ball and
+    # 9-Ball variant, and every other recorded format stays selectable.
+    raw_formats = sorted({str(f.get("format_raw") or "") for f in match_day.get("fixtures") or []} - {""})
+    md_format_options_markup = (
+        f'<option value="{FORMAT_FILTER_EIGHT_NINE}">{escape(FORMAT_FILTER_EIGHT_NINE_LABEL)}</option>'
+        f'<option value="{FORMAT_FILTER_ALL}">{escape(FORMAT_FILTER_ALL_LABEL)}</option>'
+        + "".join(f'<option value="{escape(fmt)}">{escape(_raw_format_option_label(fmt))}</option>' for fmt in raw_formats)
+    )
     resolved_viewer = viewer_player(players, viewer_member_external_id)
     compact_payload["viewer"] = {
         "configured": bool(viewer_member_external_id),
+        "external_id": viewer_member_external_id,
+        "card_number": viewer_card_number if resolved_viewer else None,
         "resolved": resolved_viewer is not None,
+        "player_id": resolved_viewer.get("id") if resolved_viewer else None,
         "player_name": resolved_viewer.get("name") if resolved_viewer else None,
         "teams": viewer_current_teams(players, viewer_member_external_id),
     }
@@ -162,53 +180,165 @@ def render(
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
     trust_card = _trust_card(payload)
+    coverage = match_day.get("coverage") or {}
+    display_tz = escape(str(match_day.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE))
+    schedule_note = (
+        f"Schedule coverage: {int(coverage.get('embedded_fixture_count') or 0):,} of "
+        f"{int(coverage.get('stored_fixture_count') or 0):,} stored fixtures are included — every fixture "
+        f"involving a team with a current captured roster ({escape(', '.join(coverage.get('current_sessions') or []) or 'no current session')}). "
+        f"The other {int(coverage.get('excluded_fixture_count') or 0):,} belong to past-session teams with no current "
+        "roster, so My Team can't reach them; their individual game results are still fully used as scouting evidence."
+    )
+    location_note = (
+        f"Venue is blank in the source for {int(coverage.get('location_missing_count') or 0):,} of these fixtures and shows as “No data”."
+    )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ultimate Coach — Scout & Compare</title>
 <style>
-:root {{ color-scheme: light; }}
-body {{ font-family: system-ui,-apple-system,Segoe UI,sans-serif; margin:0; background:#f5f7fb; color:#18202b; }}
-header {{ background:#162b4d; color:white; padding:18px 22px; }}
-header h1 {{ margin:0; font-size:26px; }}
-header p {{ margin:5px 0 0; opacity:.85; }}
-main {{ max-width:1400px; margin:auto; padding:18px; }}
-.card {{ background:white; border:1px solid #dfe5ee; border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
-.controls {{ display:grid; grid-template-columns:1fr 1fr 180px; gap:12px; }}
-label {{ font-size:12px; font-weight:700; color:#526070; display:block; }}
-select,input[type="search"] {{ width:100%; margin-top:5px; padding:10px; font-size:15px; box-sizing:border-box; }}
-input[type="search"] {{ margin-bottom:6px; }}
+:root {{
+  color-scheme: light;
+  --felt:#14532d; --felt-deep:#0c3a1f; --felt-soft:#e7f1ea; --rail:#5a3a1f;
+  --brass:#b8862b; --brass-soft:#f6ecd6; --paper:#f4f1ea; --card:#ffffff;
+  --ink:#17221c; --muted:#5b6a61; --line:#e2dccf; --line-strong:#cfc6b4;
+  --warn-bg:#fff6df; --warn-line:#b78300; --info-bg:#eaf2fb; --info-line:#2b5d8f;
+  --radius:12px;
+}}
+* {{ box-sizing:border-box; }}
+body {{ font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; margin:0; background:var(--paper); color:var(--ink); font-size:15px; line-height:1.45; }}
+header.hero {{ background:radial-gradient(120% 140% at 0% 0%,#1f6f43 0%,var(--felt) 45%,var(--felt-deep) 100%); color:#fff; padding:22px 24px 18px; border-bottom:6px solid var(--rail); }}
+.hero-inner {{ max-width:1400px; margin:auto; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }}
+.ball {{ width:44px; height:44px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#555 0%,#111 60%); display:flex; align-items:center; justify-content:center; flex:none; box-shadow:0 2px 6px rgba(0,0,0,.35); }}
+.ball span {{ background:#fff; color:#111; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }}
+header h1 {{ margin:0; font-size:26px; letter-spacing:.2px; }}
+header p {{ margin:4px 0 0; opacity:.88; font-size:14px; }}
+nav.sections {{ max-width:1400px; margin:12px auto 0; display:flex; gap:8px; flex-wrap:wrap; }}
+nav.sections a {{ color:#fff; text-decoration:none; font-size:13px; font-weight:600; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); }}
+nav.sections a:hover,nav.sections a:focus-visible {{ background:rgba(255,255,255,.24); }}
+.freshness {{ max-width:1400px; margin:14px auto 0; padding:0 18px; display:flex; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); }}
+.freshness span {{ background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; }}
+.freshness .badge-uncal {{ background:var(--warn-bg); border-color:#e8cf8a; color:#6b4d00; font-weight:700; }}
+main {{ max-width:1400px; margin:auto; padding:16px 18px 40px; }}
+.card {{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:16px; box-shadow:0 1px 2px rgba(30,25,10,.05); }}
+.card:empty {{ display:none; }}
+.card-feature {{ border-top:5px solid var(--felt); }}
+.section-title {{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:26px 0 10px; }}
+.section-title h2 {{ margin:0; font-size:21px; color:var(--felt-deep); }}
+.section-title p {{ margin:0; color:var(--muted); font-size:13px; }}
+.card-head {{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }}
+.card-head h2 {{ margin:0; }}
+.pill {{ display:inline-block; padding:4px 10px; border-radius:999px; background:var(--felt-soft); color:var(--felt-deep); font-size:12px; font-weight:700; border:1px solid #c9dfd0; }}
+.controls {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }}
+label {{ font-size:12px; font-weight:700; color:#46564d; display:block; letter-spacing:.2px; text-transform:uppercase; }}
+select,input[type="search"],input[type="date"] {{ width:100%; margin-top:6px; padding:10px 11px; font-size:15px; border:1px solid var(--line-strong); border-radius:8px; background:#fff; color:var(--ink); font-family:inherit; text-transform:none; letter-spacing:0; }}
+select:focus,input:focus {{ outline:3px solid #9cc7ab; outline-offset:1px; border-color:var(--felt); }}
+select:disabled,input:disabled {{ background:#f1efe9; color:#8a948e; }}
+input[type="search"] {{ margin-bottom:4px; }}
+label .muted {{ text-transform:none; letter-spacing:0; font-weight:400; display:block; margin-top:3px; }}
+button {{ font:inherit; font-weight:700; font-size:14px; padding:9px 14px; border-radius:8px; border:1px solid var(--felt); background:var(--felt); color:#fff; cursor:pointer; }}
+button:hover,button:focus-visible {{ background:var(--felt-deep); }}
+button.chip {{ background:#fff; color:var(--felt-deep); border-color:#bcd5c4; padding:5px 10px; font-size:12.5px; font-weight:600; border-radius:999px; }}
+button.chip:hover,button.chip[aria-pressed="true"] {{ background:var(--felt-soft); }}
+.chips {{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }}
+.chips:empty {{ display:none; }}
 .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
-.metric-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }}
-.metric {{ background:#f5f7fb; border-radius:7px; padding:10px; }}
-.metric b {{ display:block; font-size:19px; color:#162b4d; }}
-.metric span {{ font-size:11px; color:#687688; }}
-.tag {{ display:inline-block; padding:3px 7px; border-radius:999px; background:#e9eef7; margin:2px; font-size:12px; }}
-.warn {{ background:#fff7df; border-left:5px solid #b78300; padding:10px 12px; }}
+.metric-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }}
+.metric {{ background:#f7f5ef; border:1px solid #ece6d8; border-radius:9px; padding:10px 12px; }}
+.metric b {{ display:block; font-size:18px; color:var(--felt-deep); }}
+.metric span {{ font-size:11.5px; color:var(--muted); }}
+.tag {{ display:inline-block; padding:3px 8px; border-radius:999px; background:var(--felt-soft); color:var(--felt-deep); margin:2px; font-size:12px; }}
+.warn {{ background:var(--warn-bg); border-left:5px solid var(--warn-line); padding:10px 12px; }}
 .good {{ background:#edf8f0; border-left:5px solid #27813b; padding:10px 12px; }}
-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-th,td {{ padding:7px 8px; border-bottom:1px solid #e7ebf0; text-align:left; }}
-th {{ color:#566274; font-size:11px; text-transform:uppercase; }}
-.muted {{ color:#6b7582; font-size:12px; }}
-h2,h3 {{ margin-top:0; }}
-@media(max-width:760px) {{ .controls,.grid {{ grid-template-columns:1fr; }} }}
+.table-wrap {{ overflow-x:auto; -webkit-overflow-scrolling:touch; }}
+table {{ width:100%; border-collapse:collapse; font-size:13.5px; }}
+th,td {{ padding:8px 9px; border-bottom:1px solid #ece7dc; text-align:left; vertical-align:top; }}
+th {{ color:#4f5f56; font-size:11px; text-transform:uppercase; letter-spacing:.4px; background:#f7f5ef; }}
+tbody tr:nth-child(even) td {{ background:#fbfaf6; }}
+.muted {{ color:var(--muted); font-size:12.5px; }}
+h2,h3 {{ margin-top:0; color:var(--felt-deep); }}
+h3 {{ font-size:15px; margin-top:14px; }}
+.status-line {{ margin:12px 0 4px; font-weight:600; }}
+.viewer-box {{ background:var(--brass-soft); border:1px solid #e7d4a7; border-radius:10px; padding:12px 14px; margin-bottom:14px; }}
+.viewer-box label {{ color:#5d4413; }}
+.fixture {{ border:1px solid var(--line); border-left:6px solid var(--felt); border-radius:10px; padding:14px 16px; margin-top:12px; background:#fff; }}
+.fixture.bye {{ border-left-color:var(--brass); background:#fffcf4; }}
+.fixture-when {{ font-size:18px; font-weight:800; color:var(--ink); }}
+.fixture-vs {{ font-size:16px; margin:4px 0 8px; }}
+.fixture-vs b {{ color:var(--felt-deep); }}
+.badges {{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }}
+.badge {{ font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; background:#f1eee6; color:#3f4a44; border:1px solid #e1dbcd; }}
+.badge.side {{ background:var(--felt); color:#fff; border-color:var(--felt); }}
+.fixture dl {{ display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:0 0 10px; font-size:13.5px; }}
+.fixture dt {{ color:var(--muted); }}
+.fixture dd {{ margin:0; overflow-wrap:anywhere; }}
+.note {{ font-size:13px; padding:8px 10px; border-radius:8px; background:var(--info-bg); border-left:4px solid var(--info-line); margin:8px 0; }}
+.note.warn-note {{ background:var(--warn-bg); border-left-color:var(--warn-line); }}
+details.disclosure {{ margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }}
+details.disclosure summary {{ cursor:pointer; font-weight:700; color:var(--felt-deep); font-size:13.5px; }}
+details.disclosure ul {{ margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:13px; }}
+footer.page-foot {{ color:var(--muted); font-size:12.5px; border-top:1px solid var(--line); padding-top:12px; }}
+@media(max-width:760px) {{
+  header.hero {{ padding:16px 16px 14px; }}
+  header h1 {{ font-size:21px; }}
+  .freshness {{ padding:0 12px; }}
+  main {{ padding:12px 12px 32px; }}
+  .card {{ padding:14px; }}
+  .grid {{ grid-template-columns:1fr; }}
+  .fixture-when {{ font-size:16px; }}
+  .fixture dl {{ grid-template-columns:1fr; gap:0; }}
+  .fixture dt {{ margin-top:6px; }}
+}}
+@media print {{
+  header.hero,.freshness,#player-section,#trust-section,button,.viewer-box,details.disclosure {{ display:none !important; }}
+  body {{ background:#fff; }}
+  .card {{ box-shadow:none; break-inside:avoid; }}
+}}
 </style></head>
 <body>
-<header><h1>Ultimate Coach — Scout & Compare</h1>
-<p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></header>
+<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
+<div><h1>Ultimate Coach — Scout & Compare</h1>
+<p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
+<nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">Team vs Team</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
+<div class="freshness"><span>Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
-{trust_card}
-<div class="card" id="match-day-card">
-  <h2>Match Day</h2>
-  <div class="controls">
-    <label>Date<input id="md-date" type="date"></label>
-    <label>My Team<select id="md-team"></select></label>
-    <label>Format<select id="md-format"><option value="">8-Ball &amp; 9-Ball</option>{md_format_options_markup}</select></label>
+<section class="card card-feature" id="match-day-card">
+  <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
+  <div class="viewer-box">
+    <label>I am (verified player)<input id="md-viewer-search" type="search" placeholder="Search your name or APA record ID" autocomplete="off"><select id="md-viewer"></select></label>
+    <p id="md-viewer-status" class="muted"></p>
   </div>
-  <p id="md-status" class="muted"></p>
+  <div class="controls">
+    <label>1 · Date<input id="md-date" type="date"></label>
+    <label>2 · My Team<select id="md-team"></select></label>
+    <label>3 · Format<select id="md-format">{md_format_options_markup}</select></label>
+  </div>
+  <div id="md-team-dates" class="chips" aria-label="Dates this team plays"></div>
+  <p id="md-status" class="status-line"></p>
   <div id="md-fixtures"></div>
-  <p class="muted">Rosters shown below are each team's CURRENT roster, not a reconstruction of who actually played on the chosen date — this data source doesn't capture historical lineups, so no date-specific lineup accuracy is promised.</p>
+  <details class="disclosure"><summary>About Match Day data</summary><ul>
+    <li>Dates, weekdays and kickoff times are converted to {display_tz} (MST/MDT as applicable). Each fixture also shows its original source timestamp.</li>
+    <li>Rosters shown below are each team's CURRENT roster, not a reconstruction of who actually played on the chosen date — this data source doesn't capture historical lineups, so no date-specific lineup accuracy is promised.</li>
+    <li id="md-coverage">{schedule_note}</li>
+    <li>{location_note}</li>
+    <li>“APA record ID” is APA's internal member record number. It is not the league card number printed on a member card (card numbers differ per league and are not stored in this data).</li>
+  </ul></details>
+</section>
+
+<div class="section-title" id="team-section"><h2>Team vs Team — Match Night Lineup</h2><p>Current captured rosters side by side, with evidence-backed send suggestions.</p></div>
+<div class="card">
+  <div class="controls">
+    <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
+    <label>Opponent Team<input id="search-team-b" type="search" placeholder="Search opponent team"><select id="team-b"></select><span id="search-status-team-b" class="muted"></span></label>
+    <label>Format<select id="team-format">{format_options_markup}</select></label>
+  </div>
+  <p class="muted">Rosters are each team's current captured roster, not who played on any particular past date.</p>
 </div>
+<div id="team-rosters" class="grid"></div>
+<div id="team-matchups" class="card"></div>
+
+<div id="player-section">
+<div class="section-title"><h2>Player vs Player</h2><p>Direct and shared-opponent history between any two verified players.</p></div>
 <div class="card">
   <div class="controls">
     <label>Player A<input id="search-a" type="search" placeholder="Search player A"><select id="player-a"></select><span id="search-status-a" class="muted"></span></label>
@@ -225,18 +355,13 @@ h2,h3 {{ margin-top:0; }}
 <div id="direct" class="card"></div>
 <div id="shared" class="card"></div>
 <div id="meetings" class="card"></div>
-
-<div class="card">
-  <h2>Team vs Team — Match Night Lineup</h2>
-  <div class="controls">
-    <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
-    <label>Opponent Team<input id="search-team-b" type="search" placeholder="Search opponent team"><select id="team-b"></select><span id="search-status-team-b" class="muted"></span></label>
-    <label>Format<select id="team-format">{format_options_markup}</select></label>
-  </div>
 </div>
-<div id="team-rosters" class="grid"></div>
-<div id="team-matchups" class="card"></div>
-<p class="muted">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes.</p>
+
+<div id="trust-section">
+<div class="section-title"><h2>Data trust &amp; freshness</h2><p>What is verified, what is excluded, and why.</p></div>
+{trust_card}
+</div>
+<footer class="page-foot">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes.</footer>
 </main>
 <script id="uc-data" type="application/json">{data}</script>
 <script>
@@ -341,8 +466,8 @@ h2,h3 {{ margin-top:0; }}
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
       +'<div class="metric"><b>'+(c.length?(totalW+'-'+Math.max(0,totalG-totalW)):'Pending')+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
       +'<div class="metric"><b>'+(c.length?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
-      +'<h3>League stats</h3>'+(c.length?'<table><thead><tr><th>League</th><th>W-L</th><th>Last played</th><th>B&R</th><th>Mini slams</th></tr></thead><tbody>'
-        +c.map(function(r){{var w=r.matches_won||0,g=r.matches_played||0;return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+w+'-'+Math.max(0,g-w)+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
+      +'<h3>League stats</h3>'+(c.length?'<div class="table-wrap"><table><thead><tr><th>League</th><th>W-L</th><th>Last played</th><th>B&R</th><th>Mini slams</th></tr></thead><tbody>'
+        +c.map(function(r){{var w=r.matches_won||0,g=r.matches_played||0;return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+w+'-'+Math.max(0,g-w)+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
       +'<h3>Recent team/session history</h3>'+(teams.length?teams.map(function(t){{return '<span class="tag">'+esc(t.session_name||'Unknown session')+' · '+esc(t.team_name||'Unknown team')+(t.skill_level!==null?' · SL '+t.skill_level:'')+'</span>';}}).join(''):'<p class="muted">No team history captured.</p>');
   }}
 
@@ -394,10 +519,10 @@ h2,h3 {{ margin-top:0; }}
     var visibleIds=ids.slice(0,100);
     var sharedRows=visibleIds.map(function(id){{var p=PLAYERS[id],ra=record(ag[id]),rb=record(bg[id]);return '<tr><td>'+esc(p?p.name:id)+'</td><td>'+ra.w+'-'+ra.l+' ('+pct(ra.w,ra.g)+')</td><td>'+rb.w+'-'+rb.l+' ('+pct(rb.w,rb.g)+')</td><td>'+ra.g+' / '+rb.g+'</td></tr>';}}).join('');
     var limitNote=ids.length>visibleIds.length?'<p class="muted">Showing the 100 shared opponents with the largest combined samples.</p>':'';
-    document.getElementById("shared").innerHTML='<h2>Shared-opponent evidence</h2>'+(ids.length?'<p class="muted">'+ids.length+' opponent(s) both players have actually faced in '+esc(fmt)+'.</p>'+limitNote+'<table><thead><tr><th>Shared opponent</th><th>'+esc(pa.name)+'</th><th>'+esc(pb.name)+'</th><th>Samples A/B</th></tr></thead><tbody>'+sharedRows+'</tbody></table>':'<p class="muted">No recorded shared opponents in this format.</p>');
+    document.getElementById("shared").innerHTML='<h2>Shared-opponent evidence</h2>'+(ids.length?'<p class="muted">'+ids.length+' opponent(s) both players have actually faced in '+esc(fmt)+'.</p>'+limitNote+'<div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(pa.name)+'</th><th>'+esc(pb.name)+'</th><th>Samples A/B</th></tr></thead><tbody>'+sharedRows+'</tbody></table></div>':'<p class="muted">No recorded shared opponents in this format.</p>');
 
     var meetings=direct.slice().sort(function(x,y){{return String(val(y,"match_date")).localeCompare(String(val(x,"match_date")));}});
-    document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(val(r,"match_date")||'—')+'</td><td>'+esc(val(r,"session_name")||'—')+'</td><td>'+esc(val(r,"result"))+'</td><td>'+esc(val(r,"own_skill_level")===null?'—':val(r,"own_skill_level"))+'</td><td>'+esc(val(r,"opponent_skill_level")===null?'—':val(r,"opponent_skill_level"))+'</td><td>'+esc(val(r,"points_earned")===null?'—':val(r,"points_earned"))+'</td></tr>';}}).join('')+'</tbody></table>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
+    document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(val(r,"match_date")||'—')+'</td><td>'+esc(val(r,"session_name")||'—')+'</td><td>'+esc(val(r,"result"))+'</td><td>'+esc(val(r,"own_skill_level")===null?'—':val(r,"own_skill_level"))+'</td><td>'+esc(val(r,"opponent_skill_level")===null?'—':val(r,"opponent_skill_level"))+'</td><td>'+esc(val(r,"points_earned")===null?'—':val(r,"points_earned"))+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
 
     document.getElementById("status").innerHTML='<strong>Probability status: NOT CALIBRATED.</strong> Scout & Compare is showing real source evidence only. The future odds model must pass chronological backtesting before a percentage appears here.';
   }}
@@ -535,7 +660,7 @@ h2,h3 {{ margin-top:0; }}
     return '<h2>'+esc(title)+'</h2><p class="muted">'+esc(teamDisplay(team))+' · '+team.players.length+' rostered · '+totalNote+
       ' (not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules).'+
       (liveMissing?' * = division-scoped skill level, no live current rating captured for that player.':'')+'</p>'+
-      '<table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table>';
+      '<div class="table-wrap"><table><thead><tr><th>Player</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
   function sharedOpponentRecord(rowsA,rowsB) {{
@@ -605,7 +730,7 @@ h2,h3 {{ margin-top:0; }}
     }}).join("");
     out.innerHTML='<h2>Recommended sends</h2>'+
       '<p class="muted">Per opponent player, the best-supported send from our roster. Captain-assistance only — never a solved optimal lineup and never a win-probability claim; probability_publication stays FORBIDDEN throughout.</p>'+
-      '<table><thead><tr><th>Opponent player</th><th>Suggested send &amp; evidence</th></tr></thead><tbody>'+rows+'</tbody></table>';
+      '<div class="table-wrap"><table><thead><tr><th>Opponent player</th><th>Suggested send &amp; evidence</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
   renderTeamMatchups();
 
@@ -627,80 +752,163 @@ h2,h3 {{ margin-top:0; }}
   }});
 
   // ---- Match Day ----
-  // "My Team" is identity-backed: VIEWER.teams comes straight from the
-  // configured viewer's own verified team_history (see
-  // analytics.ultimate_coach_match_day), the exact same rows Team vs Team
-  // already builds TEAM_INDEX from -- never a name guess, never a default
-  // when unconfigured/unresolved/teamless, each disclosed plainly instead.
+  // Every date/time below was derived ONCE in Python, in the disclosed
+  // display timezone (analytics.ultimate_coach_match_day) -- this script
+  // never converts timestamps itself, so it can't drift into the viewer's
+  // browser timezone or disagree with the Excel companion. "Me" is an
+  // explicit choice of a verified player (APA record ID), defaulting to the
+  // build's configured identity -- never inferred from a name.
+  var MD=DATA.match_day||{{fixtures:[],schedule:{{}},coverage:{{}}}};
+  var FIXTURES=MD.fixtures||[], SCHEDULE=MD.schedule||{{}};
   var VIEWER=DATA.viewer||{{configured:false,resolved:false,teams:[]}};
-  var FIXTURES=DATA.fixtures||[];
   var MD_DATE=document.getElementById("md-date"),MD_TEAM=document.getElementById("md-team"),MD_FORMAT=document.getElementById("md-format");
   var MD_STATUS=document.getElementById("md-status"),MD_FIXTURES_EL=document.getElementById("md-fixtures");
-  var MD_TEAMS=(VIEWER.teams||[]).map(function(t){{
-    return {{
-      key:teamScopeKey(t),
-      team_external_id:String(t.team_external_id||""),
-      session_name:String(t.session_name||""),
-      display:teamDisplay({{name:t.team_name,session_name:t.session_name,format:t.format,division_id:t.division_id}})
-    }};
-  }});
-
-  function mdDisable(message) {{
-    MD_TEAM.innerHTML="";
-    MD_TEAM.disabled=true;
-    MD_DATE.disabled=true;
-    MD_FORMAT.disabled=true;
-    MD_STATUS.textContent=message;
-    MD_FIXTURES_EL.innerHTML="";
+  var MD_DATES_EL=document.getElementById("md-team-dates");
+  var MDV=document.getElementById("md-viewer"),MDVS=document.getElementById("md-viewer-search"),MDVST=document.getElementById("md-viewer-status");
+  var ALL_MY_TEAMS="__all__";
+  var VIEWER_STORE_KEY="ultimate-coach:match-day-viewer";
+  var WEEKDAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function storeGet(){{try{{return window.localStorage.getItem(VIEWER_STORE_KEY);}}catch(e){{return null;}}}}
+  function storeSet(v){{try{{if(v) window.localStorage.setItem(VIEWER_STORE_KEY,v); else window.localStorage.removeItem(VIEWER_STORE_KEY);}}catch(e){{}}}}
+  function isoDateLabel(iso){{
+    var m=/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})$/.exec(String(iso||""));
+    if(!m) return String(iso||"");
+    var day=new Date(Date.UTC(+m[1],+m[2]-1,+m[3])).getUTCDay();
+    return WEEKDAYS[day]+" "+MONTHS[+m[2]-1]+" "+(+m[3])+", "+m[1];
   }}
-  if(!VIEWER.configured) {{
-    mdDisable('No viewer identity configured. Set "ultimate_coach.viewer_member_external_id" in apa_config.yaml to your own APA member id to see your personal Match Day schedule here.');
-  }} else if(!VIEWER.resolved) {{
-    mdDisable("The configured viewer identity was not found among this build's verified players.");
-  }} else if(!MD_TEAMS.length) {{
-    mdDisable("No current team found for "+esc(VIEWER.player_name||"the configured viewer")+".");
-  }} else {{
-    MD_TEAM.innerHTML=MD_TEAMS.map(function(t){{return '<option value="'+esc(t.key)+'">'+esc(t.display)+'</option>';}}).join("");
-    MD_TEAM.value=MD_TEAMS[0].key;
-    MD_STATUS.textContent="Choose a date to see "+esc(MD_TEAMS[0].display)+"'s scheduled matches.";
+  var NAME_COUNTS={{}};
+  DATA.players.forEach(function(p){{var k=String(p.name||"").toLowerCase();NAME_COUNTS[k]=(NAME_COUNTS[k]||0)+1;}});
+  function currentScopes(p){{
+    var seen={{}},out=[];
+    (p&&p.team_history||[]).forEach(function(t){{
+      if(!t.is_current||!t.team_external_id) return;
+      var key=teamScopeKey(t);
+      if(seen[key]) return;
+      seen[key]=true;
+      out.push({{key:key,team_external_id:String(t.team_external_id),session_name:String(t.session_name||""),team_name:t.team_name||"",
+        display:teamDisplay({{name:t.team_name,session_name:t.session_name,format:t.format,division_id:t.division_id}})}});
+    }});
+    out.sort(function(x,y){{return x.display.localeCompare(y.display);}});
+    return out;
   }}
-
-  function fixtureMatchesFormat(f,filterValue) {{
-    if(filterValue) return f.format===filterValue;
-    return f.format==="EIGHT"||f.format==="NINE";
+  function viewerOptionLabel(p){{
+    var names={{}};
+    currentScopes(p).forEach(function(s){{names[s.team_name]=true;}});
+    var teamNames=Object.keys(names);
+    var dupes=NAME_COUNTS[String(p.name||"").toLowerCase()]||1;
+    return p.name+" · APA record ID "+p.external_id+" · "+(teamNames.length?teamNames.join(", "):"no current team")+(dupes>1?" · "+dupes+" players share this name":"");
   }}
-  function splitIsoDateTime(raw) {{
-    // Deliberately never new Date(raw) here -- that converts to the
-    // viewer's own browser timezone. Splitting the string instead displays
-    // exactly the offset the source recorded, never a silently-converted one.
-    var text=String(raw||"");
-    var tIdx=text.indexOf("T");
-    if(tIdx===-1) return {{date:text,time:"",offset:""}};
-    var datePart=text.slice(0,tIdx);
-    var m=text.slice(tIdx+1).match(/^(\\d{{2}}:\\d{{2}}:\\d{{2}})(Z|[+-]\\d{{2}}:\\d{{2}})?/);
-    return {{date:datePart,time:m?m[1]:"",offset:m&&m[2]?(m[2]==="Z"?"UTC":"UTC"+m[2]):""}};
+  var VIEWER_SEARCH={{}};
+  SORTED.forEach(function(p){{VIEWER_SEARCH[String(p.id)]=(p.name+" "+p.external_id).toLowerCase();}});
+  var mdViewerId=(function(){{
+    var stored=storeGet();
+    if(stored&&PLAYERS[stored]) return {{id:stored,source:"saved"}};
+    if(VIEWER.resolved&&VIEWER.player_id!==null&&PLAYERS[String(VIEWER.player_id)]) return {{id:String(VIEWER.player_id),source:"config"}};
+    return {{id:"",source:""}};
+  }})();
+  function renderViewerOptions(){{
+    var q=String(MDVS.value||"").trim().toLowerCase();
+    var matches=SORTED.filter(function(p){{return !q||VIEWER_SEARCH[String(p.id)].indexOf(q)!==-1;}});
+    var rows=matches.slice(0,MAX_OPTIONS);
+    var current=mdViewerId.id&&PLAYERS[mdViewerId.id];
+    if(current&&rows.indexOf(current)===-1) rows=[current].concat(rows);
+    MDV.innerHTML='<option value="">Choose yourself...</option>'+rows.map(function(p){{return '<option value="'+esc(p.id)+'">'+esc(viewerOptionLabel(p))+'</option>';}}).join("");
+    MDV.value=mdViewerId.id||"";
+    return matches.length;
   }}
-  function mdFixtureCard(f,teamMeta,i) {{
-    var isHome=String(f.home_team_id||"")===teamMeta.team_external_id;
-    var oppName=f.is_bye?null:(isHome?f.away_team_name:f.home_team_name);
-    var dt=splitIsoDateTime(f.match_date);
-    var when=f.date_unparsed
-      ? '<span class="warn" style="display:inline-block;padding:2px 6px;border-radius:4px;">Unparseable date: '+esc(f.match_date||"")+'</span>'
-      : (dt.date?esc(dt.date)+(dt.time?' at '+esc(dt.time)+(dt.offset?' ('+esc(dt.offset)+')':''):''):'No data');
-    var scoreNote=(f.is_scored&&f.home_score!==null&&f.away_score!==null)?' · '+f.home_score+'-'+f.away_score:'';
-    var body='<div class="metric-grid">'
-      +'<div class="metric"><b>'+when+'</b><span>Date/time (source timezone)</span></div>'
-      +'<div class="metric"><b>'+(isHome?'Home':'Away')+'</b><span>Side</span></div>'
-      +'<div class="metric"><b>'+esc(formatName(f.format))+'</b><span>Format</span></div>'
-      +'<div class="metric"><b>'+esc(f.session_name||'No data')+'</b><span>Session</span></div>'
-      +'<div class="metric"><b>'+(f.is_bye?'Bye':esc(oppName||'No data'))+'</b><span>Opponent</span></div>'
-      +'<div class="metric"><b>'+esc(f.location||'No data')+'</b><span>Location</span></div>'
-      +'<div class="metric"><b>'+esc(f.status||(f.is_scored?'SCORED':'UNPLAYED'))+scoreNote+'</b><span>Schedule/result status</span></div>'
-      +'</div>'
-      +(f.is_bye
-        ? '<p class="muted">Bye week — a real schedule slot with no opponent, not missing data.</p>'
-        : '<button type="button" id="md-compare-'+i+'">Compare rosters &amp; evidence for this matchup</button>');
-    return '<div class="card" style="margin-top:10px;">'+body+'</div>';
+  function viewerScopes(){{return mdViewerId.id?currentScopes(PLAYERS[mdViewerId.id]):[];}}
+  function renderViewerStatus(totalMatches){{
+    var p=mdViewerId.id&&PLAYERS[mdViewerId.id];
+    var searchNote=String(MDVS.value||"").trim()?(" "+totalMatches+" matching player"+(totalMatches===1?"":"s")+(totalMatches>MAX_OPTIONS?" (showing first "+MAX_OPTIONS+")":"")+"."):"";
+    if(!p) {{
+      if(VIEWER.configured&&!VIEWER.resolved) {{
+        MDVST.textContent="The configured viewer identity (APA record ID "+(VIEWER.external_id||"")+") was not found among this build's verified players. Search for yourself above."+searchNote;
+      }} else {{
+        MDVST.textContent="No viewer identity configured. Search your name or APA record ID above and choose yourself — same-name players are told apart by record ID and current teams. Nothing is guessed."+searchNote;
+      }}
+      return;
+    }}
+    var scopes=viewerScopes();
+    var src=mdViewerId.source==="config"?"default from this build's configuration":(mdViewerId.source==="saved"?"your saved choice on this device":"your choice");
+    var card=(String(p.external_id)===String(VIEWER.external_id||"")&&VIEWER.card_number)?" League card #"+VIEWER.card_number+" was verified to this record when the build was configured (card numbers are per league and are not used as identity).":"";
+    MDVST.innerHTML='Match Day for <strong>'+esc(p.name)+'</strong> · APA record ID '+esc(p.external_id)+' ('+esc(src)+').'+esc(card)+' '
+      +(scopes.length?scopes.length+' current team scope'+(scopes.length===1?'':'s')+': '+scopes.map(function(s){{return '<span class="tag">'+esc(s.display)+'</span>';}}).join(''):'No current team captured for this player.')
+      +esc(searchNote);
+  }}
+  function renderTeamOptions(){{
+    var scopes=viewerScopes(), previous=MD_TEAM.value;
+    if(!mdViewerId.id||!scopes.length) {{
+      MD_TEAM.innerHTML="";
+      MD_TEAM.disabled=true;
+      return;
+    }}
+    MD_TEAM.disabled=false;
+    MD_TEAM.innerHTML=(scopes.length>1?'<option value="'+ALL_MY_TEAMS+'">All my current teams ('+scopes.length+')</option>':'')
+      +scopes.map(function(s){{return '<option value="'+esc(s.key)+'">'+esc(s.display)+'</option>';}}).join("");
+    var keep=previous&&(previous===ALL_MY_TEAMS&&scopes.length>1||scopes.some(function(s){{return s.key===previous;}}));
+    MD_TEAM.value=keep?previous:(scopes.length>1?ALL_MY_TEAMS:scopes[0].key);
+  }}
+  function selectedScopes(){{
+    var scopes=viewerScopes();
+    if(MD_TEAM.value===ALL_MY_TEAMS) return scopes;
+    return scopes.filter(function(s){{return s.key===MD_TEAM.value;}});
+  }}
+  function formatFilterMatches(f){{
+    var v=MD_FORMAT.value;
+    if(v==="*") return true;
+    if(v==="") return f.format==="EIGHT"||f.format==="NINE";
+    return String(f.format_raw||"")===v;
+  }}
+  function formatFilterLabel(){{var o=MD_FORMAT.options[MD_FORMAT.selectedIndex];return o?o.text:"";}}
+  function sidesFor(scopes){{
+    var out=[];
+    scopes.forEach(function(s){{
+      (SCHEDULE[s.key]||[]).forEach(function(side){{
+        var f=FIXTURES[side.fixture_index];
+        if(f&&formatFilterMatches(f)) out.push({{scope:s,side:side,fixture:f}});
+      }});
+    }});
+    out.sort(function(x,y){{return String(x.fixture.local_sort||"~").localeCompare(String(y.fixture.local_sort||"~"));}});
+    return out;
+  }}
+  function opponentText(side){{
+    var o=side.opponent||{{}};
+    if(o.status==="bye") return "Bye — no opponent";
+    return o.team_name||"No data";
+  }}
+  function rosterStatusNote(side){{
+    var o=side.opponent||{{}};
+    if(o.status==="resolved") return "";
+    if(o.status==="bye") return '<p class="muted">Bye week — a real schedule slot with no opponent, not missing data. There is no opponent roster to compare.</p>';
+    if(o.status==="ambiguous") return '<p class="note warn-note">Opponent roster is ambiguous: '+o.candidate_scope_keys.length+' current roster scopes share this team ID and session ('+o.candidate_scope_keys.map(function(k){{return esc(TEAM_INDEX[k]?teamDisplay(TEAM_INDEX[k]):k);}}).join(" / ")+'). None is picked automatically — compare manually in Team vs Team below.</p>';
+    if(o.status==="missing") return '<p class="note warn-note">The source records no opponent team for this fixture, so there is no roster to compare.</p>';
+    return '<p class="note warn-note">No current roster is captured for '+esc(o.team_name||"this opponent")+' in this build, so a roster comparison is not available for this matchup.</p>';
+  }}
+  function mdFixtureCard(item,i,showTeam){{
+    var f=item.fixture, side=item.side, isBye=(side.opponent||{{}}).status==="bye";
+    var when=f.date_status==="ok"?esc(f.local_display)
+      :(f.date_status==="unparseable"?'Unparseable date: '+esc(f.match_date||""):'No date recorded');
+    var scored=f.is_scored&&f.home_score!==null&&f.home_score!==undefined&&f.away_score!==null&&f.away_score!==undefined;
+    var result=scored?(esc(f.home_team_name||"Home")+' '+f.home_score+' – '+f.away_score+' '+esc(f.away_team_name||"Away")):'Not recorded';
+    var badges='<span class="badge side">'+(side.side==="home"?"Home":"Away")+'</span>'
+      +'<span class="badge">'+esc(f.format_display||f.format_raw||formatName(f.format)||"Format: No data")+'</span>'
+      +'<span class="badge">'+esc(f.session_name||"Session: No data")+'</span>'
+      +'<span class="badge">'+esc(f.status||"Status: No data")+'</span>'
+      +(f.week!==null&&f.week!==undefined?'<span class="badge">Week '+esc(f.week)+'</span>':'');
+    var body='<div class="fixture-when">'+when+'</div>'
+      +'<div class="fixture-vs">'+(showTeam?'<b>'+esc(item.scope.display)+'</b> ':'<b>'+esc(item.scope.team_name)+'</b> ')
+      +(isBye?'— <b>Bye — no opponent</b>':(side.side==="home"?'(home) vs ':'(away) at ')+'<b>'+esc(opponentText(side))+'</b>')+'</div>'
+      +'<div class="badges">'+badges+'</div>'
+      +'<dl><dt>Kickoff</dt><dd>'+(f.date_status==="ok"?esc(f.local_time)+' '+esc(f.local_tz_abbrev)+' ('+esc(MD.display_timezone||"")+', UTC'+esc(f.local_utc_offset)+')':'No data')+'</dd>'
+      +'<dt>Source timestamp</dt><dd>'+esc(f.match_date||"No data")+'</dd>'
+      +'<dt>Venue</dt><dd>'+esc(f.location||"No data")+'</dd>'
+      +'<dt>Result</dt><dd>'+result+'</dd>'
+      +'<dt>Opponent roster</dt><dd>'+(isBye?'Not applicable (bye)':((side.opponent||{{}}).status==="resolved"?'Current roster captured':'Not available — see note'))+'</dd></dl>'
+      +(side.own_scope_ambiguous?'<p class="note warn-note">This team ID and session are rostered in more than one division and the fixture names no division, so this fixture is listed under each of them.</p>':'')
+      +rosterStatusNote(side)
+      +(!isBye&&(side.opponent||{{}}).status==="resolved"?'<button type="button" id="md-compare-'+i+'">Compare rosters &amp; evidence for this matchup</button>':'');
+    return '<div class="fixture'+(isBye?' bye':'')+'">'+body+'</div>';
   }}
   function forceSelectTeam(select,key) {{
     var team=TEAM_INDEX[key];
@@ -709,59 +917,92 @@ h2,h3 {{ margin-top:0; }}
     select.value=key;
     return true;
   }}
-  function mdApplyFixture(f,teamMeta) {{
-    var isHome=String(f.home_team_id||"")===teamMeta.team_external_id;
-    var oppId=String((isHome?f.away_team_id:f.home_team_id)||"");
-    var oppKey=null;
-    TEAM_KEYS.forEach(function(k){{
-      var t=TEAM_INDEX[k];
-      if(t.team_external_id===oppId&&t.session_name===teamMeta.session_name) oppKey=k;
-    }});
+  function mdApplyFixture(item) {{
     STA.value="";
     STB.value="";
-    forceSelectTeam(TA,teamMeta.key);
-    TF.value=f.format;
-    if(oppKey&&forceSelectTeam(TB,oppKey)) {{
-      renderTeamMatchups();
-    }} else {{
-      TB.innerHTML='<option value="">Select a team...</option>';
-      TB.value="";
-      renderTeamMatchups();
-      document.getElementById("team-matchups").innerHTML='<h2>Recommended sends</h2><p class="muted">The opponent for this fixture ('+esc(isHome?f.away_team_name:f.home_team_name)+') has no current roster captured in this build, so a roster comparison isn\\'t available for this specific matchup yet.</p>';
+    forceSelectTeam(TA,item.scope.key);
+    var fmt=item.fixture.format||"";
+    if(fmt&&!Array.prototype.some.call(TF.options,function(o){{return o.value===fmt;}})) {{
+      var opt=document.createElement("option"); opt.value=fmt; opt.textContent=formatName(fmt); TF.appendChild(opt);
     }}
+    if(fmt) TF.value=fmt;
+    forceSelectTeam(TB,item.side.opponent.scope_key);
+    var fromMatchDay="Loaded from Match Day ("+(item.fixture.local_display||"undated fixture")+"). Search to pick a different team.";
+    SSTA.textContent=fromMatchDay;
+    SSTB.textContent=fromMatchDay;
+    renderTeamMatchups();
     document.getElementById("team-rosters").scrollIntoView({{behavior:"smooth"}});
   }}
+  function renderDateChips(scopes){{
+    var dates={{}};
+    sidesFor(scopes).forEach(function(it){{if(it.fixture.local_date) dates[it.fixture.local_date]=true;}});
+    var list=Object.keys(dates).sort();
+    if(!list.length) {{ MD_DATES_EL.innerHTML=""; return; }}
+    MD_DATES_EL.innerHTML='<span class="muted" style="align-self:center;">Scheduled dates ('+list.length+'):</span>'+list.map(function(d){{
+      return '<button type="button" class="chip" data-date="'+d+'" aria-pressed="'+(d===MD_DATE.value?'true':'false')+'">'+esc(isoDateLabel(d).replace(/^(\\w{{3}})\\w*/,"$1"))+'</button>';
+    }}).join("");
+  }}
   function renderMatchDay() {{
-    if(!MD_TEAMS.length) return;
-    var teamMeta=MD_TEAMS.filter(function(t){{return t.key===MD_TEAM.value;}})[0];
-    if(!teamMeta) {{ MD_STATUS.textContent="Choose a team."; MD_FIXTURES_EL.innerHTML=""; return; }}
+    var totalMatches=renderViewerOptions();
+    renderViewerStatus(totalMatches);
+    renderTeamOptions();
+    var scopes=selectedScopes();
+    if(!mdViewerId.id) {{
+      MD_STATUS.textContent=VIEWER.configured&&!VIEWER.resolved
+        ? "The configured viewer identity was not found among this build's verified players. Choose yourself in “I am” above."
+        : "No viewer identity configured. Choose yourself in “I am” above to see your teams' schedule.";
+      MD_FIXTURES_EL.innerHTML=""; MD_DATES_EL.innerHTML="";
+      return;
+    }}
+    if(!scopes.length) {{
+      MD_STATUS.textContent=viewerScopes().length?"Choose one of your teams.":"No current team found for "+PLAYERS[mdViewerId.id].name+".";
+      MD_FIXTURES_EL.innerHTML=""; MD_DATES_EL.innerHTML="";
+      return;
+    }}
+    renderDateChips(scopes);
+    var teamText=scopes.length>1?"all "+scopes.length+" of your current teams":scopes[0].display;
+    var undated=sidesFor(scopes).filter(function(it){{return it.fixture.date_status!=="ok";}});
+    var undatedNote=undated.length?" "+undated.length+" fixture"+(undated.length===1?" has":"s have")+" a missing or unparseable date and can't be placed on a calendar day.":"";
     var localDate=MD_DATE.value;
     if(!localDate) {{
-      MD_STATUS.textContent="Choose a date to see "+esc(teamMeta.display)+"'s scheduled matches.";
+      MD_STATUS.textContent="Choose a date to see "+teamText+"'s scheduled matches"+(MD_DATES_EL.innerHTML?", or tap a scheduled date below the pickers.":".")+undatedNote;
       MD_FIXTURES_EL.innerHTML="";
       return;
     }}
-    var found=FIXTURES.filter(function(f){{
-      return f.local_date===localDate
-        && String(f.session_name||"")===teamMeta.session_name
-        && (String(f.home_team_id||"")===teamMeta.team_external_id||String(f.away_team_id||"")===teamMeta.team_external_id)
-        && fixtureMatchesFormat(f,MD_FORMAT.value);
-    }});
-    found.sort(function(x,y){{return String(x.match_date||"").localeCompare(String(y.match_date||""));}});
+    var found=sidesFor(scopes).filter(function(it){{return it.fixture.local_date===localDate;}});
     if(!found.length) {{
-      MD_STATUS.textContent="No scheduled match found for "+esc(teamMeta.display)+" on "+esc(localDate)+(MD_FORMAT.value?" in "+esc(formatName(MD_FORMAT.value)):"")+".";
+      MD_STATUS.textContent="No scheduled match found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+")."+undatedNote;
       MD_FIXTURES_EL.innerHTML="";
       return;
     }}
-    MD_STATUS.textContent=found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+esc(teamMeta.display)+" on "+esc(localDate)+". Never auto-applied below — choose which one to compare.";
-    MD_FIXTURES_EL.innerHTML=found.map(function(f,i){{return mdFixtureCard(f,teamMeta,i);}}).join("");
-    found.forEach(function(f,i){{
+    MD_STATUS.textContent=found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+"). "+(found.length>1?"All are listed — none is applied automatically; choose which one to compare.":"Choose Compare to load both rosters.");
+    MD_FIXTURES_EL.innerHTML=found.map(function(it,i){{return mdFixtureCard(it,i,scopes.length>1);}}).join("");
+    found.forEach(function(it,i){{
       var btn=document.getElementById("md-compare-"+i);
-      if(btn) btn.addEventListener("click",function(){{mdApplyFixture(f,teamMeta);}});
+      if(btn) btn.addEventListener("click",function(){{mdApplyFixture(it);}});
     }});
   }}
+  MD_DATES_EL.addEventListener("click",function(e){{
+    var t=e.target&&e.target.closest?e.target.closest("button[data-date]"):null;
+    if(!t) return;
+    MD_DATE.value=t.getAttribute("data-date");
+    renderMatchDay();
+  }});
+  MDV.addEventListener("change",function(){{
+    mdViewerId={{id:MDV.value||"",source:MDV.value?"chosen":""}};
+    storeSet(MDV.value||"");
+    MD_TEAM.value="";
+    renderMatchDay();
+  }});
+  var viewerSearchTimer=null;
+  MDVS.addEventListener("input",function(){{
+    clearTimeout(viewerSearchTimer);
+    viewerSearchTimer=setTimeout(function(){{renderViewerStatus(renderViewerOptions());}},SEARCH_DEBOUNCE_MS);
+  }});
   MD_DATE.addEventListener("change",renderMatchDay);
+  MD_DATE.addEventListener("input",renderMatchDay);
   MD_TEAM.addEventListener("change",renderMatchDay);
   MD_FORMAT.addEventListener("change",renderMatchDay);
+  renderMatchDay();
 }})();
 </script></body></html>"""

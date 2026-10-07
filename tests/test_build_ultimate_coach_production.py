@@ -47,7 +47,7 @@ def test_candidate_uses_snapshot_and_never_publishes_database(monkeypatch, tmp_p
     before = _hash(source)
     out = tmp_path / "candidate"
 
-    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot, **_: _safe_payload())
     monkeypatch.setattr(
         builder,
         "render",
@@ -78,7 +78,7 @@ def test_candidate_uses_low_memory_render_mode(monkeypatch, tmp_path):
     out = tmp_path / "candidate"
     seen = {}
 
-    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot, **_: _safe_payload())
 
     def fake_render(payload, *, built_at, consume_evidence=False, **kw):
         seen["consume_evidence"] = consume_evidence
@@ -97,7 +97,7 @@ def test_candidate_refuses_probability_unlock_and_publishes_nothing(monkeypatch,
     unsafe = _safe_payload()
     unsafe["probability_publication"] = "ALLOWED"
 
-    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: unsafe)
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot, **_: unsafe)
 
     with pytest.raises(builder.CandidateError, match="probability_publication"):
         builder.build_candidate(source, out)
@@ -111,7 +111,7 @@ def test_candidate_refuses_empty_verified_player_surface(monkeypatch, tmp_path):
     empty = _safe_payload()
     empty["counts"] = {"players": 0, "head_to_head_rows": 1, "all_games": 1}
 
-    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: empty)
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot, **_: empty)
 
     with pytest.raises(builder.CandidateError, match="no selectable players"):
         builder.build_candidate(source, out)
@@ -150,7 +150,7 @@ def test_candidate_is_not_published_if_ready_write_fails(monkeypatch, tmp_path):
     source = _source_db(tmp_path / "ultimate.db")
     out = tmp_path / "candidate"
 
-    monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
+    monkeypatch.setattr(builder, "_build_payload", lambda snapshot, **_: _safe_payload())
     monkeypatch.setattr(
         builder,
         "render",

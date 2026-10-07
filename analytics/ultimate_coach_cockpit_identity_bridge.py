@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from analytics.ultimate_coach_data_contract import build_contract
 from analytics.ultimate_coach_identity_manifest import build_verified_identity_manifest
 from analytics.ultimate_coach_identity_namespace_audit import audit_identity_namespace
-from analytics.ultimate_coach_match_day import build_fixture_rows
+from analytics.ultimate_coach_match_day import DEFAULT_MATCH_DAY_TIMEZONE, build_match_day_section
 
 
 def _result_for_perspective(all_games_row: dict[str, Any], player_id: int) -> str:
@@ -44,8 +44,14 @@ def _result_for_perspective(all_games_row: dict[str, Any], player_id: int) -> st
     return ""
 
 
-def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
+def build_verified_cockpit_payload(
+    db: Session, *, match_day_timezone: str = DEFAULT_MATCH_DAY_TIMEZONE
+) -> dict[str, Any]:
     """Return the cockpit payload, gated end-to-end by verified identity.
+
+    `match_day_timezone` is the disclosed display timezone every Match Day
+    date/kickoff is derived in (see analytics.ultimate_coach_match_day) --
+    computed once here so the HTML and Excel exports can never disagree.
 
     Every step is deterministic given identical database content: the same
     contract -> manifest -> audit chain the offline analytics/export layer
@@ -241,7 +247,9 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
         "identity_policy": "ROSTER_PROVENANCE_REQUIRED",
         "players": players,
         "evidence": evidence,
-        "fixtures": build_fixture_rows(tables["team_matches"]),
+        "match_day": build_match_day_section(
+            tables["team_matches"], players, display_timezone=match_day_timezone
+        ),
         "trust": trust,
         "counts": {
             "players": len(players),

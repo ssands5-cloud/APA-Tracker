@@ -92,3 +92,7 @@ desktop.ini
 # --opponent-team-id/--format/--session.
 /run_demo.bat
 /run_full_demo.bat
+
+# Machine-local Ultimate Coach overrides (a real viewer identity). This repo is
+# public; never commit a person's APA identity.
+apa_config.local.yaml

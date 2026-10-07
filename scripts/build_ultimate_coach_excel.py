@@ -19,7 +19,7 @@ if __package__ in (None, ""):
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
-from analytics.ultimate_coach_match_day import load_viewer_external_id_from_file
+from analytics.ultimate_coach_match_day import load_match_day_settings
 from database.engine import create_db_engine
 from ui.export_excel_ultimate_coach import write_workbook
 
@@ -39,17 +39,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Ultimate Coach staging DB does not exist: {args.db}")
         return 1
 
+    settings = load_match_day_settings(args.config)
     engine = create_db_engine({"database": {"path": str(args.db)}}, create_tables=False)
     try:
         with Session(engine) as db:
-            payload = build_verified_cockpit_payload(db)
+            payload = build_verified_cockpit_payload(db, match_day_timezone=settings.timezone)
     finally:
         engine.dispose()
 
     built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     output_path = write_workbook(
         payload, args.output, built_at=built_at, source_db=args.db.name,
-        viewer_member_external_id=load_viewer_external_id_from_file(args.config),
+        viewer_member_external_id=settings.viewer_member_external_id,
+        viewer_card_number=settings.viewer_card_number,
     )
     print(
         f"Ultimate Coach Excel written: {payload['counts']['players']} players, "

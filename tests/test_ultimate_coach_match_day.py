@@ -4,8 +4,18 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
+
 from analytics.ultimate_coach_match_day import (
+    DEFAULT_MATCH_DAY_TIMEZONE,
+    FORMAT_FILTER_ALL,
+    FORMAT_FILTER_EIGHT_NINE,
     build_fixture_rows,
+    build_match_day_section,
+    excel_date_serial,
+    fixture_matches_format_filter,
+    load_match_day_settings,
+    localize_match_date,
     fixture_opponent,
     fixtures_for_team_on_date,
     load_viewer_external_id_from_config,
@@ -78,10 +88,9 @@ def test_parse_match_date_never_raises_on_garbage():
     assert parse_match_date("2026-08-09") is None  # no offset -- not one of the two real shapes
 
 
-def test_match_local_date_near_midnight_does_not_cross_days_from_its_own_offset():
-    # 23:30 at UTC-06:00 is 05:30Z the *next* UTC day -- the local date must
-    # stay the 9th (the offset actually recorded), never silently read off
-    # a UTC-truncated day.
+def test_match_local_date_near_midnight_is_never_read_off_a_utc_truncated_day():
+    # 23:30 at UTC-06:00 is 05:30Z the *next* UTC day -- in the Denver
+    # display timezone (MDT, also -06:00 in August) it stays the 9th.
     assert match_local_date("2026-08-09T23:30:00-06:00") == date(2026, 8, 9)
 
 
@@ -202,3 +211,185 @@ def test_fixture_opponent_identifies_the_other_side():
 def test_fixture_opponent_none_for_a_bye_never_fabricated():
     fixture = _fixture_row(is_bye=True, away_team_id="", away_team_name="")
     assert fixture_opponent(fixture, "T1") is None
+
+
+# ---- display timezone (GPT finding: source UTC day is not the league day) ----
+
+def test_real_utc_evening_match_lands_on_the_previous_denver_day():
+    # Match 51545390 (Pool Cats vs Margin of Error, Summer 2026) is stored as
+    # 2026-08-30T01:00:00Z -- Saturday Aug 29 at 7:00 PM in Denver.
+    local = localize_match_date("2026-08-30T01:00:00Z")
+    assert DEFAULT_MATCH_DAY_TIMEZONE == "America/Denver"
+    assert local["local_date"] == "2026-08-29"
+    assert local["local_weekday"] == "Saturday"
+    assert local["local_time"] == "7:00 PM"
+    assert local["local_tz_abbrev"] == "MDT"
+    assert local["local_utc_offset"] == "-06:00"
+    assert local["local_display"] == "Sat Aug 29, 2026 · 7:00 PM MDT"
+    assert match_local_date("2026-08-30T01:00:00Z") == date(2026, 8, 29)
+
+
+def test_winter_and_summer_offsets_use_mst_and_mdt():
+    winter = localize_match_date("2027-01-10T02:30:00Z")  # 7:30 PM MST on Jan 9
+    assert (winter["local_date"], winter["local_time"], winter["local_tz_abbrev"], winter["local_utc_offset"]) == (
+        "2027-01-09", "7:30 PM", "MST", "-07:00")
+    # A source row already carrying -07:00 in winter is the same wall clock.
+    assert localize_match_date("2027-01-09T19:30:00-07:00")["local_display"] == winter["local_display"]
+    summer = localize_match_date("2026-07-10T01:30:00Z")  # 7:30 PM MDT on Jul 9
+    assert (summer["local_date"], summer["local_tz_abbrev"]) == ("2026-07-09", "MDT")
+
+
+def test_offset_rows_recorded_in_another_zone_are_converted_not_trusted_as_local():
+    # A real -08:00 source row (3 exist in Fall 2026) at 23:30 is 00:30 MST
+    # the next day in Denver.
+    local = localize_match_date("2026-11-13T23:30:00-08:00")
+    assert (local["local_date"], local["local_time"]) == ("2026-11-14", "12:30 AM")
+
+
+def test_dst_change_day_is_handled_by_the_timezone_database():
+    # US DST ended 2026-11-01 at 2:00 AM MDT. 08:30Z is 1:30 AM MST that day.
+    assert localize_match_date("2026-11-01T08:30:00Z")["local_display"] == "Sun Nov 1, 2026 · 1:30 AM MST"
+
+
+def test_missing_and_unparseable_dates_are_distinguished_and_never_guessed():
+    assert localize_match_date(None)["date_status"] == "missing"
+    assert localize_match_date("  ")["date_status"] == "missing"
+    bad = localize_match_date("2026-13-45T99:00:00Z")
+    assert bad["date_status"] == "unparseable"
+    assert bad["local_date"] is None and bad["local_display"] is None
+    assert localize_match_date("2026-08-09")["date_status"] == "unparseable"  # naive: no instant
+
+
+def test_another_display_timezone_can_be_chosen_explicitly():
+    assert localize_match_date("2026-08-30T01:00:00Z", "UTC")["local_date"] == "2026-08-30"
+    assert localize_match_date("2026-08-30T01:00:00Z", "America/New_York")["local_time"] == "9:00 PM"
+
+
+def test_excel_date_serial_matches_excel_1900_system():
+    assert excel_date_serial("2026-08-29") == 46263
+    assert excel_date_serial(None) is None
+
+
+# ---- settings shared by every build entrypoint ----
+
+def test_settings_default_to_denver_and_no_viewer(tmp_path):
+    settings = load_match_day_settings(tmp_path / "apa_config.yaml")
+    assert settings.timezone == "America/Denver"
+    assert settings.viewer_member_external_id is None
+    assert settings.viewer_source == "not configured"
+
+
+def test_local_override_supplies_viewer_and_card_without_touching_the_shared_config(tmp_path):
+    (tmp_path / "apa_config.yaml").write_text(
+        'ultimate_coach:\n  viewer_member_external_id: "CHANGE_ME"\n  viewer_card_number: "CHANGE_ME"\n'
+        '  match_day_timezone: "America/Denver"\n', encoding="utf-8")
+    (tmp_path / "apa_config.local.yaml").write_text(
+        'ultimate_coach:\n  viewer_member_external_id: "3349374"\n  viewer_card_number: "80202016"\n', encoding="utf-8")
+    settings = load_match_day_settings(tmp_path / "apa_config.yaml")
+    assert settings.viewer_member_external_id == "3349374"
+    assert settings.viewer_card_number == "80202016"
+    assert settings.viewer_source == "apa_config.local.yaml"
+    assert settings.timezone == "America/Denver"
+
+
+def test_unknown_display_timezone_fails_the_build_instead_of_silently_defaulting(tmp_path):
+    (tmp_path / "apa_config.yaml").write_text('ultimate_coach:\n  match_day_timezone: "Mars/Olympus"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="Mars/Olympus"):
+        load_match_day_settings(tmp_path / "apa_config.yaml")
+
+
+# ---- the shared Match Day section ----
+
+def test_section_embeds_only_fixtures_reachable_from_a_current_scope_and_counts_the_rest():
+    players = [_player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")])]
+    section = build_match_day_section([
+        _fixture_row(match_id=1, home_team_id="T1", away_team_id="T2", session_name="Fall 2026"),
+        _fixture_row(match_id=2, home_team_id="T1", away_team_id="T2", session_name="Summer 2026"),  # past session
+        _fixture_row(match_id=3, home_team_id="X1", away_team_id="X2", session_name="Fall 2026"),
+    ], players)
+    assert [f["match_id"] for f in section["fixtures"]] == [1]
+    assert section["coverage"] == {
+        "stored_fixture_count": 3, "embedded_fixture_count": 1, "excluded_fixture_count": 2,
+        "current_sessions": ["Fall 2026"], "current_scope_count": 1,
+        "date_status_counts": {"ok": 1}, "location_missing_count": 1, "bye_count": 0,
+    }
+    side = section["schedule"]["T1|d1|Fall 2026"][0]
+    assert side["side"] == "home"
+    assert side["opponent"]["status"] == "no_current_roster"
+    assert side["opponent"]["team_name"] == "Falcons"
+
+
+def test_section_resolves_opponent_by_exact_id_and_session():
+    players = [
+        _player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")]),
+        _player(2, "9002", "Opp", [_hist("T2", "d2", "Fall 2026"), _hist("T2", "d9", "Spring 2020", is_current=False)]),
+    ]
+    section = build_match_day_section([_fixture_row(home_team_id="T1", away_team_id="T2", session_name="Fall 2026")], players)
+    opponent = section["schedule"]["T1|d1|Fall 2026"][0]["opponent"]
+    assert opponent["status"] == "resolved"
+    assert opponent["scope_key"] == "T2|d2|Fall 2026"
+    # The opponent's own perspective is listed too, mirrored.
+    assert section["schedule"]["T2|d2|Fall 2026"][0]["side"] == "away"
+
+
+def test_section_discloses_ambiguous_opponent_scopes_instead_of_taking_first_or_last():
+    players = [
+        _player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")]),
+        _player(2, "9002", "Opp A", [_hist("T2", "dA", "Fall 2026")]),
+        _player(3, "9003", "Opp B", [_hist("T2", "dB", "Fall 2026")]),
+    ]
+    section = build_match_day_section([_fixture_row(home_team_id="T1", away_team_id="T2", session_name="Fall 2026")], players)
+    opponent = section["schedule"]["T1|d1|Fall 2026"][0]["opponent"]
+    assert opponent["status"] == "ambiguous"
+    assert opponent["scope_key"] is None
+    assert opponent["candidate_scope_keys"] == ["T2|dA|Fall 2026", "T2|dB|Fall 2026"]
+    # And from T2's side, its own scope is flagged as ambiguous.
+    assert all(s["own_scope_ambiguous"] for key in ("T2|dA|Fall 2026", "T2|dB|Fall 2026") for s in section["schedule"][key])
+
+
+def test_section_bye_has_no_opponent_even_with_placeholder_names():
+    players = [_player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")])]
+    section = build_match_day_section([_fixture_row(home_team_id="T1", away_team_id="13082714", away_team_name="BYE",
+                                                    session_name="Fall 2026", is_bye=True)], players)
+    opponent = section["schedule"]["T1|d1|Fall 2026"][0]["opponent"]
+    assert opponent == {"status": "bye", "scope_key": None, "candidate_scope_keys": [],
+                        "team_external_id": None, "team_name": None}
+    assert section["coverage"]["bye_count"] == 1
+
+
+def test_section_missing_opponent_name_is_none_not_blank_or_zero():
+    players = [_player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")])]
+    section = build_match_day_section([_fixture_row(home_team_id="T1", away_team_id="T2", away_team_name="",
+                                                    session_name="Fall 2026")], players)
+    assert section["schedule"]["T1|d1|Fall 2026"][0]["opponent"]["team_name"] is None
+
+
+def test_section_sorts_sides_by_display_time_with_undated_rows_last():
+    players = [_player(1, "9001", "Viewer", [_hist("T1", "d1", "Fall 2026")])]
+    section = build_match_day_section([
+        _fixture_row(match_id=1, match_external_id="1", home_team_id="T1", session_name="Fall 2026", match_date=None),
+        _fixture_row(match_id=2, match_external_id="2", home_team_id="T1", session_name="Fall 2026",
+                     match_date="2026-10-12T02:00:00Z"),  # 8:00 PM Oct 11 Denver
+        _fixture_row(match_id=3, match_external_id="3", home_team_id="T1", session_name="Fall 2026",
+                     match_date="2026-10-11T11:00:00-06:00"),
+    ], players)
+    order = [section["fixtures"][s["fixture_index"]]["match_id"] for s in section["schedule"]["T1|d1|Fall 2026"]]
+    assert order == [3, 2, 1]
+    assert section["coverage"]["date_status_counts"] == {"missing": 1, "ok": 2}
+
+
+def test_format_filter_default_keeps_every_eight_and_nine_variant_and_raw_labels_stay_selectable():
+    doubles = build_fixture_rows([_fixture_row(format="EIGHT", format_raw="8-Ball Doubles")])[0]
+    masters = build_fixture_rows([_fixture_row(format="MASTERS", format_raw="Masters")])[0]
+    assert fixture_matches_format_filter(doubles, FORMAT_FILTER_EIGHT_NINE)
+    assert not fixture_matches_format_filter(masters, FORMAT_FILTER_EIGHT_NINE)
+    assert fixture_matches_format_filter(masters, FORMAT_FILTER_ALL)
+    assert fixture_matches_format_filter(masters, "Masters")
+    assert not fixture_matches_format_filter(doubles, "8-Ball Open")
+
+
+def test_legacy_bare_format_codes_display_readably_but_keep_the_recorded_value():
+    row = build_fixture_rows([_fixture_row(format="EIGHT", format_raw="EIGHT")])[0]
+    assert row["format_raw"] == "EIGHT"
+    assert row["format_display"] == "8-Ball (recorded as EIGHT)"
+    assert build_fixture_rows([_fixture_row(format_raw="8-Ball Open")])[0]["format_display"] == "8-Ball Open"

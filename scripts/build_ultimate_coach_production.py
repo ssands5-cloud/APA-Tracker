@@ -30,7 +30,11 @@ if __package__ in (None, ""):
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
-from analytics.ultimate_coach_match_day import load_viewer_external_id_from_file
+from analytics.ultimate_coach_match_day import (
+    DEFAULT_MATCH_DAY_TIMEZONE,
+    MatchDaySettings,
+    load_match_day_settings,
+)
 from database.engine import create_db_engine
 from ui.ultimate_coach import render
 
@@ -94,14 +98,14 @@ def _snapshot_sqlite(source: Path, destination: Path) -> tuple[str, str]:
     return before, _sha256(destination)
 
 
-def _build_payload(snapshot: Path) -> dict:
+def _build_payload(snapshot: Path, *, match_day_timezone: str = DEFAULT_MATCH_DAY_TIMEZONE) -> dict:
     engine = create_db_engine(
         {"database": {"path": str(snapshot)}},
         create_tables=False,
     )
     try:
         with Session(engine) as db:
-            return build_verified_cockpit_payload(db)
+            return build_verified_cockpit_payload(db, match_day_timezone=match_day_timezone)
     finally:
         engine.dispose()
 
@@ -133,7 +137,20 @@ def _default_run_dir(run_root: Path) -> Path:
     return run_root / f"candidate-{stamp}"
 
 
-def build_candidate(source_db: Path, out_dir: Path, *, viewer_member_external_id: str | None = None) -> Path:
+def build_candidate(
+    source_db: Path,
+    out_dir: Path,
+    *,
+    viewer_member_external_id: str | None = None,
+    settings: MatchDaySettings | None = None,
+) -> Path:
+    if settings is None:
+        settings = MatchDaySettings(
+            viewer_member_external_id=viewer_member_external_id,
+            viewer_card_number=None,
+            timezone=DEFAULT_MATCH_DAY_TIMEZONE,
+            viewer_source="argument" if viewer_member_external_id else "not configured",
+        )
     source_db = source_db.resolve()
     out_dir = out_dir.resolve()
 
@@ -148,7 +165,7 @@ def build_candidate(source_db: Path, out_dir: Path, *, viewer_member_external_id
 
     try:
         source_sha, snapshot_sha = _snapshot_sqlite(source_db, snapshot)
-        payload = _build_payload(snapshot)
+        payload = _build_payload(snapshot, match_day_timezone=settings.timezone)
         _verify_payload(payload)
 
         built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -156,7 +173,8 @@ def build_candidate(source_db: Path, out_dir: Path, *, viewer_member_external_id
         html_path.write_text(
             render(
                 payload, built_at=built_at, consume_evidence=True,
-                viewer_member_external_id=viewer_member_external_id,
+                viewer_member_external_id=settings.viewer_member_external_id,
+                viewer_card_number=settings.viewer_card_number,
             ),
             encoding="utf-8",
         )
@@ -172,6 +190,12 @@ def build_candidate(source_db: Path, out_dir: Path, *, viewer_member_external_id
             "html_sha256": html_sha,
             "counts": payload["counts"],
             "trust": payload.get("trust") or {},
+            "match_day": {
+                "display_timezone": settings.timezone,
+                "viewer_configured": bool(settings.viewer_member_external_id),
+                "viewer_source": settings.viewer_source,
+                "coverage": (payload.get("match_day") or {}).get("coverage") or {},
+            },
             "safety": {
                 "probability_publication": payload["probability_publication"],
                 "matchup_probability": payload["matchup_probability"],
@@ -219,9 +243,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir = args.out or _default_run_dir(args.run_root)
     try:
-        completed = build_candidate(
-            args.db, out_dir, viewer_member_external_id=load_viewer_external_id_from_file(args.config)
-        )
+        completed = build_candidate(args.db, out_dir, settings=load_match_day_settings(args.config))
     except CandidateError as exc:
         print(f"ULTIMATE COACH CANDIDATE BLOCKED: {exc}")
         return 1
