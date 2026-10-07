@@ -544,3 +544,14 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game"
     book.set(LL, "D23", "Breaks hard")       # tonight's note joins, still separated from evidence
     assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
+
+
+def test_start_here_example_and_tour_are_true_to_the_build(built):
+    ws = built["START HERE"]
+    text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+    # Worked example comes from this build's own data: configured viewer -> next fixture. Selections only.
+    for needle in (f"1 · Player: {ANN}", f"2 · Team: {SHARKS}", "3 · Format: 8-Ball & 9-Ball (the default)",
+                   "4 · Scheduled date: Sun Oct 11, 2026", f"5 · Fixture: Home vs {FALCONS} (the only fixture that day"):
+        assert needle in text, needle
+    assert "War Room → Inspect" in text and "direct record and number of meetings" in text
+    assert "Coach Dashboard" in text and "shared opponents)" not in text      # no longer claims shared-opponent evidence

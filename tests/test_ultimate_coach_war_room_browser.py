@@ -242,3 +242,89 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 page.close()
         finally:
             browser.close()
+
+
+# ---- GPT audit #84 (Paul's real HTML UAT): a Match Day change with no applicable fixture must not leave the
+# previous fixture's Tonight panel, opponent, sends or print context on screen.
+
+def _stale_page(tmp_path: Path, browser):
+    from analytics.ultimate_coach_match_day import build_match_day_section
+    from tests.test_excel_war_room_formulas import _fixture
+    payload = _payload()
+    raw = [_fixture(1, "2026-10-11T11:00:00-06:00", "sharks-a", "falcons-a"),
+           _fixture(2, "2026-11-01T11:00:00-07:00", "sharks-a", "bye", bye=True),
+           _fixture(3, "2026-10-25T11:00:00-06:00", "sharks-a", "owls-a"),
+           _fixture(4, "2026-10-25T19:00:00-06:00", "sharks-a", "falcons-a"),
+           _fixture(7, "2026-11-08T11:00:00-07:00", "sharks-a", "owls-a")]
+    raw[-1]["away_team_id"], raw[-1]["away_team_name"] = "ghosts-a", "Ghosts"   # no captured roster
+    payload["match_day"] = build_match_day_section(raw, payload["players"])
+    path = tmp_path / "stale.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    errors = []
+    page.on("pageerror", lambda exc: errors.append(str(exc)))
+    page.goto(path.as_uri())
+    page.wait_for_load_state("load")
+    return page, errors
+
+
+def _assert_no_followed_fixture(page, *, expect):
+    tonight = page.inner_text("#tonight")
+    assert "Oct 11" not in tonight and "Falcons" not in tonight and "Cam Cole" not in tonight, tonight
+    assert expect in tonight, (expect, tonight)
+    assert page.input_value("#team-a") == "" and page.input_value("#team-b") == ""
+    for sel in ("#wr-opportunities", "#wr-risks", "#wr-matrix", "#lineup-lab", "#scouting-cards", "#wr-meetings"):
+        assert page.inner_text(sel).strip() == "", sel
+    assert page.locator("#print-matchup").count() == 0          # nothing to print for an old fixture
+
+
+def _assert_oct11(page):
+    tonight = page.inner_text("#tonight")
+    assert "Sun Oct 11, 2026 · 11:00 AM MDT" in tonight and "Falcons" in tonight
+    assert page.input_value("#team-a") == OURS and page.input_value("#team-b") == THEIRS
+    assert f"1. {ANN} — 2-0 (2)" in page.inner_text("#wr-opportunities")
+
+
+def test_match_day_change_without_an_applicable_fixture_clears_the_followed_matchup(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _stale_page(tmp_path, browser)
+            _assert_oct11(page)
+            page.fill("#md-date", "2026-11-26")                                   # valid date, no match
+            _assert_no_followed_fixture(page, expect="No scheduled match")
+            assert "Thu Nov 26, 2026" in page.inner_text("#tonight")
+            page.fill("#md-date", "2026-10-11"); _assert_oct11(page)               # return restores
+            page.fill("#md-date", "2026-11-01")                                   # bye
+            _assert_no_followed_fixture(page, expect="Bye")
+            assert "Sun Nov 1, 2026" in page.inner_text("#tonight") and "MST" in page.inner_text("#tonight")
+            page.fill("#md-date", "2026-11-08")                                   # opponent without a roster
+            _assert_no_followed_fixture(page, expect="Ghosts")
+            assert "roster" in page.inner_text("#tonight")
+            page.fill("#md-date", "2026-10-25")                                   # two fixtures: none chosen
+            _assert_no_followed_fixture(page, expect="2 fixtures")
+            page.click("#md-compare-1")                                           # explicit choice applies
+            assert "Oct 25, 2026" in page.inner_text("#tonight") and page.input_value("#team-b") == THEIRS
+            page.fill("#md-date", "2026-10-11"); _assert_oct11(page)
+            page.select_option("#md-viewer", "4")                                 # a player with no current team
+            _assert_no_followed_fixture(page, expect="No current team")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_manual_exploration_is_labelled_and_a_match_day_change_returns_to_following(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _stale_page(tmp_path, browser)
+            page.fill("#search-team-b", "Owls"); page.wait_for_timeout(400)
+            page.select_option("#team-b", "owls-a|d1|Fall 2026")
+            tonight = page.inner_text("#tonight")
+            assert "Teams picked by hand" in tonight and "Owls" in tonight and "Oct 11" not in tonight
+            page.fill("#md-date", "2026-11-26")                                   # Match Day change: follow again
+            _assert_no_followed_fixture(page, expect="No scheduled match")
+            page.fill("#md-date", "2026-10-11"); _assert_oct11(page)
+            assert errors == []
+        finally:
+            browser.close()

@@ -1091,6 +1091,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   function storeGet(){{try{{return window.localStorage.getItem(VIEWER_STORE_KEY);}}catch(e){{return null;}}}}
   function storeSet(v){{try{{if(v) window.localStorage.setItem(VIEWER_STORE_KEY,v); else window.localStorage.removeItem(VIEWER_STORE_KEY);}}catch(e){{}}}}
+  function shortDateLabel(iso){{var full=isoDateLabel(iso);return /^[A-Z][a-z]+ /.test(full)?full.slice(0,3)+full.slice(full.indexOf(" ")):full;}}
   function isoDateLabel(iso){{
     var m=/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})$/.exec(String(iso||""));
     if(!m) return String(iso||"");
@@ -1252,7 +1253,19 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     select.value=key;
     return true;
   }}
+  // Match Day's selection has no single fixture with an opponent roster: drop the followed matchup
+  // entirely (teams, fixture context, print/planning context) and say why in the Tonight panel, so an
+  // earlier fixture can never stay on screen as if it were tonight's (GPT audit #84, Paul's HTML UAT).
+  function mdNoFixture(when,text) {{
+    MATCHUP_CONTEXT=null;
+    WR_TONIGHT_NOTE={{when:when||"",text:text}};
+    STA.value=""; STB.value="";
+    applyTeamSearch(STA,TA,SSTA); TA.value="";
+    applyTeamSearch(STB,TB,SSTB); TB.value="";
+    renderTeamMatchups();
+  }}
   function mdApplyFixture(item,auto) {{
+    WR_TONIGHT_NOTE=null;
     STA.value="";
     STB.value="";
     forceSelectTeam(TA,item.scope.key);
@@ -1306,11 +1319,13 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
         ? "The configured viewer identity was not found among this build's verified players. Choose yourself in “I am” above."
         : "No viewer identity configured. Choose yourself in “I am” above to see your teams' schedule.";
       MD_FIXTURES_EL.innerHTML=""; MD_DATES_EL.innerHTML="";
+      mdNoFixture("",MD_STATUS.textContent);
       return;
     }}
     if(!scopes.length) {{
       MD_STATUS.textContent=viewerScopes().length?"Choose one of your teams.":"No current team found for "+PLAYERS[mdViewerId.id].name+".";
       MD_FIXTURES_EL.innerHTML=""; MD_DATES_EL.innerHTML="";
+      mdNoFixture("",MD_STATUS.textContent);
       return;
     }}
     var dl=renderDateList(scopes);
@@ -1332,12 +1347,14 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     if(!localDate) {{
       MD_STATUS.textContent="Choose a date to see "+teamText+"'s scheduled matches"+(MD_DATES_EL.innerHTML?", or tap a scheduled date below the pickers.":".")+undatedNote;
       MD_FIXTURES_EL.innerHTML="";
+      mdNoFixture("","Choose a date on Match Day.");
       return;
     }}
     var found=sidesFor(scopes).filter(function(it){{return it.fixture.local_date===localDate;}});
     if(!found.length) {{
       MD_STATUS.textContent="No scheduled match found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+")."+undatedNote;
       MD_FIXTURES_EL.innerHTML="";
+      mdNoFixture(shortDateLabel(localDate),"No scheduled match for "+teamText+" on this date ("+formatFilterLabel()+").");
       return;
     }}
     MD_STATUS.textContent=dateNote+found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+teamText+" on "+isoDateLabel(localDate)+" ("+formatFilterLabel()+"). "+(found.length>1?"All are listed — none is applied automatically; choose which one to compare.":"Choose Compare to load both rosters.");
@@ -1351,6 +1368,13 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     if(found.length===1&&(found[0].side.opponent||{{}}).status==="resolved") {{
       mdApplyFixture(found[0],true);
       MD_STATUS.textContent+=" The War Room below now follows this fixture.";
+    }} else if(found.length>1) {{
+      mdNoFixture(shortDateLabel(localDate),found.length+" fixtures on this date — choose one on Match Day (none is chosen for you).");
+    }} else {{
+      var f1=found[0].fixture,o1=found[0].side.opponent||{{}};
+      var when1=f1.date_status==="ok"?f1.local_display:shortDateLabel(localDate);
+      mdNoFixture(when1,o1.status==="bye"?"Bye — no opponent this week. Nothing to plan for this date."
+        :"vs "+(o1.team_name||"an opponent the source does not name")+" — no current opponent roster is captured, so there is nothing to compare or plan.");
     }}
   }}
   MD_DATES_EL.addEventListener("click",function(e){{

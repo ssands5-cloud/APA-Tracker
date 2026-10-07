@@ -1649,17 +1649,17 @@ TAB_TOUR = [
     ("START HERE", "This page: what Ultimate Coach does and how to use it in three minutes."),
     ("Command Center", "Tonight at a glance: opponent, date, venue, availability counts, the opponent roster and the evidence summary."),
     ("Match Day", "THE control panel. Pick player → team → format → date → fixture once; every other tab follows it."),
-    ("War Room", "Who to put up next: best sends per opponent, dangerous opponents, avoid sends, open risks and the colour matrix. Its own optional overrides only change this tab."),
+    ("War Room", "The match-night overview: both rosters, best sends per opponent, dangerous opponents, avoid sends, open risks, the colour matrix, and Inspect (shared-opponent evidence for one opponent or one of our players). Its own optional overrides only change this tab."),
     ("Lineup Lab", "Mark our players Available / Unavailable / Unknown and Planned / Played, and which opponents already played. Marks belong to one fixture."),
     ("Scouting Cards", "One card per opponent: records, meetings with our players, record by skill level, missing information and your observations."),
     ("Coach Notes", "Your own observations per player (tags such as 'Slow shooter' plus free text). Opinions, not APA facts — kept apart from evidence."),
     ("Captain Packet", "The printable match-night packet: page 1 summary, then scouting cards, evidence and meeting history."),
-    ("Coach Dashboard", "Any two players head to head (direct record and shared opponents), defaulting to you vs tonight's opponents."),
+    ("Coach Dashboard", "One player vs one player: their direct record and number of meetings, plus tonight's captured skill levels. Defaults to you vs tonight's opponents. (Shared-opponent evidence is in War Room → Inspect.)"),
     ("Schedule, Team Rosters, Players …", "The recorded data behind everything above — reference only."),
 ]
 
 
-def build_start_here(wb, *, stats: dict[str, Any], version: str) -> None:
+def build_start_here(wb, *, stats: dict[str, Any], version: str, example: list[str] | None = None) -> None:
     ws = wb.create_sheet("START HERE", 0)
     for letter, width in zip("ABCDEFGHIJ", (3, 26, 26, 3, 26, 26, 3, 26, 26, 3)):
         ws.column_dimensions[letter].width = width
@@ -1677,8 +1677,9 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str) -> None:
             "• Review direct head-to-head history", "• Review shared-opponent evidence", "• Plan your lineup as the night goes",
             "• Scout every opponent", "• Print a match-night packet"]
     a = _card(ws, top, 2, 3, "1 · What Ultimate Coach does", what)
-    steps = ["Step 1 · Go to Match Day", "Step 2 · Select Player (you)", "Step 3 · Select Team", "Step 4 · Select Match Date",
-             "Step 5 · Review the Command Center", "Step 6 · Review Lineup Lab (mark who's here)", "Step 7 · Review the War Room matchups",
+    steps = ["Step 1 · Go to Match Day", "Step 2 · Select Player (you)", "Step 3 · Select Team (and Format)",
+             "Step 4 · Select Match Date (and Fixture if two share a day)", "Step 5 · Review the Command Center",
+             "Step 6 · Lineup Lab: mark who's here — marks belong to that one fixture", "Step 7 · Review the War Room matchups",
              "Step 8 · Print the Captain Packet"]
     b = _card(ws, top, 5, 6, "2 · Quick start (3 minutes)", steps, title_fill=base.OPPONENT_FILL)
     flow = ["Match Day decides the fixture.", "↓ Command Center · War Room · Lineup Lab", "↓ Scouting Cards · Coach Dashboard",
@@ -1686,6 +1687,11 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str) -> None:
             "A tab's own override changes only that tab — clear it to follow Match Day again."]
     c = _card(ws, top, 8, 9, "4 · Match night workflow", flow)
     r = max(a, b, c) + 2
+    # A worked example taken from THIS build's own data (the configured viewer's next fixture) -- selections
+    # only, never results, and never hard-coded in the source.
+    r = _card(ws, r, 2, 9, "Worked example from this build — what Match Day picks for you",
+              example or ["No viewer is configured for this build: pick yourself on Match Day and it fills in team, date "
+                          "and fixture the same way."], title_fill=base.OPPONENT_FILL) + 2
     _span(ws, r, 2, 9, "3 · Workbook tour", font=Font(bold=True, size=12, color="FFFFFF"), fill=base.SECTION_FILL, wrap=False, height=22)
     for name, text in TAB_TOUR:
         r += 1
@@ -1701,6 +1707,8 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str) -> None:
               "• No validated win-probability model exists — no odds or percentages are shown anywhere (NOT CALIBRATED).",
               "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
               "• Rosters are current captured rosters, not who played on a past date.",
+              "• Unknown availability is not Unavailable, and neither is a prediction. No lineup-legality or skill cap is assumed.",
+              "• Planning marks belong to one fixture: clear old marks before planning another night.",
               "• Coach Notes are your opinions, never APA facts."]
     lim = _card(ws, r, 2, 9, "5 · Important limitations", limits, title_fill=PatternFill("solid", fgColor="8A5A00"))
     r = lim + 2

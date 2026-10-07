@@ -8,6 +8,10 @@
   var WR_SENDABLE={G:true,E:true,I:true};
   var WR_TZ=(DATA.match_day&&DATA.match_day.display_timezone)||"America/Denver";
   var WR_STATE={pair:null};
+  // Set by Match Day when its current selection has no fixture to follow (no date, no match, bye,
+  // opponent without a roster, several fixtures awaiting a choice, no team): {when, text}. The Tonight
+  // panel then states that instead of going blank or keeping a previous fixture (GPT audit #84).
+  var WR_TONIGHT_NOTE=null;
   function wrKnown(x){return x!==null&&x!==undefined;}
   function wrCategory(c){if(c.direct){var w=c.direct.w,l=c.direct.g-w;return w>l?"G":(w<l?"R":"E");}return c.shared?"I":"X";}
   function wrCell(c){
@@ -178,7 +182,10 @@
       +'<div><b>Open risks</b>'+(plan.risks.length?plural(plan.risks.length,"opponent")+' with no favorable option left':'None')+'</div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
   }
-  function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML="";["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
+  function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
+      +(WR_TONIGHT_NOTE.when?'<div class="when">'+esc(WR_TONIGHT_NOTE.when)+'</div>':'')+'<div class="vs">'+esc(WR_TONIGHT_NOTE.text)+'</div>'
+      +'<p class="muted">Following Match Day — nothing to plan until it names one fixture with an opponent roster.</p>'
+      +'<div class="tonight-links"><a href="#match-day-card">Change matchup</a></div>':"";["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
 
   function renderWarRoom(ta,tb,fmt){
     var opEl=document.getElementById("wr-opportunities");
