@@ -1370,6 +1370,40 @@ planning defect rather than just unverified feature existence. UX/Edge
 baseline remains Fair / 5 out of 10 until the next complete-flow audit.
 Updated issue #84; no feature/source/off-limits edits and nothing merged.
 
+### Phase 3 first-screen captain review — 2026-10-07 08:38 UTC
+
+Product unchanged at `4f73eb8`; artifact `5c9dc83` remains the candidate.
+Fresh GitHub check confirms both Python CI jobs green. No new builder
+commit or acknowledgement of the reproduced fixture-state P1 observed.
+Master issue #84 updated to separate fixed items and current blockers.
+
+✅ **Verified:** actual candidate opened in headless Chromium at desktop
+1280x900 and phone 390x844. Mobile document width equals viewport width
+(390), with no page errors. Selected Sunday fixture defaults correctly.
+Screenshots saved inside canonical `.git/phase3-visual-5c9dc83/` and
+visually inspected. No new artifact generation or real-Excel claim.
+
+⚠ **Needs Improvement (P2 information hierarchy):** default desktop first
+viewport contains dataset counts, freshness strips, identity setup,
+scopes, selection controls and fifteen date chips before the fixture
+card. On phone, header/navigation/freshness and identity setup consume
+the initial viewport; opponent, rosters and remaining sends are absent.
+The responsive layout works, but the primary view still asks the captain
+to navigate setup before seeing who to put up next.
+
+💡 **Recommendation:** after valid fixture selection, lead with compact
+match header, both roster/remaining-status summaries and evidence-backed
+options. Put Change matchup/setup behind progressive disclosure. Retain
+compact readable freshness and missing-data warnings rather than removing
+them. Show direct/shared/no-evidence distinctions and samples without
+predictive labels. Final visual preference remains PENDING PAUL REVIEW.
+
+❌ **Still blocking:** played/planned marks leak across fixtures in both
+exports, independently reproduced in the previous entry. No fix observed.
+Skills applied: existing verification/red-team/validator instructions.
+Readiness FAIL; qualitative Edge 5/10 and UX Fair pending corrected live
+workflow. No feature/source/off-limits edits, COM or merge performed.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
