@@ -23,6 +23,13 @@
     return [c.direct?"Direct: "+wlText(c.direct.w,c.direct.g)+" in "+plural(c.direct.g,"meeting"):"No direct meetings",
       c.shared?"Indirect: "+plural(c.shared,"shared opponent")+" — ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+"), theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"no shared opponents"].join(" · ");
   }
+  var WR_CAT_WORD={G:"favorable",R:"concerning",E:"even"};
+  // Why a player appears as a send (mirrors analytics.ultimate_coach_war_room.reason).
+  function wrReason(c){
+    if(c.direct) return wlText(c.direct.w,c.direct.g)+" direct record ("+plural(c.direct.g,"meeting")+") — "+WR_CAT_WORD[wrCategory(c)];
+    if(c.shared) return "shared-opponent results only: ours "+wlText(c.ow,c.og)+" vs theirs "+wlText(c.tw,c.tg)+" across "+plural(c.shared,"shared opponent")+" (no direct meetings)";
+    return "no recorded evidence";
+  }
   // Calendar day in the disclosed display timezone for an offset-aware source timestamp
   // (same accept rule as analytics.ultimate_coach_match_day.parse_match_date: naive -> No data).
   var WR_DAY=(function(){try{return new Intl.DateTimeFormat("en-US",{timeZone:WR_TZ,year:"numeric",month:"2-digit",day:"2-digit"});}catch(e){return null;}})();
@@ -57,7 +64,7 @@
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
-    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
+    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.reason=wrReason(r.c);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
     blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
@@ -101,7 +108,7 @@
   window.__ucCareerText=wrCareer;
   window.__ucWarRoomPair=function(ourKey,oppKey,fmt){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
-    return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation];});}),
+    return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation,c.reason];});}),
       best:w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category];}).map(function(r){return r.player;});}),
       concerning:w.concerning.map(function(c){return c.text;}),threats:w.threats.map(function(c){return c.threat_text;}),
       cards:w.cards.map(function(c){return [c.sl,c.team_record,c.lifetime,c.sample,c.vs_ours,c.met_list,c.shared_summary,c.by_sl,c.winning_sl,c.losing_sl,c.missing];}),
@@ -245,6 +252,8 @@
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player (APA record ID)</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
+      +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
+      +wrList(w.blocks.map(function(b,j){return plan.unplayed[j]?"vs "+b.opponent_label+": "+(plan.sends[j].length?"best-supported send: "+plan.sends[j][0].player+" — reason: "+plan.sends[j][0].reason:"no evidence-backed option left among our remaining players"):null;}).filter(Boolean),"Every opponent has already played.")
       +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
     // Scouting cards
     document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'

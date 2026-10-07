@@ -64,7 +64,7 @@ from analytics.ultimate_coach_war_room import (
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
-              "Player ID", "Category", "Cell"]
+              "Player ID", "Category", "Cell", "Reason"]
 TC_COLUMNS = [
     "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
     "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
@@ -142,11 +142,11 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], base._sl_display(block["opponent"]),
                             block["opponent_sample"], "—", block["note"], len(block["rows"]),
-                            block["opponent"]["id"], "—", "—"])
+                            block["opponent"]["id"], "—", "—", "—"])
             for row in block["rows"]:
                 me_rows.append([None, row["rank"], row["player"], base._sl_display(row["member"]), row["direct_text"],
                                 row["shared_text"], row["basis"], row["position"], row["member"]["id"],
-                                row["category"], row["cell"]])
+                                row["category"], row["cell"], row["reason"]])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -176,7 +176,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
           {"Pair Key": 40, "Our Team": 32, "Opponent Team": 32, "Direct Meetings": 28, "Pairings": 44})
     table("MatchupEvidence_Table", "Matchup Evidence", ME_COLUMNS, me_rows,
           {"Key": 44, "Rank": 6, "Player": 40, "SL": 8, "Direct Record": 20, "Shared-Opponent Evidence": 60,
-           "Basis": 70, "Rows": 6, "Player ID": 10, "Category": 9, "Cell": 26})
+           "Basis": 70, "Rows": 6, "Player ID": 10, "Category": 9, "Cell": 26, "Reason": 70})
     table("Threats_Table", "Threats", THREATS_COLUMNS, threat_rows, {"Key": 44, "Threat": 90})
     table("Concerning_Table", "Concerning", CONCERNING_COLUMNS, concern_rows, {"Key": 44, "Pairing": 90})
     table("Meetings_Table", "Meetings", MEETINGS_COLUMNS, meeting_rows,
@@ -581,6 +581,12 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX(MatchupEvidence_Table[Player],'
             f'INDEX(wr_OppStart,{k})+MATCH({n},{send_refs[k]},0))&" — "&INDEX(MatchupEvidence_Table[Cell],INDEX(wr_OppStart,{k})+'
             f'MATCH({n},{send_refs[k]},0)),""))'))(n)) for n in (1, 2, 3)
+    ] + [
+        # The best remaining send with its reason spelled out (Lineup Lab, Command Center).
+        ("wr_Why1", lambda k, r: (
+            f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX(MatchupEvidence_Table[Player],'
+            f'INDEX(wr_OppStart,{k})+MATCH(1,{send_refs[k]},0))&" — reason: "&INDEX(MatchupEvidence_Table[Reason],'
+            f'INDEX(wr_OppStart,{k})+MATCH(1,{send_refs[k]},0)),""))')),
     ])
 
     # ---- threats, concerning pairings, unique favorable options ----
@@ -1235,10 +1241,12 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         _span(ws, res + k, 1, 2, label, font=base.LABEL_FONT)
         _span(ws, res + k, 3, 6, formula, font=SMALL)
     bs = res + len(lines) + 1
-    _span(ws, bs, 1, 6, "Best remaining send per unplayed opponent", font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
+    _span(ws, bs, 1, 6, "Best remaining send per unplayed opponent — and why (the recorded evidence, with its sample size)",
+          font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for k in range(1, R + 1):
         _span(ws, bs + k, 1, 6, f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                                f'IF(INDEX(wr_Send1,{k})="","no evidence-backed option left",INDEX(wr_Send1,{k})))', font=SMALL)
+                                f'IF(INDEX(wr_Why1,{k})="","no evidence-backed option left among our remaining players",'
+                                f'"best-supported send: "&INDEX(wr_Why1,{k})))', font=SMALL, height=30)
     ws.freeze_panes = "A4"
 
 
@@ -1778,9 +1786,9 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     send_lines = []
     for k in range(1, R + 1):
         send_lines.append(f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                          f'IF(INDEX(wr_Send1,{k})="","no evidence-backed option left","best-supported: "&INDEX(wr_Send1,{k})))')
-    _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — reason: W-L (meetings) = direct record; ≈ = shared-opponent results",
-          send_lines, size=10.5, line_height=18)
+                          f'IF(INDEX(wr_Why1,{k})="","no evidence-backed option left","best-supported: "&INDEX(wr_Why1,{k})))')
+    _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — and the recorded evidence behind it",
+          send_lines, size=10.5, line_height=30)
     ws.freeze_panes = "A6"
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1

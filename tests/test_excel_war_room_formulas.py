@@ -526,10 +526,10 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient evidence (nothing recorded): 1" in text
-    assert f"vs {CAM}: best-supported: {ANN} — 2-0 (2)" in text
+    assert f"vs {CAM}: best-supported: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported: {DEE} — 1-1 (2)" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
@@ -555,3 +555,16 @@ def test_start_here_example_and_tour_are_true_to_the_build(built):
         assert needle in text, needle
     assert "War Room → Inspect" in text and "direct record and number of meetings" in text
     assert "Coach Dashboard" in text and "shared opponents)" not in text      # no longer claims shared-opponent evidence
+
+
+def test_lineup_lab_best_sends_state_their_reason(book, built):
+    ws = built[LL]
+    top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
+    lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
+    assert lines[:2] == [
+        f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
+        f"vs {EVE}: best-supported send: {ANN} — reason: shared-opponent results only: ours 1-0 vs theirs 0-1 across "
+        "1 shared opponent (no direct meetings)",
+    ]
+    book.set(LL, "C12", "Unavailable")
+    assert book.display(LL, f"A{top + 2}") == f"vs {EVE}: no evidence-backed option left among our remaining players"

@@ -182,3 +182,13 @@ def test_career_genuine_zero_wins_is_kept():
     assert _career((0, 10)) == "0-10 (league-scoped lifetime 8-Ball)"
     assert _career((0, 0)) == "No career games recorded"
     assert _career() == "No career stats captured"
+
+
+def test_reason_states_the_evidence_and_its_sample_size_only():
+    from analytics.ultimate_coach_war_room import reason
+    assert reason({"direct": (2, 2)}) == "2-0 direct record (2 meetings) — favorable"
+    assert reason({"direct": (0, 1)}) == "0-1 direct record (1 meeting) — concerning"
+    assert reason({"direct": (1, 2)}) == "1-1 direct record (2 meetings) — even"
+    assert reason({"direct": None, "shared_count": 1, "ours": (1, 1), "theirs": (0, 1)}) == (
+        "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no direct meetings)")
+    assert reason({"direct": None, "shared_count": 0}) == "no recorded evidence"

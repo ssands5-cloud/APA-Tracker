@@ -105,6 +105,22 @@ def explanation(row: dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
+_CATEGORY_WORD = {"G": "favorable", "R": "concerning", "E": "even"}
+
+
+def reason(row: dict[str, Any]) -> str:
+    """Why a player appears as a send, in plain words: the recorded evidence and its sample size only."""
+    direct = row.get("direct")
+    if direct:
+        wins, games = direct
+        return f"{record_text(wins, games)} direct record ({plural(games, 'meeting')}) — {_CATEGORY_WORD[category(row)]}"
+    if row.get("shared_count"):
+        (ow, og), (tw, tg) = row["ours"], row["theirs"]
+        return (f"shared-opponent results only: ours {record_text(ow, og)} vs theirs {record_text(tw, tg)} across "
+                f"{plural(row['shared_count'], 'shared opponent')} (no direct meetings)")
+    return "no recorded evidence"
+
+
 # ---- evidence indexes beyond the Player vs Player pairs ----
 
 def sl_bucket_index(evidence: Iterable[dict[str, Any]], player_ids: set[Any]) -> dict[tuple[Any, str], dict[Any, list[int]]]:
@@ -208,6 +224,7 @@ def war_room_pair(
             row["category"] = category(row)
             row["cell"] = cell_text(row)
             row["explanation"] = explanation(row)
+            row["reason"] = reason(row)
             row["position"] = position
 
     matrix = []

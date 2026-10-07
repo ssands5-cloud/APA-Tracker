@@ -59,7 +59,8 @@ def test_html_war_room_matches_the_shared_python_module_exactly(tmp_path: Path):
         try:
             page, errors = _page(tmp_path, browser)
             js = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
-            assert js["matrix"] == [[[c["category"], c["cell"], c["explanation"]] for c in row["cells"]] for row in py["matrix"]]
+            assert js["matrix"] == [[[c["category"], c["cell"], c["explanation"], c["reason"]] for c in row["cells"]]
+                                    for row in py["matrix"]]
             assert [[c for row in js["matrix"] for c in [x[0] for x in row]]] == [["G", "I", "R", "X", "E", "R"]]
             assert js["best"] == [[r["player"] for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
             assert js["concerning"] == [c["text"] for c in py["concerning"]]
