@@ -109,7 +109,7 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
         "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
         "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
         "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
-        "Meetings", "Scouting", "Lists", "Engine", "Data Trust", "Build Info",
+        "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info",
     }
     # Coach-facing sheets first, Match Day (the control panel) active.
     assert wb.sheetnames[:6] == ["Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",

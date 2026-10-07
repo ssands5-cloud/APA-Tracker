@@ -173,10 +173,10 @@ def test_every_interactive_tab_follows_match_day(book, built):
     assert book.display(CP, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
     assert _roster(book, CP, 7) == (ours, theirs)
     assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
-    assert book.display(LL, "D5") == "✓ Matches the War Room team."
-    assert book.display(LL, "C9") == "Sun Oct 11, 2026"  # marks belong to the default fixture
-    assert book.display(LL, "D9").startswith("✓ Matches the War Room’s fixture")
-    assert book.display(LL, "D6") == "✓ Matches the War Room opponent."
+    assert book.display(LL, "D5") == "✓ Matches Match Day’s team."
+    assert book.display(LL, "C9") == "Sun Oct 11, 2026 · 11:00 AM MDT · Home vs Falcons · match 1"  # marks belong to the exact default fixture
+    assert book.display(LL, "D9").startswith("✓ Matches Match Day’s fixture")
+    assert book.display(LL, "D6") == "✓ Matches Match Day’s opponent."
 
 
 def test_matrix_shows_direct_records_indirect_evidence_and_gaps_with_colors(book, built):
@@ -231,7 +231,7 @@ def test_lineup_marks_only_apply_to_the_team_they_were_made_for(book, built):
     assert ours[0][3] == "Unknown · —"
     end = 15 + 8
     assert book.display(WR, f"A{end}").startswith(f"⚠ Lineup Lab marks are for {SHARKS9} — not applied to {SHARKS}.")
-    assert book.display(LL, "D5") == f"⚠ War Room shows {SHARKS} — these marks are NOT applied there."
+    assert book.display(LL, "D5") == f"⚠ Match Day shows {SHARKS} — these marks are NOT applied there."
     assert book.display(LL, "B12") == "Ann Archer (APA record ID 1001)"  # rows list the named (9-Ball) team
 
 
@@ -266,7 +266,7 @@ def test_changing_the_player_rebuilds_team_date_and_opponent_and_explains_stale_
     assert book.display(WR, "A4") == f"Following Match Day: {FALCONS} vs {SHARKS} · Sun Oct 11, 2026 · 8-Ball"
     ours, theirs = _roster(book, WR, 15)
     assert [o[0] for o in ours] == [CAM, EVE] and [t[0] for t in theirs] == [ANN, BEA, DEE]
-    assert book.display(LL, "D5") == f"⚠ War Room shows {FALCONS} — these marks are NOT applied there."
+    assert book.display(LL, "D5") == f"⚠ Match Day shows {FALCONS} — these marks are NOT applied there."
     book.set(MD, "B6", ANN2)  # same name, different identity, no team
     assert book.display(MD, "B13") == ANN2 and book.display(MD, "B14") == "—"
     assert book.display(MD, "C14") == "No current team captured for Ann Archer."
@@ -312,7 +312,8 @@ def test_war_room_local_override_affects_only_that_tab_and_clearing_restores(boo
     assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]
     assert book.display(MD, "B17").endswith("Home vs Falcons · 8-Ball Open")       # Match Day untouched
     assert book.display(CD, "A4").startswith("Following Match Day")
-    assert book.display(CP, "A2").startswith("⚠ War Room is using local selections")
+    # Only the War Room changed: the packet, scouting cards and Coach Dashboard still follow Match Day.
+    assert book.display(CP, "A2") == book.display(MD, "B17")
     book.set(WR, "C5", OWLS)  # a pairing with no scheduled fixture -> rosters only, said plainly
     assert "precomputed for teams scheduled to play each other" in book.display(WR, "A7")
     book.set(WR, "C5", "")
@@ -378,10 +379,10 @@ def test_lineup_marks_belong_to_one_fixture_and_notes_follow_the_player(book, bu
     assert "vs Falcons" in book.display(MD, "B17")
     ours, theirs = _roster(book, WR, 15)
     assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"          # nothing leaked
-    assert book.display(WR, "A23").startswith("⚠ Lineup Lab marks are for Sun Oct 11, 2026 — not applied to this fixture.")
-    assert book.display(LL, "D9").startswith("⚠ Match Day is set to Sun Oct 25, 2026")
+    assert book.display(WR, "A23").startswith("⚠ Lineup Lab marks are for Sun Oct 11, 2026 · 11:00 AM MDT · Home vs Falcons · match 1 — not applied to this fixture.")
+    assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 7:00 PM MDT · Home vs Falcons")
     assert book.display(SC, "C17") == "Slow safeties"                    # notes describe the player
-    book.set(LL, "C9", "Sun Oct 25, 2026")                               # re-plan for this night
+    book.set(LL, "C9", book.value("Engine", book.name("uc_PlanKeyList").ref))  # re-plan for this fixture
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
     book.set(MD, "B9", "Sun Oct 11, 2026")                               # back: Oct 25 marks don't apply
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
@@ -390,4 +391,65 @@ def test_lineup_marks_belong_to_one_fixture_and_notes_follow_the_player(book, bu
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
     book.set(LL, "C9", "")
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _no_bad_values(book, built) == []
+
+
+
+def test_two_matches_on_the_same_day_never_share_marks(tmp_path):
+    """GPT audit #84 repro: two Falcons fixtures on Oct 25 (7 PM and 9 PM). Marks made for the first must
+    not apply to the second; switching back restores them."""
+    payload = _payload()
+    from tests.test_excel_war_room_formulas import _fixture as fx
+    fixtures = payload["match_day"]["fixtures"]
+    raw = [fx(1, "2026-10-11T11:00:00-06:00", "sharks-a", "falcons-a"),
+           fx(4, "2026-10-25T19:00:00-06:00", "sharks-a", "falcons-a"),
+           fx(6, "2026-10-25T21:00:00-06:00", "sharks-a", "falcons-a")]
+    payload["match_day"] = build_match_day_section(raw, payload["players"])
+    wb = load_workbook(write_workbook(payload, tmp_path / "two.xlsx", built_at="2026-10-07 18:00 UTC",
+                                      viewer_member_external_id="1001"))
+    book = Workbook(wb)
+    book.set(MD, "B9", "Sun Oct 25, 2026")
+    first, second = (book.value(s, r) for s, r in book.name("uc_FixtureList")[:2])
+    assert "7:00 PM" in first and "9:00 PM" in second
+    book.set(MD, "B10", first)
+    book.set(LL, "C9", book.value("Engine", book.name("uc_PlanKeyList").ref))
+    assert book.display(LL, "C9").endswith("· match 4")
+    book.set(LL, "D12", "Played")          # Ann
+    book.set(LL, "C23", "Played")          # Cam
+    ours, theirs = _roster(book, WR, 15)
+    assert ours[0][3] == "Unknown · Played" and theirs[0][3] == "Played"
+    book.set(MD, "B10", second)            # same day, same teams, another match
+    ours, theirs = _roster(book, WR, 15)
+    assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"
+    assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 9:00 PM MDT")
+    assert "· match 4 — not applied to this fixture." in book.display(WR, "A23")
+    assert _roster(book, CP, 7)[0][0][3] == "Unknown · —"     # the packet agrees
+    book.set(MD, "B10", first)             # back to the first match: its marks return
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    book.set(LL, "C9", "")                 # no fixture named: nothing applies (fail-closed)
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+
+
+def test_war_room_overrides_never_change_other_tabs(book, built):
+    """GPT audit #84 repro: a War Room override must not change the Coach Dashboard's Player B pool or format,
+    the scouting cards or the Captain Packet -- and the packet never mixes one fixture's heading with
+    another opponent's roster."""
+    pool = lambda: [book.value(s, r) for s, r in book.name("cd_PlayerBList")][:2]
+    packet_heading, packet_rosters = book.display(CP, "A2"), _roster(book, CP, 7)
+    card = book.display(SC, "A6")
+    assert pool() == [CAM, EVE]
+    book.set(WR, "C6", OWLS)
+    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]   # War Room changed
+    assert pool() == [CAM, EVE]                                   # Coach Dashboard did not
+    assert book.display(CP, "A2") == packet_heading and _roster(book, CP, 7) == packet_rosters
+    assert book.display(SC, "A6") == card and book.display(SC, "A4").startswith("Following Match Day")
+    book.set(WR, "C5", SHARKS9)
+    assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
+    assert book.display(CP, "A2") == packet_heading and _roster(book, CP, 7) == packet_rosters
+    # The Coach Dashboard's own override still works and clears back.
+    book.set(CD, "C8", "9-Ball")
+    assert book.display(CD, "A4").startswith("Using local selections") and book.display(CD, "A4").endswith("· 9-Ball")
+    book.set(CD, "C8", "")
+    assert book.display(CD, "A4").startswith("Following Match Day")
+    book.set(WR, "C5", ""); book.set(WR, "C6", "")
     assert _no_bad_values(book, built) == []

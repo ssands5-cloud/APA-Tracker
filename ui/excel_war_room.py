@@ -378,6 +378,13 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '=IF(uc_SchedRow="","","Venue: "&INDEX(Schedule_Table[Venue],uc_SchedRow)&" · Status: "&INDEX(Schedule_Table[Status],'
            'uc_SchedRow)&" · Score (home–away): "&INDEX(Schedule_Table[Score (home–away)],uc_SchedRow)&" · Session: "&'
            'INDEX(Schedule_Table[Session],uc_SchedRow))')
+    # The exact fixture a Lineup Lab plan belongs to: unique per fixture (it ends with the match id), so
+    # two matches on the same day -- even against the same opponent -- never share marks (GPT audit #84).
+    e.cell("uc_PlanKey", "Fixture plan key",
+           '=IF(uc_SchedRow="","",INDEX(Schedule_Table[Date Display],uc_SchedRow)&" · "&INDEX(Schedule_Table[Kickoff],'
+           'uc_SchedRow)&" · "&INDEX(Schedule_Table[Home/Away],uc_SchedRow)&" vs "&INDEX(Schedule_Table[Opponent],uc_SchedRow)&'
+           '" · match "&INDEX(Schedule_Table[Match ID],uc_SchedRow))')
+    e.name("uc_PlanKeyList", f"Engine!$B${e.row - 1}")
     e.cell("uc_OppMsg", "Opponent roster note",
            '=IF(uc_SchedRow="","",IF(uc_OppScope="","Opponent roster: "&INDEX(Schedule_Table[Opponent Roster],uc_SchedRow)&".",'
            '"Opponent roster: "&uc_OppLabel))')
@@ -423,10 +430,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     # "Played" into the next fixture). They apply only when Lineup Lab's match date is the War Room's
     # Match Day date; a War Room local exploration (no fixture) applies them only with the date blank.
     # Coach notes describe a player and follow the opponent team regardless of date.
-    e.cell("ll_DateIn", "Planning for match date", "=" + guard(f"{ll}$C$9"))
+    e.cell("ll_PlanIn", "Planning for fixture", "=" + guard(f"{ll}$C$9"))
     e.cell("ll_FixOK", "Marks belong to the shown fixture",
-           '=IF(wr_Local,ll_DateIn="",AND(ll_DateIn<>"",uc_DateDisplay<>"",OR(ll_DateIn=uc_DateDisplay,'
-           'AND(ISNUMBER(ll_DateIn),ISNUMBER(uc_DateSerial),IFERROR(INT(ll_DateIn)=uc_DateSerial,FALSE)))))')
+           '=IF(wr_Local,ll_PlanIn="",AND(ll_PlanIn<>"",uc_PlanKey<>"",ll_PlanIn=uc_PlanKey))')
     e.cell("ll_OurTeamOK", "Our team matches", '=AND(ll_OurTeam<>"",ll_OurTeam=wr_OurLabel)')
     e.cell("ll_OppTeamOK", "Opponent team matches (notes)", '=AND(ll_OppTeam<>"",ll_OppTeam=wr_OppLabel)')
     e.cell("ll_OurOK", "Our marks apply", "=AND(ll_OurTeamOK,ll_FixOK)")
@@ -864,8 +870,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
 
     base._section(ws, 12, "Rosters (SL = this team's captured skill level for its format)", last_col=12)
     end = _roster_section(ws, 13, R, title_ours="=wr_OurLabel", title_theirs="=wr_OppLabel")
-    _span(ws, end, 1, 12, '=IF(AND(ll_OurTeamOK,ll_OppTeamOK,NOT(ll_FixOK)),"⚠ Lineup Lab marks are for "&IF(ll_DateIn="",'
-                          '"no date",IF(ISNUMBER(ll_DateIn),TEXT(ll_DateIn,"ddd mmm d, yyyy"),ll_DateIn))&" — not applied to this fixture. ","")&'
+    _span(ws, end, 1, 12, '=IF(AND(ll_OurTeamOK,ll_OppTeamOK,NOT(ll_FixOK)),"⚠ Lineup Lab marks are for "&IF(ll_PlanIn="",'
+                          '"no fixture",ll_PlanIn)&" — not applied to this fixture. ","")&'
                           'IF(AND(ll_OurTeam<>"",NOT(ll_OurTeamOK)),"⚠ Lineup Lab marks are for "&ll_OurTeam&" — not applied to "&'
                           'wr_OurLabel&". ","")&IF(AND(ll_OppTeam<>"",NOT(ll_OppOK)),"⚠ Opponent marks are for "&ll_OppTeam&'
                           '" — not applied. ","")&"Team W-L = this team’s captured record this session. “No data” = not captured. '
@@ -1075,6 +1081,65 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
 # Lineup Lab
 # ---------------------------------------------------------------------------
 
+_MD_PREFIX = {"wr_": "md_", "ll_": "lm_"}
+_MD_SHEETS = ("Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard")
+
+
+def _to_md(text: str, engine_title: str, md_title: str) -> str:
+    import re
+    text = re.sub(r"(?<![A-Za-z0-9_])(wr|ll)_", lambda m: _MD_PREFIX[m.group(1) + "_"], text)
+    return text.replace(f"{engine_title}!", f"'{md_title}'!")
+
+
+def split_match_day_engine(wb) -> None:
+    """Local overrides affect only their own tab (Paul, GPT audit #84).
+
+    The War Room's override cells feed the wr_* pairing. Every other output --
+    Lineup Lab, Scouting Cards, Captain Packet, Coach Dashboard -- must keep
+    following Match Day, so the whole pairing engine is copied once to "Engine MD"
+    with wr_/ll_ renamed md_/lm_ and the War Room override inputs pinned blank:
+    md_* is always Match Day's fixture. Those four sheets (and the Coach
+    Dashboard's engine cells) are re-pointed at md_*/lm_*, so a War Room override
+    can never put one fixture's heading over another opponent's roster.
+    """
+    import re
+    src = wb["Engine"]
+    md = wb.copy_worksheet(src)
+    md.title = "Engine MD"
+    for row in md.iter_rows():
+        for c in row:
+            if isinstance(c.value, str) and c.value.startswith("="):
+                c.value = _to_md(c.value, "Engine", "Engine MD")
+    for name in list(wb.defined_names):
+        if name[:3] in _MD_PREFIX:
+            target = _MD_PREFIX[name[:3]] + name[3:]
+            text = wb.defined_names[name].attr_text.replace("Engine!", "'Engine MD'!")
+            wb.defined_names[target] = DefinedName(target, attr_text=text)
+    for name in ("md_OurInput", "md_OppInput"):
+        ref = wb.defined_names[name].attr_text.split("!")[1].replace("$", "")
+        md[ref].value = '=""'
+    # The Coach Dashboard's engine cells (Player B pool, format) follow Match Day too.
+    cd_rows = []
+    for name in wb.defined_names:
+        if name.startswith("cd_"):
+            m = re.search(r"\$?[A-Z]+\$?(\d+)", wb.defined_names[name].attr_text.split("!")[1])
+            cd_rows.append(int(m.group(1)))
+    for row in src.iter_rows(min_row=min(cd_rows) - 2):
+        for c in row:
+            if isinstance(c.value, str) and c.value.startswith("="):
+                c.value = _to_md(c.value, "Engine", "Engine")
+    for sheet in _MD_SHEETS:
+        ws = wb[sheet]
+        for row in ws.iter_rows():
+            for c in row:
+                if isinstance(c.value, str) and c.value.startswith("="):
+                    c.value = _to_md(c.value, "Engine", "Engine MD")
+        for dv in ws.data_validations.dataValidation:
+            if dv.formula1:
+                dv.formula1 = _to_md(dv.formula1, "Engine", "Engine MD")
+    md.sheet_state = "hidden" if src.sheet_state == "hidden" else src.sheet_state
+
+
 def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, default_opp: str | None,
                      default_date: str | None = None) -> None:
     R = slots["roster"]
@@ -1084,10 +1149,10 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
     _head(ws, "Lineup Lab", "Your planning marks for tonight — inputs, never evidence. Results update instantly on this "
                             "sheet and on the War Room.", last=6, current="Lineup Lab")
     rows = [(5, "Planning for our team", default_team or "", "TeamNameList",
-             '=IF(ll_OurTeamOK,"✓ Matches the War Room team.",IF(ll_OurTeam="","Name the team you are planning for.",'
-             '"⚠ War Room shows "&IF(wr_OurLabel="","no team",wr_OurLabel)&" — these marks are NOT applied there."))'),
+             '=IF(ll_OurTeamOK,"✓ Matches Match Day’s team.",IF(ll_OurTeam="","Name the team you are planning for.",'
+             '"⚠ Match Day shows "&IF(wr_OurLabel="","no team",wr_OurLabel)&" — these marks are NOT applied there."))'),
             (6, "Planning for opponent", default_opp or "", "TeamNameList",
-             '=IF(ll_OppOK,"✓ Matches the War Room opponent.",IF(ll_OppTeam="","Name the opponent team.","⚠ War Room opponent is "&'
+             '=IF(ll_OppOK,"✓ Matches Match Day’s opponent.",IF(ll_OppTeam="","Name the opponent team.","⚠ Match Day’s opponent is "&'
              'IF(wr_OppLabel="","none",wr_OppLabel)&" — opponent marks are NOT applied there."))'),
             (7, "Reference skill cap (optional)", "", None,
              '="Your own reference number (e.g. your division rule). Never assumed, never applied automatically."')]
@@ -1098,17 +1163,18 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
             _dv(ws, f"C{r}", source, "Pick a team.")
         _span(ws, r, 4, 6, status, font=base.MUTED_FONT)
         ws.row_dimensions[r].height = 30
-    _span(ws, 8, 1, 6, "Marks are for ONE fixture: the teams above on the match date below. Change Match Day to another "
-                       "night and these marks stop applying (and the War Room says so) — clear them, set the new date, and "
-                       "plan again. Coach notes describe the player and always follow the opponent team.",
+    _span(ws, 8, 1, 6, "Marks are for ONE fixture (below, ending in its match number). Pick another fixture on Match Day "
+                       "— even later the same day — and these marks stop applying (it says so). Clear them, pick the new "
+                       "fixture in the cell below, and plan again. Coach notes describe the player and always follow the "
+                       "opponent team.",
           font=base.MUTED_FONT, height=44)
-    _span(ws, 9, 1, 2, "Planning for match date", font=base.LABEL_FONT)
+    _span(ws, 9, 1, 2, "Planning for fixture", font=base.LABEL_FONT)
     base._input(ws.cell(row=9, column=3), default_date or "")
-    _dv(ws, "C9", "uc_DateList", "Pick the Match Day date these marks are for (blank only when exploring teams by hand).")
-    _span(ws, 9, 4, 6, '=IF(ll_FixOK,"✓ Matches the War Room’s fixture — availability, lineup and played applied.",'
-                       'IF(wr_Local,"War Room is exploring teams by hand — leave this blank to plan without a fixture.",'
-                       '"⚠ Match Day is set to "&IF(uc_DateDisplay="","no date",uc_DateDisplay)&" — availability, lineup and played '
-                       'are NOT applied. Notes still are."))', font=base.MUTED_FONT)
+    _dv(ws, "C9", "uc_PlanKeyList", "Pick Match Day's current fixture (the list offers exactly that one).")
+    _span(ws, 9, 4, 6, '=IF(ll_FixOK,"✓ Matches Match Day’s fixture — availability, lineup and played applied.",'
+                       'IF(uc_PlanKey="","Choose a fixture on Match Day first.",'
+                       '"⚠ Match Day’s fixture is "&uc_PlanKey&" — availability, lineup and played are NOT applied. Notes still are."))',
+          font=base.MUTED_FONT)
     ws.row_dimensions[9].height = 30
     base._section(ws, 10, "Our roster — availability and lineup (blank availability = Unknown)", last_col=6)
     base._subheader(ws, 11, [(1, "#"), (2, "Player (APA record ID)"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])

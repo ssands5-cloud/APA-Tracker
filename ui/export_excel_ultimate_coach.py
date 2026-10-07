@@ -130,7 +130,7 @@ NAV_SHEETS = ["Match Day", "War Room", "Lineup Lab", "Captain Packet", "Coach Da
 SHEET_ORDER = ["Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
                "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
                "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
-               "Meetings", "Scouting", "Lists", "Engine", "Data Trust", "Build Info"]
+               "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
 RAIL = "5A3A1F"
 OPPONENT_FILL = PatternFill("solid", fgColor=RAIL)
 
@@ -821,7 +821,8 @@ def build_workbook(
         if default:
             default_team = label_by_scope.get(default["scope"])
             default_opp = label_by_scope.get(default["opponent_scope"] or "")
-            default_date = war.date_label(default["date"])
+            default_date = (str(f.get("match_external_id")) if (f := (match_day.get("fixtures") or [])[
+                default["side"]["fixture_index"]]) else None)
         elif len(scopes) == 1:
             default_team = label_by_scope.get(scopes[0])
 
@@ -835,6 +836,23 @@ def build_workbook(
     war.build_scouting_cards(wb, slots=slots)
     war.build_captain_packet(wb, slots=slots, stats=stats)
     war.build_coach_dashboard(wb, format_options=_dashboard_format_options(pairs))
+    if default_team and default_date:
+        # Lineup Lab plans for the default fixture: its exact plan key, read from the Schedule rows
+        # (the same cells uc_PlanKey concatenates, so the two are identical by construction).
+        sched = wb["Schedule"]
+        head = {c.value: c.column for c in sched[1]}
+        scope = next((t["team_scope_key"] for t in teams if t["team_label"] == default_team), None)
+        for r in range(2, sched.max_row + 1):
+            v = lambda col: sched.cell(row=r, column=head[col]).value
+            if v("Team Scope Key") == scope and str(v("Match ID")) == default_date:
+                wb["Lineup Lab"]["C9"].value = (f"{v('Date Display')} · {v('Kickoff')} · {v('Home/Away')} vs "
+                                                f"{v('Opponent')} · match {v('Match ID')}")
+                break
+        else:
+            wb["Lineup Lab"]["C9"].value = None
+    else:
+        wb["Lineup Lab"]["C9"].value = None
+    war.split_match_day_engine(wb)
 
     for target, name in enumerate(SHEET_ORDER):
         wb.move_sheet(wb[name], offset=target - wb.sheetnames.index(name))
