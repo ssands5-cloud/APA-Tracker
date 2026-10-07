@@ -484,6 +484,8 @@ class _Parser:
                 raise ExcelError("#REF!")
             sheet, ref = refs[n - 1]
             return Ref(sheet, ref)
+        if name == "CHAR":
+            return chr(int(_to_number(self.scalar(args[0]))))
         if name == "MATCH":
             needle, refs = self.scalar(args[0]), self.cells(args[1])
             kind = 1 if len(args) < 3 else _to_number(self.scalar(args[2]))

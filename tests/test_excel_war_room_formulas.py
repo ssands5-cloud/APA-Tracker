@@ -483,3 +483,21 @@ def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built
     cards_row = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Scouting cards")) + 1
     texts = [book.display(CP, f"B{r}") for r in range(cards_row, cards_row + 5)]
     assert any("Notes: Breaks hard" in t for t in texts if isinstance(t, str))
+
+
+def test_packet_meeting_page_shows_every_record_two_across_with_dividers(book, built):
+    """Paul (#84 UAT): larger meeting text, two columns, numbered newest first, a count so nothing is silently
+    dropped, and black row dividers / light shading only on rows that hold a meeting."""
+    ws = built[CP]
+    top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Meeting history"))
+    assert book.display(CP, f"A{top + 1}") == "Showing 8 of 8 recorded meeting(s)."
+    first = top + 3
+    one, two, three = book.display(CP, f"A{first}"), book.display(CP, f"G{first}"), book.display(CP, f"A{first + 1}")
+    assert one.startswith("1. Sun Sep 20, 2026\n") and two.startswith("2. ") and three.startswith("3. ")
+    assert " · SL " in one and "\nvs " in book.display(CP, f"B{first}")
+    assert book.display(CP, f"A{first + 4}") == "" and book.display(CP, f"G{first + 4}") == ""   # 8 meetings = 4 rows
+    assert ws[f"A{first}"].font.sz == 12 and ws.row_dimensions[first].height == 30
+    rules = [r for cf in ws.conditional_formatting for r in cf.rules
+             if str(cf.sqref).startswith(f"A{first}") or str(cf.sqref).startswith(f"G{first}")]
+    assert rules and all(r.dxf.border.bottom.style == "thin" and r.dxf.border.bottom.color.rgb.endswith("000000") for r in rules)
+    assert all('<>""' in r.formula[0] for r in rules)          # empty slots stay blank: no ruled empty table

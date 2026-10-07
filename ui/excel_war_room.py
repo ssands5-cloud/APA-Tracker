@@ -72,7 +72,8 @@ TC_COLUMNS = [
 ]
 THREATS_COLUMNS = ["Key", "Opp Player ID", "Threat"]
 CONCERNING_COLUMNS = ["Key", "Our Player ID", "Opp Player ID", "Pairing"]
-MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points"]
+MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points",
+                    "Pair Key"]
 SCOUTING_COLUMNS = ["Key", "Opponent", "SL", "Team Record", "Lifetime", "Sample", "Vs Our Roster", "Met List",
                     "Shared Summary", "By SL", "Winning SL", "Losing SL", "Missing"]
 DATEKEYS_COLUMNS = ["Key", "Group Key", "Serial", "Date Display"]
@@ -156,7 +157,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
             meeting_rows.append([f"{key}|{k}", game["date"], base._player_label(game["our"]["name"], game["our"]["external_id"]),
                                  base._player_label(game["opp"]["name"], game["opp"]["external_id"]),
                                  _text(game["result"]), _text(game["own_sl"]), _text(game["opp_sl"]),
-                                 _text(game["session"]), _text(game["points"])])
+                                 _text(game["session"]), _text(game["points"]), key])
         max_meetings = max(max_meetings, len(wr["meetings"]))
         for j, card in enumerate(wr["cards"], start=1):
             card_rows.append([f"{key}|{j}", card["label"], card["sl"], card["team_record"], card["lifetime"],
@@ -1487,33 +1488,57 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     pages.append((p3, last_ev))
 
     # ---------------- page 5: meeting history ----------------
+    # Paul (#84 UAT): every recorded meeting readable on page 5, larger text, clear row dividers. Excel without
+    # macros cannot size rows to how many meetings a fixture has, so the page holds a fixed 40 slots as 20 rows x
+    # 2 meetings (numbered newest first, filled row by row so short histories stay together at the top). Each
+    # meeting is one row of two lines -- "n. date / result · SL" and "our player / vs opponent" (names + IDs).
+    # A count line says how many meetings exist; any beyond 40 are on the Meetings sheet, never silently dropped.
     p5 = last_ev + 1
     ws.row_breaks.append(Break(id=p5 - 1))
     base._section(ws, p5, "Meeting history — direct meetings between the rosters (newest first)", last_col=12)
     h(p5, 18)
-    hdr = p5 + 1
-    for col, text in ((1, "Date"), (2, "Our player (APA record ID)"), (7, "Opponent (APA record ID)"), (11, "Result (ours)"),
-                      (12, "SL ours/theirs")):
-        cell = ws.cell(row=hdr, column=col, value=text)
-        cell.font = font(9, bold=True, color=base.FELT_DEEP)
+    total = 'IF(wr_PairKey="",0,COUNTIF(Meetings_Table[Pair Key],wr_PairKey))'
+    _span(ws, p5 + 1, 1, 12, f'=IF({total}=0,"No recorded direct meetings between these rosters in this format.",'
+                             f'"Showing "&MIN({total},{MEETING_SLOTS})&" of "&{total}&" recorded meeting(s)"&IF({total}>{MEETING_SLOTS},'
+                             f'" — the older "&({total}-{MEETING_SLOTS})&" are listed on the Meetings sheet.","."))',
+          font=font(10.5, bold=True, color=base.FELT_DEEP), wrap=False)
+    h(p5 + 1, 16)
+    hdr = p5 + 2
+    blocks = ((1, 1, 2, 5), (7, 8, 9, 12))     # (first col, date/result to, names from, names to)
+    for c0, cd, cn, c9 in blocks:
+        _span(ws, hdr, c0, cd, "No. Date / Result · SL ours/theirs", font=font(9, bold=True, color=base.FELT_DEEP))
+        _span(ws, hdr, cn, c9, "Our player (APA record ID) / vs Opponent (APA record ID)", font=font(9, bold=True, color=base.FELT_DEEP))
     for c in range(1, 13):
         ws.cell(row=hdr, column=c).fill = base.SUBHEAD_FILL
     h(hdr, 16)
-    for k in range(1, MEETING_SLOTS + 1):
-        r = hdr + k
-        row = f'IFERROR(MATCH(wr_PairKey&"|{k}",Meetings_Table[Key],0),"")'
-        cond = f'OR(NOT(wr_HasEvidence),{row}="")'
-        f11 = font(11)
-        ws.cell(row=r, column=1, value=f'=IF({cond},"",INDEX(Meetings_Table[Date],{row}))').font = f11
-        _span(ws, r, 2, 5, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row}))', font=f11, wrap=False)
-        _span(ws, r, 7, 10, f'=IF({cond},"",INDEX(Meetings_Table[Opponent],{row}))', font=f11, wrap=False)
-        ws.cell(row=r, column=11, value=f'=IF({cond},"",INDEX(Meetings_Table[Result],{row}))').font = f11
-        ws.cell(row=r, column=12, value=f'=IF({cond},"",INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))').font = f11
-        h(r, 14.5)
-    last = hdr + MEETING_SLOTS + 1
-    _span(ws, last, 1, 12, '=IF(AND(wr_HasEvidence,ISNUMBER(MATCH(wr_PairKey&"|' + str(MEETING_SLOTS + 1) + '",Meetings_Table[Key],0))),'
-                           '"More meetings exist than fit here — see the Meetings sheet. ","")&"Shared-opponent totals per pairing are in '
-                           'the evidence pages; the per-opponent breakdown is in the HTML cockpit."', font=font(9, color="5B6A61"))
+    rows_per_side = MEETING_SLOTS // 2
+    meet_first = hdr + 1
+    for i in range(rows_per_side):
+        r = meet_first + i
+        for side, (c0, cd, cn, c9) in enumerate(blocks):
+            k = i * 2 + side + 1
+            row = f'IFERROR(MATCH(wr_PairKey&"|{k}",Meetings_Table[Key],0),"")'
+            cond = f'OR(NOT(wr_HasEvidence),{row}="")'
+            f12 = font(12)
+            _span(ws, r, c0, cd, f'=IF({cond},"","{k}. "&INDEX(Meetings_Table[Date],{row})&CHAR(10)&INDEX(Meetings_Table[Result],{row})&'
+                                 f'" · SL "&INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))', font=f12)
+            _span(ws, r, cn, c9, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row})&CHAR(10)&"vs "&'
+                                 f'INDEX(Meetings_Table[Opponent],{row}))', font=f12)
+        h(r, 30)
+    meet_last = meet_first + rows_per_side - 1
+    # Dividers and subtle alternating shading on rows that hold a meeting; black rules print in black & white.
+    from openpyxl.styles import Border, Side
+    rule = Border(top=Side(style="thin", color="000000"), bottom=Side(style="thin", color="000000"))
+    for c0, c9 in ((1, 5), (7, 12)):
+        a, b = get_column_letter(c0), get_column_letter(c9)
+        rng = f"{a}{meet_first}:{b}{meet_last}"
+        ws.conditional_formatting.add(rng, FormulaRule(formula=[f'AND(${a}{meet_first}<>"",MOD(ROW(),2)=0)'], border=rule,
+                                                       fill=PatternFill("solid", fgColor="F2F2F2"), stopIfTrue=True))
+        ws.conditional_formatting.add(rng, FormulaRule(formula=[f'${a}{meet_first}<>""'], border=rule))
+    last = meet_last + 1
+    _span(ws, last, 1, 12, '="Shared-opponent totals per pairing are in the evidence pages; the per-opponent breakdown is in the '
+                           'HTML cockpit. This page always holds 40 slots (Excel cannot resize rows to a fixture without macros)."',
+          font=font(9, color="5B6A61"))
     h(last, 24)
     pages.append((p5, last))
 
