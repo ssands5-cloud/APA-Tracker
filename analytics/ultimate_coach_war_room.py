@@ -159,13 +159,27 @@ def _bucket_summary(buckets: dict[Any, list[int]]) -> tuple[str, str, str]:
     return by_sl, ", ".join(winning) or "None recorded", ", ".join(losing) or "None recorded"
 
 
+def _complete_count(row: dict[str, Any]) -> tuple[int, int] | None:
+    """(wins, played) only when BOTH are recorded and consistent; never zero-fill a missing count."""
+    won, played = row.get("matches_won"), row.get("matches_played")
+    if isinstance(won, bool) or isinstance(played, bool) or not isinstance(won, int) or not isinstance(played, int):
+        return None
+    return (won, played) if 0 <= won <= played else None
+
+
 def _career_text(player: dict[str, Any] | None, fmt: str) -> str:
+    """League-scoped lifetime record from complete scopes only (GPT audit #84): a scope with
+    missing wins or games is disclosed and left out -- unknown wins never become losses."""
     rows = [r for r in (player or {}).get("career_stats") or [] if r.get("format") == fmt]
-    won = sum(r.get("matches_won") or 0 for r in rows if r.get("matches_won") is not None)
-    played = sum(r.get("matches_played") or 0 for r in rows if r.get("matches_played") is not None)
-    if not rows or not played:
+    if not rows:
         return "No career stats captured"
-    return f"{record_text(won, played)} (league-scoped lifetime {format_label(fmt)})"
+    complete = [c for c in (_complete_count(r) for r in rows) if c is not None]
+    incomplete = len(rows) - len(complete)
+    won, played = sum(c[0] for c in complete), sum(c[1] for c in complete)
+    gap = f"{plural(incomplete, 'league scope')} with missing wins or games not counted" if incomplete else ""
+    if not played:
+        return f"No complete career record captured ({gap})" if incomplete else "No career games recorded"
+    return f"{record_text(won, played)} (league-scoped lifetime {format_label(fmt)}" + (f"; {gap})" if gap else ")")
 
 
 # ---- the War Room for one directed pairing ----

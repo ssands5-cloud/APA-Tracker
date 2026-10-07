@@ -152,3 +152,20 @@ def test_matrix_cell_opens_the_evidence_behind_it(tmp_path: Path):
             assert errors == []
         finally:
             browser.close()
+
+
+def test_html_career_text_matches_python_for_incomplete_and_zero_records(tmp_path: Path):
+    """Same four cases as the Python regression: the HTML scouting card must never show 0-10 for unknown wins."""
+    from analytics.ultimate_coach_war_room import _career_text
+    cases = [[(None, 10)], [(4, None)], [(6, 8), (None, 10), (3, None)], [(0, 10)], [(0, 0)], []]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            for rows in cases:
+                stats = [{"format": "EIGHT", "matches_won": w, "matches_played": g} for w, g in rows]
+                js = page.evaluate("s => window.__ucCareerText({career_stats: s}, 'EIGHT')", stats)
+                assert js == _career_text({"career_stats": stats}, "EIGHT"), rows
+            assert errors == []
+        finally:
+            browser.close()

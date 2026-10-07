@@ -154,3 +154,31 @@ def test_build_local_date_is_the_denver_calendar_day_of_the_build_stamp():
     assert build_local_date("2026-10-07 04:30 UTC", "America/Denver") == "2026-10-06"
     assert build_local_date("2026-10-07 18:00 UTC", "America/Denver") == "2026-10-07"
     assert build_local_date("", "America/Denver") is None
+
+
+# ---- career record: never fabricate losses from missing wins (GPT audit, issue #84) ----
+
+def _career(*rows):
+    from analytics.ultimate_coach_war_room import _career_text
+    return _career_text({"career_stats": [{"format": "EIGHT", "matches_won": w, "matches_played": g} for w, g in rows]},
+                        "EIGHT")
+
+
+def test_career_missing_wins_is_not_a_zero_win_record():
+    assert _career((None, 10)) == "No complete career record captured (1 league scope with missing wins or games not counted)"
+
+
+def test_career_missing_played_is_not_counted():
+    assert _career((4, None)) == "No complete career record captured (1 league scope with missing wins or games not counted)"
+
+
+def test_career_partial_scopes_count_only_complete_ones_and_say_so():
+    assert _career((6, 8), (None, 10), (3, None)) == (
+        "6-2 (league-scoped lifetime 8-Ball; 2 league scopes with missing wins or games not counted)")
+    assert _career((6, 8), (11, 10)) == "6-2 (league-scoped lifetime 8-Ball; 1 league scope with missing wins or games not counted)"
+
+
+def test_career_genuine_zero_wins_is_kept():
+    assert _career((0, 10)) == "0-10 (league-scoped lifetime 8-Ball)"
+    assert _career((0, 0)) == "No career games recorded"
+    assert _career() == "No career stats captured"

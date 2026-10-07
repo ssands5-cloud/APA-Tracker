@@ -607,8 +607,12 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   refreshPlayerB(false);
   function record(rows){{var w=rows.filter(function(r){{return val(r,"result")==="W";}}).length;return {{w:w,l:rows.length-w,g:rows.length}};}}
   function career(p,fmt){{return (p.career_stats||[]).filter(function(r){{return r.format===fmt;}});}}
+  // A scope counts only when BOTH wins and games are recorded and consistent -- a missing
+  // count is never zero-filled (an unknown win must not become a loss).
+  function careerCount(r){{var w=r.matches_won,g=r.matches_played;return Number.isInteger(w)&&Number.isInteger(g)&&w>=0&&w<=g?[w,g]:null;}}
+  function careerComplete(rows){{var w=0,g=0,bad=0;rows.forEach(function(r){{var c=careerCount(r);if(c){{w+=c[0];g+=c[1];}}else bad++;}});return {{w:w,g:g,incomplete:bad}};}}
   function profile(p,fmt) {{
-    var c=career(p,fmt), totalW=0,totalG=0; c.forEach(function(r){{if(r.matches_won!==null) totalW+=r.matches_won;if(r.matches_played!==null) totalG+=r.matches_played;}});
+    var c=career(p,fmt), cc=careerComplete(c), totalW=cc.w, totalG=cc.g;
     var seenTeamTags={{}};
     var teams=(p.team_history||[]).slice().reverse().filter(function(t){{
       var tag=[t.session_name||"",t.team_name||"",t.skill_level===null?"":t.skill_level].join("|");
@@ -618,10 +622,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     }}).slice(0,12);
     return '<h2>'+esc(p.name)+'</h2><p class="id-line">APA record ID '+esc(recordIdText(p))+'</p>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
-      +'<div class="metric"><b>'+(c.length?(totalW+'-'+Math.max(0,totalG-totalW)):'Pending')+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L</span></div>'
-      +'<div class="metric"><b>'+(c.length?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
+      +'<div class="metric"><b>'+(totalG?(totalW+'-'+(totalG-totalW)):(c.length?'No data':'Pending'))+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L'+(cc.incomplete?' ('+cc.incomplete+' scope'+(cc.incomplete===1?'':'s')+' with missing wins or games not counted)':'')+'</span></div>'
+      +'<div class="metric"><b>'+(totalG?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
       +'<h3>League stats</h3>'+(c.length?'<div class="table-wrap"><table><thead><tr><th>League</th><th>W-L</th><th>Last played</th><th>B&R</th><th>Mini slams</th></tr></thead><tbody>'
-        +c.map(function(r){{var w=r.matches_won||0,g=r.matches_played||0;return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+w+'-'+Math.max(0,g-w)+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
+        +c.map(function(r){{var cnt=careerCount(r);return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+(cnt?cnt[0]+'-'+(cnt[1]-cnt[0]):'No data')+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
       +'<h3>Recent team/session history</h3>'+(teams.length?teams.map(function(t){{return '<span class="tag">'+esc(t.session_name||'Unknown session')+' · '+esc(t.team_name||'Unknown team')+(t.skill_level!==null?' · SL '+t.skill_level:'')+'</span>';}}).join(''):'<p class="muted">No team history captured.</p>');
   }}
 

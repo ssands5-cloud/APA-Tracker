@@ -42,10 +42,13 @@
       known.filter(function(e){return e.w>e.g-e.w;}).map(lab).join(", ")||"None recorded",
       known.filter(function(e){return e.w<e.g-e.w;}).map(lab).join(", ")||"None recorded"];
   }
+  // Complete scopes only (mirrors _career_text): unknown wins never become losses.
   function wrCareer(p,fmt){
-    var rows=((p&&p.career_stats)||[]).filter(function(r){return r.format===fmt;}),w=0,g=0;
-    rows.forEach(function(r){if(wrKnown(r.matches_won)) w+=r.matches_won||0;if(wrKnown(r.matches_played)) g+=r.matches_played||0;});
-    return rows.length&&g?wlText(w,g)+" (league-scoped lifetime "+fmtLabel(fmt)+")":"No career stats captured";
+    var rows=((p&&p.career_stats)||[]).filter(function(r){return r.format===fmt;});
+    if(!rows.length) return "No career stats captured";
+    var c=careerComplete(rows),gap=c.incomplete?plural(c.incomplete,"league scope")+" with missing wins or games not counted":"";
+    if(!c.g) return c.incomplete?"No complete career record captured ("+gap+")":"No career games recorded";
+    return wlText(c.w,c.g)+" (league-scoped lifetime "+fmtLabel(fmt)+(gap?"; "+gap+")":")");
   }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
@@ -91,6 +94,7 @@
     meetings.sort(function(x,y){var c=wrCmpTime(y.t,x.t);return c!==0?c:memberOrder(y.our,x.our);});
     return {format:fmt,ours:ours,theirs:theirs,blocks:blocks,matrix:matrix,concerning:concerning,cards:cards,threats:threats,meetings:meetings};
   }
+  window.__ucCareerText=wrCareer;
   window.__ucWarRoomPair=function(ourKey,oppKey,fmt){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
     return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation];});}),
