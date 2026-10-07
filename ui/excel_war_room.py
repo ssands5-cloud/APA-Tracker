@@ -469,7 +469,10 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             cols += [
                 (f"{prefix}Played", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$C${ll_first + k - 1}="Played","Played","—"),"—"))'),
                 (f"{prefix}Unplayed", lambda k, r: f'=AND(B{r}<>"",H{r}<>"Played")'),
-                (f"{prefix}Notes", lambda k, r: f'=IF(B{r}="","",IF(ll_OppTeamOK,IF({ll}$D${ll_first + k - 1}="","",'
+                (f"{prefix}Notes", lambda k, r: f'=IF(B{r}="","",IFERROR(IF(INDEX(cn_Summary,MATCH(INDEX(TeamRosters_Table[Player Label],B{r}),'
+                                                f'cn_Player,0))="","","Coach: "&INDEX(cn_Summary,MATCH(INDEX(TeamRosters_Table[Player Label],B{r}),'
+                                                f'cn_Player,0))&IF(AND(ll_OppTeamOK,{ll}$D${ll_first + k - 1}<>"")," · ","")),"")&'
+                                                f'IF(ll_OppTeamOK,IF({ll}$D${ll_first + k - 1}="","",'
                                                 f'{ll}$D${ll_first + k - 1}),""))'),
                 (f"{prefix}Start", lambda k, r: f'=IF(OR(B{r}="",NOT(wr_HasEvidence)),"",IFERROR(MATCH(wr_PairKey&"|{k}",'
                                                 f'MatchupEvidence_Table[Key],0),""))'),
@@ -1088,7 +1091,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
 # ---------------------------------------------------------------------------
 
 _MD_PREFIX = {"wr_": "md_", "ll_": "lm_"}
-_MD_SHEETS = ("Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard")
+_MD_SHEETS = ("Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard", "Command Center")
 
 
 def _to_md(text: str, engine_title: str, md_title: str) -> str:
@@ -1262,7 +1265,7 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False) -> int:
                             f'INDEX(Scouting_Table[{col}],{card}))', font=SMALL)
     r = top + len(fields) + 1
     _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","Coach observations")', font=base.LABEL_FONT)
-    _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Lineup Lab)",INDEX(wr_OppNotes,{k})))',
+    _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",INDEX(wr_OppNotes,{k})))',
           font=SMALL)
     return r + 1
 
@@ -1616,4 +1619,204 @@ def build_coach_dashboard(wb, *, format_options: list[str]) -> None:
         ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=7)
     _span(ws, 23, 1, 7, "Records only — no win percentage or odds are shown (none is calibrated). For shared-opponent evidence "
                         "between tonight's rosters, use the War Room's Inspect views.", font=base.MUTED_FONT, height=30)
+    ws.freeze_panes = "A5"
+
+
+# ---------------------------------------------------------------------------
+# START HERE + Captain Command Center (Paul, "Make this a captain's weapon")
+# ---------------------------------------------------------------------------
+
+def _card(ws, top: int, c1: int, c2: int, title: str, lines: list[Any], *, size: float = 11, title_fill=None,
+          line_height: float = 18) -> int:
+    """A titled card: a coloured title bar and plain lines underneath, framed by a light border."""
+    from openpyxl.styles import Border, Side
+    edge = Side(style="thin", color="CFC6B4")
+    _span(ws, top, c1, c2, title, font=Font(bold=True, size=12, color="FFFFFF"), fill=title_fill or base.SECTION_FILL,
+          wrap=False, height=22)
+    r = top
+    for line in lines:
+        r += 1
+        _span(ws, r, c1, c2, line, font=Font(size=size), height=line_height)
+    for rr in range(top, r + 1):
+        for c in range(c1, c2 + 1):
+            cell = ws.cell(row=rr, column=c)
+            cell.border = Border(left=edge if c == c1 else None, right=edge if c == c2 else None,
+                                 top=edge if rr == top else None, bottom=edge if rr == r else None)
+    return r
+
+
+TAB_TOUR = [
+    ("START HERE", "This page: what Ultimate Coach does and how to use it in three minutes."),
+    ("Command Center", "Tonight at a glance: opponent, date, venue, availability counts, the opponent roster and the evidence summary."),
+    ("Match Day", "THE control panel. Pick player → team → format → date → fixture once; every other tab follows it."),
+    ("War Room", "Who to put up next: best sends per opponent, dangerous opponents, avoid sends, open risks and the colour matrix. Its own optional overrides only change this tab."),
+    ("Lineup Lab", "Mark our players Available / Unavailable / Unknown and Planned / Played, and which opponents already played. Marks belong to one fixture."),
+    ("Scouting Cards", "One card per opponent: records, meetings with our players, record by skill level, missing information and your observations."),
+    ("Coach Notes", "Your own observations per player (tags such as 'Slow shooter' plus free text). Opinions, not APA facts — kept apart from evidence."),
+    ("Captain Packet", "The printable match-night packet: page 1 summary, then scouting cards, evidence and meeting history."),
+    ("Coach Dashboard", "Any two players head to head (direct record and shared opponents), defaulting to you vs tonight's opponents."),
+    ("Schedule, Team Rosters, Players …", "The recorded data behind everything above — reference only."),
+]
+
+
+def build_start_here(wb, *, stats: dict[str, Any], version: str) -> None:
+    ws = wb.create_sheet("START HERE", 0)
+    for letter, width in zip("ABCDEFGHIJ", (3, 26, 26, 3, 26, 26, 3, 26, 26, 3)):
+        ws.column_dimensions[letter].width = width
+    ws.sheet_view.showGridLines = False
+    _span(ws, 1, 2, 9, "Ultimate Coach — Captain's War Room", font=Font(bold=True, size=22, color=base.FELT_DEEP), wrap=False,
+          height=36)
+    _span(ws, 2, 2, 9, "Who should I put up next? Recorded, identity-verified APA evidence — organised for match night.",
+          font=Font(italic=True, size=12, color="5B6A61"), height=20)
+    fresh = stats["freshness"]
+    _span(ws, 3, 2, 9, f"Workbook version {version} · built {fresh['build_date']} · data current to the latest recorded result "
+                       f"{fresh['latest_result']} · times in {stats['tz']} · this file never refreshes itself.",
+          font=Font(size=10, color="5B6A61"), height=18)
+    top = 5
+    what = ["• Prepare for tonight's match from one setup point", "• Compare both rosters side by side",
+            "• Review direct head-to-head history", "• Review shared-opponent evidence", "• Plan your lineup as the night goes",
+            "• Scout every opponent", "• Print a match-night packet"]
+    a = _card(ws, top, 2, 3, "1 · What Ultimate Coach does", what)
+    steps = ["Step 1 · Go to Match Day", "Step 2 · Select Player (you)", "Step 3 · Select Team", "Step 4 · Select Match Date",
+             "Step 5 · Review the Command Center", "Step 6 · Review Lineup Lab (mark who's here)", "Step 7 · Review the War Room matchups",
+             "Step 8 · Print the Captain Packet"]
+    b = _card(ws, top, 5, 6, "2 · Quick start (3 minutes)", steps, title_fill=base.OPPONENT_FILL)
+    flow = ["Match Day decides the fixture.", "↓ Command Center · War Room · Lineup Lab", "↓ Scouting Cards · Coach Dashboard",
+            "↓ Captain Packet (print)", "Change Match Day and every tab follows.",
+            "A tab's own override changes only that tab — clear it to follow Match Day again."]
+    c = _card(ws, top, 8, 9, "4 · Match night workflow", flow)
+    r = max(a, b, c) + 2
+    _span(ws, r, 2, 9, "3 · Workbook tour", font=Font(bold=True, size=12, color="FFFFFF"), fill=base.SECTION_FILL, wrap=False, height=22)
+    for name, text in TAB_TOUR:
+        r += 1
+        cell = ws.cell(row=r, column=2, value=name)
+        cell.font = Font(bold=True, size=11, color=base.FELT_DEEP)
+        if name in wb.sheetnames or name in ("Command Center", "Coach Notes"):
+            cell.hyperlink = Hyperlink(ref=f"B{r}", location=f"'{name}'!A1", display=name)
+            cell.font = Font(bold=True, size=11, color="1F5C99", underline="single")
+        _span(ws, r, 3, 9, text, font=Font(size=11), height=20)
+    r += 2
+    limits = ["• Historical records are not predictions. A favorable record is not a promise.",
+              "• Evidence can be missing: unscored matches, uncaptured skill levels, players with few games.",
+              "• No validated win-probability model exists — no odds or percentages are shown anywhere (NOT CALIBRATED).",
+              "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
+              "• Rosters are current captured rosters, not who played on a past date.",
+              "• Coach Notes are your opinions, never APA facts."]
+    lim = _card(ws, r, 2, 9, "5 · Important limitations", limits, title_fill=PatternFill("solid", fgColor="8A5A00"))
+    r = lim + 2
+    _card(ws, r, 2, 9, "6 · Build information",
+          [f"Workbook version: {version}", f"Build date: {fresh['build_date']}",
+           f"Data freshness: latest recorded result {fresh['latest_result']}"
+           + (f" · {fresh['unplayed_before_build']} earlier fixtures still show UNPLAYED in this snapshot"
+              if fresh["unplayed_before_build"] else "")])
+    _link(ws, 4, 2, "→ Start: Match Day", "Match Day", font=BIG_LINK)
+    _link(ws, 4, 5, "→ Command Center", "Command Center", font=BIG_LINK)
+    ws.freeze_panes = "A4"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+
+def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) -> None:
+    """Tonight in 30 seconds. Reads the Match Day pairing (md_* after split_match_day_engine)."""
+    R = slots["roster"]
+    ws = wb.create_sheet("Command Center", 1)
+    for letter, width in zip("ABCDEFGHIJKL", (3, 30, 12, 14, 3, 30, 12, 14, 3, 34, 14, 3)):
+        ws.column_dimensions[letter].width = width
+    ws.sheet_view.showGridLines = False
+    _span(ws, 1, 2, 11, "Captain Command Center — tonight at a glance", font=Font(bold=True, size=20, color=base.FELT_DEEP),
+          wrap=False, height=32)
+    _span(ws, 2, 2, 11, '=IF(uc_Fixture="","Choose a fixture on Match Day (player → team → format → date → fixture).",uc_Fixture)',
+          font=Font(bold=True, size=14, color=base.FELT_DEEP), height=24)
+    _span(ws, 3, 2, 11, '=IF(wr_OppLabel="",uc_OppMsg,"Opponent: "&wr_OppLabel&" · "&uc_Venue)', font=Font(size=11, color="5B6A61"),
+          height=34)
+    fresh = stats["freshness"]
+    _span(ws, 4, 2, 11, f"Data freshness: built {fresh['build_date']} · latest recorded result {fresh['latest_result']} · "
+                        "the file never refreshes itself.", font=Font(size=10, color="5B6A61"), height=16)
+    _link(ws, 5, 2, "→ Match Day (change matchup)", "Match Day")
+    _link(ws, 5, 6, "→ Lineup Lab (mark availability)", "Lineup Lab")
+    _link(ws, 5, 10, "→ Captain Packet (print)", "Captain Packet")
+    top = 7
+    cnt = lambda v: f'COUNTIF(wr_OurAvail,"{v}")'
+    _card(ws, top, 2, 4, "MY TEAM", [
+        '=IF(wr_OurLabel="","Choose your team on Match Day.",wr_OurLabel)',
+        f'=IF(wr_OurCount=0,"","Available: "&{cnt("Available")})',
+        f'=IF(wr_OurCount=0,"","Unavailable: "&{cnt("Unavailable")})',
+        f'=IF(wr_OurCount=0,"","Unknown: "&{cnt("Unknown")}&" (not the same as unavailable)")',
+        '=IF(wr_OurCount=0,"","Already used: "&COUNTIF(wr_OurLineup,"Played")&" · planned: "&COUNTIF(wr_OurLineup,"Planned"))',
+        '=IF(wr_OurCount=0,"","Remaining skill total: "&IF(wr_RemainingMissing=0,wr_RemainingSL,wr_RemainingSL&" known ('
+        '"&wr_RemainingMissing&" without SL)"))',
+    ])
+    opp_lines = ['=IF(wr_OppLabel="","No opponent roster for the selected fixture.",wr_OppLabel)']
+    for k in range(1, R + 1):
+        opp_lines.append(f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
+                         f'IF(INDEX(wr_OppPlayed,{k})="Played"," · played",""))')
+    opp_end = _card(ws, top, 6, 8, "OPPONENT TEAM", opp_lines, size=10, title_fill=base.OPPONENT_FILL, line_height=16)
+    _span(ws, opp_end + 1, 6, 8, '=IF(wr_OppLabel="","","Missing information: "&COUNTIF(wr_OppSL,"No data")&" player(s) without a '
+                                 'captured SL · "&wr_UnplayedCount&" not yet played")', font=Font(size=10, color="5B6A61"), height=30)
+    cats = lambda code: "+".join(f'COUNTIF(wr_CatCol{j},"{code}")' for j in range(1, R + 1))
+    summary = [
+        '=IF(wr_PairKey="","Evidence summary appears once Match Day names a fixture with an opponent roster.",'
+        '"Pairings between the two rosters, by recorded evidence:")',
+        f'=IF(wr_PairKey="","","Strong evidence (favorable direct record): "&({cats("G")}))',
+        f'=IF(wr_PairKey="","","Concerning (more direct losses than wins): "&({cats("R")}))',
+        f'=IF(wr_PairKey="","","Weak evidence (even direct, or shared opponents only): "&({cats("E")})&" + "&({cats("I")}))',
+        f'=IF(wr_PairKey="","","Insufficient evidence (nothing recorded): "&({cats("X")}))',
+        '=IF(wr_PairKey="","","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable direct option left")',
+    ]
+    _card(ws, top, 10, 11, "COACHING SUMMARY", summary, size=10.5, line_height=30)
+    r = max(opp_end + 2, top + len(summary) + 2) + 1
+    send_lines = []
+    for k in range(1, R + 1):
+        send_lines.append(f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
+                          f'IF(INDEX(wr_Send1,{k})="","no evidence-backed option left","send "&INDEX(wr_Send1,{k})))')
+    _card(ws, r, 2, 11, "BEST REMAINING SEND PER UNPLAYED OPPONENT (reason = the recorded evidence shown after the name)",
+          send_lines, size=10.5, line_height=18)
+    ws.freeze_panes = "A6"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+
+COACH_TAGS = ["Slow shooter", "Fast shooter", "Strong safety player", "Good under pressure", "Struggles under pressure",
+              "Consistent breaker", "Aggressive style", "Defensive style", "Runs out often", "Misses long shots"]
+COACH_NOTE_ROWS = 200
+
+
+def build_coach_notes(wb) -> None:
+    """Durable coach observations per player -- opinions, kept apart from evidence. The first row naming a
+    player feeds that player's scouting cards and packet ("Coach: ..."); APA records are never changed."""
+    ws = wb.create_sheet("Coach Notes")
+    for letter, width in zip("ABCDEFG", (44, 24, 24, 60, 14, 3, 70)):
+        ws.column_dimensions[letter].width = width
+    _span(ws, 1, 1, 5, "Coach Notes — your observations (opinions, not APA facts)", font=Font(bold=True, size=18, color=base.FELT_DEEP),
+          wrap=False, height=30)
+    _span(ws, 2, 1, 5, "One row per player. Pick the player (name + APA record ID), up to two tags, and write what you saw. "
+                       "These notes appear on that player's scouting card and in the Captain Packet, always marked “Coach:”. "
+                       "They never change any recorded result.", font=Font(size=10, color="5B6A61"), height=30)
+    _link(ws, 1, 7, "← START HERE", "START HERE")
+    heads = ["Player (APA record ID)", "Tag 1", "Tag 2", "Observation", "Date noted"]
+    for c, text in enumerate(heads, start=1):
+        cell = ws.cell(row=4, column=c, value=text)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = base.SECTION_FILL
+    ws.cell(row=4, column=7, value="Summary used on cards (calculated)").font = base.HELPER_FONT
+    first, last = 5, 4 + COACH_NOTE_ROWS
+    player = DataValidation(type="list", formula1="PlayerLabelList", allow_blank=True)
+    tags = DataValidation(type="list", formula1='"' + ",".join(COACH_TAGS) + '"', allow_blank=True)
+    ws.add_data_validation(player)
+    ws.add_data_validation(tags)
+    for r in range(first, last + 1):
+        for c in range(1, 6):
+            base._input(ws.cell(row=r, column=c))
+        player.add(f"A{r}")
+        tags.add(f"B{r}")
+        tags.add(f"C{r}")
+        ws.cell(row=r, column=4).alignment = base.WRAP_TOP
+        ws.cell(row=r, column=7, value=f'=IF(A{r}="","",TRIM(B{r}&IF(AND(B{r}<>"",C{r}<>"")," · ","")&C{r}&'
+                                       f'IF(AND(OR(B{r}<>"",C{r}<>""),D{r}<>""),": ","")&D{r}))').font = base.HELPER_FONT
+    wb.defined_names["cn_Player"] = DefinedName("cn_Player", attr_text=f"'Coach Notes'!$A${first}:$A${last}")
+    wb.defined_names["cn_Summary"] = DefinedName("cn_Summary", attr_text=f"'Coach Notes'!$G${first}:$G${last}")
     ws.freeze_panes = "A5"

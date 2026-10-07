@@ -368,7 +368,7 @@ def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(b
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
     assert card["Meetings with our players"] == f"vs {ANN}: 0-2 · vs {BEA}: 2-0 · vs {DEE}: 1-1"
     assert card["Record by opponent SL"] == "vs SL5 3-3"
-    assert card["Coach observations"] == "(add notes on Lineup Lab)"
+    assert card["Coach observations"] == "(add notes on Coach Notes or Lineup Lab)"
     book.set(LL, "D23", "Breaks hard; slow safeties")
     assert book.display(SC, "C17") == "Breaks hard; slow safeties"
     top = _row(built, WR, "Direct meetings between the rosters (newest first)")
@@ -501,3 +501,46 @@ def test_packet_meeting_page_shows_every_record_two_across_with_dividers(book, b
              if str(cf.sqref).startswith(f"A{first}") or str(cf.sqref).startswith(f"G{first}")]
     assert rules and all(r.dxf.border.bottom.style == "thin" and r.dxf.border.bottom.color.rgb.endswith("000000") for r in rules)
     assert all('<>""' in r.formula[0] for r in rules)          # empty slots stay blank: no ruled empty table
+
+
+def test_start_here_explains_the_workbook_and_names_the_build(built):
+    ws = built["START HERE"]
+    text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+    for needle in ("1 · What Ultimate Coach does", "2 · Quick start", "Step 1 · Go to Match Day", "Step 8 · Print the Captain Packet",
+                   "3 · Workbook tour", "4 · Match night workflow", "5 · Important limitations",
+                   "Historical records are not predictions", "No validated win-probability model", "6 · Build information",
+                   "Workbook version: ", "Build date: Wed Oct 7, 2026", "Data freshness: latest recorded result Sun Sep 27, 2026"):
+        assert needle in text, needle
+    links = {c.hyperlink.location for row in ws.iter_rows() for c in row if c.hyperlink}
+    for sheet in ("Match Day", "Command Center", "War Room", "Lineup Lab", "Coach Notes", "Captain Packet"):
+        assert f"'{sheet}'!A1" in links and sheet in built.sheetnames, sheet
+
+
+def test_command_center_summarises_tonight_from_match_day(book, built):
+    cc = "Command Center"
+    vals = [book.display(cc, f"{c}{r}") for r in range(1, 40) for c in "BFJ"]
+    text = "\n".join(str(v) for v in vals if v not in ("", None, 0))
+    assert "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open" in text
+    assert "Available: 0" in text and "Unknown: 3 (not the same as unavailable)" in text and "Already used: 0" in text
+    assert f"{CAM} · SL 6" in text and f"{EVE} · SL 3" in text
+    assert "Strong evidence (favorable direct record): 1" in text and "Concerning (more direct losses than wins): 2" in text
+    assert "Weak evidence (even direct, or shared opponents only): 1 + 1" in text
+    assert "Insufficient evidence (nothing recorded): 1" in text
+    assert f"vs {CAM}: send {ANN} — 2-0 (2)" in text
+    book.set(LL, "C12", "Unavailable")
+    after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
+    assert "Unavailable: 1" in after and f"vs {CAM}: send {DEE} — 1-1 (2)" in after
+    book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
+    assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
+
+
+def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
+    ws = built["Coach Notes"]
+    assert "opinions, not APA facts" in ws["A1"].value
+    book.set("Coach Notes", "A5", CAM)
+    book.set("Coach Notes", "B5", "Slow shooter")
+    book.set("Coach Notes", "C5", "Strong safety player")
+    book.set("Coach Notes", "D5", "Plays the long game")
+    assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game"
+    book.set(LL, "D23", "Breaks hard")       # tonight's note joins, still separated from evidence
+    assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"

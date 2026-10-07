@@ -127,8 +127,8 @@ TABLE_STYLE = "TableStyleMedium7"  # green, matches the felt palette
 
 NAV_SHEETS = ["Match Day", "War Room", "Lineup Lab", "Captain Packet", "Coach Dashboard", "Schedule",
               "Team Rosters", "Players", "Data Trust", "Build Info"]
-SHEET_ORDER = ["Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
-               "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
+SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
+               "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
                "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
                "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
 RAIL = "5A3A1F"
@@ -767,6 +767,17 @@ def _lists_sheet(wb: Workbook, format_filter_options: list[str], compare_slots: 
 
 
 
+def _workbook_version() -> str:
+    """The code revision the workbook was built from (short git SHA), or "unversioned" outside a checkout."""
+    import subprocess
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=10,
+                             cwd=Path(__file__).resolve().parent).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        sha = ""
+    return f"PR #83 · {sha}" if sha else "unversioned"
+
+
 def build_workbook(
     payload: dict[str, Any],
     *,
@@ -836,6 +847,9 @@ def build_workbook(
     war.build_scouting_cards(wb, slots=slots)
     war.build_captain_packet(wb, slots=slots, stats=stats)
     war.build_coach_dashboard(wb, format_options=_dashboard_format_options(pairs))
+    war.build_coach_notes(wb)
+    war.build_command_center(wb, slots=slots, stats=stats)
+    war.build_start_here(wb, stats=stats, version=_workbook_version())
     if default_team and default_date:
         # Lineup Lab plans for the default fixture: its exact plan key, read from the Schedule rows
         # (the same cells uc_PlanKey concatenates, so the two are identical by construction).
@@ -856,7 +870,7 @@ def build_workbook(
 
     for target, name in enumerate(SHEET_ORDER):
         wb.move_sheet(wb[name], offset=target - wb.sheetnames.index(name))
-    wb.active = wb["Match Day"]
+    wb.active = wb["START HERE"]
     return wb
 
 

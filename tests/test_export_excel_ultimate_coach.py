@@ -106,15 +106,15 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
     wb = load_workbook(path)
 
     assert set(wb.sheetnames) == {
-        "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
-        "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
+        "START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
+        "Coach Dashboard", "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
         "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
         "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info",
     }
-    # Coach-facing sheets first, Match Day (the control panel) active.
-    assert wb.sheetnames[:6] == ["Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
-                                 "Coach Dashboard"]
-    assert wb.active.title == "Match Day"
+    # START HERE first (and open), then the coach-facing sheets with Match Day as the control panel.
+    assert wb.sheetnames[:9] == ["START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards",
+                                 "Captain Packet", "Coach Dashboard", "Coach Notes"]
+    assert wb.active.title == "START HERE"
 
     build_info = {row[0].value: row[1].value for row in wb["Build Info"].iter_rows(min_row=2, max_col=2) if row[0].value}
     assert build_info["Probability publication"] == "FORBIDDEN"
@@ -384,7 +384,7 @@ def test_match_day_sheet_inputs_dropdowns_and_viewer_default(tmp_path):
     path = write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="test", source_db="test.db",
                           viewer_member_external_id="1001", viewer_card_number="80000001")
     wb = load_workbook(path)
-    assert wb.active.title == "Match Day"
+    assert wb.active.title == "START HERE"
     md = wb["Match Day"]
     sources = {str(dv.sqref): dv.formula1 for dv in md.data_validations.dataValidation}
     assert sources == {"B6": "PlayerLabelList", "B7": "uc_TeamList", "B8": "FormatFilterList", "B9": "uc_DateList",
