@@ -1404,6 +1404,48 @@ Skills applied: existing verification/red-team/validator instructions.
 Readiness FAIL; qualitative Edge 5/10 and UX Fair pending corrected live
 workflow. No feature/source/off-limits edits, COM or merge performed.
 
+### Phase 3 local override and packet consistency audit — 2026-10-07
+
+Immutable product head `4f73eb8`, code/artifact `5c9dc83`, still unchanged.
+CI observed green on both Python versions; audit PR #85 checks also green
+before this report update. No fixture-planning repair or builder response
+observed. Continued with a new non-COM workflow probe rather than repeating
+previous tests without cause. Synthetic audit workbook generated earlier
+at this exact code revision was read, not modified on disk.
+
+❌ **Problem (P1 cross-tab state and incorrect packet context):** set only
+War Room opponent override C6 to Owls. Coach Dashboard's opponent options
+change from Falcons players Cam/Eve to Owls players Gus/Zed, although
+Match Day is unchanged. Packet A2 still contains Oct11 Home vs Falcons,
+preceded by a warning, while opponent title H5 is Owls. Then set only War
+Room our-team override C5 to Sharks 9-Ball: Coach Dashboard A4 says
+Following Match Day but reports 9-Ball while Match Day is 8-Ball. The
+independent formula-evaluator probe confirms all three behaviors.
+A warning does not make conflicting fixture/roster content correct.
+
+Root coupling: `cd_PlayerBList` consumes `wr_OppLabels`, `cd_FmtLabel`
+consumes `wr_FormatLabel`; scouting/packet use `wr_*` results while
+packet metadata uses `uc_Fixture`. Existing override test asserts the
+warning but does not require other tabs' effective context to stay fixed.
+
+💡 **Required correction:** each output defaults to Match Day's effective
+fixture and has its own optional local overrides, per Paul's explicit
+rule. Blank follows Match Day; a War Room override does not alter Coach
+Dashboard's pool/format or a fixture packet. An explicit manual-analysis
+print mode may show local rosters only if the unrelated fixture metadata
+is removed and the mode is clear. Add opponent-pool, format, scouting and
+packet assertions, invalidation and clear-to-restore checks. Preserve
+identity keys and source evidence.
+
+✅ **Verified:** actual generated-workbook formula outputs, stable exact
+head, unchanged source files, and same canonical root/origin. Skills:
+verification-before-completion, red-team, validator already reviewed.
+Probe encoding/cell-address setup errors were corrected before the final
+successful assertions; they were audit-harness issues, not product test
+results. No fabricated records added to production, no COM or feature
+changes. Posted finding in issue #84. Fixture-state P1 remains open;
+readiness FAIL, qualitative Edge 5/10 pending a corrected complete flow.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
