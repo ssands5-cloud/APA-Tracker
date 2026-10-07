@@ -69,6 +69,7 @@ button.secondary:hover { background:var(--felt-soft); }
 .scout dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:0; padding:10px 12px; font-size:13px; }
 .scout dt { color:var(--muted); } .scout dd { margin:0; overflow-wrap:anywhere; }
 .md-date-list { margin-top:10px; }
+.matrix th .id-line { display:block; text-transform:none; letter-spacing:0; font-weight:400; }
 .tonight { border-top:5px solid var(--brass); }
 .tonight:empty { display:none; }
 .tonight h2 { margin:0 0 4px; font-size:19px; }
@@ -352,7 +353,7 @@ def render(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ultimate Coach — Scout & Compare</title>
+<title>Ultimate Coach — Captain's War Room</title>
 <style>
 :root {{
   color-scheme: light;
@@ -507,7 +508,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 {_WAR_ROOM_CSS}</style></head>
 <body>
 <header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
-<div><h1>Ultimate Coach — Scout & Compare</h1>
+<div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
 <div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
@@ -698,10 +699,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     }}).slice(0,12);
     return '<h2>'+esc(p.name)+'</h2><p class="id-line">APA record ID '+esc(recordIdText(p))+'</p>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
-      +'<div class="metric"><b>'+(totalG?(totalW+'-'+(totalG-totalW)):(c.length?'No data':'Pending'))+'</b><span>League-scoped lifetime '+esc(fmt)+' W-L'+(cc.incomplete?' ('+cc.incomplete+' scope'+(cc.incomplete===1?'':'s')+' with missing wins or games not counted)':'')+'</span></div>'
+      +'<div class="metric"><b>'+(totalG?(totalW+'-'+(totalG-totalW)):(c.length?'No data':'Pending'))+'</b><span>League-scoped lifetime '+esc(formatName(fmt))+' W-L'+(cc.incomplete?' ('+cc.incomplete+' scope'+(cc.incomplete===1?'':'s')+' with missing wins or games not counted)':'')+'</span></div>'
       +'<div class="metric"><b>'+(totalG?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
       +'<h3>League stats</h3>'+(c.length?'<div class="table-wrap"><table><thead><tr><th>League</th><th>W-L</th><th>Last played</th><th>B&R</th><th>Mini slams</th></tr></thead><tbody>'
-        +c.map(function(r){{var cnt=careerCount(r);return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+(cnt?cnt[0]+'-'+(cnt[1]-cnt[0]):'No data')+'</td><td>'+esc(r.last_played||'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
+        +c.map(function(r){{var cnt=careerCount(r);return '<tr><td>'+esc(r.league_slug||r.league_id)+'</td><td>'+(cnt?cnt[0]+'-'+(cnt[1]-cnt[0]):'No data')+'</td><td>'+esc(r.last_played?isoDateLabel(String(r.last_played).slice(0,10)):'—')+'</td><td>'+esc(r.break_and_runs===null?'—':r.break_and_runs)+'</td><td>'+esc(r.mini_slams===null?'—':r.mini_slams)+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">Career-stat enrichment is still in progress for this build. Historical match evidence below is already usable.</p>')
       +'<h3>Recent team/session history</h3>'+(teams.length?teams.map(function(t){{return '<span class="tag">'+esc(t.session_name||'Unknown session')+' · '+esc(t.team_name||'Unknown team')+(t.skill_level!==null?' · SL '+t.skill_level:'')+'</span>';}}).join(''):'<p class="muted">No team history captured.</p>');
   }}
 
@@ -737,14 +738,14 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     ids.sort(function(x,y){{return (ag[y].length+bg[y].length)-(ag[x].length+bg[x].length);}});
 
     var summaryText=dr.g
-      ? esc(pa.name)+' and '+esc(pb.name)+' have '+dr.g+' recorded direct meeting'+(dr.g===1?'':'s')+' in '+esc(fmt)+'.'
-      : 'No recorded direct meeting between '+esc(pa.name)+' and '+esc(pb.name)+' in '+esc(fmt)+'.';
+      ? esc(pa.name)+' and '+esc(pb.name)+' have '+dr.g+' recorded direct meeting'+(dr.g===1?'':'s')+' in '+esc(formatName(fmt))+'.'
+      : 'No recorded direct meeting between '+esc(pa.name)+' and '+esc(pb.name)+' in '+esc(formatName(fmt))+'.';
     summaryText+=' '+(ids.length
       ? 'They share '+ids.length+' recorded opponent'+(ids.length===1?'':'s')+', so you still have indirect history to compare.'
       : 'No shared-opponent evidence is recorded for this format.');
     document.getElementById("summary").innerHTML='<h2>What we know</h2><p><strong>'+summaryText+'</strong></p>'
-      +'<div class="metric-grid"><div class="metric"><b>'+ar.length+'</b><span>'+esc(pa.name)+' evidence rows in '+esc(fmt)+'</span></div>'
-      +'<div class="metric"><b>'+br.length+'</b><span>'+esc(pb.name)+' evidence rows in '+esc(fmt)+'</span></div>'
+      +'<div class="metric-grid"><div class="metric"><b>'+ar.length+'</b><span>'+esc(pa.name)+' evidence rows in '+esc(formatName(fmt))+'</span></div>'
+      +'<div class="metric"><b>'+br.length+'</b><span>'+esc(pb.name)+' evidence rows in '+esc(formatName(fmt))+'</span></div>'
       +'<div class="metric"><b>'+dr.g+'</b><span>Direct meetings</span></div>'
       +'<div class="metric"><b>'+ids.length+'</b><span>Shared opponents</span></div></div>';
 
@@ -753,10 +754,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     var visibleIds=ids.slice(0,100);
     var sharedRows=visibleIds.map(function(id){{var p=PLAYERS[id],ra=record(ag[id]),rb=record(bg[id]);return '<tr><td>'+esc(p?playerLabel(p):id)+'</td><td>'+ra.w+'-'+ra.l+' ('+pct(ra.w,ra.g)+')</td><td>'+rb.w+'-'+rb.l+' ('+pct(rb.w,rb.g)+')</td><td>'+ra.g+' / '+rb.g+'</td></tr>';}}).join('');
     var limitNote=ids.length>visibleIds.length?'<p class="muted">Showing the 100 shared opponents with the largest combined samples.</p>':'';
-    document.getElementById("shared").innerHTML='<h2>Shared-opponent evidence</h2>'+(ids.length?'<p class="muted">'+ids.length+' opponent(s) both players have actually faced in '+esc(fmt)+'.</p>'+limitNote+'<div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(pa.name)+'</th><th>'+esc(pb.name)+'</th><th>Samples A/B</th></tr></thead><tbody>'+sharedRows+'</tbody></table></div>':'<p class="muted">No recorded shared opponents in this format.</p>');
+    document.getElementById("shared").innerHTML='<h2>Shared-opponent evidence</h2>'+(ids.length?'<p class="muted">'+ids.length+' opponent(s) both players have actually faced in '+esc(formatName(fmt))+'.</p>'+limitNote+'<div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(pa.name)+'</th><th>'+esc(pb.name)+'</th><th>Samples A/B</th></tr></thead><tbody>'+sharedRows+'</tbody></table></div>':'<p class="muted">No recorded shared opponents in this format.</p>');
 
     var meetings=direct.slice().sort(function(x,y){{return String(val(y,"match_date")).localeCompare(String(val(x,"match_date")));}});
-    document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(val(r,"match_date")||'—')+'</td><td>'+esc(val(r,"session_name")||'—')+'</td><td>'+esc(val(r,"result"))+'</td><td>'+esc(val(r,"own_skill_level")===null?'—':val(r,"own_skill_level"))+'</td><td>'+esc(val(r,"opponent_skill_level")===null?'—':val(r,"opponent_skill_level"))+'</td><td>'+esc(val(r,"points_earned")===null?'—':val(r,"points_earned"))+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
+    document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(val(r,"match_date")?wrDayLabel(wrInstant(val(r,"match_date"))):'—')+'</td><td>'+esc(val(r,"session_name")||'—')+'</td><td>'+esc(val(r,"result"))+'</td><td>'+esc(val(r,"own_skill_level")===null?'—':val(r,"own_skill_level"))+'</td><td>'+esc(val(r,"opponent_skill_level")===null?'—':val(r,"opponent_skill_level"))+'</td><td>'+esc(val(r,"points_earned")===null?'—':val(r,"points_earned"))+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
 
     document.getElementById("status").innerHTML='<strong>Probability status: NOT CALIBRATED.</strong> Scout & Compare is showing real source evidence only. The future odds model must pass chronological backtesting before a percentage appears here.';
   }}

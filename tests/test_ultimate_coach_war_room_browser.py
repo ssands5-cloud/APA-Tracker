@@ -414,3 +414,46 @@ def test_coach_notes_are_tagged_per_player_durable_and_never_evidence(tmp_path: 
             assert errors == []
         finally:
             browser.close()
+
+
+
+def test_cleared_migrated_coach_note_stays_cleared(tmp_path: Path):
+    """GPT audit #84 repro: legacy note imported, cleared by the captain, then reload must not bring it back."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.evaluate("""() => { const k='ultimate-coach:plan-v2'; const o=JSON.parse(localStorage.getItem(k)||'{}');
+                o.coach={}; o.notes={'falcons-a|d1|Fall 2026': {'10': {n: 'SYNTHETIC legacy note'}}}; localStorage.setItem(k, JSON.stringify(o)); }""")
+            page.reload(); page.wait_for_load_state("load")
+            card = page.locator("#scouting-cards .scout").first
+            assert card.locator(".coach-summary").inner_text() == "Coach: SYNTHETIC legacy note"
+            card.locator('textarea[data-plan="note"]').fill("")
+            page.reload(); page.wait_for_load_state("load")
+            assert page.locator("#scouting-cards .scout").first.locator(".coach-summary").inner_text() == ""
+            card = page.locator("#scouting-cards .scout").first
+            card.locator('textarea[data-plan="note"]').fill("Replacement")
+            page.reload(); page.wait_for_load_state("load")
+            assert page.locator("#scouting-cards .scout").first.locator(".coach-summary").inner_text() == "Coach: Replacement"
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_player_vs_player_reads_like_coaching_software(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            assert page.title() == "Ultimate Coach — Captain's War Room"
+            page.select_option("#player-a", "1"); page.wait_for_timeout(200)
+            page.select_option("#player-b", "10"); page.wait_for_timeout(200)
+            section = page.inner_text("#player-section")
+            assert "in EIGHT" not in section and "in 8-Ball" in section
+            meetings = page.inner_text("#meetings")
+            assert "Sun Sep 20, 2026" in meetings and "T19:00" not in meetings
+            th = page.locator("#wr-matrix thead th").nth(1)
+            assert th.locator(".id-line").evaluate("e => getComputedStyle(e).display") == "block"
+            assert errors == []
+        finally:
+            browser.close()

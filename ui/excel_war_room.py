@@ -88,13 +88,16 @@ LINEUP_CHOICES = ["Planned", "Played"]
 CONCERNING_SLOTS = 20
 MEETING_SLOTS = 40
 
-CAT_FILLS = {
-    "G": PatternFill("solid", fgColor="CFE8D4"),
-    "R": PatternFill("solid", fgColor="F4CCCC"),
-    "E": PatternFill("solid", fgColor="FFF0B3"),
-    "I": PatternFill("solid", fgColor="FFF0B3"),
-    "X": PatternFill("solid", fgColor="E3E3E3"),
-}
+def _cf_fill(rgb: str) -> PatternFill:
+    """A fill for CONDITIONAL formatting. Excel paints a conditional (dxf) solid fill from its background
+    colour, so both colours are set -- with only fgColor the rule fires but nothing is painted (real-Excel
+    UAT: uncoloured matrix, invisible packet card headers)."""
+    return PatternFill(fill_type="solid", fgColor=rgb, bgColor=rgb)
+
+
+CAT_FILLS = {code: _cf_fill(rgb) for code, rgb in
+             (("G", "CFE8D4"), ("R", "F4CCCC"), ("E", "FFF0B3"), ("I", "FFF0B3"), ("X", "E3E3E3"))}
+CARD_HEAD_FILL_RGB = "E8DCCB"   # light rail tint; the name is dark text so it prints readably without any fill
 CALC_FILL = PatternFill("solid", fgColor="EEF3EF")
 BIG_LINK = Font(color="1F5C99", underline="single", bold=True, size=12)
 SMALL = Font(size=9)
@@ -985,6 +988,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
             ws.cell(row=r, column=helper_col0 + j - 1, value=f"={cat_ref}").font = base.HELPER_FONT
         ws.row_dimensions[r].height = 30
     first_row, last_row = header + 1, header + R
+    for j in range(R):
+        ws.column_dimensions[get_column_letter(helper_col0 + j)].hidden = True
     for j, col in enumerate(matrix_cols, start=1):
         letter = get_column_letter(col)
         helper = get_column_letter(helper_col0 + j - 1)
@@ -1007,8 +1012,10 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
                                   (7, "Shared-opponent evidence (samples)"), (10, "Basis · ties · missing evidence")])
     for rr in range(1, R + 1):
         r = top + 2 + rr
-        s = f"INDEX(wr_OppStart,{j_ref})"
-        n = f"INDEX(wr_OppCount,{j_ref})"
+        # Excel evaluates EVERY argument of OR(), so each guard term must itself be error-free: with nothing
+        # picked, INDEX(...,"") is #VALUE! (real-Excel UAT showed #VALUE! here; GPT #84 P1).
+        s = f'IFERROR(INDEX(wr_OppStart,{j_ref}),"")'
+        n = f'IFERROR(INDEX(wr_OppCount,{j_ref}),0)'
         cond = f'OR({insp}="",{j_ref}="",{s}="",{rr}>{n})'
         _span(ws, r, 1, 2, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Player],{s}+{rr}))', font=SMALL)
         ws.cell(row=r, column=3, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[Rank],{s}+{rr}))')
@@ -1439,7 +1446,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                 continue
             lbl = f"INDEX(wr_OppLabels,{k})"
             _span(ws, r, c0, c9, f'=IF({lbl}="","",{lbl}&" · SL "&INDEX(wr_OppSL,{k})&IF(INDEX(wr_OppPlayed,{k})="Played",'
-                                 f'" · already played",""))', font=font(10.5, bold=True, color=white), wrap=False)
+                                 f'" · already played",""))', font=font(10.5, bold=True, color="3B2410"), wrap=False)
         for i, (label, col, pt) in enumerate(card_fields, start=1):
             rr = r + i
             h(rr, pt)
@@ -1458,7 +1465,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         for c0, c9 in ((1, 5), (7, 12)):
             first, last = get_column_letter(c0), get_column_letter(c9)
             ws.conditional_formatting.add(f"{first}{hr}:{last}{hr}",
-                                          FormulaRule(formula=[f'${first}${hr}<>""'], fill=base.OPPONENT_FILL))
+                                          FormulaRule(formula=[f'${first}${hr}<>""'], fill=_cf_fill(CARD_HEAD_FILL_RGB)))
     pages.append((p2, r))
 
     # ---------------- pages 3-4: evidence, packed, opponent named on every line ----------------
@@ -1497,7 +1504,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         h(r, 14.5)
     last_ev = ev_first + R * R - 1
     ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
-                                  FormulaRule(formula=[f'AND($P{ev_first}<>"",$Q{ev_first}=1)'], fill=base.SUBHEAD_FILL,
+                                  FormulaRule(formula=[f'AND($P{ev_first}<>"",$Q{ev_first}=1)'], fill=_cf_fill(base.FELT_SOFT),
                                               font=Font(bold=True)))
     pages.append((p3, last_ev))
 
@@ -1533,12 +1540,12 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
             k = i * 2 + side + 1
             row = f'IFERROR(MATCH(wr_PairKey&"|{k}",Meetings_Table[Key],0),"")'
             cond = f'OR(NOT(wr_HasEvidence),{row}="")'
-            f12 = font(11.5)
+            f12 = font(10.5)
             _span(ws, r, c0, cd, f'=IF({cond},"","{k}. "&INDEX(Meetings_Table[Date],{row})&CHAR(10)&INDEX(Meetings_Table[Result],{row})&'
                                  f'" · SL "&INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))', font=f12)
             _span(ws, r, cn, c9, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row})&CHAR(10)&"vs "&'
                                  f'INDEX(Meetings_Table[Opponent],{row}))', font=f12)
-        h(r, 28.5)
+        h(r, 29)
     meet_last = meet_first + rows_per_side - 1
     # Dividers and subtle alternating shading on rows that hold a meeting; black rules print in black & white.
     from openpyxl.styles import Border, Side
@@ -1547,7 +1554,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         a, b = get_column_letter(c0), get_column_letter(c9)
         rng = f"{a}{meet_first}:{b}{meet_last}"
         ws.conditional_formatting.add(rng, FormulaRule(formula=[f'AND(${a}{meet_first}<>"",MOD(ROW(),2)=0)'], border=rule,
-                                                       fill=PatternFill("solid", fgColor="F2F2F2"), stopIfTrue=True))
+                                                       fill=_cf_fill("F2F2F2"), stopIfTrue=True))
         ws.conditional_formatting.add(rng, FormulaRule(formula=[f'${a}{meet_first}<>""'], border=rule))
     last = meet_last + 1
     _span(ws, last, 1, 12, '="Shared-opponent totals per pairing are in the evidence pages; the per-opponent breakdown is in the '
@@ -1613,6 +1620,8 @@ def build_coach_dashboard(wb, *, format_options: list[str]) -> None:
     ws["A15"] = "Pair key"
     ws["C15"] = f'=IF(OR(cd_AID="",cd_BID=""),"",cd_AID&"|"&{fmt_code}&"|"&cd_BID)'
     ws["A16"] = "Pair row in Player vs Player"
+    for helper_row in (15, 16):          # internal lookup keys: kept for the formulas, hidden from the captain
+        ws.row_dimensions[helper_row].hidden = True
     ws["C16"] = '=IF(C15="","",IFERROR(MATCH(C15,PlayerVsPlayer_Table[Pair Key],0),""))'
     for ref in ("A15", "C15", "A16", "C16"):
         ws[ref].font = base.HELPER_FONT
@@ -1637,6 +1646,15 @@ def build_coach_dashboard(wb, *, format_options: list[str]) -> None:
 # START HERE + Captain Command Center (Paul, "Make this a captain's weapon")
 # ---------------------------------------------------------------------------
 
+def _fit_height(text: Any, width_units: float, size: float, minimum: float) -> float:
+    """Row height (points) that shows all of a wrapped literal text; formulas keep the given minimum."""
+    if not isinstance(text, str) or text.startswith("="):
+        return minimum
+    per_line = max(10, int(width_units * 11 / size * 1.05))
+    lines = max(1, -(-len(text) // per_line))
+    return max(minimum, round(lines * size * 1.35 + 4, 1))
+
+
 def _card(ws, top: int, c1: int, c2: int, title: str, lines: list[Any], *, size: float = 11, title_fill=None,
           line_height: float = 18) -> int:
     """A titled card: a coloured title bar and plain lines underneath, framed by a light border."""
@@ -1645,9 +1663,11 @@ def _card(ws, top: int, c1: int, c2: int, title: str, lines: list[Any], *, size:
     _span(ws, top, c1, c2, title, font=Font(bold=True, size=12, color="FFFFFF"), fill=title_fill or base.SECTION_FILL,
           wrap=False, height=22)
     r = top
+    width = sum(ws.column_dimensions[get_column_letter(c)].width or 8.43 for c in range(c1, c2 + 1))
     for line in lines:
         r += 1
-        _span(ws, r, c1, c2, line, font=Font(size=size), height=line_height)
+        _span(ws, r, c1, c2, line, font=Font(size=size),
+              height=max(_fit_height(line, width, size, line_height), ws.row_dimensions[r].height or 0))
     for rr in range(top, r + 1):
         for c in range(c1, c2 + 1):
             cell = ws.cell(row=rr, column=c)
@@ -1708,7 +1728,10 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str, example: list[s
         if name in wb.sheetnames or name in ("Command Center", "Coach Notes"):
             cell.hyperlink = Hyperlink(ref=f"B{r}", location=f"'{name}'!A1", display=name)
             cell.font = Font(bold=True, size=11, color="1F5C99", underline="single")
-        _span(ws, r, 3, 9, text, font=Font(size=11), height=20)
+        cell.alignment = base.WRAP_TOP
+        _span(ws, r, 3, 9, text, font=Font(size=11),
+              height=max(_fit_height(text, sum(ws.column_dimensions[c].width for c in "CDEFGHI"), 11, 20),
+                         _fit_height(name, ws.column_dimensions["B"].width, 11, 20)))
     r += 2
     lim = _card(ws, r, 2, 9, "5 · Important limitations", list(ONBOARDING_LIMITS), title_fill=PatternFill("solid", fgColor="8A5A00"))
     r = lim + 2

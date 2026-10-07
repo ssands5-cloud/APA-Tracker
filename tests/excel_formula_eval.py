@@ -488,6 +488,9 @@ class _Parser:
             return chr(int(_to_number(self.scalar(args[0]))))
         if name == "MATCH":
             needle, refs = self.scalar(args[0]), self.cells(args[1])
+            if needle is BLANK:
+                # Excel: MATCH with an empty-cell lookup value is #N/A (it never matches "" results).
+                raise ExcelError("#N/A")
             kind = 1 if len(args) < 3 else _to_number(self.scalar(args[2]))
             if kind == 1:
                 # Excel's default approximate match on an ascending range: the last position whose

@@ -128,8 +128,12 @@
     var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{}}:{our:{},opp:{},notes:{},cap:{},coach:{}};
     Object.keys(p.notes).forEach(function(scope){var s=p.notes[scope]||{};Object.keys(s).forEach(function(pid){
       var n=s[pid]&&s[pid].n;if(n&&!(p.coach[pid]&&p.coach[pid].n)){(p.coach[pid]||(p.coach[pid]={})).n=n;}});});
+    // One-time migration (GPT audit #84): once imported, the legacy copy is removed and saved, so a note the
+    // captain later clears is not resurrected on the next load.
+    if(Object.keys(p.notes).length){p.notes={};p._migrated=true;}
     return p;
   })();
+  if(WR_PLAN._migrated){delete WR_PLAN._migrated;wrSave();}
   var WR_COACH_TAGS=DATA.coach_tags||[];
   function wrCoach(pid){return WR_PLAN.coach[String(pid)]||{};}
   function wrCoachSummary(pid){

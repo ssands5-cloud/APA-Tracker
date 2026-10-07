@@ -403,7 +403,7 @@ ONBOARDING_WHAT = [
 ONBOARDING_LIMITS = [
     "• Historical records are not predictions. A favorable record is not a promise.",
     "• Evidence can be missing: unscored matches, uncaptured skill levels, players with few games.",
-    "• No validated win-probability model exists — no odds or percentages are shown anywhere (NOT CALIBRATED).",
+    "• No validated win-probability model exists: no predicted or calibrated odds are shown (NOT CALIBRATED). Historical win rates that appear (e.g. Player vs Player) describe past results only, always with their sample size.",
     "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
     "• Rosters are current captured rosters, not who played on a past date.",
     "• Unknown availability is not Unavailable, and neither is a prediction. No lineup-legality or skill cap is assumed.",

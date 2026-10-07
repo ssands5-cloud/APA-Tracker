@@ -496,7 +496,7 @@ def test_packet_meeting_page_shows_every_record_two_across_with_dividers(book, b
     assert one.startswith("1. Sun Sep 20, 2026\n") and two.startswith("2. ") and three.startswith("3. ")
     assert " · SL " in one and "\nvs " in book.display(CP, f"B{first}")
     assert book.display(CP, f"A{first + 4}") == "" and book.display(CP, f"G{first + 4}") == ""   # 8 meetings = 4 rows
-    assert ws[f"A{first}"].font.sz == 11.5 and ws.row_dimensions[first].height == 28.5
+    assert ws[f"A{first}"].font.sz == 10.5 and ws.row_dimensions[first].height == 29
     rules = [r for cf in ws.conditional_formatting for r in cf.rules
              if str(cf.sqref).startswith(f"A{first}") or str(cf.sqref).startswith(f"G{first}")]
     assert rules and all(r.dxf.border.bottom.style == "thin" and r.dxf.border.bottom.color.rgb.endswith("000000") for r in rules)
@@ -568,3 +568,37 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
     ]
     book.set(LL, "C12", "Unavailable")
     assert book.display(LL, f"A{top + 2}") == f"vs {EVE}: no evidence-backed option left among our remaining players"
+
+
+
+def test_inspect_is_blank_not_an_error_when_nothing_is_picked_and_after_clearing(book, built):
+    """Real-Excel UAT: Excel evaluates every OR() argument, so blank Inspect showed #VALUE!. The evaluator now
+    follows Excel (MATCH of an empty cell is #N/A), and the guards are error-free."""
+    inspect = _row(built, WR, "Inspect opponent")
+    cells = [f"{c}{inspect + 2 + k}" for k in range(3) for c in "ACDEGJ"]
+    assert all(book.display(WR, ref) == "" for ref in cells)
+    book.set(WR, f"C{inspect}", CAM)
+    assert book.display(WR, f"A{inspect + 2}") == ANN
+    book.set(WR, f"C{inspect}", "")
+    assert all(book.display(WR, ref) == "" for ref in cells)
+    assert _no_bad_values(book, built) == []
+
+
+def test_helper_cells_are_hidden_from_the_captain(built):
+    ws = built[WR]
+    hidden = [c for c, d in ws.column_dimensions.items() if d.hidden]
+    assert hidden and all(c >= "O" for c in hidden)                 # the matrix category helper grid
+    cd = built[CD]
+    assert cd.row_dimensions[15].hidden and cd.row_dimensions[16].hidden
+    # START HERE: every literal sentence fits its merged cell (GPT saw truncated tour/quick-start text).
+    from openpyxl.utils import get_column_letter
+    start = built["START HERE"]
+    spans = {(m.min_row, m.min_col): m.max_col for m in start.merged_cells.ranges}
+    for row in start.iter_rows():
+        for c in row:
+            if isinstance(c.value, str) and not c.value.startswith("="):
+                width = sum(start.column_dimensions[get_column_letter(k)].width or 8.43
+                            for k in range(c.column, spans.get((c.row, c.column), c.column) + 1))
+                size = c.font.sz or 11
+                lines = -(-len(c.value) // max(10, int(width * 11 / size * 1.05)))
+                assert (start.row_dimensions[c.row].height or 15) >= lines * size * 1.2, (c.coordinate, c.value[:40])

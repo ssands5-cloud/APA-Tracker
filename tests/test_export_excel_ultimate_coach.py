@@ -500,3 +500,23 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
     assert ev_rows and all('"vs "&INDEX(md_OppLabels,P' in sheet[f"A{r}"].value for r in ev_rows)
     assert any(c.value == "OUR TEAM" for c in sheet["A"]) and any(c.value == "OPPONENT" for c in sheet["G"])
     assert sheet["N1"].hyperlink is not None and sheet.data_validations.dataValidation == []
+
+
+def test_every_conditional_fill_is_painted_by_excel_and_card_names_never_rely_on_it(tmp_path):
+    """Real-Excel UAT: conditional fills written with only fgColor are never painted (uncoloured matrix,
+    white-on-white packet card names). Excel paints dxf solid fills from bgColor."""
+    wb = load_workbook(write_workbook(_match_day_payload(), tmp_path / "uc.xlsx", built_at="2026-10-07 18:00 UTC",
+                                      viewer_member_external_id="1001"))
+    fills = 0
+    for ws in wb.worksheets:
+        for cf in ws.conditional_formatting:
+            for rule in cf.rules:
+                fill = rule.dxf.fill if rule.dxf else None
+                if fill is not None and fill.fill_type == "solid":
+                    fills += 1
+                    assert fill.bgColor is not None and fill.bgColor.rgb not in (None, "00000000"), (ws.title, cf.sqref)
+                    assert fill.bgColor.rgb == fill.fgColor.rgb, (ws.title, cf.sqref)
+    assert fills >= 4
+    packet = wb["Captain Packet"]
+    heads = [c for c in packet["A"] if isinstance(c.value, str) and "already played" in c.value]
+    assert heads and all(not str(c.font.color.rgb).endswith("FFFFFF") for c in heads)   # readable with no fill at all
