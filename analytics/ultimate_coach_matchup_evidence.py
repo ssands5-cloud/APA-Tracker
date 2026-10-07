@@ -92,7 +92,10 @@ def rank_vs_opponent(
         if direct and direct[1] > 0:
             tier, rate, n, extra = TIER_DIRECT, Fraction(direct[0], direct[1]), direct[1], 0
         elif shared and og > 0:
-            tier, rate, n, extra = TIER_SHARED, Fraction(ow, og), len(shared), og
+            # Shared-opponent results are NOT ordered against each other: our record vs the
+            # shared opponents says nothing about how the opponent did against them, and no
+            # defensible single ordering combines the two (GPT audit, PR #85). One unordered group.
+            tier, rate, n, extra = TIER_SHARED, Fraction(0), 0, 0
         else:
             tier, rate, n, extra = TIER_NONE, Fraction(0), 0, 0
         candidates.append({
@@ -114,7 +117,7 @@ def rank_vs_opponent(
             position += 1
         start_rank = position - len(group) + 1
         for c in group:
-            ranked = c["tier"] != TIER_NONE
+            ranked = c["tier"] == TIER_DIRECT
             tied = ranked and len(group) > 1
             if c["direct"]:
                 direct_text = f"{record_text(*c['direct'])} ({plural(c['direct'][1], 'meeting')})"
@@ -130,14 +133,16 @@ def rank_vs_opponent(
             if c["tier"] == TIER_DIRECT:
                 basis = "Direct record"
             elif c["tier"] == TIER_SHARED:
-                basis = "Shared-opponent results only (no direct meetings)"
+                basis = ("Shared-opponent results only (no direct meetings) — not ordered against other "
+                         "indirect candidates; compare ours vs theirs")
             else:
                 basis = "No direct or shared-opponent evidence"
             if tied:
                 others = [player_ref(o["member"]) for o in group if o is not c]
                 basis += " · Tied with " + ", ".join(others) + " — same evidence; the ranking can't separate them"
             rows.append({
-                "rank": (f"{start_rank}=" if tied else str(start_rank)) if ranked else "—",
+                "rank": (f"{start_rank}=" if tied else str(start_rank)) if ranked else
+                        ("≈" if c["tier"] == TIER_SHARED else "—"),
                 "member": c["member"], "player": player_ref(c["member"]), "tier": c["tier"],
                 "direct_text": direct_text, "shared_text": shared_text, "basis": basis,
                 "direct": c["direct"], "shared_count": c["shared_count"], "ours": c["ours"], "theirs": c["theirs"],

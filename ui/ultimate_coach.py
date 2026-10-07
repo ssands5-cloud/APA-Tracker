@@ -660,8 +660,8 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
         // Within one exact scope, dedupe repeated history rows by player id.
         if(idx[key].seen[p.id]) return;
         idx[key].seen[p.id]=true;
-        var sl=p.current_skill_level!==null&&p.current_skill_level!==undefined?p.current_skill_level:t.skill_level;
-        idx[key].players.push({{id:p.id,external_id:p.external_id,name:p.name,skill_level:sl,skill_level_is_live:p.current_skill_level!==null&&p.current_skill_level!==undefined,matches_won:t.matches_won,matches_played:t.matches_played}});
+        var sl=typeof t.skill_level==="number"&&t.skill_level>0?t.skill_level:null;
+        idx[key].players.push({{id:p.id,external_id:p.external_id,name:p.name,skill_level:sl,matches_won:t.matches_won,matches_played:t.matches_played}});
       }});
     }});
     return idx;
@@ -720,18 +720,17 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       : 'full-roster skill total '+totalSkill+' from '+known.length+' of '+team.players.length+' players with a captured skill level (missing players excluded, not counted as 0)';
     var rows=team.players.slice().sort(function(x,y){{return (y.skill_level||0)-(x.skill_level||0);}}).map(function(m,i){{
       var evid=rowsFor(m.id,fmt).length;
-      var slLabel=m.skill_level===null||m.skill_level===undefined?'—':(m.skill_level+(m.skill_level_is_live?'':'*'));
+      var slLabel=m.skill_level===null||m.skill_level===undefined?'—':String(m.skill_level);
       var wl=m.matches_won===null||m.matches_won===undefined||m.matches_played===null||m.matches_played===undefined?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won);
       return '<tr><td>'+(i+1)+'</td><td>'+esc(m.name)+'</td><td>'+esc(recordIdText(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td></tr>';
     }}).join("");
-    var liveMissing=team.players.some(function(m){{return !m.skill_level_is_live&&m.skill_level!==null&&m.skill_level!==undefined;}});
     // The team-specific summary (including any "from k of n players" missing-SL disclosure) always stays with
     // the roster; the generic cap/asterisk fine print is repeated in the matchup notes, so the focused print
     // hides only this copy of it.
     return head+'<p class="roster-scope">'+esc(teamDisplay(team))+'</p><p class="roster-summary">'+team.players.length+' rostered · '+totalNote+'</p>'+
-      '<p class="muted roster-fineprint">Not a 5-player lineup total — this data source does not capture your division\\'s actual modified skill cap; the commonly used APA default is '+STANDARD_SKILL_CAP+' for a 5-player team, verify against your own division rules.'+
-      (liveMissing?' * = division-scoped skill level, no live current rating captured for that player.':'')+'</p>'+
-      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>APA record ID</th><th>Current SL</th><th>Current W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<p class="muted roster-fineprint">Not a 5-player lineup total. This data does not capture your division\\'s skill cap; enter one in Lineup Lab if you want a reference shown.'+
+      '</p>'+
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>APA record ID</th><th>SL (this format)</th><th>Team W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
   // ---- Match Night evidence: team comparison + ranking ----
@@ -750,7 +749,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   function plural(n,word){{return n+" "+word+(n===1?"":"s");}}
   function wlText(w,g){{return w+"-"+(g-w);}}
   function fmtLabel(fmt){{return FORMAT_LABELS[fmt]||fmt||"this format";}}
-  function slText(m){{return m.skill_level===null||m.skill_level===undefined?"—":(m.skill_level+(m.skill_level_is_live?"":"*"));}}
+  function slText(m){{return m.skill_level===null||m.skill_level===undefined?"—":String(m.skill_level);}}
   function memberOrder(x,y){{
     var xs=x.skill_level,ys=y.skill_level,xn=xs===null||xs===undefined,yn=ys===null||ys===undefined;
     if(xn!==yn) return xn?1:-1;
@@ -778,7 +777,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       shared.forEach(function(k){{ow+=mm[k].w;og+=mm[k].g;tw+=om[k].w;tg+=om[k].g;}});
       var c={{member:m,direct:(d&&d.g>0)?d:null,shared:shared.length,ow:ow,og:og,tw:tw,tg:tg}};
       if(c.direct) {{c.tier=3;c.rw=d.w;c.rg=d.g;c.n=d.g;c.extra=0;}}
-      else if(shared.length&&og>0) {{c.tier=2;c.rw=ow;c.rg=og;c.n=shared.length;c.extra=og;}}
+      else if(shared.length&&og>0) {{c.tier=2;c.rw=0;c.rg=1;c.n=0;c.extra=0;}}
       else {{c.tier=1;c.rw=0;c.rg=1;c.n=0;c.extra=0;}}
       return c;
     }});
@@ -791,11 +790,11 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       position+=group.length;
       var start=position-group.length+1;
       group.forEach(function(c){{
-        var ranked=c.tier!==1,tied=ranked&&group.length>1;
-        var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no direct meetings)":"No direct or shared-opponent evidence");
+        var ranked=c.tier===3,tied=ranked&&group.length>1;
+        var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; compare ours vs theirs":"No direct or shared-opponent evidence");
         if(tied) basis+=" · Tied with "+group.filter(function(o){{return o!==c;}}).map(function(o){{return playerRef(o.member);}}).join(", ")+" — same evidence; the ranking can't separate them";
         rows.push({{
-          rank:ranked?(tied?start+"=":String(start)):"—",
+          rank:ranked?(tied?start+"=":String(start)):(c.tier===2?"≈":"—"),
           member:c.member,player:playerRef(c.member),tier:c.tier,c:c,
           direct_text:c.direct?wlText(c.direct.w,c.direct.g)+" ("+plural(c.direct.g,"meeting")+")":"No direct meetings",
           shared_text:c.shared?plural(c.shared,"shared opponent")+" · ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+") · theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"No shared opponents",
@@ -838,10 +837,11 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     var opp=b.opponent,rows=b.rows;
     if(!rows.length||rows[0].tier===1) return 'No direct or shared-opponent evidence for any of our roster against '+playerRef(opp)+' in this format yet.';
     var top=rows.filter(function(r){{return r.rank===rows[0].rank;}}),c=rows[0].c;
-    if(top.length>1) return 'Insufficient evidence to distinguish '+top.map(function(r){{return r.player;}}).join(' / ')+' against '+playerRef(opp)+' — '
+    if(rows[0].tier===3&&top.length>1) return 'Insufficient evidence to distinguish '+top.map(function(r){{return r.player;}}).join(' / ')+' against '+playerRef(opp)+' — '
       +(c.tier===3?'identical direct records ('+wlText(c.rw,c.rg)+', '+plural(c.rg,'meeting')+' each)':'identical shared-opponent evidence ('+plural(c.n,'shared opponent')+', ours '+wlText(c.ow,c.og)+')')+'.';
     if(c.tier===3) return rows[0].player+' — ranks first on direct evidence: '+wlText(c.rw,c.rg)+' direct ('+plural(c.rg,'meeting')+') vs '+playerRef(opp)+'.';
-    return rows[0].player+' — none of our roster has met '+playerRef(opp)+' directly; ranks first on shared-opponent evidence: '+plural(c.n,'shared opponent')+' (ours '+wlText(c.ow,c.og)+' vs those shared opponents).';
+    var ind=rows.filter(function(r){{return r.tier===2;}}).length;
+    return 'None of our roster has met '+playerRef(opp)+' directly. '+plural(ind,'player')+(ind===1?' has':' have')+' shared-opponent evidence only — not ranked against each other; compare ours vs theirs in the matrix.';
   }}
 
   // ---- Matchup header + focused print ----
@@ -877,8 +877,8 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       +'<p class="muted">Evidence counts in the rosters use '+esc(formatName(fmt))+'.</p>';
     notes.innerHTML='<h3>About these rosters</h3><ul>'
       +'<li>— = not captured in the source data.</li>'
-      +'<li>SL with * = division-scoped skill level; no live current rating was captured for that player.</li>'
-      +'<li>Skill totals count only players with a captured skill level — missing players are excluded, never counted as 0. Totals are informational, not a 5-player lineup cap check (the commonly used APA default is '+STANDARD_SKILL_CAP+'; verify your division\\'s rules).</li>'
+      +'<li>SL = the skill level this team scope records for its format (8-Ball and 9-Ball levels differ).</li>'
+      +'<li>Skill totals count only players with a captured skill level — missing players are excluded, never counted as 0. Totals are informational, not a lineup-legality check; a cap appears only if you enter one in Lineup Lab.</li>'
       +'<li>Rosters are each team\\'s CURRENT captured roster, not a reconstruction of who actually played on any particular date.</li>'
       +'<li>Players are identified by APA record ID — not by name, and not by the league card number printed on a member card.</li>'
       +'<li>The evidence ranking orders our players by recorded direct and shared-opponent results only; ties and missing evidence are labeled. It is not win odds and not a guaranteed or optimal lineup.</li>'

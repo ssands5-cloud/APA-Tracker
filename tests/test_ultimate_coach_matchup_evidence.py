@@ -42,11 +42,11 @@ def test_direct_ranks_before_shared_before_none_and_records_are_shown_with_sampl
     block = rank_vs_opponent(ours, OPP, index, "EIGHT")
     rows = block["rows"]
     assert [r["player"] for r in rows] == ["Ann (APA record ID 1001)", "Bea (APA record ID 1002)", "Cal (APA record ID 1003)"]
-    assert [r["rank"] for r in rows] == ["1", "2", "—"]
+    assert [r["rank"] for r in rows] == ["1", "≈", "—"]  # indirect evidence is shown, never given a rank number
     assert rows[0]["direct_text"] == "1-2 (3 meetings)" and rows[0]["basis"] == "Direct record"
     assert rows[1]["direct_text"] == "No direct meetings"
     assert rows[1]["shared_text"] == "2 shared opponents · ours 4-2 (6 games) · theirs 3-1 (4 games)"
-    assert rows[1]["basis"] == "Shared-opponent results only (no direct meetings)"
+    assert rows[1]["basis"].startswith("Shared-opponent results only (no direct meetings)")
     assert rows[2]["shared_text"] == "No shared opponents"
     assert rows[2]["basis"] == "No direct or shared-opponent evidence"
     assert block["opponent_sample"] == "4 recorded games in 8-Ball"  # Opal: 2 vs player 60 + 2 vs player 61
@@ -127,3 +127,16 @@ def test_fixture_scope_pairs_are_directed_and_skip_unresolved_opponents():
         },
     }
     assert fixture_scope_pairs(match_day) == [("A|d|S", "B|d|S", "EIGHT"), ("B|d|S", "A|d|S", "EIGHT")]
+
+
+def test_shared_opponent_candidates_are_not_ordered_by_our_record_alone():
+    """GPT audit (PR #85): ours 1-0 / opponent 10-0 must not outrank ours 9-1 / opponent 0-10.
+    Indirect candidates form one unordered group in roster order; both records stay visible."""
+    ours = [_m(1, "Ann"), _m(2, "Bea")]
+    rows = [(1, 70, 1, 1), (50, 70, 10, 10)]          # Ann 1-0 vs shared 70; Opal 10-0 vs 70
+    rows += [(2, 71, 9, 10), (50, 71, 0, 10)]         # Bea 9-1 vs shared 71; Opal 0-10 vs 71
+    ranked = rank_vs_opponent(ours, OPP, build_pair_index(_pairs(*rows)), "EIGHT")["rows"]
+    assert [(r["player"].split(" (")[0], r["rank"]) for r in ranked] == [("Ann", "≈"), ("Bea", "≈")]
+    assert "theirs 10-0" in ranked[0]["shared_text"] and "theirs 0-10" in ranked[1]["shared_text"]
+    assert all("not ordered against other indirect candidates" in r["basis"] for r in ranked)
+    assert not any("Tied with" in r["basis"] for r in ranked)

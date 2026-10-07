@@ -385,8 +385,9 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             assert ("Ann Archer (APA record ID 1) — ranks first on direct evidence: 2-0 direct (2 meetings) "
                     "vs Cam Cole (APA record ID 3)") in matchups
             # Drew: no direct history for anyone, but Bea shares Evan with Drew.
-            assert ("Bea Baker (APA record ID 2) — none of our roster has met Drew Diaz (APA record ID 4) directly; "
-                    "ranks first on shared-opponent evidence: 1 shared opponent (ours 1-0 vs those shared opponents)") in matchups
+            # Indirect-only evidence is never given a "first" (GPT audit, PR #85).
+            assert ("None of our roster has met Drew Diaz (APA record ID 4) directly. 1 player has shared-opponent "
+                    "evidence only — not ranked against each other; compare ours vs theirs in the matrix.") in matchups
             # Finn: nobody on our roster has any direct or shared evidence at all.
             assert "No direct or shared-opponent evidence for any of our roster against Finn Frost (APA record ID 5)" in matchups
 
@@ -598,7 +599,7 @@ def test_same_named_teams_in_different_divisions_never_merge_rosters(tmp_path: P
             assert roster_a.count("Gale Grant") == 1
             assert "1 rostered" in roster_a
             assert "full-roster skill total 5" in roster_a
-            assert "5*" in roster_a
+            assert "Gale Grant	7	5	" in roster_a  # this team's format-specific SL, no live-SL asterisk
 
             page.select_option("#team-a", "sharks-div-b|db|Spring 2026")
             roster_b = page.locator("#team-rosters").inner_text()
@@ -1006,7 +1007,7 @@ def test_team_rosters_are_labeled_and_list_record_ids(tmp_path: Path):
             assert ours.startswith("OUR TEAM") and "Sharks" in ours
             assert theirs.startswith("OPPONENT") and "Falcons" in theirs
             headers = cards.nth(1).locator("th").all_inner_texts()
-            assert [h.upper() for h in headers][:5] == ["#", "PLAYER", "APA RECORD ID", "CURRENT SL", "CURRENT W-L"]
+            assert [h.upper() for h in headers][:5] == ["#", "PLAYER", "APA RECORD ID", "SL (THIS FORMAT)", "TEAM W-L"]
             nia = [r for r in cards.nth(1).locator("tbody tr").all_inner_texts() if "Nia Null" in r][0]
             assert "7007" in nia and nia.count("—") == 2  # missing SL and W-L are disclosed, never 0
             assert "Drew Diaz\t4" in theirs  # name next to its record ID
@@ -1132,9 +1133,10 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
                 "vs Cam Cole (APA record ID 3) · SL 3 · 2 recorded games in 8-Ball",
             ]
             assert _ranking_rows(page, 0) == [
-                ["1", "Bea Baker (APA record ID 2)", "5", "No direct meetings",
+                ["≈", "Bea Baker (APA record ID 2)", "5", "No direct meetings",
                  "1 shared opponent · ours 1-0 (1 game) · theirs 0-1 (1 game)",
-                 "Shared-opponent results only (no direct meetings)"],
+                 "Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+                 "compare ours vs theirs"],
                 ["—", "Ann Archer (APA record ID 1)", "4", "No direct meetings", "No shared opponents",
                  "No direct or shared-opponent evidence"],
             ]
