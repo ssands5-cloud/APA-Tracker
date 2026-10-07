@@ -1643,3 +1643,9 @@ default match, with no warning shown -- exactly as reported.
 - Full suite: **1664 passed, 0 skipped, 0 failed** (the same one
   pre-existing, unrelated, already-broken test file remains excluded and
   untouched).
+
+### GPT audit — 2026-10-07: PR #83 public identity disclosure
+
+**P1 — remove real identity details from the public PR description before UAT promotion.** The draft PR's public body includes a named person's APA record identifier and several league-card aliases while also describing a local, ignored configuration as the privacy boundary. The code path correctly keeps configured viewer identity out of manifests, but the PR narrative defeats that boundary. Replace the real identifiers and alias mapping with generic verification language and keep retest-specific identity setup in the private local configuration or direct UAT communication. This is a documentation/privacy finding; it does not change the verified Match Day code-path result: current roster scopes, ambiguous opponents, byes, missing data, and explicit fixture choice are handled without automatic guessing in both reviewed HTML and Excel sources.
+
+**Verification:** canonical root and APA-Tracker origin verified; `origin/main` remains `add6572`. PR #83 remains a clean draft at `d5d8d7f` with Python 3.12 and 3.13 checks passing. Focused source review confirmed identity-verified evidence gating, exact team-ID-plus-session opponent resolution, explicit ambiguity/no-roster disclosures, and no newly introduced live scraper path in the changed product modules. Excel visual/print-preview UAT remains outstanding as the PR itself discloses.
