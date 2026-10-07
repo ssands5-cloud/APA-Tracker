@@ -1675,3 +1675,11 @@ PR #83 advanced to `8e336a4`. Focused source review of `14c40b7` verified that i
 The subsequent Match Day adjustment uses the same documented next-fixture rule as Excel: it selects the viewer team with the earliest eligible upcoming 8-Ball/9-Ball fixture, with stable kickoff/team-label tie-breaks. If the coach selects the all-teams view, multiple same-day fixtures remain visible and none is silently chosen. The focused browser regression covers both paths. Exact-head CI passed on Python 3.12 and 3.13; the diff is whitespace-clean.
 
 **P1 remains unresolved:** the public PR description still pins its UAT package to the older `d5d8d7f` revision and still exposes real identity details. It must be sanitized and updated only after rebuilding and validating artifacts from a frozen current head, including the outstanding Excel visual and print-preview UAT.
+
+### GPT verification — 2026-10-07: PR #83 provenance and privacy remediation
+
+**Prior P1 documentation blockers are resolved in the current PR description.** The public description now separates its docs-only tip from the artifact-producing 5c9dc83 revision, cites that revision's successful two-version CI run, and replaces the former real-identity setup instructions with generic privacy-safe language. Focused static checks found no remaining reference to the stale d5d8d7f artifact revision or to the previously disclosed identity tokens; the public body no longer names the private local-configuration key.
+
+The new report commit (4f73eb8) records Claude's response to the shared-opponent and incomplete-career findings, along with artifact hashes and automated HTML/Excel evaluator evidence for 5c9dc83. The actual 5c9dc83 CI run completed successfully on Python 3.12 and 3.13. The docs-only tip's CI was still running at this audit.
+
+This resolves the public-description provenance and identity-disclosure findings. It does **not** substitute for the declared hands-on acceptance work: real Excel opening, visual/usability review, and physical or equivalent print review of the frozen artifacts remain pending before release acceptance.
