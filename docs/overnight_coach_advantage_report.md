@@ -1804,3 +1804,46 @@ Date: 2026-10-07 (fourth cycle: Captain Packet print finding from Paul's real-Ex
 - **Tests:** a new geometry test (fixed scale, breaks, explicit row heights, each page within the printable height at the chosen scale, no static fill on card headers, every evidence line naming its opponent) and a packing test (exact evidence lines, nothing after the last). The evaluator gained Excel's approximate `MATCH(…,1)`. 2189 passed; CI run 37674032595 passed Python 3.12 and 3.13 at `a96257b`.
 - **Artifacts:** `APA-Tracker/.worktrees/pr83/tmp/uat/build-a96257b/`. HTML SHA256 `A9E5C9D548F7EC6A0BA9BA3235D458A567284C5333F73371B0064B5AA5F60F00`; XLSX SHA256 `DDF9446F0CE204713FE9E2F24EF3AB266703DEC204503B2103E7C852E02CD41C`. Hashes verified; source DB unchanged.
 - **Requested:** Paul's new real-Excel print preview of Captain Packet pages 1–5. Print acceptance is NOT PASSED until then.
+
+### Claude build log — "Make this a captain's weapon" package 1 — 2026-10-07
+
+**Plan** (`writing-plans`; `brainstorming` satisfied by Paul's complete written spec — no open design questions):
+1. START HERE.
+2. Captain Command Center.
+3. Coach Notes.
+4. Lineup Lab reasons and HTML parity (next).
+5. Visual polish (next).
+
+**Skills used:**
+- `.github/prompts/build.md`: workbook Instructions tab, now START HERE.
+- `verification-before-completion`: suite, CI, hashes and real-data evaluation before each claim.
+- `validator` and `red-team`: wording audit against overstatement. This caught "Strong evidence" counting 1-0 single-meeting records; renamed.
+
+**Changes:**
+- **Page 5 (Paul's choice):** no 20-meeting cutoff. Adaptive sizing is impossible without macros, so page 5 uses the 40-slot two-column layout, numbered newest first, at 11.5pt in 28.5pt rows. That keeps the sheet's 78% scale; 30pt rows had dropped it to 75%. A "Showing N of M recorded meeting(s)" line comes from a new Meetings `Pair Key` column. Black thin dividers and light alternating shading appear only on filled rows (`85fc800`, `8b93a69`).
+- **START HERE (first, opening tab):**
+  - What Ultimate Coach does and an 8-step quick start.
+  - A linked workbook tour and the match-night workflow (Match Day controls everything; overrides are per tab).
+  - Limitations: records are not predictions, evidence can be missing, no calibrated probability, small samples are labeled, Coach Notes are opinions.
+  - Build info: version (git SHA), build date, data freshness (`3d9855b`).
+- **Captain Command Center** (follows Match Day via `md_*`; a War Room override never changes it):
+  - Fixture, opponent, venue and status, and data freshness.
+  - Our Available / Unavailable / Unknown / used / planned counts and remaining skill total.
+  - The opponent roster with SL, plus missing information.
+  - Evidence counts: favorable direct, concerning, limited (even direct, shared-only), insufficient.
+  - The best-supported remaining send per unplayed opponent, with its reason (`3d9855b`, `9652d0f`).
+  - Added as a new tab, not by repurposing Coach Dashboard, which keeps its tested head-to-head role.
+- **Coach Notes:** durable per-player rows (player by record ID, two tags from a fixed list, observation, date). They appear on cards and the packet as "Coach: …", never mixed into evidence. Lineup Lab's per-fixture opponent notes still join them.
+
+**Evidence:**
+- 2193 passed.
+- CI run 37683127330 passed Python 3.12 and 3.13 at `9652d0f`. An earlier 3.13 job was cancelled by the workflow's `timeout-minutes: 10` limit; the rerun passed. **Risk:** the suite is near that limit; Paul's call whether to raise it.
+- Real build: START HERE opens first; Command Center shows Brunch Ballers vs Spiraling Out Of Control on Oct 11, with 9 Unknown, the 8-player opponent roster and the evidence counts; packet scale 78%.
+- Artifacts: `APA-Tracker/.worktrees/pr83/tmp/uat/build-9652d0f/`. HTML SHA256 `2BF40BAA4AA185637504E806D915D4539384FB0930162D3E7B5BFBDCA47C7DCF`; XLSX SHA256 `A955803AD1CCC849C66E88CD93AC7769A5C2DD6361EE5FF189AB30F46309A47A`. Hashes verified; source DB unchanged.
+
+**PENDING PAUL REVIEW:** page-5 print preview, START HERE and Command Center look and feel in real Excel.
+
+**GPT, please audit:**
+- Command Center counts against the War Room matrix.
+- The Coach Notes separation from evidence.
+- START HERE accuracy.
