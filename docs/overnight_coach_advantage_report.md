@@ -1670,6 +1670,35 @@ production PASS claimed. Readiness FAIL until stale-state repair; UX Fair
 in these error states, qualitative Edge reassessment deferred. No feature,
 credential, source-data, off-limits, COM or merge operation by GPT.
 
+### Independent cockpit audit at 45659f4 - 2026-10-07
+
+This entry supersedes the earlier OPEN HTML stale-context assessment only at the verified scope below. Claude remains sole BUILDER. GPT edited this report only. Product PR83 remains draft/unmerged; documentation head44890ce is distinct from code/artifacts45659f4.
+
+**Verified**
+- Exact code: `45659f45e998fabd1d4ebc061aa20a4b909544a0`. GPT independently ran 60 focused non-COM tests in21.46s: `tests/test_ultimate_coach_war_room_browser.py`, `tests/test_excel_war_room_formulas.py`, `tests/test_ultimate_coach_war_room.py`, `tests/test_ultimate_coach_matchup_evidence.py`. Python3.12, bytecode/cache disabled; temporary/browser output under canonical `.git/gpt-focused-45659f4-20261007`; builder source head and tracked status identical/clean before and after.
+- Original HTML P1 **CLOSED within tested source and artifact scope**: valid->no-match, valid->bye, returns, missing roster, pending multiple/explicit choice, no-team viewer and manual->Match Day transitions pass fresh synthetic browser regressions. GPT also loaded the real hash-verified45659f4 HTML and replayed Brunch Ballers9-Ball Oct11 -> Nov26(no match) -> Oct11 -> Nov1(bye,11AM MST) -> Oct11. Five states passed, no script errors; stale team selectors/results/print button absent in no-match/bye. This does not establish every possible UI path or human acceptance.
+- GitHub CI independently inspected: run37693360571 at45659f4, Python3.12 and3.13 SUCCESS. Current documentation head44890ce CI was still running at last read; do not conflate it with the verified code run.
+- Completed45659f4 artifact hashes independently match UAT_MANIFEST: HTML `8A35EAF05FE53737E0B07DC0AFD81FC4E79B6EC274983F1633F8E71C4D70258F` (88,680,333 bytes), XLSX `9E432DB0941F81FB62BC36144CF0F1B2DA9BBADBC849F142BB369170EBFCAF28` (51,806,007 bytes). Manifest DB-unchanged statements remain builder-recorded; GPT did not rehash the source DB this cycle. Earlier9259e4f XLSX read was locked; the completed45659f4 XLSX was accessible and verified.
+- START HERE description/example and HTML onboarding/shared text, Command Center counters, durable per-player coach observations and evidence separation pass the focused tests. Shared reasons expose both records and direct reasons include samples. Native print/timing/design are separate acceptance items.
+
+**Needs Improvement**
+- The new reason/HTML implementation now has a concrete file-map/task plan at `docs/superpowers/plans/2026-10-07-html-onboarding-command-center-coach-notes.md`, citing `.github/skills/writing-plans/SKILL.md`, direct execution, approved-design adaptation and local browser/workbook store limits. Builder reports preimplementation skill review; prior package1 citations are honestly labeled retrospective. Reading chronology is builder-attested, not independently reconstructed from tool logs.
+- Real-Excel page5 readability/full retention, native packet print, first-time3-minute onboarding and30-second captain decision workflow remain **PENDING PAUL REVIEW**. Headless content/regression checks do not substitute for those judgments.
+
+**Problem**
+- **OPEN P2: cleared migrated coach note returns on reload.** Independent explicitly synthetic probe at45659f4 seeded legacy plan-v2 notes for synthetic player10 (Cam) with `SYNTHETIC legacy audit note`. Reload imported it; clearing textarea made summary blank; reload restored the old note, with no script errors. Startup migration checks whether current `.n` exists on every load; deliberate deletion removes`.n` but leaves legacy notes, so it is imported again. Repro script/result: `.git/gpt-focused-45659f4-20261007/synthetic-notes-probe.py` and `notes-probe/result.json`. No production facts or data modified. [Issue finding](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6047789690).
+- **OPEN P2: single-send wording hides unordered/shared or tied-direct selection.** Atf186578 and45659f4, Excel wr_Why1/MATCH(1) and HTML plan.sends[j][0] call one candidate best-supported, while shared-only candidates are deliberately unordered and first is display order(SL/name/ID). The new reason omits the previous approximate/unordered qualifier; equal direct evidence ties are also absent from this reason. This is a presentation/explainability finding, not reopening the repaired shared ranking or alleging hidden weighting. [Original finding](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6047580616).
+
+**Recommendation**
+- Builder: make legacy migration completion/deletion distinguishable and preserve observations safely; add migrate->clear->reload, replacement and cross-scope same-player regressions. Label shared-only single picks as one unordered evidence candidate, disclose display-order/tied-direct choices and retain access to all candidates in Inspect. Add multiple-shared and identical-direct assertions. GPT will independently verify repairs at immutable heads; do not compete with builder files.
+- UX: provisionally improved structure, human timing/visual acceptance pending. Qualitative Captain Edge remains provisional7/10 from the last reviewed workflow baseline; this is a qualitative utility judgment, not odds or measured winning advantage. Production acceptance/readiness remains NOT DEMONSTRATED with these open findings and pending UAT; no merge/signoff.
+
+**Skills and coordination**
+- `.github/skills/verification-before-completion/SKILL.md` -> fresh60 tests, actual-artifact5-state replay and separate CI/hash/source statements.
+- `.github/skills/red-team/SKILL.md` -> legacy migrate/clear/reload boundary and unordered/tied candidate claims.
+- `.github/skills/validator/SKILL.md` -> deterministic rooted non-COM probes and preserved reproduction output.
+- Normal reviewed GitHub coordination restored; Paul's away/directive handoff posted in6047580616. Monitor remains active until2026-10-08 06:13:08 UTC(12:13AM MDT), then pauses. No duplicate handoff, no feature edits or off-limits changes.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
