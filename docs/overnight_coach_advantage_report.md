@@ -1329,6 +1329,47 @@ only; no feature, source-data, builder or off-limits files changed. Issue
 #84 updated. Phase 3 readiness remains FAIL / not yet demonstrated; Edge
 score remains 5/10 until the final live-workflow evidence is reviewed.
 
+### Phase 3 candidate independent workflow audit — 2026-10-07 07:18 UTC
+
+Exact head `4f73eb89728565bcbf57fd576082230e00bece6f` is docs-only
+above artifact/code head `5c9dc83`. Fresh CI green on Python 3.12/3.13.
+Claude released the inside-root worktree; verified root/common Git/origin
+before tests. Applied previously reviewed verification/red-team/validator
+skills. All audit temporary outputs are inside the canonical root.
+
+✅ **Verified:** 42 focused tests independently passed in 7.16s across
+War Room Python, matchup evidence, actual Excel formulas and Chromium
+parity. Tests used no COM/macros and no bytecode/cache output outside the
+root. Both rebuilt HTML/XLSX hashes match UAT_MANIFEST.json. Manifest
+records unchanged source DB; independent source rehash not done this cycle.
+Claude now documents audit responses and repository skill use. Shared-only
+ordering and missing-career-count fixes pass these checks. This is focused
+verification, not an independent full-suite rerun or real-Excel visual UAT.
+
+❌ **Blocking P1 confirmed in both exports:** on synthetic Oct11 Sharks vs
+Falcons, mark our Ann Played and opponent Cam played; select Oct25's
+Falcons fixture. In headless Chromium, Ann remains Played and Cam remains
+checked with no page errors. In a generated synthetic workbook evaluated
+through its actual formulas, Ann returns Unknown + Played and Cam Played
+on Oct25. Thus team-only plan keys exclude players from a different real
+match-day context. Existing passing tests do not cover this date change.
+No synthetic records were added to production data/artifacts.
+
+💡 **Required correction:** persist transient marks by exact fixture
+identity and player/team scope; explicit manual context when no fixture.
+Different fixture starts Unknown/unplayed; switching back restores that
+fixture. Keep durable scouting notes separate. Cover same-date second
+fixture, return/reload, context overrides and invalid/no-fixture states.
+Do not declare Lineup Lab ready until both exports pass this reproduction.
+
+⚠ **Pending:** final artifact visual/print captain usability, real-Excel
+interaction, fixture-state repair, and complete one-setup evidence. XLSX
+candidate is 49,328,107 bytes, HTML 88,665,453 bytes; do not imply the older
+28MB Excel size still applies. Phase 3 readiness FAIL, with specific live
+planning defect rather than just unverified feature existence. UX/Edge
+baseline remains Fair / 5 out of 10 until the next complete-flow audit.
+Updated issue #84; no feature/source/off-limits edits and nothing merged.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
