@@ -169,3 +169,56 @@ def test_html_career_text_matches_python_for_incomplete_and_zero_records(tmp_pat
             assert errors == []
         finally:
             browser.close()
+
+
+def test_planning_marks_belong_to_one_fixture_and_notes_follow_the_player(tmp_path: Path):
+    """GPT audit #84 repro: Played on Oct 11 must not leak into the Oct 25 Falcons fixture."""
+    ann_l = '#lineup-lab select[data-plan="lineup"][data-pid="1"]'
+    ann_a = '#lineup-lab select[data-plan="avail"][data-pid="1"]'
+    cam_p = '#lineup-lab input[data-plan="played"][data-pid="10"]'
+    cam_note = '#scouting-cards textarea[data-pid="10"]'
+
+    def oct25_falcons(page):
+        page.fill("#md-date", "2026-10-25")
+        assert "2 scheduled matches" in page.inner_text("#md-status")      # never auto-picked
+        cards = page.locator("#md-fixtures .fixture")
+        idx = [i for i in range(cards.count()) if "Falcons" in cards.nth(i).inner_text()][0]
+        page.click(f"#md-compare-{idx}")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            assert "Oct 11, 2026" in page.inner_text("#ll-context")
+            page.select_option(ann_l, "Played")
+            page.check(cam_p)
+            page.fill(cam_note, "Slow safeties")
+
+            oct25_falcons(page)                                   # same teams, different fixture
+            assert "Oct 25, 2026" in page.inner_text("#ll-context")
+            assert page.input_value(ann_l) == "" and not page.is_checked(cam_p)
+            assert page.input_value(cam_note) == "Slow safeties"  # notes describe the player
+            page.select_option(ann_a, "Unavailable")
+
+            page.fill("#md-date", "2026-10-11")                   # back: Oct 11 marks return, Oct 25's don't
+            assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
+            assert page.input_value(ann_a) == "Unknown"
+
+            page.reload(); page.wait_for_load_state("load")       # survives reload, still per fixture
+            assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
+            oct25_falcons(page)
+            assert page.input_value(ann_a) == "Unavailable" and page.input_value(ann_l) == ""
+
+            # Same date, other fixture (vs Owls): a different opponent and fixture -> clean.
+            page.fill("#md-date", "2026-10-25")
+            page.click("#md-compare-0")
+            assert "Owls" in page.inner_text("#team-rosters") and page.input_value(ann_a) == "Unknown"
+
+            # Teams picked by hand (no fixture): its own context, no fixture's marks.
+            page.fill("#search-team-b", "Falcons"); page.wait_for_timeout(400)
+            page.select_option("#team-b", THEIRS)
+            assert "picked by hand" in page.inner_text("#ll-context")
+            assert page.input_value(ann_l) == "" and page.input_value(ann_a) == "Unknown" and not page.is_checked(cam_p)
+            assert errors == []
+        finally:
+            browser.close()

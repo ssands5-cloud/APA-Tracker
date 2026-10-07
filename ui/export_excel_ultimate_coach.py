@@ -814,13 +814,14 @@ def build_workbook(
     viewer = viewer_player(players, viewer_member_external_id)
     viewer_label = _player_label(viewer["name"], viewer["external_id"]) if viewer else None
     label_by_scope = {t["team_scope_key"]: t["team_label"] for t in teams}
-    default_team = default_opp = None
+    default_team = default_opp = default_date = None
     if viewer:
         scopes = sorted({r["team_scope_key"] for r in rosters if r["player_id"] == viewer["id"]})
         default = war.default_matchup(match_day, scopes, stats["build_local"], label_by_scope)
         if default:
             default_team = label_by_scope.get(default["scope"])
             default_opp = label_by_scope.get(default["opponent_scope"] or "")
+            default_date = war.date_label(default["date"])
         elif len(scopes) == 1:
             default_team = label_by_scope.get(scopes[0])
 
@@ -830,7 +831,7 @@ def build_workbook(
                         card_number=viewer_card_number if viewer else None, default_team=default_team, stats=stats,
                         format_options_source="FormatFilterList")
     war.build_war_room(wb, slots=slots, engine=engine)
-    war.build_lineup_lab(wb, slots=slots, default_team=default_team, default_opp=default_opp)
+    war.build_lineup_lab(wb, slots=slots, default_team=default_team, default_opp=default_opp, default_date=default_date)
     war.build_scouting_cards(wb, slots=slots)
     war.build_captain_packet(wb, slots=slots, stats=stats)
     war.build_coach_dashboard(wb, format_options=_dashboard_format_options(pairs))

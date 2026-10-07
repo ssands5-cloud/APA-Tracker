@@ -173,7 +173,9 @@ def test_every_interactive_tab_follows_match_day(book, built):
     assert book.display(CP, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
     assert _roster(book, CP, 7) == (ours, theirs)
     assert book.display(CD, "A4") == f"Following Match Day: {ANN} vs (choose Player B) · 8-Ball"
-    assert book.display(LL, "D5") == "✓ Matches the War Room — marks applied."
+    assert book.display(LL, "D5") == "✓ Matches the War Room team."
+    assert book.display(LL, "C9") == "Sun Oct 11, 2026"  # marks belong to the default fixture
+    assert book.display(LL, "D9").startswith("✓ Matches the War Room’s fixture")
     assert book.display(LL, "D6") == "✓ Matches the War Room opponent."
 
 
@@ -363,3 +365,29 @@ def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(b
     assert first[0] == "Sun Sep 20, 2026" and first[3] in ("W", "L")
     meetings = [book.display(WR, f"B{r}") for r in range(top + 2, top + 2 + 40)]
     assert sum(1 for m in meetings if m) == 8  # 2+2+2 vs Cam, 2 vs Eve
+
+
+def test_lineup_marks_belong_to_one_fixture_and_notes_follow_the_player(book, built):
+    """GPT audit #84 repro: Played on Oct 11 must not leak into the Oct 25 Falcons fixture."""
+    book.set(LL, "D12", "Played")        # Ann played on Oct 11
+    book.set(LL, "C23", "Played")        # Cam played on Oct 11
+    book.set(LL, "D23", "Slow safeties")
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    book.set(MD, "B9", "Sun Oct 25, 2026")
+    book.set(MD, "B10", book.value("Engine", book.name("uc_FixtureList")[1][1]))   # the Falcons fixture
+    assert "vs Falcons" in book.display(MD, "B17")
+    ours, theirs = _roster(book, WR, 15)
+    assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"          # nothing leaked
+    assert book.display(WR, "A23").startswith("⚠ Lineup Lab marks are for Sun Oct 11, 2026 — not applied to this fixture.")
+    assert book.display(LL, "D9").startswith("⚠ Match Day is set to Sun Oct 25, 2026")
+    assert book.display(SC, "C17") == "Slow safeties"                    # notes describe the player
+    book.set(LL, "C9", "Sun Oct 25, 2026")                               # re-plan for this night
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    book.set(MD, "B9", "Sun Oct 11, 2026")                               # back: Oct 25 marks don't apply
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+    # War Room exploring by hand (no fixture): marks apply only with the date blank.
+    book.set(WR, "C6", FALCONS)
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+    book.set(LL, "C9", "")
+    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _no_bad_values(book, built) == []
