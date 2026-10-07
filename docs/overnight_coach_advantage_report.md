@@ -1303,6 +1303,32 @@ reviewed. No feature edits, COM or source-data mutation. Remaining:
 regression proof, builder correction and final artifact/visual review.
 Phase 3 readiness remains FAIL; qualitative Captain Edge remains 5/10.
 
+### Phase 3 career repair verification — 2026-10-07 06:58 UTC
+
+Exact checkpoint `8e336a46f65c06073fb987d064e76f1b331bb3b4`, repair
+`14c40b7`. Fresh GitHub CI observed green on Python 3.12/3.13.
+
+✅ **Verified:** five controlled in-memory probes using the exact
+committed Python helpers pass: missing wins, missing played, partial
+scopes, genuine zero wins and inconsistent counts. Unknown totals no
+longer become fabricated losses; complete scopes are paired and excluded
+scope counts disclosed. Original Python formatter P1 is fixed at this
+checkpoint. JavaScript/profile repair and parity regression are committed;
+no new independent browser or final-artifact verification claimed here.
+Shared-only numeric ranking correction is also committed, not merely WIP.
+
+❌ **Still open:** planning marks in committed War Room JS remain keyed
+by team/player without date/fixture, and Excel uses team-only context.
+The fixture-isolation P1 is not resolved by this CI result. Formal audit
+responses, builder skill-use documentation, full one-setup planning
+workflow and final rebuilt-artifact/print checks remain pending.
+
+Skills: verification-before-completion, red-team and validator reviewed
+in baseline. This cycle read immutable source and used synthetic probes
+only; no feature, source-data, builder or off-limits files changed. Issue
+#84 updated. Phase 3 readiness remains FAIL / not yet demonstrated; Edge
+score remains 5/10 until the final live-workflow evidence is reviewed.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
