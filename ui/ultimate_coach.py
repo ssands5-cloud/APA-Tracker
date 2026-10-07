@@ -6,6 +6,8 @@ import json
 from html import escape
 from typing import Any
 
+from analytics.ultimate_coach_match_day import viewer_current_teams, viewer_player
+
 
 def _script_json(value: Any) -> str:
     """Serialize for embedding inside <script type="application/json">.
@@ -126,7 +128,11 @@ def _trust_card(payload: dict[str, Any]) -> str:
 
 
 def render(
-    payload: dict[str, Any], *, built_at: str = "", consume_evidence: bool = False
+    payload: dict[str, Any],
+    *,
+    built_at: str = "",
+    consume_evidence: bool = False,
+    viewer_member_external_id: str | None = None,
 ) -> str:
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -134,6 +140,24 @@ def render(
         f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
         for fmt in format_options
     )
+    # Match Day filters FIXTURES, not evidence -- a scheduled-but-unplayed
+    # match can carry a real format with zero evidence rows yet, so its own
+    # filter's options must include fixture formats too, not just whatever
+    # evidence happens to already exist.
+    fixture_formats = {f.get("format") for f in (payload.get("fixtures") or []) if f.get("format")}
+    md_format_options = _format_options(list(set(format_options) | fixture_formats))
+    md_format_options_markup = "".join(
+        f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
+        for fmt in md_format_options
+    )
+    players = payload.get("players") or []
+    resolved_viewer = viewer_player(players, viewer_member_external_id)
+    compact_payload["viewer"] = {
+        "configured": bool(viewer_member_external_id),
+        "resolved": resolved_viewer is not None,
+        "player_name": resolved_viewer.get("name") if resolved_viewer else None,
+        "teams": viewer_current_teams(players, viewer_member_external_id),
+    }
     data = _script_json(compact_payload)
     player_count = int((payload.get("counts") or {}).get("players") or 0)
     evidence_count = int((payload.get("counts") or {}).get("head_to_head_rows") or 0)
@@ -174,6 +198,17 @@ h2,h3 {{ margin-top:0; }}
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></header>
 <main>
 {trust_card}
+<div class="card" id="match-day-card">
+  <h2>Match Day</h2>
+  <div class="controls">
+    <label>Date<input id="md-date" type="date"></label>
+    <label>My Team<select id="md-team"></select></label>
+    <label>Format<select id="md-format"><option value="">8-Ball &amp; 9-Ball</option>{md_format_options_markup}</select></label>
+  </div>
+  <p id="md-status" class="muted"></p>
+  <div id="md-fixtures"></div>
+  <p class="muted">Rosters shown below are each team's CURRENT roster, not a reconstruction of who actually played on the chosen date — this data source doesn't capture historical lineups, so no date-specific lineup accuracy is promised.</p>
+</div>
 <div class="card">
   <div class="controls">
     <label>Player A<input id="search-a" type="search" placeholder="Search player A"><select id="player-a"></select><span id="search-status-a" class="muted"></span></label>
@@ -590,5 +625,143 @@ h2,h3 {{ margin-top:0; }}
     clearTimeout(teamSearchTimers.b);
     teamSearchTimers.b=setTimeout(function(){{applyTeamSearch(STB,TB,SSTB);}},SEARCH_DEBOUNCE_MS);
   }});
+
+  // ---- Match Day ----
+  // "My Team" is identity-backed: VIEWER.teams comes straight from the
+  // configured viewer's own verified team_history (see
+  // analytics.ultimate_coach_match_day), the exact same rows Team vs Team
+  // already builds TEAM_INDEX from -- never a name guess, never a default
+  // when unconfigured/unresolved/teamless, each disclosed plainly instead.
+  var VIEWER=DATA.viewer||{{configured:false,resolved:false,teams:[]}};
+  var FIXTURES=DATA.fixtures||[];
+  var MD_DATE=document.getElementById("md-date"),MD_TEAM=document.getElementById("md-team"),MD_FORMAT=document.getElementById("md-format");
+  var MD_STATUS=document.getElementById("md-status"),MD_FIXTURES_EL=document.getElementById("md-fixtures");
+  var MD_TEAMS=(VIEWER.teams||[]).map(function(t){{
+    return {{
+      key:teamScopeKey(t),
+      team_external_id:String(t.team_external_id||""),
+      session_name:String(t.session_name||""),
+      display:teamDisplay({{name:t.team_name,session_name:t.session_name,format:t.format,division_id:t.division_id}})
+    }};
+  }});
+
+  function mdDisable(message) {{
+    MD_TEAM.innerHTML="";
+    MD_TEAM.disabled=true;
+    MD_DATE.disabled=true;
+    MD_FORMAT.disabled=true;
+    MD_STATUS.textContent=message;
+    MD_FIXTURES_EL.innerHTML="";
+  }}
+  if(!VIEWER.configured) {{
+    mdDisable('No viewer identity configured. Set "ultimate_coach.viewer_member_external_id" in apa_config.yaml to your own APA member id to see your personal Match Day schedule here.');
+  }} else if(!VIEWER.resolved) {{
+    mdDisable("The configured viewer identity was not found among this build's verified players.");
+  }} else if(!MD_TEAMS.length) {{
+    mdDisable("No current team found for "+esc(VIEWER.player_name||"the configured viewer")+".");
+  }} else {{
+    MD_TEAM.innerHTML=MD_TEAMS.map(function(t){{return '<option value="'+esc(t.key)+'">'+esc(t.display)+'</option>';}}).join("");
+    MD_TEAM.value=MD_TEAMS[0].key;
+    MD_STATUS.textContent="Choose a date to see "+esc(MD_TEAMS[0].display)+"'s scheduled matches.";
+  }}
+
+  function fixtureMatchesFormat(f,filterValue) {{
+    if(filterValue) return f.format===filterValue;
+    return f.format==="EIGHT"||f.format==="NINE";
+  }}
+  function splitIsoDateTime(raw) {{
+    // Deliberately never new Date(raw) here -- that converts to the
+    // viewer's own browser timezone. Splitting the string instead displays
+    // exactly the offset the source recorded, never a silently-converted one.
+    var text=String(raw||"");
+    var tIdx=text.indexOf("T");
+    if(tIdx===-1) return {{date:text,time:"",offset:""}};
+    var datePart=text.slice(0,tIdx);
+    var m=text.slice(tIdx+1).match(/^(\\d{{2}}:\\d{{2}}:\\d{{2}})(Z|[+-]\\d{{2}}:\\d{{2}})?/);
+    return {{date:datePart,time:m?m[1]:"",offset:m&&m[2]?(m[2]==="Z"?"UTC":"UTC"+m[2]):""}};
+  }}
+  function mdFixtureCard(f,teamMeta,i) {{
+    var isHome=String(f.home_team_id||"")===teamMeta.team_external_id;
+    var oppName=f.is_bye?null:(isHome?f.away_team_name:f.home_team_name);
+    var dt=splitIsoDateTime(f.match_date);
+    var when=f.date_unparsed
+      ? '<span class="warn" style="display:inline-block;padding:2px 6px;border-radius:4px;">Unparseable date: '+esc(f.match_date||"")+'</span>'
+      : (dt.date?esc(dt.date)+(dt.time?' at '+esc(dt.time)+(dt.offset?' ('+esc(dt.offset)+')':''):''):'No data');
+    var scoreNote=(f.is_scored&&f.home_score!==null&&f.away_score!==null)?' · '+f.home_score+'-'+f.away_score:'';
+    var body='<div class="metric-grid">'
+      +'<div class="metric"><b>'+when+'</b><span>Date/time (source timezone)</span></div>'
+      +'<div class="metric"><b>'+(isHome?'Home':'Away')+'</b><span>Side</span></div>'
+      +'<div class="metric"><b>'+esc(formatName(f.format))+'</b><span>Format</span></div>'
+      +'<div class="metric"><b>'+esc(f.session_name||'No data')+'</b><span>Session</span></div>'
+      +'<div class="metric"><b>'+(f.is_bye?'Bye':esc(oppName||'No data'))+'</b><span>Opponent</span></div>'
+      +'<div class="metric"><b>'+esc(f.location||'No data')+'</b><span>Location</span></div>'
+      +'<div class="metric"><b>'+esc(f.status||(f.is_scored?'SCORED':'UNPLAYED'))+scoreNote+'</b><span>Schedule/result status</span></div>'
+      +'</div>'
+      +(f.is_bye
+        ? '<p class="muted">Bye week — a real schedule slot with no opponent, not missing data.</p>'
+        : '<button type="button" id="md-compare-'+i+'">Compare rosters &amp; evidence for this matchup</button>');
+    return '<div class="card" style="margin-top:10px;">'+body+'</div>';
+  }}
+  function forceSelectTeam(select,key) {{
+    var team=TEAM_INDEX[key];
+    if(!team) return false;
+    select.innerHTML='<option value="'+esc(key)+'">'+esc(teamDisplay(team))+' · '+team.players.length+' rostered</option>';
+    select.value=key;
+    return true;
+  }}
+  function mdApplyFixture(f,teamMeta) {{
+    var isHome=String(f.home_team_id||"")===teamMeta.team_external_id;
+    var oppId=String((isHome?f.away_team_id:f.home_team_id)||"");
+    var oppKey=null;
+    TEAM_KEYS.forEach(function(k){{
+      var t=TEAM_INDEX[k];
+      if(t.team_external_id===oppId&&t.session_name===teamMeta.session_name) oppKey=k;
+    }});
+    STA.value="";
+    STB.value="";
+    forceSelectTeam(TA,teamMeta.key);
+    TF.value=f.format;
+    if(oppKey&&forceSelectTeam(TB,oppKey)) {{
+      renderTeamMatchups();
+    }} else {{
+      TB.innerHTML='<option value="">Select a team...</option>';
+      TB.value="";
+      renderTeamMatchups();
+      document.getElementById("team-matchups").innerHTML='<h2>Recommended sends</h2><p class="muted">The opponent for this fixture ('+esc(isHome?f.away_team_name:f.home_team_name)+') has no current roster captured in this build, so a roster comparison isn\\'t available for this specific matchup yet.</p>';
+    }}
+    document.getElementById("team-rosters").scrollIntoView({{behavior:"smooth"}});
+  }}
+  function renderMatchDay() {{
+    if(!MD_TEAMS.length) return;
+    var teamMeta=MD_TEAMS.filter(function(t){{return t.key===MD_TEAM.value;}})[0];
+    if(!teamMeta) {{ MD_STATUS.textContent="Choose a team."; MD_FIXTURES_EL.innerHTML=""; return; }}
+    var localDate=MD_DATE.value;
+    if(!localDate) {{
+      MD_STATUS.textContent="Choose a date to see "+esc(teamMeta.display)+"'s scheduled matches.";
+      MD_FIXTURES_EL.innerHTML="";
+      return;
+    }}
+    var found=FIXTURES.filter(function(f){{
+      return f.local_date===localDate
+        && String(f.session_name||"")===teamMeta.session_name
+        && (String(f.home_team_id||"")===teamMeta.team_external_id||String(f.away_team_id||"")===teamMeta.team_external_id)
+        && fixtureMatchesFormat(f,MD_FORMAT.value);
+    }});
+    found.sort(function(x,y){{return String(x.match_date||"").localeCompare(String(y.match_date||""));}});
+    if(!found.length) {{
+      MD_STATUS.textContent="No scheduled match found for "+esc(teamMeta.display)+" on "+esc(localDate)+(MD_FORMAT.value?" in "+esc(formatName(MD_FORMAT.value)):"")+".";
+      MD_FIXTURES_EL.innerHTML="";
+      return;
+    }}
+    MD_STATUS.textContent=found.length+" scheduled match"+(found.length===1?"":"es")+" found for "+esc(teamMeta.display)+" on "+esc(localDate)+". Never auto-applied below — choose which one to compare.";
+    MD_FIXTURES_EL.innerHTML=found.map(function(f,i){{return mdFixtureCard(f,teamMeta,i);}}).join("");
+    found.forEach(function(f,i){{
+      var btn=document.getElementById("md-compare-"+i);
+      if(btn) btn.addEventListener("click",function(){{mdApplyFixture(f,teamMeta);}});
+    }});
+  }}
+  MD_DATE.addEventListener("change",renderMatchDay);
+  MD_TEAM.addEventListener("change",renderMatchDay);
+  MD_FORMAT.addEventListener("change",renderMatchDay);
 }})();
 </script></body></html>"""

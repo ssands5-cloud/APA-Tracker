@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from analytics.ultimate_coach_data_contract import build_contract
 from analytics.ultimate_coach_identity_manifest import build_verified_identity_manifest
 from analytics.ultimate_coach_identity_namespace_audit import audit_identity_namespace
+from analytics.ultimate_coach_match_day import build_fixture_rows
 
 
 def _result_for_perspective(all_games_row: dict[str, Any], player_id: int) -> str:
@@ -240,6 +241,7 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
         "identity_policy": "ROSTER_PROVENANCE_REQUIRED",
         "players": players,
         "evidence": evidence,
+        "fixtures": build_fixture_rows(tables["team_matches"]),
         "trust": trust,
         "counts": {
             "players": len(players),

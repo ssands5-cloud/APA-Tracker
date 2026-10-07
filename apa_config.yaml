@@ -137,3 +137,15 @@ opponent_scouting:
 logging:
   level: "INFO"
   file: "logs/apa_tracker.log"
+
+# Ultimate Coach's Match Day workflow (ui/ultimate_coach.py's "My Team"
+# selector, ui/export_excel_ultimate_coach.py's Match Day sheet): which
+# verified player identity is "me", so fixtures/rosters can be scoped to
+# your own real teams without ever matching on a display name (see
+# analytics/ultimate_coach_match_day.py's module docstring). Set this to
+# your own APA member id -- the same number shown in "Name (Member #id)"
+# labels throughout both artifacts. Leave as CHANGE_ME to disable the "My
+# Team" selector cleanly: everything else keeps working, Match Day just
+# discloses "no viewer identity configured" instead of guessing one.
+ultimate_coach:
+  viewer_member_external_id: "CHANGE_ME"

@@ -601,3 +601,217 @@ def test_same_named_teams_in_different_divisions_never_merge_rosters(tmp_path: P
             assert "1 rostered" in roster_b
         finally:
             browser.close()
+
+
+def _fixture(**overrides):
+    row = {
+        "match_id": 100, "match_external_id": "100", "match_date": "2026-10-11T11:00:00-06:00",
+        "format": "EIGHT", "session_name": "Spring 2026", "week": 7, "status": "UNPLAYED",
+        "location": None, "home_team_id": "Sharks", "home_team_name": "Sharks",
+        "away_team_id": "Falcons", "away_team_name": "Falcons", "home_score": None,
+        "away_score": None, "is_bye": False, "is_scored": False, "is_finalized": False,
+        "local_date": "2026-10-11", "date_unparsed": False,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_match_day_discloses_when_no_viewer_configured(tmp_path: Path):
+    path = tmp_path / "ultimate_coach_match_day_unconfigured.html"
+    path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            assert page.locator("#md-team").is_disabled()
+            assert page.locator("#md-date").is_disabled()
+            assert "No viewer identity configured" in page.locator("#md-status").inner_text()
+        finally:
+            browser.close()
+
+
+def test_match_day_discloses_when_viewer_has_no_current_team(tmp_path: Path):
+    payload = _team_payload()
+    payload["players"].append(
+        {"id": 8, "external_id": "9999", "name": "Teamless Viewer", "current_skill_level": 4,
+         "current_matches_won": None, "current_matches_played": None, "team_history": [], "career_stats": []}
+    )
+    path = tmp_path / "ultimate_coach_match_day_teamless.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="9999"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            assert page.locator("#md-team").is_disabled()
+            assert "No current team found for Teamless Viewer" in page.locator("#md-status").inner_text()
+        finally:
+            browser.close()
+
+
+def test_match_day_finds_fixture_and_applies_it_to_team_vs_team(tmp_path: Path):
+    # Ann Archer (external_id "1") is on Sharks -- see _team_payload().
+    payload = _team_payload()
+    payload["fixtures"] = [_fixture()]
+    path = tmp_path / "ultimate_coach_match_day.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            assert page.locator("#md-team option").count() == 1
+            assert "Sharks" in page.locator("#md-team").inner_text()
+
+            page.fill("#md-date", "2026-10-11")
+            status = page.locator("#md-status").inner_text()
+            assert "1 scheduled match" in status
+            fixture_text = page.locator("#md-fixtures").inner_text()
+            assert "Falcons" in fixture_text
+            assert "8-Ball" in fixture_text
+            assert "No data" in fixture_text  # location is unrecorded
+
+            page.click("#md-compare-0")
+            page.wait_for_timeout(100)
+            assert page.locator("#team-a").input_value() == "Sharks|d1|Spring 2026"
+            assert page.locator("#team-b").input_value() == "Falcons|d1|Spring 2026"
+            assert page.locator("#team-format").input_value() == "EIGHT"
+            rosters = page.locator("#team-rosters").inner_text()
+            assert "Ann Archer" in rosters and "Cam Cole" in rosters
+        finally:
+            browser.close()
+
+
+def test_match_day_never_auto_applies_when_multiple_fixtures_exist(tmp_path: Path):
+    payload = _team_payload()
+    payload["fixtures"] = [
+        _fixture(match_id=101, away_team_id="Falcons", away_team_name="Falcons", match_date="2026-10-11T11:00:00-06:00"),
+        _fixture(match_id=102, away_team_id="Falcons", away_team_name="Falcons", match_date="2026-10-11T19:00:00-06:00"),
+    ]
+    path = tmp_path / "ultimate_coach_match_day_multi.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#md-date", "2026-10-11")
+            assert "2 scheduled matches" in page.locator("#md-status").inner_text()
+            # Both fixtures rendered as their own cards -- neither selected
+            # on #team-a/#team-b until a "Compare" button is explicitly clicked.
+            assert page.locator("[id^='md-compare-']").count() == 2
+            assert page.locator("#team-a").input_value() == ""
+            assert page.locator("#team-b").input_value() == ""
+        finally:
+            browser.close()
+
+
+def test_match_day_bye_fixture_shows_no_opponent_and_no_compare_button(tmp_path: Path):
+    payload = _team_payload()
+    payload["fixtures"] = [_fixture(is_bye=True, away_team_id="", away_team_name="")]
+    path = tmp_path / "ultimate_coach_match_day_bye.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#md-date", "2026-10-11")
+            fixture_text = page.locator("#md-fixtures").inner_text()
+            assert "Bye week" in fixture_text
+            assert page.locator("[id^='md-compare-']").count() == 0
+        finally:
+            browser.close()
+
+
+def test_match_day_no_fixture_on_chosen_date_is_disclosed_clearly(tmp_path: Path):
+    payload = _team_payload()
+    payload["fixtures"] = [_fixture()]  # only scheduled for 2026-10-11
+    path = tmp_path / "ultimate_coach_match_day_empty.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#md-date", "2026-10-18")
+            assert "No scheduled match found for Sharks" in page.locator("#md-status").inner_text()
+            assert page.locator("#md-fixtures").inner_text() == ""
+        finally:
+            browser.close()
+
+
+def test_match_day_unparseable_date_is_disclosed_not_hidden(tmp_path: Path):
+    # build_fixture_rows() never sets local_date for a row whose match_date
+    # didn't parse (match_local_date() correctly returns None), so such a
+    # row would never surface in a by-date search in production. This test
+    # exercises mdFixtureCard()'s own disclosure branch directly against
+    # that exact shape (date_unparsed True) so it's proven to render safely
+    # -- "Unparseable date: <raw>" -- rather than crash, if it's ever reached.
+    payload = _team_payload()
+    payload["fixtures"] = [_fixture(
+        match_date="not-a-real-timestamp", local_date="2026-10-11", date_unparsed=True,
+    )]
+    path = tmp_path / "ultimate_coach_match_day_unparsed.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#md-date", "2026-10-11")
+            fixture_text = page.locator("#md-fixtures").inner_text()
+            assert "Unparseable date" in fixture_text
+            assert "not-a-real-timestamp" in fixture_text
+        finally:
+            browser.close()
+
+
+def test_match_day_format_filter_defaults_to_eight_and_nine_only(tmp_path: Path):
+    payload = _team_payload()
+    payload["fixtures"] = [
+        _fixture(match_id=103, format="EIGHT"),
+        _fixture(match_id=104, format="MASTERS ALT", away_team_id="Falcons", away_team_name="Falcons"),
+    ]
+    path = tmp_path / "ultimate_coach_match_day_format_filter.html"
+    path.write_text(render(payload, built_at="test", viewer_member_external_id="1"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
+            page.fill("#md-date", "2026-10-11")
+            # Default filter ("8-Ball & 9-Ball") must surface only the EIGHT
+            # fixture, not the real Masters Alt one on the same date.
+            assert "1 scheduled match" in page.locator("#md-status").inner_text()
+
+            page.select_option("#md-format", "MASTERS ALT")
+            assert "1 scheduled match" in page.locator("#md-status").inner_text()
+            assert "Masters Alt" in page.locator("#md-fixtures").inner_text()
+        finally:
+            browser.close()

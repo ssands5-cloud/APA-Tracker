@@ -51,7 +51,7 @@ def test_candidate_uses_snapshot_and_never_publishes_database(monkeypatch, tmp_p
     monkeypatch.setattr(
         builder,
         "render",
-        lambda payload, built_at, consume_evidence=False: "<html><body>Ultimate Coach</body></html>",
+        lambda payload, built_at, consume_evidence=False, **kw: "<html><body>Ultimate Coach</body></html>",
     )
 
     completed = builder.build_candidate(source, out)
@@ -80,7 +80,7 @@ def test_candidate_uses_low_memory_render_mode(monkeypatch, tmp_path):
 
     monkeypatch.setattr(builder, "_build_payload", lambda snapshot: _safe_payload())
 
-    def fake_render(payload, *, built_at, consume_evidence=False):
+    def fake_render(payload, *, built_at, consume_evidence=False, **kw):
         seen["consume_evidence"] = consume_evidence
         return "<html><body>Ultimate Coach</body></html>"
 
@@ -154,7 +154,7 @@ def test_candidate_is_not_published_if_ready_write_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(
         builder,
         "render",
-        lambda payload, built_at, consume_evidence=False: "<html><body>Ultimate Coach</body></html>",
+        lambda payload, built_at, consume_evidence=False, **kw: "<html><body>Ultimate Coach</body></html>",
     )
 
     original_write_text = Path.write_text

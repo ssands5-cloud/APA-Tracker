@@ -60,6 +60,7 @@ from analytics.ultimate_coach_excel_payload import (
     build_team_rosters,
     build_teams_summary,
 )
+from analytics.ultimate_coach_match_day import viewer_current_teams, viewer_player
 
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 HEADER_FILL = PatternFill("solid", fgColor="1F3864")
@@ -270,8 +271,20 @@ def _team_rosters_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[str,
     return rosters
 
 
-TEAMS_COLUMNS = ["Team", "Division ID", "Session", "Roster Count", "Known-Skill Players", "Skill Total (known only)"]
-TEAMS_WIDTHS = {"Team": 30, "Division ID": 14, "Session": 16, "Roster Count": 13, "Known-Skill Players": 17, "Skill Total (known only)": 20}
+TEAMS_COLUMNS = [
+    "Team", "Division ID", "Session", "Roster Count", "Known-Skill Players", "Skill Total (known only)",
+    # Appended at the end (never inserted earlier) so existing positional
+    # column indices elsewhere stay correct. "Combo Key" is team_external_id
+    # + "|" + session_name -- Match Day's own way to find an opponent's
+    # current team_label without a cross-range array-formula MATCH, the
+    # same "pre-join a key column, MATCH against it directly" pattern
+    # Coach Dashboard's own Pair Key already uses.
+    "Team External ID", "Combo Key",
+]
+TEAMS_WIDTHS = {
+    "Team": 30, "Division ID": 14, "Session": 16, "Roster Count": 13, "Known-Skill Players": 17,
+    "Skill Total (known only)": 20, "Team External ID": 16, "Combo Key": 24,
+}
 
 
 def _teams_sheet(wb: Workbook, rosters: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -283,6 +296,7 @@ def _teams_sheet(wb: Workbook, rosters: list[dict[str, Any]]) -> list[dict[str, 
             [
                 t["team_label"], t["division_id"], t["session_name"],
                 t["roster_count"], t["known_skill_count"], t["skill_total"],
+                t["team_external_id"], f"{t['team_external_id']}|{t['session_name']}",
             ]
         )
     _apply_widths(sheet, TEAMS_COLUMNS, TEAMS_WIDTHS)
@@ -323,6 +337,145 @@ def _player_vs_player_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[
     _apply_widths(sheet, PVP_COLUMNS, PVP_WIDTHS)
     _autotable(sheet, "PlayerVsPlayer_Table", PVP_COLUMNS, len(pairs))
     return pairs
+
+
+BOTH_EIGHT_NINE_LABEL = "(8-Ball & 9-Ball)"
+
+
+def _match_day_format_options(payload: dict[str, Any], pairs: list[dict[str, Any]]) -> list[str]:
+    """Match Day filters fixtures, not evidence -- a scheduled-but-unplayed
+    match can carry a real format with zero Player vs Player evidence rows
+    yet, so its own format list must include fixture formats too, not just
+    whatever the dashboard's evidence-derived options already cover.
+    """
+    fixture_formats = {f.get("format") for f in (payload.get("fixtures") or []) if f.get("format")}
+    evidence_formats = {row["format"] for row in pairs if row.get("format")}
+    return _dashboard_format_options([{"format": fmt} for fmt in (fixture_formats | evidence_formats)])
+
+
+def _history_scope_key(hist: dict[str, Any]) -> str:
+    """Same (team_external_id, division_id, session_name) identity key as
+    analytics.ultimate_coach_excel_payload._team_scope_key -- duplicated
+    here (both are one-line constants) rather than importing a private
+    helper across modules, same reasoning as this file's own FORMAT_LABELS.
+    """
+    return "|".join([
+        str(hist.get("team_external_id") or hist.get("team_name") or ""),
+        str(hist.get("division_id") or ""),
+        str(hist.get("session_name") or ""),
+    ])
+
+
+MY_TEAMS_COLUMNS = ["Team Label", "Team External ID", "Session Name", "Division ID", "Format"]
+MY_TEAMS_WIDTHS = {"Team Label": 36, "Team External ID": 16, "Session Name": 16, "Division ID": 14, "Format": 10}
+
+
+def _my_teams_sheet(
+    wb: Workbook, payload: dict[str, Any], rosters: list[dict[str, Any]], *, viewer_member_external_id: str | None
+) -> list[dict[str, Any]]:
+    """The configured viewer's own CURRENT teams only -- identity-backed
+    (external_id match against the verified players list), never a name
+    guess, never defaulted when unconfigured/unresolved/teamless. Reuses
+    the exact team_label the Teams/Match Night sheets already show for
+    this scope (via the rosters this workbook already built), so Match
+    Day can never display a label that doesn't also appear there.
+    """
+    sheet = wb.create_sheet("My Teams")
+    _style_header(sheet, MY_TEAMS_COLUMNS)
+    label_by_scope = {r["team_scope_key"]: r["team_label"] for r in rosters}
+    players = payload.get("players") or []
+    teams = viewer_current_teams(players, viewer_member_external_id)
+    rows = []
+    for hist in teams:
+        scope_key = _history_scope_key(hist)
+        label = label_by_scope.get(scope_key)
+        if label is None:
+            # This viewer team scope has no current roster entry in the
+            # rosters this workbook built from -- should be unreachable
+            # (viewer_current_teams() only returns is_current rows, the
+            # same source build_team_rosters() reads), but never fabricate
+            # a label if it somehow happens; skip rather than guess.
+            continue
+        rows.append(
+            {
+                "team_label": label, "team_external_id": hist.get("team_external_id") or "",
+                "session_name": hist.get("session_name") or "", "division_id": hist.get("division_id") or "",
+                "format": hist.get("format") or "",
+            }
+        )
+    for row in rows:
+        sheet.append([row["team_label"], row["team_external_id"], row["session_name"], row["division_id"], row["format"]])
+    _apply_widths(sheet, MY_TEAMS_COLUMNS, MY_TEAMS_WIDTHS)
+    _autotable(sheet, "MyTeams_Table", MY_TEAMS_COLUMNS, len(rows))
+    sheet.append([])
+    note_row = sheet.max_row + 1
+    resolved = viewer_player(players, viewer_member_external_id)
+    if not viewer_member_external_id:
+        note = ('No viewer identity configured. Set "ultimate_coach.viewer_member_external_id" in '
+                'apa_config.yaml to your own APA member id to see your personal Match Day schedule.')
+    elif resolved is None:
+        note = "The configured viewer identity was not found among this build's verified players."
+    elif not rows:
+        note = f"No current team found for {resolved.get('name', 'the configured viewer')}."
+    else:
+        note = "Identity-backed: resolved by APA member id, never by matching a display name."
+    sheet.cell(row=note_row, column=1, value=note).font = MUTED_FONT
+    return rows
+
+
+FIXTURES_COLUMNS = [
+    "Local Date", "Match Date (source)", "Format", "Format Label", "Session",
+    "Home Team ID", "Home Team Name", "Away Team ID", "Away Team Name",
+    "Location", "Bye", "Status", "Home Score", "Away Score",
+    # Per-row helper flags driving the Match Day sheet's lookup -- plain
+    # scalar formulas referencing that sheet's resolved selection cells
+    # (never a cross-range array formula; see _match_day_sheet's own
+    # docstring for why). Visible, not hidden -- never a black box.
+    "My Team Side?", "Date Matches?", "Format Matches?", "Match Day Selected?",
+]
+FIXTURES_WIDTHS = {
+    "Local Date": 12, "Match Date (source)": 24, "Format": 10, "Format Label": 12, "Session": 16,
+    "Home Team ID": 14, "Home Team Name": 26, "Away Team ID": 14, "Away Team Name": 26,
+    "Location": 16, "Bye": 8, "Status": 12, "Home Score": 11, "Away Score": 11,
+    "My Team Side?": 12, "Date Matches?": 13, "Format Matches?": 14, "Match Day Selected?": 16,
+}
+
+
+def _fixtures_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every real scheduled/completed match (analytics.ultimate_coach_match_day's
+    fixture rows, same data the HTML's Match Day card reads) as its own
+    AutoFilter-backed reference table -- the reliable way to see every
+    fixture on a date/team/format, including when more than one exists,
+    without depending on a dynamic-array formula this workbook's target
+    Excel does not support (confirmed via COM: FILTER fails as #NAME?).
+    """
+    fixtures = sorted(payload.get("fixtures") or [], key=lambda f: str(f.get("match_date") or ""))
+    sheet = wb.create_sheet("Fixtures")
+    _style_header(sheet, FIXTURES_COLUMNS)
+    for i, f in enumerate(fixtures):
+        r = i + 2  # header is row 1
+        sheet.append(
+            [
+                f.get("local_date") or ("Unparseable: " + str(f.get("match_date") or "") if f.get("date_unparsed") else ""),
+                f.get("match_date") or "",
+                f.get("format") or "",
+                _format_label(f.get("format") or ""),
+                f.get("session_name") or "",
+                f.get("home_team_id") or "", f.get("home_team_name") or "",
+                f.get("away_team_id") or "", f.get("away_team_name") or "",
+                f.get("location") or "",
+                "Yes" if f.get("is_bye") else "No",
+                f.get("status") or "",
+                f.get("home_score"), f.get("away_score"),
+                f'=OR(AND(F{r}=\'Match Day\'!$B$10,E{r}=\'Match Day\'!$B$11),AND(H{r}=\'Match Day\'!$B$10,E{r}=\'Match Day\'!$B$11))',
+                f"=A{r}='Match Day'!$B$4",
+                f'=IF(\'Match Day\'!$B$6="{BOTH_EIGHT_NINE_LABEL}",OR(C{r}="EIGHT",C{r}="NINE"),C{r}=\'Match Day\'!$B$12)',
+                f"=AND(O{r},P{r},Q{r})",
+            ]
+        )
+    _apply_widths(sheet, FIXTURES_COLUMNS, FIXTURES_WIDTHS)
+    _autotable(sheet, "Fixtures_Table", FIXTURES_COLUMNS, len(fixtures))
+    return fixtures
 
 
 def _add_dropdown(sheet: Worksheet, cell: str, source_ref: str, *, title: str, message: str) -> None:
@@ -510,7 +663,141 @@ def _match_night_sheet(wb: Workbook, team_count: int) -> None:
         sheet["A19"].font = MUTED_FONT
 
 
-def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: str = "") -> Workbook:
+def _match_day_sheet(
+    wb: Workbook, *, my_team_count: int, format_options: list[str]
+) -> None:
+    """Date + identity-backed My Team + format filter, resolving to the
+    real scheduled fixture(s) on the Fixtures sheet -- never a dynamic-
+    array formula (unsupported on the target Excel install), never a
+    cross-range array-formula MATCH (would need CSE entry on that same
+    install): every lookup here is either a plain per-cell formula or a
+    MATCH/INDEX/COUNTIF against one pre-built key column, the same
+    "pre-join a key, look it up directly" pattern Coach Dashboard's own
+    Pair Key already uses. When more than one fixture matches, this sheet
+    discloses the count and points at the Fixtures sheet's own AutoFilter
+    for all of them -- it never silently picks one.
+    """
+    sheet = wb.create_sheet("Match Day", 0)
+    sheet.sheet_view.showGridLines = False
+    sheet.column_dimensions["A"].width = 30
+    sheet.column_dimensions["B"].width = 42
+
+    sheet["A1"] = "Ultimate Coach — Match Day"
+    sheet["A1"].font = TITLE_FONT
+    sheet["A2"] = "Pick a date and your team to see your real scheduled matchup, then compare rosters on Match Night."
+    sheet["A2"].font = MUTED_FONT
+
+    sheet["A4"] = "Date (YYYY-MM-DD)"
+    sheet["A4"].font = LABEL_FONT
+    sheet["B4"] = ""
+    sheet["B4"].number_format = "@"  # Text, not an Excel date serial -- compared as text against Fixtures' Local Date.
+    sheet["A5"] = "My Team"
+    sheet["A5"].font = LABEL_FONT
+    sheet["B5"] = ""
+    sheet["A6"] = "Format"
+    sheet["A6"].font = LABEL_FONT
+    format_labels = [_format_label(fmt) for fmt in format_options]
+    sheet["B6"] = BOTH_EIGHT_NINE_LABEL
+
+    if my_team_count:
+        _add_dropdown(
+            sheet, "B5", "MyTeamLabelList",
+            title="Unknown team", message="Choose one of your own current teams (see the My Teams sheet).",
+        )
+    all_format_choices = [BOTH_EIGHT_NINE_LABEL] + format_labels
+    _add_dropdown(
+        sheet, "B6", '"' + ",".join(all_format_choices) + '"',
+        title="Format", message="Choose " + " / ".join(all_format_choices) + ".",
+    )
+
+    sheet["A9"] = "Lookup detail"
+    sheet["A9"].font = LABEL_FONT
+    sheet["A10"] = "My Team external ID"
+    sheet["B10"] = '=IFERROR(INDEX(MyTeams_Table[Team External ID],MATCH(B5,MyTeams_Table[Team Label],0)),"")'
+    sheet["A11"] = "My Team session"
+    sheet["B11"] = '=IFERROR(INDEX(MyTeams_Table[Session Name],MATCH(B5,MyTeams_Table[Team Label],0)),"")'
+    sheet["A12"] = "Format code (blank = both 8-Ball/9-Ball)"
+    sheet["B12"] = f'=IF(B6="{BOTH_EIGHT_NINE_LABEL}","",{_format_code_formula(format_options, "B6")[1:]})'
+    sheet["A13"] = "Matches found"
+    sheet["B13"] = '=COUNTIF(Fixtures_Table[Match Day Selected?],TRUE)'
+    sheet["A14"] = "Fixture row (meaningful only when exactly 1 found)"
+    sheet["B14"] = '=IFERROR(MATCH(TRUE,Fixtures_Table[Match Day Selected?],0),"")'
+    for row in range(10, 15):
+        sheet.cell(row=row, column=1).font = MUTED_FONT
+
+    sheet["A16"] = "Disclosure"
+    sheet["A16"].font = LABEL_FONT
+    sheet["B16"] = (
+        '=IF(OR(B4="",B5=""),"Choose a date and your team above.",'
+        'IF(B13=0,"No scheduled match found for this team/date/format.",'
+        'IF(B13>1,B13&" fixtures found for this team/date/format -- never silently picked one. '
+        'See the Fixtures sheet, filtered to Match Day Selected? = TRUE, for all of them.",'
+        '"1 fixture found -- details below.")))'
+    )
+    sheet["B16"].alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.row_dimensions[16].height = 48
+
+    sheet["A19"] = "Opponent"
+    sheet["A19"].font = LABEL_FONT
+    sheet["B19"] = '=IF(B13<>1,"",IF(INDEX(Fixtures_Table[Home Team ID],B14)=B10,INDEX(Fixtures_Table[Away Team Name],B14),INDEX(Fixtures_Table[Home Team Name],B14)))'
+    sheet["A20"] = "Side"
+    sheet["B20"] = '=IF(B13<>1,"",IF(INDEX(Fixtures_Table[Home Team ID],B14)=B10,"Home","Away"))'
+    sheet["A21"] = "Format"
+    sheet["B21"] = '=IF(B13<>1,"",INDEX(Fixtures_Table[Format Label],B14))'
+    sheet["A22"] = "Session"
+    sheet["B22"] = '=IF(B13<>1,"",INDEX(Fixtures_Table[Session],B14))'
+    sheet["A23"] = "Date/time (source timezone retained)"
+    sheet["B23"] = '=IF(B13<>1,"",INDEX(Fixtures_Table[Match Date (source)],B14))'
+    sheet["A24"] = "Location"
+    sheet["B24"] = '=IF(B13<>1,"",IF(INDEX(Fixtures_Table[Location],B14)="","No data",INDEX(Fixtures_Table[Location],B14)))'
+    sheet["A25"] = "Bye"
+    sheet["B25"] = '=IF(B13<>1,"",INDEX(Fixtures_Table[Bye],B14))'
+    sheet["A26"] = "Schedule/result status"
+    sheet["B26"] = '=IF(B13<>1,"",INDEX(Fixtures_Table[Status],B14))'
+    for row in range(19, 27):
+        sheet.cell(row=row, column=1).font = MUTED_FONT
+
+    sheet["A29"] = "To compare rosters, select these on the Match Night sheet"
+    sheet["A29"].font = LABEL_FONT
+    sheet["A30"] = "Our Team (Match Night cell B5)"
+    sheet["B30"] = '=IF(B13<>1,"",B5)'
+    sheet["A31"] = "Opponent Team (Match Night cell C5)"
+    sheet["B31"] = (
+        '=IF(B13<>1,"",IFERROR(INDEX(Teams_Table[Team],MATCH('
+        'IF(INDEX(Fixtures_Table[Home Team ID],B14)=B10,INDEX(Fixtures_Table[Away Team ID],B14),INDEX(Fixtures_Table[Home Team ID],B14))&"|"&B11,'
+        'Teams_Table[Combo Key],0)),"No current roster captured for this opponent"))'
+    )
+    for row in (30, 31):
+        sheet.cell(row=row, column=1).font = MUTED_FONT
+    sheet["A33"] = (
+        "Rosters shown on Match Night are each team's CURRENT roster, not a reconstruction "
+        "of who actually played on the chosen date -- this data source doesn't capture "
+        "historical lineups, so no date-specific lineup accuracy is promised."
+    )
+    sheet["A33"].font = MUTED_FONT
+    sheet["A33"].alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.merge_cells("A33:B33")
+    sheet.row_dimensions[33].height = 48
+
+    if not my_team_count:
+        sheet["A36"] = (
+            'No viewer identity configured or no current team found -- see the My Teams sheet '
+            'for the exact reason. Set "ultimate_coach.viewer_member_external_id" in '
+            "apa_config.yaml to your own APA member id to enable this sheet."
+        )
+        sheet["A36"].font = MUTED_FONT
+        sheet["A36"].alignment = Alignment(wrap_text=True, vertical="top")
+        sheet.merge_cells("A36:B36")
+        sheet.row_dimensions[36].height = 32
+
+
+def build_workbook(
+    payload: dict[str, Any],
+    *,
+    built_at: str = "",
+    source_db: str = "",
+    viewer_member_external_id: str | None = None,
+) -> Workbook:
     wb = Workbook()
     _build_info_sheet(wb, payload, built_at=built_at, source_db=source_db)
     _data_trust_sheet(wb, payload)
@@ -518,6 +805,8 @@ def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: st
     rosters = _team_rosters_sheet(wb, payload)
     _teams_sheet(wb, rosters)
     pairs = _player_vs_player_sheet(wb, payload)
+    my_teams = _my_teams_sheet(wb, payload, rosters, viewer_member_external_id=viewer_member_external_id)
+    _fixtures_sheet(wb, payload)
 
     player_count = len(payload.get("players") or [])
     team_count = len({r["team_scope_key"] for r in rosters})
@@ -536,16 +825,32 @@ def build_workbook(payload: dict[str, Any], *, built_at: str = "", source_db: st
         wb.defined_names["TeamNameList"] = DefinedName(
             "TeamNameList", attr_text="Teams!Teams_Table[Team]"
         )
+    if my_teams:
+        wb.defined_names["MyTeamLabelList"] = DefinedName(
+            "MyTeamLabelList", attr_text="'My Teams'!MyTeams_Table[Team Label]"
+        )
 
     _match_night_sheet(wb, team_count)
     _coach_dashboard_sheet(wb, player_count, _dashboard_format_options(pairs))
+    _match_day_sheet(
+        wb, my_team_count=len(my_teams), format_options=_match_day_format_options(payload, pairs)
+    )
 
-    wb.active = wb["Coach Dashboard"]
+    wb.active = wb["Match Day"]
     return wb
 
 
-def write_workbook(payload: dict[str, Any], path: str | Path, *, built_at: str = "", source_db: str = "") -> Path:
-    workbook = build_workbook(payload, built_at=built_at, source_db=source_db)
+def write_workbook(
+    payload: dict[str, Any],
+    path: str | Path,
+    *,
+    built_at: str = "",
+    source_db: str = "",
+    viewer_member_external_id: str | None = None,
+) -> Path:
+    workbook = build_workbook(
+        payload, built_at=built_at, source_db=source_db, viewer_member_external_id=viewer_member_external_id
+    )
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)

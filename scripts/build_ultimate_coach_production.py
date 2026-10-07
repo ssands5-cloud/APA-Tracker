@@ -30,12 +30,14 @@ if __package__ in (None, ""):
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
+from analytics.ultimate_coach_match_day import load_viewer_external_id_from_file
 from database.engine import create_db_engine
 from ui.ultimate_coach import render
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = PROJECT_ROOT / "data" / "ultimate_coach_staging.db"
 DEFAULT_RUN_ROOT = PROJECT_ROOT / "ultimate-coach-runs"
+DEFAULT_CONFIG = PROJECT_ROOT / "apa_config.yaml"
 HTML_NAME = "ultimate_coach.html"
 MANIFEST_NAME = "manifest.json"
 READY_NAME = "READY"
@@ -131,7 +133,7 @@ def _default_run_dir(run_root: Path) -> Path:
     return run_root / f"candidate-{stamp}"
 
 
-def build_candidate(source_db: Path, out_dir: Path) -> Path:
+def build_candidate(source_db: Path, out_dir: Path, *, viewer_member_external_id: str | None = None) -> Path:
     source_db = source_db.resolve()
     out_dir = out_dir.resolve()
 
@@ -152,7 +154,10 @@ def build_candidate(source_db: Path, out_dir: Path) -> Path:
         built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         html_path = temp_dir / HTML_NAME
         html_path.write_text(
-            render(payload, built_at=built_at, consume_evidence=True),
+            render(
+                payload, built_at=built_at, consume_evidence=True,
+                viewer_member_external_id=viewer_member_external_id,
+            ),
             encoding="utf-8",
         )
 
@@ -209,11 +214,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--run-root", type=Path, default=DEFAULT_RUN_ROOT)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
 
     out_dir = args.out or _default_run_dir(args.run_root)
     try:
-        completed = build_candidate(args.db, out_dir)
+        completed = build_candidate(
+            args.db, out_dir, viewer_member_external_id=load_viewer_external_id_from_file(args.config)
+        )
     except CandidateError as exc:
         print(f"ULTIMATE COACH CANDIDATE BLOCKED: {exc}")
         return 1

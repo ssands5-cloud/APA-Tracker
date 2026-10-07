@@ -317,6 +317,25 @@ class TestTeamFormatDerivation:
         assert payload["players"][0]["team_history"][0]["format"] == ""
 
 
+class TestFixtures:
+    def test_fixtures_section_is_populated_from_team_matches(self, payload):
+        """The shared payload's base fixture carries one team_matches row
+        (match_id 900, T1 vs T2) -- Match Day's fixtures section must
+        expose it, not a re-derivation that could silently disagree with
+        what evidence/rosters are built from."""
+        assert len(payload["fixtures"]) == 1
+        assert payload["fixtures"][0]["match_id"] == 900
+        assert payload["fixtures"][0]["home_team_id"] == "T1"
+        assert payload["fixtures"][0]["away_team_id"] == "T2"
+
+    def test_fixtures_section_present_even_with_zero_matches(self, monkeypatch):
+        empty_fixture = _base_fixture()
+        empty_fixture["tables"]["team_matches"] = []
+        monkeypatch.setattr(bridge, "build_contract", lambda db: empty_fixture)
+        empty_payload = bridge.build_verified_cockpit_payload(db=None)
+        assert empty_payload["fixtures"] == []
+
+
 class TestProbabilityLocks:
     def test_locks_are_hardcoded_not_derived_from_payload_content(self, payload):
         """Case 9: matchup_probability/predictive_confidence/

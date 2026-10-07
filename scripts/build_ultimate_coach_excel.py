@@ -19,18 +19,21 @@ if __package__ in (None, ""):
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
+from analytics.ultimate_coach_match_day import load_viewer_external_id_from_file
 from database.engine import create_db_engine
 from ui.export_excel_ultimate_coach import write_workbook
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = PROJECT_ROOT / "data" / "ultimate_coach_staging.db"
 DEFAULT_OUTPUT = PROJECT_ROOT / "output" / "ultimate_coach.xlsx"
+DEFAULT_CONFIG = PROJECT_ROOT / "apa_config.yaml"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
     if not args.db.is_file():
         print(f"Ultimate Coach staging DB does not exist: {args.db}")
@@ -44,7 +47,10 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
 
     built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    output_path = write_workbook(payload, args.output, built_at=built_at, source_db=args.db.name)
+    output_path = write_workbook(
+        payload, args.output, built_at=built_at, source_db=args.db.name,
+        viewer_member_external_id=load_viewer_external_id_from_file(args.config),
+    )
     print(
         f"Ultimate Coach Excel written: {payload['counts']['players']} players, "
         f"{payload['counts']['head_to_head_rows']} evidence rows -> {output_path}"
