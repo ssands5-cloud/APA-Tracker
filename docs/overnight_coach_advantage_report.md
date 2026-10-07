@@ -1912,3 +1912,41 @@ Date: 2026-10-07 (fifth cycle: HTML stale-context P1 from Paul's real UAT, #84 1
 **Process note:** commits from `a0dbf24` on carry the Sonnet 5 co-author footer as Paul instructed; earlier published history is not rewritten.
 
 **PENDING PAUL REVIEW:** visual acceptance of the Start here card, Command Center, coach-notes UI, START HERE tab and the packet print.
+
+### Visual review package for an external UX / coaching review — 2026-10-07
+
+**Package:** `docs/reviews/ultimate_coach_visual_review/` (commit `a3e2c03`). It contains:
+- `REVIEW_SUMMARY.md`: workbook tour, what is completed, known gaps, coaching goal, screenshot index.
+- 32 real-Excel captures, 17 HTML captures and the HTML Captain Packet PDF.
+
+**Source:** artifacts from build `45659f4` (HTML `8A35EAF0…258F`, XLSX `9E432DB0…AF28`). Hashes were re-checked after capture and are unchanged. Real snapshot; real next fixture: Sun Oct 11, 2026, Brunch Ballers vs Spiraling Out Of Control.
+
+**Method:**
+- **Excel:** Microsoft 365 Excel was started as a normal process on a scratch copy, driven by keystrokes and mouse clicks, captured from the screen, and closed without saving. No COM, no macros.
+- **HTML:** headless Chromium at 1440×900 and 390×844.
+- **Excel capture retake:** the first Excel pass was discarded. My focus trick tapped Alt, which activated Excel's ribbon key tips, so tab switches failed and keystrokes landed in dialogs. I fixed it with Shift, retook every Excel capture, and recaptured print-preview pages 2–5 by clicking the page arrow. Each image used in the index was viewed before committing.
+
+**Privacy and illustrative content (Paul's decisions):**
+- Real names and APA record IDs, plus the captain's league card number on Match Day, are published unredacted by Paul's explicit choice (public repo).
+- Planning marks are illustrative.
+- Coach Notes are left empty, so nothing is invented about real players.
+
+**Defects found by real-Excel capture (now open; the formula tests did not catch them):**
+1. Conditional-format fills are absent in real Excel because the fills are written with a foreground color only. As a result the matrix is uncolored, packet page-2 card headers (opponent names) are white on white, and the evidence and meeting row shading is missing.
+2. War Room → Inspect shows #VALUE! when nothing is picked: Excel's `OR()` evaluates the erroring `INDEX` arguments.
+3. Visible helper clutter: matrix category letters, Coach Dashboard pair-key rows, reserved blank rows.
+4. Packet page 5: small text, and the second line of each meeting is clipped.
+5. HTML matrix headers run name and SL together.
+6. HTML Player vs Player shows ISO dates and format codes.
+7. The HTML title still reads "Scout & Compare".
+
+These go into the next fix package. Review and visual acceptance stay **PENDING PAUL REVIEW**.
+
+**GPT, please audit the package honestly**, judged against "a professional APA captain's war room" vs "a sophisticated data workbook":
+- **usability:** can a first-time captain find tonight, the opponent and the next send?
+- **coaching value:** does each view help decide "who next?"
+- **workflow friction:** where does a captain hunt, scroll or hit errors or noise?
+- **decision-making value:** is the evidence readable at the table, including the "≈ shared-opponent" cells, which are 55 of 72 matrix cells?
+- **visual presentation:** hierarchy, density, color, print.
+
+Please also check the index against the files, and that no defect is hidden or misdescribed.
