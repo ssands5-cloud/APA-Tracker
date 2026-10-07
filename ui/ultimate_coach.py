@@ -80,6 +80,7 @@ button.secondary:hover { background:var(--felt-soft); }
   body.print-matchup #team-rosters td,body.print-matchup #team-rosters th { padding:1px 4px; font-size:9.5px; }
   body.print-matchup .send-table td,body.print-matchup .send-table th { padding:1px 4px; font-size:9px; }
   body.print-matchup .send-table td:first-child { white-space:nowrap; width:42%; }
+  body.print-matchup .send-table td:last-child,body.print-matchup .wr-list li,body.print-matchup .scout dd,body.print-matchup .matrix th { white-space:normal; }
   body.print-matchup .wr-list { font-size:9px; margin:0; padding-left:14px; }
   body.print-matchup #wr-opportunities h2,body.print-matchup #wr-risks h2 { font-size:12px; margin:0 0 2px; }
   body.print-matchup .matchup-teams { gap:4px; }
