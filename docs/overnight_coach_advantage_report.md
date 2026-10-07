@@ -1133,6 +1133,113 @@ This closes the normal reload and freshness-label defects, but not the
 explicitly requested unavailable-selection path. No feature code modified
 or global builder run.
 
+### Phase 3 Captain's War Room baseline audit — 2026-10-07 05:56 UTC
+
+Sprint tracker: [Ultimate Coach – Production Readiness Sprint #84](https://github.com/ssands5-cloud/APA-Tracker/issues/84).
+Paul's new directive assigns Claude implementation and GPT audit/strategic
+review, superseding the reversed roles recorded in older issue #24. The
+question is **Who should I put up next?**, not how many rows can be shown.
+
+**Scope and evidence:** immutable PR #83 checkpoint
+`47b15130c288fc005c0140f6311bc7113b746461`; GitHub Actions run
+37575437358 passed Python 3.12 and 3.13. Inspected that commit's evidence
+module and HTML/Excel sources directly using `git show` from the canonical
+root, without executing or modifying the builder's live worktree. Ran one
+controlled synthetic probe against that exact evidence module; no test
+data was added to production artifacts. This is not a full-suite rerun or
+a visual review of a new Phase 3 build. Paul's earlier screenshots cover
+selected `d5d8d7f` UAT paths only, not all of `47b1513` or future Phase 3.
+
+**Repository skills reviewed:** README, collaboration handshake, overnight
+report, `.github/prompts/audit.md`, and verification-before-completion,
+red-team and validator skills. Considered brainstorming for design
+workflow; Paul's explicit unattended authority supplies the approved
+direction and does not require repeated subjective approvals. Applied
+fresh-evidence, failure-mode and reproducibility requirements. Some
+`.github` assets refer to Budget, Python 3.11 and COM; those inherited
+defaults do not override APA's Python 3.12/3.13 and no-COM constraints.
+Builder skill consideration/use is not yet documented in the observed PR
+description/comments; this is a documentation gap, not proof of non-use.
+
+✅ **Verified — what helps lineup decisions:** source-backed fixture
+selection and roster scope identity, names paired with record IDs, and
+separate direct/shared/no-evidence records. The earlier user UAT exercised
+Sunday's 8-Ball/9-Ball fixture routing, a bye with MST kickoff, and player
+selection retention. Exact-head CI is green for this checkpoint. These
+reduce lookup effort; they do not demonstrate winning advantage.
+
+⚠ **Needs Improvement — repeated setup (P1 usability):** at `47b1513`,
+`_coach_dashboard_sheet` still creates blank Player A/B inputs and its own
+format default; `_match_night_sheet` still creates blank Our/Opponent
+Team inputs. Match Day has not yet become a shared effective selection
+with reversible local overrides. This is acknowledged planned work, not
+a regression accusation. Validate follow/override/clear behavior and
+dependent invalidation before calling the one-setup workflow complete.
+
+❌ **Problem — descriptive rank can be mistaken for advantage (P1
+interpretation risk):** `rank_vs_opponent()` orders SHARED candidates by
+our wins/games, shared count and games; the opponent's corresponding
+record is displayed but does not influence ordering. A controlled probe
+confirmed candidate A with own 1-0 / opponent 10-0 sorts before B with
+own 9-1 / opponent 0-10. This does not prove B should be sent; it proves
+the order is not comparative advantage. Existing methodology disclaimers
+are helpful, but the first-in-ranking summaries must not become "best
+odds", "strong indirect" or an unexplained opportunity verdict. Show
+both records/counts prominently; use descriptive labels or unordered
+comparison when a defensible distinction is absent. Do not invent a
+replacement difference score or blend evidence tiers.
+
+⚠ **Needs Improvement — live planning and visual evidence:** the posted
+plan proposes availability/used controls, matrix, cards and packet. No
+current final-artifact evidence establishes these work together. Unknown
+must remain distinct from unavailable; user inputs must be keyed by
+player and roster/fixture scope, survive local override resets correctly,
+and never mutate source evidence. Guard small samples and preserve
+losing/unknown candidates in an inspectable view: they are not facts of
+unavailability. Color can describe recorded win/loss balance, but an even
+record is not proof of a neutral matchup or confidence. Protected-player
+and risk language must expose its descriptive basis without a hidden
+model. The user's final print preview exposed setup clutter/tiny text;
+the dedicated packet needs new print evidence, including both rosters.
+
+❌ **Problem — new sprint boundary mismatch (P1 governance):** canonical
+root and origin verified. Existing active integration checkout is a
+linked sibling worktree, and previous UAT files are outside the root on
+Desktop. Those locations were allowed earlier, but Paul's latest directive
+requires new sprint work and temporary artifacts inside the exact root.
+No independent clone is inferred merely from a linked worktree. Do not
+delete/move/clean existing checkouts or outputs. Transition new builder
+work to a verified nested worktree and new artifacts inside the root,
+preserving all WIP. GPT's writes in this cycle are inside the root only.
+Known untracked user workbooks, handoff file and token-named files were
+investigated by status only and left untouched; no credentials were read.
+
+⚠ **Needs Improvement — release memory (P2):** PR head is `47b1513`, but
+the description still calls `d5d8d7f` the final head. Distinguish checkpoint
+CI, artifact-built SHA and pending Phase 3 candidate. Issue #84 is the new
+master tracker; do not inherit obsolete roles/cadence from issue #24.
+
+💡 **Recommendations:** fixture and both rosters first; selection hub with
+local overrides second; remaining-candidate planning and one-opponent
+scouting third; matrix and detailed evidence progressively disclosed;
+packet page 1 readable without setup/formula helpers. Use the exact
+fixture/identity to route every view. Document missing venues and current
+versus date-specific rosters, sample sizes and freshness near the decision.
+Run propagation, stale-state, bye, multi-fixture, missing-SL, ambiguity and
+planning-isolation checks on the final exact head, then verify both rebuilt
+artifact hashes and visual print/phone results. Keep Paul-only approval
+items PENDING PAUL REVIEW while advancing other approved work.
+
+**Assessment:** average-captain UX **Fair**; Captain Edge **5/10** at this
+checkpoint (qualitative usability judgment, not a measured prediction).
+The fixture/evidence tools are useful, but repeated setup and incomplete
+live planning prevent a 30-second next-send workflow. Phase 3 readiness
+**FAIL / not yet demonstrated**. Risks: rank overinterpretation, stale
+state, scope leakage, print legibility and boundary compliance. Remaining
+uncertainties: builder skill-use record, complete live workflow, final
+artifact behavior and visual/UAT acceptance. No feature edits, COM,
+probability model, source-data changes or merge performed.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
