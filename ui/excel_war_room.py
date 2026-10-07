@@ -1759,9 +1759,9 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     summary = [
         '=IF(wr_PairKey="","Evidence summary appears once Match Day names a fixture with an opponent roster.",'
         '"Pairings between the two rosters, by recorded evidence:")',
-        f'=IF(wr_PairKey="","","Strong evidence (favorable direct record): "&({cats("G")}))',
+        f'=IF(wr_PairKey="","","Favorable direct record (any sample size): "&({cats("G")}))',
         f'=IF(wr_PairKey="","","Concerning (more direct losses than wins): "&({cats("R")}))',
-        f'=IF(wr_PairKey="","","Weak evidence (even direct, or shared opponents only): "&({cats("E")})&" + "&({cats("I")}))',
+        f'=IF(wr_PairKey="","","Limited evidence: "&({cats("E")})&" even direct · "&({cats("I")})&" shared-opponent only")',
         f'=IF(wr_PairKey="","","Insufficient evidence (nothing recorded): "&({cats("X")}))',
         '=IF(wr_PairKey="","","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable direct option left")',
     ]
@@ -1770,8 +1770,8 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     send_lines = []
     for k in range(1, R + 1):
         send_lines.append(f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                          f'IF(INDEX(wr_Send1,{k})="","no evidence-backed option left","send "&INDEX(wr_Send1,{k})))')
-    _card(ws, r, 2, 11, "BEST REMAINING SEND PER UNPLAYED OPPONENT (reason = the recorded evidence shown after the name)",
+                          f'IF(INDEX(wr_Send1,{k})="","no evidence-backed option left","best-supported: "&INDEX(wr_Send1,{k})))')
+    _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — reason: W-L (meetings) = direct record; ≈ = shared-opponent results",
           send_lines, size=10.5, line_height=18)
     ws.freeze_panes = "A6"
     ws.page_setup.orientation = "landscape"

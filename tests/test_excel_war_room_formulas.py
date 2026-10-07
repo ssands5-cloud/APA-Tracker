@@ -523,13 +523,13 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open" in text
     assert "Available: 0" in text and "Unknown: 3 (not the same as unavailable)" in text and "Already used: 0" in text
     assert f"{CAM} · SL 6" in text and f"{EVE} · SL 3" in text
-    assert "Strong evidence (favorable direct record): 1" in text and "Concerning (more direct losses than wins): 2" in text
-    assert "Weak evidence (even direct, or shared opponents only): 1 + 1" in text
+    assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
+    assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient evidence (nothing recorded): 1" in text
-    assert f"vs {CAM}: send {ANN} — 2-0 (2)" in text
+    assert f"vs {CAM}: best-supported: {ANN} — 2-0 (2)" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: send {DEE} — 1-1 (2)" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported: {DEE} — 1-1 (2)" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
