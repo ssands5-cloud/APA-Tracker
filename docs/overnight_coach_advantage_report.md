@@ -1272,6 +1272,37 @@ verification claimed. Remaining uncertainties: prevalence in real career
 data, builder fix and final flow. Phase 3 readiness remains FAIL / not yet
 demonstrated; qualitative Edge score remains 5/10 pending new build review.
 
+### Phase 3 fixture planning isolation — 2026-10-07 06:38 UTC
+
+Exact checkpoint `4fa7122b215dc9d52c54c7f25bf7de930c4ab275` now has
+freshly observed green CI on Python 3.12/3.13. Shared-only ranking is
+committed as `b857bdb`; final artifact parity checks remain pending.
+Career-count repair is visibly in progress locally, not yet resolved.
+
+❌ **Problem (P1 live captain workflow):** source review of
+`ui/ultimate_coach_war_room.js` shows lineup/played marks keyed only by
+team scope and player (`WR_PLAN.our[scope][pid].l`, `.opp[scope][pid].p`).
+`wrRemaining()` and `wrPlayed()` have no fixture/date context. A player
+marked Played in one fixture remains excluded in the next fixture for
+that session team. The browser test switches opponent team, not another
+fixture with the same team. Excel `ll_OurOK`/`ll_OppOK` similarly match
+team labels without date/fixture, so old marks can apply to a later match.
+This is source-verified; no new browser interaction proof is claimed.
+
+💡 **Recommendation:** scope transient planning state to exact fixture
+identity (explicit separate manual-analysis context when no fixture).
+Different fixture starts clean/Unknown; returning restores its own plan.
+Keep durable coach notes separate. Verify same teams/different dates,
+same-day multiple fixtures, opponent change, reload, and unchanged source
+evidence. Avoid automatic clearing that loses a prior fixture plan.
+
+✅ **Verified:** immutable source functions and existing test coverage,
+exact-head CI, safe inside-root builder checkout. Finding sent to issue
+#84. Skills: verification-before-completion/red-team/validator as already
+reviewed. No feature edits, COM or source-data mutation. Remaining:
+regression proof, builder correction and final artifact/visual review.
+Phase 3 readiness remains FAIL; qualitative Captain Edge remains 5/10.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
