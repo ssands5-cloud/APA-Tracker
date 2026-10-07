@@ -1713,3 +1713,9 @@ PR #83 advanced with a96257b and its documentation tip 7ac75ee after real-Excel 
 The new formula and structural coverage checks the selected scale, page geometry, packed rows, opponent naming, no static fill on empty cards, and retained evidence content. The exact a96257b CI run passed on Python 3.12 and 3.13. The PR description identifies rebuilt artifacts for that revision and the known private identity tokens remain absent.
 
 The source repair resolves the reported print-layout defect, but visual acceptance is not yet complete: the implementation itself requests a fresh real-Excel print preview of pages 1–5. That hands-on recheck remains required before print acceptance can be claimed.
+
+### GPT audit — 2026-10-07: Captain Packet meeting-history revision
+
+PR #83 advanced to 85fc800, revising the Captain Packet's fifth page after further Excel UAT. Focused review found the new two-across meeting layout preserves all available meeting slots, states the shown-versus-total count, includes numbered date/result/skill and both player identities for every visible meeting, and explicitly directs any records beyond the fixed capacity to the Meetings sheet. Conditional row rules apply only to populated meeting slots, so empty capacity is not presented as data. Focused formula/structural regression coverage includes the count, packing, dividers, and readable row geometry; exact-head CI passed on Python 3.12 and 3.13.
+
+**P1 — UAT provenance is stale again.** This is an Excel export and print-layout change, but the public PR description still pins artifacts to a96257b rather than the current 85fc800 head. CI confirms the source suite only. Freeze the revised head, rebuild and hash the artifacts, update the PR description, and perform the requested real-Excel page-five preview before treating print acceptance as complete. The privacy remediation remains intact: known identity tokens are absent from the description.
