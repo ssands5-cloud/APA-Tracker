@@ -1626,6 +1626,50 @@ before real league use. No implementation/source-data/off-limits edits,
 credential access or merge by GPT. Native user UAT is distinguished from
 previous headless tests; no inference of physical-paper readability.
 
+### Real HTML UAT stale fixture on no-match and bye — 2026-10-07
+
+Candidate tested by Paul: `build-1b7053a`, built 17:26 UTC. New product
+head observed `a96257b` during check; `ui/ultimate_coach.py` unchanged from
+`1b7053a` at that head. Prior repaired Excel P1s remain verified closed.
+This is a new HTML context finding, not reopening those fixes.
+
+✅ **Observed other HTML UAT:** valid October11 fixture, planning response
+8 of 9 after Paul Unavailable/Bob Played, October18 clean 9 of 9, return
+restores 8 of 9, reload retains marks, clear restores 9 of 9. Selecting
+Brunch Ballers 9-Ball updates Tonight and both team scopes to division
+436648 with 9-Ball fixture metadata. Native user screenshots/text are
+separate from previous headless test results.
+
+❌ **New blocking P1:** user's paste shows date 11/26/2026 and No scheduled
+match while Tonight/War Room still claim October11 vs Spiraling Out Of
+Control with old sends. This is a valid unscheduled date, not just an
+incomplete typing state. Independently reproduced on the actual released
+HTML in fresh headless Chromium. Then selected correct November1: card
+shows Nov1, Bye and MST, but Tonight still claims Oct11/MDT/Spiraling.
+No files or source data changed. The bye time/card pass; followed-fixture
+state fails. Do not present old sends as the current selected matchup.
+
+Root: `renderMatchDay()` clears cards/returns for missing scopes/date or
+no matches without invalidating `MATCHUP_CONTEXT` and followed War Room.
+Single-fixture auto-apply only covers resolved opponents, leaving bye or
+unresolved states with old context. Existing card-only tests miss Tonight.
+
+💡 **Required:** invalidate old followed fixture and active suggestions
+whenever its context is no longer applicable. Show selected date and clear
+no-match/bye/unresolved state in Tonight, War Room, print and planning.
+Preserve explicit manual exploration only with manual labeling. Verify
+valid->no-match, valid->bye, missing opponent, scopeless viewer, pending
+multi-fixture choice and return to valid fixture, with original fixture
+plans retained safely. Never select a default opponent to fill the gap.
+
+Monitor remains paused during UAT. Skills applied: previously reviewed
+verification-before-completion/red-team/validator, with actual artifact
+reproduction and source tracing. New P1 posted to issue #84. Print-layout
+P2 is a separate open acceptance issue. No new full-suite/CI or overall
+production PASS claimed. Readiness FAIL until stale-state repair; UX Fair
+in these error states, qualitative Edge reassessment deferred. No feature,
+credential, source-data, off-limits, COM or merge operation by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
