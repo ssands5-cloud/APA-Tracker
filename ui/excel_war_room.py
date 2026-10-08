@@ -731,6 +731,16 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsLists", "Next Send lists (one line each)",
            '=wr_NsUnordLine&IF(AND(wr_NsUnordLine<>"",wr_NsAvoidLine&wr_NsUnkLine<>""),CHAR(10),"")'
            '&wr_NsAvoidLine&IF(AND(wr_NsAvoidLine<>"",wr_NsUnkLine<>""),CHAR(10),"")&wr_NsUnkLine')
+    # The whole Next Send answer as ONE wrapped cell, a line per item: headline, up to four medal lines, the
+    # "+ more" note, then the lists. Fixed rows per medal left a tall empty gap between the medal and the lists
+    # on screen and on paper (real-Excel UAT 0c2e474); one cell keeps the answer contiguous and is sized once.
+    for n in range(1, 5):
+        e.cell(f"wr_NsMedal{n}", f"Next Send medal line {n}", f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
+    e.cell("wr_NsMoreLine", "Next Send more-candidates line",
+           '=IF(COUNTIF(wr_NsMedalRun,">4")+COUNTIF(wr_NsMore,TRUE)=0,"","+ more direct candidates — see War Room Inspect")')
+    e.cell("wr_NsCard", "Next Send answer (one line each)", "=wr_NsHeadline" + "".join(
+        f'&IF({x}="","",CHAR(10)&{x})' for x in ("wr_NsMedal1", "wr_NsMedal2", "wr_NsMedal3", "wr_NsMedal4",
+                                                 "wr_NsMoreLine", "wr_NsLists")))
 
     # ---- Lineup Lab metrics ----
     e.section("Lineup Lab metrics")
@@ -1792,6 +1802,21 @@ def _worst_height(text: str, width_units: float, size: float, minimum: float) ->
     return max(minimum, round(lines * size * 1.4 + 6, 1))
 
 
+def _next_send_worst(label: str, roster: int, medals: int) -> str:
+    """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
+    headline = ("Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded "
+                "results only — not odds.")
+    medal = (f"🥇 {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+             "our only favorable direct option vs another unplayed opponent · availability unknown")
+    rest = max(roster - medals, 0)
+    lines = [headline] + [medal] * medals + ["+ more direct candidates — see War Room Inspect"]
+    if rest:
+        lines.append("≈ Not ordered (shared-opponent results only): "
+                     + "; ".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
+        lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no evidence, not weak): {label}"]
+    return "\n".join(lines)
+
+
 def _longest_label(wb) -> str:
     """The longest player label in this workbook (Players sheet), or a long generic one when there is none."""
     labels = []
@@ -1934,23 +1959,14 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _dv(ws, "C6", "wr_OppLabels", "Pick the opponent player they just put up.")
     _span(ws, 6, 10, 11, '=IF(wr_OppLabel="","","Mark sends Played on Lineup Lab — they drop out here.")',
           font=Font(size=10, color="5B6A61"), height=22)
-    ns_lines = ["=wr_NsHeadline"]
-    for n in range(1, 5):
-        ns_lines.append(f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
-    # The not-ordered / avoid / unknown lists share one wrapped cell (wr_NsLists): together they name at most R of
-    # our players, so size it for that worst case with this workbook's longest label, or Excel hides the last names.
-    label = _longest_label(wb)
-    unord = "≈ Not ordered (shared-opponent results only): "
-    worst = max((unord + "; ".join([f"{label} (availability unknown)"] * R),
-                 unord + "; ".join([f"{label} (availability unknown)"] * max(R - 2, 1))
-                 + f"\n⚠ Avoid: {label} — 0-12 (12 meetings)\n❓ Unknown (no evidence, not weak): {label}"),
+    # The whole answer is ONE wrapped cell (wr_NsCard: headline, medals, "+ more", then the lists), so it reads top
+    # to bottom with no empty medal rows in between. Each remaining player appears at most once in it, so size the
+    # cell for the worst mix -- k medal lines plus the other R-k names in the lists -- with this workbook's
+    # longest label, or Excel hides the last names.
+    worst = max((_next_send_worst(_longest_label(wb), R, k) for k in range(0, 5)),
                 key=lambda t: _worst_height(t, 166, 11, 0))
-    medal = (f"🥇 {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
-             "our only favorable direct option vs another unplayed opponent · availability unknown")
-    ns_lines = [ns_lines[0]] + [(line, medal) for line in ns_lines[1:]]
-    ns_lines += [
-        f'=IF(COUNTIF(wr_NsMedalRun,">4")+COUNTIF(wr_NsMore,TRUE)=0,"","+ more direct candidates — see War Room Inspect")',
-        ("=wr_NsLists", worst),
+    ns_lines = [
+        ("=wr_NsCard", worst),
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
     ]
     top = _card(ws, 7, 2, 11, "WHO SHOULD I SEND NEXT?", ns_lines, size=11, line_height=30) + 2
@@ -1991,8 +2007,10 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
           send_lines, size=10.5, line_height=30)
     ws.freeze_panes = "A7"
     ws.page_setup.orientation = "landscape"
+    # Fit the WIDTH only: squeezing the whole sheet onto one page shrank it below readable size (real-Excel print
+    # preview, 0c2e474). Extra pages are fine; the Captain Packet is the one-page-per-topic print.
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
+    ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 

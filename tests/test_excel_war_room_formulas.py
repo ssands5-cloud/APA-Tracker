@@ -530,8 +530,8 @@ def test_start_here_explains_the_workbook_and_names_the_build(built):
 
 
 def _next_send(book):
-    # The ≈ / Avoid / Unknown lists share one wrapped cell, a line each (CHAR(10)); compare them line by line.
-    lines = [line for r in range(8, 16) for line in str(book.display("Command Center", f"B{r}") or "").split("\n")]
+    # The whole answer is one wrapped cell, a line per item (CHAR(10)), then the note row; compare line by line.
+    lines = [line for r in (8, 9) for line in str(book.display("Command Center", f"B{r}") or "").split("\n")]
     return [x for x in lines if x not in ("", "None")]
 
 
@@ -686,17 +686,23 @@ def test_formula_rows_fit_their_worst_case_text(built):
     wr = built[WR]
     header = _row(built, WR, "Our player ↓ / opponent →")
     roster = sum(1 for c in wr[header] if str(c.value).startswith("=INDEX(wr_OppLabels,"))
-    # The three lists are one cell, a line each, naming at most `roster` of our players between them.
-    lists = [r for r in range(8, 30) if str(cc.cell(row=r, column=2).value).endswith("_NsLists")]
-    assert len(lists) == 1 and not any("Join," in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
-    worst = "≈ Not ordered (shared-opponent results only): " + "; ".join([f"{name} (availability unknown)"] * roster)
-    need = _wrapped_lines(worst, width(cc, 2, 11), 11) * 11 * 1.2
-    assert cc.row_dimensions[lists[0]].height >= need, (cc.row_dimensions[lists[0]].height, need)
+    # The whole Next Send answer is ONE cell right under the title (no empty medal rows in between), naming each
+    # remaining player at most once: size it for k medal lines plus the other roster-k names in the lists.
+    assert str(cc["B8"].value).endswith("_NsCard") and "NsOppNotes" not in str(cc["B8"].value)
+    assert not any("_NsMedalText" in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
     medal = (f"🥇 {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
-    for r in range(lists[0] - 5, lists[0] - 1):                       # the four medal lines
-        assert "_NsMedalText" in cc.cell(row=r, column=2).value
-        assert cc.row_dimensions[r].height >= _wrapped_lines(medal, width(cc, 2, 11), 11) * 11 * 1.2, r
+    headline = "Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded results only — not odds."
+    for k in range(0, 5):
+        parts = [headline] + [medal] * k + ["+ more direct candidates — see War Room Inspect"]
+        if roster - k:
+            parts.append("≈ Not ordered (shared-opponent results only): "
+                         + "; ".join([f"{name} (availability unknown)"] * max(roster - k - 2, 1)))
+            parts += [f"⚠ Avoid: {name} — 0-12 (12 meetings)", f"❓ Unknown (no evidence, not weak): {name}"]
+        need = _wrapped_lines("\n".join(parts), width(cc, 2, 11), 11) * 11 * 1.2
+        assert cc.row_dimensions[8].height >= need, (k, cc.row_dimensions[8].height, need)
+    # Printing fits the width only: a one-page squeeze made the sheet unreadable on paper (native print preview).
+    assert cc.page_setup.fitToWidth == 1 and cc.page_setup.fitToHeight == 0
     cols = [c.column for c in wr[header] if str(c.value).startswith("=INDEX(wr_OppLabels,")]
     narrow = min(width(wr, c, c) for c in cols)
     assert (wr.row_dimensions[header].height or 15) >= _wrapped_lines(name, narrow, 8) * 8 * 1.2
