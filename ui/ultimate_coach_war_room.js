@@ -189,6 +189,74 @@
       ]};
   }
 
+  // ---- Next Send (mirrors analytics.ultimate_coach_war_room.next_send / next_send_lines) ----
+  // Medals only for ORDERED direct candidates (favorable, then even) in ranking order; same evidence = same
+  // medal, named as tied. Shared-opponent-only candidates are one unordered "≈" group; concerning records
+  // are "Avoid" (worst first); no evidence is unknown, never weak. Nothing is re-scored or weighted.
+  var WR_MEDALS=["🥇","🥈","🥉"];
+  function wrNextSend(w,j,rem,unplayed){
+    var b=w.blocks[j],rows=b.rows.filter(function(r){return rem[String(r.member.id)];});
+    var onlyGreen={};
+    w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
+      var g=o.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];});
+      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(o.opponent.name);}});
+    var groups=[];
+    rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var last=groups[groups.length-1];
+      if(last&&String(last[0].rank).replace("=","")===String(r.rank).replace("=","")) last.push(r); else groups.push([r]);});
+    var medals=[],more=0;
+    groups.forEach(function(group,g){
+      if(g>=WR_MEDALS.length){more+=group.length;return;}
+      group.forEach(function(r){var save=onlyGreen[String(r.member.id)];
+        medals.push({medal:WR_MEDALS[g],member:r.member,player:r.player,category:r.category,reason:r.reason,
+          tied_with:group.filter(function(o){return o!==r;}).map(function(o){return o.member.name;}),
+          save:save?"consider saving — our only favorable direct option vs "+save.join(", "):""});});
+    });
+    var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){return {member:r.member,player:r.player,reason:r.reason};};
+    var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
+    var unknown=rows.filter(pick("X")).map(function(r){return r.player;});
+    var headline=!unplayed[j]?b.opponent.name+" has already played."
+      :medals.length?"Best-supported response: "+medals[0].member.name+(medals[0].tied_with.length?" or "+medals[0].tied_with.join(", ")+" (tied)":"")
+      :unordered.length?"No direct record to order — shared-opponent candidates only (≈, not ordered)"
+      :"No evidence-backed option left among our remaining players";
+    return {opponent:b.opponent,label:b.opponent_label,headline:headline,medals:medals,more:more,unordered:unordered,avoid:avoid,unknown:unknown};
+  }
+  function wrNextSendLines(ns){
+    var lines=[ns.headline];
+    ns.medals.forEach(function(m){lines.push(m.medal+" "+m.player+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
+    if(ns.more) lines.push("+ "+plural(ns.more,"more direct candidate")+" below the top three");
+    ns.unordered.forEach(function(u){lines.push("≈ "+u.player+" — "+u.reason);});
+    ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.player+" — "+a.reason);});
+    if(ns.unknown.length) lines.push("❓ Unknown (no evidence, not weak): "+ns.unknown.join(", "));
+    return lines;
+  }
+  window.__ucNextSend=function(ourKey,oppKey,fmt,j,remainingIds,unplayed){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
+    return wrNextSendLines(wrNextSend(w,j,rem,unplayed||w.theirs.map(function(){return true;})));
+  };
+  // The Next Send card: chips for every unplayed opponent (the one they put up), then the responses.
+  function wrNextSendCard(w,plan){
+    var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
+    if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
+    var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
+    if(sel===undefined) sel=open[0];
+    var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel],note=wrCoachSummary(opp.id);
+    var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
+    return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
+      +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">They put up:</span>'
+      +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
+      +'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p><ul class="ns-list">'
+      +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')
+        +' <button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓ Sent</button>');}).join("")
+      +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
+      +ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>');}).join("")
+      +ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
+      +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"")
+      +'</ul>'+(note?'<p class="ns-coach">📝 '+esc(note)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')
+      +'</div>';
+  }
+
   function wrList(items,empty){return '<ul class="wr-list">'+(items.length?items.map(function(t){return '<li>'+esc(t)+'</li>';}).join(""):'<li class="muted">'+esc(empty)+'</li>')+'</ul>';}
   function wrChip(cat){return '<span class="cat-dot cat-'+cat+'" title="'+esc(WR_CAT_LABELS[cat])+'"></span>';}
   // "Tonight" at the top of the page: the fixture and the decision overview first, setup below.
@@ -217,11 +285,12 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
+      +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+(riskNames.length?'<span>No favorable direct option left vs '+esc(riskNames.join(", "))+'</span>':'<span>None — every unplayed opponent still has a favorable direct option</span>')+'</div>'
-      +'</div><div class="tonight-grid detail">'
+      +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
       +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
       +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
@@ -371,6 +440,21 @@
         renderTeamMatchups();
         var d=document.getElementById("wr-pair");if(d&&d.scrollIntoView&&WR_STATE.pair) d.scrollIntoView({block:"nearest"});
       }
+    });
+  })();
+  // Next Send: pick the opponent they put up; "Mark sent" records the pairing as played (planning marks only).
+  (function(){
+    var el=document.getElementById("tonight");
+    if(!el) return;
+    el.addEventListener("click",function(ev){
+      var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
+      if(!t) return;
+      var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value];
+      if(t.hasAttribute("data-next")){WR_STATE.next=t.getAttribute("data-next");renderTeamMatchups();
+        var again=el.querySelector('.ns-chip.on');if(again) again.focus();return;}
+      if(t.hasAttribute("data-send-our")&&ta&&tb){var ck=wrCtx(ta,tb);
+        wrSetMark("our",ck,t.getAttribute("data-send-our"),"l","Played");wrSetMark("opp",ck,t.getAttribute("data-send-opp"),"p",true);
+        WR_STATE.next=null;renderTeamMatchups();}
     });
   })();
   // "Start here" opens on a first visit; once closed it stays closed on this device.

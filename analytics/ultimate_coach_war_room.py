@@ -309,6 +309,91 @@ def war_room_pair(
     }
 
 
+# ---- Next Send: "they put up this player -- who do I send?" ----
+
+MEDALS = ("🥇", "🥈", "🥉")
+
+
+def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = None,
+              unplayed: list[bool] | None = None) -> dict[str, Any]:
+    """Responses to opponent j among our remaining players, from the War Room ranking only.
+
+    Medals go to ORDERED direct candidates (favorable, then even direct records) in ranking order: players
+    with the same evidence share a medal and are named as tied. Shared-opponent-only candidates are one
+    unordered group ("≈"), never medalled. Concerning direct records are listed to avoid; players with no
+    evidence are unknown (not weak). A medalled player who is our only remaining favorable direct option vs
+    another unplayed opponent is flagged "consider saving". Nothing is re-scored, weighted or blended."""
+    blocks = war_room["blocks"]
+    remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
+    unplayed = [True] * len(blocks) if unplayed is None else unplayed
+    block = blocks[j]
+    rows = [r for r in block["rows"] if r["member"]["id"] in remaining]
+    only_green: dict[Any, list[str]] = {}
+    for k, other in enumerate(blocks):
+        if k == j or not unplayed[k]:
+            continue
+        greens = [r for r in other["rows"] if r["category"] == "G" and r["member"]["id"] in remaining]
+        if len(greens) == 1:
+            only_green.setdefault(greens[0]["member"]["id"], []).append(other["opponent"]["name"])
+
+    medals: list[dict[str, Any]] = []
+    more = 0
+    groups: list[list[dict[str, Any]]] = []
+    for r in rows:
+        if r["category"] in ("G", "E"):
+            if groups and groups[-1][0]["rank"].rstrip("=") == r["rank"].rstrip("="):
+                groups[-1].append(r)
+            else:
+                groups.append([r])
+    for g, group in enumerate(groups):
+        if g >= len(MEDALS):
+            more += len(group)
+            continue
+        for r in group:
+            tied = [o["member"]["name"] for o in group if o is not r]
+            save = only_green.get(r["member"]["id"])
+            medals.append({
+                "medal": MEDALS[g], "member": r["member"], "player": r["player"], "category": r["category"],
+                "reason": r["reason"], "tied_with": tied,
+                "save": f"consider saving — our only favorable direct option vs {', '.join(save)}" if save else "",
+            })
+    unordered = [{"member": r["member"], "player": r["player"], "reason": r["reason"]}
+                 for r in rows if r["category"] == "I"]
+    # Worst recorded direct record first: the reverse of the ranking order.
+    avoid = [{"member": r["member"], "player": r["player"], "reason": r["reason"]}
+             for r in reversed(rows) if r["category"] == "R"]
+    unknown = [r["player"] for r in rows if r["category"] == "X"]
+    if not unplayed[j]:
+        headline = f"{block['opponent']['name']} has already played."
+    elif medals:
+        headline = f"Best-supported response: {medals[0]['member']['name']}" + (
+            f" or {', '.join(medals[0]['tied_with'])} (tied)" if medals[0]["tied_with"] else "")
+    elif unordered:
+        headline = "No direct record to order — shared-opponent candidates only (≈, not ordered)"
+    else:
+        headline = "No evidence-backed option left among our remaining players"
+    return {"opponent": block["opponent"], "label": block["opponent_label"], "headline": headline,
+            "medals": medals, "more": more, "unordered": unordered, "avoid": avoid, "unknown": unknown}
+
+
+def next_send_lines(ns: dict[str, Any]) -> list[str]:
+    """Plain-text Next Send lines shared by the HTML (cross-checked) and Excel/packet texts."""
+    lines = [ns["headline"]]
+    for m in ns["medals"]:
+        lines.append(f"{m['medal']} {m['player']} — {m['reason']}"
+                     + (f" · tied with {', '.join(m['tied_with'])}" if m["tied_with"] else "")
+                     + (f" · {m['save']}" if m["save"] else ""))
+    if ns["more"]:
+        lines.append(f"+ {plural(ns['more'], 'more direct candidate')} below the top three")
+    for u in ns["unordered"]:
+        lines.append(f"≈ {u['player']} — {u['reason']}")
+    for a in ns["avoid"]:
+        lines.append(f"⚠ Avoid {a['player']} — {a['reason']}")
+    if ns["unknown"]:
+        lines.append("❓ Unknown (no evidence, not weak): " + ", ".join(ns["unknown"]))
+    return lines
+
+
 # ---- schedule helpers shared by the artifacts ----
 
 def filter_codes(fixture: dict[str, Any]) -> list[str]:

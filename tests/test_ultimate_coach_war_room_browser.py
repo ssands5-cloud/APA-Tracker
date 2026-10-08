@@ -13,7 +13,8 @@ from playwright.sync_api import sync_playwright
 
 from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_matchup_evidence import build_pair_index, members_by_scope
-from analytics.ultimate_coach_war_room import SENDABLE, meetings_index, sl_bucket_index, war_room_pair
+from analytics.ultimate_coach_war_room import (SENDABLE, meetings_index, next_send, next_send_lines,
+                                               sl_bucket_index, war_room_pair)
 from tests.test_excel_war_room_formulas import _payload
 from ui.ultimate_coach import render
 
@@ -455,6 +456,46 @@ def test_player_vs_player_reads_like_coaching_software(tmp_path: Path):
             assert "Sun Sep 20, 2026" in meetings and "T19:00" not in meetings
             th = page.locator("#wr-matrix thead th").nth(1)
             assert th.locator(".id-line").evaluate("e => getComputedStyle(e).display") == "block"
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp_path: Path):
+    py = _python_war_room()
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            for j in range(len(py["blocks"])):
+                for remaining, unplayed in ((None, None), ([3], None), (None, [True, False])):
+                    js = page.evaluate(f"window.__ucNextSend({OURS!r}, {THEIRS!r}, 'EIGHT', {j}, "
+                                       f"{'null' if remaining is None else remaining}, "
+                                       f"{'null' if unplayed is None else str(unplayed).lower()})")
+                    ids = None if remaining is None else set(remaining)
+                    assert js == next_send_lines(next_send(py, j, remaining=ids, unplayed=unplayed)), (j, remaining)
+            card = page.locator("#tonight #next-send")
+            text = card.inner_text()
+            assert "WHO SHOULD I SEND NEXT?" in text.upper() and "They put up:" in text
+            assert "Best-supported response: Ann Archer" in text and "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text
+            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning" in text
+            # Chips: tap Eve -> shared-only, never medalled.
+            page.click("#next-send .ns-chip:has-text('Eve Ellis')")
+            text = page.locator("#next-send").inner_text()
+            assert "shared-opponent candidates only (≈, not ordered)" in text and "🥇" not in text
+            # A coach note on Eve is shown as opinion.
+            page.fill('#scouting-cards textarea[data-pid="11"]', "Slow, careful safeties")
+            page.click("#next-send .ns-chip:has-text('Cam Cole')")
+            page.click("#next-send .ns-chip:has-text('Eve Ellis')")
+            assert "📝 Coach: Slow, careful safeties (your opinion, not APA facts)" in page.locator("#next-send").inner_text()
+            # ✓ Sent vs Cam: Ann Played, Cam played; Eve is the only chip left and Ann no longer appears.
+            page.click("#next-send .ns-chip:has-text('Cam Cole')")
+            page.click("#next-send .ns-send[data-send-our='1']")
+            chips = page.locator("#next-send .ns-chip")
+            assert chips.count() == 1 and "Eve Ellis" in chips.nth(0).inner_text()
+            assert "Ann Archer" not in page.locator("#next-send").inner_text()
+            assert page.input_value('#lineup-lab select[data-plan="lineup"][data-pid="1"]') == "Played"
+            assert page.is_checked('#lineup-lab input[data-plan="played"][data-pid="10"]')
             assert errors == []
         finally:
             browser.close()

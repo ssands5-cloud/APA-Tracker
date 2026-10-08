@@ -92,6 +92,25 @@ body.match-night header h1 { font-size:17px; }
 body.match-night .freshness { margin-top:6px; font-size:11px; }
 body.match-night .freshness span:nth-child(n+3) { display:none; }
 .tonight-grid.decide { margin-bottom:10px; }
+.next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
+.next-send h3 { margin:0 0 2px; font-size:16px; text-transform:uppercase; letter-spacing:.4px; color:#5d4413; }
+.ns-ask { align-self:center; font-size:12px; color:var(--muted); }
+@media (max-width:600px) { .tonight-grid.decide { gap:6px; } .tonight-grid.decide > div { padding:6px 9px; } }
+.ns-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; align-items:center; }
+.ns-chip { min-height:40px; padding:6px 10px; border-radius:20px; border:1px solid #c9b88f; background:#fff; color:#3b2f17; font-size:13px; }
+.ns-chip.on { background:#5d4413; color:#fff; border-color:#5d4413; font-weight:700; }
+.ns-head { margin:2px 0; font-size:15px; }
+.ns-list { list-style:none; margin:0; padding:0; font-size:13px; }
+.ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
+.ns-m { font-size:16px; }
+.ns-save { color:#7a4b00; font-weight:700; }
+.ns-avoid { background:#fdecec; border-left-color:#b42318 !important; }
+.ns-unordered { background:#fff8db; }
+.ns-unknown { color:var(--muted); }
+.ns-send { margin-left:4px; min-height:28px; padding:2px 8px; font-size:12px; line-height:1.2; vertical-align:baseline; }
+.ns-coach { margin:6px 0 0; font-size:13px; background:#eef4ff; padding:4px 6px; border-radius:6px; }
+.ns-foot { margin:-4px 0 8px; font-size:11px; }
+@media print { .ns-chips, .ns-send { display:none; } }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }
 .tonight-grid.detail > div { font-size:12px; }
