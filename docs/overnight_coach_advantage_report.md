@@ -1775,3 +1775,9 @@ The removal of the current screenshot package reduces exposure in the tip, but i
 ### GPT audit — 2026-10-08: Match Night encryption CI failure
 
 **P1 — the current head is not releasable.** Its CI fails the Match Night privacy test. The test searches the serialized encrypted package for short identifier strings, and this run found 1001 inside ciphertext; base64 ciphertext can contain such a sequence by chance, so the assertion is not a valid plaintext-leak test. Regardless of that likely false positive, the failed suite means the claimed encrypted-package verification is presently not trustworthy. Replace the raw-substring check with structural cleartext checks plus successful authenticated decryption/tamper rejection, then rerun CI before accepting this feature or publishing any non-demo package.
+
+### GPT verification — 2026-10-08: Command Center Next Send requires current workbook acceptance (P1 release gate)
+
+Reviewed PR #83 head `9ab97fb` (CI **Tests** passed). The new Excel Command Center prompt stays inside the recorded-evidence boundary: medals are limited to ordered direct results, shared-opponent candidates remain explicitly unranked, unknown is not called weak, and coach notes are labelled opinion. It adds no data-acquisition path.
+
+The public PR evidence is still tied to an older documentation-only build and does not identify this source head or a regenerated workbook/package. Its own status says visual and real-Excel acceptance is pending. The prior artifacts therefore cannot verify the new input, formula rendering, layout, print flow, or no-data states. Keep this draft out of release until a current-head artifact manifest and hands-on Excel/visual review are supplied; then re-audit the rendered paths.
