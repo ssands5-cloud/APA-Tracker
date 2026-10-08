@@ -1,6 +1,6 @@
 /* Ultimate Coach Match Night: offline cache. The package is fetched network-first (a fresh publish
    wins whenever the phone is online) and falls back to the last downloaded copy offline. */
-var CACHE = "uc-match-night-vH8ZSdy8Bw4l";
+var CACHE = "uc-match-night-R7rVz8D2te5O";
 var SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png",
              "icons/apple-touch-icon.png", "package.json"];
 self.addEventListener("install", function (e) {
