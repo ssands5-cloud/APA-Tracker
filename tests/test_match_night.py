@@ -107,6 +107,8 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             tonight = page.inner_text("#tonight")
             assert "Sun Oct 11, 2026 · 11:00 AM MDT" in tonight and "Falcons" in tonight
             assert "Match Night package" in page.inner_text("body")
+            # Freshness describes the whole snapshot, not the one packaged fixture.
+            assert "latest recorded result Sun Sep 27, 2026" in page.inner_text(".freshness")
             # Phone first screen: the match, best sends, threats and risks are all visible without scrolling.
             for sel in ("#tonight .when", "#tonight .decide-sends", "#tonight .decide-threats", "#tonight .decide-risks"):
                 box = page.locator(sel).bounding_box()

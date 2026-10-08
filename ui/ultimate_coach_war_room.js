@@ -210,7 +210,7 @@
       if(!s.length){sends.push("vs "+b.opponent.name+": no evidence-backed option left");return;}
       var r=s[0],direct=r.category!=="I";
       var tied=direct&&s.length>1&&s[1].rank===r.rank;
-      sends.push("vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):"≈ shared-opponent only (one of "+s.filter(function(x){return x.category==="I";}).length+" unordered candidates)"));
+      sends.push("vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)));
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});

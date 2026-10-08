@@ -34,7 +34,7 @@ from typing import Any
 from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_match_day import DEFAULT_MATCH_DAY_TIMEZONE, viewer_player
 from analytics.ultimate_coach_excel_payload import _team_scope_key
-from analytics.ultimate_coach_war_room import PAGES_URL, build_local_date, date_label, default_matchup  # noqa: F401
+from analytics.ultimate_coach_war_room import PAGES_URL, build_local_date, date_label, default_matchup, freshness  # noqa: F401
 
 PACKAGE_FORMAT = "uc-match-night-v1"
 KDF_ITERATIONS = 600_000
@@ -80,7 +80,7 @@ def select_fixture(payload: dict[str, Any], viewer_external_id: str, built_at: s
             "side": chosen["side"], "fixture": fixture, "labels": labels, "rosters": rosters}
 
 
-def slim_payload(payload: dict[str, Any], pick: dict[str, Any]) -> dict[str, Any]:
+def slim_payload(payload: dict[str, Any], pick: dict[str, Any], built_at: str = "") -> dict[str, Any]:
     """Only what one fixture needs. Every value is copied from the snapshot; nothing is synthesised."""
     scopes = {pick["our_scope"], pick["opp_scope"]}
     roster_ids = {r["player_id"] for r in pick["rosters"] if r["team_scope_key"] in scopes}
@@ -113,6 +113,9 @@ def slim_payload(payload: dict[str, Any], pick: dict[str, Any]) -> dict[str, Any
     slim = {k: v for k, v in payload.items() if k not in ("players", "evidence", "match_day")}
     slim.update(players=players, evidence=evidence, match_day=match_day,
                 counts={"players": len(roster_ids), "head_to_head_rows": len(evidence)})
+    tz = source_md.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE
+    full = freshness(source_md, build_local_date(built_at, tz) if built_at else None)
+    slim["snapshot_freshness"] = {k: full[k] for k in ("latest_result", "unplayed_before_build")}
     slim["match_night"] = {
         "fixture_label": f"{pick['labels'][pick['our_scope']]} vs {pick['labels'][pick['opp_scope']]}",
         "fixture_display": pick["fixture"].get("local_display") or "",
@@ -188,7 +191,7 @@ h1 { text-align:center; margin:0 0 4px; font-size:24px; }
 label { display:block; font-size:13px; font-weight:700; margin-bottom:6px; }
 input[type=password] { width:100%; font-size:17px; padding:13px 12px; border-radius:10px; border:0; }
 .remember { display:flex; gap:8px; align-items:center; font-weight:600; font-size:14px; margin:12px 0; }
-button { width:100%; font-size:17px; font-weight:800; padding:13px; border-radius:10px; border:0; background:#b8862b;
+button { width:100%; font-family:inherit; font-size:17px; font-weight:800; padding:13px; border-radius:10px; border:0; background:#b8862b;
   color:#1b1406; cursor:pointer; }
 button:disabled { opacity:.6; }
 .status { min-height:22px; margin-top:12px; text-align:center; font-weight:600; }
@@ -357,7 +360,7 @@ def build_site(payload: dict[str, Any], *, viewer_external_id: str, passphrase: 
 
     check_passphrase(passphrase)
     pick = select_fixture(payload, viewer_external_id, built_at, match_id)
-    slim = slim_payload(payload, pick)
+    slim = slim_payload(payload, pick, built_at)
     html = render(slim, built_at=built_at, viewer_member_external_id=viewer_external_id, viewer_card_number=None,
                   match_night=slim["match_night"])
     tz = (payload.get("match_day") or {}).get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE

@@ -309,6 +309,8 @@ def render(
     tz_name = str(match_day.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE)
     build_local = build_local_date(built_at, tz_name) if built_at else None
     fresh = freshness(match_day, build_local)
+    if payload.get("snapshot_freshness"):      # Match Night package: freshness of the whole snapshot, not one fixture
+        fresh = {**fresh, **payload["snapshot_freshness"]}
     compact_payload["build"] = {"built_at": built_at, "build_local": build_local, **{k: fresh[k] for k in (
         "build_date", "latest_result", "unplayed_before_build")}}
     # Start here: the same onboarding text, worked example and version as the Excel START HERE tab.
