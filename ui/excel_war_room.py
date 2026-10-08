@@ -670,10 +670,12 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'=IF(G{r},IF(H{r}<=3,{medal.format(r=r)}&" "&INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Reason],B{r})'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
-            f'" · consider saving — our only favorable direct option vs another unplayed opponent",""),""),"")')),
+            f'" · consider saving — our only favorable direct option vs another unplayed opponent","")'
+            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),""),"")')),
         ("wr_NsMore", lambda k, r: f'=AND(G{r},H{r}>3)'),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=M{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
-        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="I")', f'INDEX({ME}[Player],B{r})')),
+        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="I")', f'INDEX({ME}[Player],B{r})'
+                                              f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
         ("wr_NsUnkJoin", lambda k, r: _join(k, r, "O", f'AND(E{r},D{r}="X")', f'INDEX({ME}[Player],B{r})')),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
         ("wr_NsAvoidOk", lambda k, r: (f'=IF(P{r}="",FALSE,AND(INDEX({ME}[Category],P{r})="R",IFERROR(INDEX(wr_OurRemaining,'

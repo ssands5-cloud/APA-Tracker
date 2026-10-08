@@ -540,20 +540,23 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
         "Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded results only — not odds.",
-        f"🥇 {ANN} — 2-0 direct record (2 meetings) — favorable",
-        f"🥈 {DEE} — 1-1 direct record (2 meetings) — even",
+        f"🥇 {ANN} — 2-0 direct record (2 meetings) — favorable · availability unknown",
+        f"🥈 {DEE} — 1-1 direct record (2 meetings) — even · availability unknown",
         f"⚠ Avoid: {BEA} — 0-2 (2 meetings)",
     ]
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
     assert _next_send(book) == [
         "No direct record to order — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN}",
+        f"≈ Not ordered (shared-opponent results only): {ANN} (availability unknown)",
         f"⚠ Avoid: {DEE} — 0-2 (2 meetings)",
         f"❓ Unknown (no evidence, not weak): {BEA}",
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"🥇 {DEE} — 1-1 direct record (2 meetings) — even", f"⚠ Avoid: {BEA} — 0-2 (2 meetings)"]
+    assert _next_send(book)[1:] == [f"🥇 {DEE} — 1-1 direct record (2 meetings) — even · availability unknown",
+                                    f"⚠ Avoid: {BEA} — 0-2 (2 meetings)"]
+    book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
+    assert _next_send(book)[1] == f"🥇 {DEE} — 1-1 direct record (2 meetings) — even"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 

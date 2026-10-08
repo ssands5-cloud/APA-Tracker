@@ -372,6 +372,10 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
     remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
     unplayed = [True] * len(blocks) if unplayed is None else unplayed
     block = blocks[j]
+    if not unplayed[j]:          # a used target gets no active response at all (GPT audit #84 P2)
+        return {"opponent": block["opponent"], "label": block["opponent_label"],
+                "headline": f"{block['opponent']['name']} has already played.",
+                "medals": [], "more": 0, "unordered": [], "avoid": [], "unknown": []}
     rows = [r for r in block["rows"] if r["member"]["id"] in remaining]
     only_green: dict[Any, list[str]] = {}
     for k, other in enumerate(blocks):
@@ -408,9 +412,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
     avoid = [{"member": r["member"], "player": r["player"], "reason": r["reason"]}
              for r in reversed(rows) if r["category"] == "R"]
     unknown = [r["player"] for r in rows if r["category"] == "X"]
-    if not unplayed[j]:
-        headline = f"{block['opponent']['name']} has already played."
-    elif medals:
+    if medals:
         headline = f"Best-supported response: {medals[0]['member']['name']}" + (
             f" or {', '.join(medals[0]['tied_with'])} (tied)" if medals[0]["tied_with"] else "")
     elif unordered:

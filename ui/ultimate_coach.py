@@ -101,6 +101,15 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
   body.match-night .demo-flag { padding:3px 8px; margin:0 0 6px; font-size:13px; }
   body.match-night .freshness span { padding:2px 8px; }
   body.match-night nav.sections { margin-top:6px; }
+  /* Status as two short text lines instead of pills; the UTC stamp repeats the date (shown on the lock screen). */
+  body.match-night .freshness { gap:0 10px; margin-top:4px; }
+  body.match-night .freshness span { border:0; background:none; padding:0; }
+  body.match-night .freshness .utc { display:none; }
+  body.match-night #tonight .vs { margin:1px 0 4px; }
+  body.match-night .tonight-grid.decide > div { padding:4px 9px; }
+  body.match-night .tonight-grid.decide b { margin-bottom:1px; }
+  body.match-night .next-send { margin:2px 0 6px; }
+  body.match-night header h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 }
 .tonight-grid.decide { margin-bottom:10px; }
 .next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
@@ -117,6 +126,7 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
 .ns-m { font-size:16px; }
 .ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; }
+.ns-avail { color:#6b4d00; font-style:italic; }
 .ns-save { color:#7a4b00; font-weight:700; }
 .ns-more summary { cursor:pointer; font-size:13px; padding:3px 6px; background:#fdecec; border-left:4px solid #b42318; border-radius:4px; }
 .ns-avoid { background:#fdecec; border-left-color:#b42318 !important; }
@@ -129,7 +139,9 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .mv-toggle { display:inline-flex; border:1px solid #c9b88f; border-radius:999px; overflow:hidden; }
 .mv-toggle .mv { border:0; border-radius:0; background:#fff; color:#3b2f17; min-height:36px; padding:4px 12px; font-size:13px; }
 .mv-toggle .mv.on { background:#5d4413; color:#fff; font-weight:700; }
-.coach-op { display:block; font-style:normal; font-size:12px; color:#2f4a7a; }
+.note-line, .note-more { display:block; font-size:12px; color:#2f4a7a; }
+.note-line, .note-more summary { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.note-more summary { cursor:pointer; } .note-line span, .note-more summary span { display:inline !important; } .note-more[open] summary { white-space:normal; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
 @media (max-width:600px) {
@@ -137,6 +149,8 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
   .ns-chips { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; padding-bottom:2px; }
   .ns-chip { flex:0 0 auto; white-space:nowrap; min-height:38px; }
   .ns-ask { flex:0 0 auto; }
+  .ns-sent-word { display:none; }
+  .ns-send { min-width:40px; min-height:36px; }
 }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }
@@ -576,7 +590,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + ' <i class="utc">(' + escape(built_at) + ")</i>" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 {f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 {start_here}

@@ -164,6 +164,14 @@
     var s=(t1+(t1&&t2?" · ":"")+t2+((t1||t2)&&n?": ":"")+n).trim();
     return s?"Coach: "+s:"";
   }
+  // First-screen coach note: one line; a longer note opens to its full text (GPT audit #84: a long
+  // observation must not push Risks off a phone screen, and must stay reachable).
+  function wrNotePreview(n,label){
+    if(!n) return "";
+    var full=n+" ("+label+")";
+    if(n.length<=48) return '<span class="note-line">📝 '+esc(full)+'</span>';
+    return '<details class="note-more"><summary>📝 '+esc(n.slice(0,36).replace(/\s+\S*$/,""))+'… <span class="muted">('+esc(label)+')</span></summary>'+esc(n)+'</details>';
+  }
   function wrSetCoach(pid,field,value){var c=WR_PLAN.coach[String(pid)]||(WR_PLAN.coach[String(pid)]={});if(value) c[field]=value; else delete c[field];wrSave();}
   function wrSave(){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));}catch(e){}}
   function wrCtx(ta,tb){
@@ -218,7 +226,9 @@
   // are "Avoid" (worst first); no evidence is unknown, never weak. Nothing is re-scored or weighted.
   var WR_MEDALS=["🥇","🥈","🥉"];
   function wrNextSend(w,j,rem,unplayed){
-    var b=w.blocks[j],rows=b.rows.filter(function(r){return rem[String(r.member.id)];});
+    var b=w.blocks[j];
+    if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",medals:[],more:0,unordered:[],avoid:[],unknown:[]};
+    var rows=b.rows.filter(function(r){return rem[String(r.member.id)];});
     var onlyGreen={};
     w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
       var g=o.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];});
@@ -237,8 +247,7 @@
     var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){return {member:r.member,player:r.player,reason:r.reason};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return r.player;});
-    var headline=!unplayed[j]?b.opponent.name+" has already played."
-      :medals.length?"Best-supported response: "+medals[0].member.name+(medals[0].tied_with.length?" or "+medals[0].tied_with.join(", ")+" (tied)":"")
+    var headline=medals.length?"Best-supported response: "+medals[0].member.name+(medals[0].tied_with.length?" or "+medals[0].tied_with.join(", ")+" (tied)":"")
       :unordered.length?"No direct record to order — shared-opponent candidates only (≈, not ordered)"
       :"No evidence-backed option left among our remaining players";
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,medals:medals,more:more,unordered:unordered,avoid:avoid,unknown:unknown};
@@ -264,18 +273,20 @@
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
     if(sel===undefined) sel=open[0];
     var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel],note=wrCoachSummary(opp.id);
+    // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
+    var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
     return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">They put up:</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.medals.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
       +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+'</span>'
-        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓ Sent</button>');}).join("")
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)+'</span>'
+        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
       +(function(){
         // With medals, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>');}).join("");
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
           +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
         if(!ns.medals.length) return unord+rest+'</ul>';
@@ -286,7 +297,7 @@
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
       })()
-      +(note?'<p class="ns-coach">📝 '+esc(note)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')
+      +(note?'<div class="ns-coach">'+wrNotePreview(note,"your opinion, not APA facts")+'</div>':'')
       +'</div>';
   }
 
@@ -321,7 +332,7 @@
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+(n?' <i class="coach-op">📝 '+esc(n)+' (opinion)</i>':'')+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+(n?wrNotePreview(n,"opinion"):'')+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+(riskNames.length?'<span>No favorable direct option left vs '+esc(riskNames.join(", "))+'</span>':'<span>None — every unplayed opponent still has a favorable direct option</span>')+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'

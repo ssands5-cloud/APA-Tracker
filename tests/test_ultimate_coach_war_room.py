@@ -215,7 +215,10 @@ def test_next_send_medals_only_ordered_direct_candidates_and_lists_avoid_and_unk
     assert quin["medals"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
     # Marks: Bea used -> nothing to order vs Opal; Opal played -> says so.
     assert next_send(wr, 0, remaining={1, 3})["medals"] == []
-    assert next_send(wr, 0, unplayed=[False, True, True])["headline"] == "Opal has already played."
+    used = next_send(wr, 0, unplayed=[False, True, True])          # a used target: no active response at all
+    assert used["headline"] == "Opal has already played."
+    assert (used["medals"], used["unordered"], used["avoid"], used["unknown"], used["more"]) == ([], [], [], [], 0)
+    assert next_send_lines(used) == ["Opal has already played."]
 
 
 def test_next_send_ties_share_a_medal_flags_players_to_save_and_counts_the_rest():

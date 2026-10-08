@@ -478,6 +478,12 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             text = card.inner_text()
             assert "WHO SHOULD I SEND NEXT?" in text.upper() and "They put up:" in text
             assert "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
+            assert text.count("availability unknown") == 2                     # said at the action, still eligible
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
+            assert page.locator("#next-send .ns-medal").nth(0).inner_text().count("availability unknown") == 0
+            assert page.locator("#next-send .ns-medal").nth(1).inner_text().count("availability unknown") == 1
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
+            text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
             assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2)"
             card.locator(".ns-more summary").click()

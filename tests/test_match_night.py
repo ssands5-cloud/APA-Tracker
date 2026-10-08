@@ -192,3 +192,32 @@ def test_demo_label_persists_cache_is_isolated_and_errors_never_replace_the_good
             browser.close()
     finally:
         httpd.shutdown()
+
+
+def test_a_long_coach_note_stays_reachable_without_pushing_risks_off_a_safari_screen(served):
+    """GPT audit #84: a 24-word note on a dangerous opponent pushed Open Risks below a 390x664 Safari view."""
+    note = ("Very patient safety player who waits for mistakes, plays long defensive innings, rarely breaks well "
+            "and often struggles to close racks under pressure late")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(**{**IPHONE, "viewport": {"width": 390, "height": 664}})
+            page = ctx.new_page()
+            page.goto(served)
+            page.fill("#pass", PASS)
+            page.click("#go")
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            page.fill('#scouting-cards textarea[data-pid="11"]', note)   # Eve: tonight's dangerous opponent
+            page.wait_for_timeout(300)
+            page.reload()                                                   # saved note, remembered unlock
+            page.wait_for_selector("#tonight .decide-threats", timeout=20000)
+            threats = page.locator("#tonight .decide-threats")
+            assert "(opinion)" in threats.inner_text() and note not in threats.inner_text()   # one-line preview
+            for sel in ("#tonight .when", "#next-send", "#tonight .decide-threats", "#tonight .decide-risks"):
+                box = page.locator(sel).bounding_box()
+                assert box and box["y"] + box["height"] <= 664, (sel, box)
+            threats.locator(".note-more summary").click()                  # the full text is one tap away
+            assert note in threats.inner_text()
+            assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        finally:
+            browser.close()
