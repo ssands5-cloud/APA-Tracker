@@ -174,3 +174,42 @@ def test_uncommitted_source_changes_are_refused(canon):
     with pytest.raises(PublishRefused, match="uncommitted changes"):
         publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
     assert not _pages(canon).exists()
+
+
+def test_a_late_link_refuses_before_any_earlier_file_is_deleted(canon, tmp_path):
+    """GPT audit #84 (late-link repro): with index.html from the last good build and package.json as a
+    junction, the publisher used to delete index.html first and refuse only at package.json."""
+    outside = tmp_path / "outside-package"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_text("outside sentinel", encoding="utf-8")
+    site = canon / "tmp" / "match_night_site"
+    site.mkdir(parents=True)
+    old_index = site / "index.html"
+    old_index.write_text("last good package", encoding="utf-8")
+    _link(site / "package.json", outside)
+    with pytest.raises(PublishRefused, match="link/junction"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
+    assert old_index.read_text(encoding="utf-8") == "last good package"     # nothing was deleted
+    assert sentinel.read_text(encoding="utf-8") == "outside sentinel"
+    assert not _pages(canon).exists()
+
+
+def test_a_link_made_during_the_build_never_reaches_the_published_package(canon, tmp_path):
+    publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_demo_builder)
+    pages = _pages(canon)
+    published = {name: (pages / name).read_bytes() for name in PUBLISHED}
+    head = git(pages, "rev-parse", "HEAD")
+    outside = tmp_path / "outside-late"
+    outside.mkdir()
+
+    def sneaky(site):
+        _demo_builder(site)
+        (site / "sw.js").unlink()
+        _link(site / "sw.js", outside)                 # appears only after the earlier preflight passed
+
+    with pytest.raises(PublishRefused, match="link/junction"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=sneaky)
+    assert git(pages, "rev-parse", "HEAD") == head                                  # no new commit
+    assert git(pages, "status", "--porcelain", "--untracked-files=all") == ""      # nothing copied
+    assert {name: (pages / name).read_bytes() for name in PUBLISHED} == published   # last good package kept

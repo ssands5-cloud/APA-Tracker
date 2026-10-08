@@ -77,8 +77,10 @@ copied, fetched or checked out, it checks:
   `gh-pages`, with **no uncommitted work** and no files outside the published allowlist.
 - **No links anywhere on the way.** No path component of the checkout, the build folder (and its
   `icons/`), the Pages checkout, or any allowlisted source and destination may be a symlink, junction
-  or other reparse point, and each must resolve inside its root. These checks run before the first
-  write and again right before each copy. Comparing resolved paths alone is not enough: GPT showed that
+  or other reparse point, and each must resolve inside its root. **All** of these paths are checked
+  together before anything is deleted or built, again after the build (before the Pages checkout is
+  touched) and again immediately before copying. So a link found on the last file can never leave an
+  earlier file already deleted (GPT's late-link case). Comparing resolved paths alone is not enough: GPT showed that
   a junctioned `tmp/` resolves "equal" on both sides.
 - **Committed source only.** Uncommitted tracked changes are refused. A real publish also needs the
   source commit on `origin`. The `gh-pages` commit records `Source: <commit>`.

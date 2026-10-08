@@ -15,21 +15,23 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import stat
 import subprocess
 import sys
 from pathlib import Path
 
-CANONICAL_ROOT = Path(r"C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker")
-CANONICAL_ORIGIN = "https://github.com/ssands5-cloud/APA-Tracker.git"
+try:                                    # imported as scripts.publish_match_night (tests)
+    from scripts.repo_boundary import (CANONICAL_ORIGIN, CANONICAL_ROOT, BoundaryRefused, check_no_links,
+                                       check_repository, inside as _inside, is_link as _is_link, same as _same)
+except ImportError:                     # run as python scripts/publish_match_night.py
+    from repo_boundary import (CANONICAL_ORIGIN, CANONICAL_ROOT, BoundaryRefused, check_no_links,  # type: ignore
+                               check_repository, inside as _inside, is_link as _is_link, same as _same)
+
 PAGES_BRANCH = "gh-pages"
 PUBLISHED = (".nojekyll", ".repo-boundary-id", "index.html", "sw.js", "manifest.webmanifest", "package.json",
              "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png")
 FOOTER = "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
-
-class PublishRefused(RuntimeError):
-    pass
+PublishRefused = BoundaryRefused        # one refusal type for every boundary and publisher guard
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> str:
@@ -37,66 +39,6 @@ def git(cwd: Path, *args: str, check: bool = True) -> str:
     if check and proc.returncode != 0:
         raise PublishRefused(f"git {' '.join(args)} failed in {cwd}: {proc.stderr.strip() or proc.stdout.strip()}")
     return proc.stdout.strip()
-
-
-def _same(a: Path, b: Path) -> bool:
-    return str(a.resolve()).lower() == str(b.resolve()).lower()
-
-
-def _inside(child: Path, parent: Path) -> bool:
-    try:
-        child.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _is_link(path: Path) -> bool:
-    """Symlink, Windows junction or any other reparse point (GPT audit #84 P1: a junction made two aliases
-    resolve to the same outside folder, so an equality check of resolved paths passed)."""
-    try:
-        st = os.lstat(path)
-    except FileNotFoundError:
-        return False
-    if stat.S_ISLNK(st.st_mode):
-        return True
-    return bool(getattr(st, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
-
-
-def check_no_links(path: Path, root: Path, what: str) -> Path:
-    """Every existing component from root down to path is a real directory/file (no symlink, junction or
-    reparse point), and the final resolved path stays inside the resolved root. Returns the logical path."""
-    root = Path(os.path.abspath(root))
-    path = Path(os.path.abspath(path))
-    try:
-        rel = path.relative_to(root)
-    except ValueError:
-        raise PublishRefused(f"{what} {path} is not inside {root}") from None
-    current = root
-    if _is_link(current):
-        raise PublishRefused(f"{what}: {current} is a link/junction; refusing")
-    for part in rel.parts:
-        current = current / part
-        if _is_link(current):
-            raise PublishRefused(f"{what}: {current} is a link/junction; refusing")
-    if not _inside(path, root):
-        raise PublishRefused(f"{what} {path} resolves outside {root.resolve()}")
-    return path
-
-
-def check_repository(repo: Path, canonical: Path = CANONICAL_ROOT, origin: str = CANONICAL_ORIGIN) -> Path:
-    """The checkout is the canonical repository (or a linked worktree of it) with the expected origin."""
-    if not _inside(repo, canonical):
-        raise PublishRefused(f"{repo.resolve()} is not inside the canonical repository {canonical}")
-    check_no_links(repo, canonical, "repository checkout")
-    repo = repo.resolve()
-    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
-    if not _same(common, canonical / ".git"):
-        raise PublishRefused(f"git common dir {common} is not {canonical / '.git'}")
-    actual_origin = git(repo, "remote", "get-url", "origin")
-    if actual_origin != origin:
-        raise PublishRefused(f"origin is {actual_origin}, expected {origin}")
-    return repo
 
 
 def check_site_dir(site: Path, repo: Path) -> Path:
@@ -144,6 +86,21 @@ def check_site_contents(site: Path) -> None:
         raise PublishRefused(f"the built site is missing {missing}")
 
 
+def preflight_paths(site: Path, pages: Path, repo: Path, canonical: Path = CANONICAL_ROOT) -> None:
+    """Every path this publish may delete, read or write -- all allowlisted build files (cleanup targets and
+    copy sources), the boundary marker, and every Pages destination -- is checked TOGETHER, so a link found
+    on the last path refuses before the first file is touched (GPT audit #84: a junctioned package.json was
+    refused only after index.html had already been deleted)."""
+    check_no_links(site, repo, "build folder")
+    check_no_links(site / "icons", repo, "build folder")
+    check_no_links(pages / "icons", canonical, "Pages checkout")
+    for name in PUBLISHED:
+        check_no_links(site / name, repo, "build folder")
+        if name == ".repo-boundary-id":
+            check_no_links(repo / name, repo, "published source")
+        check_no_links(pages / name, canonical, "published destination")
+
+
 def sync_allowlisted(site: Path, pages: Path, repo: Path, canonical: Path = CANONICAL_ROOT) -> None:
     """Copy exactly the allowlisted files (nothing is deleted except files of the same names). Every source
     and destination is checked for links/junctions immediately before it is used."""
@@ -169,6 +126,7 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
     if push and not git(repo, "branch", "-r", "--contains", source):
         raise PublishRefused(f"source commit {source[:7]} is not on origin yet; push it first")
 
+    preflight_paths(site, pages, repo, canonical)   # ALL paths, before anything is deleted or built
     if site.exists():
         for name in PUBLISHED:                      # remove only previously generated files (links refused)
             target = site / name
@@ -189,6 +147,7 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
         if subprocess.run(build, cwd=repo).returncode != 0:
             raise PublishRefused("the Match Night package was not built; nothing was published")
     check_site_dir(site, repo)
+    preflight_paths(site, pages, repo, canonical)   # a link made during the build: refuse before Pages is touched
     check_site_contents(site)
 
     if state == "missing":
@@ -203,6 +162,7 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
         git(pages, "pull", "--ff-only", "origin", PAGES_BRANCH)
         check_pages_worktree(pages, canonical)
 
+    preflight_paths(site, pages, repo, canonical)   # immediately before copying
     sync_allowlisted(site, pages, repo, canonical)
     git(pages, "add", "--", *PUBLISHED)
     if not git(pages, "status", "--porcelain", "--", *PUBLISHED):
