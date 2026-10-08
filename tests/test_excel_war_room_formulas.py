@@ -709,6 +709,19 @@ def test_formula_rows_fit_their_worst_case_text(built):
         assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines(basis, width(wr, 10, 12), 9) * 9 * 1.2, r
 
 
+def test_tall_rows_are_top_aligned_so_values_stay_with_their_row(built):
+    # Real-Excel UAT 787f6d7: Inspect's rank and SL were bottom-aligned, so in the taller rows they sat beside the
+    # NEXT player's name. Every filled cell in a row taller than two lines must read from the top.
+    for sheet in (WR, "Command Center"):
+        ws = built[sheet]
+        merged_tails = {(r, c) for m in ws.merged_cells.ranges for r in range(m.min_row, m.max_row + 1)
+                        for c in range(m.min_col, m.max_col + 1) if (r, c) != (m.min_row, m.min_col)}
+        bad = [c.coordinate for row in ws.iter_rows() for c in row
+               if c.value not in (None, "") and (c.row, c.column) not in merged_tails and c.column < 15
+               and (ws.row_dimensions[c.row].height or 15) > 32 and c.alignment.vertical != "top"]
+        assert bad == [], (sheet, bad[:20])
+
+
 def test_captain_packet_page_one_is_decision_first(book, built):
     sends = _row(built, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
     risks = _row(built, CP, "Top risks")

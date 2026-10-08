@@ -117,6 +117,13 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
                 box = page.locator(sel).bounding_box()
                 assert box and box["y"] + box["height"] <= 844, (sel, box)
             assert page.evaluate("document.documentElement.scrollWidth") <= 390
+            # The section chips scroll sideways: the right edge fades as a "more" cue, and the last chip can be
+            # scrolled fully clear of that fade (it used to stop flush at the edge, with no cue at all).
+            nav = page.evaluate("""() => { const n = document.querySelector('nav.sections'); n.scrollLeft = n.scrollWidth;
+                const last = n.lastElementChild.getBoundingClientRect(), box = n.getBoundingClientRect();
+                return {overflows: n.scrollWidth > n.clientWidth, mask: getComputedStyle(n).webkitMaskImage || getComputedStyle(n).maskImage,
+                        gap: box.right - last.right}; }""")
+            assert nav["overflows"] and "gradient" in nav["mask"] and nav["gap"] >= 24, nav
             # Remembered on this device: a reload opens straight into Tonight.
             page.wait_for_timeout(500)
             page.reload()
@@ -128,6 +135,42 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             page.wait_for_selector("#tonight .decide-sends", timeout=20000)
             assert "Falcons" in page.inner_text("#tonight")
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_iphone_webkit_reopens_offline_when_the_site_is_unreachable(tmp_path):
+    """WebKit offline reload, the open GPT #84 item. Playwright's set_offline() in WebKit fails every reload with
+    "WebKit encountered an internal error" even though the service worker holds every file, so this takes the
+    origin away for real (the server stops) -- what a phone with no signal sees."""
+    site = tmp_path / "site"
+    build_site(_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    handler.log_message = lambda *a, **k: None
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+    with sync_playwright() as pw:
+        try:
+            browser = pw.webkit.launch(headless=True)
+        except Exception as exc:                       # CI installs Chromium only
+            httpd.shutdown()
+            pytest.skip(f"Playwright WebKit is not installed here ({type(exc).__name__})")
+        try:
+            page = browser.new_context(**IPHONE).new_page()
+            page.goto(url)
+            page.fill("#pass", PASS)
+            page.click("#go")
+            page.wait_for_selector("#tonight .decide-sends", timeout=30000)
+            assert page.evaluate("navigator.serviceWorker.ready.then(r => !!r.active)")
+            page.wait_for_timeout(500)
+            page.reload()                              # remembered: straight into Tonight, now SW-controlled
+            page.wait_for_selector("#tonight .decide-sends", timeout=30000)
+            httpd.shutdown()
+            httpd.server_close()
+            page.reload()
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            assert "Falcons" in page.inner_text("#tonight")
         finally:
             browser.close()
 

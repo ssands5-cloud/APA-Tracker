@@ -172,7 +172,11 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 @media (max-width:760px) {
   header.hero p { display:none; }
   header.hero .ball { width:32px; height:32px; }
-  nav.sections { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:8px; }
+  /* The section chips scroll sideways on a phone: fade the right edge so it reads as "more this way", and pad
+     the end so the last chip can scroll fully clear of the fade. */
+  nav.sections { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:8px; padding-right:32px;
+    -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);
+    mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent); }
   nav.sections a { white-space:nowrap; padding:5px 10px; font-size:12px; }
   .freshness { gap:4px; margin-top:8px; font-size:11px; }
   .freshness span { padding:2px 7px; }

@@ -1082,6 +1082,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     view_ref = f"$K${top + 1}"
     header = top + 2
     ws.cell(row=header, column=1, value="Our player ↓ / opponent →").font = base.SUBHEAD_FONT
+    ws.cell(row=header, column=1).alignment = base.WRAP_TOP
     matrix_cols = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12][:R]
     for j, col in enumerate(matrix_cols, start=1):
         c = ws.cell(row=header, column=col, value=f'=INDEX(wr_OppLabels,{j})')
@@ -1133,8 +1134,10 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         n = f'IFERROR(INDEX(wr_OppCount,{j_ref}),0)'
         cond = f'OR({insp}="",{j_ref}="",{s}="",{rr}>{n})'
         _span(ws, r, 1, 2, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Player],{s}+{rr}))', font=SMALL)
-        ws.cell(row=r, column=3, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[Rank],{s}+{rr}))')
-        ws.cell(row=r, column=4, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[SL],{s}+{rr}))')
+        # Top-aligned like the rest of the row: in a tall row a bottom-aligned rank sat beside the NEXT player's
+        # name (real-Excel UAT 787f6d7).
+        ws.cell(row=r, column=3, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[Rank],{s}+{rr}))').alignment = base.WRAP_TOP
+        ws.cell(row=r, column=4, value=f'=IF({cond},"",INDEX(MatchupEvidence_Table[SL],{s}+{rr}))').alignment = base.WRAP_TOP
         _span(ws, r, 5, 6, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Direct Record],{s}+{rr}))', font=SMALL)
         _span(ws, r, 7, 9, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Shared-Opponent Evidence],{s}+{rr}))', font=SMALL)
         _span(ws, r, 10, 12, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Basis],{s}+{rr}))', font=SMALL)
