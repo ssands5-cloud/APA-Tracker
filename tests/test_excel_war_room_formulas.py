@@ -508,7 +508,8 @@ def test_start_here_explains_the_workbook_and_names_the_build(built):
     text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
     for needle in ("1 · What Ultimate Coach does", "2 · Quick start", "Step 1 · Go to Match Day", "Step 8 · Print the Captain Packet",
                    "3 · Workbook tour", "4 · Match night workflow", "5 · Important limitations",
-                   "Historical records are not predictions", "No validated win-probability model", "6 · Build information",
+                   "Historical records are not predictions", "No validated win-probability model", "6 · Mobile match night (phone)", "https://ssands5-cloud.github.io/APA-Tracker/",
+                   "Add to Home Screen", "7 · Build information",
                    "Workbook version: ", "Build date: Wed Oct 7, 2026", "Data freshness: latest recorded result Sun Sep 27, 2026"):
         assert needle in text, needle
     links = {c.hyperlink.location for row in ws.iter_rows() for c in row if c.hyperlink}

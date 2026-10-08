@@ -202,19 +202,31 @@
     w.ours.forEach(function(m){av[wrAvail(plan.ck,m.id)]++;var l=wrLineup(plan.ck,m.id);if(l==="Played") used++;else if(l==="Planned") planned++;});
     var cat={G:0,R:0,E:0,I:0,X:0};w.matrix.forEach(function(row){row.cells.forEach(function(c){cat[c.category]++;});});
     var noSL=w.theirs.filter(function(o){return !wrKnown(o.skill_level);}).length,unplayedN=plan.unplayed.filter(Boolean).length;
-    var sends=[];w.blocks.forEach(function(b,j){if(plan.unplayed[j]&&plan.sends[j].length&&sends.length<3) sends.push(plan.sends[j][0].member.name+" vs "+b.opponent.name+" ("+plan.sends[j][0].cell+")");});
+    // One line per unplayed opponent (up to 3): our best-supported remaining player and WHY. A shared-only
+    // pick is labelled as one unordered candidate, never "best" (GPT audit #84 P2).
+    var sends=[];w.blocks.forEach(function(b,j){
+      if(!plan.unplayed[j]||sends.length>=3) return;
+      var s=plan.sends[j];
+      if(!s.length){sends.push("vs "+b.opponent.name+": no evidence-backed option left");return;}
+      var r=s[0],direct=r.category!=="I";
+      var tied=direct&&s.length>1&&s[1].rank===r.rank;
+      sends.push("vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):"≈ shared-opponent only (one of "+s.filter(function(x){return x.category==="I";}).length+" unordered candidates)"));
+    });
+    var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
+      .map(function(o){return o.name;});
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
-      +'<div class="tonight-grid">'
+      +'<div class="tonight-grid decide">'
+      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-risks"><b>Open risks</b>'+(riskNames.length?'<span>No favorable direct option left vs '+esc(riskNames.join(", "))+'</span>':'<span>None — every unplayed opponent still has a favorable direct option</span>')+'</div>'
+      +'</div><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
       +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
       +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
       +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient evidence (nothing recorded): '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
-      +'<div><b>Best sends now</b>'+(sends.length?sends.map(esc).join('<br>'):'No evidence-backed send left')+'</div>'
-      +'<div><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return esc(t.opponent.name+" ("+wlText(t.their_wins,t.their_games)+" vs us)");}).join('<br>'):'None recorded')+'</div>'
-      +'<div><b>Open risks</b>'+(plan.risks.length?plural(plan.risks.length,"opponent")+' with no favorable option left':'None')+'</div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
   }
   function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'

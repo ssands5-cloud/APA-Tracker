@@ -237,7 +237,8 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 assert box and box["y"] < vp["height"] * 0.6, (vp, box)
                 text = page.inner_text("#tonight")
                 assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
-                assert "Ann Archer vs Cam Cole (2-0 (2))" in text and "Eve Ellis (2-0 vs us)" in text
+                assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text and "Eve Ellis — 2-0 vs our roster (2 meetings)" in text
+                assert "vs Eve Ellis: Ann Archer — ≈ shared-opponent only (one of 1 unordered candidates)" in text
                 assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
                 assert errors == []
                 page.close()

@@ -410,6 +410,15 @@ ONBOARDING_LIMITS = [
     "• Planning marks belong to one fixture: clear old marks before planning another night.",
     "• Coach Notes are your opinions, never APA facts.",
 ]
+PAGES_URL = "https://ssands5-cloud.github.io/APA-Tracker/"
+MATCH_NIGHT_GUIDE = [
+    f"• Open on your phone: {PAGES_URL} — a private Match Night package for ONE fixture, encrypted; enter the passphrase once.",
+    "• Add to Home Screen — iPhone (Safari): Share → Add to Home Screen. Android (Chrome): ⋮ menu → Add to Home screen / Install app.",
+    "• Before league night: the publisher re-publishes the package (tools/publish_match_night.ps1); open the app once while online so the phone downloads it. The lock screen shows 'Package built <date>'.",
+    "• Offline: after one unlock it opens without signal, but the data is frozen at its build date — results recorded after it are not included.",
+    "• Planning marks and coach notes you make on the phone stay on that phone; nothing is sent anywhere.",
+    "• Freshness: check the Built date, the latest recorded result and the count of earlier fixtures still UNPLAYED in the snapshot.",
+]
 COACH_TAGS = ["Slow shooter", "Fast shooter", "Strong safety player", "Good under pressure", "Struggles under pressure",
               "Consistent breaker", "Aggressive style", "Defensive style", "Runs out often", "Misses long shots"]
 

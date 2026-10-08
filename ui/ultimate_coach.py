@@ -21,6 +21,7 @@ from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_matchup_evidence import player_ref
 from analytics.ultimate_coach_war_room import (
     COACH_TAGS,
+    MATCH_NIGHT_GUIDE,
     ONBOARDING_LIMITS,
     ONBOARDING_WHAT,
     build_local_date,
@@ -81,6 +82,16 @@ button.secondary:hover { background:var(--felt-soft); }
 .tonight-links { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-weight:700; font-size:13.5px; }
 .tonight-links a { color:var(--felt-deep); }
 @media print { #tonight,#start-here { display:none !important; } }
+.mn-banner { background:#b8862b; color:#1b1406; font-weight:700; font-size:12.5px; padding:6px 14px; text-align:center; }
+body.match-night header.hero { padding:10px 14px 8px; }
+body.match-night header.hero p,body.match-night header.hero .ball { display:none; }
+body.match-night header h1 { font-size:17px; }
+body.match-night .freshness { margin-top:6px; font-size:11px; }
+body.match-night .freshness span:nth-child(n+3) { display:none; }
+.tonight-grid.decide { margin-bottom:10px; }
+.tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
+.tonight-grid.decide b { color:#5d4413; }
+.tonight-grid.detail > div { font-size:12px; }
 .start-here summary { cursor:pointer; font-size:15px; color:var(--felt-deep); }
 .start-here[open] summary { margin-bottom:10px; }
 .sh-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
@@ -264,8 +275,10 @@ def render(
     consume_evidence: bool = False,
     viewer_member_external_id: str | None = None,
     viewer_card_number: str | None = None,
+    match_night: dict[str, Any] | None = None,
 ) -> str:
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
+    compact_payload["match_night"] = match_night
     format_options = _format_options(compact_payload.get("formats_present") or [])
     format_options_markup = "".join(
         f'<option value="{escape(fmt)}">{escape(_format_label(fmt))}</option>'
@@ -327,6 +340,7 @@ def render(
         + (li(example) if example else "<li>No viewer is configured for this build: pick yourself on Match Day and it "
            "fills in team, date and fixture the same way.</li>")
         + f'</ul></div></div><h3>Important limitations</h3><ul>{li(ONBOARDING_LIMITS)}</ul>'
+        f'<h3>Mobile match night</h3><ul>{li(MATCH_NIGHT_GUIDE)}</ul>'
         f'<p class="muted">Version: {escape(version)} · Build date: {escape(fresh["build_date"])} · data current to the '
         f'latest recorded result {escape(fresh["latest_result"])}'
         + (f' · {fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED in this snapshot'
@@ -506,12 +520,12 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
 {_WAR_ROOM_CSS}</style></head>
-<body>
+<body class="{'match-night' if match_night else ''}">
 <header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner">Match Night package · {escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])} · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 <section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 {start_here}

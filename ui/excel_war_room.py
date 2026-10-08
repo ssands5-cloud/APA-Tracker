@@ -62,6 +62,7 @@ from analytics.ultimate_coach_war_room import (
     suggested_date,
     war_room_pair,
     COACH_TAGS,
+    MATCH_NIGHT_GUIDE,
     ONBOARDING_LIMITS,
     ONBOARDING_WHAT,
 )
@@ -1734,8 +1735,8 @@ def build_start_here(wb, *, stats: dict[str, Any], version: str, example: list[s
                          _fit_height(name, ws.column_dimensions["B"].width, 11, 20)))
     r += 2
     lim = _card(ws, r, 2, 9, "5 · Important limitations", list(ONBOARDING_LIMITS), title_fill=PatternFill("solid", fgColor="8A5A00"))
-    r = lim + 2
-    _card(ws, r, 2, 9, "6 · Build information",
+    r = _card(ws, lim + 2, 2, 9, "6 · Mobile match night (phone)", list(MATCH_NIGHT_GUIDE)) + 2
+    _card(ws, r, 2, 9, "7 · Build information",
           [f"Workbook version: {version}", f"Build date: {fresh['build_date']}",
            f"Data freshness: latest recorded result {fresh['latest_result']}"
            + (f" · {fresh['unplayed_before_build']} earlier fixtures still show UNPLAYED in this snapshot"
