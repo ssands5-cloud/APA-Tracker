@@ -31,8 +31,11 @@ package:
 | That one fixture on Match Day | The rest of the schedule; the league card number |
 
 The page inside is the normal Ultimate Coach cockpit, in match-night mode: a compact header and a
-banner naming the fixture. Tonight comes first: the match, best sends, dangerous opponents and open
-risks, then the counts.
+short "Match Night package" banner. Tonight comes first: the match, then **Who should I send next?**
+(tap the player they put up → 🥇🥈🥉 ordered direct records, ≈ not ordered, ⚠ avoid, ❓ unknown,
+✓ Sent), then dangerous opponents and open risks, then the per-opponent best sends and the counts.
+On a phone in Safari's browser view (toolbars shown) the match, Next Send, threats and risks fit the
+first screen; launched from the Home Screen there is room for the best sends too.
 
 ## Security model
 - The rendered page is encrypted with **AES-256-GCM**.

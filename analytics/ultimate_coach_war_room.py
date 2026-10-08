@@ -546,6 +546,7 @@ MATCH_NIGHT_GUIDE = [
     "• Add to Home Screen — iPhone (Safari): Share → Add to Home Screen. Android (Chrome): ⋮ menu → Add to Home screen / Install app.",
     "• Before league night: the publisher re-publishes the package (tools/publish_match_night.ps1); open the app once while online so the phone downloads it. The lock screen shows 'Package built <date>'.",
     "• Offline: after one unlock it opens without signal, but the data is frozen at its build date — results recorded after it are not included.",
+    "• During the match: under 'Who should I send next?' tap the player they put up. Medals = ordered direct records (same evidence, same medal); ≈ = not ordered; ⚠ = avoid; ❓ = unknown, not weak. Tap ✓ Sent to mark the pairing played.",
     "• Planning marks and coach notes you make on the phone stay on that phone; nothing is sent anywhere.",
     "• Freshness: check the Built date, the latest recorded result and the count of earlier fixtures still UNPLAYED in the snapshot.",
 ]

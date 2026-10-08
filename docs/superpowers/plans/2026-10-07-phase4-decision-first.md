@@ -33,20 +33,30 @@ Coach notes are opinion, always labelled, never evidence.
 - [~] A8 Rebuilt (7b78fa6, CI green). Real-Excel recapture of the fixed views PENDING (needs a screen takeover Paul must allow).
 
 ## WP-B — Decision support
-- [ ] B1 Shared Python `next_send()` (mirrored in JS, exact cross-check): for one opponent, among our
-      remaining players → ordered direct candidates (favorable, then even; ties disclosed), then
-      shared-only candidates explicitly *unordered*, then Avoid (concerning direct), Unknown count,
-      the opponent's coach notes. Also "consider saving" (protected players).
-- [ ] B2 HTML **Who should I send next?** card at the very top of Tonight: remaining-opponent chips
-      (pick who they put up) → 🥇🥈🥉 for ordered candidates only, "≈ not ordered" group, ⚠ Avoid,
-      ❓ unknown, 📝 coach notes; visible on the phone's first screen.
-- [ ] B3 **Top threats** panel promoted next to it (winning recorded record vs our roster, + notes).
-- [ ] B4 **Quick read** at the top of every scouting card (HTML + Excel), facts only.
-- [ ] B5 **Captain view / Evidence view** toggle for the HTML matrix (symbols only vs current cells);
-      Excel gets a compact Captain View grid above the evidence matrix.
-- [ ] B6 Excel Command Center: Next Send section first (opponent picker), threats; Captain Packet page 1:
-      decisions before rosters.
-- [ ] B7 Coach notes surfaced in Next Send, threats, packet.
+- [x] B1 Shared `analytics.next_send()` / `next_send_lines()` (`092254f`), mirrored in JS and cross-checked
+      line-for-line via `window.__ucNextSend` (all opponents × marks). Medals only for ordered direct
+      candidates (favorable, then even); equal evidence shares a medal and names the tie; shared-only
+      candidates one unordered "≈" group; Avoid worst first; Unknown "not weak"; "consider saving".
+- [x] B2 HTML **Who should I send next?** at the top of Tonight (`092254f`, `f4eb60b`, `3751d22`, `8a841d9`):
+      chips for unplayed opponents, medals with reasons and a one-tap "✓ Sent" (Played marks), the rest
+      folded into one line that still names every player, the opponent's coach note as opinion.
+      First screen: fits a Home Screen launch (844px) with room to spare and a wide-font approximation;
+      in Safari's browser view (664px) Next Send + threats + risks fit and "Best sends now" follows.
+- [x] B3 Threats: right after Next Send on phones (CSS order), with coach notes (`d805f0b`).
+- [x] B4 **Quick read** on every scouting card, HTML + Excel (`f4eb60b`); `analytics.quick_read`,
+      cross-checked; Excel `Scouting_Table[Quick Read]`, first card row. Also fixed clipped card values
+      on phones (regression test red before the fix).
+- [x] B5 **Captain view / Evidence view** (`ddf7e16`): shared `captain_cell`; HTML remembered toggle;
+      Excel War Room "View" dropdown switching the matrix text. *Deviation:* a dropdown over the one
+      matrix instead of a second grid above it, to keep one matrix, one set of colours and one place to
+      tap/inspect. Default stays Evidence view — **which default Paul prefers is PENDING PAUL REVIEW.**
+- [x] B6 Excel Command Center opens with "They put up:" + WHO SHOULD I SEND NEXT? (`9ab97fb`); Captain
+      Packet page 1 is decision first: best sends → risks → rosters (`d805f0b`, same print geometry).
+- [~] B7 Coach notes: Next Send (HTML + Excel), threats (HTML + Excel War Room), cards and packet cards.
+      Not added to the packet's one-line "Dangerous" rows (fixed-height print rows).
+- Excel tie/consider-saving wording ("tied (same evidence)", "…vs another unplayed opponent") is shorter
+  than the HTML's (which names the tied players and the opponent); the medals and order are the same.
+- Native Excel look of the new Command Center card, View dropdown and packet page 1: **PENDING PAUL REVIEW**.
 
 ## Verification per package
 Focused red→green tests; full suite (`--ignore=tmp`); commit (explicit pathspec, Sonnet 5 footer); push;
