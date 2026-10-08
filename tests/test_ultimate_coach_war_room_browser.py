@@ -36,7 +36,10 @@ def _page(tmp_path: Path, browser):
 
 
 def _python_war_room():
-    payload = _payload()
+    return _python_war_room_for(_payload())
+
+
+def _python_war_room_for(payload):
     players = payload["players"]
     agg = defaultdict(lambda: [0, 0])
     for r in payload["evidence"]:
@@ -86,7 +89,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert page.input_value("#team-a") == OURS and page.input_value("#team-b") == THEIRS
             sends = page.inner_text("#wr-opportunities")
             assert f"1. {ANN} — 2-0 (2)" in sends and f"2. {DEE} — 1-1 (2)" in sends
-            assert f"1. {ANN} — ≈ 1-0 vs 0-1 (1 shared)" in sends
+            assert f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)" in sends and f"1. {ANN} — ≈" not in sends
             risks = page.inner_text("#wr-risks")
             assert f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players)" in risks
             assert f"{BEA} vs {CAM}: 0-2 direct (2 meetings)" in risks
@@ -598,5 +601,33 @@ def test_legacy_notes_from_every_scope_are_preserved_and_clearing_never_resurrec
             assert cam.locator('textarea[data-plan="note"]').input_value() == ""
             assert "SYNTHETIC scope B note" in cam.locator(".coach-archive").inner_text()
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_send_lists_and_best_send_text_match_python_including_ties(tmp_path: Path):
+    from analytics.ultimate_coach_war_room import best_send_text, send_list_text
+    from tests.test_excel_war_room_formulas import _tied_payload
+    payload = _tied_payload()
+    py = _python_war_room_for(payload)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            path = tmp_path / "tied.html"
+            path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            for remaining in (None, [3, 5], [1, 2, 3]):
+                js = page.evaluate(f"window.__ucSendTexts({OURS!r}, {THEIRS!r}, 'EIGHT', {'null' if remaining is None else remaining})")
+                ids = None if remaining is None else set(remaining)
+                expected = []
+                for b in py["blocks"]:
+                    rows = [r for r in b["rows"] if r["category"] in SENDABLE and (ids is None or r["member"]["id"] in ids)]
+                    expected.append([send_list_text(rows), best_send_text(rows)])
+                assert js == expected, remaining
+            assert js[0][0].startswith("1. ") and "1= " in page.evaluate(f"window.__ucSendTexts({OURS!r}, {THEIRS!r}, 'EIGHT', null)")[0][0]
+            assert "1= Ann Archer" in page.inner_text("#wr-opportunities") and "1= Fay Fox" in page.inner_text("#wr-opportunities")
+            assert "best-supported send (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
         finally:
             browser.close()

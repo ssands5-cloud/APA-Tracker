@@ -354,6 +354,47 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
+# ---- Send lists outside Tonight (War Room, Lineup Lab, Command Center, packet) ----
+
+def _group_key(row: dict[str, Any]) -> str:
+    return str(row["rank"]).rstrip("=")
+
+
+def send_labels(rows: list[dict[str, Any]]) -> list[str]:
+    """Labels for our remaining sendable candidates vs one opponent, in ranking order. Direct records are
+    numbered by evidence group ("1." or, when several remaining players share the evidence, "1="); shared-
+    opponent-only candidates are "≈" -- one unordered group, never numbered (GPT audit #84)."""
+    order: dict[str, int] = {}
+    count: dict[str, int] = {}
+    for r in rows:
+        if r["category"] in ("G", "E"):
+            key = _group_key(r)
+            order.setdefault(key, len(order) + 1)
+            count[key] = count.get(key, 0) + 1
+    return [f"{order[_group_key(r)]}{'=' if count[_group_key(r)] > 1 else '.'}" if r["category"] in ("G", "E") else "≈"
+            for r in rows]
+
+
+def send_list_text(rows: list[dict[str, Any]], limit: int = 3) -> str:
+    labels = send_labels(rows)
+    return " · ".join(f"{labels[i]} {r['player']} — {r['cell']}" for i, r in enumerate(rows[:limit]))
+
+
+def best_send_text(rows: list[dict[str, Any]]) -> str:
+    """The single best remaining send and its reason -- saying when it is tied or not ordered at all."""
+    if not rows:
+        return ""
+    first = rows[0]
+    if first["category"] == "I":
+        n = sum(1 for r in rows if r["category"] == "I")
+        tag = f"shared-opponent candidate, not ordered ({'the only one' if n == 1 else f'one of {n}'}): "
+    else:
+        tied = sum(1 for r in rows if r["category"] in ("G", "E") and _group_key(r) == _group_key(first))
+        tag = ("best-supported send: " if tied == 1 else
+               f"best-supported send (tied with {tied - 1} other{'s' if tied > 2 else ''}, same evidence): ")
+    return f"{tag}{first['player']} — reason: {first['reason']}"
+
+
 # ---- Next Send: "they put up this player -- who do I send?" ----
 
 MEDALS = ("🥇", "🥈", "🥉")

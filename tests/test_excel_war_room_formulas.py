@@ -214,7 +214,7 @@ def test_matrix_captain_view_switches_text_not_evidence(book, built):
 def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built):
     assert _opportunities(book, built) == [
         (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"),
-        (f"vs {EVE} · SL 3", f"1. {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),
+        (f"vs {EVE} · SL 3", f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),      # shared-only: never numbered
     ]
     threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
     assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players)"]
@@ -571,10 +571,10 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient evidence (nothing recorded): 1" in text
-    assert f"vs {CAM}: best-supported: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
+    assert f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported send: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
@@ -613,7 +613,8 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
     lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
     assert lines[:2] == [
         f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
-        f"vs {EVE}: best-supported send: {ANN} — reason: shared-opponent results only: ours 1-0 vs theirs 0-1 across "
+        f"vs {EVE}: shared-opponent candidate, not ordered (the only one): {ANN} — reason: shared-opponent results only: "
+        "ours 1-0 vs theirs 0-1 across "
         "1 shared opponent (no direct meetings)",
     ]
     book.set(LL, "C12", "Unavailable")
@@ -660,3 +661,48 @@ def test_captain_packet_page_one_is_decision_first(book, built):
     roster = _row(built, CP, "OUR TEAM")
     assert sends < risks < roster
     assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+
+
+FAY = "Fay Fox (APA record ID 1005)"
+
+
+def _tied_payload():
+    """The fixture plus Fay, whose 2-0 vs Cam is the same evidence as Ann's: a real tie for the first send."""
+    payload = _payload()
+    payload["players"].append(_player(5, "1005", "Fay Fox", [_hist("sharks-a", "d1", "EIGHT", 4, 2, 5)]))
+    payload["evidence"] = payload["evidence"] + _games(5, 10, "WW")
+    payload["counts"] = {"players": len(payload["players"]), "head_to_head_rows": len(payload["evidence"])}
+    return payload
+
+
+def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
+    """GPT audit #84: outside the HTML Tonight panel, Excel numbered tied and shared-only picks 1., 2., 3. and called a
+    shared-only pick "best-supported". Equal evidence now shares a number ("1="), shared-only is "≈", and the single
+    best-send sentence says when it is tied. The texts equal the shared Python functions."""
+    from analytics.ultimate_coach_war_room import SENDABLE, best_send_text, send_list_text
+    from tests.test_ultimate_coach_war_room_browser import OURS, THEIRS, _python_war_room_for
+    payload = _tied_payload()
+    wb = load_workbook(write_workbook(payload, tmp_path / "tied.xlsx", built_at="2026-10-07 18:00 UTC",
+                                      viewer_member_external_id="1001", viewer_card_number="80000001"))
+    book = Workbook(wb)
+    py = _python_war_room_for(payload)
+    rows = [[r for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
+    assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2) · 1= {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+    assert best_send_text(rows[0]) == (f"best-supported send (tied with 1 other, same evidence): {ANN} — reason: "
+                                       "2-0 direct record (2 meetings) — favorable")
+    # War Room top opportunities
+    assert [x[1] for x in _opportunities(book, wb)] == [send_list_text(rows[0]), send_list_text(rows[1])]
+    # Command Center
+    cc = "\n".join(str(book.display("Command Center", f"{c}{r}")) for r in range(1, 60) for c in "BFJ")
+    assert f"vs {CAM}: {best_send_text(rows[0])}" in cc
+    assert f"vs {EVE}: {best_send_text(rows[1])}" in cc and "shared-opponent candidate, not ordered (the only one)" in cc
+    # Lineup Lab
+    top = next(c.row for c in wb[LL]["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
+    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: {best_send_text(rows[0])}"
+    # Captain Packet page 1 (two sends)
+    sends = _row(wb, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
+    assert book.display(CP, f"C{sends + 1}") == send_list_text(rows[0], limit=2)
+    # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
+    book.set(LL, "C12", "Unavailable")
+    assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: best-supported send: {FAY} — reason: 2-0 direct record (2 meetings) — favorable"

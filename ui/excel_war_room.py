@@ -573,36 +573,68 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
 
     # ---- best-supported sends per opponent (ranking order, sendable + remaining) ----
     e.section("Best-supported sends (per opponent: candidate rows in ranking order)")
+    # Per opponent j, one row per ranked candidate: pid, category, remaining, sendable (ok), running count of
+    # sendable rows, evidence group key (MatchupEvidence_Table[Rank Group]), direct (G/E and ok), group number
+    # among remaining direct candidates, last group key, and the display label: "1." / "1=" (tied) / "≈"
+    # (shared-opponent only, never numbered). Mirrors analytics send_labels / best_send_text (GPT audit #84).
     bs_first = e.row + 1
-    send_refs = {}
+    send_refs, send_rng = {}, {}
+    heads = ("pid", "cat", "rem", "ok", "run", "key", "dir", "grp", "last", "lbl")
     for j in range(1, R + 1):
-        base_col = 2 + (j - 1) * 5
-        for off, head in enumerate(("pid", "cat", "rem", "ok", "run")):
+        base_col = 2 + (j - 1) * len(heads)
+        for off, head in enumerate(heads):
             e.ws.cell(row=bs_first - 1, column=base_col + off, value=f"o{j} {head}").font = base.HELPER_FONT
         start = f"Engine!${opp_start_col}${opp_first + j - 1}"
         count = f"Engine!${opp_count_col}${opp_first + j - 1}"
+        L = {h: get_column_letter(base_col + i) for i, h in enumerate(heads)}
+        rng = {h: f"Engine!${L[h]}${bs_first}:${L[h]}${bs_first + R - 1}" for h in heads}
         for rr in range(1, R + 1):
             r = bs_first + rr - 1
-            c = [get_column_letter(base_col + x) for x in range(5)]
-            e.ws.cell(row=r, column=base_col, value=f'=IF(OR({start}="",{rr}>{count}),"",INDEX(MatchupEvidence_Table[Player ID],{start}+{rr}))')
-            e.ws.cell(row=r, column=base_col + 1, value=f'=IF({c[0]}{r}="","",INDEX(MatchupEvidence_Table[Category],{start}+{rr}))')
-            e.ws.cell(row=r, column=base_col + 2, value=f'=IF({c[0]}{r}="",FALSE,IFERROR(INDEX({remaining},MATCH({c[0]}{r},wr_OurPids,0)),FALSE))')
-            e.ws.cell(row=r, column=base_col + 3, value=f'=AND({c[0]}{r}<>"",OR({c[1]}{r}="G",{c[1]}{r}="E",{c[1]}{r}="I"),{c[2]}{r})')
-            e.ws.cell(row=r, column=base_col + 4, value=(f'=IF({c[3]}{r},1,0)' if rr == 1 else f'={c[4]}{r - 1}+IF({c[3]}{r},1,0)'))
-        run_col = get_column_letter(base_col + 4)
-        send_refs[j] = f"Engine!${run_col}${bs_first}:${run_col}${bs_first + R - 1}"
+            c = {h: f"{L[h]}{r}" for h in heads}
+            p = {h: f"{L[h]}{r - 1}" for h in heads}
+            formulas = {
+                "pid": f'=IF(OR({start}="",{rr}>{count}),"",INDEX(MatchupEvidence_Table[Player ID],{start}+{rr}))',
+                "cat": f'=IF({c["pid"]}="","",INDEX(MatchupEvidence_Table[Category],{start}+{rr}))',
+                "rem": f'=IF({c["pid"]}="",FALSE,IFERROR(INDEX({remaining},MATCH({c["pid"]},wr_OurPids,0)),FALSE))',
+                "ok": f'=AND({c["pid"]}<>"",OR({c["cat"]}="G",{c["cat"]}="E",{c["cat"]}="I"),{c["rem"]})',
+                "run": f'=IF({c["ok"]},1,0)' if rr == 1 else f'={p["run"]}+IF({c["ok"]},1,0)',
+                "key": f'=IF({c["pid"]}="","",INDEX(MatchupEvidence_Table[Rank Group],{start}+{rr}))',
+                "dir": f'=AND({c["ok"]},OR({c["cat"]}="G",{c["cat"]}="E"))',
+                "grp": (f'=IF({c["dir"]},1,0)' if rr == 1 else
+                        f'=IF({c["dir"]},IF({p["grp"]}=0,1,IF({c["key"]}={p["last"]},{p["grp"]},{p["grp"]}+1)),{p["grp"]})'),
+                "last": f'=IF({c["dir"]},{c["key"]},"")' if rr == 1 else f'=IF({c["dir"]},{c["key"]},{p["last"]})',
+                "lbl": (f'=IF(NOT({c["ok"]}),"",IF({c["cat"]}="I","≈",{c["grp"]}&'
+                        f'IF(COUNTIFS({rng["grp"]},{c["grp"]},{rng["dir"]},TRUE)>1,"=",".")))'),
+            }
+            for off, head in enumerate(heads):
+                e.ws.cell(row=r, column=base_col + off, value=formulas[head])
+        send_refs[j] = rng["run"]
+        send_rng[j] = rng
     e.row = bs_first + R + 1
+
+    def send_text(n: int, k: int) -> str:
+        rng, m = send_rng[k], f"MATCH({n},{send_rng[k]['run']},0)"
+        row = f"INDEX(wr_OppStart,{k})+{m}"
+        return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX({rng["lbl"]},{m})&" "&'
+                f'INDEX(MatchupEvidence_Table[Player],{row})&" — "&INDEX(MatchupEvidence_Table[Cell],{row}),""))')
+
+    def best_text(k: int) -> str:
+        rng, m = send_rng[k], f"MATCH(1,{send_rng[k]['run']},0)"
+        row = f"INDEX(wr_OppStart,{k})+{m}"
+        n_i = f'COUNTIFS({rng["cat"]},"I",{rng["ok"]},TRUE)'
+        tie = f'COUNTIFS({rng["grp"]},1,{rng["dir"]},TRUE)'
+        tag = (f'IF(INDEX({rng["cat"]},{m})="I","shared-opponent candidate, not ordered ("&IF({n_i}=1,"the only one",'
+               f'"one of "&{n_i})&"): ",IF({tie}>1,"best-supported send (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
+               f'", same evidence): ","best-supported send: "))')
+        return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR({tag}&'
+                f'INDEX(MatchupEvidence_Table[Player],{row})&" — reason: "&INDEX(MatchupEvidence_Table[Reason],{row}),""))')
+
     e.block("Best send", R, [
-        (f"wr_Send{n}", (lambda n: lambda k, r: (
-            f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX(MatchupEvidence_Table[Player],'
-            f'INDEX(wr_OppStart,{k})+MATCH({n},{send_refs[k]},0))&" — "&INDEX(MatchupEvidence_Table[Cell],INDEX(wr_OppStart,{k})+'
-            f'MATCH({n},{send_refs[k]},0)),""))'))(n)) for n in (1, 2, 3)
+        (f"wr_Send{n}", (lambda n: lambda k, r: send_text(n, k))(n)) for n in (1, 2, 3)
     ] + [
-        # The best remaining send with its reason spelled out (Lineup Lab, Command Center).
-        ("wr_Why1", lambda k, r: (
-            f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX(MatchupEvidence_Table[Player],'
-            f'INDEX(wr_OppStart,{k})+MATCH(1,{send_refs[k]},0))&" — reason: "&INDEX(MatchupEvidence_Table[Reason],'
-            f'INDEX(wr_OppStart,{k})+MATCH(1,{send_refs[k]},0)),""))')),
+        # The labelled list (War Room, packet) and the single best send with its reason (Lineup Lab, Command Center).
+        ("wr_SendList", lambda k, r: f'=B{r}&IF(C{r}="",""," · "&C{r})&IF(D{r}="",""," · "&D{r})'),
+        ("wr_BestText", lambda k, r: best_text(k)),
     ])
 
     # ---- threats, concerning pairings, unique favorable options ----
@@ -972,8 +1004,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
               font=SMALL)
         _span(ws, r, 3, 12, (f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
                              f'IF(INDEX(wr_Send1,{k})="",IF(wr_HasEvidence,"No favorable, even or indirect evidence among our remaining players.",""),'
-                             f'"1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k}))&'
-                             f'IF(INDEX(wr_Send3,{k})="",""," · 3. "&INDEX(wr_Send3,{k})))))'), font=SMALL)
+                             f'INDEX(wr_SendList,{k}))))'), font=SMALL)
         ws.row_dimensions[r].height = 28
     top = top + R + 2
     base._section(ws, top, "Top risks", last_col=12)
@@ -1327,8 +1358,8 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for k in range(1, R + 1):
         _span(ws, bs + k, 1, 6, f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                                f'IF(INDEX(wr_Why1,{k})="","no evidence-backed option left among our remaining players",'
-                                f'"best-supported send: "&INDEX(wr_Why1,{k})))', font=SMALL, height=30)
+                                f'IF(INDEX(wr_BestText,{k})="","no evidence-backed option left among our remaining players",'
+                                f'INDEX(wr_BestText,{k})))', font=SMALL, height=30)
     ws.freeze_panes = "A4"
 
 
@@ -1440,7 +1471,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
         _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
                             f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
-                            f'"1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k})))))',
+                            f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k})))))',
               font=font(10))
         h(r, 27)
     r += 1
@@ -1892,7 +1923,7 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     send_lines = []
     for k in range(1, R + 1):
         send_lines.append(f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                          f'IF(INDEX(wr_Why1,{k})="","no evidence-backed option left","best-supported: "&INDEX(wr_Why1,{k})))')
+                          f'IF(INDEX(wr_BestText,{k})="","no evidence-backed option left",INDEX(wr_BestText,{k})))')
     _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — and the recorded evidence behind it",
           send_lines, size=10.5, line_height=30)
     ws.freeze_panes = "A7"

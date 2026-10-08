@@ -13,7 +13,10 @@ from analytics.ultimate_coach_war_room import (
     filter_codes,
     freshness,
     meetings_index,
+    best_send_text,
     next_send,
+    send_labels,
+    send_list_text,
     next_send_lines,
     scope_dates,
     sl_bucket_index,
@@ -239,3 +242,25 @@ def test_next_send_ties_share_a_medal_flags_players_to_save_and_counts_the_rest(
     assert ns["more"] == 1 and "+ 1 more direct candidate below the top three" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["medals"][0]["save"] == ""   # Yul already played
     assert next_send(wr, 0, remaining={1, 3, 4, 5})["medals"][0]["tied_with"] == []
+
+
+def test_send_labels_number_by_evidence_group_and_never_number_shared_only():
+    ours = [_m(1, "Ann"), _m(2, "Bo"), _m(3, "Cy"), _m(4, "Di"), _m(5, "Fay")]
+    theirs = [_m(50, "Xan"), _m(51, "Yul")]
+    index = build_pair_index(_pairs(
+        (1, 50, 2, 2), (50, 1, 0, 2), (2, 50, 2, 2), (50, 2, 0, 2),     # Ann, Bo 2-0: tied
+        (4, 50, 3, 4), (50, 4, 1, 4), (5, 50, 2, 4), (50, 5, 2, 4),     # Di 3-1, Fay 2-2
+        (3, 50, 1, 2), (50, 3, 1, 2),
+        (1, 70, 1, 1), (51, 70, 0, 1), (2, 71, 1, 1), (51, 71, 1, 1),   # Ann, Bo: shared-only vs Yul
+    ))
+    wr = war_room_pair(ours, theirs, index, "EIGHT")
+    xan = [r for r in wr["blocks"][0]["rows"] if r["category"] in ("G", "E", "I")]
+    assert send_labels(xan) == ["1=", "1=", "2.", "3.", "4."]
+    assert send_list_text(xan).startswith("1= Ann (APA record ID 1001) — 2-0 (2) · 1= Bo (APA record ID 1002) — 2-0 (2) · 2. Di")
+    assert best_send_text(xan).startswith("best-supported send (tied with 1 other, same evidence): Ann")
+    assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("best-supported send: Ann")
+    yul = [r for r in wr["blocks"][1]["rows"] if r["category"] in ("G", "E", "I")]
+    assert send_labels(yul) == ["≈", "≈"]
+    assert best_send_text(yul).startswith("shared-opponent candidate, not ordered (one of 2): ")
+    assert best_send_text(yul[:1]).startswith("shared-opponent candidate, not ordered (the only one): ")
+    assert best_send_text([]) == "" and send_list_text([]) == ""

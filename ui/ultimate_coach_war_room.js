@@ -235,6 +235,28 @@
       ]};
   }
 
+  // ---- Send lists outside Tonight (mirrors analytics send_labels / send_list_text / best_send_text) ----
+  function wrGroupKey(r){return String(r.rank).replace("=","");}
+  function wrSendLabels(rows){
+    var order={},count={},n=0;
+    rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var k=wrGroupKey(r);if(!(k in order)) order[k]=++n;count[k]=(count[k]||0)+1;});
+    return rows.map(function(r){if(r.category!=="G"&&r.category!=="E") return "≈";var k=wrGroupKey(r);return order[k]+(count[k]>1?"=":".");});
+  }
+  function wrSendListText(rows,limit){var l=wrSendLabels(rows);return rows.slice(0,limit||3).map(function(r,i){return l[i]+" "+r.player+" — "+r.cell;}).join(" · ");}
+  function wrBestSendText(rows){
+    if(!rows.length) return "";
+    var f=rows[0],tag;
+    if(f.category==="I"){var n=rows.filter(function(r){return r.category==="I";}).length;tag="shared-opponent candidate, not ordered ("+(n===1?"the only one":"one of "+n)+"): ";}
+    else{var t=rows.filter(function(r){return (r.category==="G"||r.category==="E")&&wrGroupKey(r)===wrGroupKey(f);}).length;
+      tag=t===1?"best-supported send: ":"best-supported send (tied with "+(t-1)+" other"+(t>2?"s":"")+", same evidence): ";}
+    return tag+f.player+" — reason: "+f.reason;
+  }
+  window.__ucSendTexts=function(ourKey,oppKey,fmt,remainingIds){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
+    return w.blocks.map(function(b){var rows=b.rows.filter(function(r){return WR_SENDABLE[r.category]&&rem[String(r.member.id)];});return [wrSendListText(rows),wrBestSendText(rows)];});
+  };
+
   // ---- Next Send (mirrors analytics.ultimate_coach_war_room.next_send / next_send_lines) ----
   // Medals only for ORDERED direct candidates (favorable, then even) in ranking order; same evidence = same
   // medal, named as tied. Shared-opponent-only candidates are one unordered "≈" group; concerning records
@@ -387,11 +409,11 @@
     wrTonight(w,plan,ta,tb);
     // Best sends (ranking order, sendable + remaining, unplayed opponents)
     opEl.innerHTML='<h2>Best sends — top opportunities per opponent</h2>'
-      +'<p class="muted">Favorable direct records first, then even direct, then indirect-only evidence (not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
+      +'<p class="muted">Favorable direct records first, then even direct (numbered by evidence; "1=" = tied, same evidence), then indirect-only evidence ("≈", not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
       +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Best-supported sends among our remaining players</th></tr></thead><tbody>'
       +w.blocks.map(function(b,j){
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
-          :(plan.sends[j].length?plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc((k+1)+". "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>')
+          :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>');})(wrSendLabels(plan.sends[j]))
           :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
@@ -435,7 +457,7 @@
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
       +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
-      +wrList(w.blocks.map(function(b,j){return plan.unplayed[j]?"vs "+b.opponent_label+": "+(plan.sends[j].length?"best-supported send: "+plan.sends[j][0].player+" — reason: "+plan.sends[j][0].reason:"no evidence-backed option left among our remaining players"):null;}).filter(Boolean),"Every opponent has already played.")
+      +wrList(w.blocks.map(function(b,j){return plan.unplayed[j]?"vs "+b.opponent_label+": "+(plan.sends[j].length?wrBestSendText(plan.sends[j]):"no evidence-backed option left among our remaining players"):null;}).filter(Boolean),"Every opponent has already played.")
       +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
     // Scouting cards
     document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
