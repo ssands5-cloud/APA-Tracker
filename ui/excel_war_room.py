@@ -68,7 +68,7 @@ from analytics.ultimate_coach_war_room import (
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
-              "Player ID", "Category", "Cell", "Reason", "Captain Cell"]
+              "Player ID", "Category", "Cell", "Reason", "Captain Cell", "Rank Group"]
 TC_COLUMNS = [
     "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
     "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
@@ -149,11 +149,13 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], base._sl_display(block["opponent"]),
                             block["opponent_sample"], "—", block["note"], len(block["rows"]),
-                            block["opponent"]["id"], "—", "—", "—", "—"])
+                            block["opponent"]["id"], "—", "—", "—", "—", "—"])
             for row in block["rows"]:
                 me_rows.append([None, row["rank"], row["player"], base._sl_display(row["member"]), row["direct_text"],
                                 row["shared_text"], row["basis"], row["position"], row["member"]["id"],
-                                row["category"], row["cell"], row["reason"], row["captain"]])
+                                row["category"], row["cell"], row["reason"], row["captain"],
+                                # Next Send medals: players with the same evidence share a rank group (and a medal).
+                                int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—"])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -632,6 +634,58 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         col = get_column_letter(2 + R + off)
         e.name(name, f"Engine!${col}${u_first}:${col}${u_first + R - 1}")
     e.row = u_first + R + 1
+
+    # ---- Next Send (Command Center): "they put up this player -- who do I send?" ----
+    # Mirrors analytics.next_send: medals only for ordered direct candidates (favorable, then even) among our
+    # remaining players, same rank group = same medal; shared-only candidates unordered; Avoid worst first.
+    cc, ME = "'Command Center'!", "MatchupEvidence_Table"
+    e.section("Next Send")
+    e.cell("wr_NsInput", "They put up", "=" + guard(f"{cc}$C$6"))
+    e.cell("wr_NsJ", "Opponent slot", '=IF(wr_NsInput="","",IFERROR(MATCH(wr_NsInput,wr_OppLabels,0),""))')
+    e.cell("wr_NsOpen", "Opponent unplayed", '=IF(wr_NsJ="",FALSE,INDEX(wr_OppUnplayed,wr_NsJ))')
+    e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
+    e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
+    e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
+    medal = 'IF(H{r}=1,"🥇",IF(H{r}=2,"🥈","🥉"))'
+
+    def _join(k: int, r: int, col: str, cond: str, text: str) -> str:
+        """Running ", "-joined list down a column; the last row holds the whole list (no TEXTJOIN needed)."""
+        if k == 1:
+            return f'=IF({cond},{text},"")'
+        prev = f"{col}{r - 1}"
+        return f'=IF({cond},{prev}&IF({prev}="","","; ")&{text},{prev})'
+
+    e.block("Next Send ranked row", R, [
+        ("wr_NsRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+{k})'),
+        ("wr_NsSlot", lambda k, r: f'=IF(B{r}="","",IFERROR(MATCH(INDEX({ME}[Player ID],B{r}),wr_OurPids,0),""))'),
+        ("wr_NsCat", lambda k, r: f'=IF(B{r}="","",INDEX({ME}[Category],B{r}))'),
+        ("wr_NsRem", lambda k, r: f'=IF(C{r}="",FALSE,INDEX(wr_OurRemaining,C{r}))'),
+        ("wr_NsKey", lambda k, r: f'=IF(B{r}="","",INDEX({ME}[Rank Group],B{r}))'),
+        ("wr_NsElig", lambda k, r: f'=AND(E{r},OR(D{r}="G",D{r}="E"))'),
+        ("wr_NsGrp", lambda k, r: (f'=IF(G{r},1,0)' if k == 1 else
+                                    f'=IF(G{r},IF(H{r - 1}=0,1,IF(F{r}=I{r - 1},H{r - 1},H{r - 1}+1)),H{r - 1})')),
+        ("wr_NsLastKey", lambda k, r: (f'=IF(G{r},F{r},"")' if k == 1 else f'=IF(G{r},F{r},I{r - 1})')),
+        ("wr_NsMedalRun", lambda k, r: (f'=IF(AND(G{r},H{r}<=3),1,0)' if k == 1 else f'=J{r - 1}+IF(AND(G{r},H{r}<=3),1,0)')),
+        ("wr_NsMedalText", lambda k, r: (
+            f'=IF(G{r},IF(H{r}<=3,{medal.format(r=r)}&" "&INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Reason],B{r})'
+            f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
+            f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
+            f'" · consider saving — our only favorable direct option vs another unplayed opponent",""),""),"")')),
+        ("wr_NsMore", lambda k, r: f'=AND(G{r},H{r}>3)'),
+        ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=M{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
+        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="I")', f'INDEX({ME}[Player],B{r})')),
+        ("wr_NsUnkJoin", lambda k, r: _join(k, r, "O", f'AND(E{r},D{r}="X")', f'INDEX({ME}[Player],B{r})')),
+        ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
+        ("wr_NsAvoidOk", lambda k, r: (f'=IF(P{r}="",FALSE,AND(INDEX({ME}[Category],P{r})="R",IFERROR(INDEX(wr_OurRemaining,'
+                                        f'MATCH(INDEX({ME}[Player ID],P{r}),wr_OurPids,0)),FALSE)))')),
+        ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "R", f'Q{r}',
+                                              f'INDEX({ME}[Player],P{r})&" — "&INDEX({ME}[Direct Record],P{r})')),
+    ])
+    e.cell("wr_NsHeadline", "Next Send headline", (
+        '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
+        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Medals = ordered direct records among our '
+        'remaining players (same evidence = same medal). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No direct record to order — '
+        'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
 
     # ---- Lineup Lab metrics ----
     e.section("Lineup Lab metrics")
@@ -1781,7 +1835,25 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _link(ws, 5, 2, "→ Match Day (change matchup)", "Match Day")
     _link(ws, 5, 6, "→ Lineup Lab (mark availability)", "Lineup Lab")
     _link(ws, 5, 10, "→ Captain Packet (print)", "Captain Packet")
-    top = 7
+    # Decision first: who do I send against the player they just put up? (Engine "Next Send", mirrors next_send.)
+    _span(ws, 6, 2, 2, "They put up:", font=Font(bold=True, size=12, color=base.FELT_DEEP))
+    base._input(ws.cell(row=6, column=3))
+    ws.merge_cells(start_row=6, start_column=3, end_row=6, end_column=8)
+    _dv(ws, "C6", "wr_OppLabels", "Pick the opponent player they just put up.")
+    _span(ws, 6, 10, 11, '=IF(wr_OppLabel="","","Mark sends Played on Lineup Lab — they drop out here.")',
+          font=Font(size=10, color="5B6A61"), height=22)
+    ns_lines = ["=wr_NsHeadline"]
+    for n in range(1, 5):
+        ns_lines.append(f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
+    last = f"{R}"
+    ns_lines += [
+        f'=IF(COUNTIF(wr_NsMedalRun,">4")+COUNTIF(wr_NsMore,TRUE)=0,"","+ more direct candidates — see War Room Inspect")',
+        f'=IF(INDEX(wr_NsUnordJoin,{last})="","","≈ Not ordered (shared-opponent results only): "&INDEX(wr_NsUnordJoin,{last}))',
+        f'=IF(INDEX(wr_NsAvoidJoin,{last})="","","⚠ Avoid: "&INDEX(wr_NsAvoidJoin,{last}))',
+        f'=IF(INDEX(wr_NsUnkJoin,{last})="","","❓ Unknown (no evidence, not weak): "&INDEX(wr_NsUnkJoin,{last}))',
+        '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
+    ]
+    top = _card(ws, 7, 2, 11, "WHO SHOULD I SEND NEXT?", ns_lines, size=11, line_height=30) + 2
     cnt = lambda v: f'COUNTIF(wr_OurAvail,"{v}")'
     _card(ws, top, 2, 4, "MY TEAM", [
         '=IF(wr_OurLabel="","Choose your team on Match Day.",wr_OurLabel)',
@@ -1817,7 +1889,7 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                           f'IF(INDEX(wr_Why1,{k})="","no evidence-backed option left","best-supported: "&INDEX(wr_Why1,{k})))')
     _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — and the recorded evidence behind it",
           send_lines, size=10.5, line_height=30)
-    ws.freeze_panes = "A6"
+    ws.freeze_panes = "A7"
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1

@@ -528,6 +528,35 @@ def test_start_here_explains_the_workbook_and_names_the_build(built):
         assert f"'{sheet}'!A1" in links and sheet in built.sheetnames, sheet
 
 
+def _next_send(book):
+    lines = [book.display("Command Center", f"B{r}") for r in range(8, 18)]
+    return [x for x in lines if x not in ("", None)]
+
+
+def test_command_center_next_send_answers_the_player_they_put_up(book, built):
+    assert book.display("Command Center", "B6") == "They put up:" and book.display("Command Center", "B7") == "WHO SHOULD I SEND NEXT?"
+    assert _next_send(book) == ["Pick the opponent player they put up (cell C6)."]
+    book.set("Command Center", "C6", CAM)
+    assert _next_send(book) == [
+        "Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded results only — not odds.",
+        f"🥇 {ANN} — 2-0 direct record (2 meetings) — favorable",
+        f"🥈 {DEE} — 1-1 direct record (2 meetings) — even",
+        f"⚠ Avoid: {BEA} — 0-2 (2 meetings)",
+    ]
+    book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
+    assert _next_send(book) == [
+        "No direct record to order — shared-opponent candidates only (≈, not ordered)",
+        f"≈ Not ordered (shared-opponent results only): {ANN}",
+        f"⚠ Avoid: {DEE} — 0-2 (2 meetings)",
+        f"❓ Unknown (no evidence, not weak): {BEA}",
+    ]
+    book.set("Command Center", "C6", CAM)
+    book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
+    assert _next_send(book)[1:] == [f"🥇 {DEE} — 1-1 direct record (2 meetings) — even", f"⚠ Avoid: {BEA} — 0-2 (2 meetings)"]
+    book.set(LL, "C23", "Played")                # Cam already played
+    assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
+
+
 def test_command_center_summarises_tonight_from_match_day(book, built):
     cc = "Command Center"
     vals = [book.display(cc, f"{c}{r}") for r in range(1, 40) for c in "BFJ"]
