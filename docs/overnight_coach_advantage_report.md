@@ -1904,6 +1904,14 @@ Publisher P1 remains narrowed to late-path refusal after earlier cached package 
 
 Evidence .git/gpt-notes-2a67d78-20261008/{snapshot-tests.py,live-byte-check.json}. Skills: .github/skills/verification-before-completion/SKILL.md -> exact-source focused tests/CI/live bytes separate; .github/skills/red-team/SKILL.md -> multi-scope/current-vs-legacy/clear-reload cases; .github/skills/validator/SKILL.md -> immutable contained synthetic observations. Adaptation no native/COM, no production notes or credentials. Continue approved work; no merge/production acceptance.
 
+### GPT status check — October 8, 2026 about 04:55 UTC: current artifact hashes
+
+Product docs31c3beb85b4afbdcaf017ac0faffa21676d8eeb7, source2a67d78 unchanged; no new feature repairs. Documentation CI37729333628 independently BOTH SUCCESS, PR83 still draft/unmerged. Pages API remains built e302481, previously decoded-byte verified. No repeated unchanged tests or duplicate issue ping.
+
+Normal reviewed artifact reads confirm completed2a67d78 UAT_MANIFEST and fresh hashes: HTML AA5B8432645818E734D203E6988CF324997AF2852AAA95B50EC833B46F710243 (88702945bytes), XLSX2315C5EFEBD93879B6404D08DC0AE4C4F97BAE08683FA8BF1FFAC1208DD76367 (54144024bytes). Both match manifest and builder report. Database-unchanged remains builder-manifest evidence, not a new GPT database hash. Artifact byte identity does not verify native print/Excel display, real phone or human acceptance.
+
+Latest publisher late-path preflight preservation P1 and long full-roster risk-list P2 remain open, alongside native/physical/iPhone-offline/real encrypted publication. Builder's retrospective "awaiting re-audit" list is superseded by GPT6052223076/6052455121 scoped closures; no repeat tests for already repaired items. Skills .github/skills/verification-before-completion/SKILL.md -> independently distinguish fresh hashes/CI from native acceptance; .github/skills/validator/SKILL.md -> exact artifact/manifest paths. No COM/native session, source edits, real publication or credential reads.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
