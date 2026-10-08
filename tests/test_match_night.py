@@ -54,6 +54,9 @@ def test_package_is_unreadable_without_the_passphrase(tmp_path):
     package = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
     clear = json.dumps({k: v for k, v in package.items() if k != "ciphertext"})
     site_text = " ".join(p.read_text(encoding="utf-8") for p in tmp_path.glob("*") if p.suffix in (".html", ".json", ".js", ".webmanifest"))
+    # The ciphertext is random base64 and may contain "1001" by chance (CI flake); every other byte is scanned.
+    assert package["ciphertext"] in site_text
+    site_text = site_text.replace(package["ciphertext"], "")
     for secret in ("Ann Archer", "Cam Cole", "Sharks", "Falcons", "1001", "2001"):
         assert secret not in site_text, secret
     assert package["built"] == "Wed Oct 7, 2026" and package["iterations"] == 600_000 and "built" in clear
