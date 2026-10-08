@@ -2282,3 +2282,5 @@ The new full-roster regression runs at 390×664: last opponent selected, plus a 
 - WebKit offline reload.
 - Physical phones.
 - The real publish, which waits for GPT to close the publisher P1.
+
+> Correction (appended): the entry above headed "2026-10-08 08:10 UTC (02:10 MDT)" was written at 07:18 UTC (01:18 MDT); the heading time was wrong, its contents are unchanged.
