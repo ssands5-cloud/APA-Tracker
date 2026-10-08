@@ -420,16 +420,46 @@ def describe_source(db_path: Path) -> dict[str, Any]:
     if not report_path.is_file():
         return {"refreshed": False, "accepted_current_data": False,
                 "note": "no refresh_report.json beside the source DB: data as originally archived, not refreshed"}
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    matches = (report.get("provenance") or {}).get("refreshed_db_sha256") == sha256_file(db_path)
-    coverage = report.get("coverage") or "partial"
-    return {
-        "refreshed": True, "report": str(report_path), "report_sha256": sha256_file(report_path),
-        "report_matches_db": matches, "mode": (report.get("provenance") or {}).get("mode"),
-        "coverage": coverage, "gaps": len(report.get("gaps") or []), "scope": report.get("scope"),
-        "started_utc": report.get("started_utc"), "finished_utc": report.get("finished_utc"),
-        "accepted_current_data": bool(matches and coverage == "complete"),
-    }
+    out: dict[str, Any] = {"refreshed": True, "report": str(report_path), "report_sha256": sha256_file(report_path),
+                           "accepted_current_data": False}
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        return {**out, "rejected_because": [f"refresh_report.json is not valid JSON ({type(exc).__name__})"]}
+    if not isinstance(report, dict):
+        return {**out, "rejected_because": ["refresh_report.json is not a JSON object"]}
+    prov = report.get("provenance") if isinstance(report.get("provenance"), dict) else {}
+    recon = report.get("reconciliation") if isinstance(report.get("reconciliation"), dict) else None
+    gaps, divisions = report.get("gaps"), report.get("divisions")
+    db_sha = sha256_file(db_path)
+    out.update(report_matches_db=prov.get("refreshed_db_sha256") == db_sha, mode=prov.get("mode"),
+               coverage=report.get("coverage"), gaps=len(gaps) if isinstance(gaps, list) else None,
+               scope=report.get("scope"), started_utc=report.get("started_utc"), finished_utc=report.get("finished_utc"))
+    # GPT audit 9244b5e: a matching hash plus "complete" is not enough. Every condition must hold, and anything
+    # missing, malformed or inconsistent fails closed (with the reason recorded) instead of passing or crashing.
+    checks = [
+        (report.get("schema") == REPORT_SCHEMA, f"schema is {report.get('schema')!r}, expected {REPORT_SCHEMA!r}"),
+        (out["report_matches_db"], "the report's refreshed_db_sha256 does not match this file"),
+        (isinstance(prov.get("source_db_sha256"), str) and prov.get("source_db_sha256") == prov.get("source_db_sha256_after"),
+         "source DB provenance is missing, or the source changed during the refresh"),
+        (isinstance(prov.get("catalog_sha256"), str) and bool(prov.get("catalog_sha256")), "catalog provenance is missing"),
+        (prov.get("mode") == "reconcile", f"mode is {prov.get('mode')!r}; only a reconcile refresh re-checks every sheet"),
+        (report.get("coverage") == "complete", f"coverage is {report.get('coverage')!r}"),
+        (isinstance(gaps, list) and not gaps, f"{len(gaps) if isinstance(gaps, list) else 'unknown'} gap(s) recorded"),
+        (isinstance(divisions, list) and bool(divisions)
+         and not any(isinstance(d, dict) and d.get("confirmed_denial") for d in divisions)
+         and all(isinstance(d, dict) and not d.get("coverage_observations") for d in divisions),
+         "division results are missing, or a division was denied or incomplete"),
+        (isinstance(recon, dict) and isinstance(recon.get("matches_failed"), list) and not recon["matches_failed"]
+         and isinstance(recon.get("matches_checked"), list), "reconciliation results are missing, or matches failed"),
+        (isinstance(report.get("scope"), dict) and report["scope"].get("divisions") == (len(divisions) if isinstance(divisions, list) else None),
+         "scope does not match the divisions reported"),
+    ]
+    reasons = [why for ok, why in checks if not ok]
+    out["accepted_current_data"] = not reasons
+    if reasons:
+        out["rejected_because"] = reasons
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

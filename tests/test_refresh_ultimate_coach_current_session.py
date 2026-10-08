@@ -335,3 +335,45 @@ def test_an_unexpected_failure_is_recorded_on_disk_and_scrubbed(tmp_path, monkey
         assert secret not in text and "eyJ" not in text
     assert "calling with [redacted]" in log
     assert refresh.describe_source(run / "ultimate_coach_staging.db")["accepted_current_data"] is False
+
+
+def test_describe_source_fails_closed_on_inconsistent_or_malformed_reports(setup, monkeypatch):
+    # GPT audit 9244b5e: a matching hash + coverage "complete" was accepted even with mode missing-only and a gap.
+    _run(setup, monkeypatch)
+    copy = setup[2] / "ultimate_coach_staging.db"
+    path = copy.with_name("refresh_report.json")
+    good = json.loads(path.read_text(encoding="utf-8"))
+    assert refresh.describe_source(copy)["accepted_current_data"] is True
+
+    def verdict(mutate=None, raw=None):
+        if raw is not None:
+            path.write_text(raw, encoding="utf-8")
+        else:
+            report = json.loads(json.dumps(good))
+            mutate(report)
+            path.write_text(json.dumps(report), encoding="utf-8")
+        out = refresh.describe_source(copy)
+        assert out["accepted_current_data"] is False and out["rejected_because"], out
+        return " | ".join(out["rejected_because"])
+
+    def inconsistent(r):                       # GPT's exact probe: hash matches, "complete", but missing-only + a gap
+        r["provenance"]["mode"] = "missing-only"
+        r["gaps"] = ["match M9: scoresheet denied; existing rows kept unverified"]
+    assert "mode is 'missing-only'" in verdict(inconsistent) and "1 gap(s)" in verdict(inconsistent)
+    assert "mode is None" in verdict(lambda r: r["provenance"].pop("mode"))
+    assert "schema is None" in verdict(lambda r: r.pop("schema"))
+    assert "schema is 'other-v9'" in verdict(lambda r: r.update(schema="other-v9"))
+    assert "gap(s)" in verdict(lambda r: r.update(gaps="none"))                       # wrong type
+    assert "coverage is None" in verdict(lambda r: r.pop("coverage"))
+    assert "denied or incomplete" in verdict(lambda r: r["divisions"][1].update(confirmed_denial=True))
+    assert "denied or incomplete" in verdict(lambda r: r["divisions"][0].update(coverage_observations=["1 team not ingested"]))
+    assert "matches failed" in verdict(lambda r: r["reconciliation"]["matches_failed"].append("M1"))
+    assert "reconciliation results are missing" in verdict(lambda r: r.pop("reconciliation"))
+    assert "source changed" in verdict(lambda r: r["provenance"].update(source_db_sha256_after="0" * 64))
+    assert "catalog provenance" in verdict(lambda r: r["provenance"].pop("catalog_sha256"))
+    assert "scope does not match" in verdict(lambda r: r["scope"].update(divisions=31))
+    assert "does not match this file" in verdict(lambda r: r["provenance"].update(refreshed_db_sha256="0" * 64))
+    assert "not valid JSON" in verdict(raw="{not json")
+    assert "not a JSON object" in verdict(raw="[1, 2]")
+    path.write_text(json.dumps(good), encoding="utf-8")
+    assert refresh.describe_source(copy)["accepted_current_data"] is True                # the untouched report
