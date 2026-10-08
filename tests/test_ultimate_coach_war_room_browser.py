@@ -524,6 +524,11 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
                 .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
             assert clipped == 0
+            # Next Send opponents are one swipeable row on a phone (a real roster has 8 long names).
+            assert page.evaluate("getComputedStyle(document.querySelector('#next-send .ns-chips')).flexWrap") == "nowrap"
+            tops = page.evaluate("[...document.querySelectorAll('#next-send .ns-chip')].map(c => Math.round(c.getBoundingClientRect().top))")
+            assert len(set(tops)) == 1
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         finally:
             browser.close()
 

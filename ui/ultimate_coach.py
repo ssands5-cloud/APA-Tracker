@@ -132,6 +132,12 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .coach-op { display:block; font-style:normal; font-size:12px; color:#2f4a7a; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
+@media (max-width:600px) {
+  /* One swipeable row of opponents on phones (full names; a real roster has 8). */
+  .ns-chips { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; padding-bottom:2px; }
+  .ns-chip { flex:0 0 auto; white-space:nowrap; min-height:38px; }
+  .ns-ask { flex:0 0 auto; }
+}
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }
 .tonight-grid.detail > div { font-size:12px; }
