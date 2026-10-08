@@ -561,6 +561,22 @@ def stale_warning(fresh: dict[str, Any]) -> str:
             "those matches out — refresh the data and rebuild before relying on them.")
 
 
+def stale_by_scope(match_day: dict[str, Any], build_local: str | None) -> dict[str, int]:
+    """Per team scope: fixtures dated before the build that still show UNPLAYED (the captain's own missing
+    results, not just a league-wide count). Scopes with none are omitted."""
+    fixtures = match_day.get("fixtures") or []
+    out: dict[str, int] = {}
+    if not build_local:
+        return out
+    for scope, sides in (match_day.get("schedule") or {}).items():
+        n = sum(1 for side in sides for f in [fixtures[side["fixture_index"]]]
+                if f.get("local_date") and f["local_date"] < build_local
+                and str(f.get("status") or "").upper() == "UNPLAYED" and not f.get("is_bye"))
+        if n:
+            out[scope] = n
+    return out
+
+
 def freshness(match_day: dict[str, Any], build_local: str | None) -> dict[str, Any]:
     fixtures = match_day.get("fixtures") or []
     results = [f["local_date"] for f in fixtures if f.get("local_date") and f.get("is_scored")]

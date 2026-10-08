@@ -129,7 +129,7 @@ NAV_SHEETS = ["Match Day", "War Room", "Lineup Lab", "Captain Packet", "Coach Da
               "Team Rosters", "Players", "Data Trust", "Build Info"]
 SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
                "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
-               "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
+               "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
                "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
 RAIL = "5A3A1F"
 OPPONENT_FILL = PatternFill("solid", fgColor=RAIL)

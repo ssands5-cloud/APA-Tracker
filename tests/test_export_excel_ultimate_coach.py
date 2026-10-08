@@ -108,7 +108,7 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
     assert set(wb.sheetnames) == {
         "START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
         "Coach Dashboard", "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
-        "Date Keys", "Suggested Dates", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
+        "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
         "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info",
     }
     # START HERE first (and open), then the coach-facing sheets with Match Day as the control panel.

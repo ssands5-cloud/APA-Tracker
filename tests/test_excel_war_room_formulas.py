@@ -741,16 +741,22 @@ def _stale_payload():
 
 def test_a_stale_snapshot_is_a_visible_warning_not_small_print(built, tmp_path):
     # Real case (2026-10-08): a workbook built Oct 8 held no result after Sep 20 and the only hint was muted text.
-    assert not str(built["Command Center"]["B4"].value).startswith("⚠")         # a current snapshot: plain line
+    assert not str(Workbook(built).display("Command Center", "B4")).startswith("⚠")   # a current snapshot: plain
     stale = load_workbook(write_workbook(_stale_payload(), tmp_path / "stale.xlsx", built_at="2026-10-07 18:00 UTC",
                                          viewer_member_external_id="1001", viewer_card_number="80000001"))
+    book = Workbook(stale)
+    # The selected team's own gap leads (Sharks has the unplayed Oct 4 fixture), then the league-wide warning.
+    team = "⚠ Sharks · Fall 2026 · 8-Ball: 1 earlier fixture has no result in this snapshot. "
     warning = ("⚠ 1 fixture dated before this build has no result in this snapshot (latest recorded result Sun Sep 27, "
                "2026). Records, medals and risks leave those matches out — refresh the data and rebuild before relying "
                "on them.")
     for sheet, cell in (("Command Center", "B4"), (MD, "A4")):
+        shown = str(book.display(sheet, cell))
+        assert shown.startswith(team + warning), (sheet, shown)
         c = stale[sheet][cell]
-        assert str(c.value).startswith(warning), (sheet, c.value)
         assert c.font.b and c.font.color.rgb.endswith("8A5A00"), sheet
+    book.set(MD, "B7", SHARKS9)                       # a team whose own fixtures are all accounted for
+    assert str(book.display("Command Center", "B4")).startswith(warning)       # league-wide note only
 
 
 def test_captain_packet_page_one_is_decision_first(book, built):

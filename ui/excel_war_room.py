@@ -59,6 +59,7 @@ from analytics.ultimate_coach_war_room import (
     meetings_index,
     scope_dates,
     sl_bucket_index,
+    stale_by_scope,
     stale_warning,
     suggested_date,
     war_room_pair,
@@ -210,6 +211,10 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
     table("DateKeys_Table", "Date Keys", DATEKEYS_COLUMNS, date_rows, {"Key": 50, "Group Key": 44, "Date Display": 18})
     table("SuggestedDates_Table", "Suggested Dates", SUGGESTED_COLUMNS, suggested_rows,
           {"Group Key": 44, "Date Display": 18})
+    # Per team scope: earlier fixtures that still have no result in this snapshot (the captain's own gap).
+    table("StaleScopes_Table", "Stale Scopes", ["Scope Key", "Unplayed Before Build"],
+          [[scope, n] for scope, n in sorted(stale_by_scope(match_day, build_local).items())],
+          {"Scope Key": 44, "Unplayed Before Build": 22})
     return {
         "pairs": len(tc_rows), "evidence_rows": len(me_rows), "max_threats": max_threats,
         "max_concerning": max_concern, "max_meetings": max_meetings, "max_dates": max_dates,
@@ -327,6 +332,12 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '"Suggested: the team with the earliest scheduled date on or after the build date.")))))')
     e.cell("uc_TeamScope", "Effective team scope key",
            '=IF(uc_TeamLabel="","",IFERROR(INDEX(Teams_Table[Scope Key],MATCH(uc_TeamLabel,Teams_Table[Team],0)),""))')
+    e.cell("uc_TeamStale", "Team fixtures before the build with no result",
+           '=IF(uc_TeamScope="",0,IFERROR(INDEX(StaleScopes_Table[Unplayed Before Build],'
+           'MATCH(uc_TeamScope,StaleScopes_Table[Scope Key],0)),0))')
+    e.cell("uc_TeamStaleText", "Team stale note",
+           '=IF(uc_TeamStale=0,"","⚠ "&uc_TeamLabel&": "&uc_TeamStale&" earlier fixture"&IF(uc_TeamStale=1," has",'
+           '"s have")&" no result in this snapshot. ")')
     e.cell("uc_DateGroup", "Date group key", '=IF(uc_TeamScope="","",uc_TeamScope&"|"&uc_Code)')
     e.cell("uc_DateCount", "Scheduled dates", '=IF(uc_DateGroup="",0,COUNTIF(DateKeys_Table[Group Key],uc_DateGroup))')
     dates = e.block("Date slot", D, [
@@ -860,11 +871,12 @@ def build_match_day(wb, *, slots: dict[str, int], viewer_label: str | None, view
           last=12, current="Match Day")
     fresh = stats["freshness"]
     stale = stale_warning(fresh)
-    _span(ws, 4, 1, 12,
-          (stale + " " if stale else "")
-          + f"Built {fresh['build_date']} · offline snapshot: latest recorded result {fresh['latest_result']}"
-          + f" · times in {stats['tz']} · this file never refreshes itself.",
-          font=WARN_FONT if stale else base.MUTED_FONT, height=44 if stale else 30)
+    line = ((stale + " " if stale else "")
+            + f"Built {fresh['build_date']} · offline snapshot: latest recorded result {fresh['latest_result']}"
+            + f" · times in {stats['tz']} · this file never refreshes itself.")
+    # The selected team's own missing results lead the line (uc_TeamStaleText is "" when there are none).
+    _span(ws, 4, 1, 12, '=uc_TeamStaleText&"' + line.replace('"', '""') + '"',
+          font=WARN_FONT if stale else base.MUTED_FONT, height=58 if stale else 30)
     base._section(ws, 5, "1 · Set up the matchup (yellow = your input)", last_col=12)
     rows = [
         (6, "Player", viewer_label or "", "Pick your name — every entry shows the APA record ID. Typing just the record ID also works.",
@@ -1951,11 +1963,12 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     fresh = stats["freshness"]
     stale = stale_warning(fresh)
     # A stale snapshot is a warning here, not small print: it is why a captain's own recent results can be missing.
-    _span(ws, 4, 2, 11, (stale + " " if stale else "")
-          + f"Data freshness: built {fresh['build_date']} · latest recorded result {fresh['latest_result']} · "
-            "the file never refreshes itself.",
+    line = ((stale + " " if stale else "")
+            + f"Data freshness: built {fresh['build_date']} · latest recorded result {fresh['latest_result']} · "
+              "the file never refreshes itself.")
+    _span(ws, 4, 2, 11, '=uc_TeamStaleText&"' + line.replace('"', '""') + '"',
           font=Font(size=10, bold=True, color="8A5A00") if stale else Font(size=10, color="5B6A61"),
-          height=30 if stale else 16)
+          height=44 if stale else 16)
     _link(ws, 5, 2, "→ Match Day (change matchup)", "Match Day")
     _link(ws, 5, 6, "→ Lineup Lab (mark availability)", "Lineup Lab")
     _link(ws, 5, 10, "→ Captain Packet (print)", "Captain Packet")
