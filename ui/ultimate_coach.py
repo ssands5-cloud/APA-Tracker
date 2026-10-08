@@ -23,6 +23,7 @@ from analytics.ultimate_coach_war_room import (
     COACH_TAGS,
     MATCH_NIGHT_GUIDE,
     ONBOARDING_LIMITS,
+    PVP_STATUS,
     ONBOARDING_WHAT,
     build_local_date,
     build_version,
@@ -672,6 +673,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <script>
 (function() {{
   var DATA=JSON.parse(document.getElementById("uc-data").textContent);
+  var PVP_STATUS_HTML={json.dumps("<strong>" + escape(PVP_STATUS[0]) + "</strong> " + escape(PVP_STATUS[1]))};
   var BUILT_LABEL={built_label_js};
   var PLAYERS={{}}; DATA.players.forEach(function(p){{PLAYERS[String(p.id)]=p;}});
   var EVIDENCE_INDEX=DATA.evidence_index||{{}};
@@ -796,7 +798,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       document.getElementById("direct").innerHTML='';
       document.getElementById("shared").innerHTML='';
       document.getElementById("meetings").innerHTML='';
-      document.getElementById("status").innerHTML='<strong>Probability status: NOT CALIBRATED.</strong> Scout & Compare is showing real source evidence only. The future odds model must pass chronological backtesting before a percentage appears here.';
+      document.getElementById("status").innerHTML=PVP_STATUS_HTML;
       return;
     }}
     document.getElementById("profile-b").innerHTML=profile(pb,fmt);
@@ -839,7 +841,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     var meetings=direct.slice().sort(function(x,y){{return String(val(y,"match_date")).localeCompare(String(val(x,"match_date")));}});
     document.getElementById("meetings").innerHTML='<h2>Recorded meetings</h2>'+(meetings.length?'<div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Result</th><th>SL</th><th>Opponent SL</th><th>Points</th></tr></thead><tbody>'+meetings.map(function(r){{return '<tr><td>'+esc(val(r,"match_date")?wrDayLabel(wrInstant(val(r,"match_date"))):'—')+'</td><td>'+esc(val(r,"session_name")||'—')+'</td><td>'+esc(val(r,"result"))+'</td><td>'+esc(val(r,"own_skill_level")===null?'—':val(r,"own_skill_level"))+'</td><td>'+esc(val(r,"opponent_skill_level")===null?'—':val(r,"opponent_skill_level"))+'</td><td>'+esc(val(r,"points_earned")===null?'—':val(r,"points_earned"))+'</td></tr>';}}).join('')+'</tbody></table></div>':'<p class="muted">These players have no recorded direct meeting in this format.</p>');
 
-    document.getElementById("status").innerHTML='<strong>Probability status: NOT CALIBRATED.</strong> Scout & Compare is showing real source evidence only. The future odds model must pass chronological backtesting before a percentage appears here.';
+    document.getElementById("status").innerHTML=PVP_STATUS_HTML;
   }}
 
   A.addEventListener("change",function(){{SB.value="";refreshPlayerB(false);compare();}});

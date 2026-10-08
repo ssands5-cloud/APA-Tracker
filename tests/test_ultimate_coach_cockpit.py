@@ -51,7 +51,7 @@ def test_html_never_claims_uncalibrated_probability():
         "counts":{"players":2,"head_to_head_rows":0},
     }
     html=render(payload)
-    assert "Probability status: NOT CALIBRATED" in html
+    assert "Win probability: NOT CALIBRATED" in html and "Probability status" not in html
     assert "No matchup probability is displayed until" in html
     assert "Player A" in html and "Player B" in html
     assert "Shared-opponent evidence" in html

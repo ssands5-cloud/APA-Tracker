@@ -542,6 +542,14 @@ ONBOARDING_LIMITS = [
     "• Planning marks belong to one fixture: clear old marks before planning another night.",
     "• Coach Notes are your opinions, never APA facts.",
 ]
+# Player vs Player status line (GPT audit #84): the page DOES show historical win-rate percentages, so the
+# banner must separate those descriptive figures from a prediction, which is never shown.
+PVP_STATUS = (
+    "Win probability: NOT CALIBRATED — no predicted odds are shown.",
+    "Percentages on this page are historical win rates from recorded games, each with its sample size: "
+    "they describe past results, not a prediction. A predicted percentage would need a model that first "
+    "passes chronological backtesting.",
+)
 PAGES_URL = "https://ssands5-cloud.github.io/APA-Tracker/"
 MATCH_NIGHT_GUIDE = [
     f"• Open on your phone: {PAGES_URL} — a private Match Night package for ONE fixture, encrypted; enter the passphrase once.",

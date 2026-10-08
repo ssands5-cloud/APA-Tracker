@@ -454,6 +454,12 @@ def test_player_vs_player_reads_like_coaching_software(tmp_path: Path):
             assert "in EIGHT" not in section and "in 8-Ball" in section
             meetings = page.inner_text("#meetings")
             assert "Sun Sep 20, 2026" in meetings and "T19:00" not in meetings
+            # The page shows historical percentages, so the banner separates them from predictions (GPT #84).
+            assert "Lifetime win rate" in section          # a historical percentage slot (— without career data)
+            status = page.inner_text("#status")
+            assert status.startswith("Win probability: NOT CALIBRATED — no predicted odds are shown.")
+            assert "historical win rates" in status and "not a prediction" in status
+            assert "Scout & Compare" not in status and "before a percentage appears" not in status
             th = page.locator("#wr-matrix thead th").nth(1)
             assert th.locator(".id-line").evaluate("e => getComputedStyle(e).display") == "block"
             assert errors == []
