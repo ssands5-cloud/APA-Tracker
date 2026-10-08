@@ -1133,6 +1133,827 @@ This closes the normal reload and freshness-label defects, but not the
 explicitly requested unavailable-selection path. No feature code modified
 or global builder run.
 
+### Phase 3 Captain's War Room baseline audit — 2026-10-07 05:56 UTC
+
+Sprint tracker: [Ultimate Coach – Production Readiness Sprint #84](https://github.com/ssands5-cloud/APA-Tracker/issues/84).
+Paul's new directive assigns Claude implementation and GPT audit/strategic
+review, superseding the reversed roles recorded in older issue #24. The
+question is **Who should I put up next?**, not how many rows can be shown.
+
+**Scope and evidence:** immutable PR #83 checkpoint
+`47b15130c288fc005c0140f6311bc7113b746461`; GitHub Actions run
+37575437358 passed Python 3.12 and 3.13. Inspected that commit's evidence
+module and HTML/Excel sources directly using `git show` from the canonical
+root, without executing or modifying the builder's live worktree. Ran one
+controlled synthetic probe against that exact evidence module; no test
+data was added to production artifacts. This is not a full-suite rerun or
+a visual review of a new Phase 3 build. Paul's earlier screenshots cover
+selected `d5d8d7f` UAT paths only, not all of `47b1513` or future Phase 3.
+
+**Repository skills reviewed:** README, collaboration handshake, overnight
+report, `.github/prompts/audit.md`, and verification-before-completion,
+red-team and validator skills. Considered brainstorming for design
+workflow; Paul's explicit unattended authority supplies the approved
+direction and does not require repeated subjective approvals. Applied
+fresh-evidence, failure-mode and reproducibility requirements. Some
+`.github` assets refer to Budget, Python 3.11 and COM; those inherited
+defaults do not override APA's Python 3.12/3.13 and no-COM constraints.
+Builder skill consideration/use is not yet documented in the observed PR
+description/comments; this is a documentation gap, not proof of non-use.
+
+✅ **Verified — what helps lineup decisions:** source-backed fixture
+selection and roster scope identity, names paired with record IDs, and
+separate direct/shared/no-evidence records. The earlier user UAT exercised
+Sunday's 8-Ball/9-Ball fixture routing, a bye with MST kickoff, and player
+selection retention. Exact-head CI is green for this checkpoint. These
+reduce lookup effort; they do not demonstrate winning advantage.
+
+⚠ **Needs Improvement — repeated setup (P1 usability):** at `47b1513`,
+`_coach_dashboard_sheet` still creates blank Player A/B inputs and its own
+format default; `_match_night_sheet` still creates blank Our/Opponent
+Team inputs. Match Day has not yet become a shared effective selection
+with reversible local overrides. This is acknowledged planned work, not
+a regression accusation. Validate follow/override/clear behavior and
+dependent invalidation before calling the one-setup workflow complete.
+
+❌ **Problem — descriptive rank can be mistaken for advantage (P1
+interpretation risk):** `rank_vs_opponent()` orders SHARED candidates by
+our wins/games, shared count and games; the opponent's corresponding
+record is displayed but does not influence ordering. A controlled probe
+confirmed candidate A with own 1-0 / opponent 10-0 sorts before B with
+own 9-1 / opponent 0-10. This does not prove B should be sent; it proves
+the order is not comparative advantage. Existing methodology disclaimers
+are helpful, but the first-in-ranking summaries must not become "best
+odds", "strong indirect" or an unexplained opportunity verdict. Show
+both records/counts prominently; use descriptive labels or unordered
+comparison when a defensible distinction is absent. Do not invent a
+replacement difference score or blend evidence tiers.
+
+⚠ **Needs Improvement — live planning and visual evidence:** the posted
+plan proposes availability/used controls, matrix, cards and packet. No
+current final-artifact evidence establishes these work together. Unknown
+must remain distinct from unavailable; user inputs must be keyed by
+player and roster/fixture scope, survive local override resets correctly,
+and never mutate source evidence. Guard small samples and preserve
+losing/unknown candidates in an inspectable view: they are not facts of
+unavailability. Color can describe recorded win/loss balance, but an even
+record is not proof of a neutral matchup or confidence. Protected-player
+and risk language must expose its descriptive basis without a hidden
+model. The user's final print preview exposed setup clutter/tiny text;
+the dedicated packet needs new print evidence, including both rosters.
+
+❌ **Problem — new sprint boundary mismatch (P1 governance):** canonical
+root and origin verified. Existing active integration checkout is a
+linked sibling worktree, and previous UAT files are outside the root on
+Desktop. Those locations were allowed earlier, but Paul's latest directive
+requires new sprint work and temporary artifacts inside the exact root.
+No independent clone is inferred merely from a linked worktree. Do not
+delete/move/clean existing checkouts or outputs. Transition new builder
+work to a verified nested worktree and new artifacts inside the root,
+preserving all WIP. GPT's writes in this cycle are inside the root only.
+Known untracked user workbooks, handoff file and token-named files were
+investigated by status only and left untouched; no credentials were read.
+
+⚠ **Needs Improvement — release memory (P2):** PR head is `47b1513`, but
+the description still calls `d5d8d7f` the final head. Distinguish checkpoint
+CI, artifact-built SHA and pending Phase 3 candidate. Issue #84 is the new
+master tracker; do not inherit obsolete roles/cadence from issue #24.
+
+💡 **Recommendations:** fixture and both rosters first; selection hub with
+local overrides second; remaining-candidate planning and one-opponent
+scouting third; matrix and detailed evidence progressively disclosed;
+packet page 1 readable without setup/formula helpers. Use the exact
+fixture/identity to route every view. Document missing venues and current
+versus date-specific rosters, sample sizes and freshness near the decision.
+Run propagation, stale-state, bye, multi-fixture, missing-SL, ambiguity and
+planning-isolation checks on the final exact head, then verify both rebuilt
+artifact hashes and visual print/phone results. Keep Paul-only approval
+items PENDING PAUL REVIEW while advancing other approved work.
+
+**Assessment:** average-captain UX **Fair**; Captain Edge **5/10** at this
+checkpoint (qualitative usability judgment, not a measured prediction).
+The fixture/evidence tools are useful, but repeated setup and incomplete
+live planning prevent a 30-second next-send workflow. Phase 3 readiness
+**FAIL / not yet demonstrated**. Risks: rank overinterpretation, stale
+state, scope leakage, print legibility and boundary compliance. Remaining
+uncertainties: builder skill-use record, complete live workflow, final
+artifact behavior and visual/UAT acceptance. No feature edits, COM,
+probability model, source-data changes or merge performed.
+
+### Phase 3 missing-career-count audit — 2026-10-07 06:18 UTC
+
+Exact checkpoint: `9b55c49eb802d8d15d1d7b4171d415c8fbc3be03`.
+GitHub CI freshly observed green on Python 3.12/3.13. Boundary transition
+verified via linked-worktree metadata: new builder checkout is
+`.worktrees/pr83` inside the canonical root. Existing checkouts preserved.
+Shared-only ranking changes explicitly cite audit PR #85, but are still
+uncommitted; not marked resolved or covered by checkpoint CI.
+
+❌ **Problem (P1 evidence integrity):** `_career_text()` in
+`analytics/ultimate_coach_war_room.py` independently sums non-null wins and
+played counts. A controlled, in-memory synthetic probe against this exact
+committed function with missing wins and ten played returned
+`0-10 (league-scoped lifetime EIGHT)`. Missing wins became invented losses.
+This is not a claim about any real player's production record. Other
+partial-scope rows can likewise combine mismatched totals.
+
+💡 **Recommendation:** pair complete validated counts by scope; explicitly
+disclose incomplete scope coverage and show No data when W-L is unknown.
+Preserve explicitly recorded zero wins. Cover wins missing, played
+missing, mixed complete/incomplete scopes and genuine zero in regressions.
+Do not silently present a filtered subset as complete lifetime coverage.
+
+✅ **Verified:** source and synthetic formatter reproduction, exact-head
+CI, builder's inside-root worktree transition. Finding posted on sprint
+issue #84 for Claude. No source data, feature code or builder files changed.
+Skills applied: verification-before-completion, red-team and validator
+reviewed in the baseline cycle. No full-suite rerun or new visual/artifact
+verification claimed. Remaining uncertainties: prevalence in real career
+data, builder fix and final flow. Phase 3 readiness remains FAIL / not yet
+demonstrated; qualitative Edge score remains 5/10 pending new build review.
+
+### Phase 3 fixture planning isolation — 2026-10-07 06:38 UTC
+
+Exact checkpoint `4fa7122b215dc9d52c54c7f25bf7de930c4ab275` now has
+freshly observed green CI on Python 3.12/3.13. Shared-only ranking is
+committed as `b857bdb`; final artifact parity checks remain pending.
+Career-count repair is visibly in progress locally, not yet resolved.
+
+❌ **Problem (P1 live captain workflow):** source review of
+`ui/ultimate_coach_war_room.js` shows lineup/played marks keyed only by
+team scope and player (`WR_PLAN.our[scope][pid].l`, `.opp[scope][pid].p`).
+`wrRemaining()` and `wrPlayed()` have no fixture/date context. A player
+marked Played in one fixture remains excluded in the next fixture for
+that session team. The browser test switches opponent team, not another
+fixture with the same team. Excel `ll_OurOK`/`ll_OppOK` similarly match
+team labels without date/fixture, so old marks can apply to a later match.
+This is source-verified; no new browser interaction proof is claimed.
+
+💡 **Recommendation:** scope transient planning state to exact fixture
+identity (explicit separate manual-analysis context when no fixture).
+Different fixture starts clean/Unknown; returning restores its own plan.
+Keep durable coach notes separate. Verify same teams/different dates,
+same-day multiple fixtures, opponent change, reload, and unchanged source
+evidence. Avoid automatic clearing that loses a prior fixture plan.
+
+✅ **Verified:** immutable source functions and existing test coverage,
+exact-head CI, safe inside-root builder checkout. Finding sent to issue
+#84. Skills: verification-before-completion/red-team/validator as already
+reviewed. No feature edits, COM or source-data mutation. Remaining:
+regression proof, builder correction and final artifact/visual review.
+Phase 3 readiness remains FAIL; qualitative Captain Edge remains 5/10.
+
+### Phase 3 career repair verification — 2026-10-07 06:58 UTC
+
+Exact checkpoint `8e336a46f65c06073fb987d064e76f1b331bb3b4`, repair
+`14c40b7`. Fresh GitHub CI observed green on Python 3.12/3.13.
+
+✅ **Verified:** five controlled in-memory probes using the exact
+committed Python helpers pass: missing wins, missing played, partial
+scopes, genuine zero wins and inconsistent counts. Unknown totals no
+longer become fabricated losses; complete scopes are paired and excluded
+scope counts disclosed. Original Python formatter P1 is fixed at this
+checkpoint. JavaScript/profile repair and parity regression are committed;
+no new independent browser or final-artifact verification claimed here.
+Shared-only numeric ranking correction is also committed, not merely WIP.
+
+❌ **Still open:** planning marks in committed War Room JS remain keyed
+by team/player without date/fixture, and Excel uses team-only context.
+The fixture-isolation P1 is not resolved by this CI result. Formal audit
+responses, builder skill-use documentation, full one-setup planning
+workflow and final rebuilt-artifact/print checks remain pending.
+
+Skills: verification-before-completion, red-team and validator reviewed
+in baseline. This cycle read immutable source and used synthetic probes
+only; no feature, source-data, builder or off-limits files changed. Issue
+#84 updated. Phase 3 readiness remains FAIL / not yet demonstrated; Edge
+score remains 5/10 until the final live-workflow evidence is reviewed.
+
+### Phase 3 candidate independent workflow audit — 2026-10-07 07:18 UTC
+
+Exact head `4f73eb89728565bcbf57fd576082230e00bece6f` is docs-only
+above artifact/code head `5c9dc83`. Fresh CI green on Python 3.12/3.13.
+Claude released the inside-root worktree; verified root/common Git/origin
+before tests. Applied previously reviewed verification/red-team/validator
+skills. All audit temporary outputs are inside the canonical root.
+
+✅ **Verified:** 42 focused tests independently passed in 7.16s across
+War Room Python, matchup evidence, actual Excel formulas and Chromium
+parity. Tests used no COM/macros and no bytecode/cache output outside the
+root. Both rebuilt HTML/XLSX hashes match UAT_MANIFEST.json. Manifest
+records unchanged source DB; independent source rehash not done this cycle.
+Claude now documents audit responses and repository skill use. Shared-only
+ordering and missing-career-count fixes pass these checks. This is focused
+verification, not an independent full-suite rerun or real-Excel visual UAT.
+
+❌ **Blocking P1 confirmed in both exports:** on synthetic Oct11 Sharks vs
+Falcons, mark our Ann Played and opponent Cam played; select Oct25's
+Falcons fixture. In headless Chromium, Ann remains Played and Cam remains
+checked with no page errors. In a generated synthetic workbook evaluated
+through its actual formulas, Ann returns Unknown + Played and Cam Played
+on Oct25. Thus team-only plan keys exclude players from a different real
+match-day context. Existing passing tests do not cover this date change.
+No synthetic records were added to production data/artifacts.
+
+💡 **Required correction:** persist transient marks by exact fixture
+identity and player/team scope; explicit manual context when no fixture.
+Different fixture starts Unknown/unplayed; switching back restores that
+fixture. Keep durable scouting notes separate. Cover same-date second
+fixture, return/reload, context overrides and invalid/no-fixture states.
+Do not declare Lineup Lab ready until both exports pass this reproduction.
+
+⚠ **Pending:** final artifact visual/print captain usability, real-Excel
+interaction, fixture-state repair, and complete one-setup evidence. XLSX
+candidate is 49,328,107 bytes, HTML 88,665,453 bytes; do not imply the older
+28MB Excel size still applies. Phase 3 readiness FAIL, with specific live
+planning defect rather than just unverified feature existence. UX/Edge
+baseline remains Fair / 5 out of 10 until the next complete-flow audit.
+Updated issue #84; no feature/source/off-limits edits and nothing merged.
+
+### Phase 3 first-screen captain review — 2026-10-07 08:38 UTC
+
+Product unchanged at `4f73eb8`; artifact `5c9dc83` remains the candidate.
+Fresh GitHub check confirms both Python CI jobs green. No new builder
+commit or acknowledgement of the reproduced fixture-state P1 observed.
+Master issue #84 updated to separate fixed items and current blockers.
+
+✅ **Verified:** actual candidate opened in headless Chromium at desktop
+1280x900 and phone 390x844. Mobile document width equals viewport width
+(390), with no page errors. Selected Sunday fixture defaults correctly.
+Screenshots saved inside canonical `.git/phase3-visual-5c9dc83/` and
+visually inspected. No new artifact generation or real-Excel claim.
+
+⚠ **Needs Improvement (P2 information hierarchy):** default desktop first
+viewport contains dataset counts, freshness strips, identity setup,
+scopes, selection controls and fifteen date chips before the fixture
+card. On phone, header/navigation/freshness and identity setup consume
+the initial viewport; opponent, rosters and remaining sends are absent.
+The responsive layout works, but the primary view still asks the captain
+to navigate setup before seeing who to put up next.
+
+💡 **Recommendation:** after valid fixture selection, lead with compact
+match header, both roster/remaining-status summaries and evidence-backed
+options. Put Change matchup/setup behind progressive disclosure. Retain
+compact readable freshness and missing-data warnings rather than removing
+them. Show direct/shared/no-evidence distinctions and samples without
+predictive labels. Final visual preference remains PENDING PAUL REVIEW.
+
+❌ **Still blocking:** played/planned marks leak across fixtures in both
+exports, independently reproduced in the previous entry. No fix observed.
+Skills applied: existing verification/red-team/validator instructions.
+Readiness FAIL; qualitative Edge 5/10 and UX Fair pending corrected live
+workflow. No feature/source/off-limits edits, COM or merge performed.
+
+### Phase 3 local override and packet consistency audit — 2026-10-07
+
+Immutable product head `4f73eb8`, code/artifact `5c9dc83`, still unchanged.
+CI observed green on both Python versions; audit PR #85 checks also green
+before this report update. No fixture-planning repair or builder response
+observed. Continued with a new non-COM workflow probe rather than repeating
+previous tests without cause. Synthetic audit workbook generated earlier
+at this exact code revision was read, not modified on disk.
+
+❌ **Problem (P1 cross-tab state and incorrect packet context):** set only
+War Room opponent override C6 to Owls. Coach Dashboard's opponent options
+change from Falcons players Cam/Eve to Owls players Gus/Zed, although
+Match Day is unchanged. Packet A2 still contains Oct11 Home vs Falcons,
+preceded by a warning, while opponent title H5 is Owls. Then set only War
+Room our-team override C5 to Sharks 9-Ball: Coach Dashboard A4 says
+Following Match Day but reports 9-Ball while Match Day is 8-Ball. The
+independent formula-evaluator probe confirms all three behaviors.
+A warning does not make conflicting fixture/roster content correct.
+
+Root coupling: `cd_PlayerBList` consumes `wr_OppLabels`, `cd_FmtLabel`
+consumes `wr_FormatLabel`; scouting/packet use `wr_*` results while
+packet metadata uses `uc_Fixture`. Existing override test asserts the
+warning but does not require other tabs' effective context to stay fixed.
+
+💡 **Required correction:** each output defaults to Match Day's effective
+fixture and has its own optional local overrides, per Paul's explicit
+rule. Blank follows Match Day; a War Room override does not alter Coach
+Dashboard's pool/format or a fixture packet. An explicit manual-analysis
+print mode may show local rosters only if the unrelated fixture metadata
+is removed and the mode is clear. Add opponent-pool, format, scouting and
+packet assertions, invalidation and clear-to-restore checks. Preserve
+identity keys and source evidence.
+
+✅ **Verified:** actual generated-workbook formula outputs, stable exact
+head, unchanged source files, and same canonical root/origin. Skills:
+verification-before-completion, red-team, validator already reviewed.
+Probe encoding/cell-address setup errors were corrected before the final
+successful assertions; they were audit-harness issues, not product test
+results. No fabricated records added to production, no COM or feature
+changes. Posted finding in issue #84. Fixture-state P1 remains open;
+readiness FAIL, qualitative Edge 5/10 pending a corrected complete flow.
+
+### Phase 3 planning repair delta audit — 2026-10-07 09:58 UTC
+
+Exact docs head `c5db9cd5de234083ed978075af0d1cf9812cfe39`, code and
+artifacts `05d6263`, planning repair `0c01ad3`. Fresh CI green on Python
+3.12/3.13. Canonical root/common Git/origin checked; no feature edits.
+Skills applied: existing verification-before-completion/red-team/validator.
+
+✅ **Verified progress:** independent 45-test focused run passed in
+11.00s (Python evidence, Excel actual-formula flows, Chromium parity).
+Original cross-date HTML and Excel regressions pass. HTML fixture-keyed
+marks cover return/reload and another fixture on the same date. New HTML
+and XLSX SHA256 values match UAT_MANIFEST. Actual final HTML Tonight y=247
+at 1280x900 and y=370 at 390x844; phone content has no horizontal overflow.
+Screenshot visually reviewed: opponent/date/time, remaining count, direct
+record sends and risks now appear before setup. First-screen finding is
+substantially addressed, not a substitute for Paul's visual preference.
+
+❌ **Remaining P1, Excel exact-fixture isolation:** independent non-COM
+synthetic workbook with two Oct25 Sharks-vs-Falcons fixtures at 7PM and
+9PM. Choose first, set planning date Oct25, mark Ann/Cam Played; choose
+second. Actual formula evaluator still returns Ann Unknown + Played and
+Cam Played. `ll_FixOK` compares date only; distinct fixtures on that day
+reuse the marks. No synthetic data added to production. New builder test
+covers different dates; same-date second-fixture coverage is in HTML only.
+
+💡 **Required:** exact fixture identity in Excel context, or a clearly
+fail-closed one-active-plan workflow that cannot silently reassign marks.
+Prove two fixtures on the same date with same teams, clearing/replanning,
+return and manual/no-fixture modes. Do not close Excel P1 from HTML tests.
+The previously reproduced cross-tab override and packet mismatch also
+remain open; no correction observed in this delta.
+
+⚠ **Remaining limits:** real Excel visual/interaction and final packet
+review are PENDING PAUL REVIEW. Source unchanged is builder-manifest
+reported, not independently rehashed this cycle. No full-suite rerun or
+blanket readiness claim. Readiness FAIL (specific remaining Excel/context
+blockers). Qualitative Captain Edge now 6/10: first-screen/HTML planning
+improved, but incorrect state in Excel can still change a lineup decision.
+UX remains Fair pending corrected complete flow. Issue #84 updated;
+PR #83 stays draft and nothing merged.
+
+### Phase 3 sprint-window handoff — 2026-10-07 15:58 UTC
+
+The authorized approximately ten-hour audit window has ended; the
+20-minute monitor is PAUSED. This is a handoff, not product acceptance.
+Final read-only checks verified canonical root/common Git/origin and
+product head `c5db9cd5de234083ed978075af0d1cf9812cfe39`, still draft.
+Code/artifact head remains `05d6263`; no later product commit, local repair
+or acknowledgement of the two remaining Excel findings observed. Product
+CI remains green on Python 3.12/3.13. Audit PR #85 checks were green before
+this final documentation-only update.
+
+✅ **What helps:** shared Match Day workflow, roster identity/format
+handling, direct/shared/no-evidence distinctions, restored truthful career
+counts, unordered indirect candidates, fixture-keyed HTML planning and
+first-screen Tonight overview. Builder skill use and audit responses now
+documented; new work transitioned inside the canonical root. Independent
+45 focused non-COM tests passed on this candidate and artifact hashes were
+verified during the sprint. These are historical verification results,
+not a new full-suite rerun at handoff. Snapshot unchanged is recorded by
+builder manifests; no independent source DB rehash claimed.
+
+❌ **Remaining P1 blockers:** (1) Excel uses date-only planning context,
+so distinct same-day/same-team fixtures reuse Played marks; (2) War Room
+local overrides change another tab's opponent pool/format, and the packet
+can retain fixture metadata for one opponent while showing another roster.
+Both have independent synthetic, actual-formula reproductions in the
+preceding entries and issue #84. Do not mark these closed from old green CI.
+
+💡 **Next builder actions:** exact-fixture Excel context or explicit
+fail-closed one-active-plan mechanics; independent effective selection for
+each tab with local overrides confined to that tab; fixture/roster packet
+consistency; regressions for the posted probes, then exact-head CI/rebuild
+and a new independent audit. No further subjective approval is needed to
+repair these already-authorized defects. Final visual/real-Excel/packet
+and captain workflow acceptance remain PENDING PAUL REVIEW.
+
+⚠ **Assessment:** Phase 3 readiness FAIL due to specific Excel context
+errors; UX Fair, qualitative Captain Edge 6/10 (not a predictive model).
+Latest candidate folder is
+`.worktrees/pr83/tmp/uat/build-05d6263/` inside the canonical root. Product
+PR #83 and audit PR #85 remain unmerged drafts. No feature changes,
+credentials, off-limits edits, COM/macros, destructive checkout operations
+or merges by GPT. Known unrelated user files remain untouched. Issue #84
+is the authoritative handoff; resume from it rather than old chat claims.
+
+### Phase 3 second-block Excel repair verification — 2026-10-07 17:37 UTC
+
+Paul directly authorized a new ten-hour block, 17:16 UTC Oct7 to 03:16:55
+UTC Oct8 (21:16 Denver Oct7). Monitor ACTIVE, every twenty minutes. Prior
+window handoff is historical. Exact head
+`a412e2e834a71714875d9ee4669d665d7292e1ba`; docs-only above repaired
+code/artifact `1b7053a`. Fresh CI observed green on Python 3.12/3.13.
+Canonical root/common Git/origin verified; builder snapshot tracked-clean.
+
+✅ **Verified repairs:** independent focused suite: 47 passed in 12.96s,
+covering Python evidence, actual Excel formulas and Chromium flows. Fresh
+independent synthetic reproductions outside builder tests confirm:
+- Oct25 same teams at 7PM/9PM: marks bound to first fixture are ignored on
+  second; returning restores first; blank planning fixture fails closed.
+- War Room-only opponent/format overrides leave Coach Dashboard pool and
+  format, and Captain Packet fixture heading and roster unchanged.
+Both original Excel P1 findings are resolved at this immutable checkpoint.
+No synthetic data added to production. No COM/macros or feature edits.
+
+✅ **Artifact provenance:** HTML/XLSX SHA256 values independently match
+UAT_MANIFEST in `.worktrees/pr83/tmp/uat/build-1b7053a/`; built head is
+`1b7053a`, distinct from docs-only PR head. Source unchanged is manifest
+reported; no independent source DB rehash claimed in this cycle. Both
+repairs and regressions were verified rather than accepted from self-report.
+
+⚠ **Remaining limitations:** Excel is one explicitly bound active plan;
+its instructions require clearing old marks before selecting another
+Planning for fixture value. Formula-only controls cannot auto-erase inputs
+or preserve unlimited independent editable histories; this is a disclosed
+workflow limit, not an untested claim of full plan persistence. Final real
+Excel interaction, packet appearance and captain usability remain PENDING
+PAUL REVIEW. No new real-Excel/phone/print visual acceptance claimed here.
+Do not call these technical PASS results blanket production readiness.
+
+💡 **Next:** Paul tests revised controls/clear-replan, verifies the packet
+and confirms the captain workflow. Meanwhile audit other already-approved
+items only; no merge or new features. Report any further concrete defects
+with exact head and reproduction. Skills applied: reviewed verification-
+before-completion, red-team and validator. All audit outputs inside the
+canonical root, known unrelated user files untouched.
+
+**Assessment:** technical regression audit PASS for the two open repairs;
+overall readiness PENDING PAUL REVIEW. UX provisionally Good in tested
+flows, Captain Edge 7/10 (qualitative, not a predicted win advantage), with
+manual Excel plan handling and visual acceptance still limiting the score.
+Issue #84 updated; PR #83 remains unmerged draft.
+
+### Real-Excel captain workflow and packet UAT — 2026-10-07
+
+Paul resumed hands-on UAT; background monitor PAUSED. Candidate
+`1b7053a`, docs head `a412e2e`, confirmed by current GitHub/source reads.
+Evidence: user-provided real Excel screenshots of Match Day, War Room,
+Coach Dashboard, Lineup Lab, Captain Packet and five print-preview pages.
+No new full-suite/CI, artifact hash or automated visual PASS claimed here.
+Applied previously reviewed verification/red-team/validator standards.
+
+✅ **Observed functional checks:** October11 Brunch Ballers 8-Ball fixture
+propagates to correct Spiraling Out Of Control roster. War Room-only
+Adams Family override changes that view; Coach Dashboard remains Paul
+Smith vs Bob Waldvogel in 8-Ball and packet retains the original fixture
+and roster. Clearing override restores Follow Match Day. Paul Unavailable
+and Bob Played propagate without changing shown recorded W-L. October18
+switches to away vs Inglorious Poolsters, ignoring old marks; October11
+return restores Paul/Bob marks. These support the prior technical repair
+checks; they do not reopen resolved context P1s.
+
+⚠ **Print page1:** focused match header, both rosters, planning marks,
+opportunities and risks are present, with no setup controls. Body text
+is small and requires user readability judgment at actual print scale.
+
+❌ **New P2 print-detail problem:** real preview page3 clips the rightmost
+Basis text, frequently ending at "not". Rebecca Dehart's heading is at
+page3 bottom, while her candidate rows continue page4 without a repeated
+opponent heading. Page3 has an empty brown band/large gap before evidence;
+page5 is mostly blank apart from meeting history, while other pages are
+very dense. Formula PASS does not establish printable captain usability.
+Source `build_captain_packet()` in `ui/excel_war_room.py` allocates every
+roster slot and long basis strings to narrow merged ranges with fixed
+layout; empty slots and auto-pagination need appropriate treatment.
+
+💡 **Repair:** wrap and allocate sufficient row/column space; keep opponent
+headers with candidate rows or repeat continuation headings; avoid empty
+slot bands and extreme shrink-to-fit. Compact or redistribute detail to
+readable pages, keeping record identity, samples and limitations intact.
+Check new real-Excel print preview before claiming print acceptance. No
+COM/macros, new predictive rules or expanded feature scope authorized.
+
+Print-detail UAT FAIL / requires layout fix. Overall acceptance remains
+PENDING PAUL REVIEW, qualitative Edge provisionally 7/10 with this print
+limitation. Finding posted to issue #84; user test marks must be cleared
+before real league use. No implementation/source-data/off-limits edits,
+credential access or merge by GPT. Native user UAT is distinguished from
+previous headless tests; no inference of physical-paper readability.
+
+### Real HTML UAT stale fixture on no-match and bye — 2026-10-07
+
+Candidate tested by Paul: `build-1b7053a`, built 17:26 UTC. New product
+head observed `a96257b` during check; `ui/ultimate_coach.py` unchanged from
+`1b7053a` at that head. Prior repaired Excel P1s remain verified closed.
+This is a new HTML context finding, not reopening those fixes.
+
+✅ **Observed other HTML UAT:** valid October11 fixture, planning response
+8 of 9 after Paul Unavailable/Bob Played, October18 clean 9 of 9, return
+restores 8 of 9, reload retains marks, clear restores 9 of 9. Selecting
+Brunch Ballers 9-Ball updates Tonight and both team scopes to division
+436648 with 9-Ball fixture metadata. Native user screenshots/text are
+separate from previous headless test results.
+
+❌ **New blocking P1:** user's paste shows date 11/26/2026 and No scheduled
+match while Tonight/War Room still claim October11 vs Spiraling Out Of
+Control with old sends. This is a valid unscheduled date, not just an
+incomplete typing state. Independently reproduced on the actual released
+HTML in fresh headless Chromium. Then selected correct November1: card
+shows Nov1, Bye and MST, but Tonight still claims Oct11/MDT/Spiraling.
+No files or source data changed. The bye time/card pass; followed-fixture
+state fails. Do not present old sends as the current selected matchup.
+
+Root: `renderMatchDay()` clears cards/returns for missing scopes/date or
+no matches without invalidating `MATCHUP_CONTEXT` and followed War Room.
+Single-fixture auto-apply only covers resolved opponents, leaving bye or
+unresolved states with old context. Existing card-only tests miss Tonight.
+
+💡 **Required:** invalidate old followed fixture and active suggestions
+whenever its context is no longer applicable. Show selected date and clear
+no-match/bye/unresolved state in Tonight, War Room, print and planning.
+Preserve explicit manual exploration only with manual labeling. Verify
+valid->no-match, valid->bye, missing opponent, scopeless viewer, pending
+multi-fixture choice and return to valid fixture, with original fixture
+plans retained safely. Never select a default opponent to fill the gap.
+
+Monitor remains paused during UAT. Skills applied: previously reviewed
+verification-before-completion/red-team/validator, with actual artifact
+reproduction and source tracing. New P1 posted to issue #84. Print-layout
+P2 is a separate open acceptance issue. No new full-suite/CI or overall
+production PASS claimed. Readiness FAIL until stale-state repair; UX Fair
+in these error states, qualitative Edge reassessment deferred. No feature,
+credential, source-data, off-limits, COM or merge operation by GPT.
+
+### Independent cockpit audit at 45659f4 - 2026-10-07
+
+This entry supersedes the earlier OPEN HTML stale-context assessment only at the verified scope below. Claude remains sole BUILDER. GPT edited this report only. Product PR83 remains draft/unmerged; documentation head44890ce is distinct from code/artifacts45659f4.
+
+**Verified**
+- Exact code: `45659f45e998fabd1d4ebc061aa20a4b909544a0`. GPT independently ran 60 focused non-COM tests in21.46s: `tests/test_ultimate_coach_war_room_browser.py`, `tests/test_excel_war_room_formulas.py`, `tests/test_ultimate_coach_war_room.py`, `tests/test_ultimate_coach_matchup_evidence.py`. Python3.12, bytecode/cache disabled; temporary/browser output under canonical `.git/gpt-focused-45659f4-20261007`; builder source head and tracked status identical/clean before and after.
+- Original HTML P1 **CLOSED within tested source and artifact scope**: valid->no-match, valid->bye, returns, missing roster, pending multiple/explicit choice, no-team viewer and manual->Match Day transitions pass fresh synthetic browser regressions. GPT also loaded the real hash-verified45659f4 HTML and replayed Brunch Ballers9-Ball Oct11 -> Nov26(no match) -> Oct11 -> Nov1(bye,11AM MST) -> Oct11. Five states passed, no script errors; stale team selectors/results/print button absent in no-match/bye. This does not establish every possible UI path or human acceptance.
+- GitHub CI independently inspected: run37693360571 at45659f4, Python3.12 and3.13 SUCCESS. Current documentation head44890ce CI was still running at last read; do not conflate it with the verified code run.
+- Completed45659f4 artifact hashes independently match UAT_MANIFEST: HTML `8A35EAF05FE53737E0B07DC0AFD81FC4E79B6EC274983F1633F8E71C4D70258F` (88,680,333 bytes), XLSX `9E432DB0941F81FB62BC36144CF0F1B2DA9BBADBC849F142BB369170EBFCAF28` (51,806,007 bytes). Manifest DB-unchanged statements remain builder-recorded; GPT did not rehash the source DB this cycle. Earlier9259e4f XLSX read was locked; the completed45659f4 XLSX was accessible and verified.
+- START HERE description/example and HTML onboarding/shared text, Command Center counters, durable per-player coach observations and evidence separation pass the focused tests. Shared reasons expose both records and direct reasons include samples. Native print/timing/design are separate acceptance items.
+
+**Needs Improvement**
+- The new reason/HTML implementation now has a concrete file-map/task plan at `docs/superpowers/plans/2026-10-07-html-onboarding-command-center-coach-notes.md`, citing `.github/skills/writing-plans/SKILL.md`, direct execution, approved-design adaptation and local browser/workbook store limits. Builder reports preimplementation skill review; prior package1 citations are honestly labeled retrospective. Reading chronology is builder-attested, not independently reconstructed from tool logs.
+- Real-Excel page5 readability/full retention, native packet print, first-time3-minute onboarding and30-second captain decision workflow remain **PENDING PAUL REVIEW**. Headless content/regression checks do not substitute for those judgments.
+
+**Problem**
+- **OPEN P2: cleared migrated coach note returns on reload.** Independent explicitly synthetic probe at45659f4 seeded legacy plan-v2 notes for synthetic player10 (Cam) with `SYNTHETIC legacy audit note`. Reload imported it; clearing textarea made summary blank; reload restored the old note, with no script errors. Startup migration checks whether current `.n` exists on every load; deliberate deletion removes`.n` but leaves legacy notes, so it is imported again. Repro script/result: `.git/gpt-focused-45659f4-20261007/synthetic-notes-probe.py` and `notes-probe/result.json`. No production facts or data modified. [Issue finding](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6047789690).
+- **OPEN P2: single-send wording hides unordered/shared or tied-direct selection.** Atf186578 and45659f4, Excel wr_Why1/MATCH(1) and HTML plan.sends[j][0] call one candidate best-supported, while shared-only candidates are deliberately unordered and first is display order(SL/name/ID). The new reason omits the previous approximate/unordered qualifier; equal direct evidence ties are also absent from this reason. This is a presentation/explainability finding, not reopening the repaired shared ranking or alleging hidden weighting. [Original finding](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6047580616).
+
+**Recommendation**
+- Builder: make legacy migration completion/deletion distinguishable and preserve observations safely; add migrate->clear->reload, replacement and cross-scope same-player regressions. Label shared-only single picks as one unordered evidence candidate, disclose display-order/tied-direct choices and retain access to all candidates in Inspect. Add multiple-shared and identical-direct assertions. GPT will independently verify repairs at immutable heads; do not compete with builder files.
+- UX: provisionally improved structure, human timing/visual acceptance pending. Qualitative Captain Edge remains provisional7/10 from the last reviewed workflow baseline; this is a qualitative utility judgment, not odds or measured winning advantage. Production acceptance/readiness remains NOT DEMONSTRATED with these open findings and pending UAT; no merge/signoff.
+
+**Skills and coordination**
+- `.github/skills/verification-before-completion/SKILL.md` -> fresh60 tests, actual-artifact5-state replay and separate CI/hash/source statements.
+- `.github/skills/red-team/SKILL.md` -> legacy migrate/clear/reload boundary and unordered/tied candidate claims.
+- `.github/skills/validator/SKILL.md` -> deterministic rooted non-COM probes and preserved reproduction output.
+- Normal reviewed GitHub coordination restored; Paul's away/directive handoff posted in6047580616. Monitor remains active until2026-10-08 06:13:08 UTC(12:13AM MDT), then pauses. No duplicate handoff, no feature edits or off-limits changes.
+
+### First-screen mobile captain-flow audit - 2026-10-07
+
+**Verified:** At documentation head44890ce, no new feature repair/response for the two reported P2s was present; no unchanged correctness tests were rerun. Both documentation-head CI jobs are now SUCCESS(run37693941931). New read-only headless layout audit loaded the real45659f4 HTML, verified SHA2568A35EAF05FE53737E0B07DC0AFD81FC4E79B6EC274983F1633F8E71C4D70258F, and measured first-visit viewports1280x900 and390x844. No script errors or horizontal overflow. Desktop Tonight startsy247.1, all six cards fit within900px; Best sends card spansy356.6-544.2. Saved and visually inspected actual headless screenshots at `.git/gpt-layout-45659f4-20261007/desktop-first-screen.png` and `phone-first-screen.png`; measurements/script at `result.json` and `first-screen-probe.py` in the same folder. These are headless-browser observations, not native Excel printing or human acceptance.
+
+**Needs Improvement:** Expanded availability/evidence/roster cards provide useful detail, but the phone's first screen does not answer the primary captain question. This is layout priority, not lack of data, predictions or a measured30-second human failure.
+
+**Problem - OPEN P2 mobile first-screen action visibility:** At390x844, Tonight startsy369.8; Our team spansy497.1-628.2, Evidence across all pairingsy638.2-769.4, Opponent rostery779.4-872.8. Best sends now startsy882.8 and endsy976.3, entirely below the first viewport. Dangerous opponents beginsy986.3 and Open risksy1052.1. The screenshot confirms the first viewport shows counts/metadata rather than the proposed sends. Older top-of-Tonight visibility checks alone do not establish first-screen captain utility.
+
+**Recommendation:** Reorder the existing mobile cards so actionable sends follow fixture information, with concise availability/used/unknown context visible alongside them. Keep freshness, evidence counts, roster/missing information and risks reachable and retain all data; use the current components. Add a meaningful phone first-screen assertion for the actual send card rather than only Tonight's top edge. Human30-second flow/3-minute onboarding, visual preference and native packet print remain PENDING PAUL REVIEW. The two other P2 findings(note resurrection and unordered/tied single-send explanation) remain OPEN; original HTML/Excel P1s remain closed within their verified scopes. Qualitative Edge stays provisional7/10; no new production acceptance.
+
+**Skills:** `.github/skills/red-team/SKILL.md` -> challenge feature-existence versus primary captain task; `.github/skills/verification-before-completion/SKILL.md` -> exact artifact/screenshot/geometry evidence and separate human acceptance; `.github/skills/validator/SKILL.md` -> rooted reproducible viewport probe. No feature code edits, no COM, no new files outside canonical root.
+
+### Native screenshot package audit at e913f09 - 2026-10-07
+
+**Scope / Verified:** Product documentation head `e913f09fbdec35535af7476083c61e5aa98e478b`; package `a3e2c03`; code/artifacts still45659f4. Expanded screenshot-index ranges match every asset:32 Excel PNGs,17 HTML PNGs,1 PDF, no missing/unindexed files. GPT visually inspected11 selected PNGs (Excel START HERE1/2, Command Center1/2, War Room4/5, packet previews1/2/5, HTML matrix detail and Player vs Player). This is a targeted visual audit, not inspection of all49 images or PDF contents. Excel captures are builder-supplied native screenshots, not fresh GPT live-Excel reproductions. Builder's scratch-copy/no-COM/capture method and illustrative planning marks are reported separately from observed pixels. Source HTML/XLSX hashes independently rechecked after capture and still match the prior45659f4 verified manifest. Docs e913f09 CI37697166829 independently green in both Python3.12/3.13; no unchanged correctness tests rerun.
+
+**Verified utility:** START HERE offers a real configured-player/fixture example, navigation and explicit limits; both rosters and exact identities are present on packet page1. Command Center separates availability/used/unknown, missing-SL subtotal and evidence counts. HTML matrix detail gives direct meetings and both shared records/samples instead of an unsupported win model. Planning marks in the captures are illustrative; empty Coach Notes are not fabricated observations.
+
+**Problem - OPEN native P1 packet identity visibility:** `excel_08_captain_packet_print_preview_p2.png` visibly has eight sets of scouting-card facts without visible opponent-name headers. Whatever the conditional-fill cause, a paper captain cannot reliably identify which player each card describes. This is a functional print defect, not just color preference. Require readable names/IDs/SL in normal monochrome text even if fill fails; then independently recapture the repaired exact build's page2.
+
+**Problem - OPEN native P1 Inspect errors:** `excel_04_war_room_part5.png` shows repeated #VALUE! cells under blank Inspect input. The previous60 focused tests did not establish native Excel guard semantics. Builder's explanation (OR evaluates erroring INDEX arguments) is plausible and matches the source guard shape, but GPT has not executed the native formula independently. Guard blank/invalid selections before error-prone lookups with outer IF/error handling and add faithful error-propagation coverage; native empty/selected/cleared recaptures are needed. Do not reopen the independently closed exact-fixture/stale-context P1s absent a fresh failure.
+
+**Needs Improvement / confirmed visuals:** Matrix in Excel is uncolored with exposed G/I/E/X helper letters (War Room4/5). START HERE Quick Start/workflow/tour sentences visibly truncate; the long War Room/Coach Dashboard tour text ends mid-sentence. Command Center's first native viewport shows counts/roster and only the send-section heading at the bottom; actual candidates require the next capture. Extend the existing mobile first-screen action-priority finding to this native layout. Page5 has very small two-column text and much unused space; builder reports second-line clipping, but GPT does not claim a line-by-line clipping proof from the selected screenshot. Keep Paul's full-field/no-silent-loss print requirement open. HTML matrix name and SL run together; Player vs Player displays ISO dates/EIGHT labels. These match the package's disclosed rough edges.
+
+**Problem - OPEN P2 truthful limits:** Shared `ONBOARDING_LIMITS` says no odds or percentages are shown anywhere, but `html_12_player_vs_player.png` visibly shows descriptive lifetime rates48.2%/49.5%, observed direct100% with1 recorded meeting, and percentages in shared rows. These are labeled historical observations, not evidence of fabricated odds. Correct onboarding/probability banner to say no calibrated predicted win probabilities; distinguish descriptive historical percentages and their samples. Do not remove truthful history or claim it is calibrated.
+
+**Recommendation / priority:** Repair packet-page2 names and native Inspect errors first; then address note resurrection, unordered/tied single-send explanation, mobile/native action placement, missing matrix fills/helpers and text/print fit. Require exact-head native recapture plus focused regression/CI/rebuilt hash evidence; passing the custom evaluator alone is insufficient for native rendering. Review summary should list the three previously reported P2s too, and distinguish 'shared store' as an unapproved future idea rather than active development: no cross-artifact storage/server feature has been authorized. Apply current components/approved polish only. Avoid duplicate dashboards and keep factual sample/unknown/legality limits intact.
+
+**Assessment:** Excel UX Fair / Needs Improvement; HTML detail view materially more useful, with mobile priority and legacy-profile rough edges unresolved. Qualitative Captain Edge is provisionally6/10 for this captured workflow (down from7 because printed identities vanish, Inspect errors and next-send placement undermine captain use); it is a judgment, not odds or a measured winning advantage. Production readiness NOT DEMONSTRATED; native print,30-second captain flow,3-minute onboarding and subjective acceptance remain PENDING PAUL REVIEW.
+
+**Skills trace:** `.github/skills/verification-before-completion/SKILL.md` -> separate native screenshot observation, test-oracle scope, after-capture hashes and acceptance; `.github/skills/red-team/SKILL.md` -> identity readability without color, blank Inspect path and descriptive-percentages contradiction; `.github/skills/validator/SKILL.md` -> index/file reconciliation and rooted evidence. Builder's new capture-package notes should add applicable review-skill path/influence/deviation trace; absence of that entry is not proof skills were ignored. GPT made no feature-code edits and used no COM/native automation.
+
+### Paul-authorized Phase4 decision-first scope - 2026-10-07
+
+Paul directly supplied the Phase4 Review Results; full text and GPT implementation/audit interpretation are recorded in [sprint issue84](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6048509377). This is explicit new scope within the existing unattended block, not a restart or deadline extension. Claude remains sole BUILDER, GPT AUDITOR; monitor end stays2026-10-08 06:13:08UTC(12:13AM MDT). User-supplied review ratings are Paul's judgments, not fresh GPT validation or production acceptance; his must-fix-before-production list remains binding.
+
+**Approved direction:** recommendation -> evidence -> detailed analysis. Stop adding data/reports/statistics; surface the right decision faster. HTML is the match-night command center, Excel the planning tool.
+
+**Approved components:** dedicated Next Send; visible Threat Panel; Quick Read atop current scouting cards; explicitly labeled coach observations promoted into cards/packet/threat/decision areas; reversible Captain Matrix/Evidence Matrix views sharing existing observed categories and preserving the detailed view; decision-first Tonight/Command Center/War Room/Lineup Lab/packet layouts. Extend existing sprint plan and relevant repository-skill ledger before major code, with concrete file/behavior/test/native-check maps; do not create duplicate engines or new storage backends.
+
+**Audit acceptance criteria:** exact opponent/fixture/format/player identity; remaining/unplayed filtering with availability/used/unknown disclosure; existing direct-record/sample ordering and visible ties; shared-only group remains unordered with both records/samples, no unvalidated medals/unique-best/strong thresholds. Threat W-L perspective must be explicit: an opponent0-2 is not two wins over our roster. User examples are illustration, not production records. Quick Reads describe recorded direct/shared/SL samples and missingness. Coach observations never change APA records/category/ranking calculations; fix migrate-clear-reload first. Captain View remains a presentation of the same categories, text accessible and detail reachable; no color-based predicted strength or presumed neutrality/legality.
+
+**Current problems remain open:** native packet names/Inspect errors, missing fills/helper/text/print fit; note resurrection; unordered/tied single-send wording; mobile/native action placement; misleading no-percentages claim. The original independently verified fixture/HTML stale-context P1s remain closed in their tested scopes. Prioritize production correctness alongside approved decision-flow work; native recapture/focused tests/CI/exact rebuilt hashes remain distinct proof. Subjective visual/print/30-second captain/3-minute onboarding decisions PENDING PAUL REVIEW; continue other approved work without waiting for UAT. No merge or readiness declaration.
+
+**Skills trace:** existing `.github/skills/writing-plans/SKILL.md` -> extend sprint plan with component acceptance checks; `.github/skills/red-team/SKILL.md` -> unordered/ties, threat perspective, unknown state and opinion/fact separation; `.github/skills/verification-before-completion/SKILL.md` and `.github/skills/validator/SKILL.md` -> source/test/native/CI/artifact distinctions and reproducible validation. Paul's approved written design/unattended authority supersedes repeated design confirmations; all canonical-root/off-limits/no-COM/explicit-path/coauthor protections remain. No feature implementation by GPT in this scope relay.
+
+### Paul-authorized Phase4D mobile deployment - 2026-10-07
+
+Paul explicitly authorized official GitHub Pages publication of the generated HTML, stable any-device URL, iPhone/Android/desktop rendering checks, Tonight homepage with Match/Best Sends/Threats/Risks first, Mobile Match Night guidance in START HERE, sprint-doc updates and GPT mobile/home-screen/Add-to-Home-Screen audit. [Full handoff and deployment criteria](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6048698525). This adds publishing permission within the existing deadline; no merge or production acceptance is authorized.
+
+**Verified setup:** public ssands5-cloud/APA-Tracker, admin/maintain access; has_pages=false and PagesAPI404, no gh-pages ref at this check. Expected `https://ssands5-cloud.github.io/APA-Tracker/` is a target, NOT a live verified deployment. Latest observed builder head7b78fa6 is the trust-fix package, not independently accepted by this scope relay. GPT has not configured a site, deployed bytes or claimed device verification yet; sole BUILDER owns deployment implementation and GPT owns independent audit.
+
+**Implementation:** extend existing Phase4 plan and applicable .github workflow/skill ledger; publish only intended static HTML/mobile assets and sanitized SHA/hash/build/freshness provenance, excluding repository/config/DB/XLSX/audit scratch/user notes. No protected-main merge/bypass. Branch-source Pages supports a selected publishing branch; Actions use official Pages actions and honor default-branch workflow discovery/environment protections. Keep main and PR83 untouched/unmerged, no force/reset; all local files remain canonical-root-only. Required build pipeline docs: PROJECT_STATUS.md and START HERE per existing build/audit prompts.
+
+**Acceptance:** live HTTPS200 at stable project root; Tonight as initial/home-screen entry with sends/threats/risks plus honest availability/unknown context; exact deployed HTML hash/source SHA/build date; base paths, touch targets/layout/device viewports, freshness after refresh/update, device-local notes/marks/no stale fixture. Measure transfer/parse responsiveness of the ~89MB artifact and actual browser limits. Desktop/emulated browser results must be distinguished from physical iPhone/Android and native Home Screen installation/launch; unavailable physical checks PENDING PAUL REVIEW, other work proceeds.
+
+**Mobile Match Night docs:** verified URL once live; Safari/Chrome Add-to-Home-Screen steps; refresh online before league night and inspect latest build/result date; static snapshot never live-refreshes; first load/refresh requires connectivity, shortcut is not guaranteed offline installation. Do not promise cold-offline reopening/cache/service-worker behavior without implementation/tests. File-origin notes do not automatically migrate to HTTPS; browser/workbook stores remain separate, no backend/synchronization scope.
+
+**Sources/skills:** [GitHub publishing-source documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site), [official Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages), [Apple Home Screen guide](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/27/ios/27), [Chrome Android shortcuts](https://support.google.com/chrome/answer/15085120?co=GENIE.Platform%3DAndroid). `.github/prompts/build.md`/`audit.md` read for deployment-doc requirements; verification-before-completion separates configured/deployed/reachable/device-accepted states; red-team covers stale/offline/refresh/origin/base-path failures; validator covers exact provenance/reproducible checks. Current native/notes/ties findings and production/UAT limits remain tracked.
+
+### Trust-fix audit at 7b78fa6 - 2026-10-07
+
+**Verified:** Exact source `7b78fa6b18b6f25fca7049beff353bc12239babc`, builder tracked status clean and head identical before/after. GPT87 focused non-COM tests PASS64.40s: browser War Room, Excel formulas, War Room module, matchup evidence and workbook export. Outputs/browser/temp under `.git/gpt-focused-7b78fa6-20261007`, bytecode/cache disabled. GitHub CI37700159962 independently SUCCESS Python3.12/3.13. Completed artifact hashes independently match UAT_MANIFEST: HTML E3C0767075F1196A1957751AEB7A6A599109D70C77E101E3476D7CDD8AE5B435 (88,681,014 bytes), XLSX11705D9456418F813D6FE3259C053951952CB08C704E87B293E0079785279144 (51,806,185 bytes); manifest DB-unchanged remains builder-recorded.
+
+**Verified repairs within source/synthetic scope:** Native Inspect guard now wraps each error-prone guard lookup; oracle changes blank MATCH to #N/A, and new blank->selected->cleared regression passes. Packet names now dark text independent of fill, conditional fills have both foreground/background colors, helpers hidden, START HERE literal text-height checks and HTML readable format/date/header tests pass. ONBOARDING_LIMITS correctly distinguishes historical rates from uncalibrated predictions. Original single imported-note clear/reload regression and replacement pass; an additional GPT probe confirms cleared note stays cleared. These do not establish native rendering or every migration case.
+
+**Problem - OPEN P2 migration preservation (new variant of the notes finding):** GPT independently seeded two distinct explicitly synthetic legacy observations for the same player10 under Falcons/Owls scopes at7b78fa6. Migration kept `SYNTHETIC scope-A observation` but stored `notes:{}` and only that value in coach10; `SYNTHETIC scope-B observation` disappeared from persisted storage. Clearing/reload then correctly stayed blank. Source loops import only if current.n absent, then erase all legacy notes, so different later-scope observations and legacy values already superseded by a current note are silently discarded. This is no longer resurrection; original clearing case is fixed, but observation preservation remains unresolved. No production data modified. Repro: `.git/gpt-focused-7b78fa6-20261007/legacy-note-preservation-probe.py` and `notes-probe/result.json`.
+
+**Needs Improvement:** Native P1 packet identity and Inspect errors remain BUILDER-FIXED / INDEPENDENT NATIVE CLOSURE PENDING until exact7b78fa6 recaptures show names/IDs/SL, blank/selected/cleared Inspect, matrix fills, START HERE lines and packet page5 fields. Original independently closed fixture/HTML stale-context P1s remain closed within verified scopes. Unordered/tied single-send explanation and mobile/native decision priority remain open; WP-B/Pages is not implemented in this source. Legacy Player-vs-Player probability banner still says a percentage cannot appear before backtesting, despite descriptive observed percentages: shared onboarding correction is verified, but that banner wording needs the same distinction.
+
+**Recommendation:** Preserve distinct legacy observations with scope provenance in a migration archive or explicit merged display; do not silently drop overwritten/different text or make it resurrect after deliberate clearing. Add multi-scope/distinct-current-versus-legacy regression alongside clear/reload. Finish native recapture and normal builder provenance response; continue approved Phase4 decisions/Phase4D static deployment without waiting for subjective UAT. PagesAPI still404 at this cycle, so target URL not live. User's explicit publication authorization and no-merge guards remain active.
+
+**Skills:** Existing Phase4 plan records writing-plans/systematic-debugging/verification-before-completion and red-team before implementation (timing builder-attested). GPT verification-before-completion ->87 fresh tests/hash/CI vs native evidence; red-team -> same-player multi-scope migration data preservation; validator -> exact head/rooted repro. No feature edits or COM. UX/qualitative Edge remains last native assessment6/10 pending new native evidence; not odds/production readiness. Native print/timing/preferences PENDING PAUL REVIEW.
+
+### Independent live synthetic Pages audit - 2026-10-07 MDT / 2026-10-08 UTC
+
+**Verified:** Official Pages configured legacy source gh-pages/root; latest build built at publication commit `aafbdb8221f9db6a81e71bbd0afc16ce1ec770e9`. HTTPS https://ssands5-cloud.github.io/APA-Tracker/ is LIVE as a synthetic DEMO, not Paul's real match package. Source is0aa58024353d82c0baaf539057b4bccd5c13a0ee; PR documentation head3c5155e41e75f468b344c9077928be418602ce15 is later and independently green in CI37710204827, bothPython jobs. Screenshot-package removal is recorded by builder as per-Paul; old capture evidence remains in Gita3e2c03, not erased from audit history.
+
+- Four focused synthetic deployment tests independently PASS6.14s on the clean committed checkout; no real passphrase read, no publisher executed. Earlier attempts correctly stopped for WIP/movingHEAD; the later immutable-snapshot command was rejected by automatic review usage limit and did NOT execute. Normal reviewed access has since succeeded again, so that limit is historical, not a current access claim.
+- Public index/package/SW/manifest all HTTP200; each decoded response independently matches its published Git blob. SHA256: index a0c9907b5b4e9a93363a7d7e5757e3997db997c8c8571b94022bd34e7602d5e3; package0f7e9c155b41ca5e18e9e1e480b292537ec924d32ff7df52843cb799b7b40a53; swff659a3716e197111d7588af9e684618e219b3d8f397fba494e1142d26fa5185; manifest6e539757db7fae488c2d321f44ad4ed6e17780688577b8da6e0493bdce33a047. Encrypted demo package178,257 decoded bytes /135,041 gzip body bytes; index6,457/2,608. Per-resource0.18-0.31s on unthrottled audit-host connection, NOT a mobile-network/real-data benchmark.
+- Android Pixel7/Chromium emulation412x839 and desktop1280x900: first-screen match/sends/threats/risks visible, no horizontal overflow/script errors; remembered online reload and primed offline reload PASS. iPhone13/WebKit emulation390x844: initial unlock, all four first-screen sections and remembered online reload PASS; primed offline Page.reload raised WebKit internal error with no page script errors. iPhone offline verification NOT PASSED; not proof of a physical Safari app defect. Physical devices and OS Add-to-Home-Screen installation/standalone launch remain PENDING PAUL REVIEW.
+- Manifest start_url/scope='./', display='standalone', icons192/512 and Apple icon are present in source; these support the launch design but do not establish actual OS installation. Probe/screenshot/results under canonical `.git/gpt-live-demo-0aa5802-20261008/` (live-demo-probe.py/live-result.json, webkit-stage-probe.py/webkit-result.json, device screenshots). Public demo unlock value only, never a real user's credential.
+
+**Problem - OPEN P1 publisher boundary safety:** Current tools/publish_match_night.ps1 still recursively clears generated Site/Pages without required resolved canonical containment/root/commonGit/origin/worktree/branch/WIP checks before destructive operations. It stages add-A, lacks explicit commit paths/coauthor footer and does not check every earlier native Git failure. d1bd2d7 adds boundary marker/commit-push failure checks but those do not protect prior filesystem operations. GPT has not run this publisher; repair and fail-closed wrong-root/origin/WIP tests before recommending it to Paul or executing real-data publication. [Prepublish review](https://github.com/ssands5-cloud/APA-Tracker/issues/84#issuecomment-6049385622).
+
+**Problem - OPEN P2 cache isolation (now independently reproduced):** Seeding an unrelated synthetic cache on the same origin before first app load results in its deletion by the service-worker activation in Android/desktop contexts. Restrict cleanup to this application's prefix; protect caches of other GitHub Pages projects. Network-first code also caches404/5xx responses instead of retaining a verified successful package; this is source-inspected, not yet a fresh HTTP-error reproduction. Add foreign-cache survival, success/error-update and offline fallback tests.
+
+**Problem - OPEN P2 persistent demo identity:** Lock page says DEMO, but after unlock the body has neither DEMO nor synthetic wording (independent WebKit assertion false and screenshots confirm). Remembered/offline Tonight therefore displays synthetic records as an unlabeled ordinary match. Keep an unmistakable synthetic DEMO indicator inside the encrypted/decrypted application, screenshots and packet. Do not represent this live demo as Paul's real match data.
+
+**Needs Improvement / scope:** Deployment adds private one-fixture encryption and a passphrase gate, attributed toPaul in commit/module but not evidenced by the Phase4D directive in this chat. GPT requested citation of the actual human direction, preserving privacy meanwhile. Real publish requires a locally entered passphrase, has not occurred, and no actual secret should enter audit/comments. START HERE must distinguish lock-first visit vs remembered Tonight launch, cache prepared vs first unlock, and Chromium proof vs iPhone pending offline. Builder reports native recapture needs Paul's short-screen approval: identify the actual tool/skill/permission requirement and prior-authority applicability, rather than treating subjective UAT or missing repeat approval as an automatic blocker. Use allowed tools; no bypass of disabled native APIs.
+
+**Recommendation:** repair publisher guards, cache isolation/error handling, persistent DEMO labeling, and finish native proof/legacy-note preservation alongside approved WP-B. Verify code/CI/generated/deployed hashes at each repair; no duplicate feature engine, no raw-data exposure, no force/merge. Continue approved work through06:13:08UTC; real-phone/native subjective checks PENDING PAUL REVIEW. Stable demo deployment is a milestone, not production acceptance or completion of real match-night deployment. Last native qualitative Edge6/10 remains provisional; no win model.
+
+**Skills:** verification-before-completion -> direct HTTPS/Git-byte and emulation-stage evidence; red-team -> foreign cache, error updates and synthetic identity after unlock; validator -> rooted reproducible probes. Source-review/crypto/deployment skill path/influence/deviation trace still requested from builder; absence of documentation is not proof ignored skills.
+
+### Republished demo and publisher junction audit - 2026-10-07 MDT / 2026-10-08 UTC
+
+**Verified:** Product docs092fc089436e4b0eb14af1f19e943a3bf29fced2; fixes05abce1bbe953a285b9acb8dc9d3be4e96c86c6c; test-only4345a5ad015eee49f01370546949f53e75d7a781. Docs CI37715554685 independently bothPython SUCCESS; repaired publication9a401246f4d123a72f4e4923012d21f45439e6b3 built on Pages. Builder is editing WP-B; GPT loaded affected dependencies from immutable4345a5a Git blobs into canonical `.git/gpt-publisher-4345a5a-20261008/snapshot`, leaving WIP untouched. Four publisher tests PASS27.54s and five match-night regressions PASS11.16s. Fake-origin throwaway test repos only, all outputs inside canonical audit root; no real publish/credential read. No claim of fresh full-suite execution by GPT.
+
+**Verified live repair scope:** HTTPS index/package/SW/manifest decoded bytes match their published Git blobs. Package SHA2560c2eec80e4abbd4694eeaa350baaf58ca392cc40e12b478c2192d2fb302938b7 (178,897 decoded /135,542 gzip bytes), SW4d530a135c02c5d52cff5d0a20b62696ebc40d3c276f3998bc94b46cb74a953f; index/manifest unchanged from prior audit. DEMO flags persist after unlock and remembered launch and are visible in print CSS. Seeded foreign synthetic cache survives activation. Emulated WebKit/iPhone13 and Chromium/Pixel7 initial/remembered layout show all four decision areas without overflow/errors. Pixel7 primed offline PASS; Desktop staged retry initial/remembered/controlled primed offline PASS. Two earlier desktop probe timeouts were not conclusively classified; subsequent staged retry passes, not a blanket reliability claim. WebKit offline was not repeated and remains unresolved from the earlier internal browser error. Physical phones/OS Home Screen remain PENDING PAUL REVIEW. Probe/results/screenshots `.git/gpt-live-repair-05abce1-20261008/`.
+
+**CLOSED within verified scope:** P2 persistent synthetic-DEMO identity; P2 foreign-cache deletion and unsuccessful-response caching (five synthetic match-night regressions cover the error fallback, live foreign-cache probe preserves it). Browser/native acceptance and all untested conditions are separate.
+
+**Problem - P1 publisher containment still OPEN, narrowed to junction escape:** Ordinary root/origin/worktree/WIP/allowlist/error/footer protections are substantially improved and four tests pass. But `check_site_dir()` compares `site.resolve()` with `(repo/tmp/match_night_site).resolve()` without checking final containment. GPT created a controlled Windows junction at fake-repo/tmp pointing to outside-fake-repo (both inside canonical audit directory). The predicate returned the outside resolved path, not PublishRefused; `inside_fake_repository=false`. No build, deletion, copying or publishing was executed by the probe. Repro `.git/gpt-publisher-4345a5a-20261008/junction-probe.py` and `junction-probe/result.json`. Check final resolved containment against repo/canonical root, and validate/reject reparse/link paths for build folder, Pages folder and each allowlisted source/destination before unlink/copy/stage. Add junction/symlink refusal cases, preserving outside sentinels. Do not call the publisher fully verified until these pass.
+
+**Needs Improvement:** Privacy design now documents a dated quote from Paul's Claude Code session authorizing slim encrypted/passphrase packages; this is builder-attested human-source documentation, not a transcript independently read by GPT. Preserve that privacy choice. First unlock vs remembered Home Screen is documented. Native Excel recapture is still pending due possible focus collision with Paul's typing (builder says no technical restriction); not a general stop on other authorized work. Legacy-note multi-scope preservation/native correctness/real match publication/WP-B features remain open, not erased by successful demo repairs. Real passphrase must remain locally handled; do not recommend current real publisher until junction guards fixed. Real-data/mobile-network performance not established by the small demo.
+
+**Recommendation:** finish containment/refusal regression, continue WP-B with exact shared/tie/unknown/identity rules, and supply native proof through allowed tools when the desktop is available. Keep current live site explicitly synthetic; no private-data exposure, no merge/force/hook bypass. User physical/print/timing/preferences PENDING PAUL REVIEW. Last native qualitative Edge6/10 unchanged pending new evidence; production acceptance NOT DEMONSTRATED.
+
+**Skills:** verification-before-completion -> immutable snapshot/test/CI/deployed-byte separation and honest timeout limits; red-team -> junction targets versus lexical path equality, persistent labels/cache; validator -> controlled non-destructive reproduction and rooted evidence. Existing Phase4 ledger records paths/adaptations; GPT no feature edits or mutable tests in builder worktree.
+
+### Next Send audit at 092254f - 2026-10-07 MDT / 2026-10-08 UTC
+
+**Verified:** Exact committed `092254f489e6b9a1f276f4093ad58a140245285a` introduces Python/JS Next Send, direct-record medal groups with shared medals for ties, unordered indirect group, avoid/unknown/save flags, per-unplayed-opponent chips and reversible user planning Sent marks. GPT3 focused next_send tests PASS2.78s(27 unrelated deselected), using an immutable selected-file Git snapshot under canonical `.git/gpt-next-send-092254f-20261008/snapshot` because builder is actively editing further WP-B work. Python/JS parity, ordered-vs-unordered/ties/protected flags and the UI Sent transition pass these tests; no claim of full-suite or current-WIP verification.
+
+**Problem - OPEN P2 phone layout regression / CI FAIL:** Both Python3.12/3.13 jobs in37716863518 FAILED at this source: test_match_night.test_phone_unlock_first_screen_remember_and_offline. CI reports decide-threats top833.8125+height51.78125 exceeds viewport844; each job2226 passed/1failed. Source stacks the detailed Next Send card above the existing all-opponent Best Sends summary, then threats/risks. This is a new unshipped layout regression, not reopening the independently verified prior live9a40124 demo layout. Keep the first-view requirement and meaningful assertion; don't shrink away readability, hide required content or relax the viewport to turn green. Make a compact primary response/eligibility/ties summary, with secondary candidates/evidence progressively accessible and nonduplicated all-opponent summary below, while match/threat/risk stay visible.
+
+**Problem - OPEN P2 used-opponent API contract:** Fresh explicitly synthetic probe next_send(war_room,0,unplayed=[False,True,True]) says Opal has already played but still returns one ordered medal and next_send_lines emits a gold response, Avoid and Unknown recommendations. Existing test checks headline only. The current HTML chip selector filters used opponents and its transition test passes; this is not a claim of a present visible chip leak. Make the reusable core result/text emit no active sends for a used target (or define and enforce a strict caller contract) before Excel/packet reuse. Probe output `used-opponent-result.json` in the audit folder.
+
+**Needs Improvement - P2 availability disclosure at decision point:** Synthetic browser probe shows all3 availability inputs Unknown, while Next Send offers Ann/Dee as gold/silver and2 Sent controls with no availability wording in the card. Unknown may remain in the candidate pool as previously intended, but it is not confirmed available. Put concise candidate availability / remaining-with-unknown disclosure at the recommendation action; don't silently reclassify unknown as unavailable, don't claim legality or change evidence ranks. The below-fold team counts are insufficient once the enlarged decision card consumes the first screen. Repro `availability-probe.py` and `availability-probe/result.json` in the audit folder; no production data modified.
+
+**Recommendation:** repair layout and both contract/disclosure cases with targeted tests, retain full evidence via accessible detail, and recheck immutable CI/rebuilt/deployed provenance before publishing Next Send. Continue remaining WP-B components. Publisher junction P1 and legacy-note preservation/native capture/real-device/real-publish items remain open. The live site remains the earlier independently verified synthetic9a40124 build; do not call this failed-CI source deployed or accepted. Original closed fixture/HTML stale-context scopes remain intact.
+
+**Skills:** verification-before-completion -> focused3 tests and separately inspected failed CI; red-team -> used target contract and action-point unknown availability; validator -> immutable snapshot/rooted probes without WIP interference. Existing Phase4 plan governs implementation; user written direction remains approved, no new confirmation/merge. Qualitative Edge last native assessment6/10 unchanged; human timing/design/print and physical devices PENDING PAUL REVIEW, production readiness not demonstrated.
+
+### GPT audit — October 8, 2026 about 03:00 UTC: compact Next Send / Quick Read
+
+Exact implementation inspected/tested: 3751d224aea39eb5889349c2262b89a8815889da (including f4eb60b Quick Read). CI 37719277001 independently confirms both Python 3.12/3.13 SUCCESS. This supersedes the prior 092254f full-height layout CI failure only within the revised tested viewport.
+
+Fresh immutable selected-source snapshot: 46 PASS, 1 FAIL in 47.58s across Match Night, War Room browser and Excel formula tests. The failure scanned random Base64 ciphertext for the digit string 2001: a coincidental match is not evidence of a plaintext confidentiality leak. Builder subsequently committed test-only d658360 excluding the ciphertext while retaining public-byte scans; source inspected, not freshly retested by GPT. Do not rerun random encryption solely to obtain a green result. Snapshot/probes are rooted at .git/gpt-quick-read-3751d22-20261008; no production facts or builder WIP changed.
+
+OPEN P2 browser first-screen: synthetic local encrypted demo at exact 3751d22 has no page errors. Chromium 390x844 shows Match, Next Send, Best Sends, Threats and Risks. WebKit iPhone13 descriptor 390x664 shows Match and sends, but Threats ends at y664.3 and Risks spans y670.3–722.1 below the viewport. This is browser emulation, not physical iPhone/standalone acceptance. Keep the real first-screen criterion; move/collapse redundant all-opponent summary or secondary details while retaining readable primary sends, eligibility/ties, visible threats/risks and DEMO identity. Evidence: phone-layout-probe.py, phone-layout-result.json and two profile PNGs in that audit folder.
+
+Quick Read / compact-card parity and formula checks passed within these synthetic tests. They do not close played-target core responses, decision-point Unknown availability disclosure, every native layout or native packet/Inspect acceptance. Publisher junction containment P1, legacy note scope preservation P2, real-device/HomeScreen/offline and real encrypted publication remain open. Pages remains a built synthetic demo; no claim that current implementation was deployed. No merge or production acceptance.
+
+Skills applied: .github/skills/verification-before-completion/SKILL.md -> separate exact snapshot tests, CI, source-only test repair and deployed/native evidence; .github/skills/red-team/SKILL.md -> smaller Safari browser viewport and false-positive confidentiality diagnosis; .github/skills/validator/SKILL.md -> contained reproducible synthetic probe. Adaptation: no COM/native takeover; immutable selected files instead of mutable builder tests. Automatic review rejected direct worktree pytest; that command did not execute, and the approved snapshot alternative completed.
+
+### GPT audit — October 8, 2026 03:07 UTC: Safari first-screen repair independently verified live
+
+Source d658360ce0a94d7233cbda35603ed80883dcc871 includes layout repair 8a841d9 and ciphertext-test repair. CI37720199392 independently BOTH Python3.12/3.13 SUCCESS. Fresh immutable selected-source snapshot: five Match Night tests PASS11.24s; no builder WIP imported or changed. Tests now exclude random ciphertext from public-byte scans while retaining other confidentiality checks; this resolves the prior false-positive test assertion within the tested scope.
+
+New local synthetic and LIVE Pages probes both pass the primary decision hierarchy: WebKit iPhone13 browser descriptor390x664 shows Match244–267.2, NextSend298.9–509.0, Threats517–568.8, Risks574.8–626.6, zero script errors. The older all-opponent Best Sends632.6–722.1 remains below the first screen, accessible as secondary detail. Primary sends are in Next Send. Chromium390x844 also passes. Close the smaller-Safari decision-placement P2 in this independently verified synthetic-browser/live-demo scope; do not infer physical-device, OS standalone, offline, human timing or native Excel acceptance.
+
+Pages build3108e41cfe2fddc82ee08f8b21ec5ad96a9d7be9 independently built; index/package/SW/manifest all HTTPS200 and decoded bytes match Git blobs. New package195853bytes SHA256808b04aaa3981e8e5425f9ce618755d10f77cc90e218fd911f9900ed7405b7dc, SW63d16d68d3242e5b2ada01bbd94de87f9f0157f789ed555f9b9d679d3d6bd0fc. This remains synthetic DEMO only, not Paul's encrypted real match. Evidence .git/gpt-phone-d658360-20261008/{phone-layout-result.json,live-phone-layout-result.json,live-byte-check.json} and profile screenshots.
+
+Six ongoing builder files remain modified in WP-B, untouched by GPT. Publisher junction containment P1, used-target core/disclosed Unknown eligibility, legacy note scope preservation, native repaired recaptures and physical HomeScreen/iPhone offline/real publication remain open. No new unchanged offline/native tests, publisher execution, real passphrase or merge.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> fresh focused tests, exact-source CI, independent deployed-byte and live checks separately; .github/skills/red-team/SKILL.md -> Safari browser664 viewport with primary-vs-secondary decision visibility; .github/skills/validator/SKILL.md -> immutable selected-source and rooted synthetic outputs. Adaptation: no native/COM tests, preserve claimed WIP and no repeated full suite.
+
+### GPT audit — October 8, 2026 03:28 UTC: Captain/Evidence matrix and Excel Next Send
+
+Exact committed source9ab97fb7f246187f56f5586078663a1458976e66 includes matrix toggle ddf7e169fb717cac61d1b8106a088d1781fc8d25. GPT45 focused browser/Excel-formula checks PASS48.94s using immutable selected-source snapshot, not claimed mutable worktree. CI37721912981 independently BOTH Python3.12/3.13 SUCCESS. Output .git/gpt-matrix-9ab97fb-20261008; builder's five modified WP-B files untouched.
+
+Verified synthetic scope: Python/JS Captain cell parity; reversible remembered HTML toggle with pressed state, same categories/colors/evidence, retained cell inspection; Excel dropdown switches displayed cell text without evidence/category changes. Command Center's top opponent selector and Next Send follow Match Day, show direct record/samples and disclosed medals, shared-only unordered group, avoid/no-evidence, and Lineup Lab unavailable/played exclusions. Excel played-target guard suppresses recommendations and reports already played. This does not repair or close the previously reported reusable Python core played-target response; analytics change in this package is Captain-cell presentation only.
+
+OPEN decision-point availability disclosure P2 extends to this new Excel card: remaining candidates may have Unknown availability, while medal/action lines omit individual availability and availability totals sit beneath the ten-line card. Preserve intended Unknown inclusion but label eligibility/unknown at the recommendation, without assuming availability or legality. Shared-only line lists names, with full evidence still in Inspect; ensure access to both records/samples remains clear. Do not close all-view tie/wording concerns from matrix-toggle parity alone.
+
+Native Excel recapture, print/first-viewport/timing acceptance remain pending. These formula tests use a synthetic evaluator, not native Excel. Pages remains last independently verified synthetic publication3108e41; no claim these newest features were republished. Publisher junction P1, legacy scope-note preservation, Python played-target, physical HomeScreen/offline and real encrypted publication remain open; no publisher run or credentials.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> exact-source tests and independently checked CI separate from native/live provenance; .github/skills/red-team/SKILL.md -> category-preserving alternate presentation, played-opponent exclusion and Unknown at decision point; .github/skills/validator/SKILL.md -> contained immutable selected-source checks. Adaptation: no native/COM control, no production fixtures, no builder WIP execution. Existing Phase4 plan and approved unattended authority retained; no merge/production signoff.
+
+### GPT audit — October 8, 2026 about 03:50 UTC: packet/coach promotion and populated-note layout
+
+Exact c04c92708359ad2ce01aee7bd5ba8bbb5fe89959 includes d805f0bd27b4bcaec55299ee7aab3ebee3c4beb2 packet decision-first and opinion beside threats. Independent CI37723854703 BOTH Python SUCCESS. GPT46 browser/formula tests PASS44.46s from immutable selected-source snapshot, not mutable worktree. Packet send/risk/roster order and formulas plus note labels/parity pass synthetic scope; native print retention/typography and native Inspect remain pending.
+
+Live synthetic publication441add0f9fd95b702767e776b6c6ca2dbc61dbce built; four HTTPS assets200 and decoded bytes match Git. Package198777bytes SHA25602f401b9084bbef69e0f66d3522ded701a680a5473cac13a7157fcfb535edaed, SW6d2d63558f4e04bfca1abb67f8a7391ff54d311512e6faf807a5c5473fbbe86d. Default/no-note WebKit390x664 primary decisions still pass; Chromium390x844 pass. Do not erase that verified repair or claim physical acceptance.
+
+NEW OPEN P2 populated-coach-note Safari layout: in disposable live DEMO browser, enter player11 note "Synthetic observation: takes time over safety shots, checks the table carefully, and prefers a defensive opening when the layout is difficult." Save via normal card change/rerender, select Cam, scroll to zero and assert observation actually appears. Threats517–621; Risks627–678.8 exceeds664. Chromium844 still fits, no script errors. Keep notes promoted/labeled, with compact accessible preview/details or an adjacent action so full observation remains reachable without pushing primary risks below first screen. Add populated-note viewport regression; do not hide required decisions or reduce readability. Initial probe failed to trigger rerender/normalize scroll; its measurements were discarded, corrected saved-note probe provides the reported evidence.
+
+Output .git/gpt-packet-c04c927-20261008: immutable tests, live-byte-check.json, default and notes-live-phone-layout-result.json/profile PNGs, notes-live-phone-probe.py. Synthetic observations only, no real notes or credentials modified. The current source still retains publisher unresolved junction guard and Python used-target response; legacy preservation/Unknown decision context/native/physical/offline/realpublish ledger stays open. No publisher executed, no merge/acceptance.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> distinct source/CI/fresh tests/live-byte/native evidence; .github/skills/red-team/SKILL.md -> realistic populated observation affecting decision hierarchy; .github/skills/validator/SKILL.md -> immutable contained probes and verified saved note/scroll origin, reject invalid initial measurements. Adaptation: synthetic disposable browsers, no native/COM or user-screen takeover. Continue approved work under existing plan.
+
+### GPT audit — October 8, 2026 04:07 UTC: full-roster phone controls
+
+Exact7025634921a88b7b3b36a759221347f88fb7a21b, independently CI37724800447 BOTH SUCCESS. One changed scouting/chip browser regression PASS3.24s (15 deselected), immutable selected-source snapshot. Additional synthetic eight-long-name opponent roster: WebKit390x664 and Chromium390x844 have one chip row, no document horizontal overflow, last chip reachable/selected with aria-pressed true, no script errors. Output .git/gpt-chips-7025634-20261008/eight-opponent-probe.py and phone-layout-result.json. Synthetic cloned roster identities are not real APA records.
+
+OPEN P2 scalable first-screen variant: after selecting last synthetic opponent, open-risk full name list expands; WebKit Risks632.6–778.6 is not entirely in664. Chromium844 fits. Swipeable controls repair wrapping but do not make arbitrary risk/observation lists bounded. Use a concise count/primary-risk summary plus accessible full names/details, retaining evidence/unknown labels and all records. Add full-roster/risk-list and populated-note first-screen tests rather than relaxing viewport, shrinking unreadable text or silently dropping names. Existing default/no-note live placement closure remains its narrower verified scope.
+
+Pages API now reports built9832ea7badf1527395138641ba27a5d771fcfdcd; this cycle did not reverify live bytes or claim offline/physical acceptance. Previous verified441add0 demo remains historical provenance. Publisher junction, core played-target, availability disclosure, legacy note preservation/native/physical/offline/realpublish ledger remains open. No builder source edits, publisher execution or credentials. No repeated unchanged broad tests.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> focused changed regression/CI separate from API-only deployment; .github/skills/red-team/SKILL.md -> eight long names, last-chip reachability and multiple risks; .github/skills/validator/SKILL.md -> rooted immutable synthetic probes. Adaptation: no COM/native capture, no production records. Continue approved fixes and preserve detailed evidence.
+
+### GPT audit — October 8, 2026 04:29 UTC: decision repairs and narrowed publisher preflight
+
+Exact989aecff2737b1d9da59b2cf0dd11635eb20c5bf includesab42ef0. Independent70 focused publisher/engine/browser/formula tests PASS65.94s immutable selected-source snapshot; CI37727204984 BOTH Python SUCCESS. Synthetic fake-origin publisher fixtures only, no real push/passphrase. Played-target core suppression and Unknown availability at medal/shared decision lines now pass Python/JS/Excel checks: close those P2s within independently tested scope, not blanket UI/native acceptance.
+
+Fresh synthetic note-phone probe, WebKit390x664: Match bottom249.2, NextSend504.9, Threats574.8, Risks626.6, zero script errors. Original 24-word observation retained in accessible details with opinion preview, Chromium844 also fits. Close populated-note placement variant in local immutable synthetic scope; not yet live-deployed or physical-device acceptance. Full-roster long-risk-list P2 remains separate/open.
+
+Publisher root/junction containment substantially repaired; refusal tests pass and outside sentinels survive. P1 is narrower, not wholly closed: independent late allowlisted junction fixture at package.json refuses, but index.html earlier in cleanup order has already been deleted. Outside sentinel survives, builder never runs. Thus "every guard BEFORE anything deleted" is still false. Preflight ALL existing allowlisted source/destination paths before any cleanup/copy/build; retain immediately-before-use checks too. Add late-file link refusal asserting earlier package/sentinels preserved. Repro .git/gpt-repair-989aecf-20261008/late-link-probe.py and late-link-result.json (early_old_package_preserved=false). All synthetic targets inside canonical audit folder; no real publisher invoked. Initial probe path/import failures performed no fixture mutation and were corrected before valid result.
+
+Evidence also includes snapshot-tests.py and notes-live-phone-layout-result.json/profile PNGs. Current source remains separate from last API-built9832ea7 demo. Legacy scope-note preservation/native recapture/physical HomeScreen/iPhone offline/real publication/full risk list remain open. Do not recommend real publisher until remaining preflight condition repaired. No merge/production acceptance.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> fresh exact-source tests/CI and local-vs-live scope; .github/skills/red-team/SKILL.md -> late-path failure after partial cleanup, preserve last good package; .github/skills/validator/SKILL.md -> immutable rooted fake-repository/observation probes, discard failed probe setup. Adaptation no native/COM, no real credentials or publication.
+
+### GPT audit — October 8, 2026 about 04:48 UTC: legacy observations preserved
+
+Exact2a67d7826467bd7a6541d169117e551a02c4df4d. GPT2 focused migration/clear-reload browser tests PASS4.67s (15 deselected), immutable selected-source snapshot. CI37728549912 independently BOTH Python SUCCESS. Distinct multi-scope legacy observation retained in archive with scope label; existing current note preserved alongside different earlier observation; clearing current note stays blank after reload and does not restore archived opinion. Archive shown on cards as earlier opinions and excluded from evidence/ranking. Close legacy scope-observation preservation P2 in this independently tested synthetic scope. No actual user notes migrated by GPT.
+
+Newest Pages e30248194561e4657e82e3c791363e6b3e4b6fc6 built; index/package/SW/manifest HTTPS200 decoded bytes independently match Git. Package203637bytes SHA2566d2ae737e2e54d97467fa3b94ecb066386cf06946729d17638888aefc7575236, SW65731c81677ccc2341357b31dc9803919690bcc64d70e53ac66eed3eec6f632c. Byte verification only this cycle; no new offline/physical-device/HomeScreen or migration-on-HTTPS claim. Remains synthetic DEMO, not real publication.
+
+Publisher P1 remains narrowed to late-path refusal after earlier cached package deletion, independently reproduced989aecf and reported6052223076. Builder1b96864 statement "P1 fixed" addresses the earlier containment variant, not this newer preflight preservation result; read full ledger before closure/real-publisher instructions. Full-roster long-risk-list P2 and native repaired Inspect/packet recaptures, physical/iPhone offline/real publication remain open. Prior70 focused repairs remain their scoped verification; no unchanged suite reruns or real publisher invoked.
+
+Evidence .git/gpt-notes-2a67d78-20261008/{snapshot-tests.py,live-byte-check.json}. Skills: .github/skills/verification-before-completion/SKILL.md -> exact-source focused tests/CI/live bytes separate; .github/skills/red-team/SKILL.md -> multi-scope/current-vs-legacy/clear-reload cases; .github/skills/validator/SKILL.md -> immutable contained synthetic observations. Adaptation no native/COM, no production notes or credentials. Continue approved work; no merge/production acceptance.
+
+### GPT status check — October 8, 2026 about 04:55 UTC: current artifact hashes
+
+Product docs31c3beb85b4afbdcaf017ac0faffa21676d8eeb7, source2a67d78 unchanged; no new feature repairs. Documentation CI37729333628 independently BOTH SUCCESS, PR83 still draft/unmerged. Pages API remains built e302481, previously decoded-byte verified. No repeated unchanged tests or duplicate issue ping.
+
+Normal reviewed artifact reads confirm completed2a67d78 UAT_MANIFEST and fresh hashes: HTML AA5B8432645818E734D203E6988CF324997AF2852AAA95B50EC833B46F710243 (88702945bytes), XLSX2315C5EFEBD93879B6404D08DC0AE4C4F97BAE08683FA8BF1FFAC1208DD76367 (54144024bytes). Both match manifest and builder report. Database-unchanged remains builder-manifest evidence, not a new GPT database hash. Artifact byte identity does not verify native print/Excel display, real phone or human acceptance.
+
+Latest publisher late-path preflight preservation P1 and long full-roster risk-list P2 remain open, alongside native/physical/iPhone-offline/real encrypted publication. Builder's retrospective "awaiting re-audit" list is superseded by GPT6052223076/6052455121 scoped closures; no repeat tests for already repaired items. Skills .github/skills/verification-before-completion/SKILL.md -> independently distinguish fresh hashes/CI from native acceptance; .github/skills/validator/SKILL.md -> exact artifact/manifest paths. No COM/native session, source edits, real publication or credential reads.
+
+### GPT audit — October 8, 2026 about 07:10 UTC: publisher preflight and UAT root guards closed in tested scope
+
+Exacte0792932b9597f0a879f9a3abfb687e4615cd226 includespublisherede0a77. GPT17 focused publisher/repository-boundary tests PASS66.70s from immutable107-file selected-source snapshot, fake-origin repositories and contained sentinels only. CI37740717192 independently BOTH Python3.12/3.13 SUCCESS. Original late-package.json-junction probe now refuses before builder/cleanup: early_old_package_preserved=true, outside_sentinel_preserved=true. Publisher ALLpaths preflight-before-cleanup P1 CLOSED within independent refusal/preservation scope.
+
+UAT DestinationRoot textual-only containment finding6053946245 CLOSED for tested directory-root escape: helper now verifies canonical common Git/origin, refuses link/reparse components, checks resolved containment before fetch and through guarded write stages. Fake inside/outside/junction/foreign-repo tests and static PowerShell integration check pass. GPT did not run the global production builder or a real publish; actual production build behavior and native Excel acceptance are separate evidence. No blanket adversarial race or all-file-write safety claim.
+
+Evidence .git/gpt-boundary-e079293-20261008/{snapshot-tests.py,late-link-probe.py,late-link-result.json}. Shared boundary module scripts/repo_boundary.py included in immutable snapshot. Three ongoing UI/test WIP files untouched; full-roster risk-list repair in progress, not tested or closed. Native folder still only preparation artifacts, no posted native results. Previously verified played-target/availability/note preservation remain scoped closed; no unchanged broad suite repeated. Pages remains previously verified DEMO; no new deployment claim.
+
+This closes the specified blocker to preparing private real-fixture publication with a locally supplied passphrase; do not read/publish real credentials in GPT/chat, expose full dataset or infer production acceptance. Physical HomeScreen/iPhone offline, native Inspect/print/viewport and outside-view shared/tie wording remain open. Continue approved work under fresh deadline16:23:52UTC/10:23:52AMMDT, draftPR83 unmerged.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> exact-source fresh checks/CI/repro separated from global/native/deployed behavior; .github/skills/red-team/SKILL.md -> original late-path failure and preserved last-good package; .github/skills/validator/SKILL.md -> immutable rooted fake-origin tests with new shared helper. Adaptation no COM/native control, no real publisher/credentials or competing builder.
+
+### GPT full-roster repair verification — 2026-10-08 07:30 UTC
+
+Exact immutable source `f7def90645e890935298f231127b05e4ed69fef3`; 107 selected permitted files, no mutable builder imports or changes. Two focused full-roster/populated-note regressions passed in 6.71s (5 deselected). Independently confirmed CI `37742174047`: Python 3.12 and 3.13 both success.
+
+Independent synthetic encrypted DEMO probe: eight long-named opponents, 24-word coach observation, last opponent selected, scroll reset to zero. WebKit/iPhone 13 390x664 primary Match/Next Send/Threats/Risks bottoms 249.2/466.0/535.9/625.4; Chromium 390x844 Risks bottom 625.6. No page overflow or JS errors; all eight chips exist and the expanded risk detail exposes the final long name. CLOSE full-roster first-screen P2 within these local immutable emulation scenarios. Existing secondary all-opponent Best Sends remains below the smaller viewport by design. Initial audit assertion accidentally included that secondary summary; corrected to the established primary-decision criterion, not a relaxed viewport. Evidence `.git/gpt-roster-f7def90-20261008/phone-layout-result.json` and targeted screenshots. No fresh live-byte/offline/physical claim.
+
+Claude comment `6054745840` now explicitly reports native Excel stopped at 05:17 UTC following computer-use `user_denied`; none of five scenarios executed. Earlier 'in flight' attestation is superseded. GPT observes only preparation files, no actual results. Builder suggests timed-out approval but cause is not independently established. Paul must approve Excel access in that session at the PC; do not bypass the gate. This blocker does not prevent independent shared/tie wording or WebKit-offline work; coordinate release of any idle Excel edit claim before changing the builder.
+
+Skills applicability: `.github/skills/verification-before-completion/SKILL.md` requires fresh exact-source evidence before closure; `.github/skills/red-team/SKILL.md` applies the original eight-opponent failure scenario plus a populated note; `.github/skills/validator/SKILL.md` distinguishes test/CI/emulation from native or human acceptance. Existing Phase4 plan retained; Budget/COM assumptions adapted to permitted APA non-COM synthetic probes. Publisher/UAT safeguard closures remain as previously verified, no repeat tests. Private real publication, native Inspect/print, physical Home Screen, WebKit offline and shared/tie wording outside Tonight remain pending. Monitor deadline 16:23:52 UTC unchanged.
+
+### GPT live DEMO provenance and ownership checkpoint — 2026-10-08 07:48 UTC
+
+Pages API reports BUILT `90710f28ea7acb1228b9b900d8ff12f1453fcbae`. Independently fetched index/package/SW/manifest over HTTPS: all 200 and decoded bytes equal the four exact Git blobs. Package 205373 bytes, SHA256 `b7587ce4d887956d94a6e68c363d5f3d704d6bb6a8c27c2e33ca833a74748962`; SW SHA256 `8b3b04231da372d618ea79ef7ca3fc8f05f4885107706d75ccc492b0c10659fd`. Evidence `.git/gpt-live-90710f2-20261008/live-byte-check.json`. Synthetic DEMO ONLY; byte/provenance verification, no new live browser, offline, physical or native acceptance claim. Prior local full-roster closure remains in its tested scope.
+
+Product committed head `5350774708e4a738b11c07f8b1d6f27a3b6f1dca` changes only CI browser caching/step and job timeouts; no test assertions removed. CI `37744369130` independently both Python jobs success. No repeat product tests warranted. Six active analytics/Excel/browser/JS WIP files left untouched; wait for committed wording repair before immutable audit.
+
+Claude `6055041218` attests Paul's new instruction: product builder owns Excel edits, idle native session becomes test-only and receives a fresh rebuilt copy/hash/expected values. Native folder still preparation files only. Builder also reports an unattributed duplicate test edit preserved as a patch; GPT cannot attribute it. This GPT audit used only `.git/gpt-*` scripts/snapshots and the audit report, and made no product-worktree writes. No duplicate coordination ping needed.
+
+Skills mapping: `.github/skills/verification-before-completion/SKILL.md` applies exact publication bytes and CI evidence; `.github/skills/validator/SKILL.md` keeps deployment provenance separate from native or human acceptance. Existing approved plan retained; no implementation changes, no COM or production builder. Shared/tie wording, native Inspect/print, WebKit offline, physical Home Screen and private real-fixture publication remain open; deadline 16:23:52 UTC unchanged.
+
+### GPT send-wording verification — 2026-10-08 08:09 UTC
+
+Exact immutable source `b1660adc0692a25e71236660815f5f3b6ca6f891`, 108 selected permitted files. Engine/browser/Excel-formula suites: **66 PASS in 43.13s**. Initial harness argument error executed no tests; corrected harness ran the completed suites. Independent CI `37745664219`: both Python 3.12/3.13 SUCCESS. Product worktree clean on initial check and never changed by GPT.
+
+CLOSE the previously recorded tied/shared-only false numbering and unique-best wording P2 within verified engine, HTML War Room/Lineup Lab and synthetic Excel War Room/Lineup Lab/Command Center/Captain Packet formula scope. Direct equal evidence now shares a number with '=', shared-only candidates use '≈' without a numeric ordering; single-pick text explicitly discloses ties or unordered shared evidence. Regression exercises removing one tied candidate and Python/JS parity for remaining-player subsets. No native Excel calculation/display/print acceptance, exhaustive arbitrary tie-size layout claim or separate Tonight ranking change.
+
+Independently hashed fresh UAT files and native copy: HTML `6149B817EB381307FD0E79681343A1559C3C92599ADAE24BF7D99154369739CC`; Excel and native copy both `2DEFB843E9F0045F5291E88C443EBD9D8C187C99A9AED93B4402F34BA3DB0E53`. Files under `.worktrees/pr83/tmp/uat/build-b1660ad` and `tmp/native/run-b1660ad`. Native folder contains preparation, expected values and instructions only, no actual results. Builder `6055497040` explicitly says automated session-message delivery was disabled; prepared instructions are **not proof they reached or resumed the native session**. Paul must start that test-only session and approve Excel access. No real player data from the prepared expectations was printed or committed.
+
+Skills mapping: `.github/skills/verification-before-completion/SKILL.md` uses exact source, completed focused tests, direct CI and artifact hashes; `.github/skills/red-team/SKILL.md` checks tied/shared candidates and availability removal; `.github/skills/validator/SKILL.md` separates formula evaluator and browser from native application results. Existing Phase4 plan retained; APA non-COM immutable synthetic checks adapt inherited Budget assumptions. No duplicate builders, no real publisher, passphrase access or merge. Live DEMO remains last verified `90710f2`; no new publication claim. Native Inspect/print, WebKit offline, physical Home Screen and private real-fixture publication remain pending. Deadline16:23:52 UTC unchanged.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
