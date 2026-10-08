@@ -221,3 +221,56 @@ def test_a_long_coach_note_stays_reachable_without_pushing_risks_off_a_safari_sc
             assert page.evaluate("document.documentElement.scrollWidth") <= 390
         finally:
             browser.close()
+
+
+def _full_roster_payload():
+    """The synthetic fixture plus six more Falcons with long names and no recorded games: a full 8-player
+    opponent roster where seven unplayed opponents have no favorable option (GPT audit #84 full-roster P2)."""
+    from tests.test_excel_war_room_formulas import _hist, _player
+    payload = _payload()
+    extra = ["Maximiliana Featherstonehaugh-Worthington", "Bartholomew Montgomery-Llewellyn", "Anastasiya Kowalczyk-Brightwater",
+             "Konstantinos Papadopoulos-Ridgeway", "Guinevere Castellanos-Whitfield", "Thaddeus Abernathy-Kensington"]
+    for k, name in enumerate(extra):
+        payload["players"].append(_player(20 + k, str(2100 + k), name, [_hist("falcons-a", "d1", "EIGHT", 3 + k % 4, 1, 2)]))
+    payload["counts"]["players"] = len(payload["players"])
+    return payload
+
+
+def test_a_full_roster_keeps_every_decision_on_a_safari_screen_and_every_name_reachable(tmp_path):
+    site = tmp_path / "site"
+    build_site(_full_roster_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    note = ("Very patient safety player who waits for mistakes, plays long defensive innings, rarely breaks well "
+            "and often struggles to close racks under pressure late")
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                ctx = browser.new_context(**{**IPHONE, "viewport": {"width": 390, "height": 664}})
+                page = ctx.new_page()
+                page.goto(f"http://127.0.0.1:{server.server_port}/")
+                page.fill("#pass", PASS)
+                page.click("#go")
+                page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+                assert page.locator("#next-send .ns-chip").count() == 8
+                page.fill('#scouting-cards textarea[data-pid="11"]', note)        # a dangerous opponent's long note
+                page.locator("#next-send .ns-chip").last.click()                  # GPT's probe: the last opponent
+                chip, row = page.locator("#next-send .ns-chip.on").bounding_box(), page.locator("#next-send .ns-chips").bounding_box()
+                assert row["x"] - 0.5 <= chip["x"] and chip["x"] + chip["width"] <= row["x"] + row["width"] + 0.5   # readable
+                risks = page.locator("#tonight .decide-risks")
+                assert "No favorable direct option left vs 7 of 8 unplayed opponents" in risks.inner_text()
+                assert risks.locator(".risk-more summary").inner_text().startswith("All 7: ")
+                for sel in ("#tonight .when", "#next-send", "#tonight .decide-threats", "#tonight .decide-risks"):
+                    box = page.locator(sel).bounding_box()
+                    assert box and box["y"] + box["height"] <= 664, (sel, box)
+                assert page.evaluate("document.documentElement.scrollWidth") <= 390
+                risks.locator(".risk-more summary").click()                       # every name one tap away
+                full = risks.inner_text()
+                for name in ("Eve Ellis", "Maximiliana Featherstonehaugh-Worthington", "Thaddeus Abernathy-Kensington"):
+                    assert name in full
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()

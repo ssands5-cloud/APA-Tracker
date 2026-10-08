@@ -318,6 +318,14 @@
 
   function wrList(items,empty){return '<ul class="wr-list">'+(items.length?items.map(function(t){return '<li>'+esc(t)+'</li>';}).join(""):'<li class="muted">'+esc(empty)+'</li>')+'</ul>';}
   function wrChip(cat){return '<span class="cat-dot cat-'+cat+'" title="'+esc(WR_CAT_LABELS[cat])+'"></span>';}
+  // Open risks on the first screen: a count and the first name, every name one tap away (GPT audit #84: a
+  // full roster's name list pushed Risks below a phone screen). Nothing is dropped, only folded.
+  function wrRiskSummary(names,unplayedN){
+    if(!names.length) return '<span>None — every unplayed opponent still has a favorable direct option</span>';
+    if(names.length===1) return '<span>No favorable direct option left vs '+esc(names[0])+'</span>';
+    return '<span>No favorable direct option left vs '+names.length+' of '+unplayedN+' unplayed opponents</span>'
+      +'<details class="risk-more"><summary>All '+names.length+': '+esc(names.join(", "))+'</summary>'+esc(names.join(", "))+'</details>';
+  }
   // "Tonight" at the top of the page: the fixture and the decision overview first, setup below.
   function wrTonight(w,plan,ta,tb){
     var el=document.getElementById("tonight");
@@ -348,7 +356,7 @@
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+(n?wrNotePreview(n,"opinion"):'')+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
-      +'<div class="decide-risks"><b>Open risks</b>'+(riskNames.length?'<span>No favorable direct option left vs '+esc(riskNames.join(", "))+'</span>':'<span>None — every unplayed opponent still has a favorable direct option</span>')+'</div>'
+      +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
       +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
@@ -356,6 +364,10 @@
       +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient evidence (nothing recorded): '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
+    // Keep the selected opponent's chip fully visible inside the swipeable row (scrolls the row, not the page).
+    var on=el.querySelector("#next-send .ns-chip.on");
+    if(on){var row=on.parentNode,left=on.offsetLeft-row.offsetLeft,right=left+on.offsetWidth;
+      if(left<row.scrollLeft) row.scrollLeft=left; else if(right>row.scrollLeft+row.clientWidth) row.scrollLeft=right-row.clientWidth;}
   }
   function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
       +(WR_TONIGHT_NOTE.when?'<div class="when">'+esc(WR_TONIGHT_NOTE.when)+'</div>':'')+'<div class="vs">'+esc(WR_TONIGHT_NOTE.text)+'</div>'
