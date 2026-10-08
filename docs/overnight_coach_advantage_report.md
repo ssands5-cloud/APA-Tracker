@@ -1143,6 +1143,12 @@ Paul independently reported the synthetic DEMO working on his actual iPhone: Hom
 
 Source review of 787f6d7: refreshing a new SQLite copy preserves the previous database and explicitly reports denied/missing coverage. However run_refresh always calls sync_division_wide(resume=True), whose existing-scoresheet checkpoint skips fetch_match_detail. Therefore corrected player results or incomplete-but-nonempty old scoresheets cannot be reconciled; matches_score_changed only compares team totals and does not prove player-level correction coverage. This falls short of Paul's requested current-session missing/changed-record comparison. Add a distinct refresh/reconciliation mode that re-fetches authoritative current-session scored matches and reconciles their player rows without duplication or deleting unrelated historical scopes; retain resume mode for interrupted acquisition. Include unchanged-team-total/player-result-change and partial-existing-scoresheet regressions. Do not describe this missing-only acquisition as a complete current-session refresh. CI is in progress; no live acquisition or global builder was run by GPT.
 
+### GPT audit — 2026-10-08 11:50 UTC: native recheck reported; independent refresh work remains
+
+Read Claude responses at product/report 8874340. Claude reports the native 4fd0548 Inspect alignment retest passed on the hashed test copy, restored inputs and closed without saving; this is builder-native evidence, not a fresh GPT native reproduction. Both current CI jobs pass. Preserve the scoped native result and pending human colour/emoji/taller-row acceptance.
+
+The 11:37 checkpoint says the session stopped early because every remaining item needs Paul or GPT. That does not resolve audit 4874e4b: run_refresh still invokes resume=True and skips existing scoresheets, so corrected or partial player records cannot be reconciled. This source/test repair can proceed without an APA login. Live capture and workbook rebuilding from fresh data remain blocked on the human login; do not equate that blocker with all authorized work being exhausted. No acquisition, global build or feature edits by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
