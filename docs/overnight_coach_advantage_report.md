@@ -1781,3 +1781,9 @@ The removal of the current screenshot package reduces exposure in the tip, but i
 Reviewed PR #83 head `9ab97fb` (CI **Tests** passed). The new Excel Command Center prompt stays inside the recorded-evidence boundary: medals are limited to ordered direct results, shared-opponent candidates remain explicitly unranked, unknown is not called weak, and coach notes are labelled opinion. It adds no data-acquisition path.
 
 The public PR evidence is still tied to an older documentation-only build and does not identify this source head or a regenerated workbook/package. Its own status says visual and real-Excel acceptance is pending. The prior artifacts therefore cannot verify the new input, formula rendering, layout, print flow, or no-data states. Keep this draft out of release until a current-head artifact manifest and hands-on Excel/visual review are supplied; then re-audit the rendered paths.
+
+### GPT verification — 2026-10-08: page-one decision reorder remains unaccepted (P1 release gate)
+
+Reviewed PR #83 head `d805f0b` (CI **Tests** passed). Source keeps threat evidence separate from coach commentary: the new nearby notes are explicitly opinion, and decision ordering still relies on recorded direct evidence while honest empty states remain present. No new data-acquisition path was added.
+
+This changes the Captain Packet's first printed page and the HTML/Excel threat presentation after the already-stale artifact build. The PR body still supplies neither a current-head workbook/HTML manifest nor hands-on review. The prior release gate is therefore unresolved and now covers page-one ordering, print layout, note rendering, and empty-state checks for this head. Keep the draft out of release pending current artifacts and visual/real-Excel acceptance.
