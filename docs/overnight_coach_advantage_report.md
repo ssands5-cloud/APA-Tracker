@@ -2065,3 +2065,106 @@ Please also check the index against the files, and that no defect is hidden or m
 - The first real publish: Paul runs `.\tools\publish_match_night.ps1` himself after GPT verifies the safeguards. Claude does not hold his passphrase.
 - Native Excel recapture of WP-A (PENDING PAUL REVIEW).
 - WP-B: Next Send, Quick Read, Captain/Evidence toggle, decision-first Excel layouts. Next Send starts now.
+
+### 2026-10-08 04:35 UTC (2026-10-07 22:35 MDT): Phase 4 WP-B built; GPT #84 P1 junction and P2s fixed
+
+**Source revision of code:** `989aecf`.
+- **Fresh local tests at `989aecf`:** 2228 passed (`--ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp`).
+- **CI at `989aecf`:** run 37727204984, Python 3.12 ✅ and 3.13 ✅.
+
+**Artifacts:** built from `989aecf` into `tmp/uat/build-989aecf/`; source DB unchanged.
+- HTML SHA256 `EE5948034C84684DDBBB5F272F61F456F219C8156F4E26CF7444CBBC0309EC6E`
+- Excel SHA256 `B484B438D3600F8DA9CDA4E7E0C0FC2DCA1BFE063996DE5E7FFA4936974272F7`
+
+**Live demo:** gh-pages `ccfe3b5`, a synthetic DEMO package. The new publisher wrote "Source: 989aecff2737b1d9da59b2cf0dd11635eb20c5bf" into the gh-pages commit. URL: https://ssands5-cloud.github.io/APA-Tracker/
+
+#### WP-B, built
+
+Commits:
+
+| Commit | Change |
+|---|---|
+| `092254f` | Next Send |
+| `f4eb60b` | Quick Read and phone layout |
+| `3751d22`, `8a841d9` | Phone layout |
+| `d658360` | Ciphertext test flake |
+| `ddf7e16` | Captain/Evidence toggle |
+| `9ab97fb` | Excel Command Center Next Send |
+| `d805f0b` | Packet page 1 decision-first; coach notes on threats |
+| `c04c927` | Docs |
+| `7025634` | Swipeable chips |
+
+**Next Send ("Who should I send next?")**, from shared `analytics.next_send()`:
+- **HTML:** the top of Tonight. Tap the opponent they put up.
+  - 🥇🥈🥉 go to ordered direct candidates only; equal evidence shares a medal and the tie is named.
+  - Then ≈ not ordered, ⚠ Avoid (worst first), ❓ Unknown ("not weak"), consider-saving, and the coach note labeled as opinion.
+  - ✓ Sent marks the pairing played.
+  - The JS is cross-checked line-for-line against Python.
+- **Excel:** the Command Center opens with a "They put up:" dropdown and the same card.
+
+**Other features:**
+- **Quick Read** on every scouting card, in HTML and Excel. Facts only.
+- **Captain view / Evidence view** for the matrix, from shared `captain_cell`.
+  - HTML: a toggle, remembered on the device.
+  - Excel: a War Room "View" dropdown.
+- **Packet page 1** is decision-first: best sends, then risks, then rosters.
+- **Coach notes** appear beside dangerous opponents.
+
+#### GPT #84 findings fixed
+
+- **P1, publisher junction (`989aecf`).** `<repo>/tmp` as a junction resolved "equal" on both sides.
+  - Every path component is now refused if it is a symlink, junction or reparse point, and must resolve inside its root. This covers:
+    - the checkout;
+    - the build folder and its `icons/`;
+    - the Pages checkout;
+    - each allowlisted source and destination.
+  - The checks run before the first write and again right before each copy. Cleanup touches only known files.
+  - Uncommitted tracked source is refused. A real publish needs the source commit on origin. `Source: <sha>` is recorded in the gh-pages commit.
+  - Tests use real Windows junctions (symlinks on CI) with outside sentinels kept intact. They were red against the previous publisher (5 failures) and are green now.
+  - Real paths were checked: no reparse points on the actual repository paths.
+- **P2, used-target contract (`ab42ef0`).** `next_send` for a played opponent now returns no active response in both Python and JS. Tested.
+- **P2, availability at the action (`ab42ef0`).** Unknown availability stays eligible, but each HTML medal or ≈ line and each Excel Next Send line says "availability unknown". Marking the player Available removes it. Ranking is unchanged.
+- **P2, long coach note on a phone (`ab42ef0`).** First-screen notes are a one-line preview that opens to the full text. The phone match-night layout is tighter.
+  - New regression: a 24-word note at 390×664 keeps the match, Next Send, threats and risks visible.
+  - Measured with that note:
+    - real package: 592 px, or 633 px with a wide-font (Verdana) approximation of Linux fonts;
+    - DEMO package: 627 px, or 686 px with wide fonts.
+  - On a real iPhone, the DEMO case with Safari toolbars shown is **PENDING PAUL REVIEW**.
+- **P2, CI first-screen overflow (`3751d22`, `8a841d9`):** closed by GPT in emulation scope.
+- **Ciphertext test flake (`d658360`):** closed by GPT.
+
+#### Found by me
+
+- **Real-data chips.** On the real build, 8 opponent chips wrapped into five rows. They are now one swipeable row (`7025634`).
+- **Discarded UAT build.** I edited a shared text while a UAT build was running, so I discarded that build and rebuilt from a clean, pushed head.
+
+#### Live check (`ccfe3b5`, Playwright)
+
+| Profile | Match | Next Send | Threats | Risks | Best sends overview | Horizontal scroll | Errors | DEMO flags | Offline |
+|---|---|---|---|---|---|---|---|---|---|
+| iPhone 13 WebKit (390×664 Safari view) | ✓ | ✓ | ✓ | ✓ | below the fold (by design on phones) | none | none | 2 | not run in WebKit emulation |
+| Pixel 7 Chromium | ✓ | ✓ | ✓ | ✓ | ✓ | none | none | 2 | ✓ |
+| Desktop Chromium | ✓ | ✓ | ✓ | ✓ | ✓ | none | none | 2 | ✓ |
+
+**Real-data browser check of the UAT HTML** (`989aecf`, local only, not published):
+- No script errors.
+- Next Send has 8 opponent chips and a 🥇 pick; 8 Quick Reads; no horizontal scroll.
+- At 390×844, Risks ends at 812 px even with the full desktop header.
+- A real-data Match Night package has **not** been built.
+
+#### Skills used
+
+- *systematic-debugging*: the junction cause (resolved-alias equality) and the font-dependent layout margins.
+- *test-driven-development*: the junction tests were red against the old publisher; the card-clip test was red; the used-target assertion was added together with its fix (not written red first).
+- *verification-before-completion*: a fresh suite, CI, Pages build, live check and UAT hashes before this entry.
+- *writing-plans*: the plan doc records status and deviations.
+
+#### Still open
+
+- GPT re-audit of `ab42ef0` and `989aecf`, and the legacy-note preservation item from GPT's ledger.
+- **PENDING PAUL REVIEW:**
+  - The default matrix view.
+  - Native Excel look: Command Center card, View dropdown, packet page 1, Inspect.
+  - Real iPhone and Android, including Add to Home Screen and offline.
+  - The first real publish: Paul runs `tools/publish_match_night.ps1` only after GPT closes the publisher P1.
+- **Screen access:** there is no technical block. I ask before driving Excel because the capture uses whatever window has focus and would collide with Paul's typing.
