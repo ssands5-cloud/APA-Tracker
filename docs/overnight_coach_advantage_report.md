@@ -1824,6 +1824,18 @@ Paul explicitly authorized official GitHub Pages publication of the generated HT
 
 **Skills:** verification-before-completion -> focused3 tests and separately inspected failed CI; red-team -> used target contract and action-point unknown availability; validator -> immutable snapshot/rooted probes without WIP interference. Existing Phase4 plan governs implementation; user written direction remains approved, no new confirmation/merge. Qualitative Edge last native assessment6/10 unchanged; human timing/design/print and physical devices PENDING PAUL REVIEW, production readiness not demonstrated.
 
+### GPT audit — October 8, 2026 about 03:00 UTC: compact Next Send / Quick Read
+
+Exact implementation inspected/tested: 3751d224aea39eb5889349c2262b89a8815889da (including f4eb60b Quick Read). CI 37719277001 independently confirms both Python 3.12/3.13 SUCCESS. This supersedes the prior 092254f full-height layout CI failure only within the revised tested viewport.
+
+Fresh immutable selected-source snapshot: 46 PASS, 1 FAIL in 47.58s across Match Night, War Room browser and Excel formula tests. The failure scanned random Base64 ciphertext for the digit string 2001: a coincidental match is not evidence of a plaintext confidentiality leak. Builder subsequently committed test-only d658360 excluding the ciphertext while retaining public-byte scans; source inspected, not freshly retested by GPT. Do not rerun random encryption solely to obtain a green result. Snapshot/probes are rooted at .git/gpt-quick-read-3751d22-20261008; no production facts or builder WIP changed.
+
+OPEN P2 browser first-screen: synthetic local encrypted demo at exact 3751d22 has no page errors. Chromium 390x844 shows Match, Next Send, Best Sends, Threats and Risks. WebKit iPhone13 descriptor 390x664 shows Match and sends, but Threats ends at y664.3 and Risks spans y670.3–722.1 below the viewport. This is browser emulation, not physical iPhone/standalone acceptance. Keep the real first-screen criterion; move/collapse redundant all-opponent summary or secondary details while retaining readable primary sends, eligibility/ties, visible threats/risks and DEMO identity. Evidence: phone-layout-probe.py, phone-layout-result.json and two profile PNGs in that audit folder.
+
+Quick Read / compact-card parity and formula checks passed within these synthetic tests. They do not close played-target core responses, decision-point Unknown availability disclosure, every native layout or native packet/Inspect acceptance. Publisher junction containment P1, legacy note scope preservation P2, real-device/HomeScreen/offline and real encrypted publication remain open. Pages remains a built synthetic demo; no claim that current implementation was deployed. No merge or production acceptance.
+
+Skills applied: .github/skills/verification-before-completion/SKILL.md -> separate exact snapshot tests, CI, source-only test repair and deployed/native evidence; .github/skills/red-team/SKILL.md -> smaller Safari browser viewport and false-positive confidentiality diagnosis; .github/skills/validator/SKILL.md -> contained reproducible synthetic probe. Adaptation: no COM/native takeover; immutable selected files instead of mutable builder tests. Automatic review rejected direct worktree pytest; that command did not execute, and the approved snapshot alternative completed.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
