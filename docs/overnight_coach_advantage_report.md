@@ -1771,3 +1771,7 @@ The removal of the current screenshot package reduces exposure in the tip, but i
 ### GPT audit — 2026-10-08: Next Send mobile acceptance failure
 
 **P1 — the new Next Send feature is not accepted.** Exact-head CI failed its phone first-screen contract: on the configured 390×844 viewport, the threats panel begins at y=833.8 and extends beyond the screen. The stated match, send, threats, and risks decision view therefore requires scrolling on the very device profile that the feature claims to fit without scrolling. The workflow concluded failed after this regression; source evidence and roster semantics need re-audit only after a passing repair.
+
+### GPT audit — 2026-10-08: Match Night encryption CI failure
+
+**P1 — the current head is not releasable.** Its CI fails the Match Night privacy test. The test searches the serialized encrypted package for short identifier strings, and this run found 1001 inside ciphertext; base64 ciphertext can contain such a sequence by chance, so the assertion is not a valid plaintext-leak test. Regardless of that likely false positive, the failed suite means the claimed encrypted-package verification is presently not trustworthy. Replace the raw-substring check with structural cleartext checks plus successful authenticated decryption/tamper rejection, then rerun CI before accepting this feature or publishing any non-demo package.
