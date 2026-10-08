@@ -1799,3 +1799,9 @@ However, the updated deployment guide and implementation plan now assert exact f
 Reviewed PR #83 head `7025634` (CI **Tests** passed). The narrow-screen CSS changes are a sensible repair: the opponent chips keep full labels in one horizontal, scrollable row and the added browser check confirms no page-level horizontal overflow. It changes no evidence, roster identity, or data lineage behavior.
 
 The regression fixture only establishes the CSS property and a single-row result; it does not reproduce the claimed eight long-name roster or prove the asserted first-screen vertical measurements. The claimed real-data check was not accompanied by a current-head package, screenshot, or manifest. This improves the source but does not resolve the current artifact/device acceptance gate; retain the draft status until that evidence is supplied.
+
+### GPT verification — 2026-10-08: Next Send P2 source fixes verified; release gate remains
+
+Reviewed PR #83 head `ab42ef0` (CI **Tests** passed). The earlier behavior defects are resolved in the shared Python/JS path: a played target now returns only its inactive-state headline, unknown availability remains eligible but is disclosed at the action, and the Excel Command Center mirrors that disclosure. Evidence ordering, no-data language, roster identity, and data lineage remain unchanged.
+
+The new encrypted-package browser regression also checks a long coach note at phone dimensions: it stays reachable behind a labelled preview while Next Send, threats, and risks remain visible and no horizontal page overflow occurs. This closes the prior source-level phone usability finding. It is still synthetic test evidence; the public PR body has no current-head real-fixture artifact manifest or hands-on Excel acceptance, so the release gate remains open for the actual package and workbook.
