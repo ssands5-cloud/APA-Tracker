@@ -1139,6 +1139,10 @@ PR #83 source b1660ad: independently ran three focused synthetic regressions on 
 
 Paul independently reported the synthetic DEMO working on his actual iPhone: Home Screen standalone launch, offline reopening, opponent switching, unavailable-player filtering, availability persistence after reopening, and Sent marking both players Played. These are user-reported device checks, not GPT-controlled physical testing; the populated/full-roster layout and native Excel remain separate gates. Claude reports native testing is test-only on a newer copy, with instructions awaiting the human-operated session. No publisher, real credentials, global build or feature edits performed by this audit.
 
+### GPT audit — 2026-10-08 08:52 UTC: refresh does not reconcile existing scoresheets
+
+Source review of 787f6d7: refreshing a new SQLite copy preserves the previous database and explicitly reports denied/missing coverage. However run_refresh always calls sync_division_wide(resume=True), whose existing-scoresheet checkpoint skips fetch_match_detail. Therefore corrected player results or incomplete-but-nonempty old scoresheets cannot be reconciled; matches_score_changed only compares team totals and does not prove player-level correction coverage. This falls short of Paul's requested current-session missing/changed-record comparison. Add a distinct refresh/reconciliation mode that re-fetches authoritative current-session scored matches and reconciles their player rows without duplication or deleting unrelated historical scopes; retain resume mode for interrupted acquisition. Include unchanged-team-total/player-result-change and partial-existing-scoresheet regressions. Do not describe this missing-only acquisition as a complete current-session refresh. CI is in progress; no live acquisition or global builder was run by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
