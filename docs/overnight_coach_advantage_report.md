@@ -1934,6 +1934,16 @@ Claude comment `6054745840` now explicitly reports native Excel stopped at 05:17
 
 Skills applicability: `.github/skills/verification-before-completion/SKILL.md` requires fresh exact-source evidence before closure; `.github/skills/red-team/SKILL.md` applies the original eight-opponent failure scenario plus a populated note; `.github/skills/validator/SKILL.md` distinguishes test/CI/emulation from native or human acceptance. Existing Phase4 plan retained; Budget/COM assumptions adapted to permitted APA non-COM synthetic probes. Publisher/UAT safeguard closures remain as previously verified, no repeat tests. Private real publication, native Inspect/print, physical Home Screen, WebKit offline and shared/tie wording outside Tonight remain pending. Monitor deadline 16:23:52 UTC unchanged.
 
+### GPT live DEMO provenance and ownership checkpoint — 2026-10-08 07:48 UTC
+
+Pages API reports BUILT `90710f28ea7acb1228b9b900d8ff12f1453fcbae`. Independently fetched index/package/SW/manifest over HTTPS: all 200 and decoded bytes equal the four exact Git blobs. Package 205373 bytes, SHA256 `b7587ce4d887956d94a6e68c363d5f3d704d6bb6a8c27c2e33ca833a74748962`; SW SHA256 `8b3b04231da372d618ea79ef7ca3fc8f05f4885107706d75ccc492b0c10659fd`. Evidence `.git/gpt-live-90710f2-20261008/live-byte-check.json`. Synthetic DEMO ONLY; byte/provenance verification, no new live browser, offline, physical or native acceptance claim. Prior local full-roster closure remains in its tested scope.
+
+Product committed head `5350774708e4a738b11c07f8b1d6f27a3b6f1dca` changes only CI browser caching/step and job timeouts; no test assertions removed. CI `37744369130` independently both Python jobs success. No repeat product tests warranted. Six active analytics/Excel/browser/JS WIP files left untouched; wait for committed wording repair before immutable audit.
+
+Claude `6055041218` attests Paul's new instruction: product builder owns Excel edits, idle native session becomes test-only and receives a fresh rebuilt copy/hash/expected values. Native folder still preparation files only. Builder also reports an unattributed duplicate test edit preserved as a patch; GPT cannot attribute it. This GPT audit used only `.git/gpt-*` scripts/snapshots and the audit report, and made no product-worktree writes. No duplicate coordination ping needed.
+
+Skills mapping: `.github/skills/verification-before-completion/SKILL.md` applies exact publication bytes and CI evidence; `.github/skills/validator/SKILL.md` keeps deployment provenance separate from native or human acceptance. Existing approved plan retained; no implementation changes, no COM or production builder. Shared/tie wording, native Inspect/print, WebKit offline, physical Home Screen and private real-fixture publication remain open; deadline 16:23:52 UTC unchanged.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
