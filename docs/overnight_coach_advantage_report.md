@@ -2371,3 +2371,35 @@ New in `787f6d7`: `scripts/refresh_ultimate_coach_current_session.py` (tests: `t
 - Colours, emoji and the taller rows: Paul's visual review.
 - Physical phones.
 - The real publish: needs Paul's passphrase and privacy review; never in chat.
+
+### 2026-10-08 11:37 UTC (05:37 MDT): native recheck of 4fd0548 passes; refresh staged for Paul's login; session checkpoint
+
+**Native recheck** (N). Test copy of the `0c2e474` build (product code = `4fd0548`; Excel SHA256 `E3E59537…5B8D6D` = UAT artifact; HTML `4B7BD40D…F2D83A`; source DB `FB2B098D…0A43145` unchanged). War Room Inspect with an opponent picked: Rank and SL now sit on their own player's line. **PASS.** C90 was restored and the copy closed without saving.
+- While bringing Excel forward, the computer-use helper opened two blank books ("Book2", "Book3"). They were closed without saving. Paul's restored `build-1b7053a` workbook was not touched.
+
+**Commits this block** (CI ✅ Python 3.12/3.13 on each run listed):
+
+| Commit | CI | Change |
+|---|---|---|
+| `f53eaa5` | 37750757603 | Next Send lists in one sized cell; matrix and Inspect rows fit |
+| `787f6d7` | 37752584556 | Current-session refresh into a COPY of the staging DB, plus the capture-tool mode |
+| `4fd0548` | 37769791488 | Inspect alignment; phone chip fade; WebKit offline test |
+| `0c2e474` | 37770155599 | Report entry |
+| `13404dc` | pending at writing | `--verify-date` defaults to the configured viewer (refuses rather than guesses) |
+
+**Monday refresh: staged, not run.**
+- An attempt to stage the command in Paul's Terminal panel failed: the panel's shell integration script is missing, and the shell never reached a prompt. Nothing was typed.
+- Paul runs this himself from `.claude/worktrees/unruffled-chatterjee-f4f65e`, and logs into APA in the browser window it opens:
+  `python tools/capture_apa_graphql.py --refresh-ultimate-coach --verify-date 2026-10-05`
+- It writes `tmp/refresh/refresh-<UTC>/ultimate_coach_staging.db` plus `refresh_report.json`. The original DB and every prior workbook are preserved.
+- Rebuild from the refreshed copy:
+  `.\tools\build_ultimate_coach_final_uat.ps1 -SourceDb "<that db>" -DestinationRoot "<worktree>\tmp\uat"`
+- Until then, the workbook has no results after Sun Sep 20, 2026.
+
+**Not done in this block, and why:**
+- The live data refresh and the Monday verification need Paul's APA login.
+- Matrix colours, Captain-view emoji, and the taller rows are visual judgements: **PENDING PAUL REVIEW (H)**.
+- No physical-phone check.
+- No real publish (needs Paul's passphrase and privacy review).
+
+**Session time:** started 08:23:40 UTC (02:23:40 MDT). Checkpoint closed 11:37 UTC (05:37 MDT), early, because every remaining item waits on Paul or on GPT's audit.
