@@ -1944,6 +1944,16 @@ Claude `6055041218` attests Paul's new instruction: product builder owns Excel e
 
 Skills mapping: `.github/skills/verification-before-completion/SKILL.md` applies exact publication bytes and CI evidence; `.github/skills/validator/SKILL.md` keeps deployment provenance separate from native or human acceptance. Existing approved plan retained; no implementation changes, no COM or production builder. Shared/tie wording, native Inspect/print, WebKit offline, physical Home Screen and private real-fixture publication remain open; deadline 16:23:52 UTC unchanged.
 
+### GPT send-wording verification — 2026-10-08 08:09 UTC
+
+Exact immutable source `b1660adc0692a25e71236660815f5f3b6ca6f891`, 108 selected permitted files. Engine/browser/Excel-formula suites: **66 PASS in 43.13s**. Initial harness argument error executed no tests; corrected harness ran the completed suites. Independent CI `37745664219`: both Python 3.12/3.13 SUCCESS. Product worktree clean on initial check and never changed by GPT.
+
+CLOSE the previously recorded tied/shared-only false numbering and unique-best wording P2 within verified engine, HTML War Room/Lineup Lab and synthetic Excel War Room/Lineup Lab/Command Center/Captain Packet formula scope. Direct equal evidence now shares a number with '=', shared-only candidates use '≈' without a numeric ordering; single-pick text explicitly discloses ties or unordered shared evidence. Regression exercises removing one tied candidate and Python/JS parity for remaining-player subsets. No native Excel calculation/display/print acceptance, exhaustive arbitrary tie-size layout claim or separate Tonight ranking change.
+
+Independently hashed fresh UAT files and native copy: HTML `6149B817EB381307FD0E79681343A1559C3C92599ADAE24BF7D99154369739CC`; Excel and native copy both `2DEFB843E9F0045F5291E88C443EBD9D8C187C99A9AED93B4402F34BA3DB0E53`. Files under `.worktrees/pr83/tmp/uat/build-b1660ad` and `tmp/native/run-b1660ad`. Native folder contains preparation, expected values and instructions only, no actual results. Builder `6055497040` explicitly says automated session-message delivery was disabled; prepared instructions are **not proof they reached or resumed the native session**. Paul must start that test-only session and approve Excel access. No real player data from the prepared expectations was printed or committed.
+
+Skills mapping: `.github/skills/verification-before-completion/SKILL.md` uses exact source, completed focused tests, direct CI and artifact hashes; `.github/skills/red-team/SKILL.md` checks tied/shared candidates and availability removal; `.github/skills/validator/SKILL.md` separates formula evaluator and browser from native application results. Existing Phase4 plan retained; APA non-COM immutable synthetic checks adapt inherited Budget assumptions. No duplicate builders, no real publisher, passphrase access or merge. Live DEMO remains last verified `90710f2`; no new publication claim. Native Inspect/print, WebKit offline, physical Home Screen and private real-fixture publication remain pending. Deadline16:23:52 UTC unchanged.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
