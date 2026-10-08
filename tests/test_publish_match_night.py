@@ -34,6 +34,8 @@ def canon(tmp_path):
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", ORIGIN)
+    git(root, "config", "user.name", "publisher test")          # CI has no global git identity
+    git(root, "config", "user.email", "publisher-test@example.invalid")
     (root / ".repo-boundary-id").write_text("fake\n", encoding="utf-8")
     (root / "README.md").write_text("x\n", encoding="utf-8")
     git(root, "add", "--", ".repo-boundary-id", "README.md")
