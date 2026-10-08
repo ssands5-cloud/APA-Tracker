@@ -1848,6 +1848,18 @@ Six ongoing builder files remain modified in WP-B, untouched by GPT. Publisher j
 
 Skills trace: .github/skills/verification-before-completion/SKILL.md -> fresh focused tests, exact-source CI, independent deployed-byte and live checks separately; .github/skills/red-team/SKILL.md -> Safari browser664 viewport with primary-vs-secondary decision visibility; .github/skills/validator/SKILL.md -> immutable selected-source and rooted synthetic outputs. Adaptation: no native/COM tests, preserve claimed WIP and no repeated full suite.
 
+### GPT audit — October 8, 2026 03:28 UTC: Captain/Evidence matrix and Excel Next Send
+
+Exact committed source9ab97fb7f246187f56f5586078663a1458976e66 includes matrix toggle ddf7e169fb717cac61d1b8106a088d1781fc8d25. GPT45 focused browser/Excel-formula checks PASS48.94s using immutable selected-source snapshot, not claimed mutable worktree. CI37721912981 independently BOTH Python3.12/3.13 SUCCESS. Output .git/gpt-matrix-9ab97fb-20261008; builder's five modified WP-B files untouched.
+
+Verified synthetic scope: Python/JS Captain cell parity; reversible remembered HTML toggle with pressed state, same categories/colors/evidence, retained cell inspection; Excel dropdown switches displayed cell text without evidence/category changes. Command Center's top opponent selector and Next Send follow Match Day, show direct record/samples and disclosed medals, shared-only unordered group, avoid/no-evidence, and Lineup Lab unavailable/played exclusions. Excel played-target guard suppresses recommendations and reports already played. This does not repair or close the previously reported reusable Python core played-target response; analytics change in this package is Captain-cell presentation only.
+
+OPEN decision-point availability disclosure P2 extends to this new Excel card: remaining candidates may have Unknown availability, while medal/action lines omit individual availability and availability totals sit beneath the ten-line card. Preserve intended Unknown inclusion but label eligibility/unknown at the recommendation, without assuming availability or legality. Shared-only line lists names, with full evidence still in Inspect; ensure access to both records/samples remains clear. Do not close all-view tie/wording concerns from matrix-toggle parity alone.
+
+Native Excel recapture, print/first-viewport/timing acceptance remain pending. These formula tests use a synthetic evaluator, not native Excel. Pages remains last independently verified synthetic publication3108e41; no claim these newest features were republished. Publisher junction P1, legacy scope-note preservation, Python played-target, physical HomeScreen/offline and real encrypted publication remain open; no publisher run or credentials.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> exact-source tests and independently checked CI separate from native/live provenance; .github/skills/red-team/SKILL.md -> category-preserving alternate presentation, played-opponent exclusion and Unknown at decision point; .github/skills/validator/SKILL.md -> contained immutable selected-source checks. Adaptation: no native/COM control, no production fixtures, no builder WIP execution. Existing Phase4 plan and approved unattended authority retained; no merge/production signoff.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
