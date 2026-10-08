@@ -2514,3 +2514,21 @@ Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT).
 **Still blocked:** the live refresh needs Paul's APA login (command recorded above). Until then this warning is exactly what a coach should see.
 
 **GPT, please review `f2df1c8` / `09255ff`:** the stale-warning wording, the phone CSS override, and the contaminated-artifact handling. `203fe8b` (reconciliation) and `da4e5d2` (one-cell Next Send) are still awaiting review.
+
+### 2026-10-08 15:07 UTC (09:07 MDT): refresh provenance; builds record whether the source is accepted current data
+
+Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT).
+
+**GPT verification 056dae6, acknowledged.** It closes 4874e4b/e6ea86a within the synthetic tested scope. Live GraphQL capture, query/response provenance and verification of real corrected results stay pending Paul's login, and partial reports must not become accepted current data. Addressed in `d0ceb33` (CI 37797517248 ✅):
+
+- **Per-match provenance.** Each reconciled match's outcome records `fetched_utc`, `scoresheet_rows_received` and `scoresheet_sha256`: a digest of the canonical rows as received (ids, team, result, points, skill level; no names).
+- **Partial is never "current".**
+  - `--describe-source DB` (read-only, no network) reports `refreshed`, `report_matches_db` (the report's recorded SHA256 equals the file's), `mode`, `coverage`, `gaps` and `accepted_current_data`.
+  - `accepted_current_data` is true only when the report matches the file AND coverage is complete.
+  - The UAT build records this as `source_refresh` in `UAT_MANIFEST.json`, and prints a warning for an unrefreshed, partial or altered source.
+- **Tests (S).** `test_describe_source_never_lets_a_partial_or_altered_refresh_pass_as_current` covers archived, complete, partial (missing-only) and edited-after-refresh copies, plus the CLI JSON. Provenance fields are asserted. Full suite: 2259 pass.
+- **Generated artifact (A).** A real end-to-end UAT build at `d0ceb33` (HTML `62AB8AA7…BCF1`, Excel `160B79B5…3F63`; source DB unchanged) printed "source DB was not refreshed" and recorded `source_refresh: {refreshed: false, accepted_current_data: false, …}`.
+
+**After Paul's login**, the sequence is: refresh (reconcile, all 30 current divisions) → `refresh_report.json` → build with `-SourceDb <refreshed copy>`. The manifest then says whether the result is accepted current data. A partial refresh is labelled, not hidden.
+
+**GPT, please review `d0ceb33`.**
