@@ -138,3 +138,19 @@ def test_refuses_to_overwrite_an_existing_copy(setup, monkeypatch):
     _run(setup, monkeypatch)
     with pytest.raises(refresh.RefreshError, match="overwrite"):
         _run(setup, monkeypatch)
+
+
+def test_verify_member_defaults_to_the_configured_viewer(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(refresh, "run_refresh", lambda config, **kw: seen.update(kw) or {
+        "changes": {"date_range_checked": None, "latest_scored_date_before": None, "latest_scored_date_after": None,
+                    "matches_added": [], "matches_newly_scored": [], "matches_score_changed": [],
+                    "scoresheet_rows_added": 0},
+        "provenance": {"refreshed_db": "x", "refreshed_db_sha256": "y", "source_db_sha256": "z"}, "gaps": []})
+    monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda dest, repo: dest)
+    config = tmp_path / "apa_config.yaml"
+    config.write_text("ultimate_coach:\n  viewer_member_external_id: \"9001\"\n", encoding="utf-8")
+    assert refresh.main(["--config", str(config), "--verify-date", "2026-10-05"]) == 0
+    assert seen["verify_member"] == "9001" and seen["verify_date"] == "2026-10-05"
+    config.write_text("ultimate_coach:\n  viewer_member_external_id: \"CHANGE_ME\"\n", encoding="utf-8")
+    assert refresh.main(["--config", str(config), "--verify-date", "2026-10-05"]) == 2   # never guessed

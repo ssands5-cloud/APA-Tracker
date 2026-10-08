@@ -265,6 +265,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verify-date", help="YYYY-MM-DD of the fixtures to verify (e.g. Monday's)")
     args = parser.parse_args(argv)
 
+    if args.verify_date and not args.verify_member:
+        # Default to the configured viewer (apa_config.yaml / apa_config.local.yaml), never a guess.
+        from analytics.ultimate_coach_match_day import load_match_day_settings
+
+        args.verify_member = load_match_day_settings(Path(args.config)).viewer_member_external_id
+        if not args.verify_member:
+            print("--verify-date needs --verify-member (no viewer is configured)")
+            return 2
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
     out_dir = Path(args.out_root) / f"refresh-{stamp}"
     try:
