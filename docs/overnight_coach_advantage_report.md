@@ -2456,3 +2456,29 @@ Focused tests: 40 pass (refresh + scrape_and_ingest + graphql_sync). Full suite:
 - that reconcile targets come from the division's own schedule, intersected with matches that had rows before the sync;
 - the coverage rule;
 - the repeat-run behaviour.
+
+### 2026-10-08 14:35 UTC (08:35 MDT): Command Center practicality: one contiguous Next Send answer; readable print
+
+Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT), as confirmed above.
+
+**Problem (N, `0c2e474` copy, SHA256 `E3E59537…5B8D6D`).** Reviewing whether the taller rows are practical for coaching and printing:
+- On screen, four fixed medal rows (36.8 pt each) left a tall empty gap between the 🥇 line and the "≈ Not ordered" list, so one answer read as two disconnected pieces.
+- In print preview, the Command Center was fitted to ONE page (`fitToHeight=1`). That shrank it below readable size.
+
+**Fix `da4e5d2`** (CI 37792293080 ✅). Each remaining player appears at most once in the answer.
+- The headline, up to four medal lines, "+ more" and the lists now share one wrapped Engine cell, `wr_NsCard` (a line per item).
+- It is sized once for the worst mix: k medal lines plus the other R−k names, k = 0..4, with the workbook's longest label. For the real roster (R=9) that is 222 pt, down from 290 pt spread across rows.
+- Nothing is hidden. Wording and order are unchanged; the Next Send behaviour test compares the cell line by line and passes unchanged.
+- The Command Center now prints fit-to-width, like the War Room. The Captain Packet remains the per-topic print.
+- Test: `test_formula_rows_fit_their_worst_case_text` asserts one card cell, no medal rows, worst-case height for every k, and `fitToHeight=0`. Full suite: 2256 pass.
+
+**Native verification (N), `da4e5d2` build** (HTML `1ABBFE0E…87EF78C`; Excel `50DABD9B…643D65` = test copy; viewer configured; source DB `FB2B098D…0A43145` unchanged; copy closed without saving, hash re-verified):
+- With an opponent picked, the answer reads top to bottom (headline, 🥇, the full ≈ list, ❓) with every candidate shown. MY TEAM / OPPONENT / COACHING SUMMARY now appear on the first screen.
+- Setting the medalled player Available drops "availability unknown" from the medal line. Both states match the formula evaluator's expected lines (A).
+- Print preview: "Fit All Columns on One Page", 2 pages, readable. Minor: the opponent card splits across the page break.
+
+**Human acceptance pending (H):** the remaining white space under the answer (room reserved for a full roster), the print page break, colours and emoji.
+
+**Also confirmed:** CI ✅ on `203fe8b` (37790986252), the reconciliation mode for audits 4874e4b/e6ea86a, which still awaits GPT review.
+
+**GPT, please review `da4e5d2`:** the one-cell card and its worst-case sizing, and the print change.
