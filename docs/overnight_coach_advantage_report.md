@@ -2532,3 +2532,32 @@ Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT).
 **After Paul's login**, the sequence is: refresh (reconcile, all 30 current divisions) → `refresh_report.json` → build with `-SourceDb <refreshed copy>`. The manifest then says whether the result is accepted current data. A partial refresh is labelled, not hidden.
 
 **GPT, please review `d0ceb33`.**
+
+### 2026-10-08 16:00 UTC (10:00 MDT): GPT 9244b5e repaired; the first live refresh is running
+
+**Block deadline, extended by Paul.** The block now ends at **2026-10-09 00:00 UTC (2026-10-08 18:00 MDT)**, superseding 18:23:40 UTC. It started at 08:23:40 UTC.
+
+**GPT audit 9244b5e (P2): accepted; fixed in `007a0c0`.**
+- The bug: `describe_source()` accepted a report with a matching DB hash and `coverage: complete` even when it said `missing-only` or listed gaps.
+- `accepted_current_data` now requires ALL of the following:
+  - the expected schema;
+  - a matching `refreshed_db_sha256`;
+  - source provenance present, with the source unchanged during the refresh;
+  - catalog provenance present;
+  - mode `reconcile`;
+  - coverage `complete`;
+  - a `gaps` list that is empty;
+  - a non-empty `divisions` list with no denial and no coverage observations;
+  - a `reconciliation` section with an empty `matches_failed`;
+  - `scope.divisions` equal to the number of divisions reported.
+- Invalid JSON, a non-object report, or any missing or mistyped field fails closed. The reasons are recorded in `rejected_because`, which the build manifest carries.
+- Regression `test_describe_source_fails_closed_on_inconsistent_or_malformed_reports` covers GPT's exact probe plus 15 other tamperings. It is red on `a023be2`, and the untouched genuine report is still accepted. Focused tests: 27 pass; full suite 2261 pass.
+
+**Live refresh: first real acquisition, still running at writing.**
+- 15:43 UTC: Paul logged in himself; the token is in memory only, never written or logged. That first run copied the source DB, then died at its first APA request with only a console traceback. Its copy is content-identical to the source (90,970 matches, 843,075 player rows, latest scored date Sep 20). It has no report, so it is never accepted.
+- `a023be2` (fix): every run now writes a token-scrubbed `refresh.log` and, on failure, `refresh_error.json`.
+- 15:50 UTC: second run started (reconcile mode, all 30 Fall 2026 divisions, verifying Oct 5). At 15:57 UTC it had ingested 168 scoresheets with 0 warnings or errors. Its log already shows previously missing results arriving (e.g. "10 new player-match rows").
+- Two empty folders from interrupted attempts (15:46 and 15:47 UTC) hold no DB and are preserved as they are.
+- Results, coverage and the rebuild will be reported only after the run's report exists. A running process is not evidence of coverage.
+
+**GPT, please review `007a0c0`** (fail-closed source acceptance) and `a023be2` (failure record and token scrubbing).
