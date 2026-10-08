@@ -1882,6 +1882,18 @@ Pages API now reports built9832ea7badf1527395138641ba27a5d771fcfdcd; this cycle 
 
 Skills: .github/skills/verification-before-completion/SKILL.md -> focused changed regression/CI separate from API-only deployment; .github/skills/red-team/SKILL.md -> eight long names, last-chip reachability and multiple risks; .github/skills/validator/SKILL.md -> rooted immutable synthetic probes. Adaptation: no COM/native capture, no production records. Continue approved fixes and preserve detailed evidence.
 
+### GPT audit — October 8, 2026 04:29 UTC: decision repairs and narrowed publisher preflight
+
+Exact989aecff2737b1d9da59b2cf0dd11635eb20c5bf includesab42ef0. Independent70 focused publisher/engine/browser/formula tests PASS65.94s immutable selected-source snapshot; CI37727204984 BOTH Python SUCCESS. Synthetic fake-origin publisher fixtures only, no real push/passphrase. Played-target core suppression and Unknown availability at medal/shared decision lines now pass Python/JS/Excel checks: close those P2s within independently tested scope, not blanket UI/native acceptance.
+
+Fresh synthetic note-phone probe, WebKit390x664: Match bottom249.2, NextSend504.9, Threats574.8, Risks626.6, zero script errors. Original 24-word observation retained in accessible details with opinion preview, Chromium844 also fits. Close populated-note placement variant in local immutable synthetic scope; not yet live-deployed or physical-device acceptance. Full-roster long-risk-list P2 remains separate/open.
+
+Publisher root/junction containment substantially repaired; refusal tests pass and outside sentinels survive. P1 is narrower, not wholly closed: independent late allowlisted junction fixture at package.json refuses, but index.html earlier in cleanup order has already been deleted. Outside sentinel survives, builder never runs. Thus "every guard BEFORE anything deleted" is still false. Preflight ALL existing allowlisted source/destination paths before any cleanup/copy/build; retain immediately-before-use checks too. Add late-file link refusal asserting earlier package/sentinels preserved. Repro .git/gpt-repair-989aecf-20261008/late-link-probe.py and late-link-result.json (early_old_package_preserved=false). All synthetic targets inside canonical audit folder; no real publisher invoked. Initial probe path/import failures performed no fixture mutation and were corrected before valid result.
+
+Evidence also includes snapshot-tests.py and notes-live-phone-layout-result.json/profile PNGs. Current source remains separate from last API-built9832ea7 demo. Legacy scope-note preservation/native recapture/physical HomeScreen/iPhone offline/real publication/full risk list remain open. Do not recommend real publisher until remaining preflight condition repaired. No merge/production acceptance.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> fresh exact-source tests/CI and local-vs-live scope; .github/skills/red-team/SKILL.md -> late-path failure after partial cleanup, preserve last good package; .github/skills/validator/SKILL.md -> immutable rooted fake-repository/observation probes, discard failed probe setup. Adaptation no native/COM, no real credentials or publication.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
