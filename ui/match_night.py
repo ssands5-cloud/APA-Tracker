@@ -264,7 +264,8 @@ button:disabled { opacity:.6; }
 
 SERVICE_WORKER = r"""/* Ultimate Coach Match Night: offline cache. The package is fetched network-first (a fresh publish
    wins whenever the phone is online) and falls back to the last downloaded copy offline. */
-var CACHE = "uc-match-night-__STAMP__";
+var PREFIX = "uc-match-night-";
+var CACHE = PREFIX + "__STAMP__";
 var SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png",
              "icons/apple-touch-icon.png", "package.json"];
 self.addEventListener("install", function (e) {
@@ -272,7 +273,9 @@ self.addEventListener("install", function (e) {
 });
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    // Only this app's own old caches: CacheStorage is shared by every project on ssands5-cloud.github.io.
+    return Promise.all(keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== CACHE; })
+      .map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 self.addEventListener("fetch", function (e) {
@@ -280,6 +283,9 @@ self.addEventListener("fetch", function (e) {
   var url = new URL(e.request.url);
   if (url.pathname.endsWith("/package.json") || url.pathname.endsWith("/") || url.pathname.endsWith("/index.html")) {
     e.respondWith(fetch(e.request).then(function (r) {
+      if (!r.ok) {   // 404/5xx: keep serving the last good copy instead of the error
+        return caches.match(e.request, {ignoreSearch: true}).then(function (hit) { return hit || r; });
+      }
       var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); return r;
     }).catch(function () { return caches.match(e.request, {ignoreSearch: true}); }));
     return;
@@ -361,6 +367,7 @@ def build_site(payload: dict[str, Any], *, viewer_external_id: str, passphrase: 
     check_passphrase(passphrase)
     pick = select_fixture(payload, viewer_external_id, built_at, match_id)
     slim = slim_payload(payload, pick, built_at)
+    slim["match_night"]["demo"] = demo        # persistent DEMO label inside the app and the printed packet
     html = render(slim, built_at=built_at, viewer_member_external_id=viewer_external_id, viewer_card_number=None,
                   match_night=slim["match_night"])
     tz = (payload.get("match_day") or {}).get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE

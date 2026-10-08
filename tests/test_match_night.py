@@ -127,3 +127,65 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             assert errors == []
         finally:
             browser.close()
+
+
+class _Toggle(http.server.SimpleHTTPRequestHandler):
+    fail_package = False
+
+    def do_GET(self):
+        if type(self).fail_package and self.path.split("?")[0].endswith("/package.json"):
+            self.send_error(500, "simulated server error")
+            return
+        super().do_GET()
+
+    def log_message(self, *a, **k):
+        pass
+
+
+def test_demo_label_persists_cache_is_isolated_and_errors_never_replace_the_good_package(tmp_path):
+    site = tmp_path / "site"
+    build_site(_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site, demo=True)
+    handler = type("H", (_Toggle,), {"fail_package": False})
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(handler, directory=str(site)))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            ctx = browser.new_context(**IPHONE)
+            page = ctx.new_page()
+            page.goto(url)
+            # A cache belonging to ANOTHER project on the same origin, created before our worker activates.
+            page.evaluate("caches.open('other-project-v1').then(c => c.put('/other.txt', new Response('keep me')))")
+            page.fill("#pass", PASS)
+            page.click("#go")
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            flags = page.locator(".demo-flag")
+            assert flags.count() >= 2 and all("synthetic players" in t for t in flags.all_inner_texts())
+            assert "DEMO (synthetic players)" in page.inner_text(".mn-banner")
+            page.evaluate("document.body.classList.add('print-matchup')")
+            page.emulate_media(media="print")
+            assert page.locator("#matchup-print .demo-flag").is_visible()     # the printed packet says DEMO too
+            page.emulate_media(media="screen")
+            page.wait_for_timeout(800)
+            # Re-publish (new salt -> new app cache): only our old cache may be removed.
+            build_site(_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site, demo=True)
+            page.reload()
+            page.wait_for_timeout(1500)
+            names = page.evaluate("caches.keys()")
+            assert "other-project-v1" in names
+            assert sum(1 for n in names if n.startswith("uc-match-night-")) >= 1
+            assert page.evaluate("caches.open('other-project-v1').then(c => c.match('/other.txt')).then(r => r.text())") == "keep me"
+            # Server error for the package: the last good copy is used, never the error page.
+            page.wait_for_selector("#tonight .decide-sends, #pass", timeout=20000)
+            handler.fail_package = True
+            page.reload()
+            page.wait_for_function("document.querySelector('#tonight .decide-sends') || document.querySelector('#pass')", timeout=20000)
+            if page.locator("#pass").count():
+                page.fill("#pass", PASS)
+                page.click("#go")
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            assert "Falcons" in page.inner_text("#tonight")
+            browser.close()
+    finally:
+        httpd.shutdown()

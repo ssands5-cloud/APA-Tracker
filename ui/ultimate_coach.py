@@ -82,6 +82,9 @@ button.secondary:hover { background:var(--felt-soft); }
 .tonight-links { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-weight:700; font-size:13.5px; }
 .tonight-links a { color:var(--felt-deep); }
 @media print { #tonight,#start-here { display:none !important; } }
+.demo-flag { background:#fff3cd; color:#7a1f1f; border:2px dashed #b45309; font-weight:800; text-align:center;
+  padding:6px 10px; margin:8px 0; border-radius:8px; font-size:14px; }
+@media print { .demo-flag { display:block !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 .mn-banner { background:#b8862b; color:#1b1406; font-weight:700; font-size:12.5px; padding:6px 14px; text-align:center; }
 body.match-night header.hero { padding:10px 14px 8px; }
 body.match-night header.hero p,body.match-night header.hero .ball { display:none; }
@@ -527,9 +530,9 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-{f'<div class="mn-banner">Match Night package · {escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])} · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · {escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])} · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
-<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
+{f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 {start_here}
 <section class="card card-feature" id="match-day-card">
   <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
@@ -564,7 +567,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   </div>
   <p class="muted">Rosters are each team's current captured roster, not who played on any particular past date.</p>
 </div>
-<section id="matchup-print" aria-label="Printable matchup">
+<section id="matchup-print" aria-label="Printable matchup">{f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}
 <div id="matchup-head" class="card matchup-head"></div>
 <div id="team-rosters" class="grid"></div>
 <div id="wr-opportunities" class="card"></div>
