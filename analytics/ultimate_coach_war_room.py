@@ -548,6 +548,19 @@ def default_matchup(match_day: dict[str, Any], viewer_scopes: list[str], build_l
             "opponent_scope": side["opponent"].get("scope_key")}
 
 
+def stale_warning(fresh: dict[str, Any]) -> str:
+    """One shared, prominent sentence for a snapshot whose earlier fixtures have no result ("" when none).
+
+    Real case (2026-10-08): a workbook built Oct 8 held no result after Sep 20, so a Monday that APA already
+    showed was missing; the only hint was muted text (hidden entirely on the phone Match Night page)."""
+    n = int(fresh.get("unplayed_before_build") or 0)
+    if not n:
+        return ""
+    return (f"⚠ {n} fixture{'s' if n != 1 else ''} dated before this build {'have' if n != 1 else 'has'} no result in "
+            f"this snapshot (latest recorded result {fresh.get('latest_result')}). Records, medals and risks leave "
+            "those matches out — refresh the data and rebuild before relying on them.")
+
+
 def freshness(match_day: dict[str, Any], build_local: str | None) -> dict[str, Any]:
     fixtures = match_day.get("fixtures") or []
     results = [f["local_date"] for f in fixtures if f.get("local_date") and f.get("is_scored")]

@@ -728,6 +728,31 @@ def test_tall_rows_are_top_aligned_so_values_stay_with_their_row(built):
         assert bad == [], (sheet, bad[:20])
 
 
+def _stale_payload():
+    # One fixture dated BEFORE the build (Oct 7) that still has no result: the snapshot is stale.
+    payload = _payload()
+    payload["match_day"] = build_match_day_section([
+        _fixture(1, "2026-10-11T11:00:00-06:00", "sharks-a", "falcons-a"),
+        _fixture(5, "2026-09-27T11:00:00-06:00", "owls-a", "sharks-a", status="COMPLETED", scored=True, hs=3, as_=2),
+        _fixture(6, "2026-10-04T11:00:00-06:00", "sharks-a", "owls-a"),
+    ], payload["players"])
+    return payload
+
+
+def test_a_stale_snapshot_is_a_visible_warning_not_small_print(built, tmp_path):
+    # Real case (2026-10-08): a workbook built Oct 8 held no result after Sep 20 and the only hint was muted text.
+    assert not str(built["Command Center"]["B4"].value).startswith("⚠")         # a current snapshot: plain line
+    stale = load_workbook(write_workbook(_stale_payload(), tmp_path / "stale.xlsx", built_at="2026-10-07 18:00 UTC",
+                                         viewer_member_external_id="1001", viewer_card_number="80000001"))
+    warning = ("⚠ 1 fixture dated before this build has no result in this snapshot (latest recorded result Sun Sep 27, "
+               "2026). Records, medals and risks leave those matches out — refresh the data and rebuild before relying "
+               "on them.")
+    for sheet, cell in (("Command Center", "B4"), (MD, "A4")):
+        c = stale[sheet][cell]
+        assert str(c.value).startswith(warning), (sheet, c.value)
+        assert c.font.b and c.font.color.rgb.endswith("8A5A00"), sheet
+
+
 def test_captain_packet_page_one_is_decision_first(book, built):
     sends = _row(built, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
     risks = _row(built, CP, "Top risks")

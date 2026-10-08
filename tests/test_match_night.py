@@ -139,6 +139,37 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             browser.close()
 
 
+def test_a_stale_snapshot_warning_is_visible_on_the_phone(tmp_path):
+    """The "earlier fixtures have no result" note was the THIRD freshness item, which the phone CSS hides; a stale
+    package must say so on the first screen."""
+    from tests.test_excel_war_room_formulas import _stale_payload
+
+    site = tmp_path / "site"
+    build_site(_stale_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    handler.log_message = lambda *a, **k: None
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                page = browser.new_context(**IPHONE).new_page()
+                page.goto(f"http://127.0.0.1:{httpd.server_address[1]}/")
+                page.fill("#pass", PASS)
+                page.click("#go")
+                page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+                stale = page.locator(".freshness span.stale")
+                assert stale.is_visible() and stale.inner_text().startswith("⚠ 1 fixture dated before this build")
+                box = stale.bounding_box()
+                assert box["y"] + box["height"] <= 844, box                    # on the first screen
+                assert page.evaluate("document.documentElement.scrollWidth") <= 390
+            finally:
+                browser.close()
+    finally:
+        httpd.shutdown()
+
+
 def test_iphone_webkit_reopens_offline_when_the_site_is_unreachable(tmp_path):
     """WebKit offline reload, the open GPT #84 item. Playwright's set_offline() in WebKit fails every reload with
     "WebKit encountered an internal error" even though the service worker holds every file, so this takes the

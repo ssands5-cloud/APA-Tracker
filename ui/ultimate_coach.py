@@ -29,6 +29,7 @@ from analytics.ultimate_coach_war_room import (
     build_version,
     default_matchup,
     freshness,
+    stale_warning,
     worked_example,
 )
 
@@ -94,6 +95,10 @@ body.match-night header.hero p,body.match-night header.hero .ball { display:none
 body.match-night header h1 { font-size:17px; }
 body.match-night .freshness { margin-top:6px; font-size:11px; }
 body.match-night .freshness span:nth-child(n+3) { display:none; }
+/* A stale snapshot stays visible on the phone too (it used to be the hidden third item). */
+html body .freshness span.stale { background:#FFF0B3; color:#8A5A00; font-weight:700; border:1px solid #E0C46C;
+  padding:2px 8px; border-radius:6px; }
+body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 @media (max-width:600px) {
   /* Phone match night: the banner and the date line already say "tonight" -- spend the first screen on decisions. */
   body.match-night main { padding-top:8px; }
@@ -600,7 +605,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + ' <i class="utc">(' + escape(built_at) + ")</i>" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + ' <i class="utc">(' + escape(built_at) + ")</i>" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span class="stale">{escape(stale_warning(fresh))}</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 {f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 {start_here}

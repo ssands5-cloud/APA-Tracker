@@ -59,6 +59,7 @@ from analytics.ultimate_coach_war_room import (
     meetings_index,
     scope_dates,
     sl_bucket_index,
+    stale_warning,
     suggested_date,
     war_room_pair,
     COACH_TAGS,
@@ -858,11 +859,12 @@ def build_match_day(wb, *, slots: dict[str, int], viewer_label: str | None, view
           "Set up tonight's matchup once — every tab follows it. Yellow cells are yours; green-gray cells are calculated.",
           last=12, current="Match Day")
     fresh = stats["freshness"]
+    stale = stale_warning(fresh)
     _span(ws, 4, 1, 12,
-          f"Built {fresh['build_date']} · offline snapshot: latest recorded result {fresh['latest_result']}"
-          + (f" ({fresh['unplayed_before_build']} earlier fixtures still show UNPLAYED — results after the snapshot are not "
-             "included)" if fresh["unplayed_before_build"] else "")
-          + f" · times in {stats['tz']} · this file never refreshes itself.", font=base.MUTED_FONT, height=30)
+          (stale + " " if stale else "")
+          + f"Built {fresh['build_date']} · offline snapshot: latest recorded result {fresh['latest_result']}"
+          + f" · times in {stats['tz']} · this file never refreshes itself.",
+          font=WARN_FONT if stale else base.MUTED_FONT, height=44 if stale else 30)
     base._section(ws, 5, "1 · Set up the matchup (yellow = your input)", last_col=12)
     rows = [
         (6, "Player", viewer_label or "", "Pick your name — every entry shows the APA record ID. Typing just the record ID also works.",
@@ -1947,8 +1949,13 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _span(ws, 3, 2, 11, '=IF(wr_OppLabel="",uc_OppMsg,"Opponent: "&wr_OppLabel&" · "&uc_Venue)', font=Font(size=11, color="5B6A61"),
           height=34)
     fresh = stats["freshness"]
-    _span(ws, 4, 2, 11, f"Data freshness: built {fresh['build_date']} · latest recorded result {fresh['latest_result']} · "
-                        "the file never refreshes itself.", font=Font(size=10, color="5B6A61"), height=16)
+    stale = stale_warning(fresh)
+    # A stale snapshot is a warning here, not small print: it is why a captain's own recent results can be missing.
+    _span(ws, 4, 2, 11, (stale + " " if stale else "")
+          + f"Data freshness: built {fresh['build_date']} · latest recorded result {fresh['latest_result']} · "
+            "the file never refreshes itself.",
+          font=Font(size=10, bold=True, color="8A5A00") if stale else Font(size=10, color="5B6A61"),
+          height=30 if stale else 16)
     _link(ws, 5, 2, "→ Match Day (change matchup)", "Match Day")
     _link(ws, 5, 6, "→ Lineup Lab (mark availability)", "Lineup Lab")
     _link(ws, 5, 10, "→ Captain Packet (print)", "Captain Packet")
