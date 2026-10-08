@@ -2561,3 +2561,36 @@ Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT).
 - Results, coverage and the rebuild will be reported only after the run's report exists. A running process is not evidence of coverage.
 
 **GPT, please review `007a0c0`** (fail-closed source acceptance) and `a023be2` (failure record and token scrubbing).
+
+### 2026-10-08 16:16 UTC (10:16 MDT): live refresh stopped by token expiry; refresh made resumable and self-renewing
+
+Block: 08:23:40 UTC to **2026-10-09 00:00 UTC** (18:00 MDT, Paul's extension).
+
+**Live run, exact outcome (no data accepted).**
+- Run `refresh-20261008-155018Z` (reconcile mode, all 30 Fall 2026 divisions, verifying Oct 5) started at 15:50 UTC.
+- It stopped at **16:04:27 UTC with `AccessTokenExpired`**: APA rejected the token after ~14 minutes, having reconciled **399** scoresheets with 0 warnings or errors.
+- It wrote `refresh_error.json` (token-scrubbed, as designed in `a023be2`) and no report.
+- Its copy is partial, was made by pre-resume code (no progress file), and is **not accepted current data**. It is preserved as it is.
+- Empty folders from interrupted attempts at 15:46, 15:47 and 15:58 UTC are preserved too.
+- Nothing about Monday or any other match is claimed from these partial copies. The original DB is untouched.
+
+**Cause:** APA tokens expire in minutes, while the full current-session scope needs more than an hour. One login cannot finish it, and the old run could not be continued.
+
+**Fix `be7357e`** (full suite 2264 pass):
+- `refresh_progress.json` is checkpointed after every division and every reconciled match. It holds the ORIGINAL before-snapshot, source and catalog hashes, mode, scope, completed divisions, per-match outcomes and every segment.
+- **`--resume DIR`** continues the same copy:
+  - It refuses if the source, catalog, mode or scope changed, or if a report already exists.
+  - It skips finished work, retries matches that were denied or failed, and re-syncs an interrupted division (idempotent).
+  - One final report covers all segments, with changes judged against the original snapshot.
+- Gaps are derived from the saved outcomes when the report is written, so they are never duplicated or lost.
+- The viewer's own divisions run first, so Monday comes with the first login.
+- `describe_source()` reports an unfinished refresh as unaccepted, and also rejects a division with a schedule problem.
+- **Capture tool:** the refresh now runs while the login browser stays open. On expiry it reloads the open APA page (Paul's own session). If a fresh token arrives it resumes the same folder, up to 12 times; otherwise it stops and prints the exact `--resume` command. Tokens stay in memory.
+- Tests: an expiry mid-run, then a resume reaching the same changes as a one-shot run; refusal of a changed source or an already-reported folder; viewer divisions first; the renewal loop (token per segment, `--resume` never doubled, env cleared, stop when no new token, other failures not retried).
+- **Not yet proven live:** whether APA issues a fresh token on page reload.
+
+**Blocker:** the next attempt needs Paul's login. He is away until 18:00 MDT. When he returns:
+`python tools/capture_apa_graphql.py --refresh-ultimate-coach --verify-date 2026-10-05`
+Log in, visit the team and standings pages, press Enter, and leave the browser open.
+
+**GPT, please review `be7357e`:** resume validation, gap derivation, the per-segment report, and the browser-renewal loop's security (memory-only token, reload of the user's own session).
