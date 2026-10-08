@@ -32,6 +32,8 @@ USAGE
     python tools/capture_apa_graphql.py              # capture only
     python tools/capture_apa_graphql.py --sync       # capture, then sync live
     python tools/capture_apa_graphql.py --game-night # login, refresh, verify, build + open Cockpit
+    python tools/capture_apa_graphql.py --refresh-ultimate-coach --mine-only --verify-member <id> --verify-date 2026-10-05
+        # login, then refresh the current session into a NEW COPY of the Ultimate Coach staging DB (original untouched)
 
 Be a normal user while it runs: visit the pages you want captured, at the pace
 you would anyway. This is not a crawler and must not be used as one.
@@ -101,7 +103,7 @@ def _record(captures: dict, operation: str, variables: Any, query: str, response
     }
 
 
-def capture(sync: bool = False, game_night: bool = False) -> dict:
+def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] | None = None) -> dict:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -205,6 +207,8 @@ def capture(sync: bool = False, game_night: bool = False) -> dict:
         _run_sync(token_holder.get("token"))
     elif game_night:
         _run_game_night(token_holder.get("token"))
+    elif refresh_uc is not None:
+        _run_uc_refresh(token_holder.get("token"), refresh_uc)
 
     return captures
 
@@ -223,6 +227,26 @@ def _run_game_night(token: str | None) -> None:
         from scripts.run_game_night import main as game_night_main
 
         code = game_night_main([])
+        if code:
+            raise SystemExit(code)
+    finally:
+        os.environ.pop("APA_ACCESS_TOKEN", None)
+
+
+def _run_uc_refresh(token: str | None, extra: list[str]) -> None:
+    """Refresh the current session into a copy of the Ultimate Coach staging DB with this in-memory token."""
+    if not token:
+        print("\nNo access token was seen, so the Ultimate Coach refresh cannot start.")
+        return
+
+    import os
+
+    print("\nRefreshing the current session into a COPY of the Ultimate Coach staging database...")
+    os.environ["APA_ACCESS_TOKEN"] = token  # this process only; never persisted
+    try:
+        from scripts.refresh_ultimate_coach_current_session import main as refresh_main
+
+        code = refresh_main(extra)
         if code:
             raise SystemExit(code)
     finally:
@@ -268,5 +292,16 @@ if __name__ == "__main__":
             "protection, and open the verified dashboard."
         ),
     )
-    args = parser.parse_args()
-    capture(sync=args.sync, game_night=args.game_night)
+    mode.add_argument(
+        "--refresh-ultimate-coach",
+        action="store_true",
+        help=(
+            "After login, refresh the current session's real results into a NEW copy of the Ultimate Coach "
+            "staging DB (scripts/refresh_ultimate_coach_current_session.py; any further arguments go to it)."
+        ),
+    )
+    args, extra = parser.parse_known_args()
+    if extra and not args.refresh_ultimate_coach:
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    capture(sync=args.sync, game_night=args.game_night,
+            refresh_uc=extra if args.refresh_ultimate_coach else None)
