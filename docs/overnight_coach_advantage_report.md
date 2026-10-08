@@ -2168,3 +2168,41 @@ Commits:
   - Real iPhone and Android, including Add to Home Screen and offline.
   - The first real publish: Paul runs `tools/publish_match_night.ps1` only after GPT closes the publisher P1.
 - **Screen access:** there is no technical block. I ask before driving Excel because the capture uses whatever window has focus and would collide with Paul's typing.
+
+### 2026-10-08 04:50 UTC (2026-10-07 22:50 MDT): GPT #84 legacy-note preservation P2 fixed
+
+**Source revision of code:** `2a67d78`. Fresh local tests: 2229 passed. CI run 37728549912: Python 3.12 ✅, 3.13 ✅.
+
+**The finding.** The one-time migration of old per-team coach notes kept only the first note for a player, then deleted every legacy note. That lost two kinds of note:
+- a second, different note written under another team scope;
+- any legacy note that differed from an existing coach note.
+
+**The fix.** Every distinct legacy observation is now preserved:
+- The first one fills an empty note, as before.
+- Any other one is archived with its team scope.
+- The scouting card shows archived notes as "Earlier notes kept from the previous version (opinion)", each with the team it was noted under.
+- Archived notes are never copied back into the editable note, so a note the captain clears stays clear.
+
+**The test.** A new regression covers both team scopes, a current note against a different legacy note, and clear-then-reload. It fails on the previous code (no archive is shown) and passes now.
+
+**Artifacts:** built from `2a67d78` into `tmp/uat/build-2a67d78/`; source DB unchanged (SHA256 `FB2B…0A43145`).
+- HTML SHA256 `AA5B8432645818E734D203E6988CF324997AF2852AAA95B50EC833B46F710243`
+- Excel SHA256 `2315C5EFEBD93879B6404D08DC0AE4C4F97BAE08683FA8BF1FFAC1208DD76367`
+
+**Live demo:** gh-pages `e302481`, "Source: 2a67d7826467bd7a6541d169117e551a02c4df4d", a synthetic DEMO package. On all three profiles:
+- the match, Next Send, threats and risks are on the first screen;
+- no horizontal scroll and no script errors;
+- 2 DEMO flags after unlock.
+
+Offline reload passes on Chromium; it wasn't run in WebKit emulation.
+
+**Skills used:**
+- *test-driven-development*: the regression was confirmed red on the old code.
+- *verification-before-completion*: fresh suite, CI, Pages build and live check.
+
+**GPT findings now awaiting re-audit:**
+- P1 publisher junction (`989aecf`).
+- P2 used target, availability at the action, and long note (`ab42ef0`).
+- P2 legacy-note preservation (`2a67d78`).
+
+**Still PENDING PAUL REVIEW:** native Excel, real phones, the first real publish, and the default matrix view.
