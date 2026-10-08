@@ -286,22 +286,39 @@ self.addEventListener("fetch", function (e) {
 """
 
 
-def _icon(size: int):
-    from PIL import Image, ImageDraw
-    img = Image.new("RGBA", (size, size), (20, 83, 45, 255))
-    d = ImageDraw.Draw(img)
-    m = size * 0.14
-    d.ellipse([m, m, size - m, size - m], fill=(17, 17, 17, 255))
-    c, r = size / 2, size * 0.17
-    d.ellipse([c - r, c - r, c + r, c + r], fill=(255, 255, 255, 255))
-    try:
-        from PIL import ImageFont
-        font = ImageFont.truetype("arialbd.ttf", int(size * 0.2))
-    except OSError:
-        from PIL import ImageFont
-        font = ImageFont.load_default()
-    d.text((c, c), "8", fill=(17, 17, 17, 255), font=font, anchor="mm")
-    return img
+def _icon_png(size: int) -> bytes:
+    """An 8-ball on felt as PNG bytes, drawn in pure Python (no imaging dependency)."""
+    import struct
+    import zlib
+
+    c = (size - 1) / 2
+    ball, face = size * 0.36, size * 0.17
+    ring_r, ring_w = size * 0.045, size * 0.022
+    tops = (c - size * 0.05, c + size * 0.055)            # the two loops of the "8"
+    rows = []
+    for y in range(size):
+        row = bytearray(b"\x00")                          # filter byte
+        for x in range(size):
+            px = (20, 83, 45, 255)                         # felt
+            d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
+            if d <= ball:
+                px = (17, 17, 17, 255)
+            if d <= face:
+                px = (255, 255, 255, 255)
+                for ty in tops:
+                    dd = ((x - c) ** 2 + (y - ty) ** 2) ** 0.5
+                    if abs(dd - ring_r) <= ring_w:
+                        px = (17, 17, 17, 255)
+            row += bytes(px)
+        rows.append(bytes(row))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    signature = b"\x89PNG\r\n\x1a\n"
+    return (signature + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+            + chunk(b"IEND", b""))
 
 
 def write_site(out: Path, package: dict[str, Any], *, demo: bool = False) -> list[Path]:
@@ -328,7 +345,7 @@ def write_site(out: Path, package: dict[str, Any], *, demo: bool = False) -> lis
         (out / name).write_text(text, encoding="utf-8", newline="\n")
         written.append(out / name)
     for name, size in (("icon-192.png", 192), ("icon-512.png", 512), ("apple-touch-icon.png", 180)):
-        _icon(size).save(out / "icons" / name)
+        (out / "icons" / name).write_bytes(_icon_png(size))
         written.append(out / "icons" / name)
     return written
 

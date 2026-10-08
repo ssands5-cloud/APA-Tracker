@@ -41,9 +41,13 @@ git -C $Pages pull --ff-only origin gh-pages 2>$null
 Get-ChildItem $Pages -Force | Where-Object { $_.Name -ne ".git" } | Remove-Item -Recurse -Force
 Copy-Item (Join-Path $Site "*") $Pages -Recurse -Force
 Copy-Item (Join-Path $Site ".nojekyll") $Pages -Force
+# The repository's commit guard requires its tracked boundary marker in every checkout, gh-pages included.
+Copy-Item (Join-Path $Repo ".repo-boundary-id") $Pages -Force
 git -C $Pages add -A
 $label = if ($Demo) { "DEMO (synthetic players)" } else { "private encrypted package" }
 git -C $Pages commit -m "Publish Match Night $label ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))"
+if ($LASTEXITCODE -ne 0) { throw "The gh-pages commit failed; nothing was published." }
 git -C $Pages push origin gh-pages
+if ($LASTEXITCODE -ne 0) { throw "Pushing gh-pages failed; nothing was published." }
 Write-Host ""
 Write-Host "Published. Open https://ssands5-cloud.github.io/APA-Tracker/ on your phone (Pages can take a minute to update)."
