@@ -310,3 +310,28 @@ def test_describe_source_never_lets_a_partial_or_altered_refresh_pass_as_current
     con.close()
     altered = refresh.describe_source(copy)
     assert not altered["report_matches_db"] and not altered["accepted_current_data"]
+
+
+def test_an_unexpected_failure_is_recorded_on_disk_and_scrubbed(tmp_path, monkeypatch, capsys):
+    # The first real run (2026-10-08 15:43 UTC) died after copying with only a console traceback.
+    secret = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
+
+    def boom(config, **kw):
+        logging.getLogger("scheduler.graphql_sync").warning("calling with Bearer %s", secret)
+        raise ValueError(f"unexpected answer while using Bearer {secret}")
+    import logging
+
+    monkeypatch.setattr(refresh, "run_refresh", boom)
+    monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda dest, repo: dest)
+    config = tmp_path / "apa_config.yaml"
+    config.write_text("ultimate_coach: {}\n", encoding="utf-8")
+    assert refresh.main(["--config", str(config), "--out-root", str(tmp_path / "r")]) == 5
+    run = next((tmp_path / "r").iterdir())
+    error = json.loads((run / "refresh_error.json").read_text(encoding="utf-8"))
+    log = (run / "refresh.log").read_text(encoding="utf-8")
+    assert error["error_type"] == "ValueError" and "NOT a refreshed database" in error["note"]
+    assert "unexpected answer" in error["message"] and "[redacted]" in error["message"]
+    for text in (json.dumps(error), log, capsys.readouterr().out):
+        assert secret not in text and "eyJ" not in text
+    assert "calling with [redacted]" in log
+    assert refresh.describe_source(run / "ultimate_coach_staging.db")["accepted_current_data"] is False

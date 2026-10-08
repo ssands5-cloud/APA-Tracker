@@ -401,6 +401,16 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     return report
 
 
+def _write_failure(out_dir: Path, exc: BaseException, scrub: Callable[[Any], str], tb: str) -> None:
+    """refresh_error.json: what stopped the run (type, message, scrubbed traceback). Never a token."""
+    (out_dir / "refresh_error.json").write_text(json.dumps({
+        "schema": "ultimate-coach-current-session-refresh-error-v1",
+        "failed_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "error_type": type(exc).__name__, "message": scrub(exc)[:2000], "traceback": scrub(tb)[-6000:],
+        "note": "No refresh report was written; this copy is NOT a refreshed database. The source DB is untouched.",
+    }, indent=2), encoding="utf-8")
+
+
 def describe_source(db_path: Path) -> dict[str, Any]:
     """What a build is about to read: an archived DB, or a refreshed copy -- and if refreshed, whether its report
     still describes this exact file and whether its coverage was complete. Only a complete reconcile refresh whose
@@ -461,6 +471,23 @@ def main(argv: list[str] | None = None) -> int:
     except BoundaryRefused as exc:
         print(f"Refused: {exc}")
         return 2
+    # A progress log beside the copy: the first real run (2026-10-08 15:43 UTC) died after copying with only a
+    # console traceback, so nothing on disk said why. Scrubbed of anything token-like before it is written.
+    import logging
+    import re
+    import traceback
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scrub = lambda text: re.sub(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+", "[redacted]", str(text))  # noqa: E731
+
+    class _Scrubbed(logging.Formatter):
+        def format(self, record):
+            return scrub(super().format(record))
+
+    handler = logging.FileHandler(out_dir / "refresh.log", encoding="utf-8")
+    handler.setFormatter(_Scrubbed("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
     try:
         report = run_refresh(load_config(args.config), source_db=Path(args.source_db), catalog_path=Path(args.catalog),
                              out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
@@ -468,10 +495,20 @@ def main(argv: list[str] | None = None) -> int:
     except (AccessTokenMissing, AccessTokenExpired) as exc:
         print(f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py --refresh-ultimate-coach "
               "and log in yourself; nothing was promoted and the source DB is untouched.")
+        _write_failure(out_dir, exc, scrub, traceback.format_exc())
         return 3
     except RefreshError as exc:
         print(f"Refresh stopped: {exc}")
+        _write_failure(out_dir, exc, scrub, traceback.format_exc())
         return 4
+    except Exception as exc:   # anything else: record it on disk, never as a silent console-only traceback
+        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        print(f"Refresh FAILED: {type(exc).__name__}: {scrub(exc)[:400]}\n"
+              f"  details: {out_dir / 'refresh_error.json'} · nothing was promoted; the source DB is untouched.")
+        return 5
+    finally:
+        logging.getLogger().removeHandler(handler)
+        handler.close()
     c = report["changes"]
     print(f"Refreshed copy: {report['provenance']['refreshed_db']}")
     print(f"  SHA256 {report['provenance']['refreshed_db_sha256']} (source {report['provenance']['source_db_sha256']}, unchanged)")
