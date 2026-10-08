@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ultimate Coach — Match Night</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#14532d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coach">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root { color-scheme: light; }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; color:#fff;
+  background:radial-gradient(120% 140% at 0% 0%,#1f6f43 0%,#14532d 45%,#0c3a1f 100%); display:flex; align-items:center;
+  justify-content:center; padding:24px 16px calc(24px + env(safe-area-inset-bottom)); }
+.lock { width:100%; max-width:420px; }
+.ball { width:64px; height:64px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#555 0%,#111 60%);
+  display:flex; align-items:center; justify-content:center; margin:0 auto 14px; box-shadow:0 3px 10px rgba(0,0,0,.4); }
+.ball span { background:#fff; color:#111; width:30px; height:30px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-weight:800; }
+h1 { text-align:center; margin:0 0 4px; font-size:24px; }
+.sub { text-align:center; margin:0 0 20px; opacity:.85; font-size:14px; }
+label { display:block; font-size:13px; font-weight:700; margin-bottom:6px; }
+input[type=password] { width:100%; font-size:17px; padding:13px 12px; border-radius:10px; border:0; }
+.remember { display:flex; gap:8px; align-items:center; font-weight:600; font-size:14px; margin:12px 0; }
+button { width:100%; font-size:17px; font-weight:800; padding:13px; border-radius:10px; border:0; background:#b8862b;
+  color:#1b1406; cursor:pointer; }
+button:disabled { opacity:.6; }
+.status { min-height:22px; margin-top:12px; text-align:center; font-weight:600; }
+.facts { margin-top:18px; font-size:12.5px; opacity:.85; line-height:1.5; text-align:center; }
+.demo { background:#fff3cd; color:#5d4413; border-radius:8px; padding:8px 10px; font-weight:700; text-align:center; margin-bottom:14px; }
+</style></head>
+<body>
+<main class="lock">
+  <div class="ball" aria-hidden="true"><span>8</span></div>
+  <h1>Ultimate Coach</h1>
+  <p class="sub">Match Night · private package</p>
+  <p class="demo">DEMO package — synthetic players only. Passphrase: demo-match-night-only</p>
+  <form id="unlock" autocomplete="off">
+    <label for="pass">Passphrase</label>
+    <input id="pass" type="password" autocomplete="current-password" required>
+    <label class="remember"><input id="remember" type="checkbox" checked> Remember on this device</label>
+    <button id="go" type="submit">Unlock tonight</button>
+  </form>
+  <p id="status" class="status" role="status"></p>
+  <p class="facts" id="facts">Package built Wed Oct 7, 2026 · data is encrypted (AES-GCM) and unreadable without the passphrase ·
+    works offline after the first unlock · it never refreshes itself — the publisher re-publishes before league night.</p>
+</main>
+<script>
+(function(){
+  "use strict";
+  var STATUS=document.getElementById("status"),GO=document.getElementById("go");
+  var DB="uc-match-night",STORE="keys";
+  function b64(s){var bin=atob(s),out=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);return out;}
+  function say(t){STATUS.textContent=t;}
+  function idb(){return new Promise(function(res,rej){var r=indexedDB.open(DB,1);r.onupgradeneeded=function(){r.result.createObjectStore(STORE);};
+    r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+  function idbGet(k){return idb().then(function(db){return new Promise(function(res){var t=db.transaction(STORE).objectStore(STORE).get(k);
+    t.onsuccess=function(){res(t.result||null);};t.onerror=function(){res(null);};});}).catch(function(){return null;});}
+  function idbPut(k,v){return idb().then(function(db){return new Promise(function(res){var t=db.transaction(STORE,"readwrite").objectStore(STORE).put(v,k);
+    t.onsuccess=function(){res(true);};t.onerror=function(){res(false);};});}).catch(function(){return false;});}
+  function idbDel(k){return idb().then(function(db){db.transaction(STORE,"readwrite").objectStore(STORE).delete(k);}).catch(function(){});}
+  function derive(pass,pkg){
+    return crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]).then(function(base){
+      return crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(pkg.salt),iterations:pkg.iterations,hash:"SHA-256"},base,
+        {name:"AES-GCM",length:256},false,["decrypt"]);});
+  }
+  function open(pkg,key){
+    return crypto.subtle.decrypt({name:"AES-GCM",iv:b64(pkg.iv),additionalData:new TextEncoder().encode(pkg.aad)},key,b64(pkg.ciphertext))
+      .then(function(buf){var html=new TextDecoder().decode(buf);document.open();document.write(html);document.close();});
+  }
+  var PKG=null;
+  function load(){return fetch("package.json",{cache:"no-cache"}).then(function(r){if(!r.ok) throw new Error(r.status);return r.json();});}
+  if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}
+  load().then(function(pkg){
+    PKG=pkg;
+    return idbGet(pkg.salt).then(function(key){
+      if(!key) return;
+      say("Unlocking…");
+      return open(pkg,key).catch(function(){idbDel(pkg.salt);say("Saved key no longer matches — enter the passphrase.");});
+    });
+  }).catch(function(){say("Could not load the package. Connect once to download it; after that it works offline.");});
+  document.getElementById("unlock").addEventListener("submit",function(e){
+    e.preventDefault();
+    if(!PKG){say("The package has not loaded yet.");return;}
+    var pass=document.getElementById("pass").value,remember=document.getElementById("remember").checked;
+    GO.disabled=true;say("Unlocking…");
+    derive(pass,PKG).then(function(key){
+      return open(PKG,key).then(function(){if(remember) idbPut(PKG.salt,key);});
+    }).catch(function(){GO.disabled=false;say("That passphrase does not open this package.");});
+  });
+})();
+</script>
+</body></html>
