@@ -1,6 +1,6 @@
 param(
     [string]$SourceDb = "C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db",
-    [string]$DestinationRoot = "$env:USERPROFILE\Desktop\Ultimate Coach FINAL UAT"
+    [string]$DestinationRoot = (Join-Path $PSScriptRoot "..\tmp\uat")
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +32,18 @@ $Branch = "integration/ultimate-coach-pr81-pr82-reconciliation"
 Write-Host ""
 Write-Host "=== ULTIMATE COACH FINAL UAT BUILD ===" -ForegroundColor Cyan
 Write-Host "Repo: $RepoRoot"
+
+# Outputs stay inside the canonical APA-Tracker folder (Paul, 2026-10-08): refuse any destination outside
+# the folder that owns this worktree's common .git, before anything is fetched, created or deleted.
+$CommonDir = (git -C $RepoRoot rev-parse --path-format=absolute --git-common-dir)
+if ($LASTEXITCODE -ne 0) { throw "git rev-parse --git-common-dir failed" }
+$CanonicalRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $CommonDir.Trim())).TrimEnd('\')
+$DestinationFull = [System.IO.Path]::GetFullPath($DestinationRoot).TrimEnd('\')
+if (-not ($DestinationFull + '\').StartsWith($CanonicalRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "DestinationRoot '$DestinationFull' is outside the canonical repository '$CanonicalRoot'. Nothing was built."
+}
+$DestinationRoot = $DestinationFull
+Write-Host "Destination: $DestinationRoot"
 
 git -C $RepoRoot fetch origin $Branch | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "git fetch failed" }

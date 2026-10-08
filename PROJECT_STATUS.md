@@ -40,13 +40,22 @@ Run from the repository worktree:
 # Tests (CI runs the same on Python 3.12 and 3.13)
 python -m pytest -q --ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp -p no:cacheprovider -p no:warnings
 
-# UAT build: HTML + Excel from the staging DB (read-only; hash checked before/after), with UAT_MANIFEST.json
-.\tools\build_ultimate_coach_final_uat.ps1 -DestinationRoot "<worktree>\tmp\uat"
+# UAT build: HTML + Excel from the staging DB (read-only; hash checked before/after), with UAT_MANIFEST.json.
+# Default output: <worktree>\tmp\uat. Any destination outside the canonical APA-Tracker folder is refused.
+.\tools\build_ultimate_coach_final_uat.ps1
 
 # Match Night publish (fail-closed; see docs/match_night_deployment.md)
 .\tools\publish_match_night.ps1 -Demo          # synthetic demo package
 .\tools\publish_match_night.ps1                # real next fixture: prompts for the passphrase (Paul only)
 ```
+
+### Working-folder boundary
+- All work, scratch files, workbook copies, screenshots and build outputs stay inside the canonical folder `C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`, whose origin is `https://github.com/ssands5-cloud/APA-Tracker.git`.
+  - PR #83 is built in the linked worktree `.worktrees/pr83`.
+  - Scratch goes in its `tmp/`, which is git-ignored.
+- Before writing, verify that `git rev-parse --path-format=absolute --git-common-dir` is `<canonical>/.git` and that `git remote get-url origin` is the URL above.
+- **Exception, read-only input:** the staging DB is read, never written, from `..\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db`. That folder is a linked worktree of the same canonical `.git`. Builds check its SHA256 before and after.
+- Builds made before the 2026-10-07 boundary transition remain in `Desktop\Ultimate Coach FINAL UAT\`. They are historical and are left untouched.
 
 ### Publisher safeguards (`scripts/publish_match_night.py`)
 These checks run before anything is built, deleted, copied, fetched or checked out:
