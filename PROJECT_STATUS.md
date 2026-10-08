@@ -37,11 +37,14 @@ One fixture-focused coaching tool, built from the verified staging SQLite snapsh
 ## Pipeline commands
 Run from the repository worktree:
 ```powershell
-# Tests (CI runs the same on Python 3.12 and 3.13)
-python -m pytest -q --ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp -p no:cacheprovider -p no:warnings
+# Tests (CI runs the same on Python 3.12 and 3.13). Locally, keep pytest's temp files inside the canonical
+# folder but outside the worktree (several tests treat tmp_path as 'outside the repository'):
+python -m pytest -q --ignore=tests/test_player_vs_player_unified_tab.py --ignore=tmp -p no:cacheprovider -p no:warnings --basetemp=..\..\tmp\pytest-pr83
 
 # UAT build: HTML + Excel from the staging DB (read-only; hash checked before/after), with UAT_MANIFEST.json.
-# Default output: <worktree>\tmp\uat. Any destination outside the canonical APA-Tracker folder is refused.
+# Default output: <worktree>\tmp\uat. scripts/repo_boundary.py checks canonical .git + origin and refuses any
+# destination outside the canonical folder or reached through a symlink/junction, before the fetch and before
+# every write.
 .\tools\build_ultimate_coach_final_uat.ps1
 
 # Match Night publish (fail-closed; see docs/match_night_deployment.md)
@@ -62,7 +65,7 @@ These checks run before anything is built, deleted, copied, fetched or checked o
 - the checkout is the canonical repository, with the expected origin;
 - the build folder is exactly `<repo>/tmp/match_night_site`;
 - the Pages checkout is the clean `.worktrees/gh-pages` worktree on `gh-pages`, holding only allowlisted files;
-- no path component is a symlink, junction or other reparse point;
+- no path component of any allowlisted source, cleanup target or destination is a symlink, junction or other reparse point. All of them are checked together, before any cleanup, after the build and right before copying (shared `scripts/repo_boundary.py`);
 - the source is committed (and, for a real publish, already on origin).
 
 It stages and commits only the allowlisted files and records `Source: <commit>` in the commit. Hooks are never bypassed and history is never force-pushed.

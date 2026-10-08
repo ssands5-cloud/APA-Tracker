@@ -33,16 +33,21 @@ Write-Host ""
 Write-Host "=== ULTIMATE COACH FINAL UAT BUILD ===" -ForegroundColor Cyan
 Write-Host "Repo: $RepoRoot"
 
-# Outputs stay inside the canonical APA-Tracker folder (Paul, 2026-10-08): refuse any destination outside
-# the folder that owns this worktree's common .git, before anything is fetched, created or deleted.
-$CommonDir = (git -C $RepoRoot rev-parse --path-format=absolute --git-common-dir)
-if ($LASTEXITCODE -ne 0) { throw "git rev-parse --git-common-dir failed" }
-$CanonicalRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $CommonDir.Trim())).TrimEnd('\')
-$DestinationFull = [System.IO.Path]::GetFullPath($DestinationRoot).TrimEnd('\')
-if (-not ($DestinationFull + '\').StartsWith($CanonicalRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "DestinationRoot '$DestinationFull' is outside the canonical repository '$CanonicalRoot'. Nothing was built."
+# Outputs stay inside the canonical APA-Tracker folder (Paul, 2026-10-08). scripts/repo_boundary.py checks
+# the canonical common .git AND origin, then walks every path component from the canonical root and refuses
+# any symlink/junction/reparse point, then requires final resolved containment (GPT audit #84: a string
+# prefix check passes an inside-looking path routed through a junction). Run before the fetch and again
+# immediately before every create, delete, move, copy and write below.
+$BoundaryCheck = Join-Path $RepoRoot "scripts\repo_boundary.py"
+function Assert-OutputInsideCanonical {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+    $checkArgs = @($BoundaryCheck, "check-output", "--repo", $RepoRoot)
+    foreach ($p in $Paths) { $checkArgs += @("--dest", $p) }
+    & python @checkArgs | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Output path refused (reason above). Nothing further was fetched, created, deleted or copied." }
 }
-$DestinationRoot = $DestinationFull
+$DestinationRoot = [System.IO.Path]::GetFullPath($DestinationRoot).TrimEnd('\')
+Assert-OutputInsideCanonical -Paths @($DestinationRoot)
 Write-Host "Destination: $DestinationRoot"
 
 git -C $RepoRoot fetch origin $Branch | Out-Host
@@ -72,6 +77,7 @@ $ShortHead = $LocalHead.Substring(0,7)
 $BuildRoot = Join-Path $DestinationRoot ("build-" + $ShortHead)
 $TempRoot = Join-Path $DestinationRoot (".build-" + $ShortHead + "-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 
+Assert-OutputInsideCanonical -Paths @($DestinationRoot, $BuildRoot, $TempRoot)
 New-Item -ItemType Directory -Force -Path $DestinationRoot | Out-Null
 
 # The production builder intentionally refuses to write into a pre-existing
@@ -90,6 +96,7 @@ Write-Host "Source DB: $SourceDb"
 Write-Host "Size     : $DbSize bytes"
 Write-Host "SHA256   : $Before"
 
+Assert-OutputInsideCanonical -Paths @($TempRoot)
 Push-Location $RepoRoot
 try {
     Write-Host ""
@@ -99,6 +106,7 @@ try {
 
     Write-Host ""
     Write-Host "=== BUILDING EXCEL ===" -ForegroundColor Cyan
+    Assert-OutputInsideCanonical -Paths @($TempRoot)   # the HTML build took minutes: re-check before writing again
     python scripts/build_ultimate_coach_excel.py --db "$SourceDb" --output "$TempRoot\Ultimate_Coach_FINAL_UAT.xlsx"
     if ($LASTEXITCODE -ne 0) { throw "Excel build failed with exit code $LASTEXITCODE" }
 }
@@ -108,7 +116,7 @@ finally {
 
 $After = Get-Sha256WithRetry -Path $SourceDb
 if ($Before -ne $After) {
-    throw "Source DB hash changed during the build. Candidate NOT promoted to the Desktop UAT folder."
+    throw "Source DB hash changed during the build. Candidate NOT promoted to the UAT folder."
 }
 
 $GeneratedHtml = Join-Path $TempRoot "ultimate_coach.html"
@@ -117,6 +125,7 @@ $GeneratedXlsx = Join-Path $TempRoot "Ultimate_Coach_FINAL_UAT.xlsx"
 if (-not (Test-Path $GeneratedHtml -PathType Leaf)) { throw "Generated HTML is missing." }
 if (-not (Test-Path $GeneratedXlsx -PathType Leaf)) { throw "Generated Excel workbook is missing." }
 
+Assert-OutputInsideCanonical -Paths @($TempRoot, $BuildRoot)
 Copy-Item $GeneratedHtml (Join-Path $TempRoot "Ultimate_Coach_FINAL_UAT.html") -Force
 
 if (Test-Path $BuildRoot) {
@@ -127,6 +136,7 @@ Move-Item $TempRoot $BuildRoot
 $FinalHtml = Join-Path $BuildRoot "Ultimate_Coach_FINAL_UAT.html"
 $FinalXlsx = Join-Path $BuildRoot "Ultimate_Coach_FINAL_UAT.xlsx"
 
+Assert-OutputInsideCanonical -Paths @($DestinationRoot, $BuildRoot)
 Copy-Item $FinalHtml (Join-Path $DestinationRoot "Ultimate_Coach_FINAL_UAT.html") -Force
 Copy-Item $FinalXlsx (Join-Path $DestinationRoot "Ultimate_Coach_FINAL_UAT.xlsx") -Force
 
@@ -157,6 +167,7 @@ $UatManifest = [ordered]@{
         [ordered]@{ file = "Ultimate_Coach_FINAL_UAT.xlsx"; bytes = (Get-Item $FinalXlsx).Length; sha256 = $XlsxHash }
     )
 }
+Assert-OutputInsideCanonical -Paths @($BuildRoot)
 $UatManifest | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $BuildRoot "UAT_MANIFEST.json") -Encoding UTF8
 
 Write-Host ""
@@ -173,6 +184,6 @@ Write-Host ""
 Write-Host "Excel: $FinalXlsx"
 Write-Host "SHA256: $XlsxHash"
 Write-Host ""
-Write-Host "Friendly Desktop copies:"
+Write-Host "Friendly copies (in the UAT folder):"
 Write-Host (Join-Path $DestinationRoot "Ultimate_Coach_FINAL_UAT.html")
 Write-Host (Join-Path $DestinationRoot "Ultimate_Coach_FINAL_UAT.xlsx")
