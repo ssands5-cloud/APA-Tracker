@@ -178,6 +178,25 @@ def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] 
         except (EOFError, KeyboardInterrupt):
             pass
 
+        if refresh_uc is not None:
+            # Run the refresh WHILE the browser is still open: APA tokens expire in minutes (the first live run
+            # lost its token after ~14 min of a >1 h scope), so on expiry the open page is reloaded -- the user's
+            # own logged-in session -- and the fresh token it sends lets the refresh resume. In memory only.
+            def renew(old: str | None) -> str | None:
+                token_holder.pop("token", None)
+                try:
+                    page.reload(wait_until="networkidle", timeout=60000)
+                except Exception:
+                    pass
+                for _ in range(45):
+                    if token_holder.get("token") and token_holder["token"] != old:
+                        return token_holder["token"]
+                    page.wait_for_timeout(1000)
+                return None
+
+            _run_uc_refresh(token_holder.get("token"), refresh_uc, renew=renew)
+            refresh_uc = None
+
         browser.close()
 
     if not captures:
@@ -233,24 +252,53 @@ def _run_game_night(token: str | None) -> None:
         os.environ.pop("APA_ACCESS_TOKEN", None)
 
 
-def _run_uc_refresh(token: str | None, extra: list[str]) -> None:
-    """Refresh the current session into a copy of the Ultimate Coach staging DB with this in-memory token."""
+MAX_TOKEN_RENEWALS = 12
+
+
+def _run_uc_refresh(token: str | None, extra: list[str], renew=None) -> None:
+    """Refresh the current session into a copy of the Ultimate Coach staging DB with this in-memory token.
+
+    When the token expires mid-run (exit code 3) and ``renew`` can get a fresh one from the still-open browser,
+    the same refresh is resumed (--resume <its folder>), up to MAX_TOKEN_RENEWALS times. Tokens stay in memory."""
     if not token:
         print("\nNo access token was seen, so the Ultimate Coach refresh cannot start.")
         return
 
     import os
 
-    print("\nRefreshing the current session into a COPY of the Ultimate Coach staging database...")
-    os.environ["APA_ACCESS_TOKEN"] = token  # this process only; never persisted
-    try:
-        from scripts.refresh_ultimate_coach_current_session import main as refresh_main
+    from scripts import refresh_ultimate_coach_current_session as refresh
 
-        code = refresh_main(extra)
-        if code:
+    print("\nRefreshing the current session into a COPY of the Ultimate Coach staging database...")
+    args, renewals = list(extra), 0
+    while True:
+        os.environ["APA_ACCESS_TOKEN"] = token  # this process only; never persisted
+        try:
+            code = refresh.main(args)
+        finally:
+            os.environ.pop("APA_ACCESS_TOKEN", None)
+        if not code:
+            return
+        folder = refresh.LAST_OUT_DIR
+        resumable = code == 3 and folder is not None and (folder / "refresh_progress.json").is_file()
+        if not (resumable and renew and renewals < MAX_TOKEN_RENEWALS):
             raise SystemExit(code)
-    finally:
-        os.environ.pop("APA_ACCESS_TOKEN", None)
+        print("\nThe APA token expired; renewing it from the open browser (your existing login)...")
+        fresh = renew(token)
+        if not fresh or fresh == token:
+            print("No fresh token came from the browser. Log in again and continue with:\n"
+                  f'  python tools/capture_apa_graphql.py --refresh-ultimate-coach --resume "{folder}"')
+            raise SystemExit(3)
+        token, renewals = fresh, renewals + 1
+        cleaned, skip = [], False
+        for a in args:                                   # drop any earlier --resume DIR, then resume this folder
+            if skip:
+                skip = False
+            elif a == "--resume":
+                skip = True
+            else:
+                cleaned.append(a)
+        args = cleaned + ["--resume", str(folder)]
+        print(f"Token renewed ({renewals}); resuming {folder.name}...")
 
 
 def _run_sync(token: str | None) -> None:

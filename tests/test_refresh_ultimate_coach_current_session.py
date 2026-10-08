@@ -377,3 +377,89 @@ def test_describe_source_fails_closed_on_inconsistent_or_malformed_reports(setup
     assert "not a JSON object" in verdict(raw="[1, 2]")
     path.write_text(json.dumps(good), encoding="utf-8")
     assert refresh.describe_source(copy)["accepted_current_data"] is True                # the untouched report
+
+
+def test_a_token_that_expires_mid_run_is_resumed_on_the_same_copy(setup, monkeypatch):
+    # Live run 2026-10-08: APA rejected the token after ~14 min of a >1 h scope. Progress must survive a re-login.
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    source, catalog, out = setup
+    single, _ = _run(setup, monkeypatch, out=out.parent / "single")              # the reference: one segment
+    with pytest.raises(AccessTokenExpired):
+        _run(setup, monkeypatch, m1=AccessTokenExpired("expired"))               # dies inside D1's reconcile
+    progress = json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))
+    assert progress["completed_divisions"] == [] and progress["segments"][-1]["ended_by"] == "AccessTokenExpired"
+    assert not (out / "refresh_report.json").exists()
+    unfinished = refresh.describe_source(out / "ultimate_coach_staging.db")
+    assert unfinished["accepted_current_data"] is False and "UNFINISHED" in unfinished["note"]
+
+    monkeypatch.setattr("scraper.auth_classification.call_with_confirmed_denial_retry", lambda config, fetch: fetch())
+    resumed = refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out, resume=True,
+                                  verify_member=VIEWER, verify_date="2026-10-05", sync=_fake_sync([]),
+                                  rebuild_matchups=lambda db: [], schedule=_schedule, scoresheet=_sheets(),
+                                  resolve=RESOLVED)
+    assert [s["ended_by"] for s in resumed["segments"]] == ["AccessTokenExpired", "completed"]
+    # Judged against the ORIGINAL before-snapshot: the same changes as the one-shot run, nothing counted twice.
+    for key in ("matches_newly_scored", "matches_added", "scoresheet_rows_added", "latest_scored_date_before"):
+        assert resumed["changes"][key] == single["changes"][key], key
+    assert resumed["reconciliation"]["matches_checked"] == ["M1"] and resumed["coverage"] == "complete"
+    assert refresh.describe_source(out / "ultimate_coach_staging.db")["accepted_current_data"] is True
+    with pytest.raises(refresh.RefreshError, match="already has a refresh report"):
+        refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out, resume=True,
+                            sync=_fake_sync([]), rebuild_matchups=lambda db: [], schedule=_schedule,
+                            scoresheet=_sheets(), resolve=RESOLVED)
+
+
+def test_resume_refuses_a_changed_source_and_runs_the_viewers_divisions_first(setup, monkeypatch):
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    source, catalog, out = setup
+    rows = json.loads(catalog.read_text(encoding="utf-8"))
+    for r in rows["divisions"]:
+        r["is_mine"] = r["division_id"] == "D2"                                   # the viewer's division sorts later
+    catalog.write_text(json.dumps(rows), encoding="utf-8")
+    report, calls = _run(setup, monkeypatch, out=out.parent / "order")
+    assert [c[0] for c in calls] == ["D2", "D1"]                                  # viewer's own division first
+    with pytest.raises(AccessTokenExpired):
+        _run(setup, monkeypatch, m1=AccessTokenExpired("expired"))
+    con = sqlite3.connect(source)
+    con.execute("UPDATE matches SET week = 99 WHERE id = 3")                      # the source moved on meanwhile
+    con.commit()
+    con.close()
+    with pytest.raises(refresh.RefreshError, match="source_db_sha256"):
+        refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out, resume=True,
+                            sync=_fake_sync([]), rebuild_matchups=lambda db: [], schedule=_schedule,
+                            scoresheet=_sheets(), resolve=RESOLVED)
+
+
+def test_capture_tool_renews_an_expired_token_from_the_open_browser_and_resumes(tmp_path, monkeypatch):
+    import os
+
+    from tools import capture_apa_graphql as capture
+
+    folder = tmp_path / "refresh-x"
+    folder.mkdir()
+    (folder / "refresh_progress.json").write_text("{}", encoding="utf-8")
+    calls, codes = [], iter([3, 3, 0])                      # expires twice, then completes
+
+    def fake_main(args):
+        calls.append((list(args), os.environ.get("APA_ACCESS_TOKEN")))
+        refresh.LAST_OUT_DIR = folder
+        return next(codes)
+    monkeypatch.setattr(refresh, "main", fake_main)
+    tokens = iter(["t2", "t3"])
+    capture._run_uc_refresh("t1", ["--verify-date", "2026-10-05"], renew=lambda old: next(tokens))
+    assert [c[1] for c in calls] == ["t1", "t2", "t3"]     # each segment used the then-current token
+    assert calls[0][0] == ["--verify-date", "2026-10-05"]
+    assert calls[1][0] == calls[2][0] == ["--verify-date", "2026-10-05", "--resume", str(folder)]   # never doubled
+    assert "APA_ACCESS_TOKEN" not in os.environ             # never left behind
+
+    codes2 = iter([3])
+    monkeypatch.setattr(refresh, "main", lambda args: (setattr(refresh, "LAST_OUT_DIR", folder), next(codes2))[1])
+    with pytest.raises(SystemExit) as stop:                  # the browser gave no NEW token: stop, keep progress
+        capture._run_uc_refresh("t1", [], renew=lambda old: old)
+    assert stop.value.code == 3 and "APA_ACCESS_TOKEN" not in os.environ
+    monkeypatch.setattr(refresh, "main", lambda args: 4)      # any other failure is not retried
+    with pytest.raises(SystemExit) as other:
+        capture._run_uc_refresh("t1", [], renew=lambda old: "never")
+    assert other.value.code == 4

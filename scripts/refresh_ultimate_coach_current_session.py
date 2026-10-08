@@ -44,6 +44,7 @@ DEFAULT_SOURCE = Path(r"C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-c
                       r"\data\ultimate_coach_staging.db")
 DEFAULT_CATALOG = DEFAULT_SOURCE.with_name("ultimate_coach_historical_catalog.json")
 REPORT_SCHEMA = "ultimate-coach-current-session-refresh-v1"
+LAST_OUT_DIR: Path | None = None   # the folder main() last worked in (set before any network call)
 
 
 class RefreshError(RuntimeError):
@@ -235,14 +236,51 @@ def reconcile_match(config: dict, db, match_id: str, session_name: str, *,
     return out
 
 
+PROGRESS_SCHEMA = "ultimate-coach-current-session-refresh-progress-v1"
+
+
+def _division_key(d: dict[str, Any]) -> str:
+    return f"{d['division_id']}|{d['catalog_session_id']}|{d['format']}"
+
+
+def _match_gap(outcome: dict[str, Any]) -> str | None:
+    mid, status = outcome["match_id"], outcome["status"]
+    if status in ("denied", "fetch_failed"):
+        return f"match {mid}: scoresheet {status.replace('_', ' ')}; existing rows kept unverified"
+    if status == "empty_scoresheet_kept":
+        return f"match {mid}: APA returned no player rows; {outcome['rows_before']} existing row(s) kept unverified"
+    if status == "unresolved_identity_partial":
+        return (f"match {mid}: {outcome['unresolved_identities']} scoresheet identity(ies) unresolved; rows "
+                "updated/added only, nothing removed")
+    return None
+
+
+def _division_gaps(result: dict[str, Any]) -> list[str]:
+    label = f"division {result['division_id']} ({result['format']})"
+    if result.get("confirmed_denial"):
+        return [f"{label}: APA denied access twice; any rows it left are partial"]
+    out = [f"{label}: {p}" for p in result.get("coverage_observations") or []]
+    if result.get("schedule_problem"):
+        out.append(f"{label}: {result['schedule_problem']}")
+    return out
+
+
 def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: Path, mine_only: bool = False,
                 verify_member: str | None = None, verify_date: str | None = None,
                 sync: Callable[..., dict[str, int]] | None = None,
                 rebuild_matchups: Callable[[Any], Any] | None = None, mode: str = "reconcile",
                 schedule: Callable[[dict, str], list[dict]] | None = None,
                 scoresheet: Callable[[dict, str], tuple[list[dict], list[dict]]] = default_scoresheet,
-                resolve: Callable[..., tuple[dict, int, int]] | None = None,
+                resolve: Callable[..., tuple[dict, int, int]] | None = None, resume: bool = False,
                 now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> dict[str, Any]:
+    """Refresh into ``out_dir`` -- a new copy, or with ``resume=True`` the SAME copy an earlier segment started.
+
+    APA tokens expire in minutes (the first live run, 2026-10-08, lost its token after ~14 min of a >1 h scope).
+    Progress is therefore checkpointed to refresh_progress.json after every division and every reconciled
+    match: the ORIGINAL before-snapshot, source/catalog hashes, completed divisions, per-match outcomes and the
+    segments run so far. A resumed segment skips finished work, retries matches that failed or were denied,
+    re-syncs an interrupted division (idempotent upserts) and, when the whole scope is done, writes one report
+    over all segments. The viewer's own divisions run first so Monday is covered by the first login."""
     from sqlalchemy.orm import Session
 
     from database.engine import create_db_engine
@@ -265,62 +303,88 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     if not source_db.is_file():
         raise RefreshError(f"source staging DB not found: {source_db}")
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    divisions = current_divisions(catalog, mine_only=mine_only)
+    divisions = sorted(current_divisions(catalog, mine_only=mine_only), key=lambda d: not d.get("is_mine"))
     if not divisions:
         raise RefreshError("the catalog lists no current-session divisions; nothing to refresh")
     sessions = {d["catalog_session_name"] for d in divisions}
-
-    started = now()
-    source_sha_before = sha256_file(source_db)
     dest = out_dir / "ultimate_coach_staging.db"
-    copy_read_only(source_db, dest)
-    copy_sha_before = sha256_file(dest)
-    before = snapshot(dest, sessions)
+    progress_path = out_dir / "refresh_progress.json"
+    source_sha_before = sha256_file(source_db)
+    catalog_sha = sha256_file(catalog_path)
+    stamp = lambda t: t.strftime("%Y-%m-%d %H:%M:%S UTC")  # noqa: E731
 
+    if resume:
+        if (out_dir / "refresh_report.json").exists():
+            raise RefreshError(f"{out_dir} already has a refresh report; start a new refresh instead")
+        if not progress_path.is_file() or not dest.is_file():
+            raise RefreshError(f"{out_dir} has no refresh_progress.json / copy to resume")
+        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        expected = {"schema": PROGRESS_SCHEMA, "source_db_sha256": source_sha_before, "catalog_sha256": catalog_sha,
+                    "mode": mode, "mine_only": mine_only}
+        wrong = [k for k, v in expected.items() if progress.get(k) != v]
+        if wrong:
+            raise RefreshError(f"cannot resume: {', '.join(wrong)} differ from the interrupted refresh")
+    else:
+        copy_read_only(source_db, dest)
+        progress = {"schema": PROGRESS_SCHEMA, "source_db": str(source_db), "source_db_sha256": source_sha_before,
+                    "catalog": str(catalog_path), "catalog_sha256": catalog_sha, "mode": mode, "mine_only": mine_only,
+                    "copy_sha256_before_sync": sha256_file(dest), "before": snapshot(dest, sessions),
+                    "completed_divisions": [], "results": [], "checked": [], "segments": []}
+    segment = {"started_utc": stamp(now()), "ended_by": "running"}
+    progress["segments"].append(segment)
+
+    def save() -> None:
+        progress_path.write_text(json.dumps(progress), encoding="utf-8")
+
+    save()
+    before = progress["before"]
+    had_rows = {k for k, v in before["matches"].items() if v["scoresheet_rows"] > 0}
+    # Retry what failed or was denied in an earlier segment (a fresh login may succeed); keep everything else.
+    progress["checked"] = [c for c in progress["checked"] if c["status"] not in ("denied", "fetch_failed")]
     run_config = dict(config)
     run_config["database"] = dict(config.get("database") or {})
     run_config["database"]["path"] = str(dest)
     engine = create_db_engine(run_config)
-    results, gaps, checked = [], [], []
-    had_rows = {k for k, v in before["matches"].items() if v["scoresheet_rows"] > 0}
     try:
         with Session(engine) as db:
             for d in divisions:
+                key = _division_key(d)
+                if key in progress["completed_divisions"]:
+                    continue
                 base = {"division_id": d["division_id"], "session_name": d["catalog_session_name"],
                         "format": d["format"], "is_mine": bool(d.get("is_mine"))}
                 try:
                     counts = call_with_confirmed_denial_retry(run_config, lambda d=d: sync(
                         run_config, db, d["division_id"], d["format"], d["catalog_session_name"], resume=True,
                         roster_is_current=True, identity_current_only=True))
-                except ConfirmedScopeDenial as denial:
+                except ConfirmedScopeDenial:
                     db.rollback()
-                    gaps.append(f"division {d['division_id']} ({d['format']}): APA denied access twice "
-                                f"({type(denial).__name__}); any rows it left are partial")
-                    results.append({**base, "confirmed_denial": True})
+                    progress["results"].append({**base, "confirmed_denial": True})
+                    progress["completed_divisions"].append(key)
+                    save()
                     continue
                 db.commit()
-                problems = reconcile_division_wide_coverage(counts)
-                gaps += [f"division {d['division_id']} ({d['format']}): {p}" for p in problems]
-                result = {**base, "coverage_observations": problems, **counts}
+                result = {**base, "coverage_observations": reconcile_division_wide_coverage(counts), **counts}
                 if mode == "reconcile":
                     # The sync above (resume=True) fetched every MISSING scoresheet. Matches that already had rows
                     # were skipped by its checkpoint, so re-fetch each of them and reconcile its player results.
                     try:
                         rows = call_with_confirmed_denial_retry(run_config, lambda d=d: schedule(run_config, d["division_id"]))
                     except ConfirmedScopeDenial:
-                        rows = None
-                        gaps.append(f"division {d['division_id']} ({d['format']}): schedule denied; its existing "
-                                    "scoresheets were NOT re-checked")
+                        rows, result["schedule_problem"] = None, "schedule denied; its existing scoresheets were NOT re-checked"
                     except (AccessTokenMissing, AccessTokenExpired):
                         raise
                     except Exception as exc:
                         rows = None
-                        gaps.append(f"division {d['division_id']} ({d['format']}): schedule unavailable "
-                                    f"({type(exc).__name__}); its existing scoresheets were NOT re-checked")
+                        result["schedule_problem"] = (f"schedule unavailable ({type(exc).__name__}); its existing "
+                                                      "scoresheets were NOT re-checked")
+                    done = {c["match_id"] for c in progress["checked"]}
                     targets = [str(m["match_id"]) for m in rows or []
                                if m.get("is_scored") and not m.get("is_bye") and str(m["match_id"]) in had_rows]
                     result["reconcile_targets"] = len(targets)
                     for mid in targets:
+                        if mid in done:
+                            continue
                         try:
                             outcome = call_with_confirmed_denial_retry(run_config, lambda mid=mid: reconcile_match(
                                 run_config, db, mid, d["catalog_session_name"], scoresheet=scoresheet, resolve=resolve))
@@ -333,24 +397,27 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
                             db.rollback()
                             outcome = {"match_id": mid, "status": "fetch_failed", "error": type(exc).__name__}
                         outcome["division_id"] = d["division_id"]
-                        checked.append(outcome)
-                        if outcome["status"] in ("denied", "fetch_failed"):
-                            gaps.append(f"match {mid}: scoresheet {outcome['status'].replace('_', ' ')}; existing rows "
-                                        "kept unverified")
-                        elif outcome["status"] == "empty_scoresheet_kept":
-                            gaps.append(f"match {mid}: APA returned no player rows; {outcome['rows_before']} existing "
-                                        "row(s) kept unverified")
-                        elif outcome["status"] == "unresolved_identity_partial":
-                            gaps.append(f"match {mid}: {outcome['unresolved_identities']} scoresheet identity(ies) "
-                                        "unresolved; rows updated/added only, nothing removed")
-                results.append(result)
+                        progress["checked"].append(outcome)
+                        save()
+                progress["results"].append(result)
+                progress["completed_divisions"].append(key)
+                save()
             matchups = rebuild_matchups(db)
             db.commit()
+    except (AccessTokenMissing, AccessTokenExpired) as exc:
+        segment.update(ended_by=type(exc).__name__, ended_utc=stamp(now()))
+        save()
+        raise
     finally:
         engine.dispose()
+    segment.update(ended_by="completed", ended_utc=stamp(now()))
+    save()
 
+    checked, results = progress["checked"], progress["results"]
     after = snapshot(dest, sessions)
     change = diff(before, after)
+    gaps = [g for r in results for g in _division_gaps(r)]
+    gaps += [g for c in checked if (g := _match_gap(c))]
     gaps += [f"match {k}: scored but no scoresheet rows" for k in change["scored_matches_without_scoresheet"]]
     gaps += [f"match {k}: present before the refresh but not after" for k in change["matches_missing_after_refresh"]]
     source_sha_after = sha256_file(source_db)
@@ -358,8 +425,9 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         raise RefreshError("the SOURCE staging DB changed during the refresh; do not use this copy")
     report = {
         "schema": REPORT_SCHEMA,
-        "started_utc": started.strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "finished_utc": now().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "started_utc": progress["segments"][0]["started_utc"],
+        "finished_utc": stamp(now()),
+        "segments": progress["segments"],
         "provenance": {
             "method": ("APA GraphQL: sync_division_wide(resume=True) for rosters, schedules and missing scoresheets"
                        + ("; then every already-captured scored match re-fetched and its player results reconciled"
@@ -367,8 +435,8 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
             "mode": mode,
             "source_db": str(source_db), "source_db_sha256": source_sha_before,
             "source_db_sha256_after": source_sha_after,
-            "catalog": str(catalog_path), "catalog_sha256": sha256_file(catalog_path),
-            "refreshed_db": str(dest), "refreshed_db_sha256_before_sync": copy_sha_before,
+            "catalog": str(catalog_path), "catalog_sha256": catalog_sha,
+            "refreshed_db": str(dest), "refreshed_db_sha256_before_sync": progress["copy_sha256_before_sync"],
             "refreshed_db_sha256": sha256_file(dest),
         },
         "scope": {"sessions": sorted(sessions), "mine_only": mine_only, "divisions": len(divisions)},
@@ -418,6 +486,10 @@ def describe_source(db_path: Path) -> dict[str, Any]:
     db_path = Path(db_path)
     report_path = db_path.with_name("refresh_report.json")
     if not report_path.is_file():
+        if db_path.with_name("refresh_progress.json").is_file():
+            return {"refreshed": False, "accepted_current_data": False,
+                    "note": "an UNFINISHED refresh (refresh_progress.json, no report): resume it with --resume; "
+                            "this copy is not accepted current data"}
         return {"refreshed": False, "accepted_current_data": False,
                 "note": "no refresh_report.json beside the source DB: data as originally archived, not refreshed"}
     out: dict[str, Any] = {"refreshed": True, "report": str(report_path), "report_sha256": sha256_file(report_path),
@@ -448,7 +520,8 @@ def describe_source(db_path: Path) -> dict[str, Any]:
         (isinstance(gaps, list) and not gaps, f"{len(gaps) if isinstance(gaps, list) else 'unknown'} gap(s) recorded"),
         (isinstance(divisions, list) and bool(divisions)
          and not any(isinstance(d, dict) and d.get("confirmed_denial") for d in divisions)
-         and all(isinstance(d, dict) and not d.get("coverage_observations") for d in divisions),
+         and all(isinstance(d, dict) and not d.get("coverage_observations") and not d.get("schedule_problem")
+                 for d in divisions),
          "division results are missing, or a division was denied or incomplete"),
         (isinstance(recon, dict) and isinstance(recon.get("matches_failed"), list) and not recon["matches_failed"]
          and isinstance(recon.get("matches_checked"), list), "reconciliation results are missing, or matches failed"),
@@ -478,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
                              "missing-only: fetch only scoresheets the copy lacks (interrupted-acquisition style)")
     parser.add_argument("--verify-member", help="APA member id whose current-team fixtures to verify")
     parser.add_argument("--verify-date", help="YYYY-MM-DD of the fixtures to verify (e.g. Monday's)")
+    parser.add_argument("--resume", metavar="DIR",
+                        help="continue an interrupted refresh in DIR (same copy; e.g. after the APA token expired)")
     parser.add_argument("--describe-source", metavar="DB",
                         help="print (JSON) whether DB is a refreshed copy and whether it is accepted current data; "
                              "no network, nothing written")
@@ -495,7 +570,9 @@ def main(argv: list[str] | None = None) -> int:
             print("--verify-date needs --verify-member (no viewer is configured)")
             return 2
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
-    out_dir = Path(args.out_root) / f"refresh-{stamp}"
+    out_dir = Path(args.resume).resolve() if args.resume else Path(args.out_root) / f"refresh-{stamp}"
+    global LAST_OUT_DIR
+    LAST_OUT_DIR = out_dir          # read by tools/capture_apa_graphql.py to resume after renewing the token
     try:
         check_output_root(out_dir, PROJECT_ROOT)
     except BoundaryRefused as exc:
@@ -521,10 +598,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = run_refresh(load_config(args.config), source_db=Path(args.source_db), catalog_path=Path(args.catalog),
                              out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
+                             resume=bool(args.resume),
                              verify_date=args.verify_date)
     except (AccessTokenMissing, AccessTokenExpired) as exc:
-        print(f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py --refresh-ultimate-coach "
-              "and log in yourself; nothing was promoted and the source DB is untouched.")
+        resumable = (out_dir / "refresh_progress.json").is_file()
+        print(f"APA login needed: {type(exc).__name__}. Progress is saved; nothing was promoted and the source DB "
+              "is untouched. Log in again and continue with:\n  python tools/capture_apa_graphql.py "
+              f"--refresh-ultimate-coach --resume \"{out_dir}\"" + (f" --verify-date {args.verify_date}" if args.verify_date else "")
+              if resumable else f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py "
+              "--refresh-ultimate-coach and log in yourself; nothing was promoted and the source DB is untouched.")
         _write_failure(out_dir, exc, scrub, traceback.format_exc())
         return 3
     except RefreshError as exc:
