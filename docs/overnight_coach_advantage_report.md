@@ -2206,3 +2206,79 @@ Offline reload passes on Chromium; it wasn't run in WebKit emulation.
 - P2 legacy-note preservation (`2a67d78`).
 
 **Still PENDING PAUL REVIEW:** native Excel, real phones, the first real publish, and the default matrix view.
+
+### 2026-10-08 08:10 UTC (2026-10-08 02:10 MDT): publisher preflight, output-path containment, full-roster risks
+
+**Authorization:** Paul authorized a new 10-hour block at 06:17 UTC; GPT recorded 06:23:52 to 16:23:52 UTC. He asked for the publisher, output-path safeguards and the mobile risk list to be fixed without waiting on native Excel. Claude builds; GPT audits. PR #83 stays draft and unmerged.
+
+**Working folder check** (Paul, 2026-10-08), for this session and the native-Excel session:
+- Both are linked worktrees inside the canonical folder (`.worktrees/pr83` and `.claude/worktrees/unruffled-chatterjee-f4f65e`).
+- `--git-common-dir` is `<canonical>/.git` and `origin` is `https://github.com/ssands5-cloud/APA-Tracker.git`.
+- The session launches from `Desktop\Invest`, but no repo work is written there.
+- Untracked files in the canonical root are Paul's, from Sept 17–26. They were not touched.
+
+**Commits** (all CI ✅ on Python 3.12 and 3.13):
+
+| Commit | CI run | Change |
+|---|---|---|
+| `6b80685` | 37737559436 | Player-vs-Player banner separates historical win rates from predictions (shared `PVP_STATUS`) |
+| `52e5f1e` | 37737559436 | `PROJECT_STATUS.md` (required by `.github/prompts/build.md`) |
+| `be0bb07` | 37738223095 | UAT build output defaults to `<worktree>\tmp\uat` instead of the Desktop |
+| `ede0a77` | 37740717192 | Publisher preflights ALL allowlisted paths before any cleanup (GPT P1, late-link case) |
+| `e079293` | 37740717192 | Junction-aware output containment for the UAT build (GPT finding 6053946245) |
+| `f7def90` | 37742174047 | Full-roster Risks stay on the phone's first screen (GPT P2 6051975050) |
+
+**Publisher (`ede0a77`):** `preflight_paths()` checks every allowlisted path in one pass:
+- every build file (cleanup target and copy source), the boundary marker and every Pages destination;
+- before any delete or build, again after the build, and immediately before copying.
+
+The link and containment checks now live in `scripts/repo_boundary.py`. Tests:
+- GPT's late-link repro: the old `index.html` and the outside sentinel survive.
+- A link made during the build never reaches gh-pages: no commit, a clean worktree, and the last good package intact.
+- Both tests fail against the previous publisher.
+
+**UAT build (`e079293`):** `tools/build_ultimate_coach_final_uat.ps1` calls `scripts/repo_boundary.py check-output`.
+- It checks the canonical common `.git` and the origin.
+- It walks every path component and refuses any symlink, junction or reparse point, then checks final resolved containment.
+- It runs before `git fetch` and again right before every create, delete, move, copy and build write, including before the Excel build.
+
+Tests:
+- Fake-origin repos with real junctions (symlinks on CI) and outside sentinels.
+- A static test requiring a check right before every write. It fails on the previous script, and it caught the missing re-check before the Excel build.
+- On the real script, a junctioned destination was refused before the fetch, with nothing written.
+
+**Mobile risk list (`f7def90`):**
+- Two or more risk names show as a count ("vs 7 of 8 unplayed opponents") plus a one-line "All 7: …" that opens to every name. Nothing is dropped.
+- On phones, long opponent chips are capped with an ellipsis. The selected one wraps and is scrolled fully into view.
+
+The new full-roster regression runs at 390×664: last opponent selected, plus a 24-word note on the dangerous opponent. It fails on the previous JS. Risks bottom by case:
+
+| Case | Risks bottom (px, of 664) |
+|---|---|
+| Real package | 591 |
+| Real package, wide-font approximation of Linux | 613 |
+| DEMO package | 626 |
+| DEMO package, wide fonts | 666 (2 px over, approximation only) |
+
+**Tests:** 2239 pass locally. pytest's temp folder is now `APA-Tracker\tmp\pytest-pr83`, inside the canonical folder (git-ignored) but outside the worktree. It isn't inside the worktree because several existing tests treat `tmp_path` as "outside the repository".
+
+**Live demo:** gh-pages `90710f2`, Source `f7def90`, synthetic. On iPhone 13 WebKit, Pixel 7 and desktop: match, Next Send, threats and risks are on the first screen; no horizontal scroll; no script errors; 2 DEMO flags. Offline reload passes on Chromium and wasn't run on WebKit.
+
+**Native Excel session, exact state:** not running since 05:17 UTC; none of the five scenarios was run.
+- Its computer-use request for Excel returned `user_denied`, most likely because the approval prompt timed out with nobody at the PC.
+- It correctly did not retry or work around the gate.
+- This session can't get Excel access either: the tool treats it as a scheduled run, where approval isn't possible.
+- **Unblock:** Paul approves the Excel prompt in that session while at the PC.
+- Prepared and waiting: `tmp/native/run-2a67d78/` (test copy SHA256 `2315C5EF…D76367`, plus `expected.json`).
+
+**Skills used:**
+- *systematic-debugging*: the pytest-temp-folder cause, confirmed before changing the location.
+- *test-driven-development*: every new test confirmed red against the previous code.
+- *verification-before-completion*: suite, CI, Pages build and live check before this entry.
+
+**Still open:**
+- Unordered/tied wording outside the HTML Tonight panel (Excel builder; held while the native session owns Excel edits).
+- Native Excel verification (blocked as above).
+- WebKit offline reload.
+- Physical phones.
+- The real publish, which waits for GPT to close the publisher P1.
