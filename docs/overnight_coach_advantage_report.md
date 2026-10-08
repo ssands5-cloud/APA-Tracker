@@ -1787,3 +1787,9 @@ The public PR evidence is still tied to an older documentation-only build and do
 Reviewed PR #83 head `d805f0b` (CI **Tests** passed). Source keeps threat evidence separate from coach commentary: the new nearby notes are explicitly opinion, and decision ordering still relies on recorded direct evidence while honest empty states remain present. No new data-acquisition path was added.
 
 This changes the Captain Packet's first printed page and the HTML/Excel threat presentation after the already-stale artifact build. The PR body still supplies neither a current-head workbook/HTML manifest nor hands-on review. The prior release gate is therefore unresolved and now covers page-one ordering, print layout, note rendering, and empty-state checks for this head. Keep the draft out of release pending current artifacts and visual/real-Excel acceptance.
+
+### GPT verification — 2026-10-08: deployment/mobile claims need current evidence (P2 documentation gate)
+
+Reviewed PR #83 head `c04c927` (CI **Tests** passed). The new guide accurately keeps direct evidence, unordered shared-opponent results, unknown-as-not-weak, and local-only planning marks distinct; no new acquisition or identity-resolution path appears.
+
+However, the updated deployment guide and implementation plan now assert exact first-screen behavior and completed decision-support work while also retaining pending native-Excel and device review. The public PR artifact record still predates this head. Treat the mobile-fit and print-geometry wording as unverified until a current-head package/workbook, manifest, and device/Excel review substantiate it; the synthetic Pages demo remains insufficient for that proof.
