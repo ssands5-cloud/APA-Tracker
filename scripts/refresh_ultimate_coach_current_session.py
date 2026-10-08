@@ -198,11 +198,19 @@ def reconcile_match(config: dict, db, match_id: str, session_name: str, *,
         return {"match_id": str(match_id), "status": "not_in_db"}
     before = _player_rows(db, match.id)
     scores, h2h = scoresheet(config, str(match_id))
+    # Provenance of exactly what was applied: when the authoritative sheet was fetched, and a digest of the
+    # canonical rows as received (ids and results only, so the report stays name-free).
+    fetched = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    digest = hashlib.sha256(json.dumps(sorted(
+        [str(s.get("player_id") or ""), str(s.get("team_id") or ""), str(s.get("result") or ""),
+         str(s.get("points_earned") or ""), str(s.get("skill_level") or "")] for s in scores),
+        separators=(",", ":")).encode("utf-8")).hexdigest()
     mapping, _resolved, unresolved = resolve(db, session_name, scores, current_only=True)
     scores = gs.apply_identity_mapping(scores, mapping, ("player_id",))
     h2h = gs.apply_identity_mapping(h2h, mapping, ("player_id", "opponent_id"))
     authoritative = {str(s["player_id"]) for s in scores if s.get("player_id")}
-    out: dict[str, Any] = {"match_id": str(match_id), "rows_before": len(before)}
+    out: dict[str, Any] = {"match_id": str(match_id), "rows_before": len(before), "fetched_utc": fetched,
+                           "scoresheet_rows_received": len(scores), "scoresheet_sha256": digest}
     if not authoritative:
         out.update(status="empty_scoresheet_kept", rows_after=len(before))
         return out
@@ -393,6 +401,27 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     return report
 
 
+def describe_source(db_path: Path) -> dict[str, Any]:
+    """What a build is about to read: an archived DB, or a refreshed copy -- and if refreshed, whether its report
+    still describes this exact file and whether its coverage was complete. Only a complete reconcile refresh whose
+    report matches the file's hash is ``accepted_current_data``; a partial one must never pass as current."""
+    db_path = Path(db_path)
+    report_path = db_path.with_name("refresh_report.json")
+    if not report_path.is_file():
+        return {"refreshed": False, "accepted_current_data": False,
+                "note": "no refresh_report.json beside the source DB: data as originally archived, not refreshed"}
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    matches = (report.get("provenance") or {}).get("refreshed_db_sha256") == sha256_file(db_path)
+    coverage = report.get("coverage") or "partial"
+    return {
+        "refreshed": True, "report": str(report_path), "report_sha256": sha256_file(report_path),
+        "report_matches_db": matches, "mode": (report.get("provenance") or {}).get("mode"),
+        "coverage": coverage, "gaps": len(report.get("gaps") or []), "scope": report.get("scope"),
+        "started_utc": report.get("started_utc"), "finished_utc": report.get("finished_utc"),
+        "accepted_current_data": bool(matches and coverage == "complete"),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     from scheduler.graphql_sync import load_config
     from scraper.graphql_scraper import AccessTokenExpired, AccessTokenMissing
@@ -409,8 +438,14 @@ def main(argv: list[str] | None = None) -> int:
                              "missing-only: fetch only scoresheets the copy lacks (interrupted-acquisition style)")
     parser.add_argument("--verify-member", help="APA member id whose current-team fixtures to verify")
     parser.add_argument("--verify-date", help="YYYY-MM-DD of the fixtures to verify (e.g. Monday's)")
+    parser.add_argument("--describe-source", metavar="DB",
+                        help="print (JSON) whether DB is a refreshed copy and whether it is accepted current data; "
+                             "no network, nothing written")
     args = parser.parse_args(argv)
 
+    if args.describe_source:
+        print(json.dumps(describe_source(Path(args.describe_source))))
+        return 0
     if args.verify_date and not args.verify_member:
         # Default to the configured viewer (apa_config.yaml / apa_config.local.yaml), never a guess.
         from analytics.ultimate_coach_match_day import load_match_day_settings

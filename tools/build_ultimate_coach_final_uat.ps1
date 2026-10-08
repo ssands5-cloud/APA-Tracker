@@ -119,6 +119,12 @@ if ($Before -ne $After) {
     throw "Source DB hash changed during the build. Candidate NOT promoted to the UAT folder."
 }
 
+# Was the source a refreshed copy, and is it accepted current data? (GPT audit 056dae6: a partial refresh must
+# never pass as current.) Recorded in UAT_MANIFEST.json; read-only, no network.
+$RefreshJson = & python (Join-Path $RepoRoot "scripts\refresh_ultimate_coach_current_session.py") --describe-source $SourceDb
+if ($LASTEXITCODE -ne 0) { throw "Could not describe the source DB's refresh provenance." }
+$SourceRefresh = $RefreshJson | ConvertFrom-Json
+
 $GeneratedHtml = Join-Path $TempRoot "ultimate_coach.html"
 $GeneratedXlsx = Join-Path $TempRoot "Ultimate_Coach_FINAL_UAT.xlsx"
 
@@ -161,6 +167,7 @@ $UatManifest = [ordered]@{
     source_database_sha256_before = $Before
     source_database_sha256_after = $After
     source_database_unchanged = ($Before -eq $After)
+    source_refresh = $SourceRefresh
     match_day = $ProductionManifest.match_day
     artifacts = @(
         [ordered]@{ file = "Ultimate_Coach_FINAL_UAT.html"; bytes = (Get-Item $FinalHtml).Length; sha256 = $HtmlHash },
@@ -176,6 +183,13 @@ Write-Host "ULTIMATE COACH FINAL UAT PACKAGE READY" -ForegroundColor Green
 Write-Host "============================================"
 Write-Host "PR #83 head : $LocalHead"
 Write-Host "Source DB unchanged: YES"
+if ($SourceRefresh.accepted_current_data) {
+    Write-Host "Source data: refreshed, coverage COMPLETE for its scope ($($SourceRefresh.finished_utc))" -ForegroundColor Green
+} elseif ($SourceRefresh.refreshed) {
+    Write-Host "WARNING: source is a refreshed copy that is NOT accepted current data (coverage $($SourceRefresh.coverage), $($SourceRefresh.gaps) gap(s), report matches DB: $($SourceRefresh.report_matches_db)). See UAT_MANIFEST.json source_refresh." -ForegroundColor Yellow
+} else {
+    Write-Host "Note: source DB was not refreshed (no refresh_report.json); results end at its latest recorded result." -ForegroundColor Yellow
+}
 Write-Host "Manifest : $(Join-Path $BuildRoot 'UAT_MANIFEST.json')"
 Write-Host ""
 Write-Host "HTML : $FinalHtml"

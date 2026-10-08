@@ -152,7 +152,10 @@ def test_refresh_writes_a_copy_and_reports_monday(setup, monkeypatch):
     assert [c[0] for c in calls] == ["D1", "D2"] and all(c[1] and c[2]["roster_is_current"] for c in calls)
     # ... and then the already-captured scored match (M1) re-fetched; M2 was fetched fresh by the sync itself.
     assert fetched == ["M1"] and report["reconciliation"]["matches_checked"] == ["M1"]
-    assert report["reconciliation"]["outcomes"][0]["status"] == "unchanged"
+    outcome = report["reconciliation"]["outcomes"][0]
+    assert outcome["status"] == "unchanged" and outcome["scoresheet_rows_received"] == 2
+    # Provenance of what was applied: fetch time and a digest of the authoritative rows as received.
+    assert outcome["fetched_utc"].endswith(" UTC") and len(outcome["scoresheet_sha256"]) == 64
     c = report["changes"]
     assert c["matches_newly_scored"] == ["M2"] and c["matches_added"] == ["M4"] and c["matches_score_changed"] == []
     assert c["scoresheet_rows_added"] == 2 and c["latest_scored_date_before"] == "2026-09-28"
@@ -284,3 +287,26 @@ def test_verify_member_defaults_to_the_configured_viewer(tmp_path, monkeypatch):
     assert seen["verify_member"] == "9001" and seen["verify_date"] == "2026-10-05" and seen["mode"] == "reconcile"
     config.write_text("ultimate_coach:\n  viewer_member_external_id: \"CHANGE_ME\"\n", encoding="utf-8")
     assert refresh.main(["--config", str(config), "--verify-date", "2026-10-05"]) == 2   # never guessed
+
+
+def test_describe_source_never_lets_a_partial_or_altered_refresh_pass_as_current(setup, monkeypatch, capsys):
+    # GPT 056dae6: partial reports must not become accepted current data. A build records this verdict.
+    source, _, out = setup
+    assert refresh.describe_source(source) == {
+        "refreshed": False, "accepted_current_data": False,
+        "note": "no refresh_report.json beside the source DB: data as originally archived, not refreshed"}
+    _run(setup, monkeypatch)                                   # complete reconcile refresh
+    copy = out / "ultimate_coach_staging.db"
+    complete = refresh.describe_source(copy)
+    assert complete["refreshed"] and complete["report_matches_db"] and complete["coverage"] == "complete"
+    assert complete["accepted_current_data"] and complete["gaps"] == 0 and complete["mode"] == "reconcile"
+    assert refresh.main(["--describe-source", str(copy)]) == 0
+    assert json.loads(capsys.readouterr().out) == complete     # the build script reads this JSON
+    partial, _ = _run(setup, monkeypatch, mode="missing-only", out=out.parent / "out-partial")
+    assert not refresh.describe_source(out.parent / "out-partial" / "ultimate_coach_staging.db")["accepted_current_data"]
+    con = sqlite3.connect(copy)                                # edited after its refresh: the report no longer
+    con.execute("UPDATE player_matches SET result = 'L' WHERE id = 1")   # describes this file
+    con.commit()
+    con.close()
+    altered = refresh.describe_source(copy)
+    assert not altered["report_matches_db"] and not altered["accepted_current_data"]
