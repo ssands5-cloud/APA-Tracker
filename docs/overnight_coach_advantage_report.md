@@ -2007,3 +2007,61 @@ Please also check the index against the files, and that no defect is hidden or m
 - The security model in `docs/match_night_deployment.md`.
 - The slim-package minimization in `ui/match_night.py`.
 - The WP-A fixes.
+
+### 2026-10-08 01:58 UTC (2026-10-07 19:58 MDT): GPT #84 Match Night findings fixed and demo republished
+
+**Source revision:**
+- `05abce1`: fixes.
+- `4345a5a`: test-only. The throwaway publisher repo gets its own git identity, because CI has none.
+
+**CI:** run 37715042088 at `4345a5a` passed Python 3.12 and 3.13. An earlier run at `05abce1` failed for exactly that missing identity.
+
+**Fresh local tests:** 2215 passed at `05abce1`. The `4345a5a` change touches only `tests/test_publish_match_night.py`; its 4 tests pass.
+
+**Deployment:**
+- gh-pages commit `9a40124`, published by the new fail-closed publisher (`tools/publish_match_night.ps1 -Demo`).
+- Pages build `built 9a40124`.
+- URL: https://ssands5-cloud.github.io/APA-Tracker/
+- Contents: a synthetic DEMO package. The passphrase is on the lock screen.
+
+**Fixes (GPT #84):**
+- **P1 publisher safety:** the new `scripts/publish_match_night.py` runs every check before anything is built, deleted, copied, fetched or checked out:
+  - The checkout is the canonical repo: exact common git dir and origin URL.
+  - The build folder is exactly `<repo>/tmp/match_night_site`.
+  - The Pages checkout is exactly the `.worktrees/gh-pages` linked worktree of the same repo, on branch `gh-pages`, clean, tracking only allowlisted files.
+  - It removes, copies, stages and commits only the 9 allowlisted paths, named explicitly.
+  - Any git failure raises `PublishRefused` ("Refused, nothing published").
+  - Hooks are never bypassed.
+  - Tests (`tests/test_publish_match_night.py`) use a throwaway repo with a fake origin. They cover: wrong root/origin/folder refused; first publish commits only the allowlist and keeps non-generated files; uncommitted work, a wrong branch or an extra tracked file is refused untouched; a failed build publishes nothing.
+- **P2 persistent DEMO label:** the package records `match_night.demo`. The page shows "DEMO (synthetic players)" in the banner, a `.demo-flag` above Tonight, and the same flag in the printed packet. A remembered or offline launch therefore still says DEMO.
+- **P2 cache isolation and errors:**
+  - The service worker deletes only its own `uc-match-night-*` caches. Other projects on `ssands5-cloud.github.io` survive.
+  - A 404/5xx never replaces the cached package.
+  - Tests (`tests/test_match_night.py`) were confirmed red before the fix and green after.
+
+**Live check** (`tmp/verify_pages_live.py`, Playwright, at `9a40124`):
+
+| Profile | First screen (match, sends, threats, risks) | Horizontal scroll | Script errors | DEMO flags after unlock | Offline reload unlocks |
+|---|---|---|---|---|---|
+| iPhone 13 (WebKit) | yes | none | none | 2 | not run: WebKit emulation hits an internal error offline. **Not claimed**; real iPhone is PENDING PAUL REVIEW |
+| Pixel 7 (Chromium) | yes | none | none | 2 | yes |
+| Desktop (Chromium) | yes | none | none | 2 | yes |
+
+**Screen access:**
+- No technical restriction blocks the native Excel recapture.
+- I ask first because the capture drives whatever window has focus (SendKeys/CopyFromScreen) and would collide with anything Paul types at that moment.
+- It stays PENDING PAUL REVIEW until he says the desktop is free.
+
+**Skills used** (`.github` / superpowers):
+- *systematic-debugging*, for the CI identity failure: root cause found before the fix.
+- *test-driven-development*, for the cache/DEMO tests: red, then green.
+- *verification-before-completion*: fresh CI, Pages build and live check before this entry.
+- *red-team* review of the publisher's failure paths.
+- Pre-implementation: the publisher checks were planned from GPT's finding text before any code. Retrospective: none.
+
+**Still open:**
+- GPT audit of `05abce1`/`4345a5a`/`9a40124`.
+- Real-device Add to Home Screen and offline use (PENDING PAUL REVIEW).
+- The first real publish: Paul runs `.\tools\publish_match_night.ps1` himself after GPT verifies the safeguards. Claude does not hold his passphrase.
+- Native Excel recapture of WP-A (PENDING PAUL REVIEW).
+- WP-B: Next Send, Quick Read, Captain/Evidence toggle, decision-first Excel layouts. Next Send starts now.
