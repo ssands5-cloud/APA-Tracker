@@ -68,7 +68,7 @@ from analytics.ultimate_coach_war_room import (
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
-              "Player ID", "Category", "Cell", "Reason"]
+              "Player ID", "Category", "Cell", "Reason", "Captain Cell"]
 TC_COLUMNS = [
     "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
     "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
@@ -149,11 +149,11 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], base._sl_display(block["opponent"]),
                             block["opponent_sample"], "—", block["note"], len(block["rows"]),
-                            block["opponent"]["id"], "—", "—", "—"])
+                            block["opponent"]["id"], "—", "—", "—", "—"])
             for row in block["rows"]:
                 me_rows.append([None, row["rank"], row["player"], base._sl_display(row["member"]), row["direct_text"],
                                 row["shared_text"], row["basis"], row["position"], row["member"]["id"],
-                                row["category"], row["cell"], row["reason"]])
+                                row["category"], row["cell"], row["reason"], row["captain"]])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -530,6 +530,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.ws.cell(row=cat_first - 1, column=1, value="Category grid").font = base.SUBHEAD_FONT
     cell_first = cat_first + R + 1
     e.ws.cell(row=cell_first - 1, column=1, value="Cell text grid").font = base.SUBHEAD_FONT
+    cap_first = cell_first + R + 1
+    e.ws.cell(row=cap_first - 1, column=1, value="Captain View grid").font = base.SUBHEAD_FONT
+    captain = {}
     for i in range(1, R + 1):
         for j in range(1, R + 1):
             col = get_column_letter(1 + j)
@@ -541,11 +544,14 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
                       value=f'=IF({pos}="","",INDEX(MatchupEvidence_Table[Cell],{start}+{pos}))')
             grid[(i, j)] = (f"Engine!${col}${cat_first + i - 1}", f"Engine!${col}${cell_first + i - 1}",
                             f"Engine!${col}${pos_first + i - 1}")
+            e.ws.cell(row=cap_first + i - 1, column=1 + j,
+                      value=f'=IF({pos}="","",INDEX(MatchupEvidence_Table[Captain Cell],{start}+{pos}))')
+            captain[(i, j)] = f"Engine!${col}${cap_first + i - 1}"
     last_col = get_column_letter(1 + R)
     for j in range(1, R + 1):
         col = get_column_letter(1 + j)
         e.name(f"wr_CatCol{j}", f"Engine!${col}${cat_first}:${col}${cat_first + R - 1}")
-    e.row = cell_first + R + 1
+    e.row = cap_first + R + 1
 
     # ---- per-opponent counts: favorable / sendable remaining ----
     remaining = "wr_OurRemaining"
@@ -663,7 +669,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '=IF(cd_Local,"Using local selections","Following Match Day")&": "&IF(cd_ALabel="","(Player A)",cd_ALabel)&" vs "&'
            f'IF(cd_BLabel="","(choose Player B)",cd_BLabel)&" · "&cd_FmtLabel')
 
-    return {"grid": grid, "ours": ours, "theirs": theirs}
+    return {"grid": grid, "captain": captain, "ours": ours, "theirs": theirs}
 
 
 # ---------------------------------------------------------------------------
@@ -964,10 +970,15 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
 
     top = u_top + R + 2
     base._section(ws, top, "Matchup matrix — our players (rows) vs their players (columns)", last_col=12)
-    _span(ws, top + 1, 1, 12, "Green = more direct wins than losses · Red = more direct losses than wins · Yellow = even direct "
-                              "record, or shared-opponent evidence only (≈ ours vs theirs) · Gray = no evidence. Numbers in () are "
-                              "meetings. Colors describe recorded results only — not odds or predictions.",
+    _span(ws, top + 1, 1, 9, "Green = more direct wins than losses · Red = more direct losses than wins · Yellow = even direct "
+                             "record, or shared-opponent evidence only (≈ ours vs theirs) · Gray = no evidence. Numbers in () are "
+                             "meetings (Evidence view). Captain view: 🟢🟡⚪🔴 + our direct record. Not odds or predictions.",
           font=base.MUTED_FONT, height=30)
+    ws.cell(row=top + 1, column=10, value="View").font = base.LABEL_FONT
+    base._input(ws.cell(row=top + 1, column=11), "Evidence view")
+    ws.merge_cells(start_row=top + 1, start_column=11, end_row=top + 1, end_column=12)
+    _dv(ws, f"K{top + 1}", '"Evidence view,Captain view"', "Captain view: 🟢🟡⚪🔴 and the record. Evidence view: sample sizes too.")
+    view_ref = f"$K${top + 1}"
     header = top + 2
     ws.cell(row=header, column=1, value="Our player ↓ / opponent →").font = base.SUBHEAD_FONT
     matrix_cols = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12][:R]
@@ -984,7 +995,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         ws.cell(row=r, column=1).alignment = base.WRAP_TOP
         for j, col in enumerate(matrix_cols, start=1):
             cat_ref, cell_ref, _ = grid[(i, j)]
-            c = ws.cell(row=r, column=col, value=f"={cell_ref}")
+            c = ws.cell(row=r, column=col, value=f'=IF({view_ref}="Captain view",{engine["captain"][(i, j)]},{cell_ref})')
             c.font = SMALL
             c.alignment = Alignment(wrap_text=True, vertical="top")
             ws.cell(row=r, column=helper_col0 + j - 1, value=f"={cat_ref}").font = base.HELPER_FONT

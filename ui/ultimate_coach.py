@@ -126,8 +126,11 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .ns-coach { margin:6px 0 0; font-size:13px; background:#eef4ff; padding:4px 6px; border-radius:6px; }
 .quick-read { margin:6px 8px; padding:5px 7px; background:#fff8e8; border-left:4px solid #c9a24a; font-size:13px; }
 .quick-read b { text-transform:uppercase; font-size:11px; letter-spacing:.4px; color:#5d4413; margin-right:4px; }
+.mv-toggle { display:inline-flex; border:1px solid #c9b88f; border-radius:999px; overflow:hidden; }
+.mv-toggle .mv { border:0; border-radius:0; background:#fff; color:#3b2f17; min-height:36px; padding:4px 12px; font-size:13px; }
+.mv-toggle .mv.on { background:#5d4413; color:#fff; font-weight:700; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
-@media print { .ns-chips, .ns-send { display:none; } }
+@media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }
 .tonight-grid.detail > div { font-size:12px; }

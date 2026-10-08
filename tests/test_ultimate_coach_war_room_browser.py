@@ -60,7 +60,7 @@ def test_html_war_room_matches_the_shared_python_module_exactly(tmp_path: Path):
         try:
             page, errors = _page(tmp_path, browser)
             js = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
-            assert js["matrix"] == [[[c["category"], c["cell"], c["explanation"], c["reason"]] for c in row["cells"]]
+            assert js["matrix"] == [[[c["category"], c["cell"], c["explanation"], c["reason"], c["captain"]] for c in row["cells"]]
                                     for row in py["matrix"]]
             assert [[c for row in js["matrix"] for c in [x[0] for x in row]]] == [["G", "I", "R", "X", "E", "R"]]
             assert js["best"] == [[r["player"] for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
@@ -522,5 +522,31 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
                 .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
             assert clipped == 0
+        finally:
+            browser.close()
+
+
+def test_matrix_captain_view_is_a_remembered_toggle_over_the_same_evidence(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            cells = page.locator("#wr-matrix .mcell")
+            evidence = [cells.nth(i).inner_text() for i in range(6)]
+            assert evidence[0] == "2-0 (2)"                                   # Evidence view by default (= Excel)
+            before = page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))")
+            page.click("#wr-matrix .mv[data-view='captain']")
+            assert [cells.nth(i).inner_text() for i in range(6)] == ["🟢 2-0", "🟡 ≈", "🔴 0-2", "⚪", "🟡 1-1", "🔴 0-2"]
+            assert "unknown, not weak" in page.inner_text("#wr-matrix")
+            assert "cat-G" in cells.nth(0).get_attribute("class")              # colors and categories unchanged
+            page.reload()
+            page.wait_for_selector("#wr-matrix .mcell")
+            assert page.locator("#wr-matrix .mcell").nth(0).inner_text() == "🟢 2-0"   # remembered on this device
+            page.locator("#wr-matrix .mcell").nth(0).click()                   # cells still open the evidence
+            assert "Favorable direct record" in page.inner_text("#wr-pair")
+            page.click("#wr-matrix .mv[data-view='evidence']")
+            assert [page.locator("#wr-matrix .mcell").nth(i).inner_text() for i in range(6)] == evidence
+            assert page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))") == before
+            assert errors == []
         finally:
             browser.close()

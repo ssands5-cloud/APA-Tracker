@@ -201,6 +201,15 @@ def test_matrix_shows_direct_records_indirect_evidence_and_gaps_with_colors(book
     assert f"B{header + 1}:B{header + 8}" in ranges and f"C{header + 1}:C{header + 8}" in ranges
 
 
+def test_matrix_captain_view_switches_text_not_evidence(book, built):
+    header = _row(built, WR, "Our player ↓ / opponent →")
+    assert book.display(WR, f"J{header - 1}") == "View" and book.display(WR, f"K{header - 1}") == "Evidence view"
+    book.set(WR, f"K{header - 1}", "Captain view")
+    cells = [[book.display(WR, f"{c}{header + i}") for c in "BC"] for i in (1, 2, 3)]
+    assert cells == [["🟢 2-0", "🟡 ≈"], ["🔴 0-2", "⚪"], ["🟡 1-1", "🔴 0-2"]]     # same as the HTML Captain view
+    assert [[book.display(WR, f"{c}{header + i}") for c in "OP"] for i in (1, 2, 3)] == [["G", "I"], ["R", "X"], ["E", "R"]]
+
+
 def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built):
     assert _opportunities(book, built) == [
         (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"),

@@ -106,6 +106,14 @@ def explanation(row: dict[str, Any]) -> str:
 
 
 _CATEGORY_WORD = {"G": "favorable", "R": "concerning", "E": "even"}
+CAPTAIN_ICON = {"G": "🟢", "E": "🟡", "I": "🟡", "X": "⚪", "R": "🔴"}
+
+
+def captain_cell(row: dict[str, Any]) -> str:
+    """Captain View matrix cell: the category icon plus our direct record (≈ for shared-opponent only)."""
+    cat = category(row)
+    direct = row.get("direct")
+    return CAPTAIN_ICON[cat] + (f" {record_text(*direct)}" if direct else " ≈" if cat == "I" else "")
 
 
 def reason(row: dict[str, Any]) -> str:
@@ -225,6 +233,7 @@ def war_room_pair(
             row["cell"] = cell_text(row)
             row["explanation"] = explanation(row)
             row["reason"] = reason(row)
+            row["captain"] = captain_cell(row)
             row["position"] = position
 
     matrix = []

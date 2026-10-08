@@ -8,6 +8,10 @@
   var WR_SENDABLE={G:true,E:true,I:true};
   var WR_TZ=(DATA.match_day&&DATA.match_day.display_timezone)||"America/Denver";
   var WR_STATE={pair:null};
+  // Matrix view: "evidence" (full cell text, same as Excel) or "captain" (🟢🟡⚪🔴 + record). Remembered on this device.
+  var WR_VIEW=(function(){try{return window.localStorage.getItem("ultimate-coach:matrix-view")==="captain"?"captain":"evidence";}catch(e){return "evidence";}})();
+  var WR_CAPTAIN_ICON={G:"🟢",E:"🟡",I:"🟡",X:"⚪",R:"🔴"};
+  function wrCaptainCell(c){return WR_CAPTAIN_ICON[wrCategory(c.c)]+(c.c&&c.c.direct?" "+wlText(c.c.direct.w,c.c.direct.g):(wrCategory(c.c)==="I"?" ≈":""));}
   // Set by Match Day when its current selection has no fixture to follow (no date, no match, bye,
   // opponent without a roster, several fixtures awaiting a choice, no team): {when, text}. The Tonight
   // panel then states that instead of going blank or keeping a previous fixture (GPT audit #84).
@@ -82,7 +86,7 @@
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
-    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.reason=wrReason(r.c);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
+    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.reason=wrReason(r.c);r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
     blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
@@ -127,7 +131,7 @@
   window.__ucCareerText=wrCareer;
   window.__ucWarRoomPair=function(ourKey,oppKey,fmt){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
-    return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation,c.reason];});}),
+    return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation,c.reason,c.captain];});}),
       best:w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category];}).map(function(r){return r.player;});}),
       concerning:w.concerning.map(function(c){return c.text;}),threats:w.threats.map(function(c){return c.threat_text;}),
       cards:w.cards.map(function(c){return [c.quick_read,c.sl,c.team_record,c.lifetime,c.sample,c.vs_ours,c.met_list,c.shared_summary,c.by_sl,c.winning_sl,c.losing_sl,c.missing];}),
@@ -366,11 +370,13 @@
         +row.cells.map(function(c,j){
           var on=pair&&pair.our===String(m.id)&&pair.opp===String(w.theirs[j].id);
           if(on) pairHtml=wrPairDetail(w,c,w.blocks[j],fmt);
-          return '<td><button type="button" class="mcell cat-'+c.category+(on?' on':'')+(plan.unplayed[j]?'':' out')+'" data-our="'+esc(m.id)+'" data-opp="'+esc(w.theirs[j].id)+'" title="'+esc(WR_CAT_LABELS[c.category]+" — "+c.explanation)+'">'+esc(c.cell)+'</button></td>';
+          return '<td><button type="button" class="mcell cat-'+c.category+(on?' on':'')+(plan.unplayed[j]?'':' out')+'" data-our="'+esc(m.id)+'" data-opp="'+esc(w.theirs[j].id)+'" title="'+esc(WR_CAT_LABELS[c.category]+" — "+c.explanation)+'">'+esc(WR_VIEW==="captain"?c.captain:c.cell)+'</button></td>';
         }).join("")+'</tr>';
     }).join("");
-    document.getElementById("wr-matrix").innerHTML='<h2>Matchup matrix</h2>'
-      +'<p class="legend"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no evidence. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Tap a cell for the evidence behind it.</p>'
+    document.getElementById("wr-matrix").innerHTML='<div class="card-head"><h2>Matchup matrix</h2><div class="mv-toggle" role="group" aria-label="Matrix view">'
+      +[["captain","Captain view"],["evidence","Evidence view"]].map(function(v){return '<button type="button" class="mv'+(WR_VIEW===v[0]?' on':'')+'" data-view="'+v[0]+'" aria-pressed="'+(WR_VIEW===v[0])+'">'+v[1]+'</button>';}).join("")+'</div></div>'
+      +(WR_VIEW==="captain"?'<p class="legend">🟢 Favorable direct record · 🟡 Even direct, or shared-opponent evidence only (≈) · ⚪ No evidence — unknown, not weak · 🔴 More direct losses than wins. Numbers are our direct record. Not odds. Tap a cell for the evidence, or switch to Evidence view for sample sizes.</p>':'')
+      +'<p class="legend'+(WR_VIEW==="captain"?' print-only':'')+'"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no evidence. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Tap a cell for the evidence behind it.</p>'
       +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
       +'<div id="wr-pair">'+pairHtml+'</div>';
     // Lineup Lab
@@ -465,6 +471,9 @@
       if(!t) return;
       var cur=current();
       if(t.id==="ll-clear"&&cur.ta&&cur.tb){var ck=wrCtx(cur.ta,cur.tb);delete WR_PLAN.our[ck];delete WR_PLAN.opp[ck];wrSave();renderTeamMatchups();return;}
+      if(t.hasAttribute("data-view")){WR_VIEW=t.getAttribute("data-view")==="captain"?"captain":"evidence";
+        try{window.localStorage.setItem("ultimate-coach:matrix-view",WR_VIEW);}catch(e){}
+        renderTeamMatchups();var b=root.querySelector('.mv[data-view="'+WR_VIEW+'"]');if(b) b.focus();return;}
       if(t.classList.contains("mcell")){
         var p={our:t.getAttribute("data-our"),opp:t.getAttribute("data-opp")};
         WR_STATE.pair=(WR_STATE.pair&&WR_STATE.pair.our===p.our&&WR_STATE.pair.opp===p.opp)?null:p;
