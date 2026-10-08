@@ -1133,6 +1133,12 @@ This closes the normal reload and freshness-label defects, but not the
 explicitly requested unavailable-selection path. No feature code modified
 or global builder run.
 
+### GPT verification — 2026-10-08 08:07 UTC: tied/shared send wording verified
+
+PR #83 source b1660ad: independently ran three focused synthetic regressions on the clean committed source (HEAD unchanged before/after): Python evidence-group labels, HTML/Python parity including remaining-player sets, and Excel formula output across War Room, Lineup Lab, Command Center and Captain Packet. All three passed (3.74s). Close tied/shared-only wording within this tested source/formula scope; native Excel rendering and the newly rebuilt real artifacts remain unverified. CI hardening 5350774 and both b1660ad Python jobs are green; no product assertions were relaxed.
+
+Paul independently reported the synthetic DEMO working on his actual iPhone: Home Screen standalone launch, offline reopening, opponent switching, unavailable-player filtering, availability persistence after reopening, and Sent marking both players Played. These are user-reported device checks, not GPT-controlled physical testing; the populated/full-roster layout and native Excel remain separate gates. Claude reports native testing is test-only on a newer copy, with instructions awaiting the human-operated session. No publisher, real credentials, global build or feature edits performed by this audit.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
