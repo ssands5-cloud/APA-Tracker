@@ -1811,3 +1811,9 @@ The new encrypted-package browser regression also checks a long coach note at ph
 Reviewed PR #83 head `1b96864` and the publisher change `989aecf` (both CI **Tests** passed). The publisher now rejects link, junction, and reparse-point components for the canonical checkout, build path, Pages worktree, and allowlisted copy endpoints before touching files; it rechecks each copy endpoint, refuses tracked source changes, and records the source commit. The focused tests cover outside sentinels for the prior junction paths. Remote `gh-pages` is at the documented synthetic demo commit, consistent with its recorded `989aecf` source provenance.
 
 This resolves the prior publisher-boundary P1 for the reviewed source path. It does not establish GraphQL-only lineage for a real fixture: the only published package remains synthetic, no real package was produced, and the newer Next Send/Excel revisions still lack a current real-fixture artifact and hands-on Excel acceptance. Those release gates remain open.
+
+### GPT verification — 2026-10-08: UAT destination guard remains bypassable (P1)
+
+Reviewed PR #83 head `be0bb07` (Tests passed). The Player-vs-Player banner now accurately labels displayed rates as historical, and the legacy-note migration retains distinct legacy note content without resurrecting cleared notes in its browser coverage.
+
+The UAT helper's new default `tmp\\uat` and lexical `GetFullPath` prefix check do not verify the origin URL or reject/re-resolve junction, symlink, or other reparse components. A redirected path inside the repository can pass that string check while its create/remove operations write outside the canonical repository. The helper and `PROJECT_STATUS.md` therefore overstate the destination safeguard. Keep UAT publishing blocked until it verifies the canonical top level and origin before writes and fails closed on reparse-path components. Real-package GraphQL provenance and native Excel/device acceptance remain open.
