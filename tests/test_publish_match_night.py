@@ -78,6 +78,7 @@ def test_first_publish_creates_the_worktree_and_commits_only_the_allowlist(canon
     assert sorted(git(pages, "ls-files").splitlines()) == sorted(PUBLISHED)
     message = git(pages, "log", "-1", "--format=%B")
     assert "Publish Match Night DEMO (synthetic players)" in message and "Claude Sonnet 5" in message
+    assert f"Source: {git(canon, 'rev-parse', 'HEAD')}" in message          # which committed source was published
     assert commit == git(pages, "rev-parse", "--short", "HEAD")
     assert keep.read_text(encoding="utf-8") == "mine"
     assert check_pages_worktree(pages, canon) == "ready"
@@ -113,4 +114,63 @@ def test_failed_build_publishes_nothing(canon):
         raise PublishRefused("the Match Night package was not built; nothing was published")
     with pytest.raises(PublishRefused, match="not built"):
         publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=broken)
+    assert not _pages(canon).exists()
+
+
+def _link(link: Path, target: Path) -> None:
+    """A directory junction on Windows (what GPT's probe used), a symlink elsewhere."""
+    if os.name == "nt":
+        import _winapi
+        _winapi.CreateJunction(str(target), str(link))
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
+def _never_builds(site):
+    raise AssertionError("the builder must not run when a guard refuses")
+
+
+def test_a_junctioned_build_folder_is_refused_and_the_outside_target_untouched(canon, tmp_path):
+    """GPT audit #84 P1: <repo>/tmp as a junction to an outside folder resolved 'equal' to the expected path."""
+    outside = tmp_path / "outside"
+    (outside / "match_night_site").mkdir(parents=True)
+    sentinel = outside / "match_night_site" / "index.html"
+    sentinel.write_text("outside sentinel", encoding="utf-8")
+    _link(canon / "tmp", outside)
+    with pytest.raises(PublishRefused, match="link/junction"):
+        check_site_dir(canon / "tmp" / "match_night_site", canon)
+    with pytest.raises(PublishRefused, match="link/junction"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
+    assert sentinel.read_text(encoding="utf-8") == "outside sentinel"
+    assert not _pages(canon).exists()
+
+
+def test_a_junction_inside_the_build_folder_is_refused_before_anything_is_deleted(canon, tmp_path):
+    outside = tmp_path / "outside-icons"
+    outside.mkdir()
+    sentinel = outside / "icon-192.png"
+    sentinel.write_bytes(b"outside sentinel")
+    site = canon / "tmp" / "match_night_site"
+    site.mkdir(parents=True)
+    _link(site / "icons", outside)
+    with pytest.raises(PublishRefused, match="link/junction"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
+    assert sentinel.read_bytes() == b"outside sentinel"
+
+
+def test_a_junctioned_pages_checkout_is_refused(canon, tmp_path):
+    outside = tmp_path / "outside-worktrees"
+    (outside / "gh-pages").mkdir(parents=True)
+    sentinel = outside / "gh-pages" / "index.html"
+    sentinel.write_text("outside sentinel", encoding="utf-8")
+    _link(canon / ".worktrees", outside)
+    with pytest.raises(PublishRefused, match="link/junction"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
+    assert sentinel.read_text(encoding="utf-8") == "outside sentinel"
+
+
+def test_uncommitted_source_changes_are_refused(canon):
+    (canon / "README.md").write_text("edited but not committed\n", encoding="utf-8")
+    with pytest.raises(PublishRefused, match="uncommitted changes"):
+        publish(canon, demo=True, match_id=None, db=None, push=False, canonical=canon, origin=ORIGIN, builder=_never_builds)
     assert not _pages(canon).exists()

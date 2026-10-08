@@ -13,7 +13,9 @@ The passphrase is handled only by scripts/build_match_night_package.py (hidden p
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -49,11 +51,45 @@ def _inside(child: Path, parent: Path) -> bool:
         return False
 
 
+def _is_link(path: Path) -> bool:
+    """Symlink, Windows junction or any other reparse point (GPT audit #84 P1: a junction made two aliases
+    resolve to the same outside folder, so an equality check of resolved paths passed)."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    if stat.S_ISLNK(st.st_mode):
+        return True
+    return bool(getattr(st, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def check_no_links(path: Path, root: Path, what: str) -> Path:
+    """Every existing component from root down to path is a real directory/file (no symlink, junction or
+    reparse point), and the final resolved path stays inside the resolved root. Returns the logical path."""
+    root = Path(os.path.abspath(root))
+    path = Path(os.path.abspath(path))
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        raise PublishRefused(f"{what} {path} is not inside {root}") from None
+    current = root
+    if _is_link(current):
+        raise PublishRefused(f"{what}: {current} is a link/junction; refusing")
+    for part in rel.parts:
+        current = current / part
+        if _is_link(current):
+            raise PublishRefused(f"{what}: {current} is a link/junction; refusing")
+    if not _inside(path, root):
+        raise PublishRefused(f"{what} {path} resolves outside {root.resolve()}")
+    return path
+
+
 def check_repository(repo: Path, canonical: Path = CANONICAL_ROOT, origin: str = CANONICAL_ORIGIN) -> Path:
     """The checkout is the canonical repository (or a linked worktree of it) with the expected origin."""
-    repo = repo.resolve()
     if not _inside(repo, canonical):
-        raise PublishRefused(f"{repo} is not inside the canonical repository {canonical}")
+        raise PublishRefused(f"{repo.resolve()} is not inside the canonical repository {canonical}")
+    check_no_links(repo, canonical, "repository checkout")
+    repo = repo.resolve()
     common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     if not _same(common, canonical / ".git"):
         raise PublishRefused(f"git common dir {common} is not {canonical / '.git'}")
@@ -64,20 +100,25 @@ def check_repository(repo: Path, canonical: Path = CANONICAL_ROOT, origin: str =
 
 
 def check_site_dir(site: Path, repo: Path) -> Path:
-    site = site.resolve()
-    expected = (repo / "tmp" / "match_night_site").resolve()
-    if not _same(site, expected):
-        raise PublishRefused(f"build folder must be {expected}, got {site}")
-    return site
+    expected = Path(os.path.abspath(repo / "tmp" / "match_night_site"))
+    if os.path.normcase(os.path.abspath(site)) != os.path.normcase(str(expected)):
+        raise PublishRefused(f"build folder must be {expected}, got {os.path.abspath(site)}")
+    check_no_links(expected, repo, "build folder")
+    if (expected / "icons").exists():
+        check_no_links(expected / "icons", repo, "build folder")
+    return expected
 
 
 def check_pages_worktree(pages: Path, canonical: Path = CANONICAL_ROOT) -> str:
     """Return 'missing' (safe to create) or 'ready'. Refuses anything unexpected."""
-    expected = (canonical / ".worktrees" / "gh-pages").resolve()
-    if not _same(pages, expected):
-        raise PublishRefused(f"Pages checkout must be {expected}, got {pages.resolve()}")
+    expected = Path(os.path.abspath(canonical / ".worktrees" / "gh-pages"))
+    if os.path.normcase(os.path.abspath(pages)) != os.path.normcase(str(expected)):
+        raise PublishRefused(f"Pages checkout must be {expected}, got {os.path.abspath(pages)}")
+    check_no_links(expected, canonical, "Pages checkout")
     if not pages.exists():
         return "missing"
+    if (pages / "icons").exists():
+        check_no_links(pages / "icons", canonical, "Pages checkout")
     common = Path(git(pages, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     if not _same(common, canonical / ".git"):
         raise PublishRefused(f"{pages} is not a worktree of {canonical}")
@@ -103,11 +144,14 @@ def check_site_contents(site: Path) -> None:
         raise PublishRefused(f"the built site is missing {missing}")
 
 
-def sync_allowlisted(site: Path, pages: Path, repo: Path) -> None:
-    """Copy exactly the allowlisted files (nothing is deleted except files of the same names)."""
+def sync_allowlisted(site: Path, pages: Path, repo: Path, canonical: Path = CANONICAL_ROOT) -> None:
+    """Copy exactly the allowlisted files (nothing is deleted except files of the same names). Every source
+    and destination is checked for links/junctions immediately before it is used."""
     (pages / "icons").mkdir(exist_ok=True)
     for name in PUBLISHED:
         source = repo / name if name == ".repo-boundary-id" else site / name
+        check_no_links(source, repo, "published source")
+        check_no_links(pages / name, canonical, "published destination")
         shutil.copyfile(source, pages / name)
 
 
@@ -117,15 +161,24 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
     site = check_site_dir(repo / "tmp" / "match_night_site", repo)
     pages = canonical / ".worktrees" / "gh-pages"
     state = check_pages_worktree(pages, canonical)
+    # Publish only committed source, and say which (GPT audit #84: never label working changes as HEAD).
+    changed = git(repo, "status", "--porcelain", "--untracked-files=no")
+    if changed:
+        raise PublishRefused(f"the source checkout has uncommitted changes; commit them first:\n{changed}")
+    source = git(repo, "rev-parse", "HEAD")
+    if push and not git(repo, "branch", "-r", "--contains", source):
+        raise PublishRefused(f"source commit {source[:7]} is not on origin yet; push it first")
 
     if site.exists():
-        for name in PUBLISHED:                      # remove only previously generated files, then the empty dirs
+        for name in PUBLISHED:                      # remove only previously generated files (links refused)
             target = site / name
+            check_no_links(target, repo, "build folder")
             if target.is_file():
                 target.unlink()
-        for leftover in sorted(site.rglob("*"), reverse=True):
-            if leftover.is_dir() and not any(leftover.iterdir()):
-                leftover.rmdir()
+        icons = site / "icons"
+        if icons.is_dir() and not _is_link(icons) and not any(icons.iterdir()):
+            icons.rmdir()
+    check_site_dir(site, repo)                      # re-check right before writing
     if builder is not None:                         # tests: build in-process
         builder(site)
     else:
@@ -135,6 +188,7 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
             build += ["--match-id", match_id]
         if subprocess.run(build, cwd=repo).returncode != 0:
             raise PublishRefused("the Match Night package was not built; nothing was published")
+    check_site_dir(site, repo)
     check_site_contents(site)
 
     if state == "missing":
@@ -149,12 +203,12 @@ def publish(repo: Path, *, demo: bool, match_id: str | None, db: Path | None, pu
         git(pages, "pull", "--ff-only", "origin", PAGES_BRANCH)
         check_pages_worktree(pages, canonical)
 
-    sync_allowlisted(site, pages, repo)
+    sync_allowlisted(site, pages, repo, canonical)
     git(pages, "add", "--", *PUBLISHED)
     if not git(pages, "status", "--porcelain", "--", *PUBLISHED):
         return "unchanged"
     label = "DEMO (synthetic players)" if demo else "private encrypted package"
-    git(pages, "commit", "-m", f"Publish Match Night {label}\n\n{FOOTER}", "--", *PUBLISHED)
+    git(pages, "commit", "-m", f"Publish Match Night {label}\n\nSource: {source}\n\n{FOOTER}", "--", *PUBLISHED)
     if push:
         git(pages, "push", "origin", PAGES_BRANCH)
     return git(pages, "rev-parse", "--short", "HEAD")

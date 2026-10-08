@@ -75,6 +75,13 @@ copied, fetched or checked out, it checks:
 - The build folder is exactly `<repo>/tmp/match_night_site`.
 - The Pages checkout is the linked worktree `.worktrees/gh-pages` of that repository, on branch
   `gh-pages`, with **no uncommitted work** and no files outside the published allowlist.
+- **No links anywhere on the way.** No path component of the checkout, the build folder (and its
+  `icons/`), the Pages checkout, or any allowlisted source and destination may be a symlink, junction
+  or other reparse point, and each must resolve inside its root. These checks run before the first
+  write and again right before each copy. Comparing resolved paths alone is not enough: GPT showed that
+  a junctioned `tmp/` resolves "equal" on both sides.
+- **Committed source only.** Uncommitted tracked changes are refused. A real publish also needs the
+  source commit on `origin`. The `gh-pages` commit records `Source: <commit>`.
 
 Then it:
 - Removes, copies and stages **only the allowlisted generated files**, naming them explicitly. Any git
