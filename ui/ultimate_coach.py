@@ -142,6 +142,7 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .note-line, .note-more { display:block; font-size:12px; color:#2f4a7a; }
 .note-line, .note-more summary { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .note-more summary { cursor:pointer; } .note-line span, .note-more summary span { display:inline !important; } .note-more[open] summary { white-space:normal; }
+.coach-archive { margin-top:4px; font-size:12px; color:#2f4a7a; background:#eef4ff; padding:3px 6px; border-radius:6px; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
 @media (max-width:600px) {

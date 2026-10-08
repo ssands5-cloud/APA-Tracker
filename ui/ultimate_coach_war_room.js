@@ -148,9 +148,18 @@
   // fixture's card. Notes written by the earlier per-team version (plan.notes[team][player].n) are carried over.
   var WR_PLAN=(function(){
     var o=null;try{o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");}catch(e){o=null;}
-    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{}}:{our:{},opp:{},notes:{},cap:{},coach:{}};
+    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{}};
+    // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
+    // different one (another team scope, or a note that already exists) is archived with its scope. The archive
+    // is shown on the card as an earlier opinion and is never copied back into the editable note.
     Object.keys(p.notes).forEach(function(scope){var s=p.notes[scope]||{};Object.keys(s).forEach(function(pid){
-      var n=s[pid]&&s[pid].n;if(n&&!(p.coach[pid]&&p.coach[pid].n)){(p.coach[pid]||(p.coach[pid]={})).n=n;}});});
+      var n=String((s[pid]&&s[pid].n)||"").trim();if(!n) return;
+      var c=p.coach[pid]||(p.coach[pid]={});
+      if(!c.n){c.n=n;return;}
+      if(String(c.n).trim()===n) return;
+      var a=p.archive[pid]||(p.archive[pid]=[]);
+      if(!a.some(function(x){return x.n===n;})) a.push({scope:scope,n:n});
+    });});
     // One-time migration (GPT audit #84): once imported, the legacy copy is removed and saved, so a note the
     // captain later clears is not resurrected on the next load.
     if(Object.keys(p.notes).length){p.notes={};p._migrated=true;}
@@ -171,6 +180,12 @@
     var full=n+" ("+label+")";
     if(n.length<=48) return '<span class="note-line">📝 '+esc(full)+'</span>';
     return '<details class="note-more"><summary>📝 '+esc(n.slice(0,36).replace(/\s+\S*$/,""))+'… <span class="muted">('+esc(label)+')</span></summary>'+esc(n)+'</details>';
+  }
+  function wrArchiveHtml(pid){
+    var a=WR_PLAN.archive[String(pid)]||[];
+    if(!a.length) return "";
+    return '<div class="coach-archive"><b>Earlier notes kept from the previous version (opinion):</b>'
+      +a.map(function(x){var t=TEAM_INDEX[x.scope];return '<div>'+esc(x.n)+' <span class="muted">(noted under '+esc(t?t.name:x.scope)+')</span></div>';}).join("")+'</div>';
   }
   function wrSetCoach(pid,field,value){var c=WR_PLAN.coach[String(pid)]||(WR_PLAN.coach[String(pid)]={});if(value) c[field]=value; else delete c[field];wrSave();}
   function wrSave(){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));}catch(e){}}
@@ -423,7 +438,7 @@
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
           +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'
-          +'<div class="coach-summary">'+esc(wrCoachSummary(c.opponent.id))+'</div></dd></dl></div>';
+          +'<div class="coach-summary">'+esc(wrCoachSummary(c.opponent.id))+'</div>'+wrArchiveHtml(c.opponent.id)+'</dd></dl></div>';
       }).join("")+'</div>';
     // Meetings
     document.getElementById("wr-meetings").innerHTML='<h2>Direct meetings between the rosters</h2>'+(w.meetings.length

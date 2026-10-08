@@ -563,3 +563,34 @@ def test_matrix_captain_view_is_a_remembered_toggle_over_the_same_evidence(tmp_p
             assert errors == []
         finally:
             browser.close()
+
+
+def test_legacy_notes_from_every_scope_are_preserved_and_clearing_never_resurrects(tmp_path: Path):
+    """GPT audit #84 P2 (preservation variant): two different legacy observations for one player under two team
+    scopes, and a legacy note that differs from an existing coach note, must all survive migration."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.evaluate("""() => { const k='ultimate-coach:plan-v2'; const o=JSON.parse(localStorage.getItem(k)||'{}');
+                o.coach={'11': {n: 'SYNTHETIC current note'}};
+                o.notes={'falcons-a|d1|Fall 2026': {'10': {n: 'SYNTHETIC scope A note'}, '11': {n: 'SYNTHETIC older Eve note'}},
+                         'owls-a|d1|Fall 2026': {'10': {n: 'SYNTHETIC scope B note'}}};
+                localStorage.setItem(k, JSON.stringify(o)); }""")
+            page.reload(); page.wait_for_load_state("load")
+            cam, eve = page.locator("#scouting-cards .scout").nth(0), page.locator("#scouting-cards .scout").nth(1)
+            assert cam.locator(".coach-summary").inner_text() == "Coach: SYNTHETIC scope A note"
+            assert "SYNTHETIC scope B note" in cam.locator(".coach-archive").inner_text()          # not lost
+            assert eve.locator(".coach-summary").inner_text() == "Coach: SYNTHETIC current note"   # current wins
+            assert "SYNTHETIC older Eve note" in eve.locator(".coach-archive").inner_text()        # legacy kept
+            stored = page.evaluate("JSON.parse(localStorage.getItem('ultimate-coach:plan-v2'))")
+            assert stored["notes"] == {} and len(stored["archive"]["10"]) == 1                      # migrated once
+            cam.locator('textarea[data-plan="note"]').fill("")                                     # clear: stays clear
+            page.reload(); page.wait_for_load_state("load")
+            cam = page.locator("#scouting-cards .scout").nth(0)
+            assert cam.locator(".coach-summary").inner_text() == ""
+            assert cam.locator('textarea[data-plan="note"]').input_value() == ""
+            assert "SYNTHETIC scope B note" in cam.locator(".coach-archive").inner_text()
+            assert errors == []
+        finally:
+            browser.close()
