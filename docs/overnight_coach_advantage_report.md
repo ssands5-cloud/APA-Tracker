@@ -1860,6 +1860,18 @@ Native Excel recapture, print/first-viewport/timing acceptance remain pending. T
 
 Skills trace: .github/skills/verification-before-completion/SKILL.md -> exact-source tests and independently checked CI separate from native/live provenance; .github/skills/red-team/SKILL.md -> category-preserving alternate presentation, played-opponent exclusion and Unknown at decision point; .github/skills/validator/SKILL.md -> contained immutable selected-source checks. Adaptation: no native/COM control, no production fixtures, no builder WIP execution. Existing Phase4 plan and approved unattended authority retained; no merge/production signoff.
 
+### GPT audit — October 8, 2026 about 03:50 UTC: packet/coach promotion and populated-note layout
+
+Exact c04c92708359ad2ce01aee7bd5ba8bbb5fe89959 includes d805f0bd27b4bcaec55299ee7aab3ebee3c4beb2 packet decision-first and opinion beside threats. Independent CI37723854703 BOTH Python SUCCESS. GPT46 browser/formula tests PASS44.46s from immutable selected-source snapshot, not mutable worktree. Packet send/risk/roster order and formulas plus note labels/parity pass synthetic scope; native print retention/typography and native Inspect remain pending.
+
+Live synthetic publication441add0f9fd95b702767e776b6c6ca2dbc61dbce built; four HTTPS assets200 and decoded bytes match Git. Package198777bytes SHA25602f401b9084bbef69e0f66d3522ded701a680a5473cac13a7157fcfb535edaed, SW6d2d63558f4e04bfca1abb67f8a7391ff54d311512e6faf807a5c5473fbbe86d. Default/no-note WebKit390x664 primary decisions still pass; Chromium390x844 pass. Do not erase that verified repair or claim physical acceptance.
+
+NEW OPEN P2 populated-coach-note Safari layout: in disposable live DEMO browser, enter player11 note "Synthetic observation: takes time over safety shots, checks the table carefully, and prefers a defensive opening when the layout is difficult." Save via normal card change/rerender, select Cam, scroll to zero and assert observation actually appears. Threats517–621; Risks627–678.8 exceeds664. Chromium844 still fits, no script errors. Keep notes promoted/labeled, with compact accessible preview/details or an adjacent action so full observation remains reachable without pushing primary risks below first screen. Add populated-note viewport regression; do not hide required decisions or reduce readability. Initial probe failed to trigger rerender/normalize scroll; its measurements were discarded, corrected saved-note probe provides the reported evidence.
+
+Output .git/gpt-packet-c04c927-20261008: immutable tests, live-byte-check.json, default and notes-live-phone-layout-result.json/profile PNGs, notes-live-phone-probe.py. Synthetic observations only, no real notes or credentials modified. The current source still retains publisher unresolved junction guard and Python used-target response; legacy preservation/Unknown decision context/native/physical/offline/realpublish ledger stays open. No publisher executed, no merge/acceptance.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> distinct source/CI/fresh tests/live-byte/native evidence; .github/skills/red-team/SKILL.md -> realistic populated observation affecting decision hierarchy; .github/skills/validator/SKILL.md -> immutable contained probes and verified saved note/scroll origin, reject invalid initial measurements. Adaptation: synthetic disposable browsers, no native/COM or user-screen takeover. Continue approved work under existing plan.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
