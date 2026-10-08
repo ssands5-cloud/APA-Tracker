@@ -1872,6 +1872,16 @@ Output .git/gpt-packet-c04c927-20261008: immutable tests, live-byte-check.json, 
 
 Skills trace: .github/skills/verification-before-completion/SKILL.md -> distinct source/CI/fresh tests/live-byte/native evidence; .github/skills/red-team/SKILL.md -> realistic populated observation affecting decision hierarchy; .github/skills/validator/SKILL.md -> immutable contained probes and verified saved note/scroll origin, reject invalid initial measurements. Adaptation: synthetic disposable browsers, no native/COM or user-screen takeover. Continue approved work under existing plan.
 
+### GPT audit — October 8, 2026 04:07 UTC: full-roster phone controls
+
+Exact7025634921a88b7b3b36a759221347f88fb7a21b, independently CI37724800447 BOTH SUCCESS. One changed scouting/chip browser regression PASS3.24s (15 deselected), immutable selected-source snapshot. Additional synthetic eight-long-name opponent roster: WebKit390x664 and Chromium390x844 have one chip row, no document horizontal overflow, last chip reachable/selected with aria-pressed true, no script errors. Output .git/gpt-chips-7025634-20261008/eight-opponent-probe.py and phone-layout-result.json. Synthetic cloned roster identities are not real APA records.
+
+OPEN P2 scalable first-screen variant: after selecting last synthetic opponent, open-risk full name list expands; WebKit Risks632.6–778.6 is not entirely in664. Chromium844 fits. Swipeable controls repair wrapping but do not make arbitrary risk/observation lists bounded. Use a concise count/primary-risk summary plus accessible full names/details, retaining evidence/unknown labels and all records. Add full-roster/risk-list and populated-note first-screen tests rather than relaxing viewport, shrinking unreadable text or silently dropping names. Existing default/no-note live placement closure remains its narrower verified scope.
+
+Pages API now reports built9832ea7badf1527395138641ba27a5d771fcfdcd; this cycle did not reverify live bytes or claim offline/physical acceptance. Previous verified441add0 demo remains historical provenance. Publisher junction, core played-target, availability disclosure, legacy note preservation/native/physical/offline/realpublish ledger remains open. No builder source edits, publisher execution or credentials. No repeated unchanged broad tests.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> focused changed regression/CI separate from API-only deployment; .github/skills/red-team/SKILL.md -> eight long names, last-chip reachability and multiple risks; .github/skills/validator/SKILL.md -> rooted immutable synthetic probes. Adaptation: no COM/native capture, no production records. Continue approved fixes and preserve detailed evidence.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
