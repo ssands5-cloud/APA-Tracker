@@ -720,6 +720,17 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Medals = ordered direct records among our '
         'remaining players (same evidence = same medal). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No direct record to order — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
+    # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
+    # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
+    # (real-Excel UAT 2a67d78 showed a 2-line row hiding the last "≈" candidate).
+    e.cell("wr_NsUnordLine", "Next Send not-ordered line",
+           f'=IF(INDEX(wr_NsUnordJoin,{R})="","","≈ Not ordered (shared-opponent results only): "&INDEX(wr_NsUnordJoin,{R}))')
+    e.cell("wr_NsAvoidLine", "Next Send avoid line", f'=IF(INDEX(wr_NsAvoidJoin,{R})="","","⚠ Avoid: "&INDEX(wr_NsAvoidJoin,{R}))')
+    e.cell("wr_NsUnkLine", "Next Send unknown line",
+           f'=IF(INDEX(wr_NsUnkJoin,{R})="","","❓ Unknown (no evidence, not weak): "&INDEX(wr_NsUnkJoin,{R}))')
+    e.cell("wr_NsLists", "Next Send lists (one line each)",
+           '=wr_NsUnordLine&IF(AND(wr_NsUnordLine<>"",wr_NsAvoidLine&wr_NsUnkLine<>""),CHAR(10),"")'
+           '&wr_NsAvoidLine&IF(AND(wr_NsAvoidLine<>"",wr_NsUnkLine<>""),CHAR(10),"")&wr_NsUnkLine')
 
     # ---- Lineup Lab metrics ----
     e.section("Lineup Lab metrics")
@@ -1076,7 +1087,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         c = ws.cell(row=header, column=col, value=f'=INDEX(wr_OppLabels,{j})')
         c.font = Font(bold=True, size=8, color=base.FELT_DEEP)
         c.alignment = Alignment(wrap_text=True, vertical="top")
-    ws.row_dimensions[header].height = 42
+    narrow = min(ws.column_dimensions[get_column_letter(col)].width for col in matrix_cols)
+    ws.row_dimensions[header].height = _worst_height(_longest_label(wb), narrow, 8, 42)
     grid = engine["grid"]
     helper_col0 = 15  # O.. : a same-sheet copy of the category grid for conditional formatting
     for i in range(1, R + 1):
@@ -1089,7 +1101,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
             c.font = SMALL
             c.alignment = Alignment(wrap_text=True, vertical="top")
             ws.cell(row=r, column=helper_col0 + j - 1, value=f"={cat_ref}").font = base.HELPER_FONT
-        ws.row_dimensions[r].height = 30
+        ws.row_dimensions[r].height = _worst_height(WORST_EVIDENCE, narrow, 9, 30)
     first_row, last_row = header + 1, header + R
     for j in range(R):
         ws.column_dimensions[get_column_letter(helper_col0 + j)].hidden = True
@@ -1126,7 +1138,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         _span(ws, r, 5, 6, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Direct Record],{s}+{rr}))', font=SMALL)
         _span(ws, r, 7, 9, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Shared-Opponent Evidence],{s}+{rr}))', font=SMALL)
         _span(ws, r, 10, 12, f'=IF({cond},"",INDEX(MatchupEvidence_Table[Basis],{s}+{rr}))', font=SMALL)
-        ws.row_dimensions[r].height = 30
+        basis_width = sum(ws.column_dimensions[get_column_letter(c)].width for c in (10, 11, 12))
+        ws.row_dimensions[r].height = _worst_height(WORST_BASIS, basis_width, 9, 30)
     top2 = top + 3 + R + 1
     _span(ws, top2, 1, 2, "Inspect our player", font=base.LABEL_FONT)
     base._input(ws.cell(row=top2, column=3))
@@ -1759,9 +1772,46 @@ def _fit_height(text: Any, width_units: float, size: float, minimum: float) -> f
     return max(minimum, round(lines * size * 1.35 + 4, 1))
 
 
+def _worst_height(text: str, width_units: float, size: float, minimum: float) -> float:
+    """Row height (points) for the longest text a FORMULA cell can show. Excel never auto-fits formula rows,
+    so this word-wraps the worst case (real-Excel UAT 2a67d78: clipped Next Send list and matrix cells)."""
+    per_line = max(6, int(width_units * 10 / size))   # measured in real Excel: ~10 chars per 9 units at 9 pt
+    lines = 0
+    for paragraph in text.split("\n"):
+        lines, used = lines + 1, 0
+        for word in paragraph.split(" "):
+            while len(word) > per_line:
+                lines, used, word = lines + (used > 0), 0, word[per_line:]
+            if used and used + 1 + len(word) > per_line:
+                lines, used = lines + 1, len(word)
+            else:
+                used += (1 if used else 0) + len(word)
+    return max(minimum, round(lines * size * 1.4 + 6, 1))
+
+
+def _longest_label(wb) -> str:
+    """The longest player label in this workbook (Players sheet), or a long generic one when there is none."""
+    labels = []
+    if "Players" in wb.sheetnames:
+        ws = wb["Players"]
+        head = [c.value for c in ws[1]]
+        if "Player Label" in head:
+            col = head.index("Player Label") + 1
+            labels = [str(v) for (v,) in ws.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True) if v]
+    return max(labels, key=len) if labels else WORST_LABEL
+
+
+# A long but realistic player label, and the longest matrix evidence text, for sizing formula rows.
+WORST_LABEL = "Christopher Fitzgerald (APA record ID 3487149)"
+WORST_EVIDENCE = "≈ 41-53 vs 81-58 (61 shared)"
+WORST_BASIS = ("Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+               "compare ours vs theirs")
+
+
 def _card(ws, top: int, c1: int, c2: int, title: str, lines: list[Any], *, size: float = 11, title_fill=None,
           line_height: float = 18) -> int:
-    """A titled card: a coloured title bar and plain lines underneath, framed by a light border."""
+    """A titled card: a coloured title bar and plain lines underneath, framed by a light border. A line given as
+    (value, worst_case_text) is sized for that text, since a formula line's height can't be fitted from itself."""
     from openpyxl.styles import Border, Side
     edge = Side(style="thin", color="CFC6B4")
     _span(ws, top, c1, c2, title, font=Font(bold=True, size=12, color="FFFFFF"), fill=title_fill or base.SECTION_FILL,
@@ -1770,8 +1820,10 @@ def _card(ws, top: int, c1: int, c2: int, title: str, lines: list[Any], *, size:
     width = sum(ws.column_dimensions[get_column_letter(c)].width or 8.43 for c in range(c1, c2 + 1))
     for line in lines:
         r += 1
+        line, worst = line if isinstance(line, tuple) else (line, None)
+        floor = _worst_height(worst, width, size, line_height) if worst else line_height
         _span(ws, r, c1, c2, line, font=Font(size=size),
-              height=max(_fit_height(line, width, size, line_height), ws.row_dimensions[r].height or 0))
+              height=max(_fit_height(line, width, size, floor), ws.row_dimensions[r].height or 0))
     for rr in range(top, r + 1):
         for c in range(c1, c2 + 1):
             cell = ws.cell(row=rr, column=c)
@@ -1882,12 +1934,20 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     ns_lines = ["=wr_NsHeadline"]
     for n in range(1, 5):
         ns_lines.append(f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
-    last = f"{R}"
+    # The not-ordered / avoid / unknown lists share one wrapped cell (wr_NsLists): together they name at most R of
+    # our players, so size it for that worst case with this workbook's longest label, or Excel hides the last names.
+    label = _longest_label(wb)
+    unord = "≈ Not ordered (shared-opponent results only): "
+    worst = max((unord + "; ".join([f"{label} (availability unknown)"] * R),
+                 unord + "; ".join([f"{label} (availability unknown)"] * max(R - 2, 1))
+                 + f"\n⚠ Avoid: {label} — 0-12 (12 meetings)\n❓ Unknown (no evidence, not weak): {label}"),
+                key=lambda t: _worst_height(t, 166, 11, 0))
+    medal = (f"🥇 {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+             "our only favorable direct option vs another unplayed opponent · availability unknown")
+    ns_lines = [ns_lines[0]] + [(line, medal) for line in ns_lines[1:]]
     ns_lines += [
         f'=IF(COUNTIF(wr_NsMedalRun,">4")+COUNTIF(wr_NsMore,TRUE)=0,"","+ more direct candidates — see War Room Inspect")',
-        f'=IF(INDEX(wr_NsUnordJoin,{last})="","","≈ Not ordered (shared-opponent results only): "&INDEX(wr_NsUnordJoin,{last}))',
-        f'=IF(INDEX(wr_NsAvoidJoin,{last})="","","⚠ Avoid: "&INDEX(wr_NsAvoidJoin,{last}))',
-        f'=IF(INDEX(wr_NsUnkJoin,{last})="","","❓ Unknown (no evidence, not weak): "&INDEX(wr_NsUnkJoin,{last}))',
+        ("=wr_NsLists", worst),
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
     ]
     top = _card(ws, 7, 2, 11, "WHO SHOULD I SEND NEXT?", ns_lines, size=11, line_height=30) + 2

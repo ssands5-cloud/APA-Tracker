@@ -530,8 +530,9 @@ def test_start_here_explains_the_workbook_and_names_the_build(built):
 
 
 def _next_send(book):
-    lines = [book.display("Command Center", f"B{r}") for r in range(8, 18)]
-    return [x for x in lines if x not in ("", None)]
+    # The ≈ / Avoid / Unknown lists share one wrapped cell, a line each (CHAR(10)); compare them line by line.
+    lines = [line for r in range(8, 16) for line in str(book.display("Command Center", f"B{r}") or "").split("\n")]
+    return [x for x in lines if x not in ("", "None")]
 
 
 def test_command_center_next_send_answers_the_player_they_put_up(book, built):
@@ -653,6 +654,59 @@ def test_helper_cells_are_hidden_from_the_captain(built):
                 size = c.font.sz or 11
                 lines = -(-len(c.value) // max(10, int(width * 11 / size * 1.05)))
                 assert (start.row_dimensions[c.row].height or 15) >= lines * size * 1.2, (c.coordinate, c.value[:40])
+
+
+def _wrapped_lines(text, width_units, size):
+    """Word-wrapped line count for text in a cell this wide (Excel breaks at spaces, then inside long words)."""
+    per_line = max(6, int(width_units * 10 / size))   # real Excel showed ~10 chars per 9 width units at 9 pt
+    lines = 0
+    for paragraph in text.split("\n"):
+        lines, used = lines + 1, 0
+        for word in paragraph.split(" "):
+            while len(word) > per_line:
+                lines, used, word = lines + (used > 0), 0, word[per_line:]
+            if used and used + 1 + len(word) > per_line:
+                lines, used = lines + 1, len(word)
+            else:
+                used += (1 if used else 0) + len(word)
+    return lines
+
+
+def test_formula_rows_fit_their_worst_case_text(built):
+    # Real-Excel UAT 2a67d78: the Next Send "≈ Not ordered" list showed 2 of its 3 lines (the last candidate was
+    # cut off), and narrow War Room matrix columns cut "(14 shared)" and the opponent header's record ID.
+    # Excel never auto-fits formula rows, so each must be tall enough for its longest possible text.
+    from openpyxl.utils import get_column_letter
+    cc = built["Command Center"]
+    width = lambda ws, c1, c2: sum(ws.column_dimensions[get_column_letter(k)].width or 8.43 for k in range(c1, c2 + 1))
+    players = built["Players"]
+    head = [c.value for c in players[1]]
+    col = head.index("Player Label") + 1
+    name = max((str(v) for (v,) in players.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True) if v), key=len)
+    wr = built[WR]
+    header = _row(built, WR, "Our player ↓ / opponent →")
+    roster = sum(1 for c in wr[header] if str(c.value).startswith("=INDEX(wr_OppLabels,"))
+    # The three lists are one cell, a line each, naming at most `roster` of our players between them.
+    lists = [r for r in range(8, 30) if str(cc.cell(row=r, column=2).value).endswith("_NsLists")]
+    assert len(lists) == 1 and not any("Join," in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
+    worst = "≈ Not ordered (shared-opponent results only): " + "; ".join([f"{name} (availability unknown)"] * roster)
+    need = _wrapped_lines(worst, width(cc, 2, 11), 11) * 11 * 1.2
+    assert cc.row_dimensions[lists[0]].height >= need, (cc.row_dimensions[lists[0]].height, need)
+    medal = (f"🥇 {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+             "our only favorable direct option vs another unplayed opponent · availability unknown")
+    for r in range(lists[0] - 5, lists[0] - 1):                       # the four medal lines
+        assert "_NsMedalText" in cc.cell(row=r, column=2).value
+        assert cc.row_dimensions[r].height >= _wrapped_lines(medal, width(cc, 2, 11), 11) * 11 * 1.2, r
+    cols = [c.column for c in wr[header] if str(c.value).startswith("=INDEX(wr_OppLabels,")]
+    narrow = min(width(wr, c, c) for c in cols)
+    assert (wr.row_dimensions[header].height or 15) >= _wrapped_lines(name, narrow, 8) * 8 * 1.2
+    for r in range(header + 1, header + roster + 1):
+        assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines("≈ 41-53 vs 81-58 (61 shared)", narrow, 9) * 9 * 1.2, r
+    inspect = _row(built, WR, "Inspect opponent")
+    basis = ("Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+             "compare ours vs theirs")
+    for r in range(inspect + 2, inspect + 2 + roster):
+        assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines(basis, width(wr, 10, 12), 9) * 9 * 1.2, r
 
 
 def test_captain_packet_page_one_is_decision_first(book, built):
