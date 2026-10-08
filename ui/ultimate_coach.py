@@ -106,7 +106,9 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
 .next-send h3 { margin:0 0 2px; font-size:16px; text-transform:uppercase; letter-spacing:.4px; color:#5d4413; }
 .ns-ask { align-self:center; font-size:12px; color:var(--muted); }
-@media (max-width:600px) { .tonight-grid.decide { gap:6px; } .tonight-grid.decide > div { padding:6px 9px; } }
+@media (max-width:600px) { .tonight-grid.decide { gap:6px; } .tonight-grid.decide > div { padding:6px 9px; }
+  /* Phones: Next Send already answers the open opponent, so threats and risks come before the per-opponent overview. */
+  .decide-threats { order:1; } .decide-risks { order:2; } .decide-sends { order:3; } }
 .ns-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; align-items:center; }
 .ns-chip { min-height:40px; padding:6px 10px; border-radius:20px; border:1px solid #c9b88f; background:#fff; color:#3b2f17; font-size:13px; }
 .ns-chip.on { background:#5d4413; color:#fff; border-color:#5d4413; font-weight:700; }
