@@ -9,8 +9,12 @@ replaces the database. Neither adds "Monday's scores" safely. This command:
    built from it are preserved;
 2. re-syncs only the catalog's current-session divisions (``--mine-only``: just the viewer's own) through the
    existing, audited ``sync_division_wide(resume=True)``: rosters and schedules are always re-fetched and a
-   scoresheet is fetched only for a scored match that has none yet. Existing history is upserted, never
-   dropped;
+   scoresheet is fetched only for a scored match that has none yet. Then, in the default ``--mode reconcile``
+   (GPT audit 4874e4b), every scored match that ALREADY had rows is re-fetched and its player results
+   reconciled -- corrections updated, missing rows added, rows absent from the authoritative sheet removed --
+   refusing removal on an empty sheet or an unresolved identity. ``--mode missing-only`` keeps the old
+   fetch-only-what-is-missing behaviour and never reports complete coverage. Earlier sessions and other matches
+   are never touched;
 3. writes a before/after report -- date range checked, matches added, newly scored, changed, scoresheet rows
    added, and every gap (scored match without a scoresheet, denied division, coverage problem). Ids and counts
    only: no player names.
@@ -151,19 +155,101 @@ def verify_fixtures(db_path: Path, member_id: str, on_date: str, sessions: set[s
              "away_score": r[5], "scoresheet_rows": r[6], "viewer_rows": r[7]} for r in rows]
 
 
+RESULT_FIELDS = ("result", "points_earned", "skill_level", "team_id", "eight_on_break", "eight_break_and_run",
+                 "nine_on_snap", "nine_break_and_run")
+
+
+def _player_rows(db, match_pk: int) -> dict[str, dict[str, Any]]:
+    """This match's PlayerMatch rows keyed by the player's APA external id (the identity the sheet is mapped to)."""
+    from database.models import Player, PlayerMatch
+
+    rows = db.query(PlayerMatch, Player.external_id).join(Player, Player.id == PlayerMatch.player_id).filter(
+        PlayerMatch.match_id == match_pk).all()
+    return {str(ext): {f: getattr(pm, f) for f in RESULT_FIELDS} for pm, ext in rows}
+
+
+def default_scoresheet(config: dict, match_id: str) -> tuple[list[dict], list[dict]]:
+    """The authoritative GraphQL scoresheet for one match: (per-player score rows, head-to-head rows)."""
+    from scheduler import graphql_sync as gs
+
+    detail = gs.fetch_match_detail(config, int(match_id))
+    return gs.match_player_scores(detail), gs.head_to_head_rows(detail)
+
+
+def reconcile_match(config: dict, db, match_id: str, session_name: str, *,
+                    scoresheet: Callable[[dict, str], tuple[list[dict], list[dict]]] = default_scoresheet,
+                    resolve: Callable[..., tuple[dict, int, int]] | None = None) -> dict[str, Any]:
+    """Re-fetch ONE scored match's authoritative scoresheet and reconcile its player-result rows.
+
+    Rows are matched on (player, match) after the scoresheet's alias ids are mapped to canonical identities, so a
+    repeat run adds nothing twice. Changed fields are updated and recorded field by field; players missing from
+    the authoritative sheet are removed. Removal is REFUSED, and reported, when the sheet came back with no
+    player rows (an empty answer is not proof the old rows are wrong) or when any identity is unresolved (an
+    unmapped alias would replace a canonical player). Head-to-head is reconciled with the same guards. Nothing
+    outside this one match is touched.
+    """
+    from database.ingest import ingest_head_to_head, ingest_match_scores
+    from database.models import Match, PlayerMatch, Player
+    from scheduler import graphql_sync as gs
+
+    resolve = resolve or gs.resolve_scoresheet_identities
+    match = db.query(Match).filter_by(external_id=str(match_id)).one_or_none()
+    if match is None:
+        return {"match_id": str(match_id), "status": "not_in_db"}
+    before = _player_rows(db, match.id)
+    scores, h2h = scoresheet(config, str(match_id))
+    mapping, _resolved, unresolved = resolve(db, session_name, scores, current_only=True)
+    scores = gs.apply_identity_mapping(scores, mapping, ("player_id",))
+    h2h = gs.apply_identity_mapping(h2h, mapping, ("player_id", "opponent_id"))
+    authoritative = {str(s["player_id"]) for s in scores if s.get("player_id")}
+    out: dict[str, Any] = {"match_id": str(match_id), "rows_before": len(before)}
+    if not authoritative:
+        out.update(status="empty_scoresheet_kept", rows_after=len(before))
+        return out
+    ingest_match_scores(db, match_id, scores)
+    removed: list[str] = []
+    if unresolved:
+        out["unresolved_identities"] = unresolved
+    else:
+        for ext in sorted(set(before) - authoritative):
+            player = db.query(Player).filter_by(external_id=ext).one()
+            db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).delete()
+            removed.append(ext)
+        ingest_head_to_head(db, match_id, h2h)
+    db.commit()
+    after = _player_rows(db, match.id)
+    changed = [{"player": ext, "changes": {f: [before[ext][f], after[ext][f]] for f in RESULT_FIELDS
+                                           if before[ext][f] != after[ext][f]}}
+               for ext in sorted(set(before) & set(after)) if before[ext] != after[ext]]
+    out.update(rows_after=len(after), added=sorted(set(after) - set(before)), removed=removed, changed=changed,
+               status=("unresolved_identity_partial" if unresolved else
+                       "changed" if (changed or removed or set(after) - set(before)) else "unchanged"))
+    return out
+
+
 def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: Path, mine_only: bool = False,
                 verify_member: str | None = None, verify_date: str | None = None,
                 sync: Callable[..., dict[str, int]] | None = None,
-                rebuild_matchups: Callable[[Any], Any] | None = None,
+                rebuild_matchups: Callable[[Any], Any] | None = None, mode: str = "reconcile",
+                schedule: Callable[[dict, str], list[dict]] | None = None,
+                scoresheet: Callable[[dict, str], tuple[list[dict], list[dict]]] = default_scoresheet,
+                resolve: Callable[..., tuple[dict, int, int]] | None = None,
                 now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> dict[str, Any]:
     from sqlalchemy.orm import Session
 
     from database.engine import create_db_engine
     from scheduler.graphql_sync import reconcile_division_wide_coverage
     from scraper.auth_classification import ConfirmedScopeDenial, call_with_confirmed_denial_retry
+    from scraper.graphql_scraper import AccessTokenExpired, AccessTokenMissing
 
+    if mode not in ("reconcile", "missing-only"):
+        raise RefreshError(f"unknown mode {mode!r}")
     if sync is None:
         from scheduler.graphql_sync import sync_division_wide as sync
+    if schedule is None:
+        def schedule(cfg, division_id):
+            from scheduler import graphql_sync as gs
+            return gs.division_schedule_rows(gs.fetch_division_schedule(cfg, division_id))
     if rebuild_matchups is None:
         from analytics.matchup_builder import build_matchups as rebuild_matchups
 
@@ -187,7 +273,8 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     run_config["database"] = dict(config.get("database") or {})
     run_config["database"]["path"] = str(dest)
     engine = create_db_engine(run_config)
-    results, gaps = [], []
+    results, gaps, checked = [], [], []
+    had_rows = {k for k, v in before["matches"].items() if v["scoresheet_rows"] > 0}
     try:
         with Session(engine) as db:
             for d in divisions:
@@ -206,7 +293,49 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
                 db.commit()
                 problems = reconcile_division_wide_coverage(counts)
                 gaps += [f"division {d['division_id']} ({d['format']}): {p}" for p in problems]
-                results.append({**base, "coverage_observations": problems, **counts})
+                result = {**base, "coverage_observations": problems, **counts}
+                if mode == "reconcile":
+                    # The sync above (resume=True) fetched every MISSING scoresheet. Matches that already had rows
+                    # were skipped by its checkpoint, so re-fetch each of them and reconcile its player results.
+                    try:
+                        rows = call_with_confirmed_denial_retry(run_config, lambda d=d: schedule(run_config, d["division_id"]))
+                    except ConfirmedScopeDenial:
+                        rows = None
+                        gaps.append(f"division {d['division_id']} ({d['format']}): schedule denied; its existing "
+                                    "scoresheets were NOT re-checked")
+                    except (AccessTokenMissing, AccessTokenExpired):
+                        raise
+                    except Exception as exc:
+                        rows = None
+                        gaps.append(f"division {d['division_id']} ({d['format']}): schedule unavailable "
+                                    f"({type(exc).__name__}); its existing scoresheets were NOT re-checked")
+                    targets = [str(m["match_id"]) for m in rows or []
+                               if m.get("is_scored") and not m.get("is_bye") and str(m["match_id"]) in had_rows]
+                    result["reconcile_targets"] = len(targets)
+                    for mid in targets:
+                        try:
+                            outcome = call_with_confirmed_denial_retry(run_config, lambda mid=mid: reconcile_match(
+                                run_config, db, mid, d["catalog_session_name"], scoresheet=scoresheet, resolve=resolve))
+                        except ConfirmedScopeDenial:
+                            db.rollback()
+                            outcome = {"match_id": mid, "status": "denied"}
+                        except (AccessTokenMissing, AccessTokenExpired):
+                            raise
+                        except Exception as exc:
+                            db.rollback()
+                            outcome = {"match_id": mid, "status": "fetch_failed", "error": type(exc).__name__}
+                        outcome["division_id"] = d["division_id"]
+                        checked.append(outcome)
+                        if outcome["status"] in ("denied", "fetch_failed"):
+                            gaps.append(f"match {mid}: scoresheet {outcome['status'].replace('_', ' ')}; existing rows "
+                                        "kept unverified")
+                        elif outcome["status"] == "empty_scoresheet_kept":
+                            gaps.append(f"match {mid}: APA returned no player rows; {outcome['rows_before']} existing "
+                                        "row(s) kept unverified")
+                        elif outcome["status"] == "unresolved_identity_partial":
+                            gaps.append(f"match {mid}: {outcome['unresolved_identities']} scoresheet identity(ies) "
+                                        "unresolved; rows updated/added only, nothing removed")
+                results.append(result)
             matchups = rebuild_matchups(db)
             db.commit()
     finally:
@@ -224,7 +353,10 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         "started_utc": started.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "finished_utc": now().strftime("%Y-%m-%d %H:%M:%S UTC"),
         "provenance": {
-            "method": "APA GraphQL via scheduler.graphql_sync.sync_division_wide(resume=True), current session only",
+            "method": ("APA GraphQL: sync_division_wide(resume=True) for rosters, schedules and missing scoresheets"
+                       + ("; then every already-captured scored match re-fetched and its player results reconciled"
+                          if mode == "reconcile" else "; existing scoresheets NOT re-checked (missing-only)")),
+            "mode": mode,
             "source_db": str(source_db), "source_db_sha256": source_sha_before,
             "source_db_sha256_after": source_sha_after,
             "catalog": str(catalog_path), "catalog_sha256": sha256_file(catalog_path),
@@ -235,6 +367,15 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         "changes": change,
         "matchups_rebuilt": len(matchups) if matchups is not None else None,
         "divisions": results,
+        "reconciliation": {
+            "matches_checked": [c["match_id"] for c in checked if c["status"] not in ("denied", "fetch_failed")],
+            "matches_failed": [c["match_id"] for c in checked if c["status"] in ("denied", "fetch_failed")],
+            "player_results_changed": [{"match_id": c["match_id"], **x} for c in checked for x in c.get("changed", [])],
+            "player_results_added": [{"match_id": c["match_id"], "player": p} for c in checked for p in c.get("added", [])],
+            "player_results_removed": [{"match_id": c["match_id"], "player": p} for c in checked
+                                       for p in c.get("removed", [])],
+            "outcomes": checked,
+        },
         "gaps": gaps,
     }
     if verify_member and verify_date:
@@ -246,6 +387,8 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
                 gaps.append(f"viewer fixture {f['match_id']} on {verify_date} is still not scored in APA's data")
             elif not f["scoresheet_rows"]:
                 gaps.append(f"viewer fixture {f['match_id']} on {verify_date} is scored but has no scoresheet rows")
+    # Complete only when nothing was denied, failed, refused or left uncovered -- and only for the scope above.
+    report["coverage"] = "partial" if gaps or mode != "reconcile" else "complete"
     (out_dir / "refresh_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
 
@@ -261,6 +404,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--catalog", default=str(DEFAULT_CATALOG))
     parser.add_argument("--out-root", default=str(PROJECT_ROOT / "tmp" / "refresh"))
     parser.add_argument("--mine-only", action="store_true", help="only the viewer's own current divisions")
+    parser.add_argument("--mode", choices=("reconcile", "missing-only"), default="reconcile",
+                        help="reconcile (default): also re-fetch and reconcile every already-captured scored match; "
+                             "missing-only: fetch only scoresheets the copy lacks (interrupted-acquisition style)")
     parser.add_argument("--verify-member", help="APA member id whose current-team fixtures to verify")
     parser.add_argument("--verify-date", help="YYYY-MM-DD of the fixtures to verify (e.g. Monday's)")
     args = parser.parse_args(argv)
@@ -282,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         report = run_refresh(load_config(args.config), source_db=Path(args.source_db), catalog_path=Path(args.catalog),
-                             out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member,
+                             out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
                              verify_date=args.verify_date)
     except (AccessTokenMissing, AccessTokenExpired) as exc:
         print(f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py --refresh-ultimate-coach "
@@ -297,7 +443,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  checked {c['date_range_checked']}; latest scored {c['latest_scored_date_before']} -> {c['latest_scored_date_after']}")
     print(f"  added {len(c['matches_added'])} · newly scored {len(c['matches_newly_scored'])} · score changed "
           f"{len(c['matches_score_changed'])} · scoresheet rows +{c['scoresheet_rows_added']}")
-    print(f"  gaps: {len(report['gaps'])} (see refresh_report.json)")
+    r = report["reconciliation"]
+    print(f"  reconciled {len(r['matches_checked'])} already-captured match(es), {len(r['matches_failed'])} failed/denied ·"
+          f" player results changed {len(r['player_results_changed'])} · added {len(r['player_results_added'])} ·"
+          f" removed {len(r['player_results_removed'])}")
+    print(f"  coverage: {report['coverage'].upper()} for {report['scope']['divisions']} division(s) ·"
+          f" gaps: {len(report['gaps'])} (see refresh_report.json)")
     return 0
 
 
