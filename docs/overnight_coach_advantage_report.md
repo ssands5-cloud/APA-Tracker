@@ -2616,3 +2616,9 @@ Native (N), real data, on the hashed copy:
 (A) The formula evaluator's expected values for this copy were regenerated (`tmp/native/run-0ecc168/expected.json`).
 
 **Unchanged:** the live refresh is blocked on Paul's next login (he returns 18:00 MDT); no refreshed data exists yet. Colours, emoji, whitespace and page breaks are pending Paul's own review. The iPhone checks remain user-reported synthetic DEMO verification.
+
+### 2026-10-08 16:30 UTC (10:30 MDT): Captain Packet print preview, candidate `0ecc168`
+
+Native (N), same hashed copy (`6C218277…F57B`), print preview only (nothing printed), closed with no changes.
+- Page 1 "Best sends" shows the `b1660ad` rule on real data: a tie between two equal direct records reads "1= … · 1= …"; shared-opponent-only candidates are "≈", never numbered; a single direct pick reads "1." followed by "≈" for the next.
+- 5 pages, as before. The page-4 continuation still does not repeat its column headers (minor, pending Paul).
