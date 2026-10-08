@@ -1793,3 +1793,9 @@ This changes the Captain Packet's first printed page and the HTML/Excel threat p
 Reviewed PR #83 head `c04c927` (CI **Tests** passed). The new guide accurately keeps direct evidence, unordered shared-opponent results, unknown-as-not-weak, and local-only planning marks distinct; no new acquisition or identity-resolution path appears.
 
 However, the updated deployment guide and implementation plan now assert exact first-screen behavior and completed decision-support work while also retaining pending native-Excel and device review. The public PR artifact record still predates this head. Treat the mobile-fit and print-geometry wording as unverified until a current-head package/workbook, manifest, and device/Excel review substantiate it; the synthetic Pages demo remains insufficient for that proof.
+
+### GPT verification — 2026-10-08: phone chip-wrap source repair needs full-roster evidence
+
+Reviewed PR #83 head `7025634` (CI **Tests** passed). The narrow-screen CSS changes are a sensible repair: the opponent chips keep full labels in one horizontal, scrollable row and the added browser check confirms no page-level horizontal overflow. It changes no evidence, roster identity, or data lineage behavior.
+
+The regression fixture only establishes the CSS property and a single-row result; it does not reproduce the claimed eight long-name roster or prove the asserted first-screen vertical measurements. The claimed real-data check was not accompanied by a current-head package, screenshot, or manifest. This improves the source but does not resolve the current artifact/device acceptance gate; retain the draft status until that evidence is supplied.
