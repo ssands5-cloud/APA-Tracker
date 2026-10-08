@@ -109,8 +109,8 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             assert "Match Night package" in page.inner_text("body")
             # Freshness describes the whole snapshot, not the one packaged fixture.
             assert "latest recorded result Sun Sep 27, 2026" in page.inner_text(".freshness")
-            # Phone first screen: the match, best sends, threats and risks are all visible without scrolling.
-            for sel in ("#tonight .when", "#tonight .decide-sends", "#tonight .decide-threats", "#tonight .decide-risks"):
+            # Phone first screen: the match, Next Send, best sends, threats and risks, all without scrolling.
+            for sel in ("#tonight .when", "#next-send", "#tonight .decide-sends", "#tonight .decide-threats", "#tonight .decide-risks"):
                 box = page.locator(sel).bounding_box()
                 assert box and box["y"] + box["height"] <= 844, (sel, box)
             assert page.evaluate("document.documentElement.scrollWidth") <= 390

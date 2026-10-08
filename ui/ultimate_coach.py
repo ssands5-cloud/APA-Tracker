@@ -93,6 +93,15 @@ body.match-night header.hero p,body.match-night header.hero .ball { display:none
 body.match-night header h1 { font-size:17px; }
 body.match-night .freshness { margin-top:6px; font-size:11px; }
 body.match-night .freshness span:nth-child(n+3) { display:none; }
+@media (max-width:600px) {
+  /* Phone match night: the banner and the date line already say "tonight" -- spend the first screen on decisions. */
+  body.match-night main { padding-top:8px; }
+  body.match-night #tonight { padding:10px 12px; }
+  body.match-night #tonight > h2 { display:none; }
+  body.match-night .demo-flag { padding:3px 8px; margin:0 0 6px; font-size:13px; }
+  body.match-night .freshness span { padding:2px 8px; }
+  body.match-night nav.sections { margin-top:6px; }
+}
 .tonight-grid.decide { margin-bottom:10px; }
 .next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
 .next-send h3 { margin:0 0 2px; font-size:16px; text-transform:uppercase; letter-spacing:.4px; color:#5d4413; }
@@ -555,7 +564,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-{f'<div class="mn-banner">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · {escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])} · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + " (" + escape(built_at) + ")" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span>{fresh["unplayed_before_build"]} earlier fixtures still show UNPLAYED — results after the snapshot are not included</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
 {f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
 {start_here}
