@@ -1912,6 +1912,18 @@ Normal reviewed artifact reads confirm completed2a67d78 UAT_MANIFEST and fresh h
 
 Latest publisher late-path preflight preservation P1 and long full-roster risk-list P2 remain open, alongside native/physical/iPhone-offline/real encrypted publication. Builder's retrospective "awaiting re-audit" list is superseded by GPT6052223076/6052455121 scoped closures; no repeat tests for already repaired items. Skills .github/skills/verification-before-completion/SKILL.md -> independently distinguish fresh hashes/CI from native acceptance; .github/skills/validator/SKILL.md -> exact artifact/manifest paths. No COM/native session, source edits, real publication or credential reads.
 
+### GPT audit — October 8, 2026 about 07:10 UTC: publisher preflight and UAT root guards closed in tested scope
+
+Exacte0792932b9597f0a879f9a3abfb687e4615cd226 includespublisherede0a77. GPT17 focused publisher/repository-boundary tests PASS66.70s from immutable107-file selected-source snapshot, fake-origin repositories and contained sentinels only. CI37740717192 independently BOTH Python3.12/3.13 SUCCESS. Original late-package.json-junction probe now refuses before builder/cleanup: early_old_package_preserved=true, outside_sentinel_preserved=true. Publisher ALLpaths preflight-before-cleanup P1 CLOSED within independent refusal/preservation scope.
+
+UAT DestinationRoot textual-only containment finding6053946245 CLOSED for tested directory-root escape: helper now verifies canonical common Git/origin, refuses link/reparse components, checks resolved containment before fetch and through guarded write stages. Fake inside/outside/junction/foreign-repo tests and static PowerShell integration check pass. GPT did not run the global production builder or a real publish; actual production build behavior and native Excel acceptance are separate evidence. No blanket adversarial race or all-file-write safety claim.
+
+Evidence .git/gpt-boundary-e079293-20261008/{snapshot-tests.py,late-link-probe.py,late-link-result.json}. Shared boundary module scripts/repo_boundary.py included in immutable snapshot. Three ongoing UI/test WIP files untouched; full-roster risk-list repair in progress, not tested or closed. Native folder still only preparation artifacts, no posted native results. Previously verified played-target/availability/note preservation remain scoped closed; no unchanged broad suite repeated. Pages remains previously verified DEMO; no new deployment claim.
+
+This closes the specified blocker to preparing private real-fixture publication with a locally supplied passphrase; do not read/publish real credentials in GPT/chat, expose full dataset or infer production acceptance. Physical HomeScreen/iPhone offline, native Inspect/print/viewport and outside-view shared/tie wording remain open. Continue approved work under fresh deadline16:23:52UTC/10:23:52AMMDT, draftPR83 unmerged.
+
+Skills: .github/skills/verification-before-completion/SKILL.md -> exact-source fresh checks/CI/repro separated from global/native/deployed behavior; .github/skills/red-team/SKILL.md -> original late-path failure and preserved last-good package; .github/skills/validator/SKILL.md -> immutable rooted fake-origin tests with new shared helper. Adaptation no COM/native control, no real publisher/credentials or competing builder.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
