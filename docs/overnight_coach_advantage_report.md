@@ -2482,3 +2482,35 @@ Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT), as confirmed above.
 **Also confirmed:** CI ✅ on `203fe8b` (37790986252), the reconciliation mode for audits 4874e4b/e6ea86a, which still awaits GPT review.
 
 **GPT, please review `da4e5d2`:** the one-cell card and its worst-case sizing, and the print change.
+
+### 2026-10-08 14:55 UTC (08:55 MDT): missing-data behaviour: a stale snapshot is now a visible warning
+
+Block: 08:23:40 to 18:23:40 UTC (02:23:40 to 12:23:40 MDT).
+
+**Problem.** Today's real incident: a workbook built Oct 8 held no result after Sep 20, so the Monday results APA already showed were missing. The build already counted the gap (`unplayed_before_build`), but:
+- the Command Center didn't mention it at all;
+- Excel Match Day and the HTML showed it only as muted text;
+- on the **phone Match Night page** it was the third freshness item, which the phone CSS hides.
+
+**Fix `f2df1c8`** (CI 37794867310 ✅):
+- `analytics.ultimate_coach_war_room.stale_warning()` is one shared sentence: "⚠ N fixtures dated before this build have no result in this snapshot (latest recorded result …). Records, medals and risks leave those matches out — refresh the data and rebuild before relying on them."
+- It leads Command Center B4 and Match Day A4 in bold amber when the snapshot is stale, and is unchanged otherwise.
+- The HTML freshness bar shows it as a highlighted item that stays visible on phones and isn't reset by the phone media rules.
+- Red→green: `test_a_stale_snapshot_is_a_visible_warning_not_small_print` (Excel: both sheets, bold amber) and `test_a_stale_snapshot_warning_is_visible_on_the_phone` (iPhone viewport: visible, on the first screen, no horizontal scroll).
+
+**`09255ff`** (CI 37795687476 ✅): onboarding "Important limitations" (START HERE and HTML, shared list) now says the file is a snapshot that misses later results until refreshed, and points to the warning. Full suite: 2258 pass at `f2df1c8`; 69 related tests pass at `09255ff`.
+
+**Artifact integrity: a mistake of mine, caught and isolated.** I edited `analytics/` while the `f2df1c8` build was running.
+- Its Excel picked up the then-uncommitted onboarding line; its HTML did not. So that folder does **not** match `f2df1c8`.
+- It is preserved as `tmp/uat/build-f2df1c8-CONTAMINATED-do-not-use` (with a marker file), and is not used as evidence.
+- A clean rebuild from committed `09255ff` replaced it. Rule kept from here on: no source edits during a build.
+
+**Native verification (N), clean `09255ff` build** (HTML `FD504DC2…F2F51F`, Excel `B6761EC9…CAF96D` = test copy; source DB `FB2B098D…0A43145` unchanged; closed without changes):
+- Real data is stale: **479** fixtures dated before the Oct 8 build have no result (latest recorded result Sun Sep 20, 2026).
+- Command Center B4 and Match Day A4 both lead with the bold amber ⚠ warning, fully visible.
+- START HERE shows the new limitation in full.
+- (A) Both artifacts contain the warning and the limitation.
+
+**Still blocked:** the live refresh needs Paul's APA login (command recorded above). Until then this warning is exactly what a coach should see.
+
+**GPT, please review `f2df1c8` / `09255ff`:** the stale-warning wording, the phone CSS override, and the contaminated-artifact handling. `203fe8b` (reconciliation) and `da4e5d2` (one-cell Next Send) are still awaiting review.
