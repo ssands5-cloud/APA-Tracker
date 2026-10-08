@@ -2622,3 +2622,63 @@ Native (N), real data, on the hashed copy:
 Native (N), same hashed copy (`6C218277…F57B`), print preview only (nothing printed), closed with no changes.
 - Page 1 "Best sends" shows the `b1660ad` rule on real data: a tie between two equal direct records reads "1= … · 1= …"; shared-opponent-only candidates are "≈", never numbered; a single direct pick reads "1." followed by "≈" for the next.
 - 5 pages, as before. The page-4 continuation still does not repeat its column headers (minor, pending Paul).
+
+### 2026-10-08 16:35 UTC (10:35 MDT): block checkpoint (final unless Paul logs in before the deadline)
+
+**Block:** 2026-10-08 08:23:40 UTC to 2026-10-09 00:00 UTC (18:00 MDT, Paul's extension). Posted early because the one remaining item needs Paul's login and he is away until 18:00. Nothing here is production acceptance. PR #83 stays draft and unmerged.
+
+**Completed (commits on `integration/ultimate-coach-pr81-pr82-reconciliation`, CI ✅ on each pushed head checked):**
+
+| Commit | What |
+|---|---|
+| `f53eaa5` | Next Send lists in one sized cell; matrix and Inspect rows fit (native defects on `2a67d78`) |
+| `787f6d7`, `13404dc` | Current-session refresh into a copy; capture-tool login mode; default viewer for verification |
+| `4fd0548` | Inspect Rank/SL top-aligned; phone section-chip fade; WebKit offline test |
+| `203fe8b` | Reconcile mode: re-fetch and reconcile captured scoresheets (GPT 4874e4b/e6ea86a; GPT closed them in synthetic scope, 056dae6) |
+| `da4e5d2` | One contiguous Next Send cell; Command Center prints fit-to-width |
+| `f2df1c8`, `09255ff`, `f3b6a64` | Stale snapshot is a visible warning (Excel, HTML, phone), with the selected team's own gap first; onboarding limitation |
+| `d0ceb33` | Per-match fetch provenance; builds record `source_refresh` in `UAT_MANIFEST.json` |
+| `a023be2` | Failed runs leave a token-scrubbed `refresh_error.json` and `refresh.log` |
+| `007a0c0` | Source acceptance fails closed on inconsistent or malformed reports (GPT 9244b5e) |
+| `be7357e` | Refresh resumable across short-lived tokens; renewal from the open browser |
+
+**Verification evidence:**
+- (S) Full suite 2264 pass at `be7357e`.
+- (A) UAT builds, each with source DB `FB2B098D…0A43145` unchanged:
+  - `da4e5d2`: Excel `50DABD9B…643D65`.
+  - `09255ff`: Excel `B6761EC9…CAF96D`.
+  - `0ecc168`: HTML `BF70AD55…6667`, Excel `6C218277…F57B`.
+- (N) Native Excel on hashed copies:
+  - Next Send complete and contiguous.
+  - Availability, Played and "already played" states.
+  - Inspect basis and Rank/SL alignment.
+  - Matrix text and headers.
+  - Per-team stale warning.
+  - Fixture isolation.
+  - Captain Packet tie/shared wording.
+  - Readable print.
+- The `f2df1c8` build folder is quarantined (`…-CONTAMINATED-do-not-use`): I edited source during that build.
+
+**Not done / remaining defects:**
+- **Live refresh, the main open item.**
+  - The 15:50 UTC run stopped at 16:04:27 UTC on `AccessTokenExpired`, after 399 reconciled scoresheets.
+  - Its copy is partial and predates resume support, so it can't be continued. It is not accepted current data.
+  - Monday Oct 5 and every other result after Sep 20 are therefore **not verified in any accepted DB**.
+  - No workbook has been built from refreshed data.
+  - Whether APA issues a fresh token on page reload (the `be7357e` renewal path) is unproven live.
+- Human review (H), pending Paul:
+  - matrix colours (pale fills render white in this session's capture path);
+  - Captain-view emoji (monochrome glyphs);
+  - the remaining whitespace under the Next Send answer;
+  - the taller B4 warning row;
+  - print page breaks (an opponent card splits; packet page 4 doesn't repeat headers).
+- iPhone checks remain user-reported synthetic DEMO verification (H). No physical-device check by Claude.
+- No automatic refresh schedule is installed. Nothing real was published.
+
+**For Paul at 18:00 MDT.** From `.claude/worktrees/unruffled-chatterjee-f4f65e`:
+1. Run `python tools/capture_apa_graphql.py --refresh-ultimate-coach --verify-date 2026-10-05`.
+2. Log in, visit the team and standings pages, and press **Enter** in that window. **Leave the browser open.**
+3. If it stops for a new login, re-run with the `--resume "<folder>"` it prints.
+4. After a report is written: verify it with `--describe-source` and `tmp/native/verify_refresh.py`, then rebuild with `-SourceDb "<refreshed copy>"`. Check that the manifest says `accepted_current_data: true`, or keep the candidate clearly labelled partial.
+
+**GPT, please review:** `007a0c0` (your 9244b5e), `a023be2` and `be7357e`. Earlier closures stand as GPT recorded them.
