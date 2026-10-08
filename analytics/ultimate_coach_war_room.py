@@ -288,6 +288,9 @@ def war_room_pair(
             "missing": "; ".join(missing) or "None noted",
         })
 
+    for card, block in zip(cards, evidence["opponents"]):
+        card["quick_read"] = quick_read(card, block)
+
     threats = [c for c in cards if c["their_games"] and c["their_wins"] > c["their_games"] - c["their_wins"]]
     threats.sort(key=lambda c: (-(2 * c["their_wins"] - c["their_games"]), -c["their_wins"], -c["their_games"],
                                 member_order_key(c["opponent"])))
@@ -307,6 +310,39 @@ def war_room_pair(
         "blocks": evidence["opponents"], "matrix": matrix, "best_sends": best_sends,
         "concerning": concerning, "cards": cards, "threats": threats, "meetings": meeting_rows,
     }
+
+
+def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
+    """One-line, facts-only summary for the top of a scouting card (full roster, no planning marks):
+    the opponent's record vs our roster, our best answer on record, who to avoid, and SL directions."""
+    tw, tg = card["their_wins"], card["their_games"]
+    if not tg:
+        parts = ["Unknown vs our roster — no meetings (not weak)"]
+    else:
+        word = "Threat" if tw > tg - tw else "Even" if 2 * tw == tg else "Vs our roster"
+        parts = [f"{word}: {record_text(tw, tg)} vs our roster ({plural(tg, 'meeting')})"]
+    rows = block["rows"]
+    def names(group):
+        return ", ".join(r["member"]["name"] for r in group)
+    for cat, label in (("G", "Best answer on record"), ("E", "Even option on record")):
+        group = [r for r in rows if r["category"] == cat]
+        if group:
+            top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
+            rec = record_text(*top[0]["direct"])
+            parts.append(f"{label}: {names(top)} ({rec}{', tied' if len(top) > 1 else ''})")
+            break
+    else:
+        shared = [r for r in rows if r["category"] == "I"]
+        parts.append(f"No direct answer — {plural(len(shared), 'shared-opponent candidate')} (≈, not ordered)"
+                     if shared else "No evidence-backed answer on our roster")
+    avoid = [r for r in rows if r["category"] == "R"]
+    if avoid:
+        parts.append("Avoid: " + ", ".join(f"{r['member']['name']} ({record_text(*r['direct'])})" for r in reversed(avoid)))
+    if card["winning_sl"] not in ("—", "None recorded"):
+        parts.append(f"Winning records vs {card['winning_sl']}")
+    if card["losing_sl"] not in ("—", "None recorded"):
+        parts.append(f"Losing records vs {card['losing_sl']}")
+    return " · ".join(parts)
 
 
 # ---- Next Send: "they put up this player -- who do I send?" ----

@@ -79,7 +79,7 @@ CONCERNING_COLUMNS = ["Key", "Our Player ID", "Opp Player ID", "Pairing"]
 MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points",
                     "Pair Key"]
 SCOUTING_COLUMNS = ["Key", "Opponent", "SL", "Team Record", "Lifetime", "Sample", "Vs Our Roster", "Met List",
-                    "Shared Summary", "By SL", "Winning SL", "Losing SL", "Missing"]
+                    "Shared Summary", "By SL", "Winning SL", "Losing SL", "Missing", "Quick Read"]
 DATEKEYS_COLUMNS = ["Key", "Group Key", "Serial", "Date Display"]
 SUGGESTED_COLUMNS = ["Group Key", "Serial", "Date Display"]
 
@@ -169,7 +169,8 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, card in enumerate(wr["cards"], start=1):
             card_rows.append([f"{key}|{j}", card["label"], card["sl"], card["team_record"], card["lifetime"],
                               card["sample"], card["vs_ours"], card["met_list"], card["shared_summary"],
-                              card["by_sl"], card["winning_sl"], card["losing_sl"], card["missing"]])
+                              card["by_sl"], card["winning_sl"], card["losing_sl"], card["missing"],
+                              card["quick_read"]])
 
     def table(name: str, sheet_name: str, columns: list[str], rows: list[list[Any]], widths: dict[str, int]) -> None:
         ws = wb.create_sheet(sheet_name)
@@ -189,7 +190,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
     table("Meetings_Table", "Meetings", MEETINGS_COLUMNS, meeting_rows,
           {"Key": 44, "Date": 17, "Our Player": 38, "Opponent": 38})
     table("Scouting_Table", "Scouting", SCOUTING_COLUMNS, card_rows,
-          {"Key": 44, "Opponent": 38, "Vs Our Roster": 50, "Met List": 70, "By SL": 50, "Missing": 50})
+          {"Key": 44, "Opponent": 38, "Vs Our Roster": 50, "Met List": 70, "By SL": 50, "Missing": 50, "Quick Read": 90})
 
     build_local = build_local_date(built_at, tz_name)
     dates = scope_dates(match_day)
@@ -1265,7 +1266,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
 # Scouting Cards
 # ---------------------------------------------------------------------------
 
-CARD_FIELDS = [("Team record", "Team Record"), ("League lifetime", "Lifetime"), ("Recorded games", "Sample"),
+CARD_FIELDS = [("Quick read", "Quick Read"), ("Team record", "Team Record"), ("League lifetime", "Lifetime"), ("Recorded games", "Sample"),
                ("Vs our roster", "Vs Our Roster"), ("Meetings with our players", "Met List"),
                ("Shared-opponent evidence", "Shared Summary"), ("Record by opponent SL", "By SL"),
                ("Winning records vs", "Winning SL"), ("Losing records vs", "Losing SL"), ("Missing information", "Missing")]
@@ -1276,7 +1277,7 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False) -> int:
     _span(ws, top, 1, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
                           f'IF(INDEX(wr_OppPlayed,{k})="Played"," · already played",""))',
           font=Font(bold=True, size=12, color="FFFFFF"), fill=base.OPPONENT_FILL)
-    fields = CARD_FIELDS if not compact else [f for f in CARD_FIELDS if f[1] in ("Vs Our Roster", "Met List", "By SL", "Missing")]
+    fields = CARD_FIELDS if not compact else [f for f in CARD_FIELDS if f[1] in ("Quick Read", "Vs Our Roster", "Met List", "By SL", "Missing")]
     for n, (label, col) in enumerate(fields, start=1):
         r = top + n
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","{label}")', font=base.LABEL_FONT)

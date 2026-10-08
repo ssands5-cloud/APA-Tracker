@@ -61,6 +61,24 @@
     if(!c.g) return c.incomplete?"No complete career record captured ("+gap+")":"No career games recorded";
     return wlText(c.w,c.g)+" (league-scoped lifetime "+fmtLabel(fmt)+(gap?"; "+gap+")":")");
   }
+  // Facts-only one-liner for the top of a scouting card (mirrors analytics quick_read).
+  function wrQuickRead(c,b){
+    var tw=c.their_wins,tg=c.their_games,parts=[];
+    if(!tg) parts.push("Unknown vs our roster — no meetings (not weak)");
+    else parts.push((tw>tg-tw?"Threat":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+")");
+    var names=function(g){return g.map(function(r){return r.member.name;}).join(", ");},done=false;
+    [["G","Best answer on record"],["E","Even option on record"]].forEach(function(x){
+      if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
+      var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
+      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top.length>1?", tied":"")+")");done=true;});
+    if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
+      parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
+    var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
+    if(av.length) parts.push("Avoid: "+av.map(function(r){return r.member.name+" ("+wlText(r.c.direct.w,r.c.direct.g)+")";}).join(", "));
+    if(c.winning_sl!=="—"&&c.winning_sl!=="None recorded") parts.push("Winning records vs "+c.winning_sl);
+    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
+    return parts.join(" · ");
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
@@ -88,6 +106,7 @@
         shared_summary:sharedN?"Shared opponents with "+sharedN+" of our "+ours.length+" players":"No shared opponents with our roster",
         by_sl:bk[0],winning_sl:bk[1],losing_sl:bk[2],missing:missing.join("; ")||"None noted"};
     });
+    cards.forEach(function(c,j){c.quick_read=wrQuickRead(c,blocks[j]);});
     var threats=cards.filter(function(c){return c.their_games&&c.their_wins>c.their_games-c.their_wins;});
     threats.sort(function(x,y){var a=2*x.their_wins-x.their_games,b=2*y.their_wins-y.their_games;if(a!==b) return b-a;
       if(x.their_wins!==y.their_wins) return y.their_wins-x.their_wins;if(x.their_games!==y.their_games) return y.their_games-x.their_games;return memberOrder(x.opponent,y.opponent);});
@@ -111,7 +130,7 @@
     return {matrix:w.matrix.map(function(r){return r.cells.map(function(c){return [c.category,c.cell,c.explanation,c.reason];});}),
       best:w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category];}).map(function(r){return r.player;});}),
       concerning:w.concerning.map(function(c){return c.text;}),threats:w.threats.map(function(c){return c.threat_text;}),
-      cards:w.cards.map(function(c){return [c.sl,c.team_record,c.lifetime,c.sample,c.vs_ours,c.met_list,c.shared_summary,c.by_sl,c.winning_sl,c.losing_sl,c.missing];}),
+      cards:w.cards.map(function(c){return [c.quick_read,c.sl,c.team_record,c.lifetime,c.sample,c.vs_ours,c.met_list,c.shared_summary,c.by_sl,c.winning_sl,c.losing_sl,c.missing];}),
       meetings:w.meetings.map(function(g){return [g.date,g.our.id,g.opp.id,g.result,g.session];})};
   };
 
@@ -245,15 +264,25 @@
     return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">They put up:</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p><ul class="ns-list">'
-      +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')
-        +' <button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓ Sent</button>');}).join("")
+      +(ns.medals.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
+      +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+'</span>'
+        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓ Sent</button>');}).join("")
       +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
-      +ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>');}).join("")
-      +ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
-      +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"")
-      +'</ul>'+(note?'<p class="ns-coach">📝 '+esc(note)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')
+      +(function(){
+        // With medals, the rest folds into one line that still names every player; tap for the reasons.
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>');}).join("");
+        var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
+          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
+        if(!ns.medals.length) return unord+rest+'</ul>';
+        if(!unord&&!rest) return '</ul>';
+        var sum=[];
+        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.member.name+" ("+(a.reason.split(" ")[0])+")";}).join(", "));
+        if(ns.unordered.length) sum.push("≈ "+ns.unordered.length+" not ordered");
+        if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
+        return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
+      })()
+      +(note?'<p class="ns-coach">📝 '+esc(note)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')
       +'</div>';
   }
 
@@ -371,7 +400,9 @@
         var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
           +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
-        return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div><dl>'
+        var cs=wrCoachSummary(c.opponent.id);
+        return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
+          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+(cs?'<p class="ns-coach">📝 '+esc(cs)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
           +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'

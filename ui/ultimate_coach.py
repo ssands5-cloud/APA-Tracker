@@ -67,8 +67,10 @@ button.secondary:hover { background:var(--felt-soft); }
 .scout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
 .scout { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
 .scout-head { background:var(--rail); color:#fff; font-weight:800; padding:8px 12px; }
-.scout dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 10px; margin:0; padding:10px 12px; font-size:13px; }
+.scout dl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:3px 10px; margin:0; padding:10px 12px; font-size:13px; }
 .scout dt { color:var(--muted); } .scout dd { margin:0; overflow-wrap:anywhere; }
+.scout dd select, .scout dd textarea { max-width:100%; box-sizing:border-box; }
+@media (max-width:480px) { .scout dl { grid-template-columns:minmax(0,1fr); gap:0 10px; } .scout dt { font-size:11px; text-transform:uppercase; letter-spacing:.3px; margin-top:5px; } }
 .md-date-list { margin-top:10px; }
 .matrix th .id-line { display:block; text-transform:none; letter-spacing:0; font-weight:400; }
 .tonight { border-top:5px solid var(--brass); }
@@ -103,12 +105,16 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .ns-list { list-style:none; margin:0; padding:0; font-size:13px; }
 .ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
 .ns-m { font-size:16px; }
+.ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; }
 .ns-save { color:#7a4b00; font-weight:700; }
+.ns-more summary { cursor:pointer; font-size:13px; padding:3px 6px; background:#fdecec; border-left:4px solid #b42318; border-radius:4px; }
 .ns-avoid { background:#fdecec; border-left-color:#b42318 !important; }
 .ns-unordered { background:#fff8db; }
 .ns-unknown { color:var(--muted); }
 .ns-send { margin-left:4px; min-height:28px; padding:2px 8px; font-size:12px; line-height:1.2; vertical-align:baseline; }
 .ns-coach { margin:6px 0 0; font-size:13px; background:#eef4ff; padding:4px 6px; border-radius:6px; }
+.quick-read { margin:6px 8px; padding:5px 7px; background:#fff8e8; border-left:4px solid #c9a24a; font-size:13px; }
+.quick-read b { text-transform:uppercase; font-size:11px; letter-spacing:.4px; color:#5d4413; margin-right:4px; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send { display:none; } }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }

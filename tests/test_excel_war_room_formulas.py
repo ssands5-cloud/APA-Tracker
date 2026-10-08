@@ -363,14 +363,16 @@ def test_inspect_views_rank_candidates_and_show_one_players_evidence_vs_all(book
 
 
 def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(book, built):
-    card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 18)}
+    card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 19)}
+    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Best answer on record: Ann Archer (2-0) · "
+                                  "Avoid: Bea Baker (0-2)")
     assert card["Team record"] == "7-1 (this team, Fall 2026)"
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
     assert card["Meetings with our players"] == f"vs {ANN}: 0-2 · vs {BEA}: 2-0 · vs {DEE}: 1-1"
     assert card["Record by opponent SL"] == "vs SL5 3-3"
     assert card["Coach observations"] == "(add notes on Coach Notes or Lineup Lab)"
     book.set(LL, "D23", "Breaks hard; slow safeties")
-    assert book.display(SC, "C17") == "Breaks hard; slow safeties"
+    assert book.display(SC, "C18") == "Breaks hard; slow safeties"
     top = _row(built, WR, "Direct meetings between the rosters (newest first)")
     first = [book.display(WR, f"{c}{top + 2}") for c in "ABEI"]
     assert first[0] == "Sun Sep 20, 2026" and first[3] in ("W", "L")
@@ -391,7 +393,7 @@ def test_lineup_marks_belong_to_one_fixture_and_notes_follow_the_player(book, bu
     assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"          # nothing leaked
     assert book.display(WR, "A23").startswith("⚠ Lineup Lab marks are for Sun Oct 11, 2026 · 11:00 AM MDT · Home vs Falcons · match 1 — not applied to this fixture.")
     assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 7:00 PM MDT · Home vs Falcons")
-    assert book.display(SC, "C17") == "Slow safeties"                    # notes describe the player
+    assert book.display(SC, "C18") == "Slow safeties"                    # notes describe the player
     book.set(LL, "C9", book.value("Engine", book.name("uc_PlanKeyList").ref))  # re-plan for this fixture
     assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
     book.set(MD, "B9", "Sun Oct 11, 2026")                               # back: Oct 25 marks don't apply
@@ -542,9 +544,9 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     book.set("Coach Notes", "B5", "Slow shooter")
     book.set("Coach Notes", "C5", "Strong safety player")
     book.set("Coach Notes", "D5", "Plays the long game")
-    assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game"
+    assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game"
     book.set(LL, "D23", "Breaks hard")       # tonight's note joins, still separated from evidence
-    assert book.display(SC, "C17") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
+    assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
 
 
 def test_start_here_example_and_tour_are_true_to_the_build(built):

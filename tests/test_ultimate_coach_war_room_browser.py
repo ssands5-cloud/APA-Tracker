@@ -66,7 +66,7 @@ def test_html_war_room_matches_the_shared_python_module_exactly(tmp_path: Path):
             assert js["best"] == [[r["player"] for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
             assert js["concerning"] == [c["text"] for c in py["concerning"]]
             assert js["threats"] == [c["threat_text"] for c in py["threats"]]
-            keys = ("sl", "team_record", "lifetime", "sample", "vs_ours", "met_list", "shared_summary", "by_sl",
+            keys = ("quick_read", "sl", "team_record", "lifetime", "sample", "vs_ours", "met_list", "shared_summary", "by_sl",
                     "winning_sl", "losing_sl", "missing")
             assert js["cards"] == [[c[k] for k in keys] for c in py["cards"]]
             assert js["meetings"] == [[g["date"], g["our"]["id"], g["opp"]["id"], g["result"], g["session"]] for g in py["meetings"]]
@@ -477,8 +477,11 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             card = page.locator("#tonight #next-send")
             text = card.inner_text()
             assert "WHO SHOULD I SEND NEXT?" in text.upper() and "They put up:" in text
-            assert "Best-supported response: Ann Archer" in text and "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text
-            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning" in text
+            assert "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
+            # Below the medals, the rest is one line that still names the players; tapping shows each reason.
+            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2)"
+            card.locator(".ns-more summary").click()
+            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning" in card.inner_text()
             # Chips: tap Eve -> shared-only, never medalled.
             page.click("#next-send .ns-chip:has-text('Eve Ellis')")
             text = page.locator("#next-send").inner_text()
@@ -497,5 +500,27 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             assert page.input_value('#lineup-lab select[data-plan="lineup"][data-pid="1"]') == "Played"
             assert page.is_checked('#lineup-lab input[data-plan="played"][data-pid="10"]')
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_path: Path):
+    py = _python_war_room()
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            path = tmp_path / "wr.html"
+            path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"),
+                            encoding="utf-8")
+            page = browser.new_context(**pw.devices["Pixel 7"]).new_page()
+            page.goto(path.as_uri())
+            page.wait_for_selector("#scouting-cards .scout")
+            reads = page.locator("#scouting-cards .quick-read")
+            assert [reads.nth(i).inner_text().replace("QUICK READ", "Quick read").split(" ", 2)[2]
+                    for i in range(reads.count())] == [c["quick_read"] for c in py["cards"]]
+            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings) · No direct answer")
+            clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
+                .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
+            assert clipped == 0
         finally:
             browser.close()
