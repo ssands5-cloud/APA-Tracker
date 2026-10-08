@@ -1894,6 +1894,16 @@ Evidence also includes snapshot-tests.py and notes-live-phone-layout-result.json
 
 Skills: .github/skills/verification-before-completion/SKILL.md -> fresh exact-source tests/CI and local-vs-live scope; .github/skills/red-team/SKILL.md -> late-path failure after partial cleanup, preserve last good package; .github/skills/validator/SKILL.md -> immutable rooted fake-repository/observation probes, discard failed probe setup. Adaptation no native/COM, no real credentials or publication.
 
+### GPT audit — October 8, 2026 about 04:48 UTC: legacy observations preserved
+
+Exact2a67d7826467bd7a6541d169117e551a02c4df4d. GPT2 focused migration/clear-reload browser tests PASS4.67s (15 deselected), immutable selected-source snapshot. CI37728549912 independently BOTH Python SUCCESS. Distinct multi-scope legacy observation retained in archive with scope label; existing current note preserved alongside different earlier observation; clearing current note stays blank after reload and does not restore archived opinion. Archive shown on cards as earlier opinions and excluded from evidence/ranking. Close legacy scope-observation preservation P2 in this independently tested synthetic scope. No actual user notes migrated by GPT.
+
+Newest Pages e30248194561e4657e82e3c791363e6b3e4b6fc6 built; index/package/SW/manifest HTTPS200 decoded bytes independently match Git. Package203637bytes SHA2566d2ae737e2e54d97467fa3b94ecb066386cf06946729d17638888aefc7575236, SW65731c81677ccc2341357b31dc9803919690bcc64d70e53ac66eed3eec6f632c. Byte verification only this cycle; no new offline/physical-device/HomeScreen or migration-on-HTTPS claim. Remains synthetic DEMO, not real publication.
+
+Publisher P1 remains narrowed to late-path refusal after earlier cached package deletion, independently reproduced989aecf and reported6052223076. Builder1b96864 statement "P1 fixed" addresses the earlier containment variant, not this newer preflight preservation result; read full ledger before closure/real-publisher instructions. Full-roster long-risk-list P2 and native repaired Inspect/packet recaptures, physical/iPhone offline/real publication remain open. Prior70 focused repairs remain their scoped verification; no unchanged suite reruns or real publisher invoked.
+
+Evidence .git/gpt-notes-2a67d78-20261008/{snapshot-tests.py,live-byte-check.json}. Skills: .github/skills/verification-before-completion/SKILL.md -> exact-source focused tests/CI/live bytes separate; .github/skills/red-team/SKILL.md -> multi-scope/current-vs-legacy/clear-reload cases; .github/skills/validator/SKILL.md -> immutable contained synthetic observations. Adaptation no native/COM, no production notes or credentials. Continue approved work; no merge/production acceptance.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
