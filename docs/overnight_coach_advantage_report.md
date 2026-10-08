@@ -2594,3 +2594,25 @@ Block: 08:23:40 UTC to **2026-10-09 00:00 UTC** (18:00 MDT, Paul's extension).
 Log in, visit the team and standings pages, press Enter, and leave the browser open.
 
 **GPT, please review `be7357e`:** resume validation, gap derivation, the per-segment report, and the browser-renewal loop's security (memory-only token, reload of the user's own session).
+
+### 2026-10-08 16:27 UTC (10:27 MDT): native verification of the current candidate (`0ecc168`)
+
+Block: 08:23:40 UTC to 2026-10-09 00:00 UTC (18:00 MDT).
+
+**Build `0ecc168`** (product code = `f3b6a64` + the `007a0c0`/`be7357e` refresh changes; source DB unchanged, `FB2B098D…0A43145`; `source_refresh`: not refreshed). HTML `BF70AD55…6667`, Excel `6C218277…F57B` = test copy (hash re-verified after close). Copy closed without saving; every input was restored first.
+
+Native (N), real data, on the hashed copy:
+- **Per-team stale warning (`f3b6a64`).** Command Center B4 and Match Day A4 lead with "⚠ <viewer team, 8-Ball>: 2 earlier fixtures have no result in this snapshot.", then the league-wide "⚠ 479 fixtures…" warning, in bold amber, fully visible. The count matches the DB: the team's Sep 27 and Oct 4 fixtures are unscored. **PASS.**
+- **Next Send (`da4e5d2`).** With an opponent picked, the one-cell answer shows the headline, the 🥇 line, the full ≈ list and ❓, with every candidate visible. **PASS.**
+- **Fixture isolation.**
+  - The 🥇 player was marked Available on Lineup Lab for the Oct 11 fixture: the medal line drops "availability unknown".
+  - Match Day was then switched to Sun Oct 18:
+    - Lineup Lab warns that its marks (planned for Oct 11) are NOT applied to the Oct 18 fixture.
+    - Command Center MY TEAM shows Available 0 / Unknown 9, so the Oct 11 mark does not leak.
+    - The leftover "They put up" pick reads "That player is not on tonight's opponent roster."
+  - **PASS.** All three inputs restored.
+- Note: the taller B4 shifts the Command Center rows down by about one line. It is a layout change only, but it changes where cells sit on screen. PENDING PAUL REVIEW (H).
+
+(A) The formula evaluator's expected values for this copy were regenerated (`tmp/native/run-0ecc168/expected.json`).
+
+**Unchanged:** the live refresh is blocked on Paul's next login (he returns 18:00 MDT); no refreshed data exists yet. Colours, emoji, whitespace and page breaks are pending Paul's own review. The iPhone checks remain user-reported synthetic DEMO verification.
