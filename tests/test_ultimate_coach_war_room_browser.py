@@ -491,6 +491,8 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             page.click("#next-send .ns-chip:has-text('Cam Cole')")
             page.click("#next-send .ns-chip:has-text('Eve Ellis')")
             assert "📝 Coach: Slow, careful safeties (your opinion, not APA facts)" in page.locator("#next-send").inner_text()
+            assert "📝 Coach: Slow, careful safeties (opinion)" in page.inner_text("#tonight .decide-threats")
+            assert "📝 Coach: Slow, careful safeties (your opinion, not APA facts)" in page.inner_text("#wr-risks")
             # ✓ Sent vs Cam: Ann Played, Cam played; Eve is the only chip left and Ann no longer appears.
             page.click("#next-send .ns-chip:has-text('Cam Cole')")
             page.click("#next-send .ns-send[data-send-our='1']")

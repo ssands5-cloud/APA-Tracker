@@ -978,7 +978,10 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     _span(ws, top + 1, 1, 12, "Opponents with winning records against our roster (by recorded direct results; unplayed only)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for n in range(1, 4):
-        _span(ws, top + 1 + n, 1, 12, f'=IFERROR(INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),'
+        row = f"INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))"
+        note = f"INDEX(wr_OppNotes,MATCH(INDEX(Threats_Table[Opp Player ID],{row}),wr_OppPids,0))"
+        _span(ws, top + 1 + n, 1, 12, f'=IFERROR(INDEX(Threats_Table[Threat],{row})&IFERROR(IF({note}="",""," · 📝 "&{note}&'
+                                      f'" (your opinion, not APA facts)"),""),'
                                       f'IF({n}=1,IF(wr_HasEvidence,"No unplayed opponent has a winning recorded record against our roster.",""),""))',
               font=SMALL)
     t2 = top + 5
@@ -1424,8 +1427,34 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     h(3, 15)
     h(4, 4)
 
-    # ---------------- page 1: rosters, best sends, risks ----------------
-    r = 5
+    # ---------------- page 1 (decision first): best sends, risks, then the rosters ----------------
+    r = 4
+    r += 1
+    base._section(ws, r, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)",
+                  last_col=12)
+    h(r, 18)
+    for k in range(1, R + 1):
+        r += 1
+        _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
+        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
+                            f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
+                            f'"1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k})))))',
+              font=font(10))
+        h(r, 27)
+    r += 1
+    base._section(ws, r, "Top risks", last_col=12)
+    h(r, 18)
+    risk_lines = [f'=IFERROR("Dangerous: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")'
+                  for n in range(1, 4)]
+    risk_lines += [f'=IFERROR("Avoid: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")'
+                   for n in range(1, 4)]
+    risk_lines.append('=IF(wr_UnplayedCount=0,"","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable '
+                      'direct option left among our remaining players.")')
+    for formula in risk_lines:
+        r += 1
+        _span(ws, r, 1, 12, formula, font=font(10.5), wrap=False)
+        h(r, 15)
+    r += 1
     for c1, c2, text, sub, fill in ((1, 1, "OUR TEAM", "=wr_OurLabel", base.SECTION_FILL),
                                     (7, 7, "OPPONENT", "=wr_OppLabel", base.OPPONENT_FILL)):
         ws.cell(row=r, column=c1, value=text).font = font(10.5, bold=True, color=white)
@@ -1460,31 +1489,6 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                         'availability, lineup and played are your Lineup Lab marks for this fixture, never evidence; Unknown is '
                         'not Unavailable."', font=font(9, color="5B6A61"))
     h(r, 26)
-    r += 1
-    base._section(ws, r, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)",
-                  last_col=12)
-    h(r, 18)
-    for k in range(1, R + 1):
-        r += 1
-        _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
-        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
-                            f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
-                            f'"1. "&INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · 2. "&INDEX(wr_Send2,{k})))))',
-              font=font(10))
-        h(r, 27)
-    r += 1
-    base._section(ws, r, "Top risks", last_col=12)
-    h(r, 18)
-    risk_lines = [f'=IFERROR("Dangerous: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")'
-                  for n in range(1, 4)]
-    risk_lines += [f'=IFERROR("Avoid: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")'
-                   for n in range(1, 4)]
-    risk_lines.append('=IF(wr_UnplayedCount=0,"","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable '
-                      'direct option left among our remaining players.")')
-    for formula in risk_lines:
-        r += 1
-        _span(ws, r, 1, 12, formula, font=font(10.5), wrap=False)
-        h(r, 15)
     r += 1
     fresh = stats["freshness"]
     _span(ws, r, 1, 12, f"Built {fresh['build_date']} · offline snapshot (latest recorded result {fresh['latest_result']}) · "

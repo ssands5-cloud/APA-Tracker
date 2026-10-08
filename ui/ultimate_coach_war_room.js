@@ -321,7 +321,7 @@
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+(n?' <i class="coach-op">📝 '+esc(n)+' (opinion)</i>':'')+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+(riskNames.length?'<span>No favorable direct option left vs '+esc(riskNames.join(", "))+'</span>':'<span>None — every unplayed opponent still has a favorable direct option</span>')+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
@@ -358,7 +358,7 @@
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
-      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against our roster (unplayed only).</p>'+wrList(plan.threats.map(function(c){return c.threat_text;}),"No unplayed opponent has a winning recorded record against our roster.")+'</div>'
+      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against our roster (unplayed only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.threat_text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a winning recorded record against our roster.")+'</div>'
       +'<div><h3>Avoid sends</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents).</p>'+wrList(plan.concerning.map(function(c){return c.text;}),"No concerning direct records among remaining pairings.")+'</div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix

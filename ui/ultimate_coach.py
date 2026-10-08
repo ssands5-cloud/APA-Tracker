@@ -129,6 +129,7 @@ body.match-night .freshness span:nth-child(n+3) { display:none; }
 .mv-toggle { display:inline-flex; border:1px solid #c9b88f; border-radius:999px; overflow:hidden; }
 .mv-toggle .mv { border:0; border-radius:0; background:#fff; color:#3b2f17; min-height:36px; padding:4px 12px; font-size:13px; }
 .mv-toggle .mv.on { background:#5d4413; color:#fff; font-weight:700; }
+.coach-op { display:block; font-style:normal; font-size:12px; color:#2f4a7a; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }

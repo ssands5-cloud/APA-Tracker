@@ -121,8 +121,9 @@ def _roster(book, sheet, first, R=8):
 
 
 def _packet_roster(book, R=8):
-    """Captain Packet page-1 rosters: ours (A, C, D, E); theirs (G, K = "SL n · W-L", L = played)."""
-    first = 7
+    """Captain Packet page-1 rosters: ours (A, C, D, E); theirs (G, K = "SL n · W-L", L = played).
+    Page 1 is decision first (best sends, risks), so the rosters start below them."""
+    first = next(r for r in range(1, 80) if book.display(CP, f"A{r}") == "Player (APA record ID)") + 1
     ours = [(book.display(CP, f"A{r}"), book.display(CP, f"C{r}"), book.display(CP, f"D{r}"),
              book.display(CP, f"E{r}")) for r in range(first, first + R)]
     theirs = [(book.display(CP, f"G{r}"), book.display(CP, f"K{r}"), book.display(CP, f"L{r}"))
@@ -585,6 +586,11 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game"
     book.set(LL, "D23", "Breaks hard")       # tonight's note joins, still separated from evidence
     assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
+    book.set("Coach Notes", "A6", EVE)           # a threat's note is shown with the threat, labelled as opinion
+    book.set("Coach Notes", "D6", "Runs out from anywhere")
+    threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
+    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · 📝 Coach: Runs out from anywhere "
+                       "(your opinion, not APA facts)"]
 
 
 def test_start_here_example_and_tour_are_true_to_the_build(built):
@@ -643,3 +649,11 @@ def test_helper_cells_are_hidden_from_the_captain(built):
                 size = c.font.sz or 11
                 lines = -(-len(c.value) // max(10, int(width * 11 / size * 1.05)))
                 assert (start.row_dimensions[c.row].height or 15) >= lines * size * 1.2, (c.coordinate, c.value[:40])
+
+
+def test_captain_packet_page_one_is_decision_first(book, built):
+    sends = _row(built, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
+    risks = _row(built, CP, "Top risks")
+    roster = _row(built, CP, "OUR TEAM")
+    assert sends < risks < roster
+    assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
