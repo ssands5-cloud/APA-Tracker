@@ -1836,6 +1836,18 @@ Quick Read / compact-card parity and formula checks passed within these syntheti
 
 Skills applied: .github/skills/verification-before-completion/SKILL.md -> separate exact snapshot tests, CI, source-only test repair and deployed/native evidence; .github/skills/red-team/SKILL.md -> smaller Safari browser viewport and false-positive confidentiality diagnosis; .github/skills/validator/SKILL.md -> contained reproducible synthetic probe. Adaptation: no COM/native takeover; immutable selected files instead of mutable builder tests. Automatic review rejected direct worktree pytest; that command did not execute, and the approved snapshot alternative completed.
 
+### GPT audit — October 8, 2026 03:07 UTC: Safari first-screen repair independently verified live
+
+Source d658360ce0a94d7233cbda35603ed80883dcc871 includes layout repair 8a841d9 and ciphertext-test repair. CI37720199392 independently BOTH Python3.12/3.13 SUCCESS. Fresh immutable selected-source snapshot: five Match Night tests PASS11.24s; no builder WIP imported or changed. Tests now exclude random ciphertext from public-byte scans while retaining other confidentiality checks; this resolves the prior false-positive test assertion within the tested scope.
+
+New local synthetic and LIVE Pages probes both pass the primary decision hierarchy: WebKit iPhone13 browser descriptor390x664 shows Match244–267.2, NextSend298.9–509.0, Threats517–568.8, Risks574.8–626.6, zero script errors. The older all-opponent Best Sends632.6–722.1 remains below the first screen, accessible as secondary detail. Primary sends are in Next Send. Chromium390x844 also passes. Close the smaller-Safari decision-placement P2 in this independently verified synthetic-browser/live-demo scope; do not infer physical-device, OS standalone, offline, human timing or native Excel acceptance.
+
+Pages build3108e41cfe2fddc82ee08f8b21ec5ad96a9d7be9 independently built; index/package/SW/manifest all HTTPS200 and decoded bytes match Git blobs. New package195853bytes SHA256808b04aaa3981e8e5425f9ce618755d10f77cc90e218fd911f9900ed7405b7dc, SW63d16d68d3242e5b2ada01bbd94de87f9f0157f789ed555f9b9d679d3d6bd0fc. This remains synthetic DEMO only, not Paul's encrypted real match. Evidence .git/gpt-phone-d658360-20261008/{phone-layout-result.json,live-phone-layout-result.json,live-byte-check.json} and profile screenshots.
+
+Six ongoing builder files remain modified in WP-B, untouched by GPT. Publisher junction containment P1, used-target core/disclosed Unknown eligibility, legacy note scope preservation, native repaired recaptures and physical HomeScreen/iPhone offline/real publication remain open. No new unchanged offline/native tests, publisher execution, real passphrase or merge.
+
+Skills trace: .github/skills/verification-before-completion/SKILL.md -> fresh focused tests, exact-source CI, independent deployed-byte and live checks separately; .github/skills/red-team/SKILL.md -> Safari browser664 viewport with primary-vs-secondary decision visibility; .github/skills/validator/SKILL.md -> immutable selected-source and rooted synthetic outputs. Adaptation: no native/COM tests, preserve claimed WIP and no repeated full suite.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
