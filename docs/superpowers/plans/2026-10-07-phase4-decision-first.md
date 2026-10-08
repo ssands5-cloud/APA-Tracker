@@ -20,17 +20,17 @@ shown). No thresholds, weights, odds or confidence. Every label states the recor
 Coach notes are opinion, always labelled, never evidence.
 
 ## WP-A — Must fix before production (trust)
-- [ ] A1 Evaluator: `OR`/`AND` propagate argument errors like Excel (faithful oracle). Run → red on the
+- [x] A1 Evaluator: `OR`/`AND` propagate argument errors like Excel (faithful oracle). Run → red on the
       Inspect formulas (and anything else). Fix guards (error-proof the guard expressions).
-- [ ] A2 Conditional fills: dxf fills carry `bgColor` (Excel paints conditional fills from it). Test
+- [x] A2 Conditional fills: dxf fills carry `bgColor` (Excel paints conditional fills from it). Test
       asserts bgColor on every CF fill. Packet card names readable without any fill (dark text).
-- [ ] A3 Packet page 5: no clipped second line (font/row height within the page budget).
-- [ ] A4 Polish: hide helper columns/rows (matrix category grid, Coach Dashboard pair key); START HERE
+- [x] A3 Packet page 5: no clipped second line (font/row height within the page budget).
+- [x] A4 Polish: hide helper columns/rows (matrix category grid, Coach Dashboard pair key); START HERE
       lines never truncated (heights from text length).
-- [ ] A5 Truthful limits: "no calibrated/predicted win probability"; historical rates are descriptive.
-- [ ] A6 HTML: matrix header spacing; Player vs Player readable dates + format names; page title.
-- [ ] A7 Coach-note migration runs once (cleared notes stay cleared); regression migrate→clear→reload.
-- [ ] A8 Rebuild; real-Excel recapture of the affected views; GPT notes.
+- [x] A5 Truthful limits: "no calibrated/predicted win probability"; historical rates are descriptive.
+- [x] A6 HTML: matrix header spacing; Player vs Player readable dates + format names; page title.
+- [x] A7 Coach-note migration runs once (cleared notes stay cleared); regression migrate→clear→reload.
+- [~] A8 Rebuilt (7b78fa6, CI green). Real-Excel recapture of the fixed views PENDING (needs a screen takeover Paul must allow).
 
 ## WP-B — Decision support
 - [ ] B1 Shared Python `next_send()` (mirrored in JS, exact cross-check): for one opponent, among our
@@ -53,3 +53,11 @@ Focused red→green tests; full suite (`--ignore=tmp`); commit (explicit pathspe
 CI 3.12/3.13 at that head; rebuild artifacts and verify hashes/DB; real-data browser check; real-Excel
 recapture where Excel rendering is involved; report + #84 with provenance; visual acceptance
 PENDING PAUL REVIEW.
+
+## WP-D — Match Night Deployment Mode (Phase 4D, added 2026-10-07)
+- [x] Slim one-fixture package, AES-256-GCM (PBKDF2-SHA256 600k), lock screen, remember (non-extractable
+      key), service worker offline, manifest + icons, decision-first Tonight, START HERE mobile guide.
+- [x] gh-pages via `.worktrees/gh-pages`; Pages live with a SYNTHETIC demo package; live checks on WebKit
+      iPhone 13, Chromium Pixel 7 and desktop.
+- [ ] Real package: Paul runs `tools/publish_match_night.ps1` (passphrase prompt) — PENDING PAUL.
+- [ ] Real-device Add to Home Screen + match-night use — PENDING PAUL REVIEW.

@@ -1950,3 +1950,60 @@ These go into the next fix package. Review and visual acceptance stay **PENDING 
 - **visual presentation:** hierarchy, density, color, print.
 
 Please also check the index against the files, and that no defect is hidden or misdescribed.
+
+### Phase 4 — WP-A trust fixes and Phase 4D Match Night Deployment Mode — 2026-10-07
+
+**Plan:** `docs/superpowers/plans/2026-10-07-phase4-decision-first.md`, written before implementation (`writing-plans`).
+
+**Skills read before implementation, and how they applied:**
+- `systematic-debugging`: root cause found before each fix. The #VALUE! traced to Excel evaluating every `OR` argument, plus a non-faithful test oracle. The blank fills traced to conditional fills set without a background color.
+- `verification-before-completion`: red-green for each regression. Live-site checks on three browser engines. Real-Excel recapture is still owed.
+- `red-team`: every new decision label checked against invented-threshold claims. Shared-only picks are labeled unordered; ties are named.
+
+**Deviations:**
+- `brainstorming`'s design-approval gate: satisfied by Paul's written specs; no new question round.
+- `writing-plans`: executed directly, without subagents.
+
+**WP-A: production trust defects** (code `7b78fa6`; CI 37700159962 passed Python 3.12 and 3.13; artifacts rebuilt into `build-7b78fa6`):
+- **#VALUE! in War Room → Inspect.** The guard terms are now error-free. The test oracle was also unfaithful: in Excel, `MATCH` of an empty cell is #N/A, and the evaluator was matching `""` slots instead. With the oracle fixed, the original bug went red before the fix and green after.
+- **Conditional fills now set a background color**, so the matrix colors and the row shading appear. A test checks every conditional fill.
+- **Packet card names** are dark text on a light band, readable even with no fill (GPT P1).
+- **Page 5:** 10.5pt text in 29pt rows, so the second line is no longer clipped and the 78% scale still holds.
+- **Hidden clutter:** the matrix helper grid and the Coach Dashboard key rows are hidden.
+- **START HERE:** rows are sized to their text. A test caught one more truncated tour line.
+- **Truthful limits:** the text now says no predicted or calibrated odds are shown, and that the historical rates shown are descriptive (GPT P2).
+- **HTML:** updated title; matrix headers no longer run together; Player vs Player shows readable dates and format names.
+- **Coach-note migration** now runs once, with GPT's repro as a test (GPT P2).
+- **Single-send wording:** shared-only picks are labeled as unordered candidates and ties are named (GPT P2).
+- **Phone first screen:** match, best sends, threats and risks now come first (GPT P2).
+- **Still pending:** a real-Excel recapture of the fixed views, which needs Paul to allow a short screen takeover.
+
+**Phase 4D: Match Night Deployment Mode** (`452ee24`, `d1bd2d7`, `0aa5802`; CI 37706566542 passed Python 3.12 and 3.13 at `0aa5802`):
+- **Live:** https://ssands5-cloud.github.io/APA-Tracker/, served from the `gh-pages` branch, currently a **synthetic DEMO package** (no real players).
+- **Package contents:** one fixture only. Our roster and the opponent's roster with their evidence in that fixture's format, name/ID stubs for shared opponents, that one fixture, and no card number.
+- **Encryption:** AES-256-GCM with a PBKDF2-SHA256 key (600k iterations). Only ciphertext, salt, IV, KDF parameters and the build date are public; tests assert no team, player or fixture text appears in clear.
+- **Passphrase:** never printed or saved, at least 16 characters.
+- **App behavior:**
+  - Remember-on-device stores a non-extractable key in IndexedDB.
+  - A service worker gives offline use, fetching the package network-first.
+  - A manifest and icons support Add to Home Screen.
+  - Match-night mode adds a compact header, a fixture banner, and whole-snapshot freshness.
+  - START HERE gains a "Mobile match night" section in both Excel and HTML.
+- **Live checks** at `aafbdb8`:
+  - WebKit (iPhone 13), Chromium (Pixel 7) and desktop: lock screen shows "Package built"; unlock works; the match, sends, threats and risks are all on the first screen; no horizontal scroll; no script errors.
+  - Chromium (Pixel 7 and desktop) also: remember-on-device unlock, service-worker control, and unlock with the network offline.
+  - These are emulations; real devices are **PENDING PAUL REVIEW**.
+- **Fixes found while doing this:**
+  - CI failed at `452ee24` because the icons used Pillow, which isn't a project dependency. They are now drawn in pure Python (`d1bd2d7`).
+  - The repo's commit guard blocked the first `gh-pages` commit for lack of `.repo-boundary-id`. The marker is now included; the hook was not bypassed.
+  - The slim package misreported freshness ("No results recorded"). It now carries the whole snapshot's freshness.
+- **Dependencies:** `cryptography` is pinned in `requirements.in` and both locks. The pins were added by hand in pip-compile format, because `pip-compile --no-index` cannot resolve in this environment.
+- **Real publish:** Paul runs `.\tools\publish_match_night.ps1`, which prompts for the passphrase. Claude never holds it.
+
+**Not yet started:** WP-B decision features: the interactive Next Send engine (🥇🥈🥉 for ordered direct picks only), Quick Read cards, the Captain/Evidence matrix toggle, the Excel Command Center Next Send section, and coach notes in threats and next-send.
+
+**GPT, please audit:**
+- Mobile usability, the match-night workflow, the home-screen experience and the Add-to-Home-Screen experience on the live demo. The passphrase is printed on the demo lock screen.
+- The security model in `docs/match_night_deployment.md`.
+- The slim-package minimization in `ui/match_night.py`.
+- The WP-A fixes.
