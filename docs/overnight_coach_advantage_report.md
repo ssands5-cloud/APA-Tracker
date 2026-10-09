@@ -2765,3 +2765,30 @@ Also committed alongside (`f4e1ce7`), separately scoped: the HTML/Match-Night pe
 Both commits pushed to `integration/ultimate-coach-pr81-pr82-reconciliation`; CI pending at push time. PR #83 stays draft.
 
 **None of the 4 renewal questions are answered yet** — the capture/refresh step itself was never reached live before this fix. **Next step, exact, before asking Paul for another login:** this fix is reproduced and tested locally only; it has not yet been proven against a real APA login. The next live attempt is the one that will actually answer Paul's 4 questions (fresh token on reload, same-copy resume, failed-match retry/visibility, accurate final coverage report) — not requested yet in this entry.
+
+
+### 2026-10-09 05:05 UTC (23:05 MDT, Oct 8): live renewal-flow test SUCCEEDED end to end — first real refresh of the session
+
+Following the dispatch-timing fix (`9a18a4c`), Paul logged in again and the capture tool ran the full current-session reconcile refresh live, with zero credential re-entry. Output folder `tmp/refresh/refresh-20261009-035923Z/` (not committed; local only, gitignored).
+
+**Timeline:** started 2026-10-09 03:59:26 UTC, finished 05:03:09 UTC (~64 min), 3 segments. The access token expired mid-run (caught as `AccessTokenExpired`, written to `refresh_error.json` at 04:28:46 UTC) and the renewal path (`page.reload()` on the still-open, already-logged-in tab) produced a fresh token automatically; the refresh resumed into the same output directory with no visible interruption. This happened at least once more across the 3 segments.
+
+**Paul's 4 renewal questions, now answered with live evidence (not simulated):**
+1. Fresh token on reload? **Yes**, confirmed via the caught `AccessTokenExpired` + unbroken continuation afterward.
+2. Resumes the same database copy? **Yes** — one output folder, one coherent final report across all 3 segments.
+3. Failed matches retried or retained as gaps? **Both, correctly** — divisions containing a failed/denied match were reopened each segment (the `ed139fe` fix, exercised live for the first time); 9 matches still failed by the end and are explicitly listed under `matches_failed` in the report, never silently dropped.
+4. Accurate final coverage report? **Yes** — `coverage: "partial"` (correctly not "complete"), with 105 itemized gaps.
+
+**Scope:** Fall 2026 session, `mine_only=False`, 30 divisions, mode `reconcile`. `matches_checked: 801`, `matches_failed: 9`, `player_results_added: 33`, `player_results_removed: 105` (same 105 — these are the unresolved-identity gap rows, not duplicated failures), `player_results_changed: 0`. `matchups_rebuilt: 782982`.
+
+**The original missing-data gap is closed:** `latest_scored_date_before: 2026-09-20` -> `latest_scored_date_after: 2026-10-12`. `matches_newly_scored: 273`, `matches_score_changed: 18`, `scoresheet_rows_added: 2618`.
+
+**Gap breakdown (105 total, none are player names, match/division ids only):** ~98 are pre-existing "unresolved scoresheet identity" cases carried as `player_results_removed` (rows pulled because an identity, likely a substitute, could not be resolved to a roster player -- not caused by tonight's fix); 7 are division-level "completed match(es) have no scoresheet" (divisions 426886, 436678); 9 are the `matches_failed` retries from point 3 above.
+
+**Monday 2026-10-05 verified directly** (per Paul's explicit request) via the refresh's own `--verify-member`/`--verify-date` check against his own current-team fixtures: both found and both scored --
+- match 51478011 (9-Ball Open): COMPLETED, 55-65, 10 scoresheet rows
+- match 51478086 (8-Ball Open): COMPLETED, 9-8, 10 scoresheet rows
+
+**Integrity:** source DB sha256 identical before/after (untouched, confirmed). Refreshed copy's sha256 recorded before-sync and after, in the report's `provenance` block. No credential or token value printed, logged, or committed at any point.
+
+Next: rebuild the UAT workbook from this refreshed copy (source frozen during build, all hashes including `source_refresh` provenance recorded), confirm Oct 5 appears correctly in both Excel and HTML, and verify they agree. Not started yet -- asked Paul whether to proceed now or pick it up next.
