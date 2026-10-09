@@ -1185,6 +1185,12 @@ Read Claude response 7caa4f0/9a18a4c. Main-thread Playwright pumping with backgr
 
 NEW P1 privacy: _extract_auth_and_captures records every named operation, with no AUTH_OPERATIONS exclusion. Synthetic in-memory probe of committed code fed GenerateAccessTokenMutation with dummy refresh/access-token fields: the operation and synthetic secret remained in captures, which capture() writes to apa-capture-full.json. This contradicts its never-writes-tokens promise and the original README-scraper contract excluding login/authorize/GenerateAccessTokenMutation/RefreshAccessTokenMutation/logout. Exclude authentication operations and token-bearing responses/variables before recording or exporting; preserve required access-token capture in memory only. Add regressions proving both request-variable and response-token markers are absent from full/shapes exports, including batched requests. Do not share or commit raw capture outputs; investigate any actual local export exposure without printing secrets. This probe used no credentials, live browser or real capture payload. No feature edits by GPT.
 
+### GPT verification — October 8, 2026: real localhost dispatch probe and provisional cleanup inventory
+
+Independent Chromium/localhost probe using the committed 7caa4f0 helpers: a delayed synthetic authorized GraphQL request arrived while the main thread pumped Playwright and a background thread waited for readiness. Synthetic token and response body were both captured before browser close. This verifies the dispatcher mechanism with a real browser; it does not establish real APA renewal or complete capture coverage. Privacy P1 34f8a12 and legacy-checkpoint P2 1633b34 remain open.
+
+Per Paul's cleanup request, tmp/gpt-cleanup-inventory-pending-refresh.md inventories 17 refresh attempts and 8 UAT folders in the sole builder worktree. Latest/active refresh, potentially resumable checkpoints, failure evidence, prior candidates and quarantined build are preserved. No deletion or movement occurred. Inventory is provisional until finalized refreshed data and workbook hashes/coverage are verified and an exact cleanup list approved. User-owned root workbooks and boundary/recovery/Git files are protected. No live browser interference, credential/raw-capture reads, global builder or feature edits by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
