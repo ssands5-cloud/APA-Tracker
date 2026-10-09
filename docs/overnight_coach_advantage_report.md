@@ -2952,3 +2952,18 @@ Opened `tmp/uat/build-8979397/Ultimate_Coach_FINAL_UAT.xlsx` directly in Excel (
 Switched Match Day to Mark It Up (8-Ball) / 2026-10-05, same as the first candidate: resolved to `Home vs Why So Hard · 8-Ball Open · Status: COMPLETED · Score (home-away): 9.0-8.0` -- identical, correct result, confirming the rebuild didn't regress anything already verified. Closed without saving; test copy untouched.
 
 PR #83 stays draft. Remaining native-check items not yet done on this candidate: War Room matrix, Lineup Lab, Captain Packet print, Inspect-view alignment, availability/Played states -- not attempted in this pass.
+
+
+### 2026-10-09 14:20 UTC (08:20 MDT): GPT source audit a5db049 repaired -- the real cause of the 9 failed matches, fixed
+
+GPT corrected the prior turn's diagnosis precisely: `database.ingest.ingest_match_scores`'s existing-row lookup is a plain `.one_or_none()` filtered on `(player_id, match_id)` -- and SQLAlchemy's `.one_or_none()` raises `MultipleResultsFound` just like `.one()` the instant more than one row matches. That is exactly the shape of the 9 inherited duplicate `player_matches` groups already found. Reproduced directly against a copy of the real refreshed database: this exact query, for one of the 9 real matches, raises `MultipleResultsFound` right now, deterministically -- my earlier "transient" conclusion (chasing `reconcile_match`'s separate `Player.external_id` `.one()` lookup) was wrong; that query reproduces cleanly and was never the actual cause. `ingest_match_roster` has the identical vulnerable pattern.
+
+**Fix (`ed758a2`):** `_resolve_bound_player_match(db, player_id, match_id)` replaces both `.one_or_none()` call sites. 0/1 matching rows behave exactly as before. 2+ rows are compared field-by-field across every `PlayerMatch` column except `id`: a demonstrable **exact** duplicate is collapsed to one row (extras deleted, logged, no data lost) and processing continues normally; rows that actually **disagree** are never guessed at or silently kept -- a new, clearly-named `DuplicateBoundRowsConflict` is raised instead, which `reconcile_match`'s existing generic exception handler already records as an honest, specific gap (replacing the previously opaque `"MultipleResultsFound"` label).
+
+**Verified against the real data, not just the synthetic test:** checked all 9 real duplicate pairs against every field the fix compares -- all 9 are identical on every single compared column. This means the fix will cleanly collapse and successfully reconcile all 9 currently-failed matches on the next refresh, not just handle a hypothetical case.
+
+**Tested, red before green:** `tests/test_ingest.py::TestDuplicateBoundPlayerMatchRows` (3 tests) -- exact-duplicate collapse via `ingest_match_scores` with the surviving row genuinely updated (not just left alone), a conflicting pair raising `DuplicateBoundRowsConflict` with both original rows completely untouched, and the same collapse behavior through `ingest_match_roster`. Confirmed red against the pre-fix committed code (`ImportError`), green after. Full suite: **2307 passed.**
+
+This does not retroactively fix the 9 matches in the already-refreshed copy (`tmp/refresh/refresh-20261009-035923Z/`) or the UAT candidates built from it -- those still show `coverage: partial`/9 failed, honestly, since fixing the code doesn't rewrite a prior run's report. The next live refresh (needs Paul's login) would be the first to actually exercise this fix against the real data.
+
+PR #83 stays draft.
