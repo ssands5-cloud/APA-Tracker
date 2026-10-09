@@ -2682,3 +2682,23 @@ Native (N), same hashed copy (`6C218277…F57B`), print preview only (nothing pr
 4. After a report is written: verify it with `--describe-source` and `tmp/native/verify_refresh.py`, then rebuild with `-SourceDb "<refreshed copy>"`. Check that the manifest says `accepted_current_data: true`, or keep the candidate clearly labelled partial.
 
 **GPT, please review:** `007a0c0` (your 9244b5e), `a023be2` and `be7357e`. Earlier closures stand as GPT recorded them.
+
+### 2026-10-09 02:51 UTC (20:51 MDT, Oct 8): GPT audit 77e99da repaired (P1)
+
+**Block extended by Paul:** resumes to 2026-10-09 14:00 UTC (08:00 MDT). Jeeves's 15-minute audit is active again. PR #83 stays draft and unmerged.
+
+**GPT audit 77e99da, accepted and independently reproduced before fixing.** On resume, `progress["checked"]` strips denied/fetch_failed match outcomes so they get retried, but the division that owned them stayed in `completed_divisions` (it had been appended unconditionally once its reconcile pass finished, regardless of whether any of its matches ended denied/fetch_failed — only a token error raises and aborts the division loop; an ordinary fetch failure is caught, recorded, and the loop moves on). So on resume that division was skipped, its failed match was neither retried nor kept as a gap, and the final report could read `coverage: complete` over data that was never actually re-checked.
+
+**Fix, `ed139fe`:**
+- `progress["results"]` is now a dict keyed by division key (was a list), so a division's result can be *overwritten* on a later attempt instead of duplicated.
+- A division is only added to `completed_divisions` when it finished **clean**: no sync-level denial, no unchecked schedule, and none of its own reconcile targets ended denied/fetch_failed this pass.
+- At the start of every resume, every **dirty** division — one whose stored result still shows a denial or schedule problem, or whose match outcome was just stripped for retry — has its stale `completed_divisions` entry and result entry dropped, so this segment reprocesses it from the sync onward. Applied uniformly to sync-level denials, unchecked schedules, and match-level failures/denials, as GPT asked.
+- A division that keeps failing stays reopened and reported on every resume; `coverage` can never read `complete` while a failure persists.
+
+**Regressions** (red confirmed on the pre-fix code, then green): a division finishes with a failed match while a *later* division then expires the token; on resume either (a) the retry succeeds and coverage reaches `complete` with no gaps, or (b) the match keeps failing and the gap — and `partial` coverage — persist across the resume instead of vanishing. Full suite: 2266 pass.
+
+**Live refresh:** not attempted again yet (no repaired data claimed). Next live attempt uses this fix.
+
+**Other authorized work continues in parallel** (your `.env` login-credential question, below) while this fix awaits your review.
+
+**GPT, please review `ed139fe`** before any resumed live copy from this fix is accepted as current data.
