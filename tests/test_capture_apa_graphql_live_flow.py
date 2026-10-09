@@ -23,7 +23,7 @@ import builtins
 import threading
 import time
 
-from tools.capture_apa_graphql import _extract_auth_and_captures, _pump_until, _read_line_in_background
+from tools.capture_apa_graphql import AUTH_OPERATIONS, _extract_auth_and_captures, _pump_until, _read_line_in_background
 
 
 class FakePage:
@@ -186,3 +186,72 @@ class TestExtractAuthAndCaptures:
         )
         assert token_holder["token"] == "Bearer abc123"
         assert captures["dashboard"]["response"] == {"data": {"x": 1}}
+
+
+class TestAuthOperationsNeverRecorded:
+    """GPT audit 34f8a12 (2026-10-09): a live run recorded `login`'s plaintext
+    username/password and `GenerateAccessTokenMutation`'s refresh token into
+    apa-capture-full.json on disk -- this file had never excluded credential-
+    bearing operations the way scraper/full_auto_scrape.py's AUTH_OPERATIONS
+    already does. These prove every name in that same exclusion set is never
+    recorded into `captures` (and therefore never reaches either output
+    file), while the in-memory Authorization-header token capture that
+    --sync/--refresh-ultimate-coach depend on keeps working regardless."""
+
+    def test_every_auth_operation_name_is_excluded_from_capture(self):
+        for operation in sorted(AUTH_OPERATIONS):
+            token_holder: dict = {}
+            captures: dict = {}
+            _extract_auth_and_captures(
+                "https://gql.poolplayers.com/graphql",
+                {"authorization": "Bearer abc123"},
+                [{"operationName": operation, "variables": {"username": "paul", "password": "hunter2"},
+                  "query": f"mutation {operation} {{ x }}"}],
+                lambda: {"data": {"accessToken": "eyJsecret"}},
+                captures,
+                token_holder,
+            )
+            assert operation not in captures, f"{operation} was recorded despite being a credential-bearing op"
+            assert captures == {}
+            assert token_holder["token"] == "Bearer abc123", "excluding the op must not cost us the header token"
+
+    def test_a_batched_request_mixing_auth_and_real_ops_only_records_the_real_one(self):
+        """APA's client batches several operations into one POST; a credential
+        op sitting next to a real one in the same batch must not let either
+        the batching logic or a partial failure smuggle it into captures."""
+        token_holder: dict = {}
+        captures: dict = {}
+        _extract_auth_and_captures(
+            "https://gql.poolplayers.com/graphql",
+            {"authorization": "Bearer abc123"},
+            [
+                {"operationName": "GenerateAccessTokenMutation", "variables": {"refreshToken": "r-secret"},
+                 "query": "mutation GenerateAccessTokenMutation($refreshToken: String!) { x }"},
+                {"operationName": "dashboard", "variables": {}, "query": "query dashboard { x }"},
+            ],
+            lambda: {"data": {"x": 1}},
+            captures,
+            token_holder,
+        )
+        assert list(captures.keys()) == ["dashboard"]
+
+    def test_full_json_shaped_dict_built_from_captures_never_contains_a_credential_operation(self):
+        """End-to-end sanity check matching what capture() actually writes to
+        apa-capture-full.json: build that same dict from _extract_auth_and_captures
+        and confirm no credential op key is present anywhere in it."""
+        token_holder: dict = {}
+        captures: dict = {}
+        operations = [
+            {"operationName": "login", "variables": {"username": "paul", "password": "hunter2"}, "query": "m login { x }"},
+            {"operationName": "authorize", "variables": {}, "query": "m authorize { x }"},
+            {"operationName": "dashboard", "variables": {}, "query": "q dashboard { x }"},
+            {"operationName": "logout", "variables": {}, "query": "m logout { x }"},
+        ]
+        for op in operations:
+            _extract_auth_and_captures(
+                "https://gql.poolplayers.com/graphql", {"authorization": "Bearer abc123"}, [op],
+                lambda: {"data": {}}, captures, token_holder,
+            )
+        assert set(captures.keys()) == {"dashboard"}
+        for credential_op in AUTH_OPERATIONS:
+            assert credential_op not in captures

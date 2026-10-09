@@ -60,6 +60,23 @@ LEAGUE_URL = "https://league.poolplayers.com"
 SHAPES_PATH = Path("apa-capture-shapes.json")
 FULL_PATH = Path("apa-capture-full.json")
 
+#: Operations whose variables or responses carry live credentials or tokens.
+#: These are never recorded into `captures`, so they never reach either output
+#: file -- matching scraper/full_auto_scrape.py's AUTH_OPERATIONS, the existing
+#: contract in this project after a real run there once captured a valid
+#: refresh token into a file. GPT audit 34f8a12 (2026-10-09) found this file
+#: had never had the same exclusion: a live run recorded `login`'s variables
+#: (plaintext username/password) and `GenerateAccessTokenMutation`'s refresh
+#: token into apa-capture-full.json on disk (gitignored, never pushed, but
+#: real). The exclusion only applies to what gets RECORDED for export; the
+#: in-memory-only Authorization-header token capture in
+#: _extract_auth_and_captures is unaffected and still required for --sync/
+#: --refresh-ultimate-coach to work.
+AUTH_OPERATIONS = {
+    "login", "authorize", "GenerateAccessTokenMutation",
+    "RefreshAccessTokenMutation", "logout",
+}
+
 #: A short, all-caps token is a GraphQL enum ("COMPLETED", "HOME", "THURSDAY"),
 #: not anyone's data. Keeping these makes the shape file far more useful for
 #: writing mappings, and no name, email or phone number can match it.
@@ -128,7 +145,7 @@ def _extract_auth_and_captures(
         return
     for item in body if isinstance(body, list) else [body]:
         operation = (item or {}).get("operationName")
-        if not operation:
+        if not operation or operation in AUTH_OPERATIONS:
             continue
         try:
             payload = fetch_json()

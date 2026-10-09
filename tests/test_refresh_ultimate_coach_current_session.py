@@ -432,6 +432,31 @@ def test_resume_refuses_a_changed_source_and_runs_the_viewers_divisions_first(se
                             scoresheet=_sheets(), resolve=RESOLVED)
 
 
+def test_resume_refuses_an_older_incompatible_checkpoint_instead_of_crashing(setup, monkeypatch):
+    # GPT audit 1633b34: ed139fe changed progress["results"] from a list to a dict keyed by division, but never
+    # bumped PROGRESS_SCHEMA -- so a preserved v1 checkpoint (same schema string, results still a list) passed
+    # the version check and only failed later with AttributeError at results.items(). A clean, explicit refusal
+    # is required instead.
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    source, catalog, out = setup
+    with pytest.raises(AccessTokenExpired):
+        _run(setup, monkeypatch, m1=AccessTokenExpired("expired"))
+    progress = json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))
+    progress["schema"] = "ultimate-coach-current-session-refresh-progress-v1"   # the pre-ed139fe shape
+    progress["results"] = []                                                    # its results were a list, not a dict
+    (out / "refresh_progress.json").write_text(json.dumps(progress), encoding="utf-8")
+
+    monkeypatch.setattr("scraper.auth_classification.call_with_confirmed_denial_retry", lambda config, fetch: fetch())
+    with pytest.raises(refresh.RefreshError, match="older, incompatible progress format"):
+        refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out, resume=True,
+                            verify_member=VIEWER, verify_date="2026-10-05", sync=_fake_sync([]),
+                            rebuild_matchups=lambda db: [], schedule=_schedule, scoresheet=_sheets(), resolve=RESOLVED)
+    # Refused before anything was touched: the stale checkpoint and copy are exactly as this test left them.
+    assert json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))["results"] == []
+    assert not (out / "refresh_report.json").exists()
+
+
 def test_capture_tool_renews_an_expired_token_from_the_open_browser_and_resumes(tmp_path, monkeypatch):
     import os
 

@@ -236,7 +236,14 @@ def reconcile_match(config: dict, db, match_id: str, session_name: str, *,
     return out
 
 
-PROGRESS_SCHEMA = "ultimate-coach-current-session-refresh-progress-v1"
+#: Bumped to v2 when `ed139fe` changed `results` from a list to a dict keyed by
+#: division (GPT audit 77e99da fix). A v1 checkpoint has the same schema NAME
+#: the version check used to compare, so it passed straight through and only
+#: crashed later with AttributeError at `results.items()` -- GPT audit 1633b34
+#: reproduced this against a preserved v1 progress file. Bumping the version
+#: string here is what makes the existing resume guard below catch it cleanly,
+#: instead of adding a second, separate format check that could drift from it.
+PROGRESS_SCHEMA = "ultimate-coach-current-session-refresh-progress-v2"
 
 
 def _division_key(d: dict[str, Any]) -> str:
@@ -329,7 +336,14 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         if not progress_path.is_file() or not dest.is_file():
             raise RefreshError(f"{out_dir} has no refresh_progress.json / copy to resume")
         progress = json.loads(progress_path.read_text(encoding="utf-8"))
-        expected = {"schema": PROGRESS_SCHEMA, "source_db_sha256": source_sha_before, "catalog_sha256": catalog_sha,
+        if progress.get("schema") != PROGRESS_SCHEMA:
+            raise RefreshError(
+                f"{out_dir} holds a checkpoint from an older, incompatible progress format "
+                f"({progress.get('schema')!r}, expected {PROGRESS_SCHEMA!r}). Resuming it is refused rather "
+                "than guessed at, since its internal shape may not match what this code expects. Start a new "
+                "refresh instead; any progress already reconciled there stays in its own output folder, untouched."
+            )
+        expected = {"source_db_sha256": source_sha_before, "catalog_sha256": catalog_sha,
                     "mode": mode, "mine_only": mine_only}
         wrong = [k for k, v in expected.items() if progress.get(k) != v]
         if wrong:
