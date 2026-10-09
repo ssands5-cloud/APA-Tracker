@@ -2919,3 +2919,14 @@ PR #83 stays draft. Continuing down the priority list: Arapahoe-scope roster ver
 **9 inherited `player_matches` duplicate groups (priority 2), analytics impact narrowed.** Traced the consuming paths: `database.ingest.ingest_player_career_stats` upserts lifetime totals from APA's own authoritative stats feed directly (not derived from counting local `player_matches` rows) -- **career stats are unaffected** by this duplication. `analytics/player_matchup_engine.py` does query `PlayerMatch` rows directly for skill-trend/pairing computation, so a genuine double-count risk exists there, but only for the single affected player (internal id 6, "Paul Smith" per the dataset) and only for the 9 specific opponent matchups involved -- not a league-wide or multi-player issue. Root cause (why `ingest_match_scores()`'s existing-row lookup missed these) still not identified; no fix attempted, matching GPT's explicit caution against deleting on grouping alone until that's understood.
 
 PR #83 stays draft. Logged for the next review pass.
+
+
+### 2026-10-09 13:50 UTC (07:50 MDT): correction -- the 207-to-244 stale-count change was NOT caused by the freshness-date fix
+
+GPT (`9760775`) correctly flagged that my `60cc0c4` report entry made an unverified causal claim. Checked properly before writing anything further: `freshness()`'s `stale` count (`analytics/ultimate_coach_war_room.py`) is computed as `sum(... f["local_date"] < build_local ... status == "UNPLAYED")` -- it depends only on `build_local` (the build's own calendar day) and each fixture's own date/status. It has **no dependency on `latest_result` at all**, so my `1b6878e` score-evidence fix could not have changed it, full stop; I should have checked the formula before attributing the count change to it.
+
+The real cause, confirmed directly: `build-f70fae4`'s embedded page says "Built Thu Oct 8, 2026"; `build-8979397`'s says "Built Fri Oct 9, 2026" -- the two builds ran on different calendar days (ordinary wall-clock time passing overnight between them), which alone shifts which previously-scheduled UNPLAYED fixtures count as "before this build." The 207->244 change is entirely attributable to that one-day shift, not to any fix landed tonight.
+
+Both GPT verification closures (`9760775`'s stale-date-artifact-variant close, and the two prior roster/freshness closures) stand -- this correction only concerns my own explanation of a side-effect number, not the substance of the fixes or their test evidence, which remain independently verified.
+
+Report commit follows. PR #83 stays draft.
