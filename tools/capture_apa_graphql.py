@@ -143,15 +143,33 @@ def _extract_auth_and_captures(
 
     if not body:
         return
-    for item in body if isinstance(body, list) else [body]:
+    # GPT audit 34f8a12 (follow-up, 2026-10-09 05:42 UTC): a batched request mixing a credential op with a real
+    # one (e.g. [GenerateAccessTokenMutation, dashboard]) still leaked the credential op's response, because
+    # fetch_json() returns the WHOLE batch's response array and the old code stored that entire array under the
+    # real op's key for every surviving item -- the exclusion only ever covered the request-side operation name,
+    # never the response data sitting next to it. Each surviving item is now matched to its OWN response by
+    # index; a response that isn't a same-length list for a batched (list) body can't be safely attributed to
+    # any one item, so the whole response is refused rather than guessed at.
+    is_batch = isinstance(body, list)
+    items = body if is_batch else [body]
+    payload, payload_fetched = None, False
+    for index, item in enumerate(items):
         operation = (item or {}).get("operationName")
         if not operation or operation in AUTH_OPERATIONS:
             continue
-        try:
-            payload = fetch_json()
-        except Exception:
-            continue
-        _record(captures, operation, item.get("variables"), item.get("query"), payload)
+        if not payload_fetched:
+            try:
+                payload = fetch_json()
+            except Exception:
+                return
+            payload_fetched = True
+        if is_batch:
+            if not isinstance(payload, list) or len(payload) != len(items):
+                continue
+            item_payload = payload[index]
+        else:
+            item_payload = payload
+        _record(captures, operation, item.get("variables"), item.get("query"), item_payload)
         print(f"  captured: {operation}")
 
 

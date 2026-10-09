@@ -180,7 +180,7 @@ class TestExtractAuthAndCaptures:
             "https://gql.poolplayers.com/graphql",
             {"authorization": "Bearer abc123"},
             [{"operationName": "dashboard", "variables": {"x": 1}, "query": "query dashboard { x }"}],
-            lambda: {"data": {"x": 1}},
+            lambda: [{"data": {"x": 1}}],   # a list body is matched by a same-length list response
             captures,
             token_holder,
         )
@@ -216,9 +216,17 @@ class TestAuthOperationsNeverRecorded:
             assert token_holder["token"] == "Bearer abc123", "excluding the op must not cost us the header token"
 
     def test_a_batched_request_mixing_auth_and_real_ops_only_records_the_real_one(self):
-        """APA's client batches several operations into one POST; a credential
-        op sitting next to a real one in the same batch must not let either
-        the batching logic or a partial failure smuggle it into captures."""
+        """GPT audit 34f8a12 follow-up (2026-10-09 05:42 UTC): the first version
+        of this fix excluded the credential op's REQUEST-side key, but
+        fetch_json() returns the WHOLE batch's response array, and the old
+        code stored that entire array under the surviving real op's key --
+        leaking the auth response (which can itself carry the access token
+        value) under "dashboard". The fake fetch_json here is deliberately
+        batch-shaped (a same-length list, matching what APA's real batched
+        response looks like) because a single-object fake previously let
+        this bug pass unnoticed."""
+        import json
+
         token_holder: dict = {}
         captures: dict = {}
         _extract_auth_and_captures(
@@ -229,11 +237,37 @@ class TestAuthOperationsNeverRecorded:
                  "query": "mutation GenerateAccessTokenMutation($refreshToken: String!) { x }"},
                 {"operationName": "dashboard", "variables": {}, "query": "query dashboard { x }"},
             ],
-            lambda: {"data": {"x": 1}},
+            lambda: [
+                {"data": {"generateAccessToken": {"accessToken": "SECRET-MARKER-eyJhbGciOi"}}},
+                {"data": {"dashboard": {"x": 1}}},
+            ],
             captures,
             token_holder,
         )
         assert list(captures.keys()) == ["dashboard"]
+        assert captures["dashboard"]["response"] == {"data": {"dashboard": {"x": 1}}}
+        assert "SECRET-MARKER-eyJhbGciOi" not in json.dumps(captures)
+
+    def test_a_mismatched_batch_response_is_refused_rather_than_guessed_at(self):
+        """If the response array doesn't line up with the request batch
+        (wrong length, or not a list at all), there is no safe way to know
+        which response belongs to which operation -- refuse the whole
+        response rather than risk attributing someone else's data."""
+        token_holder: dict = {}
+        captures: dict = {}
+        _extract_auth_and_captures(
+            "https://gql.poolplayers.com/graphql",
+            {"authorization": "Bearer abc123"},
+            [
+                {"operationName": "dashboard", "variables": {}, "query": "query dashboard { x }"},
+                {"operationName": "leagueDivisions", "variables": {}, "query": "query leagueDivisions { x }"},
+            ],
+            lambda: {"data": {"x": 1}},   # not a list at all -- can't be indexed per item
+            captures,
+            token_holder,
+        )
+        assert captures == {}
+        assert token_holder["token"] == "Bearer abc123"   # the token itself is still captured regardless
 
     def test_full_json_shaped_dict_built_from_captures_never_contains_a_credential_operation(self):
         """End-to-end sanity check matching what capture() actually writes to
@@ -250,7 +284,7 @@ class TestAuthOperationsNeverRecorded:
         for op in operations:
             _extract_auth_and_captures(
                 "https://gql.poolplayers.com/graphql", {"authorization": "Bearer abc123"}, [op],
-                lambda: {"data": {}}, captures, token_holder,
+                lambda: [{"data": {}}], captures, token_holder,   # list body, same-length list response
             )
         assert set(captures.keys()) == {"dashboard"}
         for credential_op in AUTH_OPERATIONS:
