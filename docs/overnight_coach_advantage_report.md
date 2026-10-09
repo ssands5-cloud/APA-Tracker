@@ -2910,3 +2910,12 @@ Paul authorized continued work through Monday 2026-10-12 08:00 MDT (14:00 UTC), 
 Still correctly labeled `coverage: "partial"`, `accepted_current_data: False` -- not claimed as release-ready. `build-f70fae4` is preserved untouched alongside this new candidate (nothing deleted).
 
 PR #83 stays draft. Continuing down the priority list: Arapahoe-scope roster verification across all divisions (not just Paul's own teams), the 105 gaps / 9 failed matches / 9 duplicate groups, and native checks on this new candidate.
+
+
+### 2026-10-09 13:40 UTC (07:40 MDT): Arapahoe-scope confirmed; duplicate-group analytics impact narrowed
+
+**Collection scope (priority 1), verified against the actual catalog, not assumed:** `tmp/refresh/refresh-20261009-035923Z`'s report shows `scope: {mine_only: False, divisions: 30}`. Cross-checked against the live catalog (`...APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_historical_catalog.json`, read-only): it lists exactly 30 Fall 2026 (current session) divisions total, of which only 4 are `is_mine`. The refresh already processed all 30 -- the full known Arapahoe Fall 2026 catalog, not a Paul-only subset. (Caveat, disclosed rather than assumed away: this confirms the refresh used everything the *catalog* currently lists; it does not independently re-verify the catalog's own division list is complete against APA's live site, which would need a fresh catalog-building capture, not attempted here.)
+
+**9 inherited `player_matches` duplicate groups (priority 2), analytics impact narrowed.** Traced the consuming paths: `database.ingest.ingest_player_career_stats` upserts lifetime totals from APA's own authoritative stats feed directly (not derived from counting local `player_matches` rows) -- **career stats are unaffected** by this duplication. `analytics/player_matchup_engine.py` does query `PlayerMatch` rows directly for skill-trend/pairing computation, so a genuine double-count risk exists there, but only for the single affected player (internal id 6, "Paul Smith" per the dataset) and only for the 9 specific opponent matchups involved -- not a league-wide or multi-player issue. Root cause (why `ingest_match_scores()`'s existing-row lookup missed these) still not identified; no fix attempted, matching GPT's explicit caution against deleting on grouping alone until that's understood.
+
+PR #83 stays draft. Logged for the next review pass.
