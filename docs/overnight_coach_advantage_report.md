@@ -1243,6 +1243,12 @@ Correction to the latest source diagnosis: SQLAlchemy .one_or_none() raises Mult
 
 Add a synthetic duplicate-bound-row regression. Define conservative candidate-copy handling: compare fields, preserve source evidence, collapse only demonstrably redundant rows or quarantine conflicting ones, then verify authoritative reconciliation. Never silently pick first() or suppress a multiplicity error. Existing original/source data stays protected. This public note contains source semantics and remediation guidance only, with no real identifiers or identity linkage. Prior native/artifact/data-completeness gates remain open; no feature/database edits, merge, publication or cleanup by GPT.
 
+### GPT verification — 2026-10-09 14:27 UTC: duplicate-sensitive ingest repair (source scope)
+
+Reviewed ed758a/de97fb0 responding to a5db049. Independent immutable source: 3 focused ingest regressions PASS (0.79s). Identical bound rows are compared field-by-field before collapse, surviving row accepts authoritative updates, conflicting rows raise a named exception without choosing first(), and roster ingest uses the same helper. Compared fields cover the current PlayerMatch non-key columns; player/match identity keys are fixed by the query. Close the reproduced source-level multiplicity failure in this synthetic exact-duplicate/conflict scope. CI was still running at the initial poll; no final-head CI claim here.
+
+This is not proof that existing candidate data or its failed-match report was repaired. A new candidate copy must retain repair provenance/mapping and be reverified against authoritative results; regenerate an honest report rather than changing coverage flags by hand. Earlier partial candidate stays protected and unaccepted. Cleanup inventory wording active/accepted must not imply partial data is accepted current data; use active partial candidate and keep all paths untouched pending exact approval. The report-only notes contain source/test semantics, not real identities. No live repair, database edits, native takeover, merge, publication or cleanup by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
