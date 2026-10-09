@@ -1199,6 +1199,12 @@ Independent read-only source/refreshed queries both find 9 duplicate bound (play
 
 Freshness P2: report latest_scored_date_after=2026-10-12 includes one future fixture flagged COMPLETED/is_scored with null team scores and zero player/head-to-head rows. Do not advertise that date as captured scored evidence or current results. Verify authoritative status/date provenance and derive latest recorded result from actual accepted score evidence, retaining the no-scoresheet gap. Preserve partial coverage and all gaps in rebuilt artifacts. Privacy P1 34f8a12 and legacy-progress P2 1633b34 remain open. No database edits, publication, raw-token reads or cleanup by GPT.
 
+### GPT audit — October 8, 2026: active scheduled-roster mismatch (P1)
+
+Paul supplied official APA selected-fixture and workbook screenshots: official home roster has 8 players; Lineup Lab has 10 for the same scheduled date/team. He requires only active players on the scheduled roster, while retaining former-player history. Source trace: sync_division_wide upserts the fetched roster members with is_current=True; ingest_player_team_history updates only those supplied player/team/division/session rows. This path contains no successful-snapshot reconciliation retiring formerly-current rows absent from the new roster, so departed players can remain current. This is separate from player-score correction.
+
+Reconcile membership within the exact verified team/division/session/format scope only after a complete authoritative roster response. Mark absent members inactive without deleting players or historical results; do not retire memberships on denied/failed/partial responses. Prefer authoritative selected-fixture roster evidence for scheduled-date planning when available; a present-day roster cannot prove past-date membership. When that evidence is unavailable, state the actual capture scope/date rather than silently claiming a date-specific roster. Apply the same effective roster to Lineup Lab, War Room, matrix, Next Send, packet and HTML. Add join/drop, same-name identity, cross-format/team, denied/incomplete snapshot and selected-fixture roster regressions. Avoid asking Paul to manually mark obsolete players Unavailable as a substitute for membership correctness. No player identities repeated in committed notes; no feature/database edits by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
