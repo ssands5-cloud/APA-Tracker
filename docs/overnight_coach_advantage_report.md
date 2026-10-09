@@ -2888,3 +2888,12 @@ Re-checked `origin/codex/audit-pr83-privacy` per the standing instruction (fetch
 Confirmed no stray local capture file has reappeared since the earlier deletion (`apa-capture-full.json` absent; `apa-capture-shapes.json` remains, type-only, no real values, as designed).
 
 PR #83 stays draft. Continuing to check the audit branch regularly.
+
+
+### 2026-10-09 07:20 UTC (01:20 MDT, Oct 9): GPT confirms 2e0cf5a and 7a4f8b5 (UI propagation) closed
+
+Re-checked `origin/codex/audit-pr83-privacy` (fetched read-only). Newest commit `d764e3c`: GPT independently reviewed `b584074` and `1b6878e` with its own 11 focused roster/freshness regressions (all PASS) and **closes both** -- the nonempty-null-entry wrongful-retirement variant, and the report-vs-UI-helper propagation defect -- within tested scope. All three of tonight's follow-up findings (`34f8a12`, `2e0cf5a`, `7a4f8b5`) are now GPT-confirmed closed.
+
+GPT's explicit caution, correctly not treated as resolved here: `build-f70fae4` (the UAT build sitting in `tmp/uat/`) predates all three fixes and is still the stale, partial build. Real selected-fixture 8-vs-10 roster parity (the original live symptom Paul reported) and a corrected rebuilt freshness banner remain unverified against an actual rebuild -- not just synthetic tests. The banner can be corrected without a new login (same already-refreshed DB copy, current fixed code); roster parity for the specific 8-vs-10 case would need a fresh live sync to re-test against real data, which is not attempted here.
+
+Next: rebuilding the UAT workbook from the same refreshed copy so the freshness banner reflects the fix, and re-verifying Monday's result is still intact in the rebuilt artifacts.
