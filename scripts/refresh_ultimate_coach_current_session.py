@@ -118,10 +118,17 @@ def diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     sheets = {k: a[k]["scoresheet_rows"] - (b.get(k) or {}).get("scoresheet_rows", 0) for k in a}
     scored_without_sheet = sorted(k for k in a if a[k]["is_scored"] and a[k]["scoresheet_rows"] == 0)
     dates = sorted(v["date"] for v in a.values() if v["date"])
-    scored_dates = sorted(v["date"] for v in a.values() if v["is_scored"] and v["date"])
+    # GPT audit 7a4f8b5: APA can flag a match is_scored=True/COMPLETED with null team scores and zero
+    # scoresheet rows -- a scheduling-system artifact, not a real result (confirmed live: match 51775357,
+    # 2026-10-12, zero player/head-to-head rows). The headline "latest scored date" must be derived from
+    # actual accepted score evidence, not the raw flag alone, or it advertises a date nothing backs. The
+    # match itself is still disclosed on its own via scored_without_sheet/scored_matches_without_scoresheet,
+    # unaffected by this -- this only changes what counts toward the "latest" date.
+    has_real_evidence = lambda v: v["is_scored"] and v["date"] and v["home_score"] is not None and v["away_score"] is not None  # noqa: E731
+    scored_dates = sorted(v["date"] for v in a.values() if has_real_evidence(v))
     return {
         "date_range_checked": [dates[0], dates[-1]] if dates else None,
-        "latest_scored_date_before": max((v["date"] for v in b.values() if v["is_scored"] and v["date"]), default=None),
+        "latest_scored_date_before": max((v["date"] for v in b.values() if has_real_evidence(v)), default=None),
         "latest_scored_date_after": scored_dates[-1] if scored_dates else None,
         "matches_added": added,
         "matches_missing_after_refresh": removed,

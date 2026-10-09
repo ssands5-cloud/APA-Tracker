@@ -140,6 +140,60 @@ def _rows(db, match_ext):
         con.close()
 
 
+class TestLatestScoredDateRequiresRealEvidence:
+    """GPT audit 7a4f8b5: a live refresh (refresh-20261009-035923Z) reported
+    latest_scored_date_after=2026-10-12, but that date's only "scored" match
+    (51775357) was flagged COMPLETED/is_scored=1 by APA with null team
+    scores and zero player/head-to-head rows -- a scheduling-system
+    artifact, not a real result. diff() computed the headline freshness
+    date from the raw is_scored flag alone, so it advertised a date with no
+    actual evidence behind it. The real latest evidence that night was
+    2026-10-07. The match still surfaces as its own disclosed gap via
+    scored_matches_without_scoresheet either way -- this only fixes the
+    headline date, not that existing gap mechanism."""
+
+    def test_a_completed_flag_with_null_scores_does_not_inflate_the_latest_date(self):
+        before = {"matches": {}, "totals": {}}
+        after = {"matches": {
+            "M1": {"date": "2026-10-07", "status": "COMPLETED", "is_scored": True, "home_score": 9.0,
+                   "away_score": 6.0, "scoresheet_rows": 10},
+            "M2": {"date": "2026-10-12", "status": "COMPLETED", "is_scored": True, "home_score": None,
+                   "away_score": None, "scoresheet_rows": 0},
+        }, "totals": {}}
+
+        result = refresh.diff(before, after)
+
+        assert result["latest_scored_date_after"] == "2026-10-07"
+        assert "M2" in result["scored_matches_without_scoresheet"]   # still disclosed as its own gap
+
+    def test_the_before_side_gets_the_same_protection(self):
+        before = {"matches": {
+            "M1": {"date": "2026-09-20", "status": "COMPLETED", "is_scored": True, "home_score": 9.0,
+                   "away_score": 6.0, "scoresheet_rows": 10},
+            "M2": {"date": "2026-10-01", "status": "COMPLETED", "is_scored": True, "home_score": None,
+                   "away_score": None, "scoresheet_rows": 0},
+        }, "totals": {}}
+        after = {"matches": {}, "totals": {}}
+
+        result = refresh.diff(before, after)
+
+        assert result["latest_scored_date_before"] == "2026-09-20"
+
+    def test_a_real_score_of_zero_still_counts_as_evidence(self):
+        """0-0 and similar low real scores must not be mistaken for the
+        None/None no-evidence case -- only an actual missing score should
+        be excluded, never a legitimately low one."""
+        before = {"matches": {}, "totals": {}}
+        after = {"matches": {
+            "M1": {"date": "2026-10-10", "status": "COMPLETED", "is_scored": True, "home_score": 0.0,
+                   "away_score": 0.0, "scoresheet_rows": 0},
+        }, "totals": {}}
+
+        result = refresh.diff(before, after)
+
+        assert result["latest_scored_date_after"] == "2026-10-10"
+
+
 def test_refresh_writes_a_copy_and_reports_monday(setup, monkeypatch):
     source, _, out = setup
     before = refresh.sha256_file(source)
