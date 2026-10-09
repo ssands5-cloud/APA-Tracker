@@ -131,7 +131,7 @@ def test_schedule_helpers_suggest_the_earliest_date_on_or_after_the_build_date()
     match_day = {
         "fixtures": [
             {"local_date": "2026-10-04", "format": "EIGHT", "format_raw": "8-Ball Open", "local_sort": "a", "is_scored": True,
-             "status": "COMPLETED"},
+             "status": "COMPLETED", "home_score": 9, "away_score": 6},
             {"local_date": "2026-10-11", "format": "EIGHT", "format_raw": "8-Ball Open", "local_sort": "b", "is_scored": False,
              "status": "UNPLAYED"},
             {"local_date": "2026-10-05", "format": "NINE", "format_raw": "9-Ball Open", "local_sort": "c", "is_scored": False,
@@ -153,6 +153,27 @@ def test_schedule_helpers_suggest_the_earliest_date_on_or_after_the_build_date()
     assert fresh["latest_result"] == "Sun Oct 4, 2026"
     assert fresh["unplayed_before_build"] == 1  # Oct 5 still UNPLAYED in the snapshot
     assert fresh["build_date"] == "Wed Oct 7, 2026"
+
+
+def test_freshness_ignores_a_completed_flag_with_no_real_score_evidence():
+    """GPT audit 7a4f8b5 follow-up (2026-10-09 06:12 UTC): the refresh
+    engine's diff() was fixed to require real score evidence for its own
+    latest-scored-date, but this is the SEPARATE function the actual
+    HTML/Excel freshness banner reads from -- it still selected by
+    is_scored alone, so a rebuild from the already-fixed refresh engine
+    still advertised the wrong date here. APA can flag a fixture
+    is_scored=True/COMPLETED with null home/away scores (a scheduling-
+    system artifact, not a real result, confirmed live on match 51775357)."""
+    match_day = {
+        "fixtures": [
+            {"local_date": "2026-10-07", "is_scored": True, "status": "COMPLETED",
+             "home_score": 9, "away_score": 6},
+            {"local_date": "2026-10-12", "is_scored": True, "status": "COMPLETED",
+             "home_score": None, "away_score": None},
+        ],
+    }
+    fresh = freshness(match_day, "2026-10-08")
+    assert fresh["latest_result"] == "Wed Oct 7, 2026"
 
 
 def test_build_local_date_is_the_denver_calendar_day_of_the_build_stamp():

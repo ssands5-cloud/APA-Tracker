@@ -588,7 +588,14 @@ def team_stale_note(team_label: str, count: int) -> str:
 
 def freshness(match_day: dict[str, Any], build_local: str | None) -> dict[str, Any]:
     fixtures = match_day.get("fixtures") or []
-    results = [f["local_date"] for f in fixtures if f.get("local_date") and f.get("is_scored")]
+    # GPT audit 7a4f8b5 follow-up (2026-10-09 06:12 UTC): scripts/refresh_ultimate_coach_current_session.py's
+    # diff() was fixed to require real score evidence, but this is the SEPARATE function the actual HTML/Excel
+    # freshness banner reads -- it still selected the latest date by is_scored alone, so a rebuild from the
+    # already-fixed refresh engine still advertised the same wrong date here. APA can flag a fixture
+    # is_scored=True/COMPLETED with null home/away scores (a scheduling-system artifact, not a real result);
+    # only a fixture with actual non-null scores counts as real evidence of a result.
+    results = [f["local_date"] for f in fixtures
+               if f.get("local_date") and f.get("is_scored") and f.get("home_score") is not None and f.get("away_score") is not None]
     latest = max(results) if results else None
     stale = sum(1 for f in fixtures if f.get("local_date") and build_local and f["local_date"] < build_local
                 and str(f.get("status") or "").upper() == "UNPLAYED")
