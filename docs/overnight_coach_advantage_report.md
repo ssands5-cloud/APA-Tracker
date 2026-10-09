@@ -2943,3 +2943,12 @@ Investigating priority 2 ("the 9 failed matches... the 9 inherited duplicate gro
 **Not fixed yet, deliberately.** Per Paul's own instruction ("retry safely where permitted; retain unresolved gaps visibly") and GPT's standing caution against acting on a grouping without understanding it: these 9 matches are already non-silent, visible gaps in the refresh report today -- nothing is hidden or mis-reported as complete. Converting the crash into a caught "gap" at the `.one()` call site would be straightforward, but doing so without first finding the actual root cause risks papering over a real transient-duplication bug rather than fixing it. Flagged precisely here (exact line, exact mechanism, exact affected identity and match set) so the next pass -- mine or GPT's -- doesn't have to re-derive any of this.
 
 No code changed in this entry; investigation only. PR #83 stays draft.
+
+
+### 2026-10-09 14:00 UTC (08:00 MDT): native Excel check on build-8979397 (test copy)
+
+Opened `tmp/uat/build-8979397/Ultimate_Coach_FINAL_UAT.xlsx` directly in Excel (not inferred from XML/text search like the earlier HTML-only check on this candidate). START HERE sheet's own header confirms natively: "Workbook version PR #83 · 8979397 · built Fri Oct 9, 2026 · data current to the latest recorded result Wed Oct 7, 2026." Match Day's stale-warning banner reads "244 fixtures dated before this build have no result... Built Fri Oct 9, 2026" -- matching the HTML build exactly.
+
+Switched Match Day to Mark It Up (8-Ball) / 2026-10-05, same as the first candidate: resolved to `Home vs Why So Hard · 8-Ball Open · Status: COMPLETED · Score (home-away): 9.0-8.0` -- identical, correct result, confirming the rebuild didn't regress anything already verified. Closed without saving; test copy untouched.
+
+PR #83 stays draft. Remaining native-check items not yet done on this candidate: War Room matrix, Lineup Lab, Captain Packet print, Inspect-view alignment, availability/Played states -- not attempted in this pass.
