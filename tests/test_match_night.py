@@ -160,7 +160,10 @@ def test_a_stale_snapshot_warning_is_visible_on_the_phone(tmp_path):
                 page.click("#go")
                 page.wait_for_selector("#tonight .decide-sends", timeout=20000)
                 stale = page.locator(".freshness span.stale")
-                assert stale.is_visible() and stale.inner_text().startswith("⚠ 1 fixture dated before this build")
+                # f3b6a64/this entry: the viewer's own team gap now leads, same as Excel's uc_TeamStaleText.
+                assert stale.is_visible() and stale.inner_text().startswith(
+                    "⚠ Sharks · Fall 2026 · 8-Ball: 1 earlier fixture has no result in this snapshot. "
+                    "⚠ 1 fixture dated before this build")
                 box = stale.bounding_box()
                 assert box["y"] + box["height"] <= 844, box                    # on the first screen
                 assert page.evaluate("document.documentElement.scrollWidth") <= 390
@@ -348,3 +351,50 @@ def test_a_full_roster_keeps_every_decision_on_a_safari_screen_and_every_name_re
                 browser.close()
     finally:
         server.shutdown()
+
+
+def test_slim_payload_names_the_viewers_own_missing_results_first(tmp_path):
+    # Excel (f3b6a64) already leads its stale warning with the selected team's own gap; the Match Night package
+    # fixes "our team" at build time, so it can carry the same lead-in without any client-side JS.
+    from tests.test_excel_war_room_formulas import SHARKS, _stale_payload
+
+    stale = _stale_payload()
+    pick = select_fixture(stale, "1001", BUILT)
+    assert pick["our_scope"] == "sharks-a|d1|Fall 2026"             # Sharks: the Oct 4 fixture is still UNPLAYED
+    slim = slim_payload(stale, pick, built_at=BUILT)
+    assert slim["snapshot_freshness"]["team_stale_note"] == (
+        f"⚠ {SHARKS}: 1 earlier fixture has no result in this snapshot. ")
+
+    # A team with no gap of its own gets no lead-in, even though the snapshot overall is stale elsewhere.
+    current = _payload()
+    pick2 = select_fixture(current, "1001", BUILT)
+    slim2 = slim_payload(current, pick2, built_at=BUILT)
+    assert slim2["snapshot_freshness"]["team_stale_note"] == ""
+
+
+def test_match_night_html_shows_the_teams_own_gap_before_the_league_wide_warning(tmp_path):
+    from tests.test_excel_war_room_formulas import SHARKS, _stale_payload
+
+    site = tmp_path / "site"
+    build_site(_stale_payload(), viewer_external_id="1001", passphrase=PASS, built_at=BUILT, out=site)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    handler.log_message = lambda *a, **k: None
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                page = browser.new_context(**IPHONE).new_page()
+                page.goto(f"http://127.0.0.1:{httpd.server_address[1]}/")
+                page.fill("#pass", PASS)
+                page.click("#go")
+                page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+                stale = page.locator(".freshness span.stale")
+                text = stale.inner_text()
+                assert text.startswith(f"⚠ {SHARKS}: 1 earlier fixture has no result in this snapshot. ⚠ 1 fixture")
+                assert stale.is_visible()
+            finally:
+                browser.close()
+    finally:
+        httpd.shutdown()

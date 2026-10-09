@@ -34,7 +34,15 @@ from typing import Any
 from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_match_day import DEFAULT_MATCH_DAY_TIMEZONE, viewer_player
 from analytics.ultimate_coach_excel_payload import _team_scope_key
-from analytics.ultimate_coach_war_room import PAGES_URL, build_local_date, date_label, default_matchup, freshness  # noqa: F401
+from analytics.ultimate_coach_war_room import (  # noqa: F401
+    PAGES_URL,
+    build_local_date,
+    date_label,
+    default_matchup,
+    freshness,
+    stale_by_scope,
+    team_stale_note,
+)
 
 PACKAGE_FORMAT = "uc-match-night-v1"
 KDF_ITERATIONS = 600_000
@@ -114,8 +122,13 @@ def slim_payload(payload: dict[str, Any], pick: dict[str, Any], built_at: str = 
     slim.update(players=players, evidence=evidence, match_day=match_day,
                 counts={"players": len(roster_ids), "head_to_head_rows": len(evidence)})
     tz = source_md.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE
-    full = freshness(source_md, build_local_date(built_at, tz) if built_at else None)
+    build_local_for_freshness = build_local_date(built_at, tz) if built_at else None
+    full = freshness(source_md, build_local_for_freshness)
     slim["snapshot_freshness"] = {k: full[k] for k in ("latest_result", "unplayed_before_build")}
+    # The single fixture this package is FOR already fixes "our team" (unlike the general Cockpit, where it is
+    # picked interactively) -- so the viewer's own missing results can be named here, same as Excel's uc_TeamStaleText.
+    slim["snapshot_freshness"]["team_stale_note"] = team_stale_note(
+        pick["labels"][pick["our_scope"]], stale_by_scope(source_md, build_local_for_freshness).get(pick["our_scope"], 0))
     slim["match_night"] = {
         "fixture_label": f"{pick['labels'][pick['our_scope']]} vs {pick['labels'][pick['opp_scope']]}",
         "fixture_display": pick["fixture"].get("local_display") or "",

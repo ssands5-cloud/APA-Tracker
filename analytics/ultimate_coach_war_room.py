@@ -577,6 +577,15 @@ def stale_by_scope(match_day: dict[str, Any], build_local: str | None) -> dict[s
     return out
 
 
+def team_stale_note(team_label: str, count: int) -> str:
+    """The same per-team lead-in Excel's uc_TeamStaleText formula renders ("" when the team has no gap), for a
+    renderer (e.g. the Match Night slim package) where the one relevant team is already fixed at build time."""
+    if not count:
+        return ""
+    return (f"⚠ {team_label}: {count} earlier fixture{'s' if count != 1 else ''} "
+            f"{'has' if count == 1 else 'have'} no result in this snapshot. ")
+
+
 def freshness(match_day: dict[str, Any], build_local: str | None) -> dict[str, Any]:
     fixtures = match_day.get("fixtures") or []
     results = [f["local_date"] for f in fixtures if f.get("local_date") and f.get("is_scored")]
