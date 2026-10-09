@@ -2967,3 +2967,26 @@ GPT corrected the prior turn's diagnosis precisely: `database.ingest.ingest_matc
 This does not retroactively fix the 9 matches in the already-refreshed copy (`tmp/refresh/refresh-20261009-035923Z/`) or the UAT candidates built from it -- those still show `coverage: partial`/9 failed, honestly, since fixing the code doesn't rewrite a prior run's report. The next live refresh (needs Paul's login) would be the first to actually exercise this fix against the real data.
 
 PR #83 stays draft.
+
+
+### 2026-10-09 14:35 UTC (08:35 MDT): exact cleanup inventory (read-only -- no files touched)
+
+Per Paul's priority 5. This is strictly an inventory; **nothing listed below has been deleted, moved or modified.** Total `tmp/` usage: **3.3 GB**, all gitignored, all local-only.
+
+**`tmp/refresh/` (676 MB, 26 folders) -- recommended disposition:**
+- **Keep -- active source.** `refresh-20261009-035923Z/` (227 MB): the successful, resumable, currently-accepted refresh (`coverage: partial`, 105 gaps, 9 of which `ed758a2` now fixes going forward). This is what every tonight's UAT build and native check used. Still needed.
+- **Candidate for deletion, your call -- superseded, unresumable.** `refresh-20261008-154359Z/` (225 MB, DB copy only, no report/error -- the very first attempt, predates resumability entirely) and `refresh-20261008-155018Z/` (225 MB, `refresh_error.json` shows `AccessTokenExpired` at 16:04:27 UTC after 399 matches -- the second attempt, also predates the resume fix so cannot be continued). Both are dead ends: the data in `refresh-20261009-035923Z` is a superset of what either contains.
+- **Candidate for deletion, your call -- empty stubs.** 24 other `refresh-*` folders, each holding only a 0-byte `refresh.log` and nothing else (no report, no error file, no database) -- failed capture-tool launches that never got far enough to write anything. Zero real data in any of them. Did not fully trace what produced each one (several line up with my own cron firings' timeframes and some don't); none contain player data or secrets regardless.
+
+**`tmp/uat/` (2.3 GB, 10 build folders + 2 top-level "friendly copy" files) -- recommended disposition:**
+- **Keep -- current candidate.** `build-8979397/` (222 MB): tonight's latest, built from current head, natively verified.
+- **Keep -- prior verified candidate, for comparison.** `build-f70fae4/` (221 MB): the first fully-verified candidate from this session, superseded but not wrong -- useful to diff against if needed.
+- **Already explicitly quarantined, not re-flagging.** `build-f2df1c8-CONTAMINATED-do-not-use/` (221 MB): marked contaminated in an earlier entry; a source edit leaked into that build. Already labeled; your call whether to actually remove it now.
+- **Candidate for deletion, your call -- superseded intermediate builds.** `build-09255ff/`, `build-0c2e474/`, `build-0ecc168/`, `build-787f6d7/`, `build-787f6d7-noviewer/`, `build-d0ceb33/`, `build-da4e5d2/` (221 MB each, ~1.5 GB total): earlier verified-at-the-time candidates from progressively fixed commits, all superseded by `build-f70fae4`/`build-8979397`.
+- The two top-level `Ultimate_Coach_FINAL_UAT.html`/`.xlsx` "friendly copy" files always mirror whichever build ran most recently (currently `build-8979397`'s copy) -- not independently meaningful, just a convenience pointer.
+
+**`tmp/native/` (312 MB, 6 run folders) -- recommended disposition:** `run-09255ff/`, `run-0c2e474/`, `run-0ecc168/`, `run-787f6d7/`, `run-787f6d7-noviewer/`, `run-da4e5d2/` (52 MB each), from earlier native-Excel visual-review/testing sessions in this project's history (predating tonight). Not evaluated for current relevance -- flagged for your own judgment on whether they're still needed as a visual-regression reference.
+
+**Not touched at all, out of scope for this inventory:** anything under `APA-Tracker-Ultimate-Coach-Live/` (the separate sibling repo holding the live source database and catalog), your own root workbooks, and any file outside this worktree's `tmp/`.
+
+No deletion will happen without your explicit approval of the exact paths above. PR #83 stays draft.
