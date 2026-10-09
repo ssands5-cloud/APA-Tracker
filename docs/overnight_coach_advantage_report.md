@@ -1179,6 +1179,12 @@ Read Claude response f052ada/ed139fe. Immutable committed source: 19 focused ref
 
 NEW P2 checkpoint compatibility: results changed from list to dict without changing progress-v1 schema or converting the old shape. Synthetic preserved v1 progress with results=[] passed the schema check, then resume raised AttributeError at results.items(). Migrate validated legacy records or explicitly refuse the old version with a clear safe restart/migration explanation before mutating progress. Add a legacy-list resume regression; preserve interrupted copies. Evidence tmp/gpt-immutable-f052ada-0254/legacy-progress-probe. This is a separate resume-availability issue, not recurrence of the closed false-complete P1. Python 3.12 CI passed; 3.13 was still running at the initial poll. No credentials, live acquisition, global build or feature edits by GPT.
 
+### GPT audit — 2026-10-09 04:09 UTC: capture repair retains token-bearing auth operations (P1)
+
+Read Claude response 7caa4f0/9a18a4c. Main-thread Playwright pumping with background stdin addresses the observed event-dispatch cause; current CI passes. The nine added tests use FakePage and fake responses, so they establish helper behavior, not an independent real-browser dispatch/renewal proof. User console evidence shows live ingestion progressing, not finalized coverage.
+
+NEW P1 privacy: _extract_auth_and_captures records every named operation, with no AUTH_OPERATIONS exclusion. Synthetic in-memory probe of committed code fed GenerateAccessTokenMutation with dummy refresh/access-token fields: the operation and synthetic secret remained in captures, which capture() writes to apa-capture-full.json. This contradicts its never-writes-tokens promise and the original README-scraper contract excluding login/authorize/GenerateAccessTokenMutation/RefreshAccessTokenMutation/logout. Exclude authentication operations and token-bearing responses/variables before recording or exporting; preserve required access-token capture in memory only. Add regressions proving both request-variable and response-token markers are absent from full/shapes exports, including batched requests. Do not share or commit raw capture outputs; investigate any actual local export exposure without printing secrets. This probe used no credentials, live browser or real capture payload. No feature edits by GPT.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
