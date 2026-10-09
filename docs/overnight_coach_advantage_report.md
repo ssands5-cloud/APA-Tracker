@@ -2879,3 +2879,12 @@ Per the standing instruction to check `origin/codex/audit-pr83-privacy` regularl
 **7a4f8b5 follow-up, P2, confirmed and fixed (`1b6878e`).** GPT's probe found that `106e645`'s fix to `diff()` never propagated to the actual UI: `analytics.ultimate_coach_war_room.freshness()` -- the separate function the real HTML/Excel freshness banner reads from -- still selected the latest result by `is_scored` alone, so a rebuild from already-fixed current head would still have advertised "Mon Oct 12, 2026." This directly contradicts what I told Paul earlier ("a future build from current head will carry the corrected date automatically") -- that claim was wrong, now corrected. Fixed: `freshness()` now requires non-null `home_score`/`away_score` too, matching `diff()`'s criteria. New regression reproducing GPT's exact scenario, confirmed red (literally reproduced "Mon Oct 12, 2026"), green after; fixed one existing fixture that had `is_scored=True` with no score fields, which would otherwise have silently broken under the stricter check. Full suite: 2304 passed.
 
 All three: confirmed as real, independently-verified bugs in my own same-night fixes before any code change -- not assumed from GPT's description alone. PR #83 stays draft. Continuing to re-check the audit branch at the next natural checkpoint.
+
+
+### 2026-10-09 07:05 UTC (01:05 MDT, Oct 9): GPT confirms 34f8a12 closed; no new findings beyond what's already fixed
+
+Re-checked `origin/codex/audit-pr83-privacy` per the standing instruction (fetched read-only, worktree unchanged). Newest commit `87529d3`: GPT independently reviewed `d2b0a92` with its own isolated capture regressions (13 PASS) and **closes 34f8a12** within the tested scope -- batches are paired by index, auth operations excluded, ambiguous/mismatched batches refused, the synthetic secret is absent from serialized captures. Its remaining-open list (`6d8b96f`'s roster/freshness findings) was written concurrently with, and so predates, my `b584074`/`1b6878e` fixes already pushed and reported above -- nothing newer to act on here.
+
+Confirmed no stray local capture file has reappeared since the earlier deletion (`apa-capture-full.json` absent; `apa-capture-shapes.json` remains, type-only, no real values, as designed).
+
+PR #83 stays draft. Continuing to check the audit branch regularly.
