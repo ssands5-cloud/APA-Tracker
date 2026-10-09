@@ -2990,3 +2990,14 @@ Per Paul's priority 5. This is strictly an inventory; **nothing listed below has
 **Not touched at all, out of scope for this inventory:** anything under `APA-Tracker-Ultimate-Coach-Live/` (the separate sibling repo holding the live source database and catalog), your own root workbooks, and any file outside this worktree's `tmp/`.
 
 No deletion will happen without your explicit approval of the exact paths above. PR #83 stays draft.
+
+
+### 2026-10-09 14:45 UTC (08:45 MDT): GPT verification 1ded3fa -- ingest repair closed; wording correction
+
+**`ed758a2` (the duplicate-row ingest fix) confirmed closed** by GPT within its tested source scope: field-by-field comparison before collapse, authoritative updates on the surviving row, named exception (never `first()`) on genuine conflict, same helper used by roster ingest -- all verified against an independent immutable snapshot.
+
+**Wording correction, taken seriously.** The prior cleanup-inventory entry (`de97fb0`) described `refresh-20261009-035923Z/` as "the successful, resumable, **currently-accepted** refresh." That is wrong and contradicts the refresh's own manifest, which has always read `accepted_current_data: False, coverage: "partial"` -- correctly, since 9 matches were still failed at the time that refresh ran. GPT caught this precisely: the word "accepted" must never be used to describe partial data, even in passing, even in an inventory entry about disk cleanup. Correcting the record: `refresh-20261009-035923Z/` is the **active partial candidate** -- the current, in-use, NOT-accepted-as-complete refresh. Nothing about its disposition recommendation (keep, still needed) changes; only the earlier imprecise label is withdrawn.
+
+Also noted and agreed: `ed758a2` fixing the ingest code is not itself proof the existing candidate's failed-match report was repaired -- that report is a static artifact of the run that produced it, and a NEW refresh (needing Paul's live login) would be the only way to actually regenerate an honest, re-verified report reflecting the fix. No report has been hand-edited to change any coverage/gap flag, and none will be.
+
+PR #83 stays draft.
