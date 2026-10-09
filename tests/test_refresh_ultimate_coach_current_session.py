@@ -463,3 +463,103 @@ def test_capture_tool_renews_an_expired_token_from_the_open_browser_and_resumes(
     with pytest.raises(SystemExit) as other:
         capture._run_uc_refresh("t1", [], renew=lambda old: "never")
     assert other.value.code == 4
+
+
+def test_resume_reopens_a_division_whose_match_failed_before_a_later_division_expired(setup, monkeypatch):
+    # GPT audit 77e99da: D1 finishes with a failed match (not fatal, the loop continues); D2 then raises
+    # AccessTokenExpired (fatal). THE BUG: D1 got marked completed anyway, so on resume its failed outcome was
+    # stripped and retried but D1 itself was skipped -- the gap vanished and coverage could read "complete".
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    source, catalog, out = setup
+    con = sqlite3.connect(source)
+    con.execute("INSERT INTO matches (id, external_id, home_team_id, away_team_id, home_team_name, away_team_name,"
+                " match_date, status, format, session_name, home_score, away_score, is_scored) VALUES"
+                " (4, 'M3', 'T1', 'T2', 'Ours', 'Theirs', '2026-09-20T19:00:00-06:00', 'COMPLETED', '8-Ball Open',"
+                " 'Fall 2026', 9, 6, 1)")
+    con.execute("INSERT INTO player_matches (player_id, match_id, match_date, team_id, result) VALUES"
+                " (1, 4, '2026-09-20', 'T1', 'W'), (2, 4, '2026-09-20', 'T2', 'L')")
+    con.commit()
+    con.close()
+
+    def schedule2(cfg, division_id):
+        return {"D1": [{"match_id": "M1", "is_scored": True, "is_bye": False}],
+                "D2": [{"match_id": "M3", "is_scored": True, "is_bye": False}]}[division_id]
+
+    state = {"m1_attempts": 0, "m3_ok": False}
+
+    def scoresheet2(config, match_id):
+        if match_id == "M1":
+            state["m1_attempts"] += 1
+            if state["m1_attempts"] == 1:
+                raise RuntimeError("APA returned a malformed scoresheet")
+            return [_row(VIEWER, "W", "T1"), _row(OPP, "L", "T2")], []
+        if match_id == "M3":
+            if not state["m3_ok"]:
+                raise AccessTokenExpired("expired")
+            return [_row(VIEWER, "W", "T1"), _row(OPP, "L", "T2")], []
+        raise AssertionError(match_id)
+
+    with pytest.raises(AccessTokenExpired):
+        refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out,
+                            sync=_fake_sync([]), rebuild_matchups=lambda db: [], schedule=schedule2,
+                            scoresheet=scoresheet2, resolve=RESOLVED)
+    progress = json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))
+    assert progress["completed_divisions"] == []           # D1 must NOT be marked complete despite finishing
+    assert [c["match_id"] for c in progress["checked"] if c["status"] == "fetch_failed"] == ["M1"]
+
+    state["m3_ok"] = True                                   # the renewed login fixes D2's problem
+    resumed = refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out,
+                                  resume=True, sync=_fake_sync([]), rebuild_matchups=lambda db: [],
+                                  schedule=schedule2, scoresheet=scoresheet2, resolve=RESOLVED)
+    assert sorted(resumed["reconciliation"]["matches_checked"]) == ["M1", "M3"]
+    assert resumed["reconciliation"]["matches_failed"] == []
+    assert resumed["gaps"] == [] and resumed["coverage"] == "complete"
+    assert refresh.describe_source(out / "ultimate_coach_staging.db")["accepted_current_data"] is True
+
+
+def test_resume_never_claims_complete_while_a_reopened_division_keeps_failing(setup, monkeypatch):
+    # The other half of 77e99da's requested regression: a match that NEVER recovers must stay an honest,
+    # reported gap across resumes -- never silently dropped, never marked complete.
+    from scraper.graphql_scraper import AccessTokenExpired
+
+    source, catalog, out = setup
+    con = sqlite3.connect(source)
+    con.execute("INSERT INTO matches (id, external_id, home_team_id, away_team_id, home_team_name, away_team_name,"
+                " match_date, status, format, session_name, home_score, away_score, is_scored) VALUES"
+                " (4, 'M3', 'T1', 'T2', 'Ours', 'Theirs', '2026-09-20T19:00:00-06:00', 'COMPLETED', '8-Ball Open',"
+                " 'Fall 2026', 9, 6, 1)")
+    con.execute("INSERT INTO player_matches (player_id, match_id, match_date, team_id, result) VALUES"
+                " (1, 4, '2026-09-20', 'T1', 'W'), (2, 4, '2026-09-20', 'T2', 'L')")
+    con.commit()
+    con.close()
+
+    def schedule2(cfg, division_id):
+        return {"D1": [{"match_id": "M1", "is_scored": True, "is_bye": False}],
+                "D2": [{"match_id": "M3", "is_scored": True, "is_bye": False}]}[division_id]
+
+    state = {"m3_ok": False}
+
+    def scoresheet2(config, match_id):
+        if match_id == "M1":
+            raise RuntimeError("APA keeps returning a malformed scoresheet")      # never recovers
+        if match_id == "M3":
+            if not state["m3_ok"]:
+                raise AccessTokenExpired("expired")
+            return [_row(VIEWER, "W", "T1"), _row(OPP, "L", "T2")], []
+        raise AssertionError(match_id)
+
+    with pytest.raises(AccessTokenExpired):
+        refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out,
+                            sync=_fake_sync([]), rebuild_matchups=lambda db: [], schedule=schedule2,
+                            scoresheet=scoresheet2, resolve=RESOLVED)
+    state["m3_ok"] = True
+    resumed = refresh.run_refresh({"database": {}}, source_db=source, catalog_path=catalog, out_dir=out,
+                                  resume=True, sync=_fake_sync([]), rebuild_matchups=lambda db: [],
+                                  schedule=schedule2, scoresheet=scoresheet2, resolve=RESOLVED)
+    assert resumed["reconciliation"]["matches_failed"] == ["M1"]
+    assert any(g.startswith("match M1: scoresheet fetch failed") for g in resumed["gaps"])
+    assert resumed["coverage"] == "partial"
+    progress = json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))
+    assert all(not k.startswith("D1|") for k in progress["completed_divisions"])   # D1 stays reopened
+    assert refresh.describe_source(out / "ultimate_coach_staging.db")["accepted_current_data"] is False

@@ -277,10 +277,20 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 
     APA tokens expire in minutes (the first live run, 2026-10-08, lost its token after ~14 min of a >1 h scope).
     Progress is therefore checkpointed to refresh_progress.json after every division and every reconciled
-    match: the ORIGINAL before-snapshot, source/catalog hashes, completed divisions, per-match outcomes and the
-    segments run so far. A resumed segment skips finished work, retries matches that failed or were denied,
-    re-syncs an interrupted division (idempotent upserts) and, when the whole scope is done, writes one report
-    over all segments. The viewer's own divisions run first so Monday is covered by the first login."""
+    match: the ORIGINAL before-snapshot, source/catalog hashes, completed divisions, a result per division keyed
+    by its division key, per-match outcomes and the segments run so far. A resumed segment skips cleanly
+    finished work, retries matches that failed or were denied, re-syncs an interrupted division (idempotent
+    upserts) and, when the whole scope is done, writes one report over all segments. The viewer's own divisions
+    run first so Monday is covered by the first login.
+
+    GPT audit 77e99da: a division that FINISHED with an unresolved match failure/denial, an undenied-but-
+    unscheduled gap, or a sync-level denial used to be marked "completed" anyway -- so on resume its failed
+    match's outcome was stripped and retried, but the division itself was skipped, and the failure vanished
+    instead of being retried or kept as a gap. A division is now added to ``completed_divisions`` only when it
+    finished with no such problem; a "dirty" division is reopened at the start of every resume (its stale
+    result entry dropped, so it is reprocessed from this segment's sync onward) until a clean pass replaces it
+    or it fails again and stays an honest, reported gap -- coverage can never read "complete" while one persists.
+    """
     from sqlalchemy.orm import Session
 
     from database.engine import create_db_engine
@@ -329,7 +339,7 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         progress = {"schema": PROGRESS_SCHEMA, "source_db": str(source_db), "source_db_sha256": source_sha_before,
                     "catalog": str(catalog_path), "catalog_sha256": catalog_sha, "mode": mode, "mine_only": mine_only,
                     "copy_sha256_before_sync": sha256_file(dest), "before": snapshot(dest, sessions),
-                    "completed_divisions": [], "results": [], "checked": [], "segments": []}
+                    "completed_divisions": [], "results": {}, "checked": [], "segments": []}
     segment = {"started_utc": stamp(now()), "ended_by": "running"}
     progress["segments"].append(segment)
 
@@ -339,6 +349,16 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     save()
     before = progress["before"]
     had_rows = {k for k, v in before["matches"].items() if v["scoresheet_rows"] > 0}
+    # GPT audit 77e99da: reopen every "dirty" division -- one whose stored result still carries a sync denial,
+    # an unchecked schedule, or (via its match outcomes) a failed/denied reconcile -- so this segment reprocesses
+    # it from the sync onward instead of leaving last segment's false "completed" mark in place.
+    failed_match_divisions = {c["division_id"] for c in progress["checked"] if c["status"] in ("denied", "fetch_failed")}
+    dirty_keys = {key for key, result in progress["results"].items()
+                 if result.get("confirmed_denial") or result.get("schedule_problem")
+                 or result.get("division_id") in failed_match_divisions}
+    for key in dirty_keys:
+        progress["completed_divisions"] = [k for k in progress["completed_divisions"] if k != key]
+        progress["results"].pop(key, None)
     # Retry what failed or was denied in an earlier segment (a fresh login may succeed); keep everything else.
     progress["checked"] = [c for c in progress["checked"] if c["status"] not in ("denied", "fetch_failed")]
     run_config = dict(config)
@@ -359,12 +379,14 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
                         roster_is_current=True, identity_current_only=True))
                 except ConfirmedScopeDenial:
                     db.rollback()
-                    progress["results"].append({**base, "confirmed_denial": True})
-                    progress["completed_divisions"].append(key)
+                    # Not added to completed_divisions: a denial is exactly the kind of problem a future resume
+                    # (a fresh, renewed token) may clear, and GPT 77e99da applies the same reopening rule here.
+                    progress["results"][key] = {**base, "confirmed_denial": True}
                     save()
                     continue
                 db.commit()
                 result = {**base, "coverage_observations": reconcile_division_wide_coverage(counts), **counts}
+                targets: list[str] = []
                 if mode == "reconcile":
                     # The sync above (resume=True) fetched every MISSING scoresheet. Matches that already had rows
                     # were skipped by its checkpoint, so re-fetch each of them and reconcile its player results.
@@ -399,8 +421,15 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
                         outcome["division_id"] = d["division_id"]
                         progress["checked"].append(outcome)
                         save()
-                progress["results"].append(result)
-                progress["completed_divisions"].append(key)
+                # GPT audit 77e99da: only a CLEAN division -- synced, scheduled, and with none of ITS matches
+                # left failed/denied this pass -- is marked completed. A dirty one still gets its latest result
+                # stored (for an honest report), but stays off completed_divisions so the next resume reprocesses
+                # it, until a clean pass replaces this result or it fails again and the gap is reported again.
+                progress["results"][key] = result
+                clean = not result.get("schedule_problem") and not any(
+                    c["status"] in ("denied", "fetch_failed") for c in progress["checked"] if c["match_id"] in targets)
+                if clean:
+                    progress["completed_divisions"].append(key)
                 save()
             matchups = rebuild_matchups(db)
             db.commit()
@@ -413,7 +442,7 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     segment.update(ended_by="completed", ended_utc=stamp(now()))
     save()
 
-    checked, results = progress["checked"], progress["results"]
+    checked, results = progress["checked"], list(progress["results"].values())
     after = snapshot(dest, sessions)
     change = diff(before, after)
     gaps = [g for r in results for g in _division_gaps(r)]
