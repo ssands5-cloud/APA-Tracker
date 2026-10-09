@@ -3001,3 +3001,14 @@ No deletion will happen without your explicit approval of the exact paths above.
 Also noted and agreed: `ed758a2` fixing the ingest code is not itself proof the existing candidate's failed-match report was repaired -- that report is a static artifact of the run that produced it, and a NEW refresh (needing Paul's live login) would be the only way to actually regenerate an honest, re-verified report reflecting the fix. No report has been hand-edited to change any coverage/gap flag, and none will be.
 
 PR #83 stays draft.
+
+
+### 2026-10-09 14:55 UTC (08:55 MDT): native check -- War Room matrix and Inspect view on build-8979397
+
+Opened `tmp/uat/build-8979397/Ultimate_Coach_FINAL_UAT.xlsx` natively (test copy, closed without saving). War Room sheet: rosters, W-L records, per-opponent meeting counts, "Best sends"/"Dangerous opponents"/"Top risks"/"Concerning pairings" text sections all render real, correctly-formatted data (player names, APA record IDs, direct/shared-opponent records with sample sizes) -- no blank cells, no `#VALUE!` or other error text anywhere visually scanned.
+
+**Inspect, the historically-fixed blank-selection defect, re-verified:** with "Inspect opponent" left blank, the results table below shows a clean empty state -- no error, nothing populated. Matches the intended behavior from the original `7b78fa6` fix; no regression.
+
+**Conditional formatting confirmed genuinely wired, not just visually assumed:** opened Excel's own Conditional Formatting Rules Manager (This Worksheet scope) rather than relying on eyeballing colors in a screenshot -- 5 real rules exist on the War Room sheet, keyed on formulas like `=$O87="G"` / `"R"` / `"E"` / `"I"` / `"X"` (evidence-classification codes), applied to range `$B$87:$B$97`. The matrix mechanism is intact; a plain visual scan of the wider evidence-detail columns (which are intentionally text, not fill-colored) had initially looked like a possible regression but was a misreading of which column is meant to carry color.
+
+No defects found in this pass. PR #83 stays draft. Still not done: Lineup Lab marks, Captain Packet print layout, Coach Dashboard, availability/Played states end-to-end.
