@@ -103,6 +103,79 @@ def _record(captures: dict, operation: str, variables: Any, query: str, response
     }
 
 
+def _extract_auth_and_captures(
+    url: str, headers: dict, body: Any, fetch_json, captures: dict, token_holder: dict, *, host: str = GRAPHQL_HOST
+) -> None:
+    """Handle one GraphQL response: capture its token, then its operations -- independently of each other.
+
+    Authorization capture happens first and unconditionally, before anything
+    that depends on the request having a parseable body or a named operation.
+    The whole point of this tool is lifting the token off the request header;
+    gating that behind body/JSON handling would silently discard a perfectly
+    good token on any response with no post body, or whose body later failed
+    to parse.
+    """
+    if host not in url:
+        return
+
+    auth = headers.get("authorization")
+    if auth and "token" not in token_holder:
+        print("  [token] signed-in session detected (access token captured)")
+    if auth:
+        token_holder["token"] = auth
+
+    if not body:
+        return
+    for item in body if isinstance(body, list) else [body]:
+        operation = (item or {}).get("operationName")
+        if not operation:
+            continue
+        try:
+            payload = fetch_json()
+        except Exception:
+            continue
+        _record(captures, operation, item.get("variables"), item.get("query"), payload)
+        print(f"  captured: {operation}")
+
+
+def _pump_until(page, ready: "threading.Event", poll_ms: int = 250) -> None:
+    """Block the main thread until ``ready`` is set, without blocking Playwright's event dispatch.
+
+    Playwright's sync API dispatches context.on(...) callbacks back onto the
+    main thread's greenlet, and that handoff happens only when the main thread
+    makes its own next Playwright call. A bare input() call never does that --
+    confirmed live on 2026-10-09, when a real login and real page visits
+    produced zero live "captured:" lines and a token that only got recorded
+    (and every response body failed with TargetClosedError) once
+    browser.close() finally forced the backlog to flush, by which point the
+    browser was already closing. page.wait_for_timeout() IS a real Playwright
+    call, so looping on it here keeps the queue draining live while we wait.
+    """
+    while not ready.is_set():
+        page.wait_for_timeout(poll_ms)
+
+
+def _read_line_in_background(prompt: str) -> "threading.Event":
+    """Read one line from stdin on a background thread; set the returned Event when done.
+
+    Keeps the main thread free to call _pump_until instead of blocking in
+    input() itself -- see _pump_until's docstring for why that matters.
+    """
+    import threading
+
+    ready = threading.Event()
+
+    def _wait() -> None:
+        try:
+            input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            pass
+        ready.set()
+
+    threading.Thread(target=_wait, daemon=True).start()
+    return ready
+
+
 def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] | None = None) -> dict:
     try:
         from playwright.sync_api import sync_playwright
@@ -131,32 +204,14 @@ def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] 
         page = context.new_page()
 
         def on_response(response) -> None:
-            if GRAPHQL_HOST not in response.url:
-                return
             request = response.request
             try:
                 body = request.post_data_json
             except Exception:
-                return
-            if not body:
-                return
-
+                body = None
             # Held in memory only, never written or printed: it lets --sync
             # reuse the session you just opened instead of you pasting a token.
-            auth = request.headers.get("authorization")
-            if auth:
-                token_holder["token"] = auth
-
-            for item in body if isinstance(body, list) else [body]:
-                operation = (item or {}).get("operationName")
-                if not operation:
-                    continue
-                try:
-                    payload = response.json()
-                except Exception:
-                    continue
-                _record(captures, operation, item.get("variables"), item.get("query"), payload)
-                print(f"  captured: {operation}")
+            _extract_auth_and_captures(response.url, request.headers, body, response.json, captures, token_holder)
 
         # Listening on the context, not the page: logging in redirects through
         # accounts.poolplayers.com and can land in a new tab, and a page-level
@@ -173,12 +228,30 @@ def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] 
         print("=" * 70)
         page.goto(LEAGUE_URL)
 
+        # input() runs on a background thread and only signals readiness; the
+        # main thread stays in _pump_until so Playwright keeps dispatching
+        # context.on("response", ...) live the whole time you're logging in
+        # and browsing, instead of queuing it all up unprocessed. See
+        # _pump_until's docstring.
         try:
-            input("\nPress Enter when you have visited those pages... ")
-        except (EOFError, KeyboardInterrupt):
+            _pump_until(page, _read_line_in_background("\nPress Enter when you have visited those pages... "))
+        except KeyboardInterrupt:
             pass
 
+        if token_holder.get("token"):
+            print("\nSigned-in session detected (access token captured).")
+
         if refresh_uc is not None:
+            try:
+                while not token_holder.get("token"):
+                    print("\nNo access token has been seen yet -- this usually means login hasn't")
+                    print("finished, or no data page has loaded yet. The browser window is still")
+                    print("open: go back to it, finish logging in, and open one data page (e.g.")
+                    print("your Division Standings), then return here.")
+                    _pump_until(page, _read_line_in_background("Press Enter to check again (or Ctrl+C to cancel)... "))
+            except KeyboardInterrupt:
+                print("\nCancelled before a token was seen. The browser stays open if you want to keep looking.")
+
             # Run the refresh WHILE the browser is still open: APA tokens expire in minutes (the first live run
             # lost its token after ~14 min of a >1 h scope), so on expiry the open page is reloaded -- the user's
             # own logged-in session -- and the fresh token it sends lets the refresh resume. In memory only.
@@ -194,7 +267,8 @@ def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] 
                     page.wait_for_timeout(1000)
                 return None
 
-            _run_uc_refresh(token_holder.get("token"), refresh_uc, renew=renew)
+            if token_holder.get("token"):
+                _run_uc_refresh(token_holder.get("token"), refresh_uc, renew=renew)
             refresh_uc = None
 
         browser.close()
