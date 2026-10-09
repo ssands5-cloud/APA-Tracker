@@ -2717,3 +2717,32 @@ Paul asked for an unattended refresh using locally stored `APA_USERNAME`/`APA_PA
 **Practical alternative, already mostly built:** `be7357e`'s renewal path reloads the already-logged-in browser tab on token expiry and recaptures the fresh token APA's own page requests — no credential re-entry, riding on the browser's session cookie from Paul's one manual login. Not yet proven live (the one real attempt expired before this path existed). What remains attended under rule (c): the first login, and any point the underlying session itself (not just the short-lived access token) expires — for that, `--resume <folder>` (hardened by `ed139fe`/77e99da) means every attended moment contributes real, non-duplicated progress.
 
 No live acquisition attempted in this entry. Continuing other authorized verification work.
+
+### 2026-10-09 03:05 UTC (21:05 MDT, Oct 8): renewal-flow test attempted — no token captured, nothing run
+
+Paul asked to test the `be7357e` browser-renewal flow end to end: start the capture tool, he logs in himself, keep the browser open, run the reconcile refresh, and observe token renewal across an expiry.
+
+**What happened:** the capture tool was started (`python tools/capture_apa_graphql.py --refresh-ultimate-coach --verify-date 2026-10-05`) in a visible console at 21:00:51 MDT. Its own on-screen output (read, not typed into):
+
+```
+captured: viewerLeagues
+captured: RaygunUserTracking
+
+No access token was seen, so the Ultimate Coach refresh cannot start.
+```
+
+Two GraphQL operations were captured; neither carried an `Authorization` header, so `tools/capture_apa_graphql.py`'s existing guard (unchanged by tonight's work) exited cleanly before ever calling `refresh.main()`. **No refresh ran, nothing was fetched, the original and every partial copy are untouched.** Exit code 0. This is the 4th such attempt in the last ~20 minutes (`tmp/refresh/refresh-20261009-024521Z`, `-024552Z`, `-024916Z` each hold only a 0-byte `refresh.log`, no visible console output recorded for those).
+
+**None of the four renewal questions were answerable this attempt**, since the refresh never started:
+- Does the signed-in page supply a fresh token on reload? Not reached.
+- Does the tool resume the same copy? Not reached.
+- Are failed matches retried or retained? Not reached.
+- Final coverage report? Not produced.
+
+**Likely cause (not confirmed):** `viewerLeagues` reads as a pre-login or account-list call that does not itself carry a bearer token; visiting it alone does not prove an authenticated page was reached. Chrome's window content was not inspected (no access requested or granted to it — Paul's login stays private from this session by design).
+
+**No credential or token value was ever read, printed, logged, or committed.** Nothing in this attempt touches the live database.
+
+**Next step, exact:** after signing in, visit the team page AND the division standings page and wait for each to show real data before returning to the console to press Enter. If MFA or a CAPTCHA appears, stop and report it rather than attempting it.
+
+Continuing other authorized work (recheck of missing-data warnings across the HTML/Excel/phone) while this waits on Paul.
