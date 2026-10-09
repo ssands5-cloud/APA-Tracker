@@ -622,10 +622,17 @@ def sync_division_wide(
         team_obj = upsert_team(db, team["team_id"], team["team_name"])
         counts["teams_ingested"] += 1
         current_player_ids: set[str] = set()
+        has_unresolved_entry = False
         for entry in team["roster"]:
             counts["roster_players_discovered"] += 1
             if not entry["player_id"]:
-                continue  # a vacant slot names no real player to upsert
+                # GPT audit 2e0cf5a follow-up (2026-10-09 06:12 UTC): a vacant slot and a malformed/unresolved
+                # one look identical here (both end up with player_id == "") -- a roster with one real member
+                # and one null member is "nonempty" but NOT proven complete, yet the old code still retired
+                # every OTHER absent member against it, risking retiring a real active player whose own entry
+                # just happened to fail to resolve this fetch. Recorded, never retried against blind.
+                has_unresolved_entry = True
+                continue
             player = upsert_player(db, entry["player_id"], entry["player_name"], team_obj)
             written = ingest_player_team_history(db, player, [{
                 "team_id": team["team_id"], "team_name": team["team_name"],
@@ -637,10 +644,11 @@ def sync_division_wide(
             current_player_ids.add(entry["player_id"])
         # GPT audit 2e0cf5a: a player dropped from the roster otherwise stays is_current=True forever, since
         # the upsert above only ever touches players a fetch DID return. Only retire absent members against a
-        # genuinely fetched, non-empty roster for THIS exact team/division/session -- an empty roster response
-        # can't be told apart from a denied or partial one, and retiring against it would be a guess, not a fact.
-        # roster_is_current=False (career backfill) never retires: those rows are intentionally historical.
-        if roster_is_current and current_player_ids:
+        # genuinely fetched, non-empty, fully-resolved roster for THIS exact team/division/session -- an empty
+        # roster response can't be told apart from a denied or partial one, and a roster with even one
+        # unresolved entry can't be trusted as complete either; retiring against either would be a guess, not
+        # a fact. roster_is_current=False (career backfill) never retires: those rows are intentionally historical.
+        if roster_is_current and current_player_ids and not has_unresolved_entry:
             counts["roster_members_retired"] += retire_absent_team_members(
                 db, current_player_ids, team["team_id"], division_id, division_session_name)
 

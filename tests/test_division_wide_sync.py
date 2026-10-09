@@ -478,6 +478,42 @@ class TestRetireAbsentRosterMembers:
             player = db.query(Player).filter_by(external_id=external_id).one()
             assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).one().is_current is True
 
+    PARTIAL_NULL_MEMBER_ROSTER = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+                {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+                 "skillLevel": 6, "member": {"id": 9001}},
+                {"displayName": None, "matchesWon": 0, "matchesPlayed": 0,
+                 "skillLevel": None, "member": None},   # Bob's slot failed to resolve this fetch -- no
+                                                         # slot "id" either, or player_id falls back to it
+
+            ]},
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+
+    def test_a_nonempty_roster_with_one_unresolved_entry_retires_nobody(self, db, monkeypatch):
+        """GPT audit 2e0cf5a follow-up (2026-10-09 06:12 UTC): a roster with
+        one valid member and one null member is "nonempty" but not proven
+        COMPLETE -- the old code still retired every other absent member
+        against it, which would have wrongly retired a real active player
+        (Bob) whose own entry just happened to fail to resolve this time."""
+        from database.models import Player, PlayerTeamHistory
+
+        self._sync(db, monkeypatch, self.TWO_PLAYER_ROSTER)
+        bob = db.query(Player).filter_by(external_id="9003").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=bob.id).one().is_current is True
+
+        counts = self._sync(db, monkeypatch, self.PARTIAL_NULL_MEMBER_ROSTER)
+
+        assert counts["roster_members_retired"] == 0
+        assert db.query(PlayerTeamHistory).filter_by(player_id=bob.id).one().is_current is True
+        ann = db.query(Player).filter_by(external_id="9001").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=ann.id).one().is_current is True
+
 
 class TestMatchAlreadyHasScoresheet:
     def test_false_when_the_match_does_not_exist_at_all(self, db):
