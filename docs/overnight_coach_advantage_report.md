@@ -2897,3 +2897,16 @@ Re-checked `origin/codex/audit-pr83-privacy` (fetched read-only). Newest commit 
 GPT's explicit caution, correctly not treated as resolved here: `build-f70fae4` (the UAT build sitting in `tmp/uat/`) predates all three fixes and is still the stale, partial build. Real selected-fixture 8-vs-10 roster parity (the original live symptom Paul reported) and a corrected rebuilt freshness banner remain unverified against an actual rebuild -- not just synthetic tests. The banner can be corrected without a new login (same already-refreshed DB copy, current fixed code); roster parity for the specific 8-vs-10 case would need a fresh live sync to re-test against real data, which is not attempted here.
 
 Next: rebuilding the UAT workbook from the same refreshed copy so the freshness banner reflects the fix, and re-verifying Monday's result is still intact in the rebuilt artifacts.
+
+
+### 2026-10-09 13:25 UTC (07:25 MDT): UAT candidate rebuilt from current head -- freshness fix confirmed in the actual artifact
+
+Paul authorized continued work through Monday 2026-10-12 08:00 MDT (14:00 UTC), superseding the prior deadline. A recurring session check-in was configured (CronCreate, ~every 15 min, 7-day auto-expiry) to keep checking the audit branch and continuing this workflow -- disclosed honestly to Paul that this only runs while the desktop app and machine stay up; it is not a durable background service independent of that.
+
+**Rebuilt** `tmp/uat/build-8979397/` from source commit `8979397` (current head, carrying all three of tonight's follow-up fixes) against the SAME already-refreshed copy (`tmp/refresh/refresh-20261009-035923Z/ultimate_coach_staging.db`, sha256 `3D8C8B36...` unchanged). HTML (88,872,683 bytes, sha256 `2B140C38...`) and Excel (54,915,193 bytes, sha256 `89BA1398...`).
+
+**Verified directly in the rebuilt artifact, not assumed:** the freshness banner now reads *"latest recorded result Wed Oct 7, 2026"* -- confirming `1b6878e`'s fix actually reaches the real output, correcting the stale "Mon Oct 12, 2026" claim in the superseded `build-f70fae4`. The stale-fixture count correspondingly rose from 207 to 244 (expected and correct: the earlier, inflated "latest result" date was wrongly excluding real Oct 7-12 gaps from that count). Both Monday 2026-10-05 match ids (`51478011`, `51478086`) remain present.
+
+Still correctly labeled `coverage: "partial"`, `accepted_current_data: False` -- not claimed as release-ready. `build-f70fae4` is preserved untouched alongside this new candidate (nothing deleted).
+
+PR #83 stays draft. Continuing down the priority list: Arapahoe-scope roster verification across all divisions (not just Paul's own teams), the 105 gaps / 9 failed matches / 9 duplicate groups, and native checks on this new candidate.
