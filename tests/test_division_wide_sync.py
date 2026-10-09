@@ -381,6 +381,104 @@ class TestSyncDivisionWide:
         assert not any("scoresheet" in g for g in gaps)
 
 
+class TestRetireAbsentRosterMembers:
+    """GPT audit 2e0cf5a, exercised through the real sync_division_wide path
+    (not just retire_absent_team_members in isolation): a real division
+    showed 10 players in Lineup Lab for a team whose official roster that
+    night had 8, because nothing ever retired a player dropped from a
+    team's roster between two syncs."""
+
+    TWO_PLAYER_ROSTER = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+                {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+                 "skillLevel": 6, "member": {"id": 9001}},
+                {"id": 3, "displayName": "Bob Departing", "matchesWon": 2, "matchesPlayed": 9,
+                 "skillLevel": 4, "member": {"id": 9003}},
+            ]},
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+    SHRUNK_ROSTER = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": [
+                {"id": 1, "displayName": "Ann Fixture", "matchesWon": 6, "matchesPlayed": 9,
+                 "skillLevel": 6, "member": {"id": 9001}},
+            ]},
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+    DENIED_ROSTER_FOR_301 = {
+        "teams": [
+            {"isBye": False, "id": 301, "name": "Fixture Sharks", "roster": []},   # empty: a denied/partial response
+            {"isBye": False, "id": 302, "name": "Fixture Renegades", "roster": [
+                {"id": 2, "displayName": "Uma Sample", "matchesWon": 4, "matchesPlayed": 9,
+                 "skillLevel": 5, "member": {"id": 9002}},
+            ]},
+        ],
+    }
+
+    def _sync(self, db, monkeypatch, rosters):
+        monkeypatch.setattr(sync, "fetch_division_rosters", lambda config, division_id: rosters)
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: MATCH_DETAIL_PAYLOAD)
+        return sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                        division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+    def test_a_player_dropped_between_two_syncs_is_no_longer_current(self, db, monkeypatch):
+        from database.models import Player, PlayerTeamHistory
+
+        self._sync(db, monkeypatch, self.TWO_PLAYER_ROSTER)
+        bob = db.query(Player).filter_by(external_id="9003").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=bob.id).one().is_current is True
+
+        counts = self._sync(db, monkeypatch, self.SHRUNK_ROSTER)
+
+        assert db.query(PlayerTeamHistory).filter_by(player_id=bob.id).one().is_current is False
+        ann = db.query(Player).filter_by(external_id="9001").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=ann.id).one().is_current is True
+        assert counts["roster_members_retired"] == 1
+        # History is kept: Bob's row and its data still exist, just no longer current.
+        bob_row = db.query(PlayerTeamHistory).filter_by(player_id=bob.id).one()
+        assert bob_row.matches_won == 2
+
+    def test_an_empty_roster_response_for_a_team_never_retires_anyone(self, db, monkeypatch):
+        """An empty roster for one team can't be told apart from a denied or
+        partial response -- GPT's explicit caution: never retire on that."""
+        from database.models import Player, PlayerTeamHistory
+
+        self._sync(db, monkeypatch, self.TWO_PLAYER_ROSTER)
+        counts = self._sync(db, monkeypatch, self.DENIED_ROSTER_FOR_301)
+
+        assert counts["roster_members_retired"] == 0
+        for external_id in ("9001", "9003"):
+            player = db.query(Player).filter_by(external_id=external_id).one()
+            assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).one().is_current is True
+
+    def test_a_whole_division_roster_fetch_failure_retires_nobody(self, db, monkeypatch):
+        from database.models import Player, PlayerTeamHistory
+
+        self._sync(db, monkeypatch, self.TWO_PLAYER_ROSTER)
+
+        monkeypatch.setattr(sync, "fetch_division_rosters",
+                            lambda config, division_id: (_ for _ in ()).throw(RuntimeError("denied")))
+        monkeypatch.setattr(sync, "fetch_division_schedule", lambda config, division_id: SCHEDULE_PAYLOAD)
+        monkeypatch.setattr(sync, "fetch_match_detail", lambda config, match_id: MATCH_DETAIL_PAYLOAD)
+        counts = sync.sync_division_wide(config={}, db=db, division_id=DIVISION_ID,
+                                          division_format=FORMAT_NAME, division_session_name=SESSION_NAME)
+
+        assert counts["roster_members_retired"] == 0
+        for external_id in ("9001", "9003"):
+            player = db.query(Player).filter_by(external_id=external_id).one()
+            assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).one().is_current is True
+
+
 class TestMatchAlreadyHasScoresheet:
     def test_false_when_the_match_does_not_exist_at_all(self, db):
         assert sync.match_already_has_scoresheet(db, "90401") is False

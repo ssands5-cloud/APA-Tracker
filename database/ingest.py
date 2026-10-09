@@ -642,6 +642,49 @@ def ingest_player_team_history(db: Session, player: Player, rows: list[dict]) ->
     return count
 
 
+def retire_absent_team_members(
+    db: Session, current_player_ids: set[str], team_external_id: str, division_id: str, session_name: str,
+) -> int:
+    """Mark is_current=False for every PlayerTeamHistory row in this exact
+    (team, division, session) scope whose player is not in ``current_player_ids``.
+
+    GPT audit 2e0cf5a: ingest_player_team_history only ever upserts the
+    players a roster fetch DID return, so a player dropped from a team stayed
+    is_current=True forever -- a real division showed 10 players in Lineup
+    Lab for a team whose official roster that night had 8. There is no
+    reconciliation step anywhere that retires a formerly-current row absent
+    from a new, complete roster response.
+
+    Only ever called by sync_division_wide with the player ids it just
+    confirmed present on THIS team's THIS roster fetch, and only when that
+    fetch returned at least one real player -- never on a denied, empty or
+    partial response, where "absent" cannot be distinguished from "the
+    fetch failed." Rows are updated, never deleted: a departed player's
+    history (and this row's own skill/rank/matches data) is preserved,
+    just no longer presented as a current membership.
+    """
+    retired = (
+        db.query(PlayerTeamHistory)
+        .filter(
+            PlayerTeamHistory.team_external_id == (team_external_id or ""),
+            PlayerTeamHistory.division_id == (division_id or ""),
+            PlayerTeamHistory.session_name == (session_name or ""),
+            PlayerTeamHistory.is_current.is_(True),
+            ~PlayerTeamHistory.player_id.in_(
+                db.query(Player.id).filter(Player.external_id.in_(current_player_ids))
+            ),
+        )
+        .all()
+    )
+    for row in retired:
+        row.is_current = False
+    if retired:
+        db.commit()
+        logger.info("Retired %d absent roster member(s) for team %s (division %s, %s)",
+                    len(retired), team_external_id, division_id, session_name)
+    return len(retired)
+
+
 def ingest_head_to_head(db: Session, match_id, rows: list[dict]) -> int:
     """Reconcile PlayerHeadToHead for ONE match, from
     scraper.graphql_scraper.head_to_head_rows() -- who a player actually

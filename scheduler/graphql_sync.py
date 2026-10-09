@@ -37,6 +37,7 @@ from database.ingest import (
     ingest_match_scores,
     ingest_player_team_history,
     ingest_standings,
+    retire_absent_team_members,
     upsert_player,
     upsert_roster,
     upsert_team,
@@ -597,6 +598,7 @@ def sync_division_wide(
     counts = {
         "teams_discovered": 0, "teams_ingested": 0,
         "roster_players_discovered": 0, "roster_players_ingested": 0,
+        "roster_members_retired": 0,
         "matches_discovered": 0, "matches_ingested": 0,
         "scored_matches_discovered": 0, "scored_matches_with_scoresheet": 0,
         "head_to_head_rows": 0,
@@ -619,6 +621,7 @@ def sync_division_wide(
         counts["teams_discovered"] += 1
         team_obj = upsert_team(db, team["team_id"], team["team_name"])
         counts["teams_ingested"] += 1
+        current_player_ids: set[str] = set()
         for entry in team["roster"]:
             counts["roster_players_discovered"] += 1
             if not entry["player_id"]:
@@ -631,6 +634,15 @@ def sync_division_wide(
                 "matches_won": entry["matches_won"], "matches_played": entry["matches_played"],
             }])
             counts["roster_players_ingested"] += written
+            current_player_ids.add(entry["player_id"])
+        # GPT audit 2e0cf5a: a player dropped from the roster otherwise stays is_current=True forever, since
+        # the upsert above only ever touches players a fetch DID return. Only retire absent members against a
+        # genuinely fetched, non-empty roster for THIS exact team/division/session -- an empty roster response
+        # can't be told apart from a denied or partial one, and retiring against it would be a guess, not a fact.
+        # roster_is_current=False (career backfill) never retires: those rows are intentionally historical.
+        if roster_is_current and current_player_ids:
+            counts["roster_members_retired"] += retire_absent_team_members(
+                db, current_player_ids, team["team_id"], division_id, division_session_name)
 
     try:
         schedule = fetch_division_schedule(config, division_id)

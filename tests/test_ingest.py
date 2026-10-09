@@ -33,6 +33,7 @@ from database.ingest import (
     ingest_player_career_stats,
     ingest_player_team_history,
     ingest_standings,
+    retire_absent_team_members,
     upsert_player,
     upsert_team,
 )
@@ -480,6 +481,91 @@ class TestIngestPlayerTeamHistory:
         assert len(rows) == 1
         assert rows[0].team_external_id == "13082948"
         assert rows[0].team_name == "Chalk It Up Again"
+
+
+class TestRetireAbsentTeamMembers:
+    """GPT audit 2e0cf5a: ingest_player_team_history only ever upserts
+    players a roster fetch DID return, so a player dropped from a team
+    stayed is_current=True forever -- a real division showed 10 players in
+    Lineup Lab for a team whose official roster that night had 8. These
+    prove the new reconciliation step retires an absent member without
+    deleting their history, scoped exactly to the team/division/session
+    that was actually fetched."""
+
+    def _current_row(self, db, player_id, name, *, team_id="T1", team_name="Mark It Up", division_id="D1",
+                      session_name="Fall 2026"):
+        team = upsert_team(db, team_id, team_name)
+        player = upsert_player(db, player_id, name)
+        ingest_player_team_history(db, player, [{
+            "is_current": True, "team_id": team_id, "team_name": team_name, "division_id": division_id,
+            "session_name": session_name, "skill_level": 5, "matches_won": 3, "matches_played": 5,
+        }])
+        return player
+
+    def test_a_player_absent_from_the_new_roster_is_retired_not_deleted(self, db):
+        self._current_row(db, "P1", "Stays")
+        self._current_row(db, "P2", "Departed")
+
+        retired = retire_absent_team_members(db, {"P1"}, "T1", "D1", "Fall 2026")
+
+        assert retired == 1
+        rows = {r.team_external_id: r for r in db.query(PlayerTeamHistory)}
+        stayed = db.query(Player).filter_by(external_id="P1").one()
+        departed = db.query(Player).filter_by(external_id="P2").one()
+        stayed_row = db.query(PlayerTeamHistory).filter_by(player_id=stayed.id).one()
+        departed_row = db.query(PlayerTeamHistory).filter_by(player_id=departed.id).one()
+        assert stayed_row.is_current is True
+        assert departed_row.is_current is False
+        # History is preserved, not deleted: the row and its data are still there.
+        assert departed_row.matches_won == 3 and departed_row.team_name == "Mark It Up"
+
+    def test_a_player_who_rejoins_later_is_reinstated_as_current(self, db):
+        self._current_row(db, "P1", "Returning")
+        retire_absent_team_members(db, set(), "T1", "D1", "Fall 2026")
+        player = db.query(Player).filter_by(external_id="P1").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).one().is_current is False
+
+        ingest_player_team_history(db, player, [{
+            "is_current": True, "team_id": "T1", "team_name": "Mark It Up", "division_id": "D1",
+            "session_name": "Fall 2026", "skill_level": 5, "matches_won": 4, "matches_played": 6,
+        }])
+        assert db.query(PlayerTeamHistory).filter_by(player_id=player.id).one().is_current is True
+
+    def test_retirement_never_crosses_team_division_or_session_scope(self, db):
+        self._current_row(db, "P1", "Same Player Different Team", team_id="T1", division_id="D1")
+        self._current_row(db, "P1", "Same Player Different Team", team_id="T2", division_id="D1")
+        self._current_row(db, "P1", "Same Player Different Team", team_id="T1", division_id="D2")
+
+        retire_absent_team_members(db, set(), "T1", "D1", "Fall 2026")   # retire P1 off T1/D1 only
+
+        player = db.query(Player).filter_by(external_id="P1").one()
+        rows = {(r.team_external_id, r.division_id): r.is_current for r in
+                db.query(PlayerTeamHistory).filter_by(player_id=player.id)}
+        assert rows[("T1", "D1")] is False     # the targeted scope was retired
+        assert rows[("T2", "D1")] is True       # a different team, same division: untouched
+        assert rows[("T1", "D2")] is True       # same team, different division: untouched
+
+    def test_same_display_name_two_different_players_only_retires_the_absent_one(self, db):
+        """Identity is by player id, never by name -- two "John Smith"s on
+        the same team must not be confused with each other."""
+        self._current_row(db, "P1", "John Smith")
+        self._current_row(db, "P2", "John Smith")
+
+        retire_absent_team_members(db, {"P2"}, "T1", "D1", "Fall 2026")
+
+        p1 = db.query(Player).filter_by(external_id="P1").one()
+        p2 = db.query(Player).filter_by(external_id="P2").one()
+        assert db.query(PlayerTeamHistory).filter_by(player_id=p1.id).one().is_current is False
+        assert db.query(PlayerTeamHistory).filter_by(player_id=p2.id).one().is_current is True
+
+    def test_an_empty_current_set_is_a_no_op_guard_at_the_caller_not_here(self, db):
+        """retire_absent_team_members itself has no opinion on an empty
+        roster -- sync_division_wide is the one that must refuse to call it
+        with an empty set, since an empty response can't be told apart from
+        a denied one. Documented here so that caller contract stays visible."""
+        self._current_row(db, "P1", "Still Here")
+        retired = retire_absent_team_members(db, set(), "T1", "D1", "Fall 2026")
+        assert retired == 1   # this function alone has no such guard; the caller supplies it
 
 
 class TestResultNormalization:
