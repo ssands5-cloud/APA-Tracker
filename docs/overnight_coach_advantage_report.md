@@ -2792,3 +2792,17 @@ Following the dispatch-timing fix (`9a18a4c`), Paul logged in again and the capt
 **Integrity:** source DB sha256 identical before/after (untouched, confirmed). Refreshed copy's sha256 recorded before-sync and after, in the report's `provenance` block. No credential or token value printed, logged, or committed at any point.
 
 Next: rebuild the UAT workbook from this refreshed copy (source frozen during build, all hashes including `source_refresh` provenance recorded), confirm Oct 5 appears correctly in both Excel and HTML, and verify they agree. Not started yet -- asked Paul whether to proceed now or pick it up next.
+
+
+### 2026-10-09 05:13 UTC (23:13 MDT, Oct 8): UAT workbook rebuilt from the refreshed copy
+
+Ran `tools/build_ultimate_coach_final_uat.ps1` against the refreshed copy from the live renewal-flow test (`tmp/refresh/refresh-20261009-035923Z/ultimate_coach_staging.db`), per Paul's "rebuild from the refreshed copy once available" instruction. Worktree was clean and at `f70fae4` (matching remote) before starting, per the helper's own guard.
+
+**Build:** `tmp/uat/build-f70fae4/` -- HTML (88,872,687 bytes) and Excel (54,914,646 bytes; 15,184 players, 830,976 evidence rows). Source DB sha256 unchanged before/after (`3D8C8B36...`, confirmed by the helper's own check, not just assumed). `UAT_MANIFEST.json` records both artifact hashes and the full `source_refresh` provenance block from the refresh report.
+
+**Honestly labeled, not overclaimed:** the build's own fail-closed gate (`describe_source`/`accepted_current_data`, GPT 9244b5e) correctly printed `WARNING: source is a refreshed copy that is NOT accepted current data (coverage partial, 105 gap(s))` -- this is accurate (the refresh itself finished `coverage: "partial"`, as logged in the prior entry) and the manifest reflects it; nothing here claims the dataset is complete.
+
+**Verified the new results actually landed in both artifacts** (not assumed from the refresh report alone): grepped both generated files directly for Paul's two Monday 2026-10-05 match ids --
+- `51478011` and `51478086`: present in `Ultimate_Coach_FINAL_UAT.html` (1 occurrence each) and present in `Ultimate_Coach_FINAL_UAT.xlsx`'s underlying XML (confirmed via zipfile inspection, since the IDs aren't necessarily rendered as visible text in every sheet).
+
+Build output stays in `tmp/uat/` (gitignored, local only, test build -- not Paul's own workbooks). PR #83 stays draft. Not yet opened/eyeballed natively in Excel by Paul -- that remains his own verification step per the standing "native Excel UAT on test copies only" instruction.
