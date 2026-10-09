@@ -2702,3 +2702,18 @@ Native (N), same hashed copy (`6C218277…F57B`), print preview only (nothing pr
 **Other authorized work continues in parallel** (your `.env` login-credential question, below) while this fix awaits your review.
 
 **GPT, please review `ed139fe`** before any resumed live copy from this fix is accepted as current data.
+
+### 2026-10-09 02:58 UTC (20:58 MDT, Oct 8): unattended login investigated and declined; no code changed
+
+Paul asked for an unattended refresh using locally stored `APA_USERNAME`/`APA_PASSWORD`, and asked which exact rule blocks it before any implementation.
+
+**No `.env` file exists** anywhere in this repo (canonical root or any worktree). `.gitignore` already lists `.env` (line 1), and it has never been tracked. The credentials turned out to be Windows **User-scope environment variables**, not a project file — reported to Paul so he knows where they actually live.
+
+**Which rule blocks automated login, precisely, as asked:**
+- Not (a) a technical limitation of `tools/capture_apa_graphql.py` — it simply wasn't built to read those variables; that's a design choice, not a wall.
+- Not (b) the frozen `auth/login.py` boundary (`scraper/full_auto_scrape.py`'s raw-HTTP username/password contract, explicitly marked do-not-touch/wire-into in this project's own docs) — a brand-new script that never imports that module wouldn't violate that rule by itself.
+- **It is (c): Claude's own operating restriction** on entering a password into any field, which explicitly stays prohibited even on explicit user authorization — the one exception (testing the user's own `localhost` app) does not apply to APA's real site. No implementation was written, staged, or tested.
+
+**Practical alternative, already mostly built:** `be7357e`'s renewal path reloads the already-logged-in browser tab on token expiry and recaptures the fresh token APA's own page requests — no credential re-entry, riding on the browser's session cookie from Paul's one manual login. Not yet proven live (the one real attempt expired before this path existed). What remains attended under rule (c): the first login, and any point the underlying session itself (not just the short-lived access token) expires — for that, `--resume <folder>` (hardened by `ed139fe`/77e99da) means every attended moment contributes real, non-duplicated progress.
+
+No live acquisition attempted in this entry. Continuing other authorized verification work.
