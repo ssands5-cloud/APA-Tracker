@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 import database.ingest as ingest_module
 from database.ingest import (
+    DuplicateBoundRowsConflict,
     backfill_player_team,
     ingest_eight_ball_stats,
     ingest_head_to_head,
@@ -280,6 +281,63 @@ class TestIngestStandingsSharedTimestamp:
 
         rows = latest_standings(db)
         assert {r.team_name for r in rows} == {"Fresh Team"}
+
+
+class TestDuplicateBoundPlayerMatchRows:
+    """GPT source audit a5db049 (2026-10-09): both ingest_match_roster and
+    ingest_match_scores looked up the existing row for (player_id, match_id)
+    via a plain .one_or_none(), which raises the generic MultipleResultsFound
+    the moment more than one row is bound to that key -- confirmed live: 9
+    real matches each inherited an exact-duplicate PlayerMatch pair for one
+    player. An exact duplicate costs nothing to collapse; a genuinely
+    conflicting one must never be resolved by guessing."""
+
+    def _duplicate_pair(self, db, *, match_id="M1", result="W"):
+        ingest_match(db, match_id=match_id, home_team_id="T1", away_team_id="T2",
+                     home_team_name="Home", away_team_name="Away")
+        player = upsert_player(db, "P1", "Alice")
+        match = db.query(ingest_module.Match).filter_by(external_id=match_id).one()
+        for _ in range(2):
+            db.add(PlayerMatch(player_id=player.id, match_id=match.id, team_id="T1",
+                               match_date="2026-09-01", opponent="Away", result=result,
+                               points_earned=6.0))
+        db.commit()
+        return player, match
+
+    def test_an_exact_duplicate_pair_is_collapsed_not_crashed_on(self, db):
+        player, match = self._duplicate_pair(db)
+        assert db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).count() == 2
+
+        created, updated = ingest_match_scores(
+            db, "M1", [{"player_id": "P1", "player_name": "Alice", "team_id": "T1", "result": "L"}],
+        )
+
+        assert created == 0 and updated == 1
+        rows = db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).all()
+        assert len(rows) == 1
+        assert rows[0].result == "L"   # the surviving row was genuinely updated, not just left alone
+
+    def test_a_conflicting_duplicate_pair_raises_a_named_error_and_touches_nothing(self, db):
+        player, match = self._duplicate_pair(db, result="W")
+        # make the two rows genuinely disagree, not just duplicate
+        rows = db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).order_by(PlayerMatch.id).all()
+        rows[1].result = "L"
+        db.commit()
+
+        with pytest.raises(DuplicateBoundRowsConflict):
+            ingest_match_scores(
+                db, "M1", [{"player_id": "P1", "player_name": "Alice", "team_id": "T1", "result": "W"}],
+            )
+
+        # nothing was deleted, nothing was guessed at and silently kept
+        still = db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).order_by(PlayerMatch.id).all()
+        assert [r.result for r in still] == ["W", "L"]
+
+    def test_ingest_match_roster_also_collapses_an_exact_duplicate(self, db):
+        player, match = self._duplicate_pair(db)
+        count = ingest_match_roster(db, "M1", "T1", "Home", [{"player_id": "P1", "player_name": "Alice"}])
+        assert count == 0   # already exists (post-collapse) -- the whole point is it doesn't crash
+        assert db.query(PlayerMatch).filter_by(player_id=player.id, match_id=match.id).count() == 1
 
 
 class TestVacantScoresheetSlotsAreSkippedNotMerged:

@@ -253,6 +253,58 @@ def _resolve_match_pk(db: Session, match_external_id) -> Match:
     return match
 
 
+class DuplicateBoundRowsConflict(Exception):
+    """Raised when (player_id, match_id) binds more than one PlayerMatch row whose OTHER fields disagree.
+
+    GPT source audit a5db049 (2026-10-09): both ingest_match_roster and
+    ingest_match_scores look up the existing row for (player_id, match_id)
+    via .one_or_none() -- which raises MultipleResultsFound, the same
+    opaque error an unrelated identity lookup could also raise, the moment
+    more than one row is bound to the same key. Confirmed live: 9 real
+    matches each inherited an exact-duplicate PlayerMatch pair for one
+    player, predating this refresh. A demonstrable EXACT duplicate (every
+    other column equal) costs nothing to collapse to one row. Rows that
+    actually disagree are a genuine data-integrity problem that must never
+    be resolved by guessing (first()) or silently swallowed -- they are
+    raised here, under a name the caller can record as an honest, specific
+    gap instead of the generic "MultipleResultsFound".
+    """
+
+
+_PLAYER_MATCH_COMPARE_FIELDS = (
+    "team_id", "team_name", "match_date", "opponent", "skill_level", "matches_won", "matches_played",
+    "win_pct", "ppm", "pa", "points_earned", "result", "eight_on_break", "eight_break_and_run",
+    "nine_on_snap", "nine_break_and_run",
+)
+
+
+def _resolve_bound_player_match(db: Session, player_id: int, match_id: int) -> Optional["PlayerMatch"]:
+    """The single PlayerMatch row bound to (player_id, match_id), tolerating an exact duplicate.
+
+    See DuplicateBoundRowsConflict's docstring for why a plain .one_or_none()
+    is not safe to use here.
+    """
+    rows = (
+        db.query(PlayerMatch).filter_by(player_id=player_id, match_id=match_id).order_by(PlayerMatch.id).all()
+    )
+    if len(rows) <= 1:
+        return rows[0] if rows else None
+    kept, extras = rows[0], rows[1:]
+    if all(getattr(row, field) == getattr(kept, field)
+           for row in extras for field in _PLAYER_MATCH_COMPARE_FIELDS):
+        for row in extras:
+            db.delete(row)
+        logger.warning(
+            "Collapsed %d exact-duplicate player_match row(s) onto id %s (player %s, match %s)",
+            len(extras), kept.id, player_id, match_id,
+        )
+        return kept
+    raise DuplicateBoundRowsConflict(
+        f"player {player_id}, match {match_id}: {len(rows)} bound player_match rows disagree -- "
+        "not collapsed, not guessed at"
+    )
+
+
 def ingest_match_roster(
     db: Session,
     match_id,
@@ -285,11 +337,7 @@ def ingest_match_roster(
         player = upsert_player(db, player_id, player_name)
 
         # Check if this player-match combo already exists
-        existing = (
-            db.query(PlayerMatch)
-            .filter_by(player_id=player.id, match_id=match.id)
-            .one_or_none()
-        )
+        existing = _resolve_bound_player_match(db, player.id, match.id)
 
         if existing:
             logger.debug("PlayerMatch for player %s in match %s already exists", player_id, match_id)
@@ -350,11 +398,7 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
 
         player = upsert_player(db, player_id, player_name)
 
-        existing = (
-            db.query(PlayerMatch)
-            .filter_by(player_id=player.id, match_id=match.id)
-            .one_or_none()
-        )
+        existing = _resolve_bound_player_match(db, player.id, match.id)
         # opponent is the OTHER side's name, not this player's own team --
         # analytics.team_stats.head_to_head() filters PlayerMatch.opponent,
         # and without this it silently matched nothing for any row ingested
