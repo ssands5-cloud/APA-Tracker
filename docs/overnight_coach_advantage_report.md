@@ -2823,3 +2823,16 @@ Paul relayed GPT's findings from `origin/codex/audit-pr83-privacy`, `docs/overni
 Commit `58bd99a`, pushed. PR #83 stays draft.
 
 **Not yet addressed in this entry (next, per priority order):** P1 2e0cf5a (stale active roster membership), audit 7a4f8b5 (partial coverage / inherited duplicate groups / freshness caveat on tonight's refresh -- the 2026-10-12 date in the earlier success report must NOT be read as confirmed scored evidence; GPT found that date includes a future fixture flagged COMPLETED with null scores and zero rows), and native-Excel verification of Monday's actual results on test copies.
+
+
+### 2026-10-09 05:58 UTC (23:58 MDT, Oct 8): GPT audit 2e0cf5a (P1) repaired -- stale active roster membership
+
+Confirmed against source: `ingest_player_team_history` only ever upserted the players a roster fetch DID return; nothing retired a formerly-current `PlayerTeamHistory` row absent from a new, complete roster response. `run_all_teams`' own TeamStat path is unaffected (each row already carries APA's own current/past classification directly); only the `sync_division_wide` roster path had the gap.
+
+**Fix:** `retire_absent_team_members(db, current_player_ids, team_external_id, division_id, session_name)` in `database/ingest.py` -- marks `is_current=False` for every row in that exact scope whose player is not in the just-fetched roster. Rows are updated, never deleted: history (and the row's own skill/rank/matches data) is preserved. Wired into `sync_division_wide`, scoped per team, only when `roster_is_current=True` (never for career-backfill) and only against a genuinely non-empty fetched roster -- an empty response can't be told apart from denied/partial, so it never triggers retirement (GPT's explicit caution). A whole-division roster-fetch failure already short-circuits upstream to an empty roster dict, so nobody is touched either.
+
+**Tested, red before green:** `tests/test_ingest.py::TestRetireAbsentTeamMembers` (5, function-level: retired-not-deleted, rejoin reinstatement, scope never crosses team/division/session, same-display-name players distinguished by id). `tests/test_division_wide_sync.py::TestRetireAbsentRosterMembers` (3, through the real `sync_division_wide` path: a player dropped between two syncs is retired, an empty roster retires nobody, a whole-division fetch failure retires nobody). Confirmed red against the pre-fix committed code (`ImportError` / `KeyError` on the new counts key), green after. Full suite: **2298 passed.** Commit `ec1f5ad`, pushed.
+
+**Honestly scoped, not overclaimed:** this fixes the shared source of truth (`PlayerTeamHistory.is_current`) that Lineup Lab/War Room/matrix/Next Send/packet/HTML are expected to read through `canonical_current_roster` or an equivalent filtered query -- each of those six surfaces was not individually re-audited in this pass to prove none of them bypasses that flag. Also unaddressed: GPT's separate point that "a present-day roster cannot prove past-date membership" -- this fix reflects present-day truth as of each sync, not a reconstructed roster for a specific past scheduled date. Both are flagged here rather than silently left for a future audit to rediscover.
+
+PR #83 stays draft. Continuing to audit `7a4f8b5` (partial-coverage / duplicate-group / freshness-date caveats on tonight's refresh) next.
