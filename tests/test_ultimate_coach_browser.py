@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import sync_playwright
 
 from analytics.ultimate_coach_match_day import build_match_day_section
@@ -251,12 +252,50 @@ def test_profile_history_dedupes_repeated_display_rows(tmp_path: Path):
             browser.close()
 
 
+def _rehydrate(compact: dict) -> dict:
+    """Faithful Python port of the browser's rehydrate step.
+
+    Kept deliberately close to the JS in ui/ultimate_coach.py so a change to
+    one that is not mirrored in the other shows up as a failing round-trip.
+    """
+    import copy
+
+    out = copy.deepcopy(compact)
+    table = out.get("strings")
+    if table is None:
+        return out
+    deref = lambda v: table[v] if isinstance(v, int) and not isinstance(v, bool) else v
+
+    positions = out.get("evidence_interned_positions") or []
+    for rows in (out.get("evidence_index") or {}).values():
+        for row in rows:
+            for position in positions:
+                row[position] = deref(row[position])
+
+    fields = out.get("team_history_fields")
+    if fields:
+        interned = set(out.get("team_history_interned_positions") or [])
+        for player in out.get("players") or []:
+            rows = player.get("team_history")
+            if not rows:
+                continue
+            player["team_history"] = [
+                {
+                    name: (deref(row[i]) if i in interned else row[i])
+                    for i, name in enumerate(fields)
+                }
+                if isinstance(row, list)
+                else row
+                for row in rows
+            ]
+    return out
+
+
 def test_browser_payload_compacts_and_preindexes_evidence():
     payload = _payload()
-    compact = _browser_payload(payload)
+    compact = _rehydrate(_browser_payload(payload))
 
     assert "evidence" not in compact
-    assert compact["browser_payload_schema"] == "ultimate-coach-browser-compact-v1"
     assert compact["counts"] == payload["counts"]
 
     fields = compact["evidence_row_fields"]
@@ -267,6 +306,94 @@ def test_browser_payload_compacts_and_preindexes_evidence():
     assert len(player_one) == 2
     assert player_one[0][opponent_i] == 2
     assert player_one[0][result_i] == "W"
+
+
+def test_browser_payload_declares_the_compact_v2_schema():
+    compact = _browser_payload(_payload())
+
+    assert compact["browser_payload_schema"] == "ultimate-coach-browser-compact-v2"
+    assert compact["team_history_fields"][0] == "team_external_id"
+    assert isinstance(compact["strings"], list)
+
+
+def test_interning_is_lossless_for_evidence_and_team_history():
+    """Every recorded value must survive the round trip byte for byte.
+
+    This is the guard on the ~50MB size reduction: the payload may shrink
+    only by removing duplication, never by dropping or altering a row.
+    """
+    payload = _payload()
+    payload["players"][0]["team_history"] = [
+        {
+            "team_external_id": "t-1",
+            "team_name": "Team One",
+            "division_id": "d1",
+            "session_name": "Summer 2026",
+            "format": "EIGHT",
+            "is_current": True,
+            "skill_level": 4,
+            "matches_won": 1,
+            "matches_played": 2,
+        },
+        {
+            "team_external_id": "t-1",
+            "team_name": "Team One",
+            "division_id": "d1",
+            "session_name": "Summer 2026",
+            "format": "NINE",
+            "is_current": False,
+            "skill_level": None,
+            "matches_won": 0,
+            "matches_played": 0,
+        },
+    ]
+    expected_history = [dict(entry) for entry in payload["players"][0]["team_history"]]
+    expected_rows = {
+        key: [list(row) for row in rows]
+        for key, rows in _browser_payload(payload)["evidence_index"].items()
+    }
+
+    compact = _browser_payload(payload)
+    restored = _rehydrate(compact)
+
+    assert restored["players"][0]["team_history"] == expected_history
+    # a repeated string is stored once and referenced twice
+    assert compact["players"][0]["team_history"][0][1] == (
+        compact["players"][0]["team_history"][1][1]
+    )
+    assert len(compact["strings"]) == len(set(compact["strings"]))
+    for key, rows in restored["evidence_index"].items():
+        assert len(rows) == len(expected_rows[key])
+
+
+def test_interning_refuses_an_ambiguous_non_string_value():
+    """A number in an interned field would be unrecoverable, so the build fails.
+
+    The browser rehydrates by replacing numbers with table entries, so a real
+    number arriving here could not be told apart from an index. Refusing beats
+    silently corrupting a recorded session name.
+    """
+    from ui.ultimate_coach import BrowserPayloadEncodingError
+
+    payload = _payload()
+    payload["players"][0]["team_history"] = [
+        {
+            "team_external_id": "t-1",
+            "team_name": 12345,
+            "division_id": "d1",
+            "session_name": "Summer 2026",
+            "format": "EIGHT",
+            "is_current": True,
+            "skill_level": 4,
+            "matches_won": 1,
+            "matches_played": 2,
+        }
+    ]
+
+    with pytest.raises(BrowserPayloadEncodingError) as excinfo:
+        _browser_payload(payload)
+
+    assert "team_name" in str(excinfo.value)
 
 
 

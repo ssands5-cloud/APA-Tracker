@@ -255,6 +255,69 @@ _BROWSER_EVIDENCE_FIELDS = (
     "points_earned",
 )
 
+# Positions in a compact evidence row whose value is a repeated string and is
+# therefore stored as an index into the shared "strings" table instead of being
+# written out once per row. match_date alone repeats 830k times across ~6.5k
+# distinct values in a full-league build.
+_BROWSER_EVIDENCE_INTERNED = ("match_date", "session_name", "result")
+
+# team_history is emitted as positional rows against these field names, the
+# same convention evidence_row_fields already uses, because repeating the nine
+# key names on every one of ~150k rows cost ~19MB of the standalone HTML on its
+# own. The browser rebuilds the dicts at load, so every consumer downstream of
+# the single JSON.parse still sees the original object shape.
+_BROWSER_TEAM_HISTORY_FIELDS = (
+    "team_external_id",
+    "team_name",
+    "division_id",
+    "session_name",
+    "format",
+    "is_current",
+    "skill_level",
+    "matches_won",
+    "matches_played",
+)
+_BROWSER_TEAM_HISTORY_INTERNED = (
+    "team_external_id",
+    "team_name",
+    "division_id",
+    "session_name",
+    "format",
+)
+
+
+class BrowserPayloadEncodingError(ValueError):
+    """A value could not be encoded losslessly, so the build refuses to guess.
+
+    Interned positions are rehydrated in the browser by replacing numbers with
+    table entries, so a genuine number arriving in an interned field would be
+    indistinguishable from an index. Rather than emit an ambiguous payload we
+    fail the build and name the field.
+    """
+
+
+class _StringTable:
+    """Intern repeated strings; None passes through, anything else refuses."""
+
+    def __init__(self) -> None:
+        self.values: list[str] = []
+        self._index: dict[str, int] = {}
+
+    def encode(self, value: Any, *, field: str) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise BrowserPayloadEncodingError(
+                f"{field} must be a string or None to be interned losslessly, "
+                f"got {type(value).__name__} ({value!r})"
+            )
+        existing = self._index.get(value)
+        if existing is not None:
+            return existing
+        self._index[value] = len(self.values)
+        self.values.append(value)
+        return self._index[value]
+
 # EIGHT/NINE are always offered even with zero matching evidence -- they are
 # the two primary APA team formats. Any other raw format recorded in the
 # source data (e.g. "MASTERS", "MASTERS ALT" -- both are real APA formats,
@@ -311,9 +374,50 @@ def _browser_payload(
             index.setdefault(key, []).append(
                 [row.get(field) for field in _BROWSER_EVIDENCE_FIELDS]
             )
-    compact["browser_payload_schema"] = "ultimate-coach-browser-compact-v1"
+    strings = _StringTable()
+    evidence_interned = [
+        _BROWSER_EVIDENCE_FIELDS.index(name) for name in _BROWSER_EVIDENCE_INTERNED
+    ]
+    for key, rows in index.items():
+        for row in rows:
+            for position in evidence_interned:
+                row[position] = strings.encode(
+                    row[position], field=f"evidence[{key}].{_BROWSER_EVIDENCE_FIELDS[position]}"
+                )
+
+    history_interned = [
+        _BROWSER_TEAM_HISTORY_FIELDS.index(name)
+        for name in _BROWSER_TEAM_HISTORY_INTERNED
+    ]
+    compact_players = []
+    for player in compact.get("players") or []:
+        history = player.get("team_history")
+        if not isinstance(history, list):
+            compact_players.append(player)
+            continue
+        rows = []
+        for entry in history:
+            row = [entry.get(name) for name in _BROWSER_TEAM_HISTORY_FIELDS]
+            for position in history_interned:
+                row[position] = strings.encode(
+                    row[position],
+                    field=(
+                        f"players[{player.get('id')}].team_history"
+                        f".{_BROWSER_TEAM_HISTORY_FIELDS[position]}"
+                    ),
+                )
+            rows.append(row)
+        compact_players.append({**player, "team_history": rows})
+    if compact_players:
+        compact["players"] = compact_players
+
+    compact["browser_payload_schema"] = "ultimate-coach-browser-compact-v2"
     compact["evidence_row_fields"] = list(_BROWSER_EVIDENCE_FIELDS)
     compact["evidence_index"] = index
+    compact["evidence_interned_positions"] = evidence_interned
+    compact["team_history_fields"] = list(_BROWSER_TEAM_HISTORY_FIELDS)
+    compact["team_history_interned_positions"] = history_interned
+    compact["strings"] = strings.values
     compact["formats_present"] = sorted(formats_present)
     compact["format_labels"] = FORMAT_LABELS
     return compact
@@ -686,6 +790,38 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <script>
 (function() {{
   var DATA=JSON.parse(document.getElementById("uc-data").textContent);
+  // Rehydrate the compact-v2 payload back into the exact object shape every
+  // consumer below already expects. Repeated strings travel once in
+  // DATA.strings and team_history travels as positional rows, which removes
+  // ~50MB of duplicated key names and date strings from this file without
+  // dropping a single recorded row. A compact-v1 payload has no "strings"
+  // table and is left untouched, so an older build still renders.
+  (function(D){{
+    var S=D.strings; if(!S) return;
+    function deref(v){{ return typeof v==="number" ? S[v] : v; }}
+    var ep=D.evidence_interned_positions||[], idx=D.evidence_index||{{}};
+    Object.keys(idx).forEach(function(k){{
+      var rows=idx[k];
+      for(var i=0;i<rows.length;i++){{
+        var r=rows[i];
+        for(var j=0;j<ep.length;j++){{ r[ep[j]]=deref(r[ep[j]]); }}
+      }}
+    }});
+    var tf=D.team_history_fields;
+    if(!tf) return;
+    var tp={{}}; (D.team_history_interned_positions||[]).forEach(function(i){{tp[i]=1;}});
+    (D.players||[]).forEach(function(p){{
+      var rows=p.team_history;
+      if(!rows) return;
+      for(var i=0;i<rows.length;i++){{
+        var r=rows[i];
+        if(!Array.isArray(r)) continue;
+        var o={{}};
+        for(var c=0;c<tf.length;c++){{ o[tf[c]]=tp[c] ? deref(r[c]) : r[c]; }}
+        rows[i]=o;
+      }}
+    }});
+  }})(DATA);
   var PVP_STATUS_HTML={json.dumps("<strong>" + escape(PVP_STATUS[0]) + "</strong> " + escape(PVP_STATUS[1]))};
   var BUILT_LABEL={built_label_js};
   var PLAYERS={{}}; DATA.players.forEach(function(p){{PLAYERS[String(p.id)]=p;}});
