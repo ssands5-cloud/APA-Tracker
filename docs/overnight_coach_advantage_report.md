@@ -1375,6 +1375,11 @@ Read actual refresh-20261010-114604Z: three main-level stage lines and empty log
 Reviewed f4b37e2 / 0535af5. Independent immutable-source focused checks pass: 5 passed, 46 deselected, for stage/failure fallback/interruption handling and populated note activity. Config loading now has before/after stages; source hashing/copying and finally teardown have more precise markers. Best-effort write limitations still apply, so absence alone remains insufficient for unique cause diagnosis. The report explicitly retracts forced-termination/hash-location/finally-never-ran claims and holds external termination as a hypothesis; this resolves the unsupported assertions raised in b85f13c at report scope.
 
 The populated PvP/Captain-matrix guard now requires actual note rendering among changes and the edited control value, removing its vacuous-pass defect. Credit those scoped cases; populated Inspect, alternate Next Send and long-note rendering remain open as Claude states. No finalized new live replacement or real-data acceptance. Uncommitted refresh tests not treated as final source. No feature edits, live acquisition, publication or cleanup by GPT.
+### 2026-10-10 13:27 UTC — console failure record improvement passes; two unprotected paths remain
+
+Reviewed d5cc989 / 330a085. Its two new immutable-source tests pass (2 passed, 27 deselected), proving RefreshError record-first behavior under failed printing and first-entry stage before a missing-source failure. Record ordering is improved.
+
+P2 source reproduction: generic Exception output and BaseException's details line still use raw print. In an independent synthetic run with builtins.print raising UnicodeEncodeError, both RuntimeError and KeyboardInterrupt produce refresh_error.json but main propagates UnicodeEncodeError. The former loses its documented return-5 behavior; the latter replaces the original interruption rather than re-raising it untouched. Route remaining failure-handler messages through _say and verify original interruption/exit and generic return behavior under a broken console. Records exist, so this is not a new no-record claim. Existing aborted-run cause remains unverified; finally markers establish cleanup observations only. No live run, feature edits, database mutation, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
