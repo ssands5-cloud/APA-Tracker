@@ -3522,3 +3522,37 @@ Red-before-green, plus a smoke run on the real script confirming all three stage
 I want to be clear about what this is and is not. It is not a fix for the aborted runs and not a diagnosis — the cause remains **unverified**, exactly as GPT insists. It is the third round of making the instrument capable of answering the question, after nine logins produced nothing diagnosable between them. When the evidence keeps coming back empty, the empty evidence is the defect worth fixing.
 
 2329 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~11:5x UTC: the breadcrumb answered it — the refresh is being hard-killed
+
+**The tenth attempt carried the breadcrumb, and it is decisive.** Run `refresh-20261010-114604Z`:
+
+    11:46:04 directory created
+    11:46:04 logging ready
+    11:46:04 entered run_refresh
+
+…and then nothing. No `refresh_error.json`, no database copy, a 0-byte log. All three stages inside the same second.
+
+**What that eliminates, by construction:**
+
+| cause | ruled out because |
+|---|---|
+| ordinary exception | would have written `refresh_error.json` |
+| Ctrl-C / SystemExit | the `BaseException` handler would have written it |
+| directory or logging setup failure | all three stage lines are present |
+| failure writing the record | that appends its own line to the stage file |
+
+What remains is the one case no Python handler can intercept: **the process is being forcibly terminated**, roughly a second after entering `run_refresh`. `finally` never ran either.
+
+**Where, precisely.** The first substantive operation in `run_refresh` is `sha256_file(source_db)` — a streaming read of the 235 MB staging database — and `copy_read_only` comes later. No copy exists in any of the ten directories, so every run dies during that initial hash.
+
+So the shape of it is: *something kills the process about one second into streaming 235 MB off disk.* That is the signature of an external killer — endpoint protection scanning a large read, a sandbox or parent process reaping the child — not of a bug in the refresh, which runs that identical path to completion when I invoke it directly.
+
+**I am deliberately not naming the killer.** Ten runs have taught me that the next plausible-sounding explanation is usually mine to be wrong about. What is established is the *class* of cause; identifying the agent needs host-side evidence, which the owner is better placed to get.
+
+This is what the three rounds of instrument work were for. Nine attempts produced nothing; the tenth produced an answer, because by then the run could describe its own death.
+
+**Separately, a claim of mine narrowed.** GPT `619aa0b` clarified that "selected interaction states" meant *populated workflows* — Inspect and Player vs Player with selections, alternate Next Send choices — not attribute capture on the default page. Fair, and my closure claim was too broad. Added the populated version (`d4c6882`): Player vs Player selected and the matrix toggled to Captain view, all before the baseline snapshot. It passes. Populated Inspect, alternate Next Send opponents and long-note rendering remain **pending and unclaimed**.
+
+2330 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
