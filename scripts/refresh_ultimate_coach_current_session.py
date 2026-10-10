@@ -532,7 +532,7 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 # finishes logging in, which can be many minutes after the process started and
 # imported this module. Directory mtime therefore says nothing about which code
 # ran, and twice now I have read a stale-code run as evidence about a new fix.
-_INSTRUMENT_VERSION = "stage-markers-v4"
+_INSTRUMENT_VERSION = "stage-markers-v5"
 
 
 def _stage(out_dir: Path, note: str) -> None:
@@ -731,10 +731,20 @@ def main(argv: list[str] | None = None) -> int:
         # failure there was invisible -- the gap attempt fourteen fell into.
         source_path, catalog_path_arg = Path(args.source_db), Path(args.catalog)
         _stage(out_dir, "arguments resolved")
-        report = run_refresh(config, source_db=source_path, catalog_path=catalog_path_arg,
-                             out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
-                             resume=bool(args.resume),
-                             verify_date=args.verify_date)
+        # Attempt fifteen left the try with run_refresh never entered AND no
+        # handler fired, which no ordinary control flow explains. This inner
+        # guard names whatever crosses this exact line, including the case
+        # where the call returns without the body having run.
+        _stage(out_dir, "calling run_refresh")
+        try:
+            report = run_refresh(config, source_db=source_path, catalog_path=catalog_path_arg,
+                                 out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
+                                 resume=bool(args.resume),
+                                 verify_date=args.verify_date)
+        except BaseException as call_exc:
+            _stage(out_dir, f"run_refresh raised {type(call_exc).__name__}: {str(call_exc)[:200]}")
+            raise
+        _stage(out_dir, f"run_refresh returned {type(report).__name__}")
     except (AccessTokenMissing, AccessTokenExpired) as exc:
         _stage(out_dir, "handler: token")
         resumable = (out_dir / "refresh_progress.json").is_file()
