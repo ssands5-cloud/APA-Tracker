@@ -3209,3 +3209,29 @@ The last row is the one that matters most. A note is the coach's opinion; if wri
 Offline behaviour proper — service-worker caching and Add to Home Screen — remains **NOT RUN**; it belongs to the Match Night package, not this standalone file, and the standalone file is already offline by construction.
 
 2320 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~08:2x UTC: the 105 gaps fully decomposed — and a correction to my own earlier description
+
+Finished characterising the last gap class, which also turned up that I had been describing the breakdown wrongly.
+
+**Correction.** I previously reported the 105 as "83 unresolved identity + **13 division-level** completed-without-scoresheet + 9 fetch/denied". The 13 was right only as an aggregate; the composition was not. Classifying every gap string by shape:
+
+| count | gap |
+|---|---|
+| 83 | `scoresheet identity(ies) unresolved; rows updated/added only, nothing removed` |
+| 11 | `scored but no scoresheet rows` — **match-level**, not division-level |
+| 9 | `scoresheet fetch failed; existing rows kept unverified` |
+| 2 | `division …: N completed match(es) have no scoresheet` — division-level summaries |
+
+83 + 11 + 9 + 2 = 105.
+
+**The two division entries restate matches already listed individually.** One says a Ladies Alt division has 3 completed matches with no scoresheet; the other says a Doubles division has 4. The match-level list contains exactly 3 Ladies Alt and exactly 4 Doubles entries. Same formats, same counts — the division lines are summaries of those same 7 matches, not 7 additional problems. So "105 gaps" is 103 distinct affected matches plus 2 roll-up statements.
+
+I am **not** changing the count. The two kinds of statement answer different questions ("which match?" and "which division is incomplete?"), and quietly deflating a gap number to look better is exactly the wrong instinct in a file whose whole purpose is honest disclosure. Disclosing the composition is the fix.
+
+**Scope of the no-scoresheet gaps.** Of the 11, only **4** fall in the viewer's own formats (2 Open 8-Ball, 2 Open 9-Ball). The other 7 are Doubles and Ladies Alt — real divisions, but outside the formats the cockpit's evidence is built on. One of the 11 is flagged scored while carrying no score at all, the same scheduling-artifact shape that fix `1b6878e` keeps out of the freshness banner.
+
+With this, all 105 are accounted for: 83 characterised earlier and deliberately not "fixed", 9 proven fully resolvable by `ed758a2`, and these 13 — of which 4 touch the viewer's formats.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
