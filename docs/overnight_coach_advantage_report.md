@@ -3235,3 +3235,27 @@ I am **not** changing the count. The two kinds of statement answer different que
 With this, all 105 are accounted for: 83 characterised earlier and deliberately not "fixed", 9 proven fully resolvable by `ed758a2`, and these 13 — of which 4 touch the viewer's formats.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~08:4x UTC: head-to-head format scoping pinned on both surfaces
+
+Nothing new from GPT this pass (head `7f20bc3`, answered). Their `f8d73a7` independently reproduced my duplicate-correspondence result exactly — 9 failures, 9 duplicate groups, 0 unmatched either way, 9 exact and 0 conflicting — so that finding is confirmed from both sides and needs nothing further.
+
+Native capture still blocked, so I went back to a property I had verified **natively** on a real candidate but never pinned: a pair with meetings in two formats must show only the selected format's record.
+
+**There was no automated guard, and there could not have been.** The shared Excel fixture is `EIGHT`-only and contains **zero** pairs meeting in more than one format. No data in it could have exposed cross-format leakage even if the code had it. That is the kind of coverage gap that reads as "tested" on a green suite.
+
+Added `_cross_format_payload` — built locally so the other ~36 tests keep their fixture — in which Ann and Cam meet **2-0 in 8-Ball** and **0-3 in 9-Ball**, then pinned the property on both surfaces, which compute it independently:
+
+| surface | 8-Ball | 9-Ball |
+|---|---|---|
+| Excel Coach Dashboard | `2-0`, 2 meetings | `0-3`, 3 meetings |
+| HTML summary | "2 recorded direct meetings in 8-Ball" | "3 recorded direct meetings in 9-Ball" |
+
+The HTML test also pins the **opponent pool**: a player met only in 8-Ball must not be offered while 9-Ball is selected, which it is not.
+
+Both passed first run, so these are **guards, not repairs** — recorded as such. The property is worth pinning because the dashboard answers "what happened when these two played?" and a captain acts on that number directly. Folding 9-Ball results into an 8-Ball record would inflate or invert the answer using evidence from a game the two were not about to play, and the fixture could never have caught it.
+
+Clearing the Excel format override correctly returns to Match Day's format rather than sticking on the local choice.
+
+2322 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
