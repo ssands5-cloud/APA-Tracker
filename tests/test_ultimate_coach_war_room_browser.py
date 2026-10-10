@@ -868,3 +868,63 @@ def test_a_coach_note_follows_its_player_not_the_slot_when_the_fixture_changes(t
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_path: Path):
+    """All-surface version of the opinion/evidence boundary (GPT: sampled tables are not enough).
+
+    The earlier note test compared the first three tables, which proves little:
+    a leak could surface in the matrix, Next Send, Tonight, Inspect, a scouting
+    card or the Player vs Player summary and go unseen.
+
+    So this walks EVERY leaf text node in the document before and after writing
+    a note and requires that every single changed line contains the note text.
+    Anything else that moves is evidence reacting to an opinion, which is the
+    one thing this feature must never do.
+    """
+    path = tmp_path / "all_surface.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    note = "ZZNOTE-all-surface-probe"
+
+    read_all = """() => {
+      const out = [];
+      document.querySelectorAll('body *').forEach(el => {
+        if (el.children.length) return;          // leaf nodes only, so text is counted once
+        const t = (el.innerText || '').trim();
+        if (t) out.push(el.tagName + '|' + t);
+      });
+      return out;
+    }"""
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+
+            before = page.evaluate(read_all)
+            assert len(before) > 200, f"page looks unrendered ({len(before)} nodes)"
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(500)
+            after = page.evaluate(read_all)
+
+            import difflib
+
+            changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
+                       if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+            leaked = [line for line in changed if note not in line]
+            assert leaked == [], (
+                "writing a coach note moved text that is not the note itself: " + repr(leaked[:5]))
+            assert changed, "the note should at least render somewhere"
+            assert errors == [], errors
+        finally:
+            browser.close()
