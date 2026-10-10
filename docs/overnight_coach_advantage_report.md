@@ -3351,7 +3351,7 @@ The owner offered a login and has now attempted the `--mine-only` refresh four t
 
 **First correction to my own reasoning.** I assumed the empty `refresh.log` was the symptom. It is not: a **successful** run leaves it empty too, because the handler only writes when the sync logs a warning. The real signal is the three files that were *absent*: `refresh_error.json`, `refresh_progress.json`, and the 235 MB database copy.
 
-**What that rules out.** Every failure path in `main()` — token, `RefreshError`, and a bare `except Exception` — calls `_write_failure()`, which writes `refresh_error.json`. No such file exists in any of the four. An ordinary exception therefore cannot explain them. What `except Exception` does *not* catch is `KeyboardInterrupt` and process termination, so the runs are being **interrupted**, not failing.
+**What that rules out.** Every failure path in `main()` — token, `RefreshError`, and a bare `except Exception` — calls `_write_failure()`, which writes `refresh_error.json`. No such file exists in any of the four. An ordinary exception therefore cannot explain them. What `except Exception` does *not* catch is `KeyboardInterrupt` and process termination. **That was as far as the evidence went, and I overstated it — see the correction below.**
 
 **Proved the pipeline is healthy, without a login.** Ran the refresh with a deliberately invalid token. It hashed the source, made the full 235 MB copy, started the sync, failed cleanly at the first API call with `AccessTokenExpired`, wrote both `refresh_error.json` and a 430 KB `refresh_progress.json`, and printed its own resume command. Source DB sha256 identical before and after. The token string does not appear anywhere in the written files.
 
@@ -3383,3 +3383,25 @@ Why this one matters more than its size suggests: a coach note is the captain's 
 Remaining from GPT's list: bound real-candidate and native workflow evidence, both still blocked on the foreground and the login.
 
 2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~10:1x UTC: two corrections from GPT `f6dcb35`, both confirmed against the code and the data
+
+**1. "Interrupted, not failing" was not established.** I concluded the aborted runs were killed rather than crashed, because no `refresh_error.json` was written. GPT points out that `out_dir.mkdir()` and the logging handler are set up **outside** `main()`'s try block — confirmed: mkdir, `FileHandler` and `addHandler` all precede the `try:`. So an exception thrown during directory or log setup escapes uncaught and leaves *exactly* the same artifacts as a Ctrl-C. Interruption, crash and early failure are indistinguishable from the files alone. **Cause held as unverified**; the silent hash-and-copy window remains a plausible explanation, not a demonstrated one.
+
+A fifth attempt has since appeared (10:02 UTC) with the same single empty log, started fresh rather than resumed.
+
+**2. The resume directory starts from an earlier baseline — the more consequential catch.** Verified directly:
+
+| copy | source hash | `player_matches` |
+|---|---|---|
+| live source / my diagnostic's baseline | `FB2B098D…` | **843,075** |
+| bound candidate `build-40d02c6` | `3D8C8B36…` | **845,588** |
+
+The bound candidate carries **2,513 more rows** because it incorporates the 2026-10-09 live refresh, which was deliberately never promoted back into the source. So a mine-only run resumed from my diagnostic rebuilds on the *pre-refresh* archive.
+
+**What that does and does not mean.** It does **not** invalidate the resume as a way to answer the roster question: current team membership comes from a live APA roster response, not from the copy's history, so the 10-vs-8 answer is unaffected by the baseline. What it does mean is that a completed mine-only run from this directory **must not replace** the retained all-scope candidate — doing so would silently drop 2,513 rows of recorded history and narrow the scope at the same time. Both copies are retained; nothing is deleted.
+
+I recommended that resume to the owner without noticing the baseline difference. Correcting it to him directly as well as here.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
