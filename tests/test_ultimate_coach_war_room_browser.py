@@ -1281,3 +1281,69 @@ def test_a_note_does_not_disturb_a_populated_inspect_selection(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_a_long_note_on_a_phone_expands_readably_and_leaves_risks_reachable(tmp_path: Path):
+    """The presentation intent itself, on the viewport it was written for.
+
+    GPT audit #84's stated reason for collapsing a long note is that it must
+    not push Risks off a phone screen; GPT 630c862 noted the expanded and
+    phone-geometry halves were still unverified. This checks the whole
+    bargain on a 375px viewport: collapsed by default with Risks still there,
+    expanding reveals the note as actually visible text, and Risks survives
+    the expansion rather than being displaced out of the document.
+
+    Uses innerText for the expanded check on purpose -- here the question IS
+    visibility, which is exactly what innerText answers and textContent does
+    not. The earlier test used textContent because its question was whether
+    the words still existed. Same element, different question.
+    """
+    payload = _payload()
+    payload["evidence"] = payload["evidence"] + _games(3, 10, "LLL") + _games(2, 10, "LL")
+    payload["counts"] = {"players": len(payload["players"]),
+                         "head_to_head_rows": len(payload["evidence"])}
+    path = tmp_path / "phone_note.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    long_note = ("ZZLONGNOTE plays safe off the rail all night and will not cut the ball "
+                 "into the side pocket under pressure")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 375, "height": 812})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            for index in range(page.eval_on_selector_all("textarea.plan", "els => els.length")):
+                box = page.locator("textarea.plan").nth(index)
+                box.scroll_into_view_if_needed()
+                box.fill(long_note)
+                box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+
+            details = page.locator("details.note-more").first
+            assert details.count() > 0, "the threat fixture must render the preview"
+            assert details.evaluate("el => !el.open"), "collapsed by default on a phone"
+
+            risks = page.locator(".decide-risks").first
+            assert risks.count() > 0 and risks.inner_text().strip(), "Risks must be present while collapsed"
+
+            # expanding must make the whole note genuinely visible, not merely present
+            details.locator("summary").first.click()
+            page.wait_for_timeout(300)
+            assert details.evaluate("el => el.open")
+            assert long_note in details.inner_text(), "expanding must reveal the full note as visible text"
+
+            # ...and Risks must survive the expansion
+            assert risks.inner_text().strip(), "Risks must still be reachable after expanding"
+            overflow = page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+            assert overflow <= 1, f"a long note must not cause sideways scrolling, got {overflow}px"
+            assert errors == [], errors
+        finally:
+            browser.close()
