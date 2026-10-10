@@ -631,3 +631,60 @@ def test_send_lists_and_best_send_text_match_python_including_ties(tmp_path: Pat
             assert "best-supported send (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
         finally:
             browser.close()
+
+
+def test_a_coach_note_is_remembered_cleared_and_never_changes_the_evidence(tmp_path: Path):
+    """Issue #84 scenario 8: a note saves, survives a reload, does NOT come back
+    after being cleared, and never moves the evidence.
+
+    The cockpit keeps planning marks and notes under its own localStorage key,
+    `ultimate-coach:plan-v2`. The Match Night phone app's `match-night:*` keys
+    already have persistence tests; this key had none, so a regression in the
+    cockpit's own storage would have gone unnoticed.
+
+    The evidence assertion is the point of the whole feature: a note is the
+    coach's opinion, and if writing one could reorder the ranked evidence then
+    opinion would be quietly laundering itself into fact.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.wait_for_timeout(400)
+            note = "ZZTESTNOTE-breaks-hard-off-the-rail"
+            tables = lambda: page.eval_on_selector_all(
+                "table", "els => els.slice(0, 3).map(t => t.innerText)")
+
+            before = tables()
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+
+            assert tables() == before, "a coach note must never reorder the evidence"
+
+            stored = page.evaluate(
+                "n => Object.keys(localStorage).filter(k => (localStorage.getItem(k) || '').includes(n))",
+                note)
+            assert stored == ["ultimate-coach:plan-v2"], stored
+
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+            assert page.locator("textarea.plan").first.input_value() == note, "note must survive a reload"
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill("")
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+
+            assert page.locator("textarea.plan").first.input_value() == ""
+            assert note not in page.locator("body").inner_text(), "a cleared note must not reappear"
+            assert errors == [], errors
+        finally:
+            browser.close()
