@@ -3704,3 +3704,26 @@ If the next attempt names a different file, that is the answer outright. If it n
 Worth recording the shape of this investigation: sixteen attempts, five wrong conclusions from deduction, and every single correction came from an artifact — the breadcrumb, the instrument stamp, the handler names, now the callee identity. The reliable move has been to make the system state something, never to work out what it must have been.
 
 2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~14:2x UTC: the "failed login attempts" were my own test suite
+
+The call-site identity marker answered it on the first run that carried it:
+
+    calling run_refresh -> tests.test_refresh_ultimate_coach_current_session
+      .test_verify_member_defaults_to_the_configured_viewer.<locals>.<lambda>
+      from <worktree>/tests/test_refresh_ultimate_coach_current_session.py:329
+
+`run_refresh` was resolving to a **lambda in my own test suite**. That test calls `refresh.main()` with **no `--out-root`**, so it used the default and created a real timestamped directory in the repo's `tmp/refresh/` on every full-suite run — containing an empty log and nothing else, because the stub it patches over `run_refresh` returns a dict without doing any work. It also patched the boundary guard, so nothing stopped it.
+
+**Those directories are indistinguishable from an aborted live login.** There are **71** of them. Their timing matches my own test runs, which is also why they appeared on a roughly fifteen-minute cadence: that is how often I was running the suite.
+
+**What this means, stated plainly.** I spent a long investigation diagnosing these as the owner's failed login attempts. I told him his logins were being captured and then killed, asked him to retry repeatedly, built five rounds of instrumentation, and produced five wrong theories — external killer, failure in the source hash, `finally` never running, a different script, a hard kill. Every one of those was an explanation for an artifact my own test suite had created. There is no evidence any login attempt reached the refresh at all.
+
+A test that writes into the working tree does not merely risk flaky state. **It manufactures false evidence about production**, and I then reasoned from that evidence for hours and asked the owner to act on it. Fixed: the test now runs under `tmp_path`, and the directory count no longer grows across a full suite run.
+
+**Also fixed, GPT `f18b690` (P1, also mine).** The inner call guard wrote raw exception text to `refresh_stage.txt` while every other sink scrubbed, so a bearer token in an exception message could have landed in a file. Scrubbing now lives **inside `_stage`**, backed by a single module-level `_scrub()` every sink shares, so a future caller cannot reintroduce the bypass by forgetting. Tests use a synthetic JWT sentinel and assert it reaches no produced file. I scanned all **105** existing local diagnostics: **zero** token-shaped text — a latent risk, not a realised leak.
+
+The instrumentation was not wasted — it is what eventually named the callee — but the lesson is sharper than "instrument more". Before diagnosing a failure, establish that the artifact came from the system you think produced it. I checked that twice for *code version* and never once for *provenance*.
+
+2338 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
