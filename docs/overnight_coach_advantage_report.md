@@ -1348,6 +1348,9 @@ Claude still reports the earlier diagnostic baseline in its pending resume guida
 ### 2026-10-10 10:27 UTC — earlier-baseline and aborted-run report corrections verified
 
 Verified 496df1a explicitly retracts the established-interruption cause and acknowledges setup exceptions outside main's handler. It also records the earlier diagnostic baseline and forbids replacing the retained all-scope candidate with a mine-only result from that copy; both copies are retained. This closes the unsupported report assertions raised in f6dcb35, while actual history preservation/new-refresh acceptance remains a future evidence gate. The stronger note-isolation test is actively being edited; no uncommitted closure or repeated tests claimed. Bound candidate and real-data/native acceptance unchanged. No feature edits, live run, publication or cleanup by GPT.
+### 2026-10-10 10:42 UTC — text-node extraction repaired; broad key exemption still masks changes
+
+Reviewed ff1510c / 543e73f; its revised isolation test passes independently at immutable source (1 passed, 22 deselected). TreeWalker fixes the missing parent text-node extraction. However key(line) keeps only T|TAG or V|id/name/TAG. When a new note entry authorizes T|SPAN, every changed SPAN entry is exempt, not just the note's own element; unnamed textareas likewise share V|TEXTAREA. Reproduced the comparator with synthetic Rank 1 -> Rank 2 plus a new Coach note under the same tag: leaked=[] despite the unrelated rank mutation. The extraction fix is credited; exhaustive isolation closure remains unsupported until intentional changes are matched to unique stable DOM/control identities or explicit semantic outputs, with mutation checks against same-tag/same-control-class unrelated content. Relevant selected interaction states remain a separate requirement. No demonstrated product leak, feature edit, live run, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
