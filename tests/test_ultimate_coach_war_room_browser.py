@@ -810,3 +810,61 @@ def test_coach_notes_stay_with_their_player_and_never_cross_browser_contexts(tmp
             fresh.close()
         finally:
             browser.close()
+
+
+def test_a_coach_note_follows_its_player_not_the_slot_when_the_fixture_changes(tmp_path: Path):
+    """Switching Match Day must never move a note onto a different person.
+
+    Notes are stored under `coach` keyed by player id, so this should hold --
+    but the failure mode if it ever regressed to position keying is bad enough
+    to pin: the captain's private written opinion about one named opponent
+    would silently appear attached to a different named opponent on the next
+    fixture. That is worse than losing the note.
+
+    Oct 11 faces one opponent team, Oct 25 faces another, so the note targets
+    are disjoint between the two dates.
+    """
+    path = tmp_path / "fixture_switch.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    note = "ZZNOTE-belongs-to-the-oct-11-opponent"
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            stored = lambda: page.evaluate(
+                "() => JSON.parse(localStorage.getItem('ultimate-coach:plan-v2') || '{}').coach || {}")
+            values = lambda: page.eval_on_selector_all("textarea.plan", "els => els.map(e => e.value)")
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(300)
+
+            owner = [k for k, v in stored().items() if v.get("n") == note]
+            assert len(owner) == 1, stored()
+
+            # a different date means a different opponent team
+            page.select_option("#md-date-list", "2026-10-25")
+            page.wait_for_timeout(500)
+            assert note not in page.locator("body").inner_text(), (
+                "the note must not reappear against the new fixture's opponents")
+            assert all(v == "" for v in values()), values()
+            assert [k for k, v in stored().items() if v.get("n") == note] == owner, (
+                "switching fixtures must not re-key or drop the stored note")
+
+            # and it is still there when that opponent comes back
+            page.select_option("#md-date-list", "2026-10-11")
+            page.wait_for_timeout(500)
+            assert page.locator("textarea.plan").first.input_value() == note
+            assert errors == [], errors
+        finally:
+            browser.close()
