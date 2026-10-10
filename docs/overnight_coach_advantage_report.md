@@ -3893,3 +3893,64 @@ No code change this firing. That is the honest outcome when the thing worth chec
 **Everything remaining needs the owner:** real roster 10-vs-8, native workflow evidence, print legibility, the no-scoresheet cause split, and the history-preserving replacement decision.
 
 2345 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+## Audit 4613fbe: a one-sided oracle, and a pessimism of mine that was wrong
+
+GPT raised two points. The first was a gap in a test I wrote; the second corrects
+something I told Paul.
+
+**(a) The advice oracle read in one direction only.** The alternate-target guard in
+`test_a_note_does_not_reset_an_alternate_next_send_opponent` collected after-lines
+that were absent from before. That catches an added line and nothing else. A deleted
+warning leaves no new line to find, and a reordering of otherwise unchanged lines
+leaves no new line either -- yet both change the advice a captain actually reads.
+Replaced with an ordered, bidirectional diff of the before/after advice in which the
+only permitted difference is one carrying the note's own text. Added two non-vacuity
+assertions as well, because a page that had stopped responding altogether would
+otherwise satisfy a "nothing else changed" oracle by changing nothing at all: the
+textarea must hold the note, and the note must be present in the stored plan.
+Full suite 2345 passed, pytest's own exit code 0. Committed 0c55c8a.
+
+**(b) I was wrong that the rest needs Paul.** I had reported that the remaining
+candidate verification all waited on him. Native Excel and an authoritative roster
+response genuinely do. But the already-bound artifact can be driven headlessly and
+read-only, and that is candidate evidence rather than another source-level guard,
+which is exactly the distinction GPT drew. So I ran two acceptance passes against the
+real `build-40d02c6` HTML -- the bound candidate, real data, no login, no desktop.
+
+First pass, 5 of 5: the artifact loads with no script errors; Next Send offers every
+unplayed opponent; choosing a different opponent re-targets the advice and moves
+`aria-pressed`; a matrix cell pins its pair into Inspect; and the pinned pair resolves
+to real player records in the candidate database.
+
+Second pass, 9 of 9, covering two items from Paul's own list -- Lineup Lab
+availability and Played marks with their effect on sends, and the Coach Dashboard:
+
+- the dashboard's roster total agrees with the Lineup Lab's roster rows
+- marking a player Unavailable withdraws them from the recommendations
+- the dashboard's remaining count then drops by exactly one, total unchanged
+- restoring availability brings the same player back as a send
+- marking a player Played withdraws them and spends a roster slot
+- the selected-lineup line stops reporting nothing marked once a player is Planned
+- marking an opponent Played removes that opponent from Next Send
+- one "Sent" click records our player Played and retires that opponent together
+- no script errors across the whole pass
+
+Each of these asserts a change in a named direction -- a removal from a list, a
+decrement of a count -- so an inert page would fail five of them rather than pass
+quietly. Expected-versus-actual for every scenario is recorded privately under
+`tmp/native/acceptance-40d02c6/` (gitignored; it carries real identifiers, so it
+stays off GitHub).
+
+Two observations from the run, neither a defect:
+
+- the roster measured 10 of ours against 8 of theirs. That is the same 10-versus-8
+  question already open, now measured directly off the artifact instead of inferred.
+  It still needs an authoritative roster response to adjudicate, and that needs Paul.
+- for the opponent selected on load, the recommendation list held a single medal, so
+  withdrawing that one player left no evidence-backed option at all. That is the
+  documented thin-evidence path rather than a fault, but it is worth Paul knowing how
+  thin the real evidence is for that pairing.
+
+What this does not establish: native Excel behaviour, print legibility, or production
+acceptance. PR #83 stays draft. Real roster and data acceptance remains open.
