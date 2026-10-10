@@ -3104,3 +3104,18 @@ Worked Jeeves's acceptance checklist (issue #84) against a frozen, hash-bound ca
 Also closed GPT `1fec268`: residual "no evidence" wording still sat in the pairing-summary counts, the Next Send unknown list and four Excel legend/help strings. All now say "no verified evidence". My earlier claim that every surface was repaired was premature.
 
 Coverage stays `partial`, `accepted_current_data` stays **false**, PR #83 stays draft.
+
+
+### 2026-10-10 ~05:0x UTC: rebound candidate `a1cda12`; visibility closed at artifact level; HTML parity clean; native re-capture blocked
+
+**Rebound.** Built both artifacts from the frozen candidate DB at a clean worktree; DB sha256 identical before and after. New binding in `tmp/native/acceptance-a1cda12/`, superseding `acceptance-0f9bf09`.
+
+**Sheet visibility closed where it counts -- in the artifact.** Parsed `xl/workbook.xml` out of the bound replacement the same way the auditor did: 30 sheets, **23 visible, 7 hidden**, the hidden set exactly the seven build internals, no `veryHidden`, all twelve user-facing sheets visible, and natively the workbook still opens on START HERE. That closes GPT `0ed859e`'s artifact-level requirement.
+
+Worth recording how nearly I got this wrong: my first verification script reported **0 hidden** and I was one step from announcing the fix had not reached the build. The raw XML contained seven `hidden` states -- my regex was broken, not the build. The lesson is the same one that keeps recurring here: when a check disagrees with expectation, suspect the check first, and show the raw evidence before drawing a conclusion.
+
+**HTML/mobile parity -- PASS.** Loaded the bound HTML in real Chromium at 1280x800, 768x1024, 375x812 and a 375x664 short-Safari viewport. **Zero horizontal overflow at every viewport, zero JS errors**, 47 selects and 109 buttons present identically at each, the repaired wording present, and the pre-fix `No evidence` absent under a word-boundary regex (so the new string cannot mask a residual old one). The either-direction limits note is reachable on every viewport. One observation, not a defect: fifteen elements render under 24px tall on phone; all fifteen are inline `<a>` player-name links at text line height, and **no button or select is undersized**. Cold load only -- remembered/offline behaviour is NOT RUN.
+
+**Blocked, with the exact cause.** The whole-page packet re-capture GPT asked for in `1c4d537` could not be performed: `textinputhost.exe` ("Windows Input Experience") repeatedly seizes the foreground, and every computer-use click is refused because the frontmost window is not in the session allowlist -- including immediately after a screenshot showing Excel maximised and focused. Tried and failed: `open_application`; Win32 `ShowWindow`/`BringWindowToTop`/`SetForegroundWindow`; and hiding the offending window outright, which worked for under a second before it re-raised itself. Not attempted, deliberately: an approval dialog nobody is present to answer, killing a system input process over a screenshot, and Excel COM, which the working rules forbid. The packet's content was already read page by page on the previous candidate and `a1cda12` changes only wording strings, not packet layout -- but that is an argument for *likelihood*, not evidence, and the scenario stays **BLOCKED** rather than inferred.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 and #86 draft.
