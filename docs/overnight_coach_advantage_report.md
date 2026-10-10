@@ -4235,3 +4235,44 @@ this entry cannot close.
 Still Paul's: whether 58% prints legibly, the native Excel workflows, authoritative
 live roster data, the no-scoresheet cause split, and history preservation. PR #83
 stays draft. No product code changed.
+
+## Audit bd2e33c, and the 9-Ball fixture: the scope gap I declared is closed
+
+GPT reproduced all three direct-meeting samples independently, against both recorded
+hashes, clicking each recorded matrix cell in a fresh headless context and querying
+the source read-only, preserving duplicate multiplicity: displayed against source
+totals of 1 of 2, 2 of 2 and 1 of 5, every exclusion another format, no same-format
+omission and no unmatched displayed row. That closes the three-sample claim it had
+previously held as builder-reported, and it confirms the enriched evidence was the
+right fix. It also records the "genuinely never met" overclaim as resolved.
+
+Nothing in that entry was a new finding, so I spent this firing closing a gap I had
+declared myself. Every parity and understatement check so far covered only the 8-Ball
+fixture; the same two clubs also meet in a 9-Ball division, and I had explicitly
+recorded that as unmeasured. Measured now, 13 of 13.
+
+The 9-Ball division binds to the expected fixture, and it is genuinely different
+ground rather than a repeat: a different division, different team identifiers on both
+sides, and its own evidence.
+
+- both rendered rosters are exactly the snapshot rosters for that division, 10 of ours
+  and 8 of theirs, zero missing and zero unexpected
+- every rendered player resolves to a real player row with the stored name: zero
+  unresolved, zero name mismatches, on both sides
+- Next Send offers exactly the unplayed opponents, 8 chips against 8 unplayed rows
+- all 80 pairs were checked, not only those carrying evidence: zero understated and
+  zero overstated against the snapshot's own 9-Ball count per pair
+- the workbook holds 6 rows for this fixture and all 6 equal their HTML cell, and all
+  6 HTML direct-record cells have a workbook row behind them
+- the artifact hash was unchanged by the pass, and no script errors
+
+So the 10-versus-8 shape holds in both of Paul's divisions and agrees with the
+snapshot both times. The understatement check now covers 160 pairs across two formats
+with no instance of the artifact hiding or inventing evidence in either direction.
+
+What this does not touch is unchanged: the workbook's rendered surfaces still need
+either a much larger formula-evaluation budget or Paul's own Excel, print legibility
+at 58% is still his call, and authoritative roster correctness against APA still
+needs a live login. Evidence under
+tmp/native/acceptance-40d02c6/nine-ball-fixture-acceptance.json. PR #83 stays draft.
+No product code changed.
