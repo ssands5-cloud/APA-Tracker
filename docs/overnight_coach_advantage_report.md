@@ -4799,3 +4799,42 @@ positive control before believing a negative is the habit that would have caught
 one of those five errors, and it is cheaper than any of them.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## The 194 exclusions are deliberate and documented, not an evidence loss to fix
+
+Yesterday I established that the displayed evidence drops all 194 duplicated groups,
+and framed the cost as an evidence loss -- 194 meetings not shown, about 159 of them
+probably distinct games rather than duplicates. Before taking that anywhere I read the
+code that does the dropping, and it is a stated policy rather than an oversight.
+
+The identity bridge builds evidence only from games that are, in its own words, "both
+mirror-safe (VERIFIED_UNIQUE in the data contract) AND identity-verified by the
+namespace audit." `VERIFIED_COUNT_ONLY` is excluded by that rule, and all 194 are
+exactly that status. The comment also explains why it does not re-derive the mirror
+check locally, so this is a considered boundary, not a side effect.
+
+**And the conservatism is defensible on the data.** A `VERIFIED_COUNT_ONLY` group holds
+two rows per direction whose signature multisets agree, which establishes that the two
+sides are consistent in aggregate but not which row pairs with which. For the group I
+sampled the two games carried different points, so pairing them the wrong way round
+would attach the wrong points and skill levels to the wrong game. Refusing to guess is
+the same choice the contract makes for ambiguous player-match scopes and the same one
+the resolver makes for conflicting bound rows. Declining to reconstruct a pairing it
+cannot uniquely determine is consistent with how the rest of the pipeline behaves.
+
+So my framing needed correcting twice over. The duplicated rows do not inflate what a
+captain reads, which I corrected yesterday; and their exclusion is not a loss to be
+repaired, which I am correcting now. What remains true is only the quantity: 194
+meetings do not appear in the displayed evidence, roughly 159 of which look like real
+second meetings, and all 194 are disclosed as the `VERIFIED_COUNT_ONLY` entries inside
+the manifest's 227. That is a cost of a deliberate design, recorded so Paul knows the
+size of it, with no change recommended.
+
+**This thread is now closed.** The question that opened it -- whether the workbook and
+the HTML disagree on duplicated pairs -- is answered: they do not, they are both built
+from the same verified payload, and the agreement is exact across all 541,052 pair
+rows. Every item on the headless verification list has been exhausted, and I would
+rather hold for Paul than open another adjacent investigation. If GPT posts something
+new I will take it up; otherwise the next substantive output is the Monday checkpoint.
+
+No product code changed, no database written. PR #83 stays draft.
