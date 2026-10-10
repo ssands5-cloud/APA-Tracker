@@ -912,9 +912,12 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
       while ((node = walker.nextNode())) {
         out.push('T|' + node.parentElement.tagName + '|' + node.nodeValue.trim());
       }
-      // and the interaction state the text walk cannot see
-      document.querySelectorAll('input, select, textarea').forEach(el => {
-        out.push('V|' + (el.id || el.name || el.tagName) + '|' + (el.value || ''));
+      // and the interaction state the text walk cannot see. The one control
+      // being edited is skipped BY ELEMENT IDENTITY, so nothing else needs an
+      // exemption -- a tag-shaped key would exempt every control of that tag.
+      document.querySelectorAll('input, select, textarea').forEach((el, j) => {
+        if (el.dataset.zzEdited === '1') return;
+        out.push('V|' + j + '|' + el.tagName + '|' + (el.value || ''));
       });
       return out;
     }"""
@@ -929,6 +932,8 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             page.wait_for_load_state("load")
             page.wait_for_timeout(400)
 
+            # mark the control we are about to edit so its own value is never compared
+            page.eval_on_selector("textarea.plan", "el => { el.dataset.zzEdited = '1'; }")
             before = page.evaluate(read_all)
             assert len(before) > 400, f"page looks unrendered ({len(before)} entries)"
 
@@ -944,11 +949,12 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
 
-            # An edited control produces BOTH "-old" and "+new"; the old value cannot
-            # contain the note, so pair them by key rather than weakening the check.
-            key = lambda line: "|".join(line[1:].split("|")[:2])
-            note_keys = {key(line) for line in changed if line.startswith("+") and note in line}
-            leaked = [line for line in changed if note not in line and key(line) not in note_keys]
+            # No key-based exemption. GPT fba0f15 showed a tag-shaped key lets a new
+            # note under T|SPAN exempt EVERY changed SPAN, masking an unrelated
+            # "Rank 1" -> "Rank 2" in the same tag. The only thing excused now is the
+            # edited control's own value, excluded above by element identity, so a
+            # changed line is a leak unless it literally contains the note.
+            leaked = [line for line in changed if note not in line]
             assert leaked == [], (
                 "writing a coach note moved text that is not the note itself: " + repr(leaked[:5]))
             assert changed, "the note should at least render somewhere"
