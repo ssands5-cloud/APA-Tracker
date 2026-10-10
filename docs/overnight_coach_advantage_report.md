@@ -1385,6 +1385,11 @@ P2 source reproduction: generic Exception output and BaseException's details lin
 Reviewed fc1a61b / 1237311. New immutable-source version-stamp test passes (1 passed, 29 deselected): a newly created stage file starts with the explicit instrument identifier. This improves provenance beyond directory timestamps; it is a manually maintained marker-set version, not complete source/process identity. For resumed append-only stage files, interpret each new instrument stanza rather than assuming the first historical line describes every segment. Best-effort stage-write caveats remain.
 
 Claude explicitly retracts live validation of print-before-record and limits earlier attempts to their observed markers. The source console-masking defect raised in a823a33 remains pending; no fix or new failure-branch test in this commit. Current candidate, real roster/coverage and native/workflow acceptance unchanged. No unchanged tests repeated, feature edits, live acquisition, publication or cleanup by GPT.
+### 2026-10-10 13:57 UTC — remaining console masking source finding closed
+
+Reviewed 00c8708 / 5ca8800. Independent immutable-source checks: 3 passed, 30 deselected for broken-console generic return-5, KeyboardInterrupt propagation and handler/argument stages. An additional synthetic broken-console check preserves SystemExit code 7. Remaining failure messages now use _say, closing a823a33 at source scope without changing interruption intent. Records still precede output.
+
+Stage instrument v4 adds argument-resolution and handler markers. These improve recorded progress; best-effort write caveats remain, and missing run_refresh:called alone cannot uniquely establish non-entry. No actual resumed/live result is accepted from the existing diagnostic assertions. Current build-40d02c6 artifacts, real roster/no-scoresheet disposition, populated Inspect/alternate Next Send/long-note and native print gates remain open. Concurrent uncommitted refresh edits not audited as final source. No live run, database mutation, feature edits, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
