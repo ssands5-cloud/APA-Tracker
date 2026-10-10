@@ -871,14 +871,21 @@ def test_a_coach_note_follows_its_player_not_the_slot_when_the_fixture_changes(t
 
 
 def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_path: Path):
-    """All-surface version of the opinion/evidence boundary (GPT: sampled tables are not enough).
+    """All-surface version of the opinion/evidence boundary.
 
-    The earlier note test compared the first three tables, which proves little:
-    a leak could surface in the matrix, Next Send, Tonight, Inspect, a scouting
-    card or the Player vs Player summary and go unseen.
+    Two rounds of correction got this to something that actually earns the
+    word "all". First version compared the first three tables, which could not
+    have seen a leak in the matrix, Next Send, Tonight, Inspect, a scouting
+    card or the Player vs Player summary.
 
-    So this walks EVERY leaf text node in the document before and after writing
-    a note and requires that every single changed line contains the note text.
+    Second version walked leaf ELEMENTS and skipped any element with children,
+    so text held by a parent NEXT TO a child element was invisible -- GPT
+    f6dcb35/5b8e525 reproduced the hole, and on the real page 42 elements carry
+    their own text beside child elements. "Rank 1" becoming "Rank 2" alongside
+    an untouched span would have passed.
+
+    This walks real TEXT NODES with a TreeWalker and also captures every form
+    control's value, then requires every changed entry to contain the note.
     Anything else that moves is evidence reacting to an opinion, which is the
     one thing this feature must never do.
     """
@@ -889,10 +896,25 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
 
     read_all = """() => {
       const out = [];
-      document.querySelectorAll('body *').forEach(el => {
-        if (el.children.length) return;          // leaf nodes only, so text is counted once
-        const t = (el.innerText || '').trim();
-        if (t) out.push(el.tagName + '|' + t);
+      // Real text nodes: a parent's own text is captured even when it also has
+      // element children, which an element-level walk silently drops.
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      // No positional index in the key: inserting one node would shift every
+      // later index and the diff would report hundreds of phantom changes.
+      let node;
+      while ((node = walker.nextNode())) {
+        out.push('T|' + node.parentElement.tagName + '|' + node.nodeValue.trim());
+      }
+      // and the interaction state the text walk cannot see
+      document.querySelectorAll('input, select, textarea').forEach(el => {
+        out.push('V|' + (el.id || el.name || el.tagName) + '|' + (el.value || ''));
       });
       return out;
     }"""
@@ -908,7 +930,7 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             page.wait_for_timeout(400)
 
             before = page.evaluate(read_all)
-            assert len(before) > 200, f"page looks unrendered ({len(before)} nodes)"
+            assert len(before) > 400, f"page looks unrendered ({len(before)} entries)"
 
             box = page.locator("textarea.plan").first
             box.scroll_into_view_if_needed()
@@ -921,7 +943,12 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
 
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
-            leaked = [line for line in changed if note not in line]
+
+            # An edited control produces BOTH "-old" and "+new"; the old value cannot
+            # contain the note, so pair them by key rather than weakening the check.
+            key = lambda line: "|".join(line[1:].split("|")[:2])
+            note_keys = {key(line) for line in changed if line.startswith("+") and note in line}
+            leaked = [line for line in changed if note not in line and key(line) not in note_keys]
             assert leaked == [], (
                 "writing a coach note moved text that is not the note itself: " + repr(leaked[:5]))
             assert changed, "the note should at least render somewhere"
