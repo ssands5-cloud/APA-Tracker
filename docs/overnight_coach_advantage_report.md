@@ -4191,3 +4191,47 @@ Scope limits: this measures the 8-Ball family for one bound fixture. The same ro
 in their 9-Ball division are a different fixture and were not measured. Evidence in
 `tmp/native/acceptance-40d02c6/evidence-understatement.json`. PR #83 stays draft. No
 product code changed.
+
+## Captain Packet print layout: the structural half, verified without Excel
+
+Print legibility needs Paul's eyes, but the packet's pagination is declared in the
+workbook and can be read without opening it. Read directly from the sheet part, so
+nothing here is inferred from a rendering.
+
+**Declared setup.** Landscape US Letter, scale 58%, horizontally centred, margins
+0.35 left/right and 0.45 top/bottom. Print area `A1:L218`. Rows 1:2 repeat as print
+titles on every page. Three manual row breaks, at rows 39, 70 and 194.
+
+**The breaks fall between sections, not inside them.** Each band begins with its own
+section header: row 40 opens the scouting cards, row 71 opens evidence by opponent,
+row 195 opens meeting history. The row before each break is the last row of the
+previous section. So the four bands are the four logical sections of the packet, and
+no section is split across a break.
+
+**Nothing user-facing is excluded from the print area.** Content extends to column R
+while the print area stops at L, which looked like it could drop data. It does not:
+the only non-empty cells beyond L are a navigation link in N1:N2 and index-arithmetic
+helper formulas in P:R rows 74-194. Chrome and scratch work, correctly unprinted.
+
+**Computed page count: six.** Every one of the 218 rows carries an explicit height, so
+the per-band totals are exact file data rather than an estimate: 763pt for the cover
+and tonight summary, 774pt for the scouting cards, 1,814pt for evidence by opponent,
+654pt for meeting history. Against a printable 547pt that holds 943pt of rows at 58%,
+less 46pt of repeating titles, that is one page, one page, three pages and one page.
+
+This is a computation from the file, not a verified page count. Excel's own pagination
+can differ: I allowed no space for header or footer beyond the margins, and if Excel
+reserves any the later bands could spill to a seventh page. Paul's list names pages
+1, 3 and 5, which under this layout are the cover, the middle of the evidence
+section, and its end -- a reasonable sample of the three distinct page shapes.
+
+**The legibility question, stated as precisely as I can make it.** At 58% scale a
+15pt row renders about 8.7pt tall, so body text sized for those rows lands around
+6 to 7pt on paper. Three evidence spans also carry shrink-to-fit from the earlier
+clipping repair, so their worst-case text renders smaller still. Whether that is
+readable on Paul's printer is not something I can measure, and it is the one thing
+this entry cannot close.
+
+Still Paul's: whether 58% prints legibly, the native Excel workflows, authoritative
+live roster data, the no-scoresheet cause split, and history preservation. PR #83
+stays draft. No product code changed.
