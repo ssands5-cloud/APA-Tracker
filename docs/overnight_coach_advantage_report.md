@@ -4438,3 +4438,64 @@ of my false alarms this week. None of them is in the current refresh scope, so n
 depends on it today. If Paul confirms 0-0 means void, excluding it is a small change.
 
 No product code changed in this entry. PR #83 stays draft.
+
+## The nine duplicate rows are all Paul's, on exactly the nine failed-fetch matches
+
+The nine duplicate groups have been carried as a tracked item for a while without
+being localised. They are localised now, and the pattern is specific enough to point
+at a cause.
+
+**Every scored match of his four teams this session checks out.** Thirty-two scored,
+non-bye matches across the four teams, 158 games, 316 head-to-head rows. Every game is
+stored from both sides with opposite results and swapped skill levels, zero integrity
+problems. No scored match of his is missing its individual results. The nine matches
+whose scoresheet fetch failed were all included, and they are no less sound than the
+other twenty-three: zero problems in either group. So "existing rows kept unverified"
+means the rows were kept and are internally consistent, not that they are wrong.
+
+**The nine duplicates are one player, on exactly the nine failed-fetch matches.**
+Nine exact-duplicate `player_matches` groups exist in the whole 845,588-row table --
+same match, player, team, result, points and skill level. All nine are Paul's own row,
+and the nine matches are precisely the nine whose scoresheet fetch failed. The two sets
+match match-for-match.
+
+That correlation suggests a mechanism rather than proving one. The viewer's own
+matches are ingested by their own loop, separately from each team's scoresheet, so a
+row for the viewer can arrive by two routes. On the failed-fetch branch the existing
+row is deliberately kept, and nothing then reconciles it against a row the other route
+had already written. I have not reproduced that sequence, so I am recording it as the
+most likely explanation and not as a diagnosis.
+
+**No user-visible effect in anything verified so far, stated with its limits.** The War
+Room's evidence comes from `player_head_to_head`, and that table is clean here: zero of
+the ten head-to-head rows for the examined match involve a duplicate or an alias id,
+and the earlier understatement pass compared 160 pairs across two formats against the
+snapshot with zero discrepancy in either direction. `players.matches_won` and
+`matches_played` are stored as APA reports them rather than counted from
+`player_matches`, so the duplicates do not inflate them. What I can say is that no
+surface I have checked is affected; I have not audited every consumer of
+`player_matches`, and ten analytics modules read it.
+
+**A related thing that is not a defect.** The same match shows nineteen distinct
+players for a five-game match, which looked alarming until resolved: ten rows under
+canonical APA ids and nine under ids above 90,000,000, which are the documented
+unresolved scoresheet aliases. There are exactly 782 of them, matching the figure
+recorded earlier, and not one has a current team, so none can appear in any roster the
+artifact renders. That is consistent with the roster checks finding exactly 10 and 8
+with zero unexpected members.
+
+**Not fixed, deliberately.** Removing the nine rows is a database mutation and Paul's
+standing instruction is that nothing gets deleted without his approval of exact paths.
+An ingest-level guard that refuses a second identical row is the real fix and belongs
+in the sync path, but it would not retire the nine rows already written, so it needs
+his decision on both halves together. Recorded for that decision.
+
+**A measurement error of mine, caught by measuring.** I first compared one of his
+matches against another as a baseline and concluded the row counts were inconsistent.
+The baseline was unrepresentative: `player_matches` normally equals the head-to-head
+count, not double it, and the match I picked was one of only three doubled matches in
+710. Four-game matches are likewise unremarkable, about 3% of that format. Both of my
+initial suspicions dissolved once I measured the distribution instead of comparing two
+rows.
+
+No product code changed and no database was written. PR #83 stays draft.
