@@ -3973,9 +3973,11 @@ It observed **zero** direct meetings and still reported PASS. That is the kind o
 false evidence I am supposed to be preventing, and it was mine. Replaced with a real
 oracle in both directions.
 
-The zero itself was never a data fault -- that pair has genuinely never met, and the
-product correctly says "No verified direct meetings in this snapshot". The old
-assertion simply could not tell a correct no-evidence case from a broken one.
+The zero itself was never a data fault: the snapshot holds no verified direct
+meeting for that pair, and the product correctly says "No verified direct meetings in
+this snapshot". The old assertion simply could not tell a correct no-evidence case
+from a broken one. (Corrected -- this paragraph first said the pair "has genuinely
+never met", which claims more than a snapshot can support. See the af74de0 entry.)
 
 **Record-level acceptance, 8 of 8**, against the real artifact and its source
 snapshot (both hashes recorded privately):
@@ -4057,3 +4059,49 @@ Recording them because the running tally of my own false alarms matters:
 Still Paul's, unchanged: native Excel workflows, Captain Packet print legibility,
 authoritative live roster data, the no-scoresheet cause split, and the
 history-preservation decision. PR #83 stays draft. No product code changed here.
+
+## Audit af74de0: a wording overclaim of mine, and evidence that could not be reproduced
+
+GPT independently verified the identity and target-set work in a fresh headless
+context against the exact bound hash: all 18 rendered roster-control identities
+resolve to candidate player rows with matching stored names and external IDs, zero
+unresolved and zero mismatches; the complete Next Send chip set equals the unchecked
+opponent set both before and after marking one opponent Played, 8 then 7; artifact
+hash unchanged; SQLite opened read-only. Those precise cases are closed. They are not
+authoritative roster correctness, which still needs Paul.
+
+Two things to fix, and the first is a correction of my own language.
+
+**Corrected: "that pair has genuinely never met".** I wrote that about a pair with
+zero direct meetings. A snapshot showing no verified direct meeting cannot establish
+that two players never met -- identity exclusions and unresolved identities sit
+between those two statements. The honest claim is the one the product itself makes:
+"No verified direct meetings in this snapshot." Corrected in place above, with a
+pointer to this entry.
+
+What makes this worse than a slip is that this very document already said so. The
+earlier identity analysis records that a no-evidence pairing "is indistinguishable
+from a pairing that genuinely never met" and calls the absence of that distinction
+the one honest shortfall of that investigation. I then contradicted my own finding
+several hundred lines later. The lesson is not about this sentence; it is that I
+restate conclusions from memory instead of from the record I already wrote.
+
+**Fixed: the direct-meeting samples were not reproducible.** The saved JSON carried
+only aggregate counts -- three pairs, so many shown, so many excluded -- which is
+enough to read but not enough for anyone to re-derive. GPT correctly declined to
+treat it as independently verified and kept it as builder-reported. It now records,
+per sample: the matrix cell's `data-our`/`data-opp` keys, both APA record IDs, every
+displayed row with its matched/unmatched verdict, the snapshot format and match id
+behind each, every excluded row with the reason it was excluded, the bound format,
+and both the artifact and source-database hashes, plus the exact steps to re-run.
+Re-ran the oracle on that basis: 9 of 9, three samples, same results as before --
+one pair showing 1 of 2 rows with 1 excluded by format, one showing both of 2 with
+nothing excluded, one showing 1 of 5 with 4 excluded, zero same-format omissions.
+
+The evidence stays in the gitignored directory because it carries real identifiers.
+That is the constraint that produced the thin summary in the first place, and the
+answer is fuller private detail, not thinner public detail.
+
+Unchanged and still Paul's: native Excel workflows, Captain Packet print legibility,
+authoritative live roster data, the no-scoresheet cause split, and the
+history-preservation decision. PR #83 stays draft. No product code changed.
