@@ -1081,3 +1081,56 @@ def test_a_coach_note_changes_nothing_once_the_workflows_are_populated(tmp_path:
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_a_long_coach_note_survives_whole(tmp_path: Path):
+    """A long observation must be stored and restored in full, never clipped.
+
+    Scope, stated because I could not reach the rest: past 48 characters the
+    note is PRESENTED as a collapsed <details> with a 36-character summary, so
+    it cannot push Risks off a phone screen. That preview only renders for a
+    listed threat or a chosen Next Send opponent, and this fixture produces
+    neither -- writing notes into every available control rendered no preview
+    at all. So the collapsed presentation is NOT exercised here.
+
+    What is exercised is the half that loses data if it breaks: the stored note
+    itself. A summary being short is a design choice; the note being short is
+    data loss, and that is what this pins.
+    """
+    path = tmp_path / "long_note.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    long_note = ("ZZLONGNOTE plays safe off the rail all night and will not cut the ball "
+                 "into the side pocket under pressure, so leave that shot open on purpose")
+    assert len(long_note) > 48, "must exceed the collapse threshold"
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(long_note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+
+            stored = page.evaluate(
+                "() => JSON.parse(localStorage.getItem('ultimate-coach:plan-v2') || '{}').coach || {}")
+            kept = [v.get("n") for v in stored.values() if v.get("n")]
+            assert kept == [long_note], f"the stored note must be whole, got {kept}"
+
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+            restored = page.locator("textarea.plan").first.input_value()
+            assert restored == long_note, "a reload must not clip the note"
+            assert len(restored) == len(long_note)
+            assert errors == [], errors
+        finally:
+            browser.close()
