@@ -1073,6 +1073,11 @@ def test_a_coach_note_changes_nothing_once_the_workflows_are_populated(tmp_path:
             leaked = [line for line in changed if note not in line]
             assert leaked == [], (
                 "a coach note disturbed a populated workflow: " + repr(leaked[:5]))
+            # Non-vacuity (GPT b85f13c): without this a DROPPED note passes with
+            # changed == [], and the test would be celebrating its own silence.
+            assert changed, "the note must render somewhere, or this proves nothing"
+            assert any(note in line for line in changed)
+            assert page.locator("textarea.plan").first.input_value() == note
             assert errors == [], errors
         finally:
             browser.close()

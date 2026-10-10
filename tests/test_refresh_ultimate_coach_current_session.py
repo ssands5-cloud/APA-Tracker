@@ -717,7 +717,8 @@ class TestTheRunLeavesABreadcrumbOfHowFarItGot:
         stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
         assert "directory created" in stages
         assert "logging ready" in stages
-        assert "entered run_refresh" in stages
+        assert "loading config" in stages
+        assert "config loaded" in stages
 
     def test_a_record_that_cannot_be_written_still_leaves_a_plain_text_fallback(self, tmp_path, monkeypatch):
         def boom(*args, **kwargs):

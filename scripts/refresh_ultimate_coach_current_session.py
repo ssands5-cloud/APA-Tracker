@@ -333,7 +333,9 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     sessions = {d["catalog_session_name"] for d in divisions}
     dest = out_dir / "ultimate_coach_staging.db"
     progress_path = out_dir / "refresh_progress.json"
+    _stage(out_dir, "run_refresh: body entered")
     source_sha_before = sha256_file(source_db)
+    _stage(out_dir, "run_refresh: source hashed")
     catalog_sha = sha256_file(catalog_path)
     stamp = lambda t: t.strftime("%Y-%m-%d %H:%M:%S UTC")  # noqa: E731
 
@@ -356,7 +358,9 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         if wrong:
             raise RefreshError(f"cannot resume: {', '.join(wrong)} differ from the interrupted refresh")
     else:
+        _stage(out_dir, "run_refresh: copying database")
         copy_read_only(source_db, dest)
+        _stage(out_dir, "run_refresh: copy made")
         progress = {"schema": PROGRESS_SCHEMA, "source_db": str(source_db), "source_db_sha256": source_sha_before,
                     "catalog": str(catalog_path), "catalog_sha256": catalog_sha, "mode": mode, "mine_only": mine_only,
                     "copy_sha256_before_sync": sha256_file(dest), "before": snapshot(dest, sessions),
@@ -684,9 +688,15 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
     _stage(out_dir, "logging ready")
-    _stage(out_dir, "entered run_refresh")
     try:
-        report = run_refresh(load_config(args.config), source_db=Path(args.source_db), catalog_path=Path(args.catalog),
+        # Sequenced deliberately: load_config used to be evaluated as an argument
+        # AFTER the "entered run_refresh" breadcrumb, so that line claimed more
+        # than it knew -- it proved arrival at the call site, not entry into the
+        # body (GPT ef31d78). Each step now says only what it has actually done.
+        _stage(out_dir, "loading config")
+        config = load_config(args.config)
+        _stage(out_dir, "config loaded")
+        report = run_refresh(config, source_db=Path(args.source_db), catalog_path=Path(args.catalog),
                              out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
                              resume=bool(args.resume),
                              verify_date=args.verify_date)
@@ -720,8 +730,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  details: {out_dir / 'refresh_error.json'}")
         raise
     finally:
+        # GPT b85f13c: without this there is no evidence either way about whether
+        # finally ran, so claiming it did not would be an assumption, not a
+        # reading. Written first, before the handler teardown that could itself
+        # fail, so the marker reflects reaching finally rather than finishing it.
+        _stage(out_dir, "finally reached")
         logging.getLogger().removeHandler(handler)
         handler.close()
+        _stage(out_dir, "finally completed")
     c = report["changes"]
     print(f"Refreshed copy: {report['provenance']['refreshed_db']}")
     print(f"  SHA256 {report['provenance']['refreshed_db_sha256']} (source {report['provenance']['source_db_sha256']}, unchanged)")
