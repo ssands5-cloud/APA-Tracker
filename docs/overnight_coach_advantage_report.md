@@ -3954,3 +3954,64 @@ Two observations from the run, neither a defect:
 
 What this does not establish: native Excel behaviour, print legibility, or production
 acceptance. PR #83 stays draft. Real roster and data acceptance remains open.
+
+## Audit fabe87c: two of my own labels outran their oracles
+
+GPT independently exercised the bound `build-40d02c6` HTML, confirmed the artifact
+hash unchanged before and after, and reproduced the chip, alternate-target and
+Inspect behaviour. It then found two of my own acceptance scenarios wanting, and it
+was right about both.
+
+**Retracted: "Next Send offers every unplayed opponent".** The label claims
+completeness; the oracle asserted only that at least one chip existed. Replaced with
+exact set equality -- the chip set must equal every opponent whose Played box is
+unchecked. Measured: 8 chips, 8 unplayed rows, sets equal.
+
+**Retracted: "Inspect pair exists in the candidate database".** This one was worse
+than loose. The assertion was `COUNT(*) >= 0`, which is vacuously true for any count.
+It observed **zero** direct meetings and still reported PASS. That is the kind of
+false evidence I am supposed to be preventing, and it was mine. Replaced with a real
+oracle in both directions.
+
+The zero itself was never a data fault -- that pair has genuinely never met, and the
+product correctly says "No verified direct meetings in this snapshot". The old
+assertion simply could not tell a correct no-evidence case from a broken one.
+
+**Record-level acceptance, 8 of 8**, against the real artifact and its source
+snapshot (both hashes recorded privately):
+
+- the rendered rosters are exactly the snapshot rosters, both sides: 10 of ours and 8
+  of theirs, zero missing and zero unexpected APA record IDs
+- every rendered player resolves to a real player row, with the displayed name equal
+  to the stored name: zero unresolved, zero name mismatches
+- Next Send offers exactly the unplayed opponents
+- the Inspect panel's direct-meeting claim agrees with the snapshot
+- the artifact's SHA256 was unchanged by the pass, and no script errors
+
+**This closes Paul's 10-versus-8 question as an artifact question.** The snapshot holds
+exactly 10 current players for our team and exactly 8 for theirs, and the artifact
+renders exactly those sets. So the asymmetry is in the data, not in the build. What
+remains open is narrower than before: whether the snapshot itself matches APA's
+authoritative roster today. That still needs a live login, and so still needs Paul.
+
+**The non-zero branch, 7 of 7.** A two-sided oracle needs both sides exercised, which
+was the lesson of 4613fbe, so I found matrix pairs that do have meetings and checked
+them in both directions: every meeting the panel displays must match a snapshot row
+exactly on date, result, both skill levels and session; and no snapshot row of the
+same format may be absent, so a format exclusion is permitted but a silent drop is
+not. Three pairs checked -- one showed 1 of 2 rows with 1 excluded by format, one
+showed both of its 2 rows with nothing excluded, one showed 1 of 5 with 4 excluded.
+Zero same-format omissions. The spread matters: the oracle is discriminating between
+pairs rather than passing everything.
+
+That spread also confirmed cross-format separation on real data for the first time,
+rather than on a fixture. One pair's apparent discrepancy -- the snapshot holds a win
+and a loss, the panel reports 1-0 in one meeting -- resolved to the loss being a
+9-Ball game excluded from an 8-Ball matchup. Correct behaviour, and the thing
+`test_coach_dashboard_head_to_head_never_mixes_formats` exists to protect. My first
+query was what was wrong, not the product.
+
+No product code changed in this entry; it is measurement and retraction only.
+Expected-versus-actual per scenario, the retraction record and the binding hashes are
+private under `tmp/native/acceptance-40d02c6/`. PR #83 stays draft; native Excel,
+print legibility and authoritative live data remain Paul's.
