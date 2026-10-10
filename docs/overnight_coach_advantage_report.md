@@ -3425,3 +3425,28 @@ Quantified on the real page before changing anything: **42 elements carry their 
 This is the second time this session that my own measurement, not the product, produced the alarming number — and the third if the Ladies Alt scare is counted. The product keeps being right. The instrument keeps being the thing that needs checking.
 
 2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~10:4x UTC: sixth aborted login run — two more hypotheses excluded by experiment
+
+A sixth attempt appeared at 10:32 UTC, same single empty log. Six identical failures is a pattern to solve, not just to record, so I ran the experiment instead of speculating further.
+
+**Excluded: the browser being open during the refresh.** The capture tool calls `_run_uc_refresh` **inside** the `sync_playwright()` block, with `browser.close()` only afterwards, by design — the open page is what lets an expired token be renewed. That is the one condition my earlier clean diagnostic lacked. So I reproduced it exactly: launched Chromium, opened a page, and ran `refresh.main(["--mine-only"])` inside that context with an invalid token.
+
+It completed the source hash and the full 235 MB copy in **7.6 seconds**, wrote all four files, and returned cleanly. **The browser is not the problem, and the silent window is seconds, not minutes.**
+
+**Excluded earlier: the pipeline itself**, by the same method without a browser.
+
+**What the control flow proves about the token.** `_run_uc_refresh` is only called inside `if token_holder.get("token")`, and only it creates the refresh directory. A directory therefore means a token *was* captured. Pressing Ctrl-C at the "no token yet" prompt is caught, leaves the token unset, and creates nothing. So all six runs got a token and then died in a window that takes about seven seconds to traverse.
+
+**Still unverified, and I am not going to guess again.** Interruption, crash and early failure remain indistinguishable from the artifacts, exactly as GPT `f6dcb35` said. What would settle it is the console output, which is currently lost when the window goes.
+
+So the next attempt should capture it:
+
+    python tools/capture_apa_graphql.py --refresh-ultimate-coach --mine-only 2>&1 | Tee-Object -FilePath tmp\login-run.log
+
+`Tee-Object` keeps the transcript on disk whether the run ends by error, by Ctrl-C, or by the window closing. One captured transcript settles what five more blind attempts cannot.
+
+Nothing deleted; seven `tmp/refresh/` directories retained (six aborted, one resumable diagnostic).
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
