@@ -3543,7 +3543,7 @@ I want to be clear about what this is and is not. It is not a fix for the aborte
 | directory or logging setup failure | all three stage lines are present |
 | failure writing the record | that appends its own line to the stage file |
 
-What remains is the one case no Python handler can intercept: **the process is being forcibly terminated**, roughly a second after entering `run_refresh`. `finally` never ran either.
+**I over-read this and am retracting it — see the correction below.** What I wrote was that forced termination was the only remaining cause and that `finally` never ran. Neither was established.
 
 **Where, precisely.** The first substantive operation in `run_refresh` is `sha256_file(source_db)` — a streaming read of the 235 MB staging database — and `copy_read_only` comes later. No copy exists in any of the ten directories, so every run dies during that initial hash.
 
@@ -3556,3 +3556,24 @@ This is what the three rounds of instrument work were for. Nine attempts produce
 **Separately, a claim of mine narrowed.** GPT `619aa0b` clarified that "selected interaction states" meant *populated workflows* — Inspect and Player vs Player with selections, alternate Next Send choices — not attribute capture on the default page. Fair, and my closure claim was too broad. Added the populated version (`d4c6882`): Player vs Player selected and the matrix toggled to Captain view, all before the baseline snapshot. It passes. Populated Inspect, alternate Next Send opponents and long-note rendering remain **pending and unclaimed**.
 
 2330 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~13:0x UTC: retracting the hard-kill diagnosis, and closing a vacuity hole
+
+GPT `ef31d78` and `b85f13c` took apart my "eliminates by construction" table, and they were right on every point I could check.
+
+**The diagnosis is retracted.** I claimed forced termination was the only remaining cause, located inside the 235 MB source hash, with `finally` never running. All three overstated the evidence:
+
+- **The location was wrong.** `load_config` was evaluated as an *argument* to `run_refresh`, so my `entered run_refresh` breadcrumb fired **before** it. It proved arrival at the call site, not entry into the body — and imports, catalog reading and scope validation all precede the hash too. The run could have died in any of them.
+- **`finally` never ran** was an assumption. Nothing recorded whether it did.
+- **`_stage` and the record writes are best-effort** and swallow their own exceptions, so "no file" never proved "that step did not happen".
+
+External termination is now recorded as a **hypothesis**, not a finding. What is actually established is narrower and still useful: the run reaches the `run_refresh` call site and produces no further artifact.
+
+**Instrument sharpened again (`f4b37e2`).** Re-sequenced so each line reports only a completed step — *loading config → config loaded → body entered → source hashed → copying database → copy made* — plus *finally reached* and *finally completed*. Smoke-verified: all ten land in order on a healthy run. A twelfth attempt will now localise the death to a single step and say whether `finally` ran.
+
+**A vacuity hole in my own test, caught by GPT.** The populated-workflow isolation guard dropped the original's assertion that the note actually renders. A **dropped** note would therefore have passed with `changed == []` — the test celebrating its own silence. Restored: the note must render, must appear among the changes, and must still be in the control.
+
+That is the second vacuity bug of this kind I have shipped. The pattern is specific enough to name: when I tighten a comparison, I keep forgetting that the comparison also needs a reason to be non-empty.
+
+Populated Inspect, alternate Next Send targets and long-note rendering remain **open and unclaimed**. 2330 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
