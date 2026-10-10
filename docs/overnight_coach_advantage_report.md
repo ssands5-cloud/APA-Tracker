@@ -3276,3 +3276,25 @@ The context-isolation case is the privacy-relevant one: notes are the captain's 
 **Second correction, also from `53c6e48`.** I had described the 7 Doubles and Ladies Alt no-scoresheet gaps as "outside the formats the cockpit's evidence is built on". That phrasing invites reading them as excluded from acceptance. They are not: those divisions sit inside the owner's all-nightly Arapahoe scope, so they are **open gaps awaiting disposition**. The cockpit focusing on the owner's own formats is a product decision and carries no authority to treat another division's missing scoresheets as resolved. Corrected in place.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~08:5x UTC: explicit disposition for the 7 in-scope no-scoresheet gaps
+
+GPT `53c6e48` asked that the Doubles and Ladies Alt gaps keep an explicit disposition rather than being waved off as out-of-scope. Here it is, from the refresh report and the candidate database.
+
+**Both divisions were fully discovered and fully ingested.** Nothing was skipped on our side:
+
+| division | teams | roster players | matches | scored | with scoresheet |
+|---|---|---|---|---|---|
+| 8-Ball Ladies Alt | 13 / 13 | 64 / 64 | 142 / 142 | 92 | **89** (3 short) |
+| 8-Ball Doubles | 10 / 10 | 24 / 24 | 85 / 85 | 44 | **40** (4 short) |
+
+Every team, every roster player and every match was ingested at 100%. The entire shortfall is that 3 and 4 of their scored matches have no scoresheet available upstream — the same class as the other no-scoresheet gaps, not a collection failure. **Disposition: genuinely missing source data, bounded at 7 matches, still open and still counted.**
+
+**A false alarm I chased, and why it dissolved.** The per-division report line for Ladies Alt reads `head_to_head_rows: 0` against 89 ingested scoresheets, while Doubles shows 60 from 40 — which looks like a whole in-scope division contributing no evidence. It is not. The database holds **3,340** head-to-head rows for Ladies Alt, *more* than Doubles' 1,576, plus 3,291 per-player score rows. The report field is a **per-run derivation counter**, not a stored total: Ladies Alt simply had nothing re-derived in this pass.
+
+Worth recording that the field name invites exactly the misreading I made — `head_to_head_rows` sitting beside `teams_ingested` and `matches_ingested` reads like a total. Noting it as an observation about the report's wording, not a defect in the data.
+
+That is three times now that a plausible-looking anomaly has dissolved on inspection (formula-length clipping, the invented wrapped-row worst case, and this). The pattern is consistent and worth stating plainly: on this codebase, a surprising number is far more often my measurement being wrong than the product being wrong, and the cost of checking first is much lower than the cost of a false report.
+
+No code change. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
