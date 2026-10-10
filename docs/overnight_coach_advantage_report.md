@@ -3626,3 +3626,26 @@ That is the second time I have read a stale-code run as evidence about a new fix
 The recurring lesson of this whole sequence is narrow and worth keeping: nearly every wrong conclusion here came from reasoning about *when* or *how* something was measured, not from the measurement itself. Fixing the instrument has been more productive than theorising about the gap, every single time.
 
 2333 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~13:4x UTC: the first safely-readable attempt, and the gap it exposed
+
+Attempt fourteen (13:31) is the first run whose stage file states its own instrument — `stage-markers-v3` — so it is the first that can be read without guessing which code produced it. That alone was worth the previous round.
+
+    instrument stage-markers-v3
+    directory created / logging ready / loading config / config loaded
+    finally reached / finally completed
+
+`run_refresh: called` is **absent**, and that marker is now `run_refresh`'s first statement. So the function was never entered. `finally` ran. **No error record**, even though handlers now write the record before printing.
+
+So something raises between `config loaded` and `run_refresh`'s first line — a span that contained no instrumentation at all, because the arguments (`Path(args.source_db)`, `Path(args.catalog)`) were evaluated inline as part of the call. That is exactly the blind spot the run fell into, and it existed because I had put the breadcrumbs around the call rather than through it.
+
+**Closed (`00c8708`):** arguments are resolved explicitly with an `arguments resolved` marker, and **every handler now names itself** in the stage file. The next attempt will say whether a handler ran at all — which is the question attempt fourteen could not answer.
+
+**Also closed, from GPT `a823a33`, both reproduced in source:** the generic `Exception` handler and the `BaseException` details line still used raw `print`. Under a failing console the first lost its documented return-5 and the second replaced the operator's own interruption with a `UnicodeEncodeError`. Records were written either way, so this was never evidence loss — it was **the caller being told something false**, which is its own kind of harm. Both now route through `_say`, with tests asserting a generic failure still returns 5 and an interruption still surfaces as `KeyboardInterrupt` under a broken console.
+
+A healthy run now emits fourteen lines, including `arguments resolved` and `handler: token`.
+
+Two process notes worth keeping. My string-matching edits broke on a non-ASCII character for the third time today, and a handler-naming pass matched `except Exception` inside the helper functions as well as in `main`; both were caught before commit by syntax and test checks rather than by care. And the cause of the aborted runs is still **unverified** — fourteen attempts in, what has actually improved is only the instrument.
+
+2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
