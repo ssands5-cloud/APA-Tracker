@@ -735,3 +735,44 @@ class TestTheRunLeavesABreadcrumbOfHowFarItGot:
 
         stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
         assert "RuntimeError" in stages and "original failure" in stages
+
+
+class TestAConsoleFailureCannotDestroyTheFailureRecord:
+    """Attempt twelve showed stage lines through `finally` and NO error record.
+
+    The handlers printed before recording, so anything that made the print fail
+    -- a UnicodeEncodeError on a cp1252 console being the obvious candidate on
+    this machine -- took the evidence down with it and let the original
+    exception propagate. The run then looks like it vanished.
+
+    The console is the least reliable thing in the process and the record is
+    the most valuable, so the record goes first.
+    """
+
+    def test_the_record_is_written_even_when_printing_fails(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise refresh.RefreshError("synthetic stop")
+
+        def exploding_print(*args, **kwargs):
+            raise UnicodeEncodeError("charmap", "x", 0, 1, "synthetic console failure")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+        monkeypatch.setattr("builtins.print", exploding_print)
+
+        refresh.main(["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "nope.db")])
+
+        record = refresh.LAST_OUT_DIR / "refresh_error.json"
+        assert record.is_file(), sorted(f.name for f in refresh.LAST_OUT_DIR.iterdir())
+        assert "RefreshError" in json.loads(record.read_text(encoding="utf-8"))["error_type"]
+
+    def test_run_refresh_marks_that_it_was_called_before_its_prologue_can_raise(self, tmp_path, monkeypatch):
+        """A missing source DB raises in run_refresh's prologue, BEFORE the old
+        breadcrumb, so 'never entered' and 'raised early' looked identical."""
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        refresh.main(["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "missing.db")])
+
+        stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "run_refresh: called" in stages
+        assert "run_refresh: body entered" not in stages

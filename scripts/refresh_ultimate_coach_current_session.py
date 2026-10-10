@@ -305,6 +305,10 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     result entry dropped, so it is reprocessed from this segment's sync onward) until a clean pass replaces it
     or it fails again and stays an honest, reported gap -- coverage can never read "complete" while one persists.
     """
+    # First executable statement on purpose: the prologue below can raise
+    # (missing source DB, unreadable catalog, no current divisions) and those
+    # used to be indistinguishable from never reaching the function at all.
+    _stage(Path(out_dir), "run_refresh: called")
     from sqlalchemy.orm import Session
 
     from database.engine import create_db_engine
@@ -546,6 +550,23 @@ def _stage(out_dir: Path, note: str) -> None:
         pass
 
 
+def _say(message: str) -> None:
+    """Print a failure message without letting the console end the run.
+
+    The record is already on disk by the time this is called, so a console that
+    cannot encode the text -- cp1252 and a non-ASCII character is the obvious
+    case here -- must not turn a recorded, returnable failure into an unhandled
+    crash. Display is the least important thing happening at this point.
+    """
+    try:
+        print(message)
+    except Exception:
+        try:
+            print(message.encode("ascii", "replace").decode("ascii"))
+        except Exception:
+            pass
+
+
 def _record_failure(out_dir: Path, exc: BaseException, scrub: Callable[[Any], str], tb: str) -> None:
     """Write the failure record, and if even that fails leave a breadcrumb.
 
@@ -702,16 +723,16 @@ def main(argv: list[str] | None = None) -> int:
                              verify_date=args.verify_date)
     except (AccessTokenMissing, AccessTokenExpired) as exc:
         resumable = (out_dir / "refresh_progress.json").is_file()
-        print(f"APA login needed: {type(exc).__name__}. Progress is saved; nothing was promoted and the source DB "
+        _record_failure(out_dir, exc, scrub, traceback.format_exc())
+        _say(f"APA login needed: {type(exc).__name__}. Progress is saved; nothing was promoted and the source DB "
               "is untouched. Log in again and continue with:\n  python tools/capture_apa_graphql.py "
               f"--refresh-ultimate-coach --resume \"{out_dir}\"" + (f" --verify-date {args.verify_date}" if args.verify_date else "")
               if resumable else f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py "
               "--refresh-ultimate-coach and log in yourself; nothing was promoted and the source DB is untouched.")
-        _record_failure(out_dir, exc, scrub, traceback.format_exc())
         return 3
     except RefreshError as exc:
-        print(f"Refresh stopped: {exc}")
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
+        _say(f"Refresh stopped: {exc}")
         return 4
     except Exception as exc:   # anything else: record it on disk, never as a silent console-only traceback
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
@@ -726,7 +747,7 @@ def main(argv: list[str] | None = None) -> int:
         # login, so the cause is recorded here and the exception re-raised untouched:
         # identical behaviour, evidence kept.
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
-        print(f"Refresh STOPPED: {type(exc).__name__}. Nothing was promoted; the source DB is untouched.")
+        _say(f"Refresh STOPPED: {type(exc).__name__}. Nothing was promoted; the source DB is untouched.")
         print(f"  details: {out_dir / 'refresh_error.json'}")
         raise
     finally:
