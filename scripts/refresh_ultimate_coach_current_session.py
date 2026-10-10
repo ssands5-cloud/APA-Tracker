@@ -536,7 +536,11 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 _INSTRUMENT_VERSION = "stage-markers-v7"
 
 
-_TOKENISH = re.compile(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+")
+# The third segment is optional on purpose. Truncating an exception message
+# can cut a JWT's signature off, and a two-segment remainder would otherwise
+# slip through (GPT 60de108). "eyJ" is base64 for '{"', so a bare one in an
+# exception is a credential fragment, not prose.
+_TOKENISH = re.compile(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+(\.[\w-]+)?|bearer\s+\S+")
 
 
 def _scrub(text: Any) -> str:
@@ -768,7 +772,7 @@ def main(argv: list[str] | None = None) -> int:
                                  resume=bool(args.resume),
                                  verify_date=args.verify_date)
         except BaseException as call_exc:
-            _stage(out_dir, f"run_refresh raised {type(call_exc).__name__}: {str(call_exc)[:200]}")
+            _stage(out_dir, "run_refresh raised {}: {}".format(type(call_exc).__name__, _scrub(call_exc)[:200]))
             raise
         _keys = sorted(report)[:8] if isinstance(report, dict) else "n/a"
         _stage(out_dir, "run_refresh returned {} keys={}".format(type(report).__name__, _keys))

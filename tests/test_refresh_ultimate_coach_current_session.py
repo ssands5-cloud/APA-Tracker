@@ -902,3 +902,40 @@ class TestNoDiagnosticSinkLeaksCredentials:
         written = (out / "refresh_stage.txt").read_text(encoding="utf-8")
         assert "ZZSYNTHETICPAYLOAD" not in written
         assert "[redacted]" in written
+
+
+class TestTruncationCannotDefeatRedaction:
+    """GPT 60de108 (P1 remains): truncating before scrubbing re-opens the leak.
+
+    The call site passed str(exc)[:200] into _stage. A long BARE JWT cut at 200
+    characters loses its signature segment, so the two-segment remainder no
+    longer matches a three-segment JWT pattern and survives redaction.
+
+    Two defences, because either alone is brittle: scrub BEFORE truncating at
+    the call site, and widen the pattern so a two-segment eyJ prefix is still
+    treated as token-shaped. "eyJ" is base64 for '{"' -- a bare one in an
+    exception message is a credential fragment, not prose.
+    """
+
+    LONG_BARE_JWT = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                     + "ZZLONGPAYLOAD" * 30 + ".ZZTAILSIGNATURE")
+
+    def test_a_long_bare_token_is_redacted_despite_truncation(self, tmp_path, monkeypatch):
+        assert len(self.LONG_BARE_JWT) > 250, "sentinel must exceed the truncation window"
+
+        def boom(*args, **kwargs):
+            raise RuntimeError(f"upstream rejected {self.LONG_BARE_JWT} while fetching")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        refresh.main(["--out-root", str(tmp_path / "r"), "--source-db", str(tmp_path / "x.db")])
+
+        leaked = [f.name for f in sorted(refresh.LAST_OUT_DIR.iterdir())
+                  if "ZZLONGPAYLOAD" in f.read_text(encoding="utf-8", errors="replace")]
+        assert leaked == [], f"truncated token text reached: {leaked}"
+
+    def test_scrub_catches_a_two_segment_token_prefix(self):
+        truncated = self.LONG_BARE_JWT[:200]
+        assert truncated.count(".") == 1, "the sentinel must truncate to two segments"
+        assert "ZZLONGPAYLOAD" not in refresh._scrub(truncated)
