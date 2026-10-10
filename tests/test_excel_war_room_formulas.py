@@ -753,6 +753,40 @@ def test_captain_packet_evidence_rows_cannot_silently_clip_identity_text(built):
             )
 
 
+def test_captain_packet_best_sends_row_fits_its_worst_case_send_text(built):
+    """Guard, not a fix: this one already passes, unlike the evidence rows above.
+
+    The packet's best-sends cell is C:L and it DOES wrap, so the question is
+    height rather than width. md_Send1 resolves on Engine MD to
+    "{rank} {player label} - {evidence cell}", and the row shows
+    md_Send1 & " · " & md_Send2, so its worst case is two of those.
+
+    Measured maxima in the real Matchup Evidence table: player label 55 chars,
+    evidence cell 33 chars ("≈ 121-147 vs 111-106 (113 shared)"). That gives
+    ~95 per send and ~193 for the pair, which wraps to 2 lines at width 119 /
+    10pt and needs 24 of the 27 available. It fits -- but only just, so this
+    pins it: widening the label format or narrowing C:L would start clipping
+    the second send with nothing on the page to say so.
+    """
+    cp = built[CP]
+    first = _row(built, CP, "Best sends — top opportunities per opponent "
+                            "(favorable direct first, then even, then indirect)") + 1
+
+    cell = cp.cell(row=first, column=3)
+    assert cell.alignment.wrap_text, "best-sends text wraps; the risk is height, not width"
+    assert "md_Send1" in str(cell.value) and "md_Send2" in str(cell.value)
+
+    player, evidence = "x" * 55, "y" * 33          # real measured maxima
+    send = f"10. {player} — {evidence}"
+    worst = f"{send} · {send}"
+    width = sum(built[CP].column_dimensions[c].width or 8.43
+                for c in ("C", "D", "E", "F", "G", "H", "I", "J", "K", "L"))
+    need = _wrapped_lines(worst, width, 10) * 10 * 1.2
+
+    assert (cp.row_dimensions[first].height or 15) >= need, (
+        cp.row_dimensions[first].height, need, width)
+
+
 def test_tall_rows_are_top_aligned_so_values_stay_with_their_row(built):
     # Real-Excel UAT 787f6d7: Inspect's rank and SL were bottom-aligned, so in the taller rows they sat beside the
     # NEXT player's name. Every filled cell in a row taller than two lines must read from the top.
