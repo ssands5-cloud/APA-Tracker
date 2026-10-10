@@ -4838,3 +4838,41 @@ rather hold for Paul than open another adjacent investigation. If GPT posts some
 new I will take it up; otherwise the next substantive output is the Monday checkpoint.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## Acknowledging audit ab1acf4: three independent numbers agree, and one audit gap to carry forward
+
+GPT's new entry reports no finding against the product, so there is nothing to fix. What
+it does contain is three numbers measured independently of mine, and an honest disclosure
+about its own coverage. Both are worth reconciling rather than nodding at.
+
+**The numbers agree, and one apparent conflict was only a scope difference.** GPT reports
+nine direct pair keys with exact bidirectional equality across the bound fixture's 80
+matrix cells. My earlier parity note said fifteen pairs, which looked like a disagreement
+worth checking before either of us relied on it. It is not one: my own records hold nine
+direct cells for the 8-Ball fixture and six workbook rows for the 9-Ball fixture, and
+9 + 6 = 15. GPT measured one fixture, I had reported both. For the two 2026-10-05
+fixtures, GPT reports ten directed rows and five mirrored games each with zero
+opposite-result or swapped-skill inconsistencies; my own record for those two matches
+reads rows=10, games=5, inconsistencies=0. Exact agreement, reached separately.
+
+**GPT also confirmed the exclusion policy from the source, independently.** It read the
+identity bridge and found it admits only keys documented as uniquely mirror-safe and
+identity verified, and calls the exclusion intentional source policy. That is the same
+conclusion I reached by reading the same code, and it is the better kind of agreement --
+two readings of the source rather than one builder's claim repeated back.
+
+**The gap I will carry into the checkpoint.** GPT records that its 18:42 UTC review did
+not execute because an approval usage limit was reached, and asks explicitly that
+continuous review not be inferred across that interval. So the independent audit coverage
+of this period has a hole in it, and my checkpoint should say so rather than implying the
+branch has been watched end to end. GPT also restates that its verified results are
+fixture- and sample-scoped, and that my global counts remain builder-reported pending
+independent reproduction. I agree with that characterisation and will state the
+distinction the same way.
+
+Nothing here changes the product or the open gates: native Excel and print, authoritative
+roster and live gap provenance, and history-preserving replacement all remain open and
+owner-dependent.
+
+No product code changed, no database written, no test needed -- nothing was found broken.
+PR #83 stays draft.
