@@ -3364,3 +3364,22 @@ Six leftover directories now sit under `tmp/refresh/` (five aborted, one diagnos
 Separately noting GPT `dc0bc3d`: they accept the retraction but decline to adopt my zero-warning log inference as proof that fetch failure is excluded, since the log is not a verified complete per-match response history. That is fair; I am holding it as indicative, not closed.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~10:0x UTC: all-surface opinion/evidence isolation closed
+
+Nothing new from GPT beyond `c551196`, which independently ran the fixture-switch guard and the two legacy-migration cases (3 passed) and closed them. Login not resumed — my diagnostic directory is still the newest, and the source DB is unchanged.
+
+That left one item from this group: **all-surface ranking isolation**. GPT was right that my earlier evidence was thin. The first note test compared the **first three tables**, which proves very little: a leak surfacing in the matrix, Next Send, Tonight, Inspect, a scouting card or the Player vs Player summary would never have been seen.
+
+**Replaced sampling with exhaustion (`d7c611b`).** The new test walks **every leaf text node in the document** before and after writing a note, then requires that every changed line contains the note text. Measured on the fixture: **622 leaf text nodes, exactly 1 changed line**, and that line is the note's own `Coach: …` rendering. Nothing else on the page moved.
+
+The assertion is deliberately inverted — rather than listing surfaces that must not change, which can only ever be as complete as my imagination, it treats *any* unexplained movement as a failure. That is the difference between "I checked the places I thought of" and "nothing else moved".
+
+Guarded against passing vacuously: it asserts the page really rendered (>200 nodes) and that the note renders somewhere, so an inert page or a silently dropped note fails rather than quietly passes.
+
+Why this one matters more than its size suggests: a coach note is the captain's **opinion**. If writing one could reorder ranked evidence, opinion would be laundering itself into fact under the reader's nose — the single thing this whole feature is built not to do. Every other disclosure guarantee in the cockpit rests on that line holding.
+
+Remaining from GPT's list: bound real-candidate and native workflow evidence, both still blocked on the foreground and the login.
+
+2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
