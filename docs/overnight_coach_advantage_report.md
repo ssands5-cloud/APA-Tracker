@@ -3041,3 +3041,26 @@ Going forward I will describe league data structurally (counts, roles, ids-as-pl
 **What this does and does not prove.** It explains the 10 and identifies which rows are suspect. It does **not** prove those rows should be retired -- only an authoritative roster fetch can say that, and that needs Paul's login. `ec1f5ad` would retire exactly such a row on the next successful sync *if* APA's roster no longer lists the member, and `b584074` ensures it won't fire against a partial or malformed roster response. So the fix is in place and targeted at this, but **unexercised against live data, and real roster acceptance stays open and unverified.**
 
 Scoped GPT source closures remain source-scope only; none of this is production approval. PR #83 stays draft.
+
+
+### 2026-10-09 (later): the 105 refresh gaps characterised -- identity splits quantified, deliberately not "fixed"
+
+Paul's priority 2 asked to investigate the gaps and "retry safely where permitted; retain unresolved gaps visibly." Breakdown of the 105 in `refresh-20261009-035923Z`:
+
+| count | kind |
+|---|---|
+| 83 | matches with unresolved scoresheet identities (**138** individual unresolved instances: 50 matches with 1, 18 with 2, 9 with 3, 5 with 4, 1 with 5) |
+| 13 | division-level "completed match(es) have no scoresheet" |
+| 9 | match fetch/denied -- root-caused and fixed in `ed758a2`, unexercised against live data |
+
+**What an "unresolved identity" actually is, measured database-wide** (accumulated across all history, a wider scope than this one run): APA's scoresheets use a different id space than its roster queries, so `resolve_scoresheet_identities` maps scoresheet ids onto canonical roster ids by team-scoped name match, and refuses to map when it cannot be certain. The unmapped records are persisted honestly under their own ids rather than merged on a guess. There are **782** such records, owning **1,917** of **845,588** `player_matches` rows -- **0.23%**. Splitting them by how many canonical records share their name:
+
+- **418 have exactly one canonical name match** (824 rows) -- the only group where a split *might* be recoverable.
+- **241 have several canonical name matches** (772 rows) -- genuinely ambiguous. One sampled record matched two different canonical records; merging would have picked a person at random. Refusing is correct.
+- **123 have no canonical name match at all** (321 rows) -- substitutes and one-off players with no roster record. Correctly kept under their own identity.
+
+**Deliberately proposing no fix here, and that is the finding.** The 418 is an *upper bound on potentially recoverable splits*, not a defect count. The resolver is team-scoped and current-roster-scoped on purpose; a globally-unique name is still not proof that a scoresheet entry and a roster entry are the same human, and this league's data demonstrably contains distinct people sharing a name (that is what the 241 are). Loosening resolution to capture the 418 would trade an honest, visible gap for silent, unverifiable conflation of two real people's records -- strictly worse, and contrary to the "never guess" rule this project and GPT's audits have both repeatedly upheld. These gaps are already reported per match and surfaced in the refresh report, which is what "retain unresolved gaps visibly" asks for.
+
+**Effect on analytics, stated honestly:** evidence attached to an unresolved id is invisible to views keyed on canonical ids, so a real past meeting can read as "no direct evidence" rather than a recorded result. That is a real limitation, it is bounded at 0.23% of rows, and it errs toward *understating* evidence rather than inventing it. Such a pairing renders as category `X` "Insufficient evidence" with the reason cell "No evidence" (`analytics/ultimate_coach_war_room.py:59,92`) -- verified against the source, not paraphrased. That wording claims no more than is known, but note it is indistinguishable from a pairing that genuinely never met: the UI does not say "evidence may exist under an unresolved identity". Nothing currently surfaces that distinction, and that is the one honest shortfall this investigation found.
+
+No code changed. Real data acceptance stays open; scoped source closures are not production approval. PR #83 stays draft.
