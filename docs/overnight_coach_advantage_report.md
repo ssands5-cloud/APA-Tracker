@@ -4541,3 +4541,56 @@ had already made, and I would not have noticed if I had stopped at reporting the
 finding instead of reading the path that consumes it.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## The 227 coverage issues decomposed, and the duplicate question closed absolutely
+
+Last entry I said the duplicates had no user-visible effect in anything verified, but
+scoped it: ten analytics modules read `player_matches` and I had not audited them.
+Closing that, because a scoped claim about whether a captain sees wrong numbers is not
+worth much.
+
+**None of those ten modules is in this artifact's path.** The Ultimate Coach builders
+import only `ultimate_coach_*` analytics; `player_stats`, `team_stats`,
+`player_vs_player`, `matchups` and the rest are not reached. One
+`ultimate_coach_*` module does read the table -- the data contract -- so that is the
+only path that matters.
+
+**It fails closed, which is the right behaviour.** When more than one PlayerMatch row
+exists for a single player/match scope, the contract does not pick one and does not
+average them. It leaves the scope out of its index entirely and records a
+`PLAYER_MATCH_AMBIGUITY` coverage issue. So the nine duplicates cannot produce a wrong
+number anywhere in this artifact; they produce nine disclosed issues and nine omitted
+scopes. That is a small, stated data loss instead of a quiet error, and it closes the
+question absolutely rather than scoped.
+
+**The manifest's 227 coverage issues, decomposed for the first time.** The contract
+emits three categories, and on this snapshot they land as:
+
+- `PLAYER_MATCH_AMBIGUITY`: 9 -- exactly the nine duplicate groups, all Paul's own row
+  on the nine failed-fetch matches
+- `H2H_MATCH_MISSING`: 0 -- no head-to-head row references a missing match. Worth
+  noting, because the ingest docstring records that exact orphaned-foreign-key bug as
+  having shipped once before; it is absent here
+- `GAME_MIRROR_STATUS`: 218 -- the remainder
+
+**The mirror category is duplicated head-to-head rows, not missing ones.** No
+head-to-head row in the snapshot lacks its mirror: that count is zero, so none of the
+218 is a `MISSING_REVERSE` or `REVERSE_ONLY`. What does exist is 388 directional groups
+carrying a duplicate row, 388 surplus rows in total. The contract flags those as
+mirror-status issues while still using them, since the two sides agree.
+
+**And none of the 388 is in a match of Paul's four teams.** That is the part that
+matters for him, and it agrees with two earlier independent results: his 32 matches and
+158 games showed zero mirror inconsistencies, and the 160-pair understatement pass
+across both formats found zero discrepancy in either direction. Three different routes
+to the same conclusion.
+
+**One limit stated rather than papered over.** I identified the 218 as the mirror
+category by elimination -- the other two categories are 9 and 0 against a manifest
+total of 227 -- and then explained it with the 388 duplicate groups I measured
+directly. I did not reproduce the exact arithmetic from 388 directional groups to 218
+unordered issues, which would mean reimplementing the contract's pair grouping and its
+signature normalisation. The category and its cause are measured; the precise mapping
+between those two counts is inferred.
+
+No product code changed, no database written. PR #83 stays draft.
