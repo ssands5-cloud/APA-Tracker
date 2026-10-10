@@ -217,7 +217,7 @@ def test_refresh_writes_a_copy_and_reports_monday(setup, monkeypatch):
     assert c["totals_after"]["matches"] == 4                         # the Spring 2025 history is kept
     assert report["verify"]["viewer_fixtures"] == [{"match_id": "M2", "format": "8-Ball Open", "status": "COMPLETED",
                                                     "is_scored": True, "home_score": 10.0, "away_score": 5.0,
-                                                    "scoresheet_rows": 2, "viewer_rows": 1}]
+                                                    "is_bye": False, "scoresheet_rows": 2, "viewer_rows": 1}]
     assert report["gaps"] == [] and report["coverage"] == "complete"
     saved = json.loads((out / "refresh_report.json").read_text(encoding="utf-8"))
     assert saved["changes"] == c and "Viewer" not in json.dumps(saved)   # ids and counts only, no names
@@ -1005,3 +1005,94 @@ class TestAByeIsNotACoverageGap:
         assert snap["matches"]["BYE"]["is_bye"] is True
         assert snap["matches"]["REAL"]["is_bye"] is False
         assert refresh.diff({"matches": {}, "totals": {}}, snap)["scored_matches_without_scoresheet"] == ["REAL"]
+
+
+class TestAByeIsNotFreshnessEvidence:
+    """The sibling of TestAByeIsNotACoverageGap, found by asking where else a
+    bye is treated as a played match.
+
+    has_real_evidence() was written for audit 7a4f8b5, where APA flagged a
+    match scored with NULL team scores, so it requires both scores to be
+    present. A bye passes that test: APA scores byes with a forfeit shape
+    (0-10 for 8-Ball, 0-70 for 9-Ball), which is non-null. Measured in
+    refresh-20261009-035923Z: all four past byes pass has_real_evidence, and
+    the latest bye passing it is 2026-08-24. It is latent there only because
+    a real match on 2026-10-07 is later -- but the same teams have byes on
+    2026-10-26 and 2026-11-01, so a refresh run just after a bye week would
+    headline a freshness date backed by a match nobody played. That is the
+    exact failure 7a4f8b5 fixed, reached through a different door.
+
+    The viewer-fixture gap checks have the same blind spot: a bye on the
+    verified date is scored with no scoresheet rows, so it would be reported
+    as a problem when it is simply a week off."""
+
+    def test_a_bye_does_not_become_the_latest_scored_date(self):
+        after = {"matches": {
+            "REAL": {"date": "2026-10-07", "status": "COMPLETED", "is_scored": True, "home_score": 9.0,
+                     "away_score": 6.0, "scoresheet_rows": 10, "is_bye": False},
+            "BYE": {"date": "2026-11-01", "status": "COMPLETED", "is_scored": True, "home_score": 0.0,
+                    "away_score": 10.0, "scoresheet_rows": 0, "is_bye": True},
+        }, "totals": {}}
+
+        result = refresh.diff({"matches": {}, "totals": {}}, after)
+
+        assert result["latest_scored_date_after"] == "2026-10-07"
+
+    def test_the_before_side_also_ignores_a_bye(self):
+        before = {"matches": {
+            "BYE": {"date": "2026-11-01", "status": "COMPLETED", "is_scored": True, "home_score": 0.0,
+                    "away_score": 70.0, "scoresheet_rows": 0, "is_bye": True},
+            "REAL": {"date": "2026-09-20", "status": "COMPLETED", "is_scored": True, "home_score": 9.0,
+                     "away_score": 6.0, "scoresheet_rows": 10, "is_bye": False},
+        }, "totals": {}}
+
+        result = refresh.diff(before, {"matches": {}, "totals": {}})
+
+        assert result["latest_scored_date_before"] == "2026-09-20"
+
+    def test_verify_fixtures_reports_whether_a_fixture_is_a_bye(self, tmp_path):
+        db = tmp_path / "v.db"
+        con = sqlite3.connect(db)
+        con.executescript(
+            "CREATE TABLE matches (id INTEGER PRIMARY KEY, external_id TEXT, home_team_id TEXT, away_team_id TEXT,"
+            " match_date TEXT, status TEXT, format TEXT, session_name TEXT, home_score REAL, away_score REAL,"
+            " is_scored INT, is_bye INT);"
+            "CREATE TABLE players (id INTEGER PRIMARY KEY, external_id TEXT);"
+            "CREATE TABLE player_matches (id INTEGER PRIMARY KEY, match_id INT, player_id INT);"
+            "CREATE TABLE player_team_history (id INTEGER PRIMARY KEY, player_id INT, team_external_id TEXT,"
+            " session_name TEXT);"
+            "INSERT INTO players VALUES (1, 'V1');"
+            "INSERT INTO player_team_history VALUES (1, 1, 'T1', 'Fall 2026');"
+            "INSERT INTO matches VALUES (1, 'BYE', 'T1', 'T9', '2026-11-01T11:00:00-06:00', 'COMPLETED',"
+            " 'EIGHT', 'Fall 2026', 0.0, 10.0, 1, 1);")
+        con.commit()
+        con.close()
+
+        rows = refresh.verify_fixtures(db, "V1", "2026-11-01", {"Fall 2026"})
+
+        assert len(rows) == 1 and rows[0]["match_id"] == "BYE"
+        assert rows[0]["is_bye"] is True
+
+    def test_a_bye_on_the_verified_date_is_not_reported_as_a_gap(self, setup, monkeypatch):
+        source, catalog, out = setup
+        con = sqlite3.connect(source)
+        con.execute("INSERT INTO player_team_history (player_id, is_current, team_external_id, team_name,"
+                    " session_name) VALUES (1, 1, 'T1', 'Ours', 'Fall 2026')")
+        con.execute("INSERT INTO matches (id, external_id, home_team_id, away_team_id, home_team_name,"
+                    " away_team_name, match_date, status, format, session_name, home_score, away_score,"
+                    " is_scored, is_bye) VALUES (9, 'BYE9', 'T1', 'T2', 'Bye', 'BYE',"
+                    " '2026-10-19T19:00:00-06:00', 'COMPLETED', '8-Ball Open', 'Fall 2026', 0, 10, 1, 1)")
+        con.commit()
+        con.close()
+        monkeypatch.setattr("scraper.auth_classification.call_with_confirmed_denial_retry",
+                            lambda config, fetch: fetch())
+
+        report = refresh.run_refresh(
+            {"database": {}}, source_db=source, catalog_path=catalog, out_dir=out.parent / "out-bye",
+            verify_member=VIEWER, verify_date="2026-10-19", sync=_fake_sync([]),
+            rebuild_matchups=lambda db: [], schedule=_schedule, scoresheet=_sheets(), resolve=RESOLVED,
+            now=lambda: datetime(2026, 10, 20, 9, 0, tzinfo=timezone.utc))
+
+        assert report["verify"]["viewer_fixtures"], "the bye must still be disclosed as the viewer's fixture"
+        assert not [g for g in report["gaps"] if "BYE9" in g], \
+            f"a bye is a week off, not a coverage problem: {[g for g in report['gaps'] if 'BYE9' in g]}"

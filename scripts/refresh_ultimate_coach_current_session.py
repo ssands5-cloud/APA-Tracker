@@ -134,7 +134,12 @@ def diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     # actual accepted score evidence, not the raw flag alone, or it advertises a date nothing backs. The
     # match itself is still disclosed on its own via scored_without_sheet/scored_matches_without_scoresheet,
     # unaffected by this -- this only changes what counts toward the "latest" date.
-    has_real_evidence = lambda v: v["is_scored"] and v["date"] and v["home_score"] is not None and v["away_score"] is not None  # noqa: E731
+    # A bye is excluded here for the same reason it is excluded from the gap above:
+    # APA scores byes with a forfeit shape (0-10, 0-70), which is non-null, so the
+    # null-score test 7a4f8b5 added does not catch them. A refresh run just after a
+    # bye week would otherwise headline a freshness date nobody played.
+    has_real_evidence = lambda v: (v["is_scored"] and v["date"] and v["home_score"] is not None  # noqa: E731
+                                   and v["away_score"] is not None and not v.get("is_bye"))
     scored_dates = sorted(v["date"] for v in a.values() if has_real_evidence(v))
     return {
         "date_range_checked": [dates[0], dates[-1]] if dates else None,
@@ -159,6 +164,7 @@ def verify_fixtures(db_path: Path, member_id: str, on_date: str, sessions: set[s
         rows = con.execute(
             "WITH day AS (SELECT * FROM matches WHERE substr(match_date,1,10) = ?) "
             "SELECT m.external_id, m.format, m.status, m.is_scored, m.home_score, m.away_score,"
+            " m.is_bye,"
             " (SELECT COUNT(*) FROM player_matches pm WHERE pm.match_id = m.id),"
             " (SELECT COUNT(*) FROM player_matches pm JOIN players p ON p.id = pm.player_id"
             "   WHERE pm.match_id = m.id AND p.external_id = ?) "
@@ -170,7 +176,8 @@ def verify_fixtures(db_path: Path, member_id: str, on_date: str, sessions: set[s
     finally:
         con.close()
     return [{"match_id": str(r[0]), "format": r[1], "status": r[2], "is_scored": bool(r[3]), "home_score": r[4],
-             "away_score": r[5], "scoresheet_rows": r[6], "viewer_rows": r[7]} for r in rows]
+             "away_score": r[5], "is_bye": bool(r[6]), "scoresheet_rows": r[7], "viewer_rows": r[8]}
+            for r in rows]
 
 
 RESULT_FIELDS = ("result", "points_earned", "skill_level", "team_id", "eight_on_break", "eight_break_and_run",
@@ -527,6 +534,8 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
         if not report["verify"]["viewer_fixtures"]:
             gaps.append(f"no fixture for the viewer's current teams on {verify_date}")
         for f in report["verify"]["viewer_fixtures"]:
+            if f.get("is_bye"):
+                continue   # still disclosed as the viewer's fixture; a week off is not a gap
             if not f["is_scored"]:
                 gaps.append(f"viewer fixture {f['match_id']} on {verify_date} is still not scored in APA's data")
             elif not f["scoresheet_rows"]:
