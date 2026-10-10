@@ -4328,3 +4328,70 @@ opposite of the truth. Resolving the columns correctly gives 13.
 Scope: this fixes gap reporting, not data. Nothing was re-fetched and no database was
 written. The real gap count for this refresh is 101 rather than 105, and the
 no-scoresheet class is 7 real matches rather than 13 strings. PR #83 stays draft.
+
+## Two more places a bye was treated as a played match -- and the UI was fine all along
+
+Having found one bye defect, the obvious next question was where else a bye is read
+as a played match. Two more, both in the same file, and one good-news result.
+
+**The UI was never affected, and I was wrong to suspect it.** I checked whether Match
+Day offers a bye week as a plannable matchup, because the snapshot keeps real team ids
+on bye rows while overwriting the names to Bye and BYE, so a date lookup could in
+principle resolve a real-looking opponent. It does not. Selecting either of his 8-Ball
+team's bye dates clears the War Room -- no matrix, no send chips, no teams bound --
+while a control date binds a real fixture with all 80 cells. And the page says so
+plainly: "Bye - no opponent this week. Nothing to plan for this date.", "Not
+applicable (bye)", and a note that a bye week is "a real schedule slot with no
+opponent, not missing data". The control date mentions a bye nowhere.
+
+My first probe reported the opposite, because I read one element's text truncated to
+300 characters and the bye wording lives further down. That is the fourth false alarm
+this stretch that checking caught before it reached a report, and it matters here
+because it bounds the defect I had just fixed: that one was reporting-only and never
+user-facing.
+
+**Found: a bye can become the headline freshness date.** `has_real_evidence` was added
+for audit 7a4f8b5, where APA flagged a match scored with null team scores, so it tests
+that both scores are present. APA scores byes with a forfeit shape -- 0-10 for 8-Ball,
+0-70 for 9-Ball -- which is not null, so every bye passes it. All four past byes in
+this snapshot pass, the latest being 2026-08-24. It is latent today only because a real
+match on 2026-10-07 is later. But the same four teams have byes on 2026-10-26 and
+2026-11-01, so a refresh run just after a bye week would advertise a freshness date
+backed by a match nobody played: exactly the failure 7a4f8b5 fixed, reached through a
+different door.
+
+**Found: a bye on the verified date is reported as a coverage problem.**
+`verify_fixtures` never returned the flag, so the viewer-fixture checks saw a match
+scored with no scoresheet rows and said so. Reproduced before fixing, with the gap
+string it actually emits: "viewer fixture BYE9 on 2026-10-19 is scored but has no
+scoresheet rows". A bye is a week off, not a problem.
+
+**Fixed, red before green.** Byes are excluded from `has_real_evidence` on both the
+before and after sides, `verify_fixtures` now reports `is_bye`, and the viewer-fixture
+loop skips byes while still disclosing them as fixtures. Four new tests, all four red
+for the right reasons first, and the earlier guard tests stayed green so neither fix
+over-reached. Verified on the real snapshot afterwards: the freshness date is unchanged
+at 2026-10-07, no bye appears in the no-scoresheet gaps, and the old rule would have
+admitted a bye as late as 2026-08-24.
+
+**A note on the correction I made last entry.** The comment immediately above the
+query I just edited already states that `matches.home_team_id` and `away_team_id` hold
+the APA team external id. My wrong join was not an undocumented trap; the answer was
+written three lines from the code I was reading. Reading less and inferring more is the
+actual habit to fix.
+
+**One regression caught by the full suite, and worth recording.** The first full run
+after this fix came back 1 failed, 2352 passed. An existing test asserts exact
+dictionary equality on the viewer-fixture rows, so adding `is_bye` to them broke it.
+Not a product regression -- the field addition is deliberate and tested -- but the
+assertion had to learn the new field, and it still compares the whole dictionary
+rather than being loosened to ignore it. Re-ran the full suite afterwards rather than
+trusting the targeted file.
+
+Worth noting how it surfaced: the shell wrapper around that run reported "exited with
+code 0" while pytest's own exit code was 1. Capturing pytest's code separately is the
+habit that caught it, and it exists because a grep pipeline's exit code once fooled me
+into reporting a clean run that was not.
+
+Scope: reporting and freshness accuracy only. No data was re-fetched, no database
+written, nothing deleted. PR #83 stays draft.
