@@ -532,7 +532,7 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 # finishes logging in, which can be many minutes after the process started and
 # imported this module. Directory mtime therefore says nothing about which code
 # ran, and twice now I have read a stale-code run as evidence about a new fix.
-_INSTRUMENT_VERSION = "stage-markers-v5"
+_INSTRUMENT_VERSION = "stage-markers-v6"
 
 
 def _stage(out_dir: Path, note: str) -> None:
@@ -735,7 +735,16 @@ def main(argv: list[str] | None = None) -> int:
         # handler fired, which no ordinary control flow explains. This inner
         # guard names whatever crosses this exact line, including the case
         # where the call returns without the body having run.
-        _stage(out_dir, "calling run_refresh")
+        # Attempt sixteen staged "run_refresh returned dict" with NONE of the
+        # body markers and no copied database. A real function cannot return
+        # without running its first statement, so the next question is whether
+        # this name resolves to the function I instrumented. Identity, not
+        # inference: deduction has been wrong five times in this hunt.
+        _code = getattr(run_refresh, "__code__", None)
+        _where = "{}.{} from {}:{}".format(
+            getattr(run_refresh, "__module__", "?"), getattr(run_refresh, "__qualname__", "?"),
+            getattr(_code, "co_filename", "?"), getattr(_code, "co_firstlineno", "?"))
+        _stage(out_dir, "calling run_refresh -> " + _where)
         try:
             report = run_refresh(config, source_db=source_path, catalog_path=catalog_path_arg,
                                  out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
@@ -744,7 +753,8 @@ def main(argv: list[str] | None = None) -> int:
         except BaseException as call_exc:
             _stage(out_dir, f"run_refresh raised {type(call_exc).__name__}: {str(call_exc)[:200]}")
             raise
-        _stage(out_dir, f"run_refresh returned {type(report).__name__}")
+        _keys = sorted(report)[:8] if isinstance(report, dict) else "n/a"
+        _stage(out_dir, "run_refresh returned {} keys={}".format(type(report).__name__, _keys))
     except (AccessTokenMissing, AccessTokenExpired) as exc:
         _stage(out_dir, "handler: token")
         resumable = (out_dir / "refresh_progress.json").is_file()
