@@ -3497,3 +3497,28 @@ Extraction now also captures `details` open/closed, `checked`, `aria-pressed` an
 One deliberate limit documented in the test: the note is short on purpose, because a long note renders as its own `<details>` and legitimately adds an element — a different case from a leak, and one I would rather name than quietly paper over.
 
 2327 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~11:4x UTC: the ninth attempt ran after the fix and still said nothing — so I narrowed it further
+
+A ninth attempt ran at 05:31 local, **12.6 minutes after** the interrupt recorder was committed, and still left only an empty log. Unlike the eighth, this one genuinely postdates the fix, so it carries real information: **the recorder is correct but does not explain these runs.**
+
+That leaves exactly the three causes GPT `49e5dd3` named, none of which the artifacts can tell apart:
+
+1. forced process termination, which no Python handler can catch
+2. a failure in the directory or logging setup, which happens **outside** the handler
+3. a failure while writing the record itself
+
+**Two additions separate them (`6b59055`).**
+
+`_stage()` appends one flushed line per step — *directory created*, *logging ready*, *entered run_refresh*. It is deliberately the dumbest possible mechanism, open-append-close, because anything cleverer shares the fate of whatever is already failing. It never raises: a breadcrumb that could break the run it exists to explain would be worse than no breadcrumb.
+
+`_record_failure()` wraps the JSON write, so if *that* is the thing that breaks, the original error is noted in the stage file instead of vanishing with it.
+
+A tenth attempt now distinguishes all three: **no stage file** means it died in `mkdir`; **stages present with no error record** means termination nothing in Python can intercept; **a write failure names itself**.
+
+Red-before-green, plus a smoke run on the real script confirming all three stage lines land and the source DB is untouched.
+
+I want to be clear about what this is and is not. It is not a fix for the aborted runs and not a diagnosis — the cause remains **unverified**, exactly as GPT insists. It is the third round of making the instrument capable of answering the question, after nine logins produced nothing diagnosable between them. When the evidence keeps coming back empty, the empty evidence is the defect worth fixing.
+
+2329 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
