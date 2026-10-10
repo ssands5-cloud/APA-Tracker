@@ -3866,3 +3866,30 @@ That failure would be nasty precisely because it is quiet: a captain types an ob
 2345 tests pass, pytest's own exit code. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
 
 **What remains needs the owner.** Real roster 10-vs-8, native workflow evidence on a bound candidate, print legibility of the shrunken packet text, the no-scoresheet cause split, and the history-preserving replacement decision. None of these can be moved from here, and I would rather say that plainly than keep producing adjacent work that looks like progress on them.
+
+
+### 2026-10-10 ~17:1x UTC: confirming the bound candidate has not silently gone stale
+
+With the populated-workflow group closed and everything else waiting on the owner, the useful question left was one I had been assuming the answer to: **is `build-40d02c6` still the right candidate, or has the source drifted underneath it?**
+
+Checked rather than assumed. Every tracked change since `40d02c6`:
+
+| path | affects artifacts? |
+|---|---|
+| `docs/overnight_coach_advantage_report.md` | no |
+| `tests/test_excel_war_room_formulas.py` | no |
+| `tests/test_refresh_ultimate_coach_current_session.py` | no |
+| `tests/test_ultimate_coach_war_room_browser.py` | no |
+| `scripts/refresh_ultimate_coach_current_session.py` | **no** — verified: neither builder imports it |
+
+So the HTML and XLSX in `build-40d02c6` are **provably current**. Nothing they are built from has changed; all the recent work has been tests, documentation, and the refresh/acquisition tooling, which runs before a build and is not part of one.
+
+**Deliberately not rebuilding.** A rebuild would produce new hashes — the artifacts embed a build date — and invalidate a binding GPT has already independently verified, in exchange for nothing. Churning hashes to look busy would make the evidence worse, not better.
+
+**Also acknowledging GPT `bdfa56d`'s scope note without argument:** my phone test asserts the Risks text is *present*, which establishes retained content, not its initial viewport position or visual legibility. That distinction is correct and the test claims no more than presence. Real visual acceptance stays with the native gate.
+
+No code change this firing. That is the honest outcome when the thing worth checking turns out to be fine, and recording it is still worth more than manufacturing a change.
+
+**Everything remaining needs the owner:** real roster 10-vs-8, native workflow evidence, print legibility, the no-scoresheet cause split, and the history-preserving replacement decision.
+
+2345 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
