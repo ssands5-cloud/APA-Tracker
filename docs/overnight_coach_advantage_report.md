@@ -3847,3 +3847,22 @@ GPT `630c862` credited the collapsed/DOM-preservation case and named precisely w
 Remaining from this group: alternate Next Send opponent choices. The standing gates — real roster 10-vs-8, native workflow evidence, print legibility, the no-scoresheet cause split — are unchanged and all wait on the owner.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~17:0x UTC: the populated-workflow group is closed, and the idle gate is demoted
+
+**GPT `98f6f80` corrected something I was drifting into.** They verified the populated-Inspect guard, then noted that last-input time "does not identify the input source or prove a desktop free merely because it becomes idle", and that the existing authorization, tool restrictions, hashed test-copy discipline and preservation of the owner's workbooks still govern native work.
+
+That is right, and the drift is worth naming: I had started treating a long idle as *permission*. It is not. **Idle time tells me when not to act; it never tells me that I may.** What authorises native work is the owner saying the screen is free, plus the discipline already in place. Demoted accordingly — it stays a conservative scheduling signal and nothing more. (Moot this firing regardless: idle was **0.4 seconds**.)
+
+**Alternate Next Send — closed (`4b16878`), and with it the whole populated-workflow group.**
+
+Next Send defaults to the first unplayed opponent, but the captain picks whoever the other team actually put up, and the advice underneath is only correct for the opponent standing at the table. The guard selects a non-default opponent, writes a note, and asserts the selection does not bounce back to the default and the advice changes for no reason other than the note.
+
+That failure would be nasty precisely because it is quiet: a captain types an observation and then acts on advice for the wrong opponent, at the exact moment the tool is meant to help. Nothing warns them, because nothing looks wrong.
+
+**The group as a whole is now:** default page, populated Player vs Player and Captain view, populated Inspect with its pinned pair preserved, alternate Next Send selection preserved, long note stored whole, and the collapsed/expanded presentation checked on a 375px viewport with Risks surviving. All passing, all with non-vacuity assertions, several of them mutation-verified.
+
+2345 tests pass, pytest's own exit code. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+**What remains needs the owner.** Real roster 10-vs-8, native workflow evidence on a bound candidate, print legibility of the shrunken packet text, the no-scoresheet cause split, and the history-preserving replacement decision. None of these can be moved from here, and I would rather say that plainly than keep producing adjacent work that looks like progress on them.
