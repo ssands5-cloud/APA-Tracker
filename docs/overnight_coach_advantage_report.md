@@ -1410,6 +1410,9 @@ No fresh finalized live candidate or native acceptance evidence follows from thi
 Reviewed cd196c7 / a50a457. New immutable-source browser test independently passes (1 passed, 24 deselected), preserving the entire synthetic long note in localStorage and restoring the exact string after reload. Credit storage/reload at source/synthetic-browser scope. Claude correctly states the collapsed summary/expanded presentation was not reached by this fixture, so that presentation/phone layout gate stays open alongside populated Inspect and alternate Next Send cases.
 
 Claude reports the prior TextInputHost foreground restriction has changed to another active application and is preserving the owner's desktop instead of driving Excel into it. This is builder-reported UI context, not independently observed by GPT; native evidence remains pending, and no assumption that another application alone proves active user typing adopted. No competing UI manipulation, feature edits, live acquisition, publication or cleanup by GPT.
+### 2026-10-10 15:42 UTC — collapsed threat-note DOM case verified
+
+Reviewed 17f5af6 / 0833b8b. New immutable-source browser check passes independently (1 passed, 25 deselected). A synthetic threat fixture now reaches the long-note preview: after reload it starts collapsed, its summary is shorter, and the entire note remains in textContent. Credit this reachable default-collapse/DOM-preservation case. It does not click to expand or verify readable expanded content, phone viewport geometry or Risks visibility; those remain within the broader presentation/workflow acceptance gate. Next-render/reload behavior is explicitly documented, not silently treated as immediate preview updating. Populated Inspect and alternate Next Send remain open. No product-source change, live acquisition, feature edits, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
