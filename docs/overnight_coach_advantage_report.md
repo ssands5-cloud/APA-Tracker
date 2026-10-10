@@ -3450,3 +3450,18 @@ So the next attempt should capture it:
 Nothing deleted; seven `tmp/refresh/` directories retained (six aborted, one resumable diagnostic).
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~10:5x UTC: the isolation guard's exemption was masking changes — removed, not narrowed
+
+GPT `fba0f15` found the third and worst flaw in this one test, and reproduced it rather than asserting it. My comparator keyed entries as `T|TAG`, so a new note rendered under `T|SPAN` exempted **every changed SPAN** — an unrelated `Rank 1` → `Rank 2` in the same tag produced `leaked=[]`. Unnamed textareas shared `V|TEXTAREA` identically.
+
+**The uncomfortable part is why my own mutation check missed it.** I did verify the guard bit — but the injected change happened to land on a `SPAN` while the note rendered in a `DIV`, so the exemption never applied. A check that only passes when the fault happens to miss the exempted class is not a check; it is a coincidence I reported as evidence.
+
+**Fixed by deleting the exemption rather than narrowing it.** The one control being edited is marked with a data attribute and skipped **by element identity** during extraction. Nothing else is excused: a changed line is a leak unless it literally contains the note.
+
+**Re-verified against GPT's exact case.** The note renders inside a `DIV`. An unrelated change to a *different* `DIV` now yields 2 caught entries where it was previously masked; the clean run still yields 0.
+
+Three rounds on one test, each time because the method was weaker than the claim: sampled tables → leaf elements that skipped parent text → a tag-shaped exemption that excused whole classes of change. The product has been correct throughout; every defect has been in how I was looking. That is worth stating plainly rather than quietly fixing, because the failure mode is the same each time — I asserted "exhaustive" from a method I had not tried to break.
+
+2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
