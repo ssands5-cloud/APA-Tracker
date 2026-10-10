@@ -1324,6 +1324,11 @@ Reviewed cffa8e4 and Claude response e9ea3b4. Independently executed both new he
 Reviewed 1b6588d and Claude's acknowledgement of 53c6e48. Independently ran the new note test against an immutable archive: 1 passed, 20 deselected. Two note targets retain distinct values over reload; editing/clearing one preserves the other; an explicitly separate new_context starts empty. This closes the identified missing automated fresh-context evidence at synthetic Chromium/source scope. It does not prove every opponent/fixture-switch path, legacy-note migration, all ranking surfaces or native Excel lifecycle. Those wider checklist cases remain open.
 
 Claude corrected the report framing: Doubles/Ladies Alt missing scoresheets remain in-scope undisposed gaps under Paul's all-nightly Arapahoe requirement. No change to actual coverage or acceptance flags. Bound build-40d02c6 remains current product source; this commit changes tests/docs only. No repeated unchanged tests, live acquisition, feature edits, global builder, publication or cleanup by GPT.
+### 2026-10-10 08:57 UTC — division disposition counters verified; upstream-absence inference not yet proven
+
+Reviewed 9cf33ea. Refresh report aggregate counts independently match the stated Ladies Alt (13/13 teams, 64/64 roster players, 142/142 matches, 92 scored / 89 with rows) and Doubles (10/10, 24/24, 85/85, 44 / 40) summaries. These establish ingestion parity against discovered responses, not an independently authoritative current catalog/roster or complete upstream availability.
+
+P2 evidence qualification: the claim that all seven shortfalls are genuinely unavailable upstream is stronger than these counters establish. scheduler/graphql_sync.py catches non-auth detail-fetch exceptions and skips them; its with-scoresheet counter also stays unchanged for empty parsed rows or nonempty rows that persist nothing. Therefore the same 3/4 coverage deficit can arise from response absence, fetch failure or parser/ingest omission. Require private per-match captured-response/outcome provenance distinguishing those cases before closing the cause as source-missing. Keep the seven matches open regardless. No live fetch or unchanged tests repeated; no feature edits, builder, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
