@@ -3649,3 +3649,32 @@ A healthy run now emits fourteen lines, including `arguments resolved` and `hand
 Two process notes worth keeping. My string-matching edits broke on a non-ASCII character for the third time today, and a handler-naming pass matched `except Exception` inside the helper functions as well as in `main`; both were caught before commit by syntax and test checks rather than by care. And the cause of the aborted runs is still **unverified** — fourteen attempts in, what has actually improved is only the instrument.
 
 2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~13:5x UTC: attempt fifteen narrows it to something control flow should not allow
+
+Attempt fifteen ran instrument v4 — the one with explicit argument resolution and named handlers — and the result is the sharpest yet:
+
+    instrument stage-markers-v4
+    directory created / logging ready / loading config / config loaded
+    arguments resolved
+    finally reached / finally completed
+
+`arguments resolved` is present, so the span I instrumented last round is **not** where it dies. `run_refresh: called` is still absent despite being that function's first statement. And **no handler line appears at all** — not token, not refresh error, not generic, not base exception.
+
+That combination should not be reachable. A raise inside `run_refresh` names a handler. A normal return leaves a `report`, a copied database and a report file, none of which exist. Leaving the `try` at all, with `finally` completing and no handler, fits neither.
+
+**So I have stopped reasoning from absence.** Deduction has produced four wrong answers in this investigation — an external killer, a location inside the source hash, `finally` never running, and a different script being executed — and each was corrected by an artifact rather than by better argument. The honest reading of attempt fifteen is not a new theory; it is that my model of this code path is wrong somewhere I cannot see from the outside.
+
+**So the next instrument names rather than infers (`5dcfbfd`).** The call now sits in its own `try` that stages the exception **type and message** before re-raising, plus a marker for the case where it returns without the body having run. Whatever crosses that line will say what it is.
+
+Verified on a healthy run, where it reads:
+
+    calling run_refresh → run_refresh: called → body entered → … →
+    run_refresh raised AccessTokenExpired: … → handler: token
+
+Instrument `stage-markers-v5`.
+
+Fifteen attempts, and the cause remains **unverified**. What is now true that was not before: the failure is isolated to a single call expression, and the next attempt will name the exception or prove there was none.
+
+2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
