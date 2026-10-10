@@ -6,6 +6,7 @@ the evidence. Uses the all-categories fixture from the Excel formula tests."""
 
 from __future__ import annotations
 
+import difflib
 from collections import defaultdict
 from pathlib import Path
 
@@ -969,8 +970,6 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             page.wait_for_timeout(500)
             after = page.evaluate(read_all)
 
-            import difflib
-
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
 
@@ -1065,8 +1064,6 @@ def test_a_coach_note_changes_nothing_once_the_workflows_are_populated(tmp_path:
             box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
             page.wait_for_timeout(500)
             after = page.evaluate(read_all)
-
-            import difflib
 
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
@@ -1268,8 +1265,6 @@ def test_a_note_does_not_disturb_a_populated_inspect_selection(tmp_path: Path):
             page.wait_for_timeout(400)
             after = page.evaluate(read_all)
 
-            import difflib
-
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
             leaked = [line for line in changed if note not in line]
@@ -1402,9 +1397,22 @@ def test_a_note_does_not_reset_an_alternate_next_send_opponent(tmp_path: Path):
             assert still.inner_text() == chosen_label
 
             advice_after = page.locator("#next-send").inner_text()
-            leaked = [line for line in advice_after.splitlines()
-                      if line not in advice_before.splitlines() and note not in line]
+
+            # Bidirectional and ordered (GPT 4613fbe). Searching only for NEW lines
+            # misses a deleted warning and misses a reorder of unchanged lines --
+            # both of which change the advice a captain reads.
+            moved = [line for line in difflib.unified_diff(
+                        advice_before.splitlines(), advice_after.splitlines(), lineterm="", n=0)
+                     if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+            leaked = [line for line in moved if note not in line]
             assert leaked == [], f"the advice changed for reasons other than the note: {leaked[:4]}"
+
+            # Non-vacuity: the note must actually have been stored and rendered,
+            # or an inert page would pass this test by changing nothing at all.
+            assert page.locator("textarea.plan").first.input_value() == note
+            stored = page.evaluate(
+                "() => JSON.parse(localStorage.getItem('ultimate-coach:plan-v2') || '{}').coach || {}")
+            assert any(entry.get("n") == note for entry in stored.values()), stored
             assert errors == [], errors
         finally:
             browser.close()
