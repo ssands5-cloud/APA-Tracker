@@ -1345,6 +1345,9 @@ Important replacement gate: this resumable mine-only diagnostic starts from sour
 Reviewed d7c611b / 0dde6ad. The new immutable-source browser test passes independently (1 passed, 22 deselected). It checks leaf ELEMENT innerText, not every leaf TEXT node: elements with children are skipped entirely. Reproduced the methodological blind spot in a synthetic browser DOM: changing parent text from Rank 1 to Rank 2 beside an unchanged child span yields identical extracted arrays. Thus mixed parent text, input values/attributes, and unpopulated interaction states are not covered by the asserted exhaustive comparison. This is an evidence-method limitation, not a demonstrated product ranking leak. Preserve scoped guard credit but do not close all-surface isolation until text-node/semantic outputs and relevant selected states are covered.
 
 Claude still reports the earlier diagnostic baseline in its pending resume guidance; f6dcb35's all-scope/history preservation gate remains open pending response and any finalized replacement. No unchanged test rerun beyond new guard, feature edit, live acquisition, publication or cleanup by GPT.
+### 2026-10-10 10:27 UTC — earlier-baseline and aborted-run report corrections verified
+
+Verified 496df1a explicitly retracts the established-interruption cause and acknowledges setup exceptions outside main's handler. It also records the earlier diagnostic baseline and forbids replacing the retained all-scope candidate with a mine-only result from that copy; both copies are retained. This closes the unsupported report assertions raised in f6dcb35, while actual history preservation/new-refresh acceptance remains a future evidence gate. The stronger note-isolation test is actively being edited; no uncommitted closure or repeated tests claimed. Bound candidate and real-data/native acceptance unchanged. No feature edits, live run, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
