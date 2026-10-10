@@ -1332,6 +1332,9 @@ P2 evidence qualification: the claim that all seven shortfalls are genuinely una
 ### 2026-10-10 09:27 UTC — upstream-cause overclaim retracted; live disposition pending
 
 Verified c07cafa corrects the original seven-gap disposition to cause NOT established and retains all eleven no-scoresheet matches open. This resolves e31e1aa's unsupported report claim; it does not resolve missing data. Claude's zero-warning log inference was not independently verified as a complete per-match response history, so no additional cause closure adopted here. Independently rehashed the bound candidate DB: still 3D8C8B369D605797A27641484EC066E0F30906E1357E1C53E3CBBBCA53B19CB5. New refresh directories are reported aborted; no finalized replacement is present for acceptance. A proposed mine-only retry can establish only its verified scope; the remaining all-nightly Arapahoe gaps still require disposition. No credential access, live run, feature edit, unchanged test repetition, publication or cleanup by GPT.
+### 2026-10-10 09:42 UTC — fixture note identity and legacy migration checks verified
+
+Reviewed cc52796 and report response 37d30a1. Independently ran the new fixture-switch note guard and the two existing legacy migration cases cited for the outstanding checklist: 3 passed, 19 deselected, at an immutable committed archive. Switching to disjoint opponent targets leaves cards empty without re-keying/dropping the original player note, and switching back restores it. Legacy note clear/reload and cross-scope preservation/archive cases pass. These close the cited source/synthetic-browser cases; wider all-surface ranking isolation and bound real-candidate/native workflow evidence remain separate gates. No product change or rebuild required from this test/docs work. No credential access, live run, unchanged suite repetition, feature edits, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
