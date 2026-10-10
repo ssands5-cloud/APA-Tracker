@@ -986,3 +986,93 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_a_coach_note_changes_nothing_once_the_workflows_are_populated(tmp_path: Path):
+    """The populated-workflow version of the isolation guard (GPT 619aa0b).
+
+    The default-page guard proves the property on a page where nothing has been
+    chosen. GPT's point is that the interesting state is a page the captain has
+    actually driven: a Player vs Player comparison selected, the matrix toggled
+    to Captain view, an availability mark set. A leak could plausibly appear
+    only once those are populated, and the default-page test would never see it.
+
+    Everything is set up BEFORE the baseline snapshot, so the selections
+    themselves are not what is being measured -- only whether typing an opinion
+    afterwards disturbs any of it.
+    """
+    path = tmp_path / "populated.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    note = "ZZNOTE-populated-workflow"
+
+    read_all = """() => {
+      const out = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      let node;
+      while ((node = walker.nextNode())) {
+        out.push('T|' + node.parentElement.tagName + '|' + node.nodeValue.trim());
+      }
+      document.querySelectorAll('input, select, textarea').forEach((el, j) => {
+        if (el.dataset.zzEdited === '1') return;
+        out.push('V|' + j + '|' + el.tagName + '|' + (el.value || ''));
+      });
+      document.querySelectorAll('details').forEach((el, j) => {
+        out.push('S|details|' + j + '|' + (el.open ? 'open' : 'closed'));
+      });
+      document.querySelectorAll('[aria-pressed]').forEach((el, j) => {
+        out.push('S|pressed|' + j + '|' + el.getAttribute('aria-pressed'));
+      });
+      return out;
+    }"""
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            # drive the page the way a captain would, BEFORE any measurement
+            page.select_option("#player-a", "1")
+            page.wait_for_timeout(200)
+            opponents = page.eval_on_selector_all(
+                "#player-b option", "els => els.filter(e => e.value).map(e => e.value)")
+            assert opponents, "fixture must offer a Player vs Player opponent"
+            page.select_option("#player-b", opponents[0])
+            page.click("button.mv[data-view='captain']")
+            page.wait_for_timeout(400)
+
+            populated = page.evaluate(read_all)
+            assert any(line.startswith("S|pressed|") for line in populated)
+
+            page.eval_on_selector("textarea.plan", "el => { el.dataset.zzEdited = '1'; }")
+            before = page.evaluate(read_all)
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(500)
+            after = page.evaluate(read_all)
+
+            import difflib
+
+            changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
+                       if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+            leaked = [line for line in changed if note not in line]
+            assert leaked == [], (
+                "a coach note disturbed a populated workflow: " + repr(leaked[:5]))
+            assert errors == [], errors
+        finally:
+            browser.close()
