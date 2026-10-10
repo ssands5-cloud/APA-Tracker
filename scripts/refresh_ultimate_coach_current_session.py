@@ -95,7 +95,7 @@ def snapshot(db_path: Path, session_names: set[str]) -> dict[str, Any]:
         marks = ",".join("?" * len(session_names)) or "''"
         rows = con.execute(
             f"SELECT m.external_id, substr(m.match_date,1,10), m.status, m.is_scored, m.home_score, m.away_score,"
-            f" COALESCE(s.n, 0) FROM matches m LEFT JOIN (SELECT match_id, COUNT(*) AS n FROM player_matches"
+            f" COALESCE(s.n, 0), m.is_bye FROM matches m LEFT JOIN (SELECT match_id, COUNT(*) AS n FROM player_matches"
             f" GROUP BY match_id) s ON s.match_id = m.id WHERE m.session_name IN ({marks})",
             sorted(session_names)).fetchall()
         totals = dict(zip(("matches", "player_matches", "players"), (
@@ -105,7 +105,8 @@ def snapshot(db_path: Path, session_names: set[str]) -> dict[str, Any]:
     finally:
         con.close()
     matches = {str(r[0]): {"date": r[1], "status": r[2], "is_scored": bool(r[3]), "home_score": r[4],
-                           "away_score": r[5], "scoresheet_rows": r[6]} for r in rows}
+                           "away_score": r[5], "scoresheet_rows": r[6], "is_bye": bool(r[7])}
+               for r in rows}
     return {"matches": matches, "totals": totals}
 
 
@@ -117,7 +118,15 @@ def diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     changed = sorted(k for k in set(a) & set(b) if b[k]["is_scored"] and a[k]["is_scored"]
                      and (b[k]["home_score"], b[k]["away_score"]) != (a[k]["home_score"], a[k]["away_score"]))
     sheets = {k: a[k]["scoresheet_rows"] - (b.get(k) or {}).get("scoresheet_rows", 0) for k in a}
-    scored_without_sheet = sorted(k for k in a if a[k]["is_scored"] and a[k]["scoresheet_rows"] == 0)
+    # A bye has no scoresheet because nobody played it, so it is not a coverage gap.
+    # APA flags byes COMPLETED/is_scored with a forfeit-shaped score, and the
+    # division-wide ingest path already skips them, so only the viewer's own byes
+    # were ever reported here: 4 of the 13 "no scoresheet" gaps in
+    # refresh-20261009-035923Z were byes of the viewer's own four teams. The
+    # exclusion is on is_bye alone -- audit 7a4f8b5's null-score artifact is a real
+    # scheduling problem rather than a bye, and must keep being disclosed.
+    scored_without_sheet = sorted(k for k in a if a[k]["is_scored"]
+                                  and a[k]["scoresheet_rows"] == 0 and not a[k].get("is_bye"))
     dates = sorted(v["date"] for v in a.values() if v["date"])
     # GPT audit 7a4f8b5: APA can flag a match is_scored=True/COMPLETED with null team scores and zero
     # scoresheet rows -- a scheduling-system artifact, not a real result (confirmed live: match 51775357,

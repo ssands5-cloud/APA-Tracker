@@ -939,3 +939,69 @@ class TestTruncationCannotDefeatRedaction:
         truncated = self.LONG_BARE_JWT[:200]
         assert truncated.count(".") == 1, "the sentinel must truncate to two segments"
         assert "ZZLONGPAYLOAD" not in refresh._scrub(truncated)
+
+
+class TestAByeIsNotACoverageGap:
+    """A bye has no scoresheet because nobody played it, so counting it as a
+    completed match missing its scoresheet reports a problem that does not
+    exist. Measured in refresh-20261009-035923Z: of 13 "no scoresheet" gap
+    strings, 4 were byes -- every one of them a bye of the viewer's own teams
+    (2026-08-23 and 2026-08-24, week 4, home and away both named Bye/BYE,
+    is_bye=1, is_scored=1, zero player_matches and zero head-to-head rows).
+    The division-wide ingest path already skips byes; this diff did not, so
+    only the viewer's own byes were ever reported.
+
+    The deliberately-disclosed case from audit 7a4f8b5 -- is_scored with null
+    scores and zero rows, which is a real scheduling artifact rather than a
+    bye -- must keep being reported, so this exclusion is on is_bye alone."""
+
+    def test_a_played_match_with_no_scoresheet_is_still_a_gap(self):
+        after = {"matches": {
+            "REAL": {"date": "2026-07-18", "status": "COMPLETED", "is_scored": True, "home_score": 9.0,
+                     "away_score": 6.0, "scoresheet_rows": 0, "is_bye": False},
+        }, "totals": {}}
+
+        result = refresh.diff({"matches": {}, "totals": {}}, after)
+
+        assert result["scored_matches_without_scoresheet"] == ["REAL"]
+
+    def test_a_bye_is_not_reported_as_a_match_missing_its_scoresheet(self):
+        after = {"matches": {
+            "BYE": {"date": "2026-08-23", "status": "COMPLETED", "is_scored": True, "home_score": 0.0,
+                    "away_score": 10.0, "scoresheet_rows": 0, "is_bye": True},
+        }, "totals": {}}
+
+        result = refresh.diff({"matches": {}, "totals": {}}, after)
+
+        assert result["scored_matches_without_scoresheet"] == []
+
+    def test_the_null_score_artifact_stays_disclosed(self):
+        """Audit 7a4f8b5's case is not a bye and must not be swept up by this."""
+        after = {"matches": {
+            "ARTIFACT": {"date": "2026-10-12", "status": "COMPLETED", "is_scored": True, "home_score": None,
+                         "away_score": None, "scoresheet_rows": 0, "is_bye": False},
+        }, "totals": {}}
+
+        result = refresh.diff({"matches": {}, "totals": {}}, after)
+
+        assert result["scored_matches_without_scoresheet"] == ["ARTIFACT"]
+
+    def test_the_snapshot_reads_the_bye_flag_so_the_diff_can_use_it(self, tmp_path):
+        """A diff cannot exclude byes if snapshot() never reads is_bye."""
+        db = tmp_path / "s.db"
+        con = sqlite3.connect(db)
+        con.executescript(
+            "CREATE TABLE matches (id INTEGER PRIMARY KEY, external_id TEXT, match_date TEXT, status TEXT,"
+            " is_scored INT, home_score REAL, away_score REAL, is_bye INT, session_name TEXT);"
+            "CREATE TABLE player_matches (id INTEGER PRIMARY KEY, match_id INT, player_id INT);"
+            "CREATE TABLE players (id INTEGER PRIMARY KEY, external_id TEXT);"
+            "INSERT INTO matches VALUES (1,'BYE','2026-08-23','COMPLETED',1,0.0,10.0,1,'Fall 2026');"
+            "INSERT INTO matches VALUES (2,'REAL','2026-08-30','COMPLETED',1,9.0,6.0,0,'Fall 2026');")
+        con.commit()
+        con.close()
+
+        snap = refresh.snapshot(db, {"Fall 2026"})
+
+        assert snap["matches"]["BYE"]["is_bye"] is True
+        assert snap["matches"]["REAL"]["is_bye"] is False
+        assert refresh.diff({"matches": {}, "totals": {}}, snap)["scored_matches_without_scoresheet"] == ["REAL"]
