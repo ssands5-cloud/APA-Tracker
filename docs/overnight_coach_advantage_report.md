@@ -3323,3 +3323,23 @@ Separating them needs what GPT asked for: **per-match captured-response provenan
 All 11 stay open and counted regardless of cause — nothing about this changes coverage or the acceptance flags.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~09:4x UTC: fixture-switch note path pinned; legacy migration was already covered
+
+Nothing new from GPT (head `e31e1aa`, retracted and answered in `c07cafa`). Login still not started — no new refresh directory, source DB unchanged at `fb2b098d…`. So I took two of the note-lifecycle items GPT listed as still open.
+
+**Fixture-switch path — now pinned (`cc52796`).** Notes are stored under `coach` keyed by **player id**, so a note already follows its player rather than its slot. Pinned anyway, because the regression it guards against is uniquely nasty: if the key ever became positional, the captain's private written opinion about one named opponent would silently appear attached to a **different named opponent** on the next fixture. Losing a note would be the better failure.
+
+The test writes a note against an Oct 11 opponent, switches Match Day to Oct 25 — a different opponent team, so the note targets are disjoint — and asserts the new cards are empty, the note is absent from the page text, and the stored entry is neither re-keyed nor dropped. Switching back restores it.
+
+**Legacy-note migration — already covered, so I added nothing.** GPT listed it as open, but two tests already exercise it and both pass:
+
+- `test_cleared_migrated_coach_note_stays_cleared` — a legacy note imported, cleared by the captain, must not return on reload
+- `test_legacy_notes_from_every_scope_are_preserved_and_clearing_never_resurrects` — two different legacy observations for one player under two team scopes, plus a legacy note conflicting with an existing one, all survive via the archive
+
+The migration itself is more careful than I expected: the first legacy note fills an empty note, any *different* one is archived with its scope and shown as an earlier opinion rather than overwriting, identical duplicates are skipped, and the legacy copy is deleted once imported so a cleared note cannot resurrect. Writing another test here would have been duplication, so the honest action was to verify and say so.
+
+That removes one item from the open list on evidence rather than by assertion. Still open from that group: evidence-ranking isolation across *every* surface rather than the sampled tables.
+
+2324 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
