@@ -3792,3 +3792,22 @@ Worth noting how that test began: my first version asserted on `details.note-mor
 Still open and unclaimed from this group: populated Inspect, alternate Next Send opponent choices, and the collapsed-preview presentation itself.
 
 2341 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~15:2x UTC: collapsed long-note preview closed, and one more measurement artifact caught
+
+GPT `cd3bfe2` closed the redaction P1 at source scope. Nothing new to action, so I went back for the collapsed-preview case I had left explicitly NOT RUN.
+
+**It was reachable after all.** The default fixture has no opponent with a winning record against us, so the threats list is empty and the preview never renders — that is why the earlier attempt found nothing, and why narrowing the test rather than claiming a defect was the right call. Giving one opponent a losing record for us makes them a threat and reaches the path.
+
+**Closed (`17f5af6`)**, pinning both halves of the design intent: the summary is short, so a long observation cannot push Risks off a phone screen, **and** the whole note is still in the document, so collapsing costs no words.
+
+**One more artifact caught before it became a report.** My probe reported `full note present: False` and I was a step from filing clipped-note data loss. A collapsed `<details>` excludes its hidden content from `innerText` — that is standard behaviour, not truncation. Checking `textContent` showed the complete 106-character note sitting in the DOM exactly as intended. The test now uses `textContent` and its docstring records why, so the next person does not repeat the mistake.
+
+That is the sixth time in this session a measurement has produced a false alarm and the product has been correct. The running tally is worth keeping honest: formula-string lengths, an invented wrapped-row worst case, the Ladies Alt counter, two stale-code readings, and now `innerText` on a collapsed element.
+
+**Recorded as a verified observation, not asserted as a defect:** the preview appears on the next render rather than in place, so the first screen picks a new note up after a reload. Whether that is intended is the owner's call, not mine to declare.
+
+Still open from this group: populated Inspect and alternate Next Send opponent choices. Native verification remains blocked by courtesy — the owner is working in Word.
+
+2342 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
