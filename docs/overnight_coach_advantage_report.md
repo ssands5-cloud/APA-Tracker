@@ -3678,3 +3678,29 @@ Instrument `stage-markers-v5`.
 Fifteen attempts, and the cause remains **unverified**. What is now true that was not before: the failure is isolated to a single call expression, and the next attempt will name the exception or prove there was none.
 
 2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~14:1x UTC: attempt sixteen returns a dict without running its body
+
+Attempt sixteen ran instrument v5 and produced a result none of my theories predicted:
+
+    instrument stage-markers-v5
+    directory created / logging ready / loading config / config loaded
+    arguments resolved
+    calling run_refresh
+    run_refresh returned dict
+    finally reached / finally completed
+
+`run_refresh` **returned normally, in the same second, with a dict** — and **none** of its body markers fired. No database copy, no report file. A real function cannot return without executing its first statement, and that statement is the `run_refresh: called` marker.
+
+**Excluded by inspection, not argument:** there is only one `def run_refresh` in the file; `tools/capture_apa_graphql.py` does not patch it; there is no `sitecustomize.py`, `usercustomize.py` or root `conftest.py`; and the marker really is the first statement after the docstring — my own invocations emit it every single time, including the one I ran minutes earlier.
+
+So the open question is no longer control flow. It is **identity**: whatever `run_refresh` names in that process is not the function I instrumented.
+
+**The call site now says so itself (`a313bf2`).** Before calling, it stages the callee's module, qualname, file and first line; after returning, the dict's **keys only** — names, never values, since this is a public repository. Verified locally, where it reads `__main__.run_refresh from <worktree>/scripts/...py:282`.
+
+If the next attempt names a different file, that is the answer outright. If it names this one, then a function in this file returned without running its first line, and I will have to take that seriously rather than explain it away.
+
+Worth recording the shape of this investigation: sixteen attempts, five wrong conclusions from deduction, and every single correction came from an artifact — the breadcrumb, the instrument stamp, the handler names, now the callee identity. The reliable move has been to make the system state something, never to work out what it must have been.
+
+2336 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
