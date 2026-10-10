@@ -837,7 +837,17 @@ def _head(sheet, title: str, subtitle: str, *, last: int, current: str) -> None:
 
 
 def _span(sheet, row: int, c1: int, c2: int, value: Any, *, font: Font | None = None, fill=None, wrap: bool = True,
-          height: float | None = None) -> None:
+          height: float | None = None, shrink: bool = False) -> None:
+    """Write one value across a merged span.
+
+    `shrink` is for single-line unwrapped cells whose text is variable-length
+    identity data (names, record IDs, shared-opponent counts). Excel only spills
+    unwrapped text into a genuinely EMPTY neighbour, and in a packed row there is
+    none -- so without shrink-to-fit the overflow is silently clipped on paper.
+    Shrinking keeps the row on one line, which is what preserves the Captain
+    Packet's tuned one-scale page geometry. It has no effect when `wrap` is on,
+    because Excel ignores shrinkToFit for wrapped cells.
+    """
     cell = sheet.cell(row=row, column=c1, value=value)
     if font is not None:
         cell.font = font
@@ -846,6 +856,8 @@ def _span(sheet, row: int, c1: int, c2: int, value: Any, *, font: Font | None = 
             sheet.cell(row=row, column=c).fill = fill
     if wrap:
         cell.alignment = base.WRAP_TOP
+    elif shrink:
+        cell.alignment = Alignment(shrinkToFit=True, vertical="top")
     if c2 > c1:
         sheet.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
     if height:
@@ -1638,10 +1650,10 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         ws.cell(row=r, column=17, value=f'=IF(P{r}="","",{n}-INDEX(wr_PkStart,P{r})+1)').font = base.HELPER_FONT
         ws.cell(row=r, column=18, value=f'=IF(P{r}="","",INDEX(wr_OppStart,P{r})+Q{r})').font = base.HELPER_FONT
         f10 = font(10.5)
-        _span(ws, r, 1, 2, f'=IF(P{r}="","","vs "&INDEX(wr_OppLabels,P{r}))', font=f10, wrap=False)
+        _span(ws, r, 1, 2, f'=IF(P{r}="","","vs "&INDEX(wr_OppLabels,P{r}))', font=f10, wrap=False, shrink=True)
         ws.cell(row=r, column=3, value=f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Rank],R{r}))').font = f10
-        _span(ws, r, 4, 7, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Player],R{r}))', font=f10, wrap=False)
-        _span(ws, r, 8, 10, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Cell],R{r}))', font=f10, wrap=False)
+        _span(ws, r, 4, 7, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Player],R{r}))', font=f10, wrap=False, shrink=True)
+        _span(ws, r, 8, 10, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Cell],R{r}))', font=f10, wrap=False, shrink=True)
         cat = f'INDEX(MatchupEvidence_Table[Category],R{r})'
         _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
                              f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence")))))', font=f10, wrap=False)

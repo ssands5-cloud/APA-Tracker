@@ -715,6 +715,44 @@ def test_formula_rows_fit_their_worst_case_text(built):
         assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines(basis, width(wr, 10, 12), 9) * 9 * 1.2, r
 
 
+def test_captain_packet_evidence_rows_cannot_silently_clip_identity_text(built):
+    # Measured on the real candidate, not the fixture: the Captain Packet's "Evidence by
+    # opponent" rows are ONE line (height 14.5) at 10.5pt with wrap off, and every
+    # neighbouring cell in the row is filled -- so text wider than its columns is CLIPPED.
+    # Excel only spills unwrapped text into genuinely empty neighbours, and there are none.
+    #
+    # Against the real Matchup Evidence table (212,939 rows) three of the four spans overflow:
+    #     A:B  width 48 -> ~45 chars, holds "vs " + opponent label   worst real 58
+    #     D:G  width 51 -> ~48 chars, holds our player label         worst real 55
+    #     H:J  width 29 -> ~27 chars, holds the evidence cell text   worst real 33
+    #                                 ("≈ 121-147 vs 111-106 (113 shared)")
+    # Same defect class as the War Room clipping fixed earlier, which is why that sheet has
+    # a fit test and this one did not.
+    #
+    # Widening the columns or wrapping to two lines would both break the packet's tuned
+    # one-scale 5-page geometry, so these cells must shrink to fit instead: the page layout
+    # is preserved and no recorded identity is lost.
+    from openpyxl.utils import get_column_letter
+
+    cp = built[CP]
+    section = _row(built, CP, "Evidence by opponent — every line names the opponent")
+    hdr = next(r for r in range(section, section + 6)
+               if cp.cell(row=r, column=1).value == "Opponent (APA record ID)")
+    first = hdr + 1
+
+    assert (cp.row_dimensions[first].height or 15) < 20, "evidence rows are single-line by design"
+
+    for r in (first, first + 1, first + 4):
+        for col in (1, 4, 8):          # the three measured as able to overflow
+            al = cp.cell(row=r, column=col).alignment
+            fits = bool(al and (al.shrinkToFit or al.wrap_text))
+            assert fits, (
+                f"{get_column_letter(col)}{r} is one unwrapped line holding variable-length "
+                "identity text with filled neighbours: a long name or a big shared-opponent "
+                "count is silently clipped on the printed packet"
+            )
+
+
 def test_tall_rows_are_top_aligned_so_values_stay_with_their_row(built):
     # Real-Excel UAT 787f6d7: Inspect's rank and SL were bottom-aligned, so in the taller rows they sat beside the
     # NEXT player's name. Every filled cell in a row taller than two lines must read from the top.
