@@ -686,3 +686,51 @@ class TestAnInterruptedRunStillRecordsWhyItStopped:
         record = refresh.LAST_OUT_DIR / "refresh_error.json"
         assert record.is_file()
         assert "SystemExit" in json.loads(record.read_text(encoding="utf-8"))["error_type"]
+
+
+class TestTheRunLeavesABreadcrumbOfHowFarItGot:
+    """Nine live attempts, and the ninth ran 12 minutes AFTER the interrupt
+    recorder landed and still wrote no record.
+
+    That leaves three causes which the artifacts cannot tell apart: forced
+    process termination, a failure in the directory/logging setup that happens
+    OUTSIDE the handler, or a failure while writing the record itself. GPT
+    49e5dd3 lists the same three.
+
+    A stage breadcrumb separates them. It is appended and flushed at each step,
+    so whatever survives says how far the run got even when nothing else does.
+    """
+
+    def _args(self, tmp_path):
+        return ["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "nope.db")]
+
+    def test_the_stage_file_records_reaching_the_refresh(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise KeyboardInterrupt()
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        with pytest.raises(KeyboardInterrupt):
+            refresh.main(self._args(tmp_path))
+
+        stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "directory created" in stages
+        assert "logging ready" in stages
+        assert "entered run_refresh" in stages
+
+    def test_a_record_that_cannot_be_written_still_leaves_a_plain_text_fallback(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise RuntimeError("original failure")
+
+        def cannot_write(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr(refresh, "_write_failure", cannot_write)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        refresh.main(self._args(tmp_path))
+
+        stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "RuntimeError" in stages and "original failure" in stages

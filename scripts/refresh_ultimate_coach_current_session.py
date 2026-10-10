@@ -519,6 +519,43 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     return report
 
 
+def _stage(out_dir: Path, note: str) -> None:
+    """Append one line saying how far the run got, flushed immediately.
+
+    Nine live attempts left a directory holding only an empty log, and the
+    ninth ran well after the interrupt recorder landed and still wrote no
+    record. Three causes remain indistinguishable from the artifacts: forced
+    termination, a failure in the directory/logging setup outside the handler,
+    and a failure while writing the record itself.
+
+    This is deliberately the dumbest possible mechanism -- open, append,
+    close -- because anything cleverer shares the fate of whatever is already
+    failing. It never raises: a breadcrumb that can break the run it is meant
+    to explain would be worse than no breadcrumb.
+    """
+    try:
+        stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        with (out_dir / "refresh_stage.txt").open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} {note}" + chr(10))
+            fh.flush()
+    except Exception:
+        pass
+
+
+def _record_failure(out_dir: Path, exc: BaseException, scrub: Callable[[Any], str], tb: str) -> None:
+    """Write the failure record, and if even that fails leave a breadcrumb.
+
+    GPT 49e5dd3 named "failure while writing the record" as one of the three
+    causes the artifacts cannot distinguish. If the JSON write is the thing
+    that breaks, the original error must not vanish with it.
+    """
+    try:
+        _write_failure(out_dir, exc, scrub, tb)
+    except Exception as write_exc:
+        _stage(out_dir, f"could not write refresh_error.json ({type(write_exc).__name__}); "
+                        f"original failure was {type(exc).__name__}: {scrub(exc)[:300]}")
+
+
 def _write_failure(out_dir: Path, exc: BaseException, scrub: Callable[[Any], str], tb: str) -> None:
     """refresh_error.json: what stopped the run (type, message, scrubbed traceback). Never a token."""
     (out_dir / "refresh_error.json").write_text(json.dumps({
@@ -635,6 +672,7 @@ def main(argv: list[str] | None = None) -> int:
     import traceback
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    _stage(out_dir, "directory created")
     scrub = lambda text: re.sub(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+", "[redacted]", str(text))  # noqa: E731
 
     class _Scrubbed(logging.Formatter):
@@ -645,6 +683,8 @@ def main(argv: list[str] | None = None) -> int:
     handler.setFormatter(_Scrubbed("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
+    _stage(out_dir, "logging ready")
+    _stage(out_dir, "entered run_refresh")
     try:
         report = run_refresh(load_config(args.config), source_db=Path(args.source_db), catalog_path=Path(args.catalog),
                              out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
@@ -657,14 +697,14 @@ def main(argv: list[str] | None = None) -> int:
               f"--refresh-ultimate-coach --resume \"{out_dir}\"" + (f" --verify-date {args.verify_date}" if args.verify_date else "")
               if resumable else f"APA login needed: {type(exc).__name__}. Run tools/capture_apa_graphql.py "
               "--refresh-ultimate-coach and log in yourself; nothing was promoted and the source DB is untouched.")
-        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        _record_failure(out_dir, exc, scrub, traceback.format_exc())
         return 3
     except RefreshError as exc:
         print(f"Refresh stopped: {exc}")
-        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        _record_failure(out_dir, exc, scrub, traceback.format_exc())
         return 4
     except Exception as exc:   # anything else: record it on disk, never as a silent console-only traceback
-        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        _record_failure(out_dir, exc, scrub, traceback.format_exc())
         print(f"Refresh FAILED: {type(exc).__name__}: {scrub(exc)[:400]}\n"
               f"  details: {out_dir / 'refresh_error.json'} · nothing was promoted; the source DB is untouched.")
         return 5
@@ -675,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
         # the cause could not be read from disk at all. Every retry costs a real APA
         # login, so the cause is recorded here and the exception re-raised untouched:
         # identical behaviour, evidence kept.
-        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        _record_failure(out_dir, exc, scrub, traceback.format_exc())
         print(f"Refresh STOPPED: {type(exc).__name__}. Nothing was promoted; the source DB is untouched.")
         print(f"  details: {out_dir / 'refresh_error.json'}")
         raise
