@@ -3605,3 +3605,24 @@ Worth sitting with: the external-killer hypothesis was wrong, and so was the loc
 Eleven stage lines now land in order on a healthy run. The next attempt should finally produce a named error.
 
 2332 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~13:2x UTC: the directory timestamp never meant what I kept reading into it
+
+Attempt thirteen (13:16:46) shows the same six lines as twelve and, crucially, **no `run_refresh: called`** — even though that marker was in the working tree from ~13:12, four minutes earlier. I started to conclude the run was executing some other copy of the script. It is not: only this worktree has the markers, and the refresh directories are written here.
+
+**The actual explanation is the measurement, again.** `capture_apa_graphql` opens a browser and waits for the operator to finish logging in *before* calling the refresh. The refresh directory is therefore created minutes after the process started and imported the module. **Directory mtime says nothing about which code ran.**
+
+That is the second time I have read a stale-code run as evidence about a new fix — first on attempt eight, now on thirteen. Both times the artifact was real and my inference about *when the code was loaded* was the error.
+
+**Consequences, stated plainly:**
+
+- Attempt twelve's reading stands only for the markers it actually carried. Its `finally reached`/`finally completed` lines are real, so `finally` running is still established.
+- The print-before-record repair in `d5cc989` is **untested against a live run**. I presented it as the likely explanation; it remains a hypothesis that no attempt has yet exercised.
+- Nothing can be concluded from attempt thirteen at all.
+
+**Fixed so this cannot recur (`fc1a61b`).** Every stage file now opens with `instrument stage-markers-v3`, bumped whenever the markers change. The artifact states which instrument produced it rather than leaving me to infer it from timestamps — which I have now demonstrably done badly twice.
+
+The recurring lesson of this whole sequence is narrow and worth keeping: nearly every wrong conclusion here came from reasoning about *when* or *how* something was measured, not from the measurement itself. Fixing the instrument has been more productive than theorising about the gap, every single time.
+
+2333 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
