@@ -739,7 +739,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            f'=IF(INDEX(wr_NsUnordJoin,{R})="","","≈ Not ordered (shared-opponent results only): "&INDEX(wr_NsUnordJoin,{R}))')
     e.cell("wr_NsAvoidLine", "Next Send avoid line", f'=IF(INDEX(wr_NsAvoidJoin,{R})="","","⚠ Avoid: "&INDEX(wr_NsAvoidJoin,{R}))')
     e.cell("wr_NsUnkLine", "Next Send unknown line",
-           f'=IF(INDEX(wr_NsUnkJoin,{R})="","","❓ Unknown (no evidence, not weak): "&INDEX(wr_NsUnkJoin,{R}))')
+           f'=IF(INDEX(wr_NsUnkJoin,{R})="","","❓ Unknown (no verified evidence, not weak): "&INDEX(wr_NsUnkJoin,{R}))')
     e.cell("wr_NsLists", "Next Send lists (one line each)",
            '=wr_NsUnordLine&IF(AND(wr_NsUnordLine<>"",wr_NsAvoidLine&wr_NsUnkLine<>""),CHAR(10),"")'
            '&wr_NsAvoidLine&IF(AND(wr_NsAvoidLine<>"",wr_NsUnkLine<>""),CHAR(10),"")&wr_NsUnkLine')
@@ -1096,7 +1096,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     top = u_top + R + 2
     base._section(ws, top, "Matchup matrix — our players (rows) vs their players (columns)", last_col=12)
     _span(ws, top + 1, 1, 9, "Green = more direct wins than losses · Red = more direct losses than wins · Yellow = even direct "
-                             "record, or shared-opponent evidence only (≈ ours vs theirs) · Gray = no evidence. Numbers in () are "
+                             "record, or shared-opponent evidence only (≈ ours vs theirs) · Gray = no verified evidence in this snapshot. Numbers in () are "
                              "meetings (Evidence view). Captain view: 🟢🟡⚪🔴 + our direct record. Not odds or predictions.",
           font=base.MUTED_FONT, height=30)
     ws.cell(row=top + 1, column=10, value="View").font = base.LABEL_FONT
@@ -1234,7 +1234,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     for k, text in enumerate([
         "Ranking rule (reviewed, unchanged): players with direct meetings first (by observed direct record, then more meetings), "
         "then shared-opponent results only (by our record against opponents both players faced, then more shared opponents, "
-        "then more games); no evidence = listed last, not ranked. Ties are shown as “2=” and named.",
+        "then more games); no verified evidence = listed last, not ranked. Ties are shown as “2=” and named.",
         "Best-supported sends keep that order and drop only concerning (losing direct) and no-evidence pairings. A direct "
         "record ranks ahead of indirect evidence even when it is small — read the records and sample sizes.",
         "No recorded meetings with our roster does not mean a weak opponent — it means unknown.",
@@ -1618,7 +1618,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     base._section(ws, p3, "Evidence by opponent — every line names the opponent", last_col=12)
     h(p3, 18)
     _span(ws, p3 + 1, 1, 12, "Rank: direct meetings first (by record, then more meetings) · “≈” = shared-opponent evidence "
-                             "only, NOT ordered among themselves · “—” = no evidence · “2=” = tied (every row with the same "
+                             "only, NOT ordered among themselves · “—” = no verified evidence · “2=” = tied (every row with the same "
                              "“n=” under one opponent is tied). Evidence: W-L (meetings) = direct record; ≈ ours vs theirs "
                              "(n shared) = records against shared opponents. Basis = the evidence category.",
           font=font(9, color="5B6A61"))
@@ -1827,7 +1827,7 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
     if rest:
         lines.append("≈ Not ordered (shared-opponent results only): "
                      + "; ".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
-        lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no evidence, not weak): {label}"]
+        lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {label}"]
     return "\n".join(lines)
 
 

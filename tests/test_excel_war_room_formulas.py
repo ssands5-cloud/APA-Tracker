@@ -550,7 +550,7 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
         "No direct record to order — shared-opponent candidates only (≈, not ordered)",
         f"≈ Not ordered (shared-opponent results only): {ANN} (availability unknown)",
         f"⚠ Avoid: {DEE} — 0-2 (2 meetings)",
-        f"❓ Unknown (no evidence, not weak): {BEA}",
+        f"❓ Unknown (no verified evidence, not weak): {BEA}",
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
@@ -698,7 +698,7 @@ def test_formula_rows_fit_their_worst_case_text(built):
         if roster - k:
             parts.append("≈ Not ordered (shared-opponent results only): "
                          + "; ".join([f"{name} (availability unknown)"] * max(roster - k - 2, 1)))
-            parts += [f"⚠ Avoid: {name} — 0-12 (12 meetings)", f"❓ Unknown (no evidence, not weak): {name}"]
+            parts += [f"⚠ Avoid: {name} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {name}"]
         need = _wrapped_lines("\n".join(parts), width(cc, 2, 11), 11) * 11 * 1.2
         assert cc.row_dimensions[8].height >= need, (k, cc.row_dimensions[8].height, need)
     # Printing fits the width only: a one-page squeeze made the sheet unreadable on paper (native print preview).

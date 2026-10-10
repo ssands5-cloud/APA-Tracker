@@ -213,7 +213,7 @@ def team_comparison(
         "direct_meetings": (f"{plural(dg, 'game')} · our players {record_text(dw, dg)}" if dg
                             else "No verified direct meetings between these rosters in this snapshot"),
         "opponents_met": f"{len(met)} of {len(opp_members)}",
-        "pairings": (f"{direct_pairs} direct · {shared_pairs} shared-opponent only · {none_pairs} no evidence "
+        "pairings": (f"{direct_pairs} direct · {shared_pairs} shared-opponent only · {none_pairs} no verified evidence "
                      f"({total_pairs} total)"),
     }
 

@@ -498,7 +498,7 @@ def next_send_lines(ns: dict[str, Any]) -> list[str]:
     for a in ns["avoid"]:
         lines.append(f"⚠ Avoid {a['player']} — {a['reason']}")
     if ns["unknown"]:
-        lines.append("❓ Unknown (no evidence, not weak): " + ", ".join(ns["unknown"]))
+        lines.append("❓ Unknown (no verified evidence, not weak): " + ", ".join(ns["unknown"]))
     return lines
 
 

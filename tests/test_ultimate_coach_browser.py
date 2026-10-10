@@ -1300,7 +1300,7 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
             assert "Players with no recorded 8-Ball games\t0\t1" in comparison
             assert "2 games · our players 2-0" in comparison
             assert "1 of 3" in comparison
-            assert "1 direct · 1 shared-opponent only · 4 no evidence (6 total)" in comparison
+            assert "1 direct · 1 shared-opponent only · 4 no verified evidence (6 total)" in comparison
         finally:
             browser.close()
 

@@ -3082,3 +3082,25 @@ No code changed. Real data acceptance stays open; scoped source closures are not
 Also added `EVIDENCE_LIMITS_NOTE` to the HTML trust card, the Excel Data Trust sheet and the matrix legend -- at the point the categories are read, not buried -- stating the either-direction risk instead of reassuring the reader. A test asserts the note cannot describe the omission as conservative, so my original error cannot be reintroduced as wording.
 
 No identity merged, no alias implied to belong to any canonical player, no login needed. 2,315 tests pass. Real data and roster acceptance stay open; PR #83 stays draft.
+
+
+### 2026-10-10 04:3x UTC: native acceptance on a bound candidate -- two real defects found, one fixed
+
+Worked Jeeves's acceptance checklist (issue #84) against a frozen, hash-bound candidate rather than a moving target. Binding recorded in `tmp/native/acceptance-<source>/candidate-binding.json` (gitignored): source commit, branch, clean-worktree flag, candidate DB sha256, and every artifact hash. Source DB hash was identical before and after every build. Native work ran on a **copy**, closed with **Don't Save**, and the copy's sha256 was verified identical afterwards.
+
+**Verified at record level, not just visually.**
+- The freshness banner says "data current to the latest recorded result Wed Oct 7, 2026". Queried the candidate DB: the latest *local* date carrying real score evidence is exactly 2026-10-07. The only `is_scored` row after it is 2026-10-12 with NULL scores -- the scheduling artifact. Without fix `1b6878e` the banner would have advertised a **future** date.
+- The packet's fixture header matches match id 9 in the DB (2026-10-11T11:00, 8-Ball Open, UNPLAYED) field for field.
+- Lineup Lab's skill arithmetic checks out: roster SLs sum to 36, marking the SL-4 entry Unavailable gives 32, clearing restores 36.
+
+**Two misreads caught before they became false bug reports.** A 0.5-scale screenshot made me think START HERE and Match Day showed different viewer record ids, and separately that "Open risks" changed from 0 to 3. Re-read at high zoom, the ids are identical and Open risks is 3 in both states (consistent with "favorable vs 5 of 8": 3 + 5 = 8). Both were my reading errors, not product defects. Low-resolution screenshots are not evidence; every number in the results file is from a high-zoom re-read or from the file itself.
+
+**Defect 1 -- FIXED (`bb1cfa5`).** All 30 sheets shipped visible: `hidden=0, veryHidden=0`. A captain opened the workbook into a 30-tab file including `Engine`, `Engine MD`, `Lists` and the schedule/date key helpers. Now hidden -- not veryHidden, so the arithmetic stays auditable -- while every sheet the user-facing text points at (`Meetings`, `Scouting Cards`, `Players`, `Player vs Player`) stays visible. GPT independently confirmed the failure from `xl/workbook.xml` in the hash-bound artifact.
+
+**Defect 2 -- STILL OPEN.** Our roster shows **10** current members where the owner reports 8. Exactly two carry 0-0: one at SL 6, one with no captured SL at all. That matches the database finding precisely -- but zero games is **not** proof of removal, and inferring it is forbidden. Only an authoritative roster response can settle it, and that needs the owner's interactive login. `ec1f5ad`/`b584074` target exactly this and stay **unexercised against live data**.
+
+**Scenario honesty.** Per GPT `0ed859e` I reclassified: a scenario I reasoned about but never exercised is **NOT RUN**, not a pass, and the availability and print scenarios are **PARTIAL PASS** with the exercised subcases named. Builder observations are not independent verification.
+
+Also closed GPT `1fec268`: residual "no evidence" wording still sat in the pairing-summary counts, the Next Send unknown list and four Excel legend/help strings. All now say "no verified evidence". My earlier claim that every surface was repaired was premature.
+
+Coverage stays `partial`, `accepted_current_data` stays **false**, PR #83 stays draft.

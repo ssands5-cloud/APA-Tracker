@@ -103,7 +103,7 @@ def test_team_comparison_counts_facts_and_discloses_missing_skill_levels():
     assert c["theirs"] == {"rostered": "2", "captured_sl": "2 of 2", "sl_total": "8", "games": "4", "no_games": "0"}
     assert c["direct_meetings"] == "3 games · our players 2-1"
     assert c["opponents_met"] == "1 of 2"
-    assert c["pairings"] == "1 direct · 1 shared-opponent only · 2 no evidence (4 total)"
+    assert c["pairings"] == "1 direct · 1 shared-opponent only · 2 no verified evidence (4 total)"
     empty = team_comparison(ours, theirs, build_pair_index([]), "EIGHT")
     assert empty["direct_meetings"] == "No verified direct meetings between these rosters in this snapshot"
 

@@ -295,7 +295,7 @@
     if(ns.more) lines.push("+ "+plural(ns.more,"more direct candidate")+" below the top three");
     ns.unordered.forEach(function(u){lines.push("≈ "+u.player+" — "+u.reason);});
     ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.player+" — "+a.reason);});
-    if(ns.unknown.length) lines.push("❓ Unknown (no evidence, not weak): "+ns.unknown.join(", "));
+    if(ns.unknown.length) lines.push("❓ Unknown (no verified evidence, not weak): "+ns.unknown.join(", "));
     return lines;
   }
   window.__ucNextSend=function(ourKey,oppKey,fmt,j,remainingIds,unplayed){
@@ -325,7 +325,7 @@
         // With medals, the rest folds into one line that still names every player; tap for the reasons.
         var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
-          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
+          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
         if(!ns.medals.length) return unord+rest+'</ul>';
         if(!unord&&!rest) return '</ul>';
         var sum=[];

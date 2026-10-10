@@ -234,7 +234,7 @@ def test_next_send_medals_only_ordered_direct_candidates_and_lists_avoid_and_unk
         "🥇 Cal (APA record ID 1003) — 1-1 direct record (2 meetings) — even",
         "≈ Bea (APA record ID 1002) — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
         "opponent (no direct meetings)",
-        "❓ Unknown (no evidence, not weak): Ann (APA record ID 1001)"]
+        "❓ Unknown (no verified evidence, not weak): Ann (APA record ID 1001)"]
     quin = next_send(wr, 2)
     assert quin["medals"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
     # Marks: Bea used -> nothing to order vs Opal; Opal played -> says so.

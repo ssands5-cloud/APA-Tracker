@@ -1233,7 +1233,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return {{format:fmtLabel(fmt),ours:side(ours),theirs:side(theirs),
       direct_meetings:dg?plural(dg,"game")+" · our players "+wlText(dw,dg):"No verified direct meetings between these rosters in this snapshot",
       opponents_met:Object.keys(met).length+" of "+theirs.length,
-      pairings:direct+" direct · "+sharedOnly+" shared-opponent only · "+none+" no evidence ("+(ours.length*theirs.length)+" total)"}};
+      pairings:direct+" direct · "+sharedOnly+" shared-opponent only · "+none+" no verified evidence ("+(ours.length*theirs.length)+" total)"}};
   }}
   function evidenceLeader(b){{
     var opp=b.opponent,rows=b.rows;
@@ -1337,7 +1337,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     }}).join("");
     out.innerHTML='<h2>Evidence ranking vs each opponent</h2>'
       +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
-      +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (by our player\\'s record against opponents both players have faced, then more shared opponents, then more games); players with no evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
+      +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (by our player\\'s record against opponents both players have faced, then more shared opponents, then more games); players with no verified evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
       +'<h3>At a glance</h3><div class="table-wrap"><table><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
       +'<div class="rank-blocks">'+detail+'</div>';
   }}
