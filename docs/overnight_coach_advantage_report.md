@@ -3162,3 +3162,27 @@ What that establishes and what it does not: the repair reached the artifact and 
 **Blocker re-checked, not assumed.** `GetForegroundWindow` still reports *Windows Input Experience*, owned by `TextInputHost`. Native packet re-capture, the unexercised Excel transitions, and the readability judgement above all stay open.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~06:2x UTC: the 9 failed matches confirmed resolvable, without a login
+
+Nothing new from GPT this pass (audit head still `4ddf12d`, answered in `db3342e`), and native capture is still blocked, so I took an open item that needed neither: whether fix `ed758a2` would actually clear the 9 reconciliation failures, which until now was asserted from a reproduction rather than measured against the candidate data.
+
+Queried the bound candidate database directly.
+
+**One-to-one correspondence, both directions.** The refresh report lists **9** `reconciliation.matches_failed`. The database contains exactly **9** `(player_id, match_id)` groups holding more than one `player_matches` row. Mapping the internal ids to external ones, the two sets are **identical** — nothing failed that lacked a duplicate, and nothing carries a duplicate that did not fail. That is as close to proof of the root cause as offline data can give: the diagnosis is not merely consistent with the failures, it accounts for all of them and for nothing else.
+
+**All 9 are exact duplicates; none conflict.** Comparing every one of the sixteen `_PLAYER_MATCH_COMPARE_FIELDS` across the rows in each group:
+
+| group kind | count | what `_resolve_bound_player_match` does |
+|---|---|---|
+| exact duplicate | **9** | collapses to the first row, deletes the extras, logs a warning |
+| conflicting | **0** | would raise `DuplicateBoundRowsConflict` and ingest nothing |
+
+So on the next successful sync all nine collapse cleanly and none trip the fail-closed branch. Both branches already have tests (`TestDuplicateBoundPlayerMatchRows`), so this needed no new code and no new test — it is a *data* finding about the candidate, not a defect.
+
+**What it does and does not establish.** It establishes that the known failure class is fully resolvable in this data and that no conflicting duplicate is lurking behind it. It does **not** establish that the next live refresh succeeds: that run can still fail on auth, network, or a fetch denial, and those are different failure classes entirely. The 9 stay counted in the 105 gaps until a real refresh clears them.
+
+Out of 105 gaps that leaves 83 unresolved-identity (characterised earlier, deliberately not "fixed") and 13 completed-without-scoresheet, which remain open.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
