@@ -4499,3 +4499,45 @@ initial suspicions dissolved once I measured the distribution instead of compari
 rows.
 
 No product code changed and no database was written. PR #83 stays draft.
+
+## Correction: the nine duplicates need no decision from Paul, and no fix
+
+Last entry I told Paul the nine duplicate rows left him two decisions -- whether to
+delete them, and whether to add an ingest guard -- and said both halves needed one
+answer. That was wrong in a useful direction: the machinery already exists, it is
+already tested, and the rows will repair themselves.
+
+**The guard I was about to propose is already there.** `ingest_match_scores` dedupes
+on `(player_id, match_id)`, and the resolver behind it collapses exact-duplicate rows
+when it meets them: it keeps the lowest-id row, deletes the extras, logs a warning, and
+raises a named error instead if the rows disagree rather than guessing. Two existing
+tests pin both halves of that -- an exact duplicate pair collapses to one updated row,
+and a conflicting pair raises and touches nothing.
+
+**That explains the correlation better than my own hypothesis did.** I suggested the
+duplicates were created by the viewer loop and the team scoresheet both writing a row.
+Creation may well work that way, but it is not what makes them persist. The collapse
+only happens as a side effect of a successful re-ingest of that match, and the nine
+matches carrying duplicates are exactly the nine whose scoresheet fetch failed. They
+survive because nothing has successfully re-read them since, not because anything is
+missing from the code.
+
+**All nine will collapse, not raise.** The resolver compares sixteen fields before
+collapsing; I had checked six. All sixteen are present in this table, and all nine
+groups agree on every one of them, so each is an exact duplicate by the resolver's own
+definition. Zero would hit the conflict path. The next successful fetch of those
+matches repairs them with no intervention.
+
+**So the item I added to Paul's decision list is withdrawn.** No database mutation to
+approve, no ingest guard to write. The one caveat worth keeping: repair needs those
+specific matches to be fetched successfully at some point. If their fetch keeps
+failing, the rows stay, and that remains harmless -- the War Room reads
+`player_head_to_head`, which carries none of them, and the stored match counts come
+from APA rather than being counted from `player_matches`.
+
+Recording this as a correction rather than quietly dropping it, because the error was
+in the direction that costs Paul attention: I handed him a decision that the codebase
+had already made, and I would not have noticed if I had stopped at reporting the
+finding instead of reading the path that consumes it.
+
+No product code changed, no database written. PR #83 stays draft.
