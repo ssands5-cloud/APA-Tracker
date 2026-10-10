@@ -4699,3 +4699,57 @@ evidence if any pair did meet twice. The useful output here is the number and it
 bound, not a change.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## One confirmation, one unresolved question, and a firing I should have run differently
+
+Yesterday's double-counting finding rested on arithmetic that fit exactly rather than
+on the contract's own rows. Today it is confirmed directly, and one new thing is worth
+recording. The rest of this firing I spent chasing a question through my own errors,
+and that is worth recording too.
+
+**Confirmed, from the contract's own output.** Every `all_games` row carries a
+`mirror_status`, so the composition needs no inference: 426,801 `VERIFIED_UNIQUE` plus
+388 `VERIFIED_COUNT_ONLY`, totalling the 427,189 already reconciled. Each of the 194
+duplicated groups emits exactly two rows. So the contract's canonical game table does
+count a duplicated meeting twice, and yesterday's conclusion stands on measurement now
+rather than on a sum that happened to fit.
+
+**A caution strengthened.** I bound one of the four current-session duplicated groups
+and read its four rows: one player holds a win and a loss against the other, mirrored
+consistently on both sides. That is two real games with a 1-1 split, not a duplicate at
+all. It is one of the 159 I declined to call duplicates yesterday, and it shows why
+that caution was right -- had I collapsed those, I would have erased a genuine result.
+The 35 exact duplicates remain the only ones I would call double-counted.
+
+**Unresolved: whether the shipped workbook agrees with the contract here.** The
+workbook's Player vs Player sheet appeared to report fewer games than either the raw
+or the deduplicated count for the duplicated pairs, consistently one fewer than
+deduplicated. That would be a real parity divergence, since the HTML matrix and the
+workbook are supposed to present the same evidence. I could not establish it. Every
+comparison I built failed on key construction rather than on data: the sheet labels a
+format family while the payload carries a different format value, and the builder
+emits 562,710 pair rows against the sheet's 541,052, so the two are not keyed alike
+and the difference may be entirely in my mapping. I am recording the question as open
+rather than reporting a divergence I have not demonstrated.
+
+What would settle it is reading the Excel builder's own format normalisation and row
+filtering and keying the comparison the way it keys itself, instead of guessing the
+join. That is a clean next step for someone with fresh attention on it.
+
+**On my own error rate this firing, because it is the real finding.** Five separate
+mistakes, all the same kind: a read-only URI SQLAlchemy does not interpret, a guessed
+import path, a guessed output key, `player_id` where the table uses
+`participant_a_id`, and a format key that matches nothing. Each cost a cycle, and two
+of them produced confident-looking zeros -- zero coverage issues against a manifest
+saying 227, and zero duplicated groups emitting a game -- that I would have reported as
+findings had the contradiction not been visible. The pattern is unchanged from three
+firings ago: I name things from memory instead of reading them. The useful mitigation
+is the one that actually worked each time, which is checking a result against a number
+I already trust before believing it.
+
+Also worth saying plainly: this firing produced one confirmation and one open question
+for a lot of work. The headless verification list has been exhausted for several
+firings, and the follow-on threads I have been generating are reaching the point where
+they cost more than they return.
+
+No product code changed, no database written. PR #83 stays draft.
