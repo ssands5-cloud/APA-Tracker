@@ -3061,6 +3061,24 @@ Paul's priority 2 asked to investigate the gaps and "retry safely where permitte
 
 **Deliberately proposing no fix here, and that is the finding.** The 418 is an *upper bound on potentially recoverable splits*, not a defect count. The resolver is team-scoped and current-roster-scoped on purpose; a globally-unique name is still not proof that a scoresheet entry and a roster entry are the same human, and this league's data demonstrably contains distinct people sharing a name (that is what the 241 are). Loosening resolution to capture the 418 would trade an honest, visible gap for silent, unverifiable conflation of two real people's records -- strictly worse, and contrary to the "never guess" rule this project and GPT's audits have both repeatedly upheld. These gaps are already reported per match and surfaced in the refresh report, which is what "retain unresolved gaps visibly" asks for.
 
-**Effect on analytics, stated honestly:** evidence attached to an unresolved id is invisible to views keyed on canonical ids, so a real past meeting can read as "no direct evidence" rather than a recorded result. That is a real limitation, it is bounded at 0.23% of rows, and it errs toward *understating* evidence rather than inventing it. Such a pairing renders as category `X` "Insufficient evidence" with the reason cell "No evidence" (`analytics/ultimate_coach_war_room.py:59,92`) -- verified against the source, not paraphrased. That wording claims no more than is known, but note it is indistinguishable from a pairing that genuinely never met: the UI does not say "evidence may exist under an unresolved identity". Nothing currently surfaces that distinction, and that is the one honest shortfall this investigation found.
+**Effect on analytics, stated honestly:** evidence attached to an unresolved id is invisible to views keyed on canonical ids, so a real past meeting can read as "no direct evidence" rather than a recorded result. That is a real limitation. Such a pairing renders as category `X` "Insufficient evidence" with the reason cell "No evidence" (`analytics/ultimate_coach_war_room.py:59,92`) -- verified against the source, not paraphrased. That wording claims no more than is known, but note it is indistinguishable from a pairing that genuinely never met: the UI does not say "evidence may exist under an unresolved identity". Nothing currently surfaces that distinction, and that is the one honest shortfall this investigation found.
 
 No code changed. Real data acceptance stays open; scoped source closures are not production approval. PR #83 stays draft.
+
+
+### 2026-10-09 (later still): GPT `7e67f60` -- I was wrong that excluded evidence is conservative
+
+**Correcting my own claim in `43043d0`.** I wrote that the identity exclusions "err toward *understating* evidence rather than inventing it." That is false, and GPT's counterexample is exact. I reproduced it against the committed `category()` before accepting it:
+
+| the pairing | verified rows | category shown |
+|---|---|---|
+| verified subtotal only | 1-0 of 1 | `G` **Favorable** -- 🟢 1-0 |
+| same pairing, 2 losses excluded | 1-2 of 3 | `R` **Concerning** -- 🔴 1-2 |
+
+`category()` reads the sign of whatever subtotal survived, so omitted rows move a label and a send order **in either direction**. A pairing can be presented as a recommended send while its complete record is concerning. And my "0.23% of rows" framing was a second mistake of the same kind: an archive-wide share says nothing about how much of *one* pair's history is missing, which is the only scope a captain actually decides in. Both claims are retracted. That counterexample is now an executable test rather than a note.
+
+**Disclosure, fixed in `15b6327`.** GPT's second P2 matched the shortfall I had already flagged, and went further: `"No evidence"` and `"Insufficient evidence (nothing recorded)"` assert a fact about history the snapshot cannot support. Reworded to what is known on every surface that said it -- the shared `cell_text`/`explanation`, the HTML matrix, legend, Tonight panel and Inspect, the Excel basis column and evidence-count formula, and the roster/scouting summaries. Both sides had their own copies; the existing HTML-vs-Python parity test caught the ones I missed first time.
+
+Also added `EVIDENCE_LIMITS_NOTE` to the HTML trust card, the Excel Data Trust sheet and the matrix legend -- at the point the categories are read, not buried -- stating the either-direction risk instead of reassuring the reader. A test asserts the note cannot describe the omission as conservative, so my original error cannot be reintroduced as wording.
+
+No identity merged, no alias implied to belong to any canonical player, no login needed. 2,315 tests pass. Real data and roster acceptance stay open; PR #83 stays draft.
