@@ -1203,3 +1203,81 @@ def test_a_long_note_collapses_on_the_first_screen_without_losing_a_word(tmp_pat
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_a_note_does_not_disturb_a_populated_inspect_selection(tmp_path: Path):
+    """The populated-Inspect case GPT kept listing as open.
+
+    Inspect is filled by clicking a matrix cell, which pins one pair's evidence
+    below the matrix. A captain mid-match has that open on the pair they are
+    deciding about. Writing an opinion must neither move the evidence nor throw
+    away the selection they are reading -- losing their place would be a small
+    bug with a bad moment attached to it.
+    """
+    path = tmp_path / "inspect_note.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    note = "ZZNOTE-inspect-populated"
+
+    read_all = """() => {
+      const out = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      let node;
+      while ((node = walker.nextNode())) {
+        out.push('T|' + node.parentElement.tagName + '|' + node.nodeValue.trim());
+      }
+      document.querySelectorAll('input, select, textarea').forEach((el, j) => {
+        if (el.dataset.zzEdited === '1') return;
+        out.push('V|' + j + '|' + el.tagName + '|' + (el.value || ''));
+      });
+      return out;
+    }"""
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            cell = page.locator("button.mcell").first
+            assert cell.count() > 0, "fixture must render a matrix to inspect"
+            cell.click()
+            page.wait_for_timeout(400)
+
+            pinned = page.locator("#wr-pair").inner_text()
+            assert pinned.strip(), "clicking a cell must populate Inspect"
+
+            page.eval_on_selector("textarea.plan", "el => { el.dataset.zzEdited = '1'; }")
+            before = page.evaluate(read_all)
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+            after = page.evaluate(read_all)
+
+            import difflib
+
+            changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
+                       if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
+            leaked = [line for line in changed if note not in line]
+            assert leaked == [], "a note disturbed a populated Inspect view: " + repr(leaked[:5])
+            assert changed, "the note must render somewhere, or this proves nothing"
+
+            assert page.locator("#wr-pair").inner_text() == pinned, (
+                "writing a note must not discard the pair the captain was reading")
+            assert errors == [], errors
+        finally:
+            browser.close()
