@@ -4395,3 +4395,46 @@ into reporting a clean run that was not.
 
 Scope: reporting and freshness accuracy only. No data was re-fetched, no database
 written, nothing deleted. PR #83 stays draft.
+
+## The no-scoresheet cause split cannot be done offline -- tested, not assumed
+
+I have been telling Paul the no-scoresheet cause split needs per-match live
+provenance. That was an assumption. The bye work suggested a way to test it: a bye is
+legitimately empty and carries an explicit flag, so perhaps forfeits are legitimately
+empty too and carry a recognisable signature. If so, part of the split could be made
+from the snapshot alone and Paul would have less to check.
+
+It cannot. Here is the measurement.
+
+**The seven real no-scoresheet matches fall into three shapes.** Three Ladies Alt
+matches scored as shutouts, 0-6 twice and 6-0 once. Three Doubles matches scored
+lopsidedly, 2-10 and 10-2. One Doubles match with null scores, `is_finalized=0`, dated
+after the build date -- the artifact audit 7a4f8b5 already identified, and the only
+unfinalized row among the seven.
+
+**The shutout and lopsided shapes are not forfeit signatures.** Across every scored,
+non-bye match in those two formats: in Ladies Alt, 559 matches have scoresheet rows
+and 27 do not, and the 0-6 and 6-0 shapes each occur once *with* rows. In Doubles, 396
+have rows and 11 do not, and 2-10 and 10-2 each occur three times *with* rows. A real
+played match can end at those scores, so the score cannot tell a forfeit from a match
+whose scoresheet was never captured.
+
+**And there is no flag to fall back on.** The matches table carries `is_bye`,
+`is_scored` and `is_finalized`, and nothing that marks a forfeit. The bye case was
+tractable precisely because APA states it explicitly; the forfeit case has no
+equivalent, so the distinction is not in this data at any level.
+
+So the split genuinely needs per-match provenance from a live fetch, and that is now
+evidenced rather than asserted. What Paul needs to check is also smaller than seven:
+the future-dated unfinalized one is a scheduling artifact already understood, leaving
+six matches, none of them involving his own teams.
+
+**One observation recorded, deliberately not acted on.** Twenty Ladies Alt matches
+across older sessions are scored 0-0 with no scoresheet rows, and 0-0 never appears
+among matches that do have rows. That looks like a void or cancelled match rather than
+missing coverage. I am not excluding them: unlike `is_bye`, 0-0 is a data shape I would
+be assigning a meaning to, which is exactly the inference habit that produced several
+of my false alarms this week. None of them is in the current refresh scope, so nothing
+depends on it today. If Paul confirms 0-0 means void, excluding it is a small change.
+
+No product code changed in this entry. PR #83 stays draft.
