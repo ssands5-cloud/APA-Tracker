@@ -4105,3 +4105,45 @@ answer is fuller private detail, not thinner public detail.
 Unchanged and still Paul's: native Excel workflows, Captain Packet print legibility,
 authoritative live roster data, the no-scoresheet cause split, and the
 history-preservation decision. PR #83 stays draft. No product code changed.
+
+## Excel/HTML parity on the real candidate: the evidence layer agrees exactly
+
+This was the next item on the list after the native workflows, and it needed no
+login. 4 of 4, on the bound candidate's own workbook and HTML.
+
+**What was checked.** For every pair in the bound fixture -- 10 of ours against 8 of
+theirs, 80 matrix cells, all 80 read -- the workbook's `Player vs Player` evidence
+rows were compared against the HTML matrix cells in both directions. The HTML renders
+a pair with direct evidence as wins-losses then games in parentheses
+(`analytics/ultimate_coach_war_room.py:100-108`), so the comparison is on numbers,
+not on wording.
+
+- the workbook holds 9 rows for this fixture's format; all 9 equal the HTML cell for
+  the same pair, zero mismatches, from 541,052 rows streamed
+- the HTML shows 9 cells in direct-record form, and every one has a workbook row
+  behind it: zero cases of the HTML claiming a record the workbook lacks
+- the remaining 71 pairs show no direct evidence in either artifact, consistently
+- a database cross-check of those same 9 pairs agrees 9 of 9
+
+Both directions matter here. Comparing one way would let the HTML invent a record, or
+let the workbook carry one the HTML silently drops; the pair sets are identical at 9.
+
+**What this does not establish, stated plainly.** This is parity of the evidence
+layer, not of the workbook's rendered War Room. Evaluating the real candidate's
+formulas headlessly is not affordable: its sheets are 587 MB of XML uncompressed, and
+the War Room formulas reach into the two evidence sheets that are 240 MB and 209 MB
+on their own, so there is no cheap subset to evaluate. The project's formula
+evaluator works fine at fixture scale and that is where formula correctness is
+covered; on the real candidate, the rendered Excel surfaces still need either a much
+larger evaluation budget or Paul opening the workbook. I would rather record that
+limit than let an evidence-layer pass stand in for the whole claim.
+
+The database cross-check is reported rather than asserted, because it needs a mapping
+from the workbook's format family to the snapshot's format strings, and that mapping
+is my inference. It agreed everywhere, so nothing hangs on it; a disagreement would
+have been a question to investigate, not a failure to report.
+
+Evidence under `tmp/native/acceptance-40d02c6/excel-html-parity.json`, with both
+artifact hashes. Still Paul's: native Excel workflows, Captain Packet print
+legibility, authoritative live roster data, the no-scoresheet cause split, and the
+history-preservation decision. PR #83 stays draft. No product code changed.
