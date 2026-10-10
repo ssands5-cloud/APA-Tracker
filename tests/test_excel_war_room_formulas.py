@@ -616,7 +616,7 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
         f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
         f"vs {EVE}: shared-opponent candidate, not ordered (the only one): {ANN} — reason: shared-opponent results only: "
         "ours 1-0 vs theirs 0-1 across "
-        "1 shared opponent (no direct meetings)",
+        "1 shared opponent (no verified direct meetings in this snapshot)",
     ]
     book.set(LL, "C12", "Unavailable")
     assert book.display(LL, f"A{top + 2}") == f"vs {EVE}: no evidence-backed option left among our remaining players"
@@ -709,7 +709,7 @@ def test_formula_rows_fit_their_worst_case_text(built):
     for r in range(header + 1, header + roster + 1):
         assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines("≈ 41-53 vs 81-58 (61 shared)", narrow, 9) * 9 * 1.2, r
     inspect = _row(built, WR, "Inspect opponent")
-    basis = ("Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+    basis = ("Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; "
              "compare ours vs theirs")
     for r in range(inspect + 2, inspect + 2 + roster):
         assert (wr.row_dimensions[r].height or 15) >= _wrapped_lines(basis, width(wr, 10, 12), 9) * 9 * 1.2, r

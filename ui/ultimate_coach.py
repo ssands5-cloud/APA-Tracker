@@ -1193,7 +1193,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       var start=position-group.length+1;
       group.forEach(function(c){{
         var ranked=c.tier===3,tied=ranked&&group.length>1;
-        var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; compare ours vs theirs":"No direct or shared-opponent evidence");
+        var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; compare ours vs theirs":"No verified direct or shared-opponent evidence in this snapshot");
         if(tied) basis+=" · Tied with "+group.filter(function(o){{return o!==c;}}).map(function(o){{return playerRef(o.member);}}).join(", ")+" — same evidence; the ranking can't separate them";
         rows.push({{
           rank:ranked?(tied?start+"=":String(start)):(c.tier===2?"≈":"—"),
@@ -1237,7 +1237,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   }}
   function evidenceLeader(b){{
     var opp=b.opponent,rows=b.rows;
-    if(!rows.length||rows[0].tier===1) return 'No direct or shared-opponent evidence for any of our roster against '+playerRef(opp)+' in this format yet.';
+    if(!rows.length||rows[0].tier===1) return 'No verified direct or shared-opponent evidence in this snapshot for any of our roster against '+playerRef(opp)+' in this format yet.';
     var top=rows.filter(function(r){{return r.rank===rows[0].rank;}}),c=rows[0].c;
     if(rows[0].tier===3&&top.length>1) return 'Insufficient evidence to distinguish '+top.map(function(r){{return r.player;}}).join(' / ')+' against '+playerRef(opp)+' — '
       +(c.tier===3?'identical direct records ('+wlText(c.rw,c.rg)+', '+plural(c.rg,'meeting')+' each)':'identical shared-opponent evidence ('+plural(c.n,'shared opponent')+', ours '+wlText(c.ow,c.og)+')')+'.';

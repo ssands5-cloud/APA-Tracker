@@ -46,9 +46,9 @@ def test_direct_ranks_before_shared_before_none_and_records_are_shown_with_sampl
     assert rows[0]["direct_text"] == "1-2 (3 meetings)" and rows[0]["basis"] == "Direct record"
     assert rows[1]["direct_text"] == "No verified direct meetings in this snapshot"
     assert rows[1]["shared_text"] == "2 shared opponents · ours 4-2 (6 games) · theirs 3-1 (4 games)"
-    assert rows[1]["basis"].startswith("Shared-opponent results only (no direct meetings)")
+    assert rows[1]["basis"].startswith("Shared-opponent results only (no verified direct meetings in this snapshot)")
     assert rows[2]["shared_text"] == "No shared opponents"
-    assert rows[2]["basis"] == "No direct or shared-opponent evidence"
+    assert rows[2]["basis"] == "No verified direct or shared-opponent evidence in this snapshot"
     assert block["opponent_sample"] == "4 recorded games in 8-Ball"  # Opal: 2 vs player 60 + 2 vs player 61
     assert block["note"] == "2 of 3 of our players have direct or shared-opponent evidence against this opponent."
 

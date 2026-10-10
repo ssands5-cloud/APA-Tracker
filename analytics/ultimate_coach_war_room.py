@@ -145,7 +145,7 @@ def reason(row: dict[str, Any]) -> str:
     if row.get("shared_count"):
         (ow, og), (tw, tg) = row["ours"], row["theirs"]
         return (f"shared-opponent results only: ours {record_text(ow, og)} vs theirs {record_text(tw, tg)} across "
-                f"{plural(row['shared_count'], 'shared opponent')} (no direct meetings)")
+                f"{plural(row['shared_count'], 'shared opponent')} (no verified direct meetings in this snapshot)")
     return "no recorded evidence"
 
 

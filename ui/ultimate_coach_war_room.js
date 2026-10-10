@@ -31,7 +31,7 @@
   // Why a player appears as a send (mirrors analytics.ultimate_coach_war_room.reason).
   function wrReason(c){
     if(c.direct) return wlText(c.direct.w,c.direct.g)+" direct record ("+plural(c.direct.g,"meeting")+") — "+WR_CAT_WORD[wrCategory(c)];
-    if(c.shared) return "shared-opponent results only: ours "+wlText(c.ow,c.og)+" vs theirs "+wlText(c.tw,c.tg)+" across "+plural(c.shared,"shared opponent")+" (no direct meetings)";
+    if(c.shared) return "shared-opponent results only: ours "+wlText(c.ow,c.og)+" vs theirs "+wlText(c.tw,c.tg)+" across "+plural(c.shared,"shared opponent")+" (no verified direct meetings in this snapshot)";
     return "no recorded evidence";
   }
   // Calendar day in the disclosed display timezone for an offset-aware source timestamp

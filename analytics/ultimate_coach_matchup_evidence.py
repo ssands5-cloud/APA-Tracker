@@ -142,10 +142,10 @@ def rank_vs_opponent(
             if c["tier"] == TIER_DIRECT:
                 basis = "Direct record"
             elif c["tier"] == TIER_SHARED:
-                basis = ("Shared-opponent results only (no direct meetings) — not ordered against other "
+                basis = ("Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other "
                          "indirect candidates; compare ours vs theirs")
             else:
-                basis = "No direct or shared-opponent evidence"
+                basis = "No verified direct or shared-opponent evidence in this snapshot"
             if tied:
                 others = [player_ref(o["member"]) for o in group if o is not c]
                 basis += " · Tied with " + ", ".join(others) + " — same evidence; the ranking can't separate them"

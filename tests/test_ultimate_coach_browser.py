@@ -516,7 +516,7 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             assert ("None of our roster has met Drew Diaz (APA record ID 4) directly. 1 player has shared-opponent "
                     "evidence only — not ranked against each other; compare ours vs theirs in the matrix.") in matchups
             # Finn: nobody on our roster has any direct or shared evidence at all.
-            assert "No direct or shared-opponent evidence for any of our roster against Finn Frost (APA record ID 5)" in matchups
+            assert "No verified direct or shared-opponent evidence in this snapshot for any of our roster against Finn Frost (APA record ID 5)" in matchups
 
             assert "FORBIDDEN" in matchups
 
@@ -1279,10 +1279,10 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
             assert _ranking_rows(page, 0) == [
                 ["≈", "Bea Baker (APA record ID 2)", "5", "No verified direct meetings in this snapshot",
                  "1 shared opponent · ours 1-0 (1 game) · theirs 0-1 (1 game)",
-                 "Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+                 "Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; "
                  "compare ours vs theirs"],
                 ["—", "Ann Archer (APA record ID 1)", "4", "No verified direct meetings in this snapshot", "No shared opponents",
-                 "No direct or shared-opponent evidence"],
+                 "No verified direct or shared-opponent evidence in this snapshot"],
             ]
             notes = page.locator(".rank-block p.muted").all_inner_texts()
             assert notes[0] == "1 of 2 of our players have direct or shared-opponent evidence against this opponent."

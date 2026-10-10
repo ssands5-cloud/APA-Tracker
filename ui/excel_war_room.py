@@ -1846,7 +1846,7 @@ def _longest_label(wb) -> str:
 # A long but realistic player label, and the longest matrix evidence text, for sizing formula rows.
 WORST_LABEL = "Christopher Fitzgerald (APA record ID 3487149)"
 WORST_EVIDENCE = "≈ 41-53 vs 81-58 (61 shared)"
-WORST_BASIS = ("Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
+WORST_BASIS = ("Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; "
                "compare ours vs theirs")
 
 

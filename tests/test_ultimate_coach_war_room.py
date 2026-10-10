@@ -216,7 +216,7 @@ def test_reason_states_the_evidence_and_its_sample_size_only():
     assert reason({"direct": (0, 1)}) == "0-1 direct record (1 meeting) — concerning"
     assert reason({"direct": (1, 2)}) == "1-1 direct record (2 meetings) — even"
     assert reason({"direct": None, "shared_count": 1, "ours": (1, 1), "theirs": (0, 1)}) == (
-        "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no direct meetings)")
+        "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)")
     assert reason({"direct": None, "shared_count": 0}) == "no recorded evidence"
 
 
@@ -233,7 +233,7 @@ def test_next_send_medals_only_ordered_direct_candidates_and_lists_avoid_and_unk
         "Best-supported response: Cal",
         "🥇 Cal (APA record ID 1003) — 1-1 direct record (2 meetings) — even",
         "≈ Bea (APA record ID 1002) — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
-        "opponent (no direct meetings)",
+        "opponent (no verified direct meetings in this snapshot)",
         "❓ Unknown (no verified evidence, not weak): Ann (APA record ID 1001)"]
     quin = next_send(wr, 2)
     assert quin["medals"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
