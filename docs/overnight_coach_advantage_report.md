@@ -4594,3 +4594,56 @@ signature normalisation. The category and its cause are measured; the precise ma
 between those two counts is inferred.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## The 227 reproduced exactly, and a wrong claim of mine corrected
+
+Last entry I decomposed the manifest's 227 coverage issues but kept a limit: I had
+identified 218 as the mirror category by elimination and had not reproduced the mapping
+from the 388 duplicate groups I measured. Closed now, by running the contract's own
+code against a copy of the snapshot rather than reimplementing its grouping.
+
+**The contract's own numbers.** 227 coverage issues, matching the manifest exactly:
+218 `GAME_MIRROR_STATUS` and 9 `PLAYER_MATCH_AMBIGUITY`, with `H2H_MATCH_MISSING`
+absent entirely. Its table counts also line up with the manifest -- 427,189 all-games
+rows, 845,588 player-match stats, 854,426 raw head-to-head rows.
+
+**The mapping I owed, reproduced.** The 218 split into 194 `VERIFIED_COUNT_ONLY` and 24
+`REVERSE_ONLY`. The 194 are exactly half the 388 duplicate directional groups I measured
+last entry: each unordered pair carries a duplicate in both directions, so 388 halves to
+194. That is the arithmetic I said I had not done.
+
+**Correction: I claimed none of the 218 was a missing-mirror case. Twenty-four are.**
+I wrote that no head-to-head row lacks its mirror, having checked whether the swapped
+(match, player, opponent) row exists. It always does. But the contract additionally
+requires a *usable* result: its low and high row lists filter on a result normalising to
+W or L, and anything else is dropped before classification. So a mirror row can exist and
+still leave the group empty.
+
+That is what happened. The snapshot holds 48 head-to-head rows with a null result, and
+they form exactly 24 pairs in which neither direction has a usable outcome -- so the
+classifier falls through to `REVERSE_ONLY` for each. The count matches the contract's 24
+exactly. Those are games with no recorded result, not games missing a mirror, and the
+category name reads oddly for that case because the fall-through catches an empty low
+side however it became empty.
+
+None of the 24 is in a match of Paul's four teams, which keeps the earlier conclusion
+about his own data intact.
+
+**Three tooling errors of my own in this one firing, all mine and all caught.** The
+first attempt opened the database through a read-only URI that SQLAlchemy did not
+interpret, so the contract read an empty database and reported 0 issues against a
+manifest saying 227 -- the contradiction is the only reason I looked. The second
+attempt guessed an import path that does not exist. The third read
+`contract["coverage_issues"]`, which is not where the contract puts them; they live
+under `tables`, so my lookup returned nothing and I got 0 again. Each was the same
+habit: naming something from memory instead of reading it, which is the third firing
+running where that has cost me a cycle.
+
+**Housekeeping to note, not act on.** Running the contract needed a database copy, so
+there is now a 235 MB copy of the staging snapshot in this session's scratchpad
+directory, outside the repository and untracked. It carries real player data. I am not
+deleting it under the standing rule about deletions, and recording it here so it is on
+the cleanup inventory rather than forgotten.
+
+No product code changed, and the source database is unchanged -- hashed before and
+after, identical. PR #83 stays draft.
