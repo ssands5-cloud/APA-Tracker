@@ -3343,3 +3343,24 @@ The migration itself is more careful than I expected: the first legacy note fill
 That removes one item from the open list on evidence rather than by assertion. Still open from that group: evidence-ranking isolation across *every* surface rather than the sampled tables.
 
 2324 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~09:4x UTC: diagnosing four failed login runs — the machinery is fine, the runs are being killed
+
+The owner offered a login and has now attempted the `--mine-only` refresh four times (08:06, 08:19, 08:32, 09:33 UTC). Every attempt left a refresh directory containing nothing but a 0-byte `refresh.log`. Rather than let him keep retrying blind, I diagnosed it.
+
+**First correction to my own reasoning.** I assumed the empty `refresh.log` was the symptom. It is not: a **successful** run leaves it empty too, because the handler only writes when the sync logs a warning. The real signal is the three files that were *absent*: `refresh_error.json`, `refresh_progress.json`, and the 235 MB database copy.
+
+**What that rules out.** Every failure path in `main()` — token, `RefreshError`, and a bare `except Exception` — calls `_write_failure()`, which writes `refresh_error.json`. No such file exists in any of the four. An ordinary exception therefore cannot explain them. What `except Exception` does *not* catch is `KeyboardInterrupt` and process termination, so the runs are being **interrupted**, not failing.
+
+**Proved the pipeline is healthy, without a login.** Ran the refresh with a deliberately invalid token. It hashed the source, made the full 235 MB copy, started the sync, failed cleanly at the first API call with `AccessTokenExpired`, wrote both `refresh_error.json` and a 430 KB `refresh_progress.json`, and printed its own resume command. Source DB sha256 identical before and after. The token string does not appear anywhere in the written files.
+
+**Why the attempts die in a window with no output.** `run_refresh` opens by SHA-256 hashing a 235 MB database and then copying it via SQLite's backup API. Both are silent, so the terminal sits with no output after "Refreshing the current session into a COPY…" — which reads exactly like a hang. All four attempts died inside that window, before the copy landed.
+
+**The unblock.** The diagnostic run left a clean resumable directory: progress schema v2, `mine_only: true`, `mode: reconcile`, `completed_divisions: 0`, and the database copy already made. Resuming it skips the hash-and-copy window entirely and goes straight to live work on a fresh token, so the owner sees activity within seconds instead of staring at silence.
+
+Six leftover directories now sit under `tmp/refresh/` (five aborted, one diagnostic). All are gitignored and none is deleted — cleanup needs the owner's approval of exact paths.
+
+Separately noting GPT `dc0bc3d`: they accept the retraction but decline to adopt my zero-warning log inference as proof that fetch failure is excluded, since the log is not a verified complete per-match response history. That is fair; I am holding it as indicative, not closed.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
