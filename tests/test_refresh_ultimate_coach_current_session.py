@@ -642,3 +642,47 @@ def test_resume_never_claims_complete_while_a_reopened_division_keeps_failing(se
     progress = json.loads((out / "refresh_progress.json").read_text(encoding="utf-8"))
     assert all(not k.startswith("D1|") for k in progress["completed_divisions"])   # D1 stays reopened
     assert refresh.describe_source(out / "ultimate_coach_staging.db")["accepted_current_data"] is False
+
+
+class TestAnInterruptedRunStillRecordsWhyItStopped:
+    """Seven live attempts left a directory holding nothing but an empty log.
+
+    Interruption, crash and early failure were indistinguishable from the
+    artifacts, because main() only recorded `Exception` -- and KeyboardInterrupt
+    and SystemExit are not Exceptions. So the one question that mattered, "did
+    it crash or was it stopped?", could not be answered from disk at all.
+
+    A refresh that dies without saying why costs a real APA login to retry, so
+    recording the cause is worth more than the handful of lines it takes.
+    """
+
+    def test_a_keyboard_interrupt_writes_a_failure_record_and_still_propagates(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise KeyboardInterrupt()
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+        out_root = tmp_path / "refresh"
+
+        with pytest.raises(KeyboardInterrupt):
+            refresh.main(["--out-root", str(out_root), "--source-db", str(tmp_path / "nope.db")])
+
+        folder = refresh.LAST_OUT_DIR
+        assert folder is not None and folder.is_dir()
+        record = folder / "refresh_error.json"
+        assert record.is_file(), sorted(f.name for f in folder.iterdir())
+        assert "KeyboardInterrupt" in json.loads(record.read_text(encoding="utf-8"))["error_type"]
+
+    def test_a_system_exit_is_recorded_the_same_way(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise SystemExit(7)
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        with pytest.raises(SystemExit):
+            refresh.main(["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "nope.db")])
+
+        record = refresh.LAST_OUT_DIR / "refresh_error.json"
+        assert record.is_file()
+        assert "SystemExit" in json.loads(record.read_text(encoding="utf-8"))["error_type"]

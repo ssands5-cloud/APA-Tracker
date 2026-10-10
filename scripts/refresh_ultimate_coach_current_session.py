@@ -668,6 +668,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Refresh FAILED: {type(exc).__name__}: {scrub(exc)[:400]}\n"
               f"  details: {out_dir / 'refresh_error.json'} · nothing was promoted; the source DB is untouched.")
         return 5
+    except BaseException as exc:
+        # Ctrl-C and SystemExit are NOT Exceptions, so an interrupted run used to
+        # leave a folder holding nothing but an empty log -- indistinguishable from
+        # a crash or an early failure. Seven live attempts died exactly that way and
+        # the cause could not be read from disk at all. Every retry costs a real APA
+        # login, so the cause is recorded here and the exception re-raised untouched:
+        # identical behaviour, evidence kept.
+        _write_failure(out_dir, exc, scrub, traceback.format_exc())
+        print(f"Refresh STOPPED: {type(exc).__name__}. Nothing was promoted; the source DB is untouched.")
+        print(f"  details: {out_dir / 'refresh_error.json'}")
+        raise
     finally:
         logging.getLogger().removeHandler(handler)
         handler.close()
