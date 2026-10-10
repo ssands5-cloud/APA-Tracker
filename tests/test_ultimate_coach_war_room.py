@@ -358,3 +358,37 @@ class TestEvidenceLimitsReachBothSurfaces:
         )
         assert "What excluded evidence means for a decision" in text
         assert "either direction" in text
+
+
+class TestInternalSheetsAreHidden:
+    """A captain should not open this workbook into a 30-tab engine dump.
+
+    The internals have to exist because formulas and data validation point at
+    them, so they are hidden rather than removed -- and hidden, not veryHidden,
+    so the arithmetic stays auditable from the tab bar.
+    """
+
+    def test_build_internals_are_hidden_and_user_sheets_are_not(self):
+        from ui.export_excel_ultimate_coach import INTERNAL_SHEETS, SHEET_ORDER
+
+        # the sheets user-facing text sends the reader to must never be hidden
+        for name in ("Meetings", "Scouting Cards", "Players", "Player vs Player",
+                     "START HERE", "Captain Packet", "Lineup Lab", "War Room"):
+            assert name in SHEET_ORDER
+            assert name not in INTERNAL_SHEETS
+
+        for name in INTERNAL_SHEETS:
+            assert name in SHEET_ORDER, f"{name} is not a real sheet"
+
+    def test_a_built_workbook_hides_exactly_those_sheets(self, tmp_path):
+        """Checks the actual built workbook, not just the constant."""
+        from tests.test_excel_war_room_formulas import _payload
+        from ui.export_excel_ultimate_coach import INTERNAL_SHEETS, build_workbook
+
+        wb = build_workbook(_payload())
+
+        hidden = {ws.title for ws in wb.worksheets if ws.sheet_state != "visible"}
+        assert hidden == set(INTERNAL_SHEETS), f"unexpected: {hidden ^ set(INTERNAL_SHEETS)}"
+        assert wb.active.title == "START HERE"
+        # Excel refuses to open a workbook with no visible sheet
+        assert any(ws.sheet_state == "visible" for ws in wb.worksheets)

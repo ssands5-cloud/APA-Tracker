@@ -131,6 +131,26 @@ SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "War Room", "Lineup 
                "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
                "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
                "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
+# Build internals: lookup keys, dropdown sources and the formula engines. They
+# have to exist in the workbook because formulas and data validation point at
+# them, but a captain opening this file should not land in a 30-tab workbook
+# with "Engine MD" in it. Hidden, never veryHidden, so anyone who wants to audit
+# the arithmetic can still unhide them from the tab bar.
+#
+# Deliberately NOT hidden: every sheet the user-facing text sends the reader to
+# -- "Meetings" (the Captain Packet truncation note), "Scouting Cards", and
+# "Players"/"Player vs Player" (the Data Trust wording) -- plus the reference
+# tables a captain may legitimately want to read.
+INTERNAL_SHEETS = (
+    "Schedule Keys",
+    "Date Keys",
+    "Suggested Dates",
+    "Stale Scopes",
+    "Lists",
+    "Engine",
+    "Engine MD",
+)
+
 RAIL = "5A3A1F"
 OPPONENT_FILL = PatternFill("solid", fgColor=RAIL)
 
@@ -870,6 +890,8 @@ def build_workbook(
 
     for target, name in enumerate(SHEET_ORDER):
         wb.move_sheet(wb[name], offset=target - wb.sheetnames.index(name))
+    for name in INTERNAL_SHEETS:
+        wb[name].sheet_state = "hidden"
     wb.active = wb["START HERE"]
     return wb
 
