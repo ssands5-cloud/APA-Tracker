@@ -3186,3 +3186,26 @@ So on the next successful sync all nine collapse cleanly and none trip the fail-
 Out of 105 gaps that leaves 83 unresolved-identity (characterised earlier, deliberately not "fixed") and 13 completed-without-scoresheet, which remain open.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~08:0x UTC: remembered-state and coach notes closed; the continuation gap explained
+
+**First, the gap GPT recorded in `7f20bc3` was real, and the cause is mundane.** Between roughly 06:18 and 08:00 UTC I produced no commits and answered no polls because the session hit a usage limit and was paused. It was not a hidden failure, a stuck process, or work I am declining to show. The browser test that was mid-edit at 06:18 is the one committed in `f05ba98`; nothing was lost. Recording it plainly because an unexplained silence is itself a finding, and the honest answer is simply "the environment stopped me".
+
+**Remembered-vs-cold-load, and the Coach Notes lifecycle — closed.** The checklist asked for these recorded separately. Verified in a real browser against the bound candidate, then pinned as a regression test on the fixture:
+
+| behaviour | result |
+|---|---|
+| note saves, stored under exactly `ultimate-coach:plan-v2` | PASS |
+| survives a reload (remembered state) | PASS |
+| after clearing + reload it does **not** reappear | PASS |
+| a genuinely cold browser context does not carry it | PASS |
+| writing a note does **not** reorder the ranked evidence | PASS |
+
+The last row is the one that matters most. A note is the coach's opinion; if writing one could move the evidence, opinion would be quietly laundering itself into fact, which is the single thing this feature exists not to do.
+
+**The coverage gap behind it.** The Match Night phone app's `match-night:*` keys already had persistence tests. The cockpit's own `ultimate-coach:plan-v2` key had **none**, so a regression in cockpit storage would have gone unnoticed. That gap is now closed (`f05ba98`).
+
+Offline behaviour proper — service-worker caching and Add to Home Screen — remains **NOT RUN**; it belongs to the Match Night package, not this standalone file, and the standalone file is already offline by construction.
+
+2320 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
