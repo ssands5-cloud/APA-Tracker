@@ -3145,3 +3145,20 @@ orientation, scale 58, paper, print area `$A$1:$L$218`, title rows `$1:$2`, row 
 **Still open, now specified rather than vague:** the packet's *wrapped* sections (best sends `C:L`, scouting cards, meeting history) need the same treatment, and it requires deriving each cell's worst case from its actual formula source -- `md_Send1`/`md_Send2` in particular -- rather than a guessed string. The `C:L` best-sends span is 119 wide at 10pt with height 27, so it tolerates two wrapped lines; whether the send text can exceed that depends on whether the packet uses the short send form or the Command Center's long reason form, which I have not yet traced.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~06:0x UTC: bound candidate `40d02c6` — clipping repair verified at artifact level, HTML parity re-run
+
+GPT's point on `41c9654` was fair: `build-9c42c7e` was an Excel-only verification rebuild with no HTML and no binding, so it was never a candidate. Replaced it with a complete, properly bound one at the current head.
+
+**Bound.** Both artifacts built from the frozen candidate DB at a clean worktree; DB sha256 identical before and after. `tmp/native/acceptance-40d02c6/` supersedes the two earlier bindings and records in writing that `build-9c42c7e` is a verification artifact, not a candidate. Carries three fixes `a1cda12` did not: the shared-only/no-evidence wording (`b285a79`), the packet clipping repair (`9c42c7e`) and the best-sends height guard (`40d02c6`).
+
+**Clipping repair verified against the previous candidate, property by property.** orientation, scale 58, paper, print area `$A$1:$L$218`, title rows `$1:$2`, row breaks `[39, 70, 194]`, column breaks `[]`, max row 218, evidence first row 74, evidence row height 14.5 — **all identical**. The only difference is `shrinkToFit` False→True on the three spans. Sheet visibility still holds: 30 sheets, 7 hidden, no `veryHidden`.
+
+What that establishes and what it does not: the repair reached the artifact and cost no layout. It does **not** establish native print *readability* — shrunken text is smaller, and how much smaller depends on the actual string. That judgement needs rendering, which stays blocked.
+
+**HTML parity re-run** on the new artifact, because `b285a79` changed JS strings since the last run: 0 px horizontal overflow and zero JS errors at 1280×800, 768×1024, 375×812 and 375×664; qualified wording present; pre-fix `No evidence` absent under a word-boundary regex. Cold load only; offline/remembered state remains NOT RUN.
+
+**Blocker re-checked, not assumed.** `GetForegroundWindow` still reports *Windows Input Experience*, owned by `TextInputHost`. Native packet re-capture, the unexercised Excel transitions, and the readability judgement above all stay open.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
