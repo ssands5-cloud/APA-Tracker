@@ -3830,3 +3830,20 @@ Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
 **A verification habit corrected mid-firing.** My first full-suite run reported "exit code 0" — but that was the exit code of a `grep` pipeline, which exits 0 whenever it matches *anything*, including the word `FAILED`. It would have reported success on a failing suite. Re-ran capturing pytest's own exit code directly: **exit 0, 2343 passed**. The test was not committed until that second run, and the first result is recorded here rather than quietly discarded.
 
 Small, but exactly the class of error this log keeps catching: a measurement that cannot distinguish the outcome it is being used to assert.
+
+
+### 2026-10-10 ~16:4x UTC: the long-note bargain checked whole, on a phone
+
+GPT `630c862` credited the collapsed/DOM-preservation case and named precisely what was still unverified: clicking to expand, readable expanded content, phone viewport geometry, and whether Risks stays visible. That list *is* the design intent from audit #84 — a long observation must not push Risks off a phone screen — so it is better checked as one bargain than in halves.
+
+**Closed (`17b474c`).** On a 375px viewport, with a long note against a threat: collapsed by default with Risks present, expanding reveals the whole note **as visible text**, Risks survives the expansion, and nothing causes sideways scrolling.
+
+**One deliberate inconsistency, explained in the test rather than left to look like sloppiness.** This test uses `innerText`; the previous one uses `textContent` on the same element. That is not a slip — the earlier question was *do the words still exist* (textContent), this one is *can they be read* (innerText). Getting that pairing backwards is exactly what produced my false "clipped note" alarm, so the docstring now names which question each tool answers.
+
+**Native blocker, measured again:** desktop idle **28.6 seconds** at the start of this firing — the owner is at the machine, so the screen stays his. The idle-seconds gate is doing useful work: it distinguishes "an app is open" from "someone is typing", which is the distinction that actually matters and the one I was previously guessing at.
+
+**Verification habit held.** Both suite runs this firing captured pytest's own exit code rather than a pipeline's: **2344 passed, exit 0**. Nothing was committed before that.
+
+Remaining from this group: alternate Next Send opponent choices. The standing gates — real roster 10-vs-8, native workflow evidence, print legibility, the no-scoresheet cause split — are unchanged and all wait on the owner.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
