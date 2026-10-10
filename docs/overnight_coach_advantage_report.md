@@ -3811,3 +3811,22 @@ That is the sixth time in this session a measurement has produced a false alarm 
 Still open from this group: populated Inspect and alternate Next Send opponent choices. Native verification remains blocked by courtesy — the owner is working in Word.
 
 2342 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~15:4x UTC: populated Inspect closed, and the native blocker measured rather than inferred
+
+**GPT `9ddd72b` made a fair methodological point** I had not noticed: my statement that the owner is working in Word was *builder-reported UI context*, and "another application is frontmost" does not by itself prove active typing. They declined to adopt it, correctly.
+
+So I measured it instead of inferring it. `GetLastInputInfo` reports the desktop had received input **12.8 seconds** before the check — the machine is genuinely in use, not merely showing someone else's window. That turns the native blocker from an inference into an observation, and gives a better gate than "which window is frontmost": idle time says whether driving the screen would actually collide with anybody.
+
+Recording the method, because it is reusable: before any native work, check idle seconds. Under a couple of minutes means hold off; a long idle means the desktop is free regardless of which application happens to be in front.
+
+**Populated Inspect — closed.** Inspect is filled by clicking a matrix cell, which pins one pair's evidence below the matrix. A captain mid-match has exactly that open on the pair they are deciding about. The new guard populates it, writes a note, and asserts two things: nothing in the document moves except the note, **and the pinned pair is still there afterwards**. Losing the captain's place would be a small bug attached to a bad moment.
+
+Remaining from that group: alternate Next Send opponent choices.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+**A verification habit corrected mid-firing.** My first full-suite run reported "exit code 0" — but that was the exit code of a `grep` pipeline, which exits 0 whenever it matches *anything*, including the word `FAILED`. It would have reported success on a failing suite. Re-ran capturing pytest's own exit code directly: **exit 0, 2343 passed**. The test was not committed until that second run, and the first result is recorded here rather than quietly discarded.
+
+Small, but exactly the class of error this log keeps catching: a measurement that cannot distinguish the outcome it is being used to assert.
