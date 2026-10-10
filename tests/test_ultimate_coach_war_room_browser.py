@@ -15,7 +15,7 @@ from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_matchup_evidence import build_pair_index, members_by_scope
 from analytics.ultimate_coach_war_room import (SENDABLE, meetings_index, next_send, next_send_lines,
                                                sl_bucket_index, war_room_pair)
-from tests.test_excel_war_room_formulas import _payload
+from tests.test_excel_war_room_formulas import _games, _payload
 from ui.ultimate_coach import render
 
 OURS, THEIRS = "sharks-a|d1|Fall 2026", "falcons-a|d1|Fall 2026"
@@ -1131,6 +1131,75 @@ def test_a_long_coach_note_survives_whole(tmp_path: Path):
             restored = page.locator("textarea.plan").first.input_value()
             assert restored == long_note, "a reload must not clip the note"
             assert len(restored) == len(long_note)
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+def test_a_long_note_collapses_on_the_first_screen_without_losing_a_word(tmp_path: Path):
+    """The collapsed-preview case, now reachable.
+
+    The default fixture has no opponent with a winning record against us, so
+    the threats list is empty and the note preview never renders -- which is
+    why an earlier attempt at this test found nothing. Giving one opponent a
+    losing record for us makes them a threat and reaches the path.
+
+    The design intent (GPT audit #84) is that a long observation must not push
+    Risks off a phone screen. The hazard that creates is the opposite one:
+    silently clipping the captain's words. So this pins both halves -- the
+    summary is short, and the full note is still in the document.
+
+    innerText deliberately is NOT used for that check: a collapsed <details>
+    excludes its hidden content from innerText, which looks exactly like data
+    loss and is not. textContent is the honest measure here.
+    """
+    payload = _payload()
+    payload["evidence"] = payload["evidence"] + _games(3, 10, "LLL") + _games(2, 10, "LL")
+    payload["counts"] = {"players": len(payload["players"]),
+                         "head_to_head_rows": len(payload["evidence"])}
+    path = tmp_path / "threat_note.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    long_note = ("ZZLONGNOTE plays safe off the rail all night and will not cut the ball "
+                 "into the side pocket under pressure")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            assert "Cam Cole" in page.locator(".decide-threats").inner_text(), "fixture must produce a threat"
+
+            for index in range(page.eval_on_selector_all("textarea.plan", "els => els.length")):
+                box = page.locator("textarea.plan").nth(index)
+                box.scroll_into_view_if_needed()
+                box.fill(long_note)
+                box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+
+            # The first screen picks the note up on the next render, not in place.
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(400)
+
+            shown = page.evaluate("""(note) => {
+              const d = document.querySelector('details.note-more');
+              if (!d) return null;
+              const summary = d.querySelector('summary');
+              return {open: d.open,
+                      wholeNoteInDom: d.textContent.includes(note),
+                      summaryLength: (summary ? summary.textContent : '').length};
+            }""", long_note)
+
+            assert shown is not None, "a long note on a threat must render its preview"
+            assert shown["open"] is False, "it must start collapsed so Risks stay on screen"
+            assert shown["wholeNoteInDom"], "collapsing must not cost a single word"
+            assert shown["summaryLength"] < len(long_note), "the summary is the short part"
             assert errors == [], errors
         finally:
             browser.close()
