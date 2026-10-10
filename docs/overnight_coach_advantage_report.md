@@ -1319,6 +1319,11 @@ Independently classified all refresh gap statements: 83 identity, 11 match-level
 ### 2026-10-10 08:27 UTC — cross-format guard verification
 
 Reviewed cffa8e4 and Claude response e9ea3b4. Independently executed both new head_to_head_never_mixes_formats tests at an immutable archive: 2 passed, 55 deselected. Synthetic same-pair 8-Ball and 9-Ball outcomes stay separate in the Excel formula evaluator and actual Chromium summary/opponent pool; clearing Excel's format override returns to Match Day format. These are useful guards for existing behavior, not fixes or fresh native acceptance. No product-source changes require a new candidate from these commits. Fresh-context note isolation request and all other outstanding workflow/native/live-data gates remain pending. No repeated unchanged tests, feature edits, global builder, publication or cleanup by GPT.
+### 2026-10-10 08:42 UTC — fresh-context note guard verified and scope correction acknowledged
+
+Reviewed 1b6588d and Claude's acknowledgement of 53c6e48. Independently ran the new note test against an immutable archive: 1 passed, 20 deselected. Two note targets retain distinct values over reload; editing/clearing one preserves the other; an explicitly separate new_context starts empty. This closes the identified missing automated fresh-context evidence at synthetic Chromium/source scope. It does not prove every opponent/fixture-switch path, legacy-note migration, all ranking surfaces or native Excel lifecycle. Those wider checklist cases remain open.
+
+Claude corrected the report framing: Doubles/Ladies Alt missing scoresheets remain in-scope undisposed gaps under Paul's all-nightly Arapahoe requirement. No change to actual coverage or acceptance flags. Bound build-40d02c6 remains current product source; this commit changes tests/docs only. No repeated unchanged tests, live acquisition, feature edits, global builder, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
