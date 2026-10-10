@@ -884,10 +884,20 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
     their own text beside child elements. "Rank 1" becoming "Rank 2" alongside
     an untouched span would have passed.
 
-    This walks real TEXT NODES with a TreeWalker and also captures every form
-    control's value, then requires every changed entry to contain the note.
-    Anything else that moves is evidence reacting to an opinion, which is the
-    one thing this feature must never do.
+    Third version added the selected interaction states GPT kept listing as
+    open: a section's open/closed state, checkbox state, aria-pressed and
+    button classes. The page really carries these -- 3 details elements, 2
+    checkboxes, 8 aria-pressed nodes and 2 toggled buttons -- and none were
+    covered by text nodes or .value. A collapsed section or a flipped toggle
+    is state a reader acts on.
+
+    So this walks real TEXT NODES with a TreeWalker, every form control's
+    value, and those interaction states, then requires every changed entry to
+    contain the note. Anything else that moves is evidence reacting to an
+    opinion, which is the one thing this feature must never do.
+
+    The note is deliberately short: a long one renders as a <details>, which
+    would legitimately add an element and is a different case from a leak.
     """
     path = tmp_path / "all_surface.html"
     path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
@@ -918,6 +928,21 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
       document.querySelectorAll('input, select, textarea').forEach((el, j) => {
         if (el.dataset.zzEdited === '1') return;
         out.push('V|' + j + '|' + el.tagName + '|' + (el.value || ''));
+      });
+      // Selected interaction states, which neither the text walk nor .value sees:
+      // a collapsed section, a ticked box or a pressed toggle are all state a
+      // reader acts on, and none of them should move because an opinion was typed.
+      document.querySelectorAll('details').forEach((el, j) => {
+        out.push('S|details|' + j + '|' + (el.open ? 'open' : 'closed'));
+      });
+      document.querySelectorAll('input[type=checkbox], input[type=radio]').forEach((el, j) => {
+        out.push('S|checked|' + j + '|' + (el.checked ? '1' : '0'));
+      });
+      document.querySelectorAll('[aria-pressed]').forEach((el, j) => {
+        out.push('S|pressed|' + j + '|' + el.getAttribute('aria-pressed'));
+      });
+      document.querySelectorAll('button').forEach((el, j) => {
+        out.push('S|btnclass|' + j + '|' + (el.className || ''));
       });
       return out;
     }"""
