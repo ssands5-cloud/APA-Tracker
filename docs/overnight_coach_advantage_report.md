@@ -4753,3 +4753,49 @@ firings, and the follow-on threads I have been generating are reaching the point
 they cost more than they return.
 
 No product code changed, no database written. PR #83 stays draft.
+
+## The open question closes: no parity defect, and my fail-open claim was wrong
+
+Yesterday I left two things unsettled -- whether the workbook diverges from the
+contract on duplicated pairs, and whether the double-counting I had confirmed in the
+contract reaches what a captain reads. Both are settled, by reading the build instead
+of guessing at it, and the second one corrects me.
+
+**I had been comparing against the wrong payload.** The build script uses
+`build_verified_cockpit_payload` from the identity bridge, not
+`build_ultimate_coach_payload`. The bridge exists precisely so Excel and HTML cannot
+disagree about who is a verified player or which games count -- its own docstring says
+so. I used the unfiltered builder, which yields 853,678 evidence rows against the
+verified 830,976, so my expectation was inflated by 22,702 rows and the workbook looked
+short by exactly the amount I had not filtered.
+
+With the right builder the agreement is exact: 830,976 evidence rows, matching the
+build log; 541,052 pair rows, matching the sheet's data rows exactly; and every one of
+those 541,052 rows carrying the same Games value as the payload it came from, with zero
+differences and zero unmatched keys. **There is no parity divergence.** That is also a
+far stronger parity result than the one recorded earlier, which covered only the
+fifteen pairs inside Paul's two bound fixtures.
+
+**Correction: the displayed evidence does not double-count. It excludes.** I wrote
+that duplicated head-to-head rows make the artifact fail open, and that a pairing which
+met once can read as having met twice. That is true of the contract's intermediate
+`all_games` table, which emits 388 rows for the 194 duplicated groups. It is false of
+what the artifact shows. The verified payload contains **zero** evidence rows for every
+one of the 194 -- identity verification drops them outright. So the displayed layer
+fails closed here, like it does for the ambiguous player-match scopes, and no captain
+can read an inflated record from this cause.
+
+The real cost is the opposite of what I claimed: 194 meetings are not shown at all,
+including the 159 that may be genuine second meetings rather than duplicates. That is a
+small evidence loss rather than an inflation, and it is already disclosed -- those 194
+are exactly the `VERIFIED_COUNT_ONLY` entries inside the manifest's 227.
+
+**What made this result trustworthy was a positive control, and that is the lesson from
+my error run.** A result of "none of the 194 appears" is exactly the shape five of my
+recent mistakes produced, so before believing it I checked that the same harness could
+find groups it should find: 489 of 500 ordinary groups located, the remainder consistent
+with the identity exclusion rate. Only then was the zero worth reporting. Adding a
+positive control before believing a negative is the habit that would have caught every
+one of those five errors, and it is cheaper than any of them.
+
+No product code changed, no database written. PR #83 stays draft.
