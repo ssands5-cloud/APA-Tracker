@@ -4015,3 +4015,45 @@ No product code changed in this entry; it is measurement and retraction only.
 Expected-versus-actual per scenario, the retraction record and the binding hashes are
 private under `tmp/native/acceptance-40d02c6/`. PR #83 stays draft; native Excel,
 print legibility and authoritative live data remain Paul's.
+
+## Monday 2026-10-05 individual player results: verified against the records
+
+This was on Paul's list and it did not need a login. That Monday his second team
+played two finalized matches in two divisions -- one 8-Ball (9-8) and one 9-Ball
+(55-65), five individual games each. Verified on the real bound candidate, 7 of 7.
+
+**The records' own integrity first, independent of any screen.** For both matches,
+every game is stored twice, once from each player's perspective, and each pair must
+disagree on the result and swap the two skill levels. Ten rows, five games, zero
+inconsistencies in each match. This is a check on the data itself rather than on the
+display, which is what Paul asked for when he said to verify the underlying records
+alongside the visuals.
+
+**Match Day knows that team's own schedule.** The default fixture plays Sundays; this
+second team plays Mondays. Selecting it offers 2026-10-05 among its 18 scheduled
+dates, in both divisions.
+
+**Every displayed result matches the snapshot exactly.** With each fixture bound, the
+meetings table was compared against the snapshot for that date and format: five
+games expected, five shown, zero missing and zero unexpected, for both the 8-Ball and
+the 9-Ball division, each matching on result and on both skill levels. The comparison
+fails if the expected set is empty, so a fixture that silently showed nothing could
+not pass.
+
+Two things looked like defects along the way and both were mine, not the product's.
+Recording them because the running tally of my own false alarms matters:
+
+- A pair's snapshot rows showed a win and a loss while the panel reported 1-0 in one
+  meeting. The loss was a 9-Ball game correctly excluded from an 8-Ball matchup. That
+  is the behaviour `test_coach_dashboard_head_to_head_never_mixes_formats` protects,
+  and this is the first time it has been confirmed on real data rather than a fixture.
+  My query was what failed to filter by format.
+- The War Room appeared to omit his second team entirely -- one team offered in a
+  division the snapshot says holds nine. It is a capped searchable list, and it says
+  so on screen: "Showing first 75 of 228 matches. Keep typing, then choose a team."
+  Typing the name finds it at once. Had I reported that without checking, it would
+  have been a false P1.
+
+Still Paul's, unchanged: native Excel workflows, Captain Packet print legibility,
+authoritative live roster data, the no-scoresheet cause split, and the
+history-preservation decision. PR #83 stays draft. No product code changed here.
