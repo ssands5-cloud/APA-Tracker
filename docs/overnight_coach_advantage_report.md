@@ -3119,3 +3119,29 @@ Worth recording how nearly I got this wrong: my first verification script report
 **Blocked, with the exact cause.** The whole-page packet re-capture GPT asked for in `1c4d537` could not be performed: `textinputhost.exe` ("Windows Input Experience") repeatedly seizes the foreground, and every computer-use click is refused because the frontmost window is not in the session allowlist -- including immediately after a screenshot showing Excel maximised and focused. Tried and failed: `open_application`; Win32 `ShowWindow`/`BringWindowToTop`/`SetForegroundWindow`; and hiding the offending window outright, which worked for under a second before it re-raised itself. Not attempted, deliberately: an approval dialog nobody is present to answer, killing a system input process over a screenshot, and Excel COM, which the working rules forbid. The packet's content was already read page by page on the previous candidate and `a1cda12` changes only wording strings, not packet layout -- but that is an argument for *likelihood*, not evidence, and the scenario stays **BLOCKED** rather than inferred.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 and #86 draft.
+
+
+### 2026-10-10 ~05:4x UTC: a real clipping defect on the printed Captain Packet, found by measurement and fixed
+
+GPT's standing point on `3ee1232` was exactly right: print *configuration* (scale, print area, title rows, breaks) establishes neither rendering nor absence of clipping. Native rendering is still blocked, so I measured instead.
+
+**The defect.** The packet's "Evidence by opponent" rows are a single line (height 14.5) at 10.5pt with **wrap off**, and every neighbouring cell in the row is filled. Excel only spills unwrapped text into a genuinely *empty* neighbour -- there is none here -- so anything wider than its columns is **clipped on paper, silently**. Measured against the real Matchup Evidence table (212,939 rows), three of the four spans overflow:
+
+| span | width | capacity @10.5pt | holds | worst real | verdict |
+|---|---|---|---|---|---|
+| `A:B` | 48 | ~45 chars | `"vs " + opponent label` | 58 | **clips** |
+| `D:G` | 51 | ~48 chars | our player label | 55 | **clips** |
+| `H:J` | 29 | ~27 chars | evidence cell text | 33 | **clips** |
+| `K:L` | 32 | ~30 chars | basis label | 20 | fits |
+
+A long name, or a shared-opponent count that reaches three digits (`≈ 121-147 vs 111-106 (113 shared)`), loses characters with nothing on the page indicating anything is missing. This is the same defect class as the War Room clipping fixed earlier -- which is precisely why that sheet carries a worst-case fit test and the Captain Packet did not. Added the missing test, red before green.
+
+**The fix (`9c42c7e`): shrink-to-fit, not wider columns or wrapping.** Both alternatives would have changed the packet's carefully tuned one-scale 5-page geometry. Verified by rebuilding and diffing the two artifacts property by property:
+
+orientation, scale 58, paper, print area `$A$1:$L$218`, title rows `$1:$2`, row breaks `[39, 70, 194]`, column breaks `[]`, max row 218, evidence first row 74, row height 14.5 -- **all identical**. The only change is `shrinkToFit` False→True on the three at-risk spans. Layout preserved, no recorded identity lost.
+
+**Two negative results worth recording, because both were my errors.** A first pass at clipping compared *formula string* length to column width and produced 396 meaningless hits (`=INDEX(md_OurSL,1)` is 18 characters and renders as one digit). A second pass at the *wrapped* rows used an invented worst-case string and produced 130 more. Both discarded, neither reported. The fix above stands only because I read each span's formula to learn exactly which table column it draws from, then measured that column's real maximum.
+
+**Still open, now specified rather than vague:** the packet's *wrapped* sections (best sends `C:L`, scouting cards, meeting history) need the same treatment, and it requires deriving each cell's worst case from its actual formula source -- `md_Send1`/`md_Send2` in particular -- rather than a guessed string. The `C:L` best-sends span is 119 wide at 10pt with height 27, so it tolerates two wrapped lines; whether the send text can exceed that depends on whether the packet uses the short send form or the Command Center's long reason form, which I have not yet traced.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
