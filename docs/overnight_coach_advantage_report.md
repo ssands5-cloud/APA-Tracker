@@ -4647,3 +4647,55 @@ the cleanup inventory rather than forgotten.
 
 No product code changed, and the source database is unchanged -- hashed before and
 after, identical. PR #83 stays draft.
+
+## The evidence layer reconciles exactly, and 35 pairs are double-counted
+
+With the contract's own counts in hand, the whole evidence pipeline can be reconciled
+row by row rather than described. It closes exactly, and the closure exposes one thing
+the earlier passes could not have caught.
+
+**Every raw row is accounted for.** The snapshot holds 854,426 directional
+head-to-head rows, which group into 427,019 (match, pair) groups: 426,825 holding
+exactly two rows, 194 holding four, and none holding fewer than two. Twenty-four of
+the two-row groups have no usable result on either side, the 48 null-result rows found
+earlier. So:
+
+- 426,801 ordinary pairs contribute one canonical game each
+- 194 duplicated pairs contribute two each, adding 388
+- 426,801 + 388 = 427,189, which is exactly the contract's `all_games` count
+- rows: 426,801x2 + 194x4 + 24x2 = 854,426, the full raw total
+
+Nothing is unexplained in either direction, and the 24 unusable pairs contribute no
+games at all. That is the strongest statement available about whether the artifact
+loses evidence: it does not, and the arithmetic is exact rather than approximate.
+
+**But a duplicated pair yields two games, not one.** This is where the closure earns
+its keep. For the nine duplicated `player_matches` rows the contract fails closed --
+the scope is dropped and disclosed. For duplicated head-to-head rows it fails open:
+both survive into `all_games`, so a pairing that met once can read as having met
+twice. The earlier understatement pass could not have caught this, because it compared
+the artifact's game count against the same snapshot rows that carry the duplication;
+both sides were inflated equally.
+
+**How many are genuinely double-counted: 35 of the 194.** Comparing the four rows in
+each group on player, opponent, result, both skill levels, points and nine-ball points,
+35 groups reduce to two identical mirrored pairs -- one game recorded twice, with
+nothing to distinguish the copies. The other 159 differ in points or even in result;
+one sampled group has a player both winning and losing to the same opponent in a single
+match. Those could be two real meetings or contradictory source rows, and the snapshot
+cannot tell me which, so I am not calling them duplicates.
+
+**Scope, which is the reassuring part.** The 194 span sessions back to Fall 2020, so
+this is a long-standing archive characteristic rather than anything the current work
+introduced. Four are in the current session. None is in a match of Paul's four teams,
+so none of it reaches the fixtures he is actually planning against -- consistent with
+his 158 games showing zero mirror problems. And all 194 are disclosed: they are exactly
+the `VERIFIED_COUNT_ONLY` issues inside the manifest's 227, so this is a quantified,
+visible characteristic rather than a silent error.
+
+**Not fixed, and I would not fix it.** Collapsing the 35 is a database mutation, and
+the 159 are genuinely ambiguous -- treating them as duplicates would destroy real
+evidence if any pair did meet twice. The useful output here is the number and its
+bound, not a change.
+
+No product code changed, no database written. PR #83 stays draft.
