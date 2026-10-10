@@ -1347,3 +1347,64 @@ def test_a_long_note_on_a_phone_expands_readably_and_leaves_risks_reachable(tmp_
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_a_note_does_not_reset_an_alternate_next_send_opponent(tmp_path: Path):
+    """The last of the populated-workflow cases GPT listed.
+
+    Next Send defaults to the first unplayed opponent, but the captain picks
+    whoever the other team actually put up. That choice is the whole point of
+    the panel: the advice underneath it is only correct for the opponent
+    standing at the table.
+
+    So writing a note must not silently bounce the selection back to the
+    default. A captain who typed an observation and then acted on advice for
+    the wrong opponent would have been misled by the tool at the exact moment
+    it is supposed to help.
+    """
+    path = tmp_path / "next_send_note.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    note = "ZZNOTE-alternate-next-send"
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1000})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            chips = page.locator("button.ns-chip")
+            assert chips.count() >= 2, "fixture must offer more than one opponent to choose"
+            assert chips.nth(0).evaluate("el => el.getAttribute('aria-pressed')") == "true"
+
+            alternate = chips.nth(1)
+            chosen_label = alternate.inner_text()
+            alternate.click()
+            page.wait_for_timeout(400)
+
+            assert page.locator("button.ns-chip").nth(1).evaluate(
+                "el => el.getAttribute('aria-pressed')") == "true", "clicking a chip must select it"
+            advice_before = page.locator("#next-send").inner_text()
+
+            box = page.locator("textarea.plan").first
+            box.scroll_into_view_if_needed()
+            box.fill(note)
+            box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+            page.wait_for_timeout(400)
+
+            still = page.locator("button.ns-chip").nth(1)
+            assert still.evaluate("el => el.getAttribute('aria-pressed')") == "true", (
+                "a note must not bounce the selection back to the default opponent")
+            assert still.inner_text() == chosen_label
+
+            advice_after = page.locator("#next-send").inner_text()
+            leaked = [line for line in advice_after.splitlines()
+                      if line not in advice_before.splitlines() and note not in line]
+            assert leaked == [], f"the advice changed for reasons other than the note: {leaked[:4]}"
+            assert errors == [], errors
+        finally:
+            browser.close()
