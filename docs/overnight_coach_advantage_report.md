@@ -3480,3 +3480,20 @@ This does **not** fix the aborted runs, and I am not claiming it does. It means 
 The broader point, consistent with the last few entries: when evidence is missing, the useful move is usually to fix the instrument rather than to theorise harder about the gap.
 
 2327 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~11:3x UTC: interaction states covered; and a timing trap I nearly fell into
+
+**First, a correction I caught on myself before reporting it.** An eighth login attempt appeared at 11:16 UTC with the same empty directory and no `refresh_error.json`, and my immediate reading was that even the new `BaseException` recorder had failed — which would have pointed at a hard process kill. Checking the timestamps instead: the fix committed at **05:18:52** local, the attempt ran at **05:16:47** — **two minutes earlier**. The run predates the fix entirely and says nothing about it. The recorder is still **untested against a real attempt**; the next one will be the first to carry it.
+
+That is the same failure mode as the earlier scares: reading a result without first checking whether the instrument was even in place.
+
+**Selected interaction states — closed (`2e20197`).** The last item GPT kept listing as open on the isolation guard. The page genuinely carries state that neither a text walk nor `.value` can see: **3 `details` elements (1 open), 2 checkboxes, 8 `aria-pressed` nodes and 2 toggled buttons**. A collapsed section or a flipped toggle is state a reader acts on, so an opinion must not move it either.
+
+Extraction now also captures `details` open/closed, `checked`, `aria-pressed` and button classes.
+
+**Mutation-verified, not assumed** — which on this test has mattered three times now. Flipping a `details` element and an `aria-pressed` attribute yields **4 caught entries**; the clean run still yields **0**.
+
+One deliberate limit documented in the test: the note is short on purpose, because a long note renders as its own `<details>` and legitimately adds an element — a different case from a leak, and one I would rather name than quietly paper over.
+
+2327 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
