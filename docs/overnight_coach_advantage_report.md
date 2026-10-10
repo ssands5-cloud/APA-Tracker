@@ -3289,7 +3289,7 @@ GPT `53c6e48` asked that the Doubles and Ladies Alt gaps keep an explicit dispos
 | 8-Ball Ladies Alt | 13 / 13 | 64 / 64 | 142 / 142 | 92 | **89** (3 short) |
 | 8-Ball Doubles | 10 / 10 | 24 / 24 | 85 / 85 | 44 | **40** (4 short) |
 
-Every team, every roster player and every match was ingested at 100%. The entire shortfall is that 3 and 4 of their scored matches have no scoresheet available upstream — the same class as the other no-scoresheet gaps, not a collection failure. **Disposition: genuinely missing source data, bounded at 7 matches, still open and still counted.**
+Every team, every roster player and every match was ingested at 100%. The entire shortfall is 3 and 4 scored matches that ended with no persisted scoresheet rows. **Disposition: cause NOT established — see the correction below. Bounded at 7 matches, open and counted.**
 
 **A false alarm I chased, and why it dissolved.** The per-division report line for Ladies Alt reads `head_to_head_rows: 0` against 89 ingested scoresheets, while Doubles shows 60 from 40 — which looks like a whole in-scope division contributing no evidence. It is not. The database holds **3,340** head-to-head rows for Ladies Alt, *more* than Doubles' 1,576, plus 3,291 per-player score rows. The report field is a **per-run derivation counter**, not a stored total: Ladies Alt simply had nothing re-derived in this pass.
 
@@ -3298,3 +3298,28 @@ Worth recording that the field name invites exactly the misreading I made — `h
 That is three times now that a plausible-looking anomaly has dissolved on inspection (formula-length clipping, the invented wrapped-row worst case, and this). The pattern is consistent and worth stating plainly: on this codebase, a surprising number is far more often my measurement being wrong than the product being wrong, and the cost of checking first is much lower than the cost of a false report.
 
 No code change. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~09:1x UTC: retracting "genuinely missing upstream" — the counters cannot carry that claim
+
+GPT `e31e1aa` is right and I have corrected the entry above. I wrote that the 7 shortfalls were "genuinely missing source data". The ingestion counters do not establish that, and I asserted a **cause** from evidence that only shows an **absence**.
+
+Confirmed against `scheduler/graphql_sync.py`, the same `scored_matches_with_scoresheet` counter stays unincremented for three different reasons:
+
+| # | cause | why the counter misses it |
+|---|---|---|
+| a | APA returned no scoresheet rows | `if scores:` is false |
+| b | the detail fetch raised | non-auth exceptions are logged and `continue`d, never counted |
+| c | rows returned but none persisted | `ingest_match_scores` skips blank-player_id rows (vacant, forfeited, malformed) and can return `(0, 0)`, so `if created or updated` is false |
+
+The code even documents (c) in a comment: a non-empty `scores` list "does not prove any were persisted". I had read that comment and still wrote the stronger claim.
+
+**What I can now exclude, and what I cannot.** Grepping this run's log for the skip warning gives **zero** hits, so **cause (b) is excluded for this run**. All 11 no-scoresheet matches hold **0 persisted player rows and 0 head-to-head rows**, and none appears in `reconciliation.outcomes` — consistent with **both** (a) and (c), which is exactly why the two cannot be separated from here.
+
+Separating them needs what GPT asked for: **per-match captured-response provenance**, i.e. what APA actually returned for each of those matches. That requires a live fetch, so it is not something I can settle offline.
+
+**Usefully, the pending login run can close part of this.** Four of the 11 are in the viewer's own formats, so a `--mine-only` refresh will re-fetch them; if a per-match capture shows an empty scoresheet, (a) is proven for those four, and if it shows rows that fail to persist, (c) is. The other seven need the full-scope run.
+
+All 11 stay open and counted regardless of cause — nothing about this changes coverage or the acceptance flags.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
