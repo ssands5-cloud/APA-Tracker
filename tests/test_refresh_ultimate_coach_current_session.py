@@ -788,3 +788,57 @@ def test_the_stage_file_names_the_instrument_that_wrote_it(tmp_path, monkeypatch
     refresh.main(["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "missing.db")])
     stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
     assert stages.splitlines()[0].endswith(refresh._INSTRUMENT_VERSION)
+
+
+class TestABrokenConsoleChangesNoOutcome:
+    """GPT a823a33: two handler prints were still raw, so a failing console
+    replaced the real outcome with a UnicodeEncodeError.
+
+    The record was written either way, so this is not about losing evidence --
+    it is about the caller being told something false. A generic failure must
+    still return 5, and an interruption must still surface as the interruption
+    the operator caused, not as a console encoding error.
+    """
+
+    def _broken_console(self, monkeypatch):
+        def exploding_print(*args, **kwargs):
+            raise UnicodeEncodeError("charmap", "x", 0, 1, "synthetic console failure")
+
+        monkeypatch.setattr("builtins.print", exploding_print)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+    def test_a_generic_failure_still_returns_five(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise RuntimeError("synthetic generic failure")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        self._broken_console(monkeypatch)
+
+        assert refresh.main(["--out-root", str(tmp_path / "r"), "--source-db", str(tmp_path / "x.db")]) == 5
+        assert (refresh.LAST_OUT_DIR / "refresh_error.json").is_file()
+
+    def test_an_interruption_surfaces_as_itself_not_as_a_console_error(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise KeyboardInterrupt()
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        self._broken_console(monkeypatch)
+
+        with pytest.raises(KeyboardInterrupt):
+            refresh.main(["--out-root", str(tmp_path / "r"), "--source-db", str(tmp_path / "x.db")])
+        assert (refresh.LAST_OUT_DIR / "refresh_error.json").is_file()
+
+    def test_the_stage_file_names_which_handler_ran(self, tmp_path, monkeypatch):
+        """Attempt fourteen reached config-loaded then finally, with no record and
+        no run_refresh entry. Nothing said whether a handler ran at all."""
+        def boom(*args, **kwargs):
+            raise RuntimeError("synthetic generic failure")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        refresh.main(["--out-root", str(tmp_path / "r"), "--source-db", str(tmp_path / "x.db")])
+
+        stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "handler: generic exception" in stages
+        assert "arguments resolved" in stages

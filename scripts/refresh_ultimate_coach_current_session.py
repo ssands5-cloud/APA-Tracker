@@ -532,7 +532,7 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 # finishes logging in, which can be many minutes after the process started and
 # imported this module. Directory mtime therefore says nothing about which code
 # ran, and twice now I have read a stale-code run as evidence about a new fix.
-_INSTRUMENT_VERSION = "stage-markers-v3"
+_INSTRUMENT_VERSION = "stage-markers-v4"
 
 
 def _stage(out_dir: Path, note: str) -> None:
@@ -726,11 +726,17 @@ def main(argv: list[str] | None = None) -> int:
         _stage(out_dir, "loading config")
         config = load_config(args.config)
         _stage(out_dir, "config loaded")
-        report = run_refresh(config, source_db=Path(args.source_db), catalog_path=Path(args.catalog),
+        # Arguments resolved explicitly: evaluated inline they sat between the
+        # "config loaded" marker and run_refresh's own first statement, so a
+        # failure there was invisible -- the gap attempt fourteen fell into.
+        source_path, catalog_path_arg = Path(args.source_db), Path(args.catalog)
+        _stage(out_dir, "arguments resolved")
+        report = run_refresh(config, source_db=source_path, catalog_path=catalog_path_arg,
                              out_dir=out_dir, mine_only=args.mine_only, verify_member=args.verify_member, mode=args.mode,
                              resume=bool(args.resume),
                              verify_date=args.verify_date)
     except (AccessTokenMissing, AccessTokenExpired) as exc:
+        _stage(out_dir, "handler: token")
         resumable = (out_dir / "refresh_progress.json").is_file()
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
         _say(f"APA login needed: {type(exc).__name__}. Progress is saved; nothing was promoted and the source DB "
@@ -740,15 +746,18 @@ def main(argv: list[str] | None = None) -> int:
               "--refresh-ultimate-coach and log in yourself; nothing was promoted and the source DB is untouched.")
         return 3
     except RefreshError as exc:
+        _stage(out_dir, "handler: refresh error")
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
         _say(f"Refresh stopped: {exc}")
         return 4
     except Exception as exc:   # anything else: record it on disk, never as a silent console-only traceback
+        _stage(out_dir, f"handler: generic exception ({type(exc).__name__})")
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
-        print(f"Refresh FAILED: {type(exc).__name__}: {scrub(exc)[:400]}\n"
+        _say(f"Refresh FAILED: {type(exc).__name__}: {scrub(exc)[:400]}\n"
               f"  details: {out_dir / 'refresh_error.json'} · nothing was promoted; the source DB is untouched.")
         return 5
     except BaseException as exc:
+        _stage(out_dir, f"handler: base exception ({type(exc).__name__})")
         # Ctrl-C and SystemExit are NOT Exceptions, so an interrupted run used to
         # leave a folder holding nothing but an empty log -- indistinguishable from
         # a crash or an early failure. Seven live attempts died exactly that way and
@@ -757,7 +766,7 @@ def main(argv: list[str] | None = None) -> int:
         # identical behaviour, evidence kept.
         _record_failure(out_dir, exc, scrub, traceback.format_exc())
         _say(f"Refresh STOPPED: {type(exc).__name__}. Nothing was promoted; the source DB is untouched.")
-        print(f"  details: {out_dir / 'refresh_error.json'}")
+        _say(f"  details: {out_dir / 'refresh_error.json'}")
         raise
     finally:
         # GPT b85f13c: without this there is no evidence either way about whether
