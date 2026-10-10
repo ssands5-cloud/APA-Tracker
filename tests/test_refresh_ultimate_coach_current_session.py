@@ -776,3 +776,15 @@ class TestAConsoleFailureCannotDestroyTheFailureRecord:
         stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
         assert "run_refresh: called" in stages
         assert "run_refresh: body entered" not in stages
+
+
+def test_the_stage_file_names_the_instrument_that_wrote_it(tmp_path, monkeypatch):
+    """A refresh directory is created only after the operator finishes logging
+    in, which can be minutes after the process imported this module. Directory
+    mtime therefore cannot say which code ran -- I misread stale-code runs as
+    evidence about a new fix twice before adding this line.
+    """
+    monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+    refresh.main(["--out-root", str(tmp_path / "refresh"), "--source-db", str(tmp_path / "missing.db")])
+    stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+    assert stages.splitlines()[0].endswith(refresh._INSTRUMENT_VERSION)

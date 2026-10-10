@@ -527,6 +527,14 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
     return report
 
 
+# Bumped whenever the stage markers change. Written as the first line of every
+# stage file because a refresh directory is created only AFTER the operator
+# finishes logging in, which can be many minutes after the process started and
+# imported this module. Directory mtime therefore says nothing about which code
+# ran, and twice now I have read a stale-code run as evidence about a new fix.
+_INSTRUMENT_VERSION = "stage-markers-v3"
+
+
 def _stage(out_dir: Path, note: str) -> None:
     """Append one line saying how far the run got, flushed immediately.
 
@@ -697,6 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     import traceback
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    _stage(out_dir, f"instrument {_INSTRUMENT_VERSION}")
     _stage(out_dir, "directory created")
     scrub = lambda text: re.sub(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+", "[redacted]", str(text))  # noqa: E731
 
