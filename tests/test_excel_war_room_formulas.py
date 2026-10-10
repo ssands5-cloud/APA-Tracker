@@ -767,6 +767,15 @@ def test_captain_packet_best_sends_row_fits_its_worst_case_send_text(built):
     10pt and needs 24 of the 27 available. It fits -- but only just, so this
     pins it: widening the label format or narrowing C:L would start clipping
     the second send with nothing on the page to say so.
+
+    Deliberate limits of this guard, so nobody mistakes it for print acceptance:
+    it counts characters with the same approximation the rest of this module
+    uses, so it does not model proportional-font line breaks, and it says
+    nothing about legibility. The surrogate strings are "x" rather than real
+    names on purpose -- real league names must not enter the test suite, and "x"
+    is wider than the average glyph, so a character-count bound built from it
+    errs toward over-estimating the space needed rather than under. Native
+    rendering remains the only thing that can judge readability.
     """
     cp = built[CP]
     first = _row(built, CP, "Best sends — top opportunities per opponent "
