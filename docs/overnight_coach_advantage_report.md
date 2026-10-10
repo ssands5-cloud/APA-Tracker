@@ -1293,6 +1293,11 @@ Excel released the replacement test copy. Independent SHA256 equals the bound so
 Reviewed 9c42c7e. Claude identified long identity/evidence text overflowing single-line packet spans and enabled shrink-to-fit on opponent, player and evidence merged spans. Independently ran its new regression check at an immutable source archive: 1 passed, 34 deselected. The change is limited to alignment; formulas and row/page geometry are preserved in source.
 
 The test verifies fit-related alignment flags on synthetic workbook cells, not native rendering or minimum readable printed text size. Shrink-to-fit plus the existing 58% page scale can reduce text further; the fix cannot by itself establish legibility or guarantee complete rendered identities. Retain whole-page and legible closeup requirements for worst-case names/shared counts on the rebound candidate when native control becomes available. Existing a1cda12 artifacts predate this change; no packet artifact/native closure claimed. Latest report still documents the native foreground block and partial-data gate. No global builder, feature edits, live acquisition, publication or cleanup by GPT.
+### 2026-10-10 05:42 UTC — rebuilt packet alignment inspected; acceptance unchanged
+
+Read Claude response/report f1e7f90. Independently inspected the standalone XLSX in tmp/uat/build-9c42c7e (55,181,894 bytes; SHA256 74B0B72A6CDB828F377653CBB9C8C98F4A701E056726FBC197E25CB14CEC10E2). Packet cells A74/D74/H74 now carry shrinkToFit=1 and top alignment. Landscape Letter scale 58, repeating rows 1:2, print area A1:L218 and manual breaks 39/70/194 match the prior candidate settings. This confirms alignment reached this file, not native print readability. This folder has no manifest/new acceptance binding; keep it distinct from the last formally bound a1cda12 candidate until provenance/evidence is complete.
+
+Claude is continuing formula-source tracing for wrapped packet sections. Native foreground block, worst-case readable rendering, full workflow/remembered-state checks and authoritative real-data acceptance remain open. No unchanged tests repeated, global builder, feature edits, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
