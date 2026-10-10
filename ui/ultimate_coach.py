@@ -21,6 +21,7 @@ from analytics.ultimate_coach_excel_payload import build_team_rosters
 from analytics.ultimate_coach_matchup_evidence import player_ref
 from analytics.ultimate_coach_war_room import (
     COACH_TAGS,
+    EVIDENCE_LIMITS_NOTE,
     MATCH_NIGHT_GUIDE,
     ONBOARDING_LIMITS,
     PVP_STATUS,
@@ -447,6 +448,7 @@ def _trust_card(payload: dict[str, Any]) -> str:
     <div class="metric"><b>{n('source_coverage_issue_count')}</b><span>Source coverage issues (contract-level)</span></div>
   </div>
   <p class="muted">Only players with roster-backed, uniquely-verified identity provenance are selectable below. Only games that are both mirror-verified and identity-verified feed direct/shared-opponent evidence. Quarantined or unresolved evidence is counted above, never silently dropped or blended in.</p>
+  <p class="muted"><b>What excluded evidence means for a decision.</b> {escape(EVIDENCE_LIMITS_NOTE)}</p>
 </div>"""
 
 
@@ -1196,7 +1198,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
         rows.push({{
           rank:ranked?(tied?start+"=":String(start)):(c.tier===2?"≈":"—"),
           member:c.member,player:playerRef(c.member),tier:c.tier,c:c,
-          direct_text:c.direct?wlText(c.direct.w,c.direct.g)+" ("+plural(c.direct.g,"meeting")+")":"No direct meetings",
+          direct_text:c.direct?wlText(c.direct.w,c.direct.g)+" ("+plural(c.direct.g,"meeting")+")":"No verified direct meetings in this snapshot",
           shared_text:c.shared?plural(c.shared,"shared opponent")+" · ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+") · theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"No shared opponents",
           basis:basis
         }});
@@ -1229,7 +1231,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       }});
     }});
     return {{format:fmtLabel(fmt),ours:side(ours),theirs:side(theirs),
-      direct_meetings:dg?plural(dg,"game")+" · our players "+wlText(dw,dg):"No direct meetings between these rosters",
+      direct_meetings:dg?plural(dg,"game")+" · our players "+wlText(dw,dg):"No verified direct meetings between these rosters in this snapshot",
       opponents_met:Object.keys(met).length+" of "+theirs.length,
       pairings:direct+" direct · "+sharedOnly+" shared-opponent only · "+none+" no evidence ("+(ours.length*theirs.length)+" total)"}};
   }}

@@ -373,6 +373,8 @@ def _data_trust_sheet(wb: Workbook, payload: dict[str, Any]) -> None:
             "unresolved evidence is counted above, never silently dropped or blended in."
         ]
     )
+    sheet.append([])
+    sheet.append(["What excluded evidence means for a decision: " + EVIDENCE_LIMITS_NOTE])
     row = sheet.max_row
     sheet.cell(row=row, column=1).font = MUTED_FONT
     sheet.cell(row=row, column=1).alignment = WRAP_TOP
@@ -767,7 +769,11 @@ def _lists_sheet(wb: Workbook, format_filter_options: list[str], compare_slots: 
 
 
 
-from analytics.ultimate_coach_war_room import build_version, worked_example  # noqa: E402  (after base helpers)
+from analytics.ultimate_coach_war_room import (  # noqa: E402  (after base helpers)
+    EVIDENCE_LIMITS_NOTE,
+    build_version,
+    worked_example,
+)
 
 
 def build_workbook(

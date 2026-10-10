@@ -51,10 +51,10 @@ def test_category_rule_uses_only_the_sign_of_the_record_and_whether_evidence_exi
 def test_cell_text_and_explanation_name_the_records_and_sample_sizes():
     assert cell_text(_row(direct=(2, 3))) == "2-1 (3)"
     assert cell_text(_row(shared=4, ours=(6, 9), theirs=(5, 9))) == "≈ 6-3 vs 5-4 (4 shared)"
-    assert cell_text(_row()) == "No evidence"
+    assert cell_text(_row()) == "No verified evidence"
     assert explanation(_row(direct=(2, 3), shared=4, ours=(6, 9), theirs=(5, 9))) == (
         "Direct: 2-1 in 3 meetings · Indirect: 4 shared opponents — ours 6-3 (9 games), theirs 5-4 (9 games)")
-    assert explanation(_row()) == "No direct meetings · no shared opponents"
+    assert explanation(_row()) == "No verified direct meetings in this snapshot · no shared opponents"
 
 
 def _war_room():
@@ -285,3 +285,76 @@ def test_send_labels_number_by_evidence_group_and_never_number_shared_only():
     assert best_send_text(yul).startswith("shared-opponent candidate, not ordered (one of 2): ")
     assert best_send_text(yul[:1]).startswith("shared-opponent candidate, not ordered (the only one): ")
     assert best_send_text([]) == "" and send_list_text([]) == ""
+
+
+class TestExcludedEvidenceDisclosure:
+    """GPT 7e67f60: a no-evidence cell must not claim nothing was ever played.
+
+    A pairing can have real recorded meetings that this snapshot excluded
+    because their identities are unresolved, so the wording has to be about
+    what is verified here. And because category() reads the sign of whatever
+    subtotal survived, excluded rows can move a label either way -- the note
+    must not describe the omission as conservative.
+    """
+
+    def test_a_no_evidence_cell_says_verified_rather_than_none(self):
+        from analytics.ultimate_coach_war_room import cell_text, explanation
+
+        empty = {"direct": None, "ours": (0, 0), "theirs": (0, 0), "shared_count": 0}
+
+        assert cell_text(empty) == "No verified evidence"
+        assert "No verified direct meetings in this snapshot" in explanation(empty)
+        # the old wording asserted a fact about history, not about this snapshot
+        assert cell_text(empty) != "No evidence"
+        assert "No direct meetings ·" not in explanation(empty)
+
+    def test_excluded_evidence_can_flip_a_category_either_way(self):
+        """The exact counterexample from the audit, as an executable guard."""
+        from analytics.ultimate_coach_war_room import category
+
+        verified_only = {"direct": (1, 1), "ours": (0, 0), "theirs": (0, 0), "shared_count": 0}
+        with_excluded = {"direct": (1, 3), "ours": (0, 0), "theirs": (0, 0), "shared_count": 0}
+
+        assert category(verified_only) == "G"
+        assert category(with_excluded) == "R"
+
+    def test_the_limits_note_refuses_to_call_the_omission_conservative(self):
+        from analytics.ultimate_coach_war_room import EVIDENCE_LIMITS_NOTE
+
+        assert "either direction" in EVIDENCE_LIMITS_NOTE
+        assert "favorable can prove concerning" in EVIDENCE_LIMITS_NOTE
+        for forbidden in ("conservative", "understate", "only ever"):
+            assert forbidden not in EVIDENCE_LIMITS_NOTE.lower()
+
+
+class TestEvidenceLimitsReachBothSurfaces:
+    """The same note has to reach the HTML reader and the Excel reader."""
+
+    def test_the_html_trust_card_carries_the_note(self):
+        from analytics.ultimate_coach_war_room import EVIDENCE_LIMITS_NOTE
+        from ui.ultimate_coach import _trust_card
+
+        html = _trust_card({"trust": {"identity_exclusion_count": 4221}})
+
+        assert "What excluded evidence means for a decision" in html
+        assert "either direction" in html
+        # rendered, not just referenced
+        assert EVIDENCE_LIMITS_NOTE[:40] in html
+
+    def test_the_excel_trust_sheet_carries_the_note(self):
+        from openpyxl import Workbook
+
+        from ui.export_excel_ultimate_coach import _data_trust_sheet
+
+        wb = Workbook()
+        _data_trust_sheet(wb, {"trust": {"identity_exclusion_count": 4221}})
+
+        text = chr(10).join(
+            str(cell.value)
+            for sheet in wb.worksheets
+            for row in sheet.iter_rows()
+            for cell in row
+            if cell.value is not None
+        )
+        assert "What excluded evidence means for a decision" in text
+        assert "either direction" in text

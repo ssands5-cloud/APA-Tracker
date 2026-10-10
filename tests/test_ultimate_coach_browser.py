@@ -1277,11 +1277,11 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
                 "vs Cam Cole (APA record ID 3) · SL 3 · 2 recorded games in 8-Ball",
             ]
             assert _ranking_rows(page, 0) == [
-                ["≈", "Bea Baker (APA record ID 2)", "5", "No direct meetings",
+                ["≈", "Bea Baker (APA record ID 2)", "5", "No verified direct meetings in this snapshot",
                  "1 shared opponent · ours 1-0 (1 game) · theirs 0-1 (1 game)",
                  "Shared-opponent results only (no direct meetings) — not ordered against other indirect candidates; "
                  "compare ours vs theirs"],
-                ["—", "Ann Archer (APA record ID 1)", "4", "No direct meetings", "No shared opponents",
+                ["—", "Ann Archer (APA record ID 1)", "4", "No verified direct meetings in this snapshot", "No shared opponents",
                  "No direct or shared-opponent evidence"],
             ]
             notes = page.locator(".rank-block p.muted").all_inner_texts()

@@ -21,10 +21,10 @@
   function wrCell(c){
     if(c.direct) return wlText(c.direct.w,c.direct.g)+" ("+c.direct.g+")";
     if(c.shared) return "≈ "+wlText(c.ow,c.og)+" vs "+wlText(c.tw,c.tg)+" ("+c.shared+" shared)";
-    return "No evidence";
+    return "No verified evidence";
   }
   function wrExplain(c){
-    return [c.direct?"Direct: "+wlText(c.direct.w,c.direct.g)+" in "+plural(c.direct.g,"meeting"):"No direct meetings",
+    return [c.direct?"Direct: "+wlText(c.direct.w,c.direct.g)+" in "+plural(c.direct.g,"meeting"):"No verified direct meetings in this snapshot",
       c.shared?"Indirect: "+plural(c.shared,"shared opponent")+" — ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+"), theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"no shared opponents"].join(" · ");
   }
   var WR_CAT_WORD={G:"favorable",R:"concerning",E:"even"};
@@ -383,7 +383,7 @@
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
       +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
       +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
-      +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient evidence (nothing recorded): '+cat.X+'</span></div>'
+      +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient verified evidence in this snapshot: '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
     // Keep the selected opponent's chip fully visible inside the swipeable row (scrolls the row, not the page).
@@ -435,8 +435,8 @@
     }).join("");
     document.getElementById("wr-matrix").innerHTML='<div class="card-head"><h2>Matchup matrix</h2><div class="mv-toggle" role="group" aria-label="Matrix view">'
       +[["captain","Captain view"],["evidence","Evidence view"]].map(function(v){return '<button type="button" class="mv'+(WR_VIEW===v[0]?' on':'')+'" data-view="'+v[0]+'" aria-pressed="'+(WR_VIEW===v[0])+'">'+v[1]+'</button>';}).join("")+'</div></div>'
-      +(WR_VIEW==="captain"?'<p class="legend">🟢 Favorable direct record · 🟡 Even direct, or shared-opponent evidence only (≈) · ⚪ No evidence — unknown, not weak · 🔴 More direct losses than wins. Numbers are our direct record. Not odds. Tap a cell for the evidence, or switch to Evidence view for sample sizes.</p>':'')
-      +'<p class="legend'+(WR_VIEW==="captain"?' print-only':'')+'"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no evidence. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Tap a cell for the evidence behind it.</p>'
+      +(WR_VIEW==="captain"?'<p class="legend">🟢 Favorable direct record · 🟡 Even direct, or shared-opponent evidence only (≈) · ⚪ No verified evidence — unknown, not weak · 🔴 More direct losses than wins. Numbers are our direct record. Not odds. Tap a cell for the evidence, or switch to Evidence view for sample sizes.</p>':'')
+      +'<p class="legend'+(WR_VIEW==="captain"?' print-only':'')+'"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no verified evidence in this snapshot. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Where identities are unresolved or excluded a pairing’s history can be incomplete, and the missing results can move a category either way — favorable can prove concerning. Tap a cell for the evidence behind it.</p>'
       +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
       +'<div id="wr-pair">'+pairHtml+'</div>';
     // Lineup Lab
@@ -492,7 +492,7 @@
     var games=w.meetings.filter(function(g){return String(g.our.id)===String(m.id)&&String(g.opp.id)===String(o.id);});
     return '<div class="pair cat-border-'+row.category+'"><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
       +'<p>'+wrChip(row.category)+' <b>'+esc(WR_CAT_LABELS[row.category])+'</b> · rank '+esc(row.rank)+' of '+block.rows.length+' vs this opponent · '+esc(row.explanation)+'</p>'
-      +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No direct meetings.</p>')
+      +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No verified direct meetings in this snapshot.</p>')
       +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(m.name)+' vs them</th><th>'+esc(o.name)+' vs them</th></tr></thead><tbody>'
         +shared.slice(0,25).map(function(k){return '<tr><td>'+esc(PLAYERS[k]?playerRef(PLAYERS[k]):k)+'</td><td>'+esc(wlText(mm[k].w,mm[k].g)+" ("+plural(mm[k].g,"game")+")")+'</td><td>'+esc(wlText(om[k].w,om[k].g)+" ("+plural(om[k].g,"game")+")")+'</td></tr>';}).join("")+'</tbody></table></div>'
         +(shared.length>25?'<p class="muted">Showing 25 of '+shared.length+' (largest combined samples).</p>':''):'<p class="muted">No shared opponents.</p>')

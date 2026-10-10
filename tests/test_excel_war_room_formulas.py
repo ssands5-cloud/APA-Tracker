@@ -194,7 +194,7 @@ def test_matrix_shows_direct_records_indirect_evidence_and_gaps_with_colors(book
     header = _row(built, WR, "Our player ↓ / opponent →")
     assert [book.display(WR, f"{c}{header}") for c in "BC"] == [CAM, EVE]
     cells = [[book.display(WR, f"{c}{header + i}") for c in "BC"] for i in (1, 2, 3)]
-    assert cells == [["2-0 (2)", "≈ 1-0 vs 0-1 (1 shared)"], ["0-2 (2)", "No evidence"], ["1-1 (2)", "0-2 (2)"]]
+    assert cells == [["2-0 (2)", "≈ 1-0 vs 0-1 (1 shared)"], ["0-2 (2)", "No verified evidence"], ["1-1 (2)", "0-2 (2)"]]
     cats = [[book.display(WR, f"{c}{header + i}") for c in "OP"] for i in (1, 2, 3)]
     assert cats == [["G", "I"], ["R", "X"], ["E", "R"]]
     rules = built[WR].conditional_formatting
@@ -487,7 +487,7 @@ def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built
         [f"vs {CAM}", "3", BEA, "0-2 (2)", "Concerning direct"],
         [f"vs {EVE}", "1", DEE, "0-2 (2)", "Concerning direct"],
         [f"vs {EVE}", "≈", ANN, "≈ 1-0 vs 0-1 (1 shared)", "Indirect only"],
-        [f"vs {EVE}", "—", BEA, "No evidence", "No evidence"],
+        [f"vs {EVE}", "—", BEA, "No verified evidence", "No verified evidence"],
     ]
     assert lines[6:] == [["", "", "", "", ""]] * 2                     # packed: nothing after the last line
     # Meeting history uses real columns; the opponent card shows notes with the missing-information line.
@@ -571,7 +571,7 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert f"{CAM} · SL 6" in text and f"{EVE} · SL 3" in text
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
-    assert "Insufficient evidence (nothing recorded): 1" in text
+    assert "Insufficient verified evidence in this snapshot: 1" in text
     assert f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")

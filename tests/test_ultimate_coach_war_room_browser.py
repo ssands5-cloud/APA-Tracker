@@ -95,7 +95,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert f"{BEA} vs {CAM}: 0-2 direct (2 meetings)" in risks
             cells = page.locator("#wr-matrix .mcell")
             assert [cells.nth(i).inner_text() for i in range(6)] == [
-                "2-0 (2)", "≈ 1-0 vs 0-1 (1 shared)", "0-2 (2)", "No evidence", "1-1 (2)", "0-2 (2)"]
+                "2-0 (2)", "≈ 1-0 vs 0-1 (1 shared)", "0-2 (2)", "No verified evidence", "1-1 (2)", "0-2 (2)"]
             assert "cat-G" in cells.nth(0).get_attribute("class") and "cat-X" in cells.nth(3).get_attribute("class")
             before = page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))")
 
@@ -375,7 +375,7 @@ def test_tonight_is_a_command_center_with_excels_counts(tmp_path: Path):
             for needle in ("Available: 0", "Unavailable: 0", "Unknown: 3 (not the same as unavailable)",
                            "Already used: 0 · planned: 0",
                            "Favorable direct record (any sample size): 1", "Concerning (more direct losses than wins): 2",
-                           "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient evidence (nothing recorded): 1",
+                           "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient verified evidence in this snapshot: 1",
                            "Missing information: 0 player(s) without a captured SL · 2 not yet played"):
                 assert needle in t, needle
             lines = t.splitlines()                                         # each count on its own line

@@ -44,7 +44,7 @@ def test_direct_ranks_before_shared_before_none_and_records_are_shown_with_sampl
     assert [r["player"] for r in rows] == ["Ann (APA record ID 1001)", "Bea (APA record ID 1002)", "Cal (APA record ID 1003)"]
     assert [r["rank"] for r in rows] == ["1", "≈", "—"]  # indirect evidence is shown, never given a rank number
     assert rows[0]["direct_text"] == "1-2 (3 meetings)" and rows[0]["basis"] == "Direct record"
-    assert rows[1]["direct_text"] == "No direct meetings"
+    assert rows[1]["direct_text"] == "No verified direct meetings in this snapshot"
     assert rows[1]["shared_text"] == "2 shared opponents · ours 4-2 (6 games) · theirs 3-1 (4 games)"
     assert rows[1]["basis"].startswith("Shared-opponent results only (no direct meetings)")
     assert rows[2]["shared_text"] == "No shared opponents"
@@ -86,7 +86,7 @@ def test_formats_never_mix():
     ours = [_m(1, "Ann")]
     pairs = [{"player_id": 1, "opponent_id": 50, "format": "NINE", "wins": 3, "games": 3}]
     rows = rank_vs_opponent(ours, OPP, build_pair_index(pairs), "EIGHT")["rows"]
-    assert rows[0]["rank"] == "—" and rows[0]["direct_text"] == "No direct meetings"
+    assert rows[0]["rank"] == "—" and rows[0]["direct_text"] == "No verified direct meetings in this snapshot"
 
 
 def test_team_comparison_counts_facts_and_discloses_missing_skill_levels():
@@ -105,7 +105,7 @@ def test_team_comparison_counts_facts_and_discloses_missing_skill_levels():
     assert c["opponents_met"] == "1 of 2"
     assert c["pairings"] == "1 direct · 1 shared-opponent only · 2 no evidence (4 total)"
     empty = team_comparison(ours, theirs, build_pair_index([]), "EIGHT")
-    assert empty["direct_meetings"] == "No direct meetings between these rosters"
+    assert empty["direct_meetings"] == "No verified direct meetings between these rosters in this snapshot"
 
 
 def test_matchup_evidence_orders_opponents_like_the_roster():

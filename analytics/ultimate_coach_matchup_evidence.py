@@ -28,6 +28,15 @@ from collections import defaultdict
 from fractions import Fraction
 from typing import Any, Iterable
 
+# "No evidence" / "No direct meetings" asserted more than the data supports: a
+# pairing can have real recorded meetings that this snapshot excluded because
+# their identities are unresolved. The honest claim is about what is verified
+# here, not about what was ever played. Defined in this module because
+# ultimate_coach_war_room imports from it, so the constants have to live on the
+# lower side of that dependency.
+NO_VERIFIED_EVIDENCE = "No verified evidence"
+NO_VERIFIED_DIRECT = "No verified direct meetings in this snapshot"
+
 FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
 
 TIER_DIRECT = 3
@@ -122,7 +131,7 @@ def rank_vs_opponent(
             if c["direct"]:
                 direct_text = f"{record_text(*c['direct'])} ({plural(c['direct'][1], 'meeting')})"
             else:
-                direct_text = "No direct meetings"
+                direct_text = NO_VERIFIED_DIRECT
             if c["shared_count"]:
                 ow, og = c["ours"]
                 tw, tg = c["theirs"]
@@ -202,7 +211,7 @@ def team_comparison(
         "ours": side(our_members),
         "theirs": side(opp_members),
         "direct_meetings": (f"{plural(dg, 'game')} · our players {record_text(dw, dg)}" if dg
-                            else "No direct meetings between these rosters"),
+                            else "No verified direct meetings between these rosters in this snapshot"),
         "opponents_met": f"{len(met)} of {len(opp_members)}",
         "pairings": (f"{direct_pairs} direct · {shared_pairs} shared-opponent only · {none_pairs} no evidence "
                      f"({total_pairs} total)"),

@@ -1644,7 +1644,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 8, 10, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Cell],R{r}))', font=f10, wrap=False)
         cat = f'INDEX(MatchupEvidence_Table[Category],R{r})'
         _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
-                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No evidence")))))', font=f10, wrap=False)
+                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence")))))', font=f10, wrap=False)
         h(r, 14.5)
     last_ev = ev_first + R * R - 1
     ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
@@ -2014,7 +2014,7 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         f'=IF(wr_PairKey="","","Favorable direct record (any sample size): "&({cats("G")}))',
         f'=IF(wr_PairKey="","","Concerning (more direct losses than wins): "&({cats("R")}))',
         f'=IF(wr_PairKey="","","Limited evidence: "&({cats("E")})&" even direct · "&({cats("I")})&" shared-opponent only")',
-        f'=IF(wr_PairKey="","","Insufficient evidence (nothing recorded): "&({cats("X")}))',
+        f'=IF(wr_PairKey="","","Insufficient verified evidence in this snapshot: "&({cats("X")}))',
         '=IF(wr_PairKey="","","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable direct option left")',
     ]
     _card(ws, top, 10, 11, "COACHING SUMMARY", summary, size=10.5, line_height=30)

@@ -43,6 +43,8 @@ from zoneinfo import ZoneInfo
 
 from analytics.ultimate_coach_match_day import EIGHT_NINE_CATEGORIES, excel_date_serial, localize_match_date
 from analytics.ultimate_coach_matchup_evidence import (
+    NO_VERIFIED_DIRECT,
+    NO_VERIFIED_EVIDENCE,
     format_label,
     matchup_evidence,
     member_order_key,
@@ -59,6 +61,20 @@ CATEGORY_LABELS = {
     "X": "Insufficient evidence",
 }
 CATEGORY_COLOR = {"G": "green", "R": "red", "E": "yellow", "I": "yellow", "X": "gray"}
+
+# Excluded evidence is NOT directionally conservative, and saying so would be
+# wrong: category() reads the sign of a verified subtotal, so a pairing whose
+# verified rows are 1-0 shows as Favorable while the same pairing with two
+# excluded losses (1-2) is Concerning. Missing rows can move a label or a send
+# order either way without a single stored value being fabricated.
+EVIDENCE_LIMITS_NOTE = (
+    "Categories describe the evidence verified in this snapshot, not a complete "
+    "record. Where identities are unresolved or excluded, a pairing's history can "
+    "be incomplete, and the missing results can move a category or a send order "
+    "in either direction — a pairing shown as favorable can prove concerning "
+    "once its excluded results resolve. See Data trust & freshness for how many "
+    "identities this build excluded."
+)
 SENDABLE = ("G", "E", "I")
 
 _WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -89,13 +105,17 @@ def cell_text(row: dict[str, Any]) -> str:
     if row.get("shared_count"):
         (ow, og), (tw, tg) = row["ours"], row["theirs"]
         return f"≈ {record_text(ow, og)} vs {record_text(tw, tg)} ({row['shared_count']} shared)"
-    return "No evidence"
+    return NO_VERIFIED_EVIDENCE
 
 
 def explanation(row: dict[str, Any]) -> str:
     """Which records support the pairing, how many observations, direct or indirect."""
     direct = row.get("direct")
-    parts = [f"Direct: {record_text(*direct)} in {plural(direct[1], 'meeting')}" if direct else "No direct meetings"]
+    parts = [
+        f"Direct: {record_text(*direct)} in {plural(direct[1], 'meeting')}"
+        if direct
+        else NO_VERIFIED_DIRECT
+    ]
     if row.get("shared_count"):
         (ow, og), (tw, tg) = row["ours"], row["theirs"]
         parts.append(f"Indirect: {plural(row['shared_count'], 'shared opponent')} — ours {record_text(ow, og)} "
