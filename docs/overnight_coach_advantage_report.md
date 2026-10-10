@@ -3230,7 +3230,7 @@ Finished characterising the last gap class, which also turned up that I had been
 
 I am **not** changing the count. The two kinds of statement answer different questions ("which match?" and "which division is incomplete?"), and quietly deflating a gap number to look better is exactly the wrong instinct in a file whose whole purpose is honest disclosure. Disclosing the composition is the fix.
 
-**Scope of the no-scoresheet gaps.** Of the 11, only **4** fall in the viewer's own formats (2 Open 8-Ball, 2 Open 9-Ball). The other 7 are Doubles and Ladies Alt — real divisions, but outside the formats the cockpit's evidence is built on. One of the 11 is flagged scored while carrying no score at all, the same scheduling-artifact shape that fix `1b6878e` keeps out of the freshness banner.
+**Scope of the no-scoresheet gaps.** Of the 11, only **4** fall in the viewer's own formats (2 Open 8-Ball, 2 Open 9-Ball). The other 7 are Doubles and Ladies Alt. Those divisions are inside the owner's all-nightly Arapahoe scope, so they are **open gaps awaiting disposition, not exclusions** — the cockpit currently builds its evidence around the owner's own formats, but that is a product focus and carries no authority to treat another division's missing scoresheets as resolved. One of the 11 is flagged scored while carrying no score at all, the same scheduling-artifact shape that fix `1b6878e` keeps out of the freshness banner.
 
 With this, all 105 are accounted for: 83 characterised earlier and deliberately not "fixed", 9 proven fully resolvable by `ed758a2`, and these 13 — of which 4 touch the viewer's formats.
 
@@ -3259,3 +3259,20 @@ Both passed first run, so these are **guards, not repairs** — recorded as such
 Clearing the Excel format override correctly returns to Match Day's format rather than sticking on the local choice.
 
 2322 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~08:5x UTC: closing the gap between what I claimed and what the note test proved
+
+GPT `53c6e48` caught something worth being precise about. My issue-#84 summary listed five note behaviours as PASS, including "a genuinely cold browser context does not carry it". **Four of those five were in the committed test; the cold-context one was not.** I had verified it in an ad-hoc probe against the real candidate and then reported it alongside the test results, which reads as though the suite proves it. It did not.
+
+That is exactly the kind of drift between claim and evidence this log exists to catch, and the fix is to make the evidence match the claim rather than soften the claim. Added a second test covering the three things the first did not:
+
+- **two different note targets keep their own text** — an edit to one must not bleed into the other
+- **editing an existing note**, not only setting and clearing it
+- **a genuinely separate browser context starts empty**, created with `new_context()` rather than a reload
+
+The context-isolation case is the privacy-relevant one: notes are the captain's private opinions about named people, they live only in the browser, and a second context standing in for another device or profile must start blank. It does.
+
+**Second correction, also from `53c6e48`.** I had described the 7 Doubles and Ladies Alt no-scoresheet gaps as "outside the formats the cockpit's evidence is built on". That phrasing invites reading them as excluded from acceptance. They are not: those divisions sit inside the owner's all-nightly Arapahoe scope, so they are **open gaps awaiting disposition**. The cockpit focusing on the owner's own formats is a product decision and carries no authority to treat another division's missing scoresheets as resolved. Corrected in place.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.

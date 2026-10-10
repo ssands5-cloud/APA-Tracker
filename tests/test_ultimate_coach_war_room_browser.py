@@ -735,3 +735,78 @@ def test_html_head_to_head_never_mixes_formats(tmp_path: Path):
                 page.close()
         finally:
             browser.close()
+
+
+def test_coach_notes_stay_with_their_player_and_never_cross_browser_contexts(tmp_path: Path):
+    """The lifecycle the first note test did NOT cover (GPT 53c6e48).
+
+    That test used one context and one note, so three claims I had made were
+    broader than the evidence: a genuinely separate browser context, editing an
+    existing note rather than only setting and clearing it, and two notes not
+    bleeding into each other. This covers those.
+
+    Context isolation is the privacy-relevant one. Notes are the captain's
+    private opinions about named people and they live only in the browser; a
+    second context standing in for another device or profile must start empty.
+    """
+    path = tmp_path / "notes2.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    first, second, edited = "ZZNOTE-first-target", "ZZNOTE-second-target", "ZZNOTE-first-EDITED"
+
+    def write(page, index, text):
+        box = page.locator("textarea.plan").nth(index)
+        box.scroll_into_view_if_needed()
+        box.fill(text)
+        box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
+        page.wait_for_timeout(300)
+
+    def values(page):
+        return page.eval_on_selector_all("textarea.plan", "els => els.map(e => e.value)")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+            page = ctx.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert len(values(page)) >= 2, "fixture must offer at least two note targets"
+
+            # two different targets keep their own text
+            write(page, 0, first)
+            write(page, 1, second)
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert values(page)[:2] == [first, second]
+
+            # editing one must not disturb the other
+            write(page, 0, edited)
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert values(page)[:2] == [edited, second], "an edit must not bleed between targets"
+
+            # clearing one leaves the other intact
+            write(page, 0, "")
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert values(page)[:2] == ["", second]
+            ctx.close()
+
+            # a genuinely separate context -- another device or profile -- starts empty
+            fresh = browser.new_context(viewport={"width": 1280, "height": 900})
+            page2 = fresh.new_page()
+            page2.goto(path.as_uri())
+            page2.wait_for_load_state("load")
+            page2.wait_for_timeout(300)
+            assert values(page2)[:2] == ["", ""], "notes must not leak across browser contexts"
+            body = page2.locator("body").inner_text()
+            for leaked in (first, second, edited):
+                assert leaked not in body
+            fresh.close()
+        finally:
+            browser.close()
