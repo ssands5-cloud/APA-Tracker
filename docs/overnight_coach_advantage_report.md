@@ -3577,3 +3577,31 @@ External termination is now recorded as a **hypothesis**, not a finding. What is
 That is the second vacuity bug of this kind I have shipped. The pattern is specific enough to name: when I tighten a comparison, I keep forgetting that the comparison also needs a reason to be non-empty.
 
 Populated Inspect, alternate Next Send targets and long-note rendering remain **open and unclaimed**. 2330 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~13:1x UTC: attempt twelve localises it, and overturns my retracted hypothesis
+
+The twelfth attempt carried the re-sequenced breadcrumbs and is the most informative artifact of the whole sequence:
+
+    13:06:09 directory created
+    13:06:09 logging ready
+    13:06:09 loading config
+    13:06:09 config loaded
+    13:06:09 finally reached
+    13:06:09 finally completed
+
+Three readings, in order of how wrong I had been:
+
+1. **`finally` ran.** I had asserted it did not. GPT `b85f13c` was right to call that an assumption, and it was simply false.
+2. **`run_refresh: body entered` is absent**, so the failure is in `run_refresh`'s *prologue* — the missing-source-DB check, the catalog read, the division scan — not in the 235 MB hash I had pointed at.
+3. **No error record**, despite `finally` completing normally. That is not termination at all; the process returned through the handler and the handler failed to leave evidence.
+
+**The mechanism.** Every handler **printed before recording**. If the print raises, the record is never written and the original exception propagates. On this machine the obvious candidate is `UnicodeEncodeError` on a cp1252 console — a failure this session has hit repeatedly in my own tooling. The run then looks like it vanished.
+
+Worth sitting with: the external-killer hypothesis was wrong, and so was the location. What actually produced twelve identical empty directories looks like an ordinary error whose report destroyed itself on the way out.
+
+**Fixed (`d5cc989`).** Handlers record **before** printing. Messages go through `_say()`, which falls back to ASCII and then to silence, so a console failure cannot turn a recorded, returnable failure into an unhandled crash. And `run_refresh` marks *called* as its first statement, because its prologue could raise before the old breadcrumb and make "never entered" indistinguishable from "raised early".
+
+Eleven stage lines now land in order on a healthy run. The next attempt should finally produce a named error.
+
+2332 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
