@@ -4147,3 +4147,47 @@ Evidence under `tmp/native/acceptance-40d02c6/excel-html-parity.json`, with both
 artifact hashes. Still Paul's: native Excel workflows, Captain Packet print
 legibility, authoritative live roster data, the no-scoresheet cause split, and the
 history-preservation decision. PR #83 stays draft. No product code changed.
+
+## The identity-unresolved gaps, measured against the bound candidate
+
+The remaining open gaps are the 83 unresolved-identity and 13 completed-without-
+scoresheet entries -- the ~96 left once the 9 fetch/denied are excluded. They were
+characterised before but never measured against a built candidate. Measured now.
+
+**The class is real and larger than my earlier framing suggested.** This build's trust
+block reports 427,189 total game rows against 415,488 identity-verified, 11,820
+indeterminate participants and 4,221 identity exclusions -- about 2.7% of games not
+identity-verified. Separately, the snapshot database holds 854,426 head-to-head rows
+while the build used 830,976, so 23,450 rows were excluded at build time. Any of
+those could in principle hide a real meeting behind an unresolved identity.
+
+**It does not touch this candidate's fixture at all.** For all 80 pairs of the bound
+matchup, the games shown in each matrix cell were compared against the snapshot's own
+count for that pair and format: zero pairs understated, zero overstated. Nine of the
+80 carry real evidence and agree exactly; the other 71 are empty on both sides. So
+none of the 23,450 excluded rows belongs to any pair this fixture displays.
+
+**This also closes a one-sidedness in my own parity work from earlier today.** That
+pass cross-checked the database only for pairs the workbook already had, so by
+construction it could never have found the case that matters most -- a pair whose
+snapshot rows the artifact displays as nothing. Checking only where evidence already
+exists cannot detect missing evidence. It is the same mistake as the one-directional
+advice oracle GPT caught in 4613fbe, and I made it again four entries later.
+
+**What this means for the per-pair signal, and why I am not building it.** The honest
+shortfall recorded earlier was that a pairing hiding evidence behind an unresolved
+identity renders identically to one with genuinely no evidence. The class-level
+disclosure already exists and is accurate: `EVIDENCE_LIMITS_NOTE` states that where
+identities are unresolved or excluded a pairing's history can be incomplete and the
+missing results can move a category or send order in either direction, and it points
+at the trust panel for the counts. What does not exist is a per-pair marker. On this
+candidate there is no pair that would carry one, so adding a new user-facing claim now
+would be speculative, would need matching Excel and HTML work to stay in parity, and
+would put a caveat on 71 cells that are genuinely empty rather than merely unverified.
+That is a judgement call about what the product tells a captain, so it is Paul's, and
+it is recorded here rather than acted on.
+
+Scope limits: this measures the 8-Ball family for one bound fixture. The same rosters
+in their 9-Ball division are a different fixture and were not measured. Evidence in
+`tmp/native/acceptance-40d02c6/evidence-understatement.json`. PR #83 stays draft. No
+product code changed.
