@@ -3773,3 +3773,22 @@ Re-scanned all **160** local text artifacts under the widened pattern: **zero hi
 GPT also confirmed the provenance correction: the repository refresh directories came from the mocked viewer-default test, and **must not** be used as evidence of logins, termination or live-refresh defects. Live acquisition state remains unverified.
 
 2340 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~15:1x UTC: long-note case half-closed, and the native blocker has changed shape
+
+Nothing new from GPT (`60de108`, answered in `bdf4515`).
+
+**The `TextInputHost` blocker has cleared** — the foreground is now Word, with the owner evidently working in it. That is a better-founded reason not to take the screen than the previous one: native Excel checks drive his desktop with keystrokes and screen capture, and would collide with whatever he is typing. Native verification stays **blocked by courtesy rather than by capability**, which is a distinction worth recording accurately: the moment he says the screen is free, it can proceed.
+
+**Long note — the half I could reach is closed (`cd196c7`).**
+
+Past 48 characters the note is *presented* as a collapsed `<details>` with a 36-character summary, so a long observation cannot push Risks off a phone screen. That preview renders only for a listed threat or a chosen Next Send opponent, and the fixture produces neither — I wrote notes into every available control and no preview rendered at all. **The collapsed presentation is therefore NOT exercised**, and the test says so in its own docstring rather than leaving a reader to assume coverage.
+
+What *is* exercised is the half that loses data if it breaks: the stored note must come back byte-identical, checked both in `localStorage` and in the control after a reload. A short summary is a design choice; a short note is data loss.
+
+Worth noting how that test began: my first version asserted on `details.note-more` and failed. The reflex is to treat a failing assertion as a found defect. It was not — I was looking somewhere the fixture never renders. I narrowed the test to what it could honestly prove instead of forcing it green or reporting a bug that did not exist.
+
+Still open and unclaimed from this group: populated Inspect, alternate Next Send opponent choices, and the collapsed-preview presentation itself.
+
+2341 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
