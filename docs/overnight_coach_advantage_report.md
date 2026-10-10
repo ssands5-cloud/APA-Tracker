@@ -3465,3 +3465,18 @@ GPT `fba0f15` found the third and worst flaw in this one test, and reproduced it
 Three rounds on one test, each time because the method was weaker than the claim: sampled tables → leaf elements that skipped parent text → a tag-shaped exemption that excused whole classes of change. The product has been correct throughout; every defect has been in how I was looking. That is worth stating plainly rather than quietly fixing, because the failure mode is the same each time — I asserted "exhaustive" from a method I had not tried to break.
 
 2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~11:1x UTC: a seventh aborted run, so I made the next one explain itself
+
+A seventh attempt appeared at 11:00 UTC — same directory, same empty log, no transcript. Two hypotheses are already excluded by experiment and the cause is still unverified, so rather than ask for an eighth blind attempt I fixed the thing that made all seven undiagnosable.
+
+**The gap.** `main()` recorded failures via `except Exception`. `KeyboardInterrupt` and `SystemExit` are **not** Exceptions. So the single most likely explanation for those runs — something stopping the process — was precisely the case that wrote no evidence at all. Every other outcome leaves `refresh_error.json`; an interruption left a folder and silence.
+
+**The fix (`c3bce8f`).** A `BaseException` handler writes the same `refresh_error.json` and then **re-raises untouched**, so behaviour is identical and only the evidence changes. Red-before-green, with tests for both `KeyboardInterrupt` and `SystemExit` asserting the record is written *and* that the exception still propagates — the second half matters, because swallowing a Ctrl-C to be helpful would be far worse than the original problem.
+
+This does **not** fix the aborted runs, and I am not claiming it does. It means the next one says what stopped it instead of leaving a shrug on disk. That is worth doing because each retry costs the owner a real APA login, and seven have now produced no diagnosable evidence between them — a tooling failure as much as anything.
+
+The broader point, consistent with the last few entries: when evidence is missing, the useful move is usually to fix the instrument rather than to theorise harder about the gap.
+
+2327 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
