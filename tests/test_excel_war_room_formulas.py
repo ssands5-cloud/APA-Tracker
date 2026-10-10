@@ -860,6 +860,65 @@ def _tied_payload():
     return payload
 
 
+def _cross_format_payload():
+    """Ann and Cam meet in BOTH formats: 2-0 to Ann in 8-Ball, 0-3 in 9-Ball.
+
+    The shared fixture is EIGHT-only with no pair meeting in two formats, so
+    nothing in it could ever expose cross-format leakage. Built locally rather
+    than widened in _payload() so the other tests keep their fixture.
+    """
+    payload = _payload()
+    for player in payload["players"]:
+        if player["external_id"] == "2001":                      # give Cam a 9-Ball scope too
+            player["team_history"] = player["team_history"] + [_hist("falcons-b", "d9", "NINE", 5)]
+    nine = []
+    for n in range(3):
+        nine += [
+            {"player_id": 1, "opponent_id": 10, "format": "NINE", "result": "L",
+             "match_date": "2026-09-13T19:00:00-06:00", "session_name": "Fall 2026",
+             "own_skill_level": 4, "opponent_skill_level": 5, "points_earned": None},
+            {"player_id": 10, "opponent_id": 1, "format": "NINE", "result": "W",
+             "match_date": "2026-09-13T19:00:00-06:00", "session_name": "Fall 2026",
+             "own_skill_level": 5, "opponent_skill_level": 4, "points_earned": None},
+        ]
+    payload["evidence"] = payload["evidence"] + nine
+    payload["counts"] = {"players": len(payload["players"]),
+                         "head_to_head_rows": len(payload["evidence"])}
+    return payload
+
+
+def test_coach_dashboard_head_to_head_never_mixes_formats(tmp_path):
+    """A 9-Ball meeting must not count toward an 8-Ball head-to-head, or the reverse.
+
+    Verified natively on a real candidate first -- a pair with meetings in both
+    formats showed only the selected format's record. There was no automated
+    guard for it, because the shared fixture is EIGHT-only: no data in it could
+    have exposed leakage even if it existed.
+
+    This matters more than it looks. The dashboard answers "what happened when
+    these two played?", and a captain acts on the number. Folding 9-Ball results
+    into an 8-Ball record would inflate or invert that answer with evidence from
+    a game the players were not about to play.
+    """
+    payload = _cross_format_payload()
+    wb = load_workbook(write_workbook(payload, tmp_path / "xfmt.xlsx", built_at="2026-10-07 18:00 UTC",
+                                      viewer_member_external_id="1001", viewer_card_number="80000001"))
+    book = Workbook(wb)
+
+    book.set(CD, "C6", CAM)
+    assert book.display(CD, "A4").endswith("· 8-Ball")
+    assert book.display(CD, "C19") == "2-0", "8-Ball record must exclude the three 9-Ball losses"
+    assert book.display(CD, "C20") == 2, "8-Ball meeting count must exclude the 9-Ball meetings"
+
+    book.set(CD, "C8", "9-Ball")
+    assert book.display(CD, "A4").endswith("· 9-Ball")
+    assert book.display(CD, "C19") == "0-3", "9-Ball record must exclude the two 8-Ball wins"
+    assert book.display(CD, "C20") == 3
+
+    book.set(CD, "C8", "")
+    assert book.display(CD, "C19") == "2-0", "clearing the override returns to Match Day's format"
+
+
 def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     """GPT audit #84: outside the HTML Tonight panel, Excel numbered tied and shared-only picks 1., 2., 3. and called a
     shared-only pick "best-supported". Equal evidence now shares a number ("1="), shared-only is "≈", and the single

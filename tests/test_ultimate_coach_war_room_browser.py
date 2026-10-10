@@ -688,3 +688,50 @@ def test_a_coach_note_is_remembered_cleared_and_never_changes_the_evidence(tmp_p
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_html_head_to_head_never_mixes_formats(tmp_path: Path):
+    """The HTML side of the same guard as the Excel cross-format test.
+
+    HTML and Excel compute this independently, so proving it in the workbook
+    says nothing about the page. Ann and Cam meet 2-0 in 8-Ball and 0-3 in
+    9-Ball; each format must report only its own meetings, and the opponent
+    pool must be scoped too -- an opponent met only in 8-Ball should not be
+    offered while 9-Ball is selected.
+    """
+    from tests.test_excel_war_room_formulas import _cross_format_payload
+
+    path = tmp_path / "xfmt.html"
+    path.write_text(render(_cross_format_payload(), built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            for fmt, label, meetings in (("EIGHT", "8-Ball", 2), ("NINE", "9-Ball", 3)):
+                page = browser.new_page(viewport={"width": 1280, "height": 900})
+                errors = []
+                page.on("pageerror", lambda exc: errors.append(str(exc)))
+                page.goto(path.as_uri())
+                page.wait_for_load_state("load")
+                page.select_option("#format", fmt)
+                page.select_option("#player-a", "1")
+                page.wait_for_timeout(300)
+
+                pool = page.eval_on_selector_all(
+                    "#player-b option", "els => els.filter(e => e.value).map(e => e.textContent)")
+                cam = [t for t in pool if "2001" in t]
+                assert len(cam) == 1, (fmt, pool)
+                assert f"{meetings} meeting" in cam[0], (fmt, cam[0])
+                # Zed was met in 8-Ball only, so 9-Ball must not offer him
+                assert any("2003" in t for t in pool) == (fmt == "EIGHT"), (fmt, pool)
+
+                page.select_option("#player-b", "10")
+                page.wait_for_timeout(300)
+                summary = page.locator("#summary").inner_text()
+                assert f"{meetings} recorded direct meeting" in summary, (fmt, summary[:200])
+                assert label in summary
+                assert errors == [], errors
+                page.close()
+        finally:
+            browser.close()
