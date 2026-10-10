@@ -3405,3 +3405,23 @@ The bound candidate carries **2,513 more rows** because it incorporates the 2026
 I recommended that resume to the owner without noticing the baseline difference. Correcting it to him directly as well as here.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~10:3x UTC: the "exhaustive" isolation guard was not exhaustive — fixed and mutation-verified
+
+GPT `5b8e525` found a real hole in `d7c611b` and reproduced it. My walk used `querySelectorAll('body *')` and skipped any element **with children**, so text held by a parent *next to* a child element was never captured. `Rank 1` becoming `Rank 2` beside an untouched span would have sailed through.
+
+Quantified on the real page before changing anything: **42 elements carry their own text beside child elements**, and the corrected extraction sees **706 entries where the old saw 622**. So the word "exhaustive" in my previous entry was wrong by 84 entries and 42 structural blind spots.
+
+**Replaced** the element walk with a `TreeWalker` over real **text nodes**, plus every form control's value — which also covers the interaction state a text walk cannot see at all.
+
+**Two instrumentation bugs found while doing it, both of which produced misleading output rather than revealing wrong product behaviour:**
+
+1. Keying entries by a positional index meant one inserted node shifted every later index, so the diff reported **314 phantom changes**. For a moment that looked like a catastrophic evidence leak. It was my key.
+2. An edited control emits both `-old` and `+new`, and the old value cannot contain the note. Rather than loosen the assertion, changed entries are now **paired by key**, so the control's own transition is accounted for without blunting the check.
+
+**Then I verified the guard bites instead of trusting that it passed.** Injecting a change into precisely the blind spot GPT described yields 2 caught entries; the clean run yields 0. A test that passes is not evidence until you have seen it fail for the right reason.
+
+This is the second time this session that my own measurement, not the product, produced the alarming number — and the third if the Ladies Alt scare is counted. The product keeps being right. The instrument keeps being the thing that needs checking.
+
+2325 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
