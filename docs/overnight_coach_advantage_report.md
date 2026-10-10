@@ -4276,3 +4276,55 @@ at 58% is still his call, and authoritative roster correctness against APA still
 needs a live login. Evidence under
 tmp/native/acceptance-40d02c6/nine-ball-fixture-acceptance.json. PR #83 stays draft.
 No product code changed.
+
+## A real defect in the gap report: byes counted as missing scoresheets
+
+Nothing new from GPT this firing, so I asked a question the gap list had never been
+asked: of the 105 gaps, which ones actually cost Paul evidence in the fixtures he
+uses? Answering it found a reporting defect, and the first fix to product code in
+several entries.
+
+**The gap list's own shape, resolved.** The 105 strings are 2 division roll-ups and
+103 match-level entries, in three message shapes: 83 unresolved-identity, 9 scoresheet
+fetch failures, and 11 "scored but no scoresheet rows". The 2 roll-ups report 3 Ladies
+Alt and 4 Doubles matches, and those 7 are the same matches already listed
+individually, so the no-scoresheet class is 13 strings describing 11 distinct matches.
+
+**Four of those 11 are byes.** Every one is a bye of Paul's own four teams, on
+2026-08-23 and 2026-08-24, week 4, both sides named Bye and BYE, `is_bye=1`,
+`is_scored=1`, with a forfeit-shaped score and zero player and head-to-head rows. A
+bye has no scoresheet because nobody played it. Counting it as a completed match
+missing its scoresheet reports a problem that does not exist.
+
+The snapshot holds exactly 8 byes, matching the build manifest's own bye count, and
+exactly the 4 with past dates were flagged -- the 4 dated later are not yet complete.
+The division-wide ingest path already skips byes explicitly; this diff did not, which
+is why only the viewer's own byes were ever reported.
+
+**Fixed, red before green.** `snapshot()` now reads `is_bye` and `diff()` excludes
+byes from the no-scoresheet gap. Four tests: a played match with no scoresheet is
+still a gap, a bye is not, audit 7a4f8b5's null-score artifact stays disclosed because
+it is a real scheduling problem rather than a bye, and `snapshot()` must actually read
+the flag or the diff cannot use it. Two were red for the right reasons before the fix
+and the two guard tests passed throughout, so the fix could not over-reach. Verified
+against the real snapshot afterwards as well: the 4 byes are gone and all 7 real
+no-scoresheet matches are retained.
+
+**What this means for Paul's own data, which was the question.** Thirteen match-level
+gaps touch his four teams: 9 fetch failures and the 4 byes. The 9 all have their
+individual results present -- 8 to 10 head-to-head rows and 14 to 20 player-match rows
+each -- because "fetch failed; existing rows kept unverified" means the rows were kept,
+not lost. The 4 byes are correctly empty. So **no match of his own teams is missing
+player results**, and none of the 83 unresolved-identity gaps touches his teams at all.
+
+**A correction to record.** I first resolved the gap matches to teams by joining
+`teams.id` to `matches.home_team_id`, which found nothing and told me zero of the 103
+gaps involved his teams. That was wrong: those columns hold the *external* team id
+despite the name, so the join silently matched nothing and made every match look like
+someone else's. A name-based pass said 9, the two disagreed, and the disagreement is
+the only reason I checked. Had I run only the id-based query I would have reported the
+opposite of the truth. Resolving the columns correctly gives 13.
+
+Scope: this fixes gap reporting, not data. Nothing was re-fetched and no database was
+written. The real gap count for this refresh is 101 rather than 105, and the
+no-scoresheet class is 7 real matches rather than 13 strings. PR #83 stays draft.
