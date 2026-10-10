@@ -325,6 +325,19 @@ def test_refuses_to_overwrite_an_existing_copy(setup, monkeypatch):
 
 
 def test_verify_member_defaults_to_the_configured_viewer(tmp_path, monkeypatch):
+    """Runs under tmp_path because it used to run in the REPO.
+
+    Without --out-root this called main() with the default out-root, so every
+    full-suite run created a real timestamped directory in tmp/refresh/ holding
+    an empty log and nothing else -- the stub it patches over run_refresh
+    returns a dict without doing any work.
+
+    Those directories are indistinguishable from an aborted live login, and I
+    spent a long investigation diagnosing them as the owner's failed attempts
+    before the call-site identity marker named this lambda as the callee. A
+    test that writes into the working tree does not just risk flaky state; it
+    manufactures false evidence about production.
+    """
     seen = {}
     monkeypatch.setattr(refresh, "run_refresh", lambda config, **kw: seen.update(kw) or {
         "changes": {"date_range_checked": None, "latest_scored_date_before": None, "latest_scored_date_after": None,
@@ -337,10 +350,12 @@ def test_verify_member_defaults_to_the_configured_viewer(tmp_path, monkeypatch):
     monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda dest, repo: dest)
     config = tmp_path / "apa_config.yaml"
     config.write_text("ultimate_coach:\n  viewer_member_external_id: \"9001\"\n", encoding="utf-8")
-    assert refresh.main(["--config", str(config), "--verify-date", "2026-10-05"]) == 0
+    out_root = str(tmp_path / "refresh")        # never the repo's own tmp/refresh -- see below
+    assert refresh.main(["--config", str(config), "--out-root", out_root, "--verify-date", "2026-10-05"]) == 0
     assert seen["verify_member"] == "9001" and seen["verify_date"] == "2026-10-05" and seen["mode"] == "reconcile"
     config.write_text("ultimate_coach:\n  viewer_member_external_id: \"CHANGE_ME\"\n", encoding="utf-8")
-    assert refresh.main(["--config", str(config), "--verify-date", "2026-10-05"]) == 2   # never guessed
+    assert refresh.main(["--config", str(config), "--out-root", out_root,
+                         "--verify-date", "2026-10-05"]) == 2   # never guessed
 
 
 def test_describe_source_never_lets_a_partial_or_altered_refresh_pass_as_current(setup, monkeypatch, capsys):
@@ -842,3 +857,48 @@ class TestABrokenConsoleChangesNoOutcome:
         stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
         assert "handler: generic exception" in stages
         assert "arguments resolved" in stages
+
+
+class TestNoDiagnosticSinkLeaksCredentials:
+    """GPT f18b690 (P1): I introduced this one.
+
+    The inner call guard wrote str(exc) straight into refresh_stage.txt while
+    every other sink -- the error JSON and the log formatter -- scrubbed it.
+    HTTP libraries routinely put bearer tokens into exception text, so a
+    diagnostic I added to chase a bug became the one place a credential could
+    land in a file.
+
+    Scrubbing now lives inside _stage itself rather than at its call sites, so
+    a future caller cannot reintroduce the bypass by forgetting.
+    """
+
+    SENTINEL = "Bearer eyJhbGciOiJIUzI1NiJ9.ZZSYNTHETICPAYLOAD.ZZSYNTHETICSIG"
+
+    def test_a_token_in_an_exception_never_reaches_any_diagnostic_file(self, tmp_path, monkeypatch):
+        def boom(*args, **kwargs):
+            raise RuntimeError(f"upstream rejected {self.SENTINEL} while fetching")
+
+        monkeypatch.setattr(refresh, "run_refresh", boom)
+        monkeypatch.setattr("scripts.repo_boundary.check_output_root", lambda *a, **k: None)
+
+        assert refresh.main(["--out-root", str(tmp_path / "r"), "--source-db", str(tmp_path / "x.db")]) == 5
+
+        leaked = []
+        for produced in sorted(refresh.LAST_OUT_DIR.iterdir()):
+            text = produced.read_text(encoding="utf-8", errors="replace")
+            if "ZZSYNTHETICPAYLOAD" in text or "ZZSYNTHETICSIG" in text:
+                leaked.append(produced.name)
+        assert leaked == [], f"credential text reached: {leaked}"
+
+        stages = (refresh.LAST_OUT_DIR / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "[redacted]" in stages, stages
+        assert "RuntimeError" in stages
+
+    def test_stage_scrubs_even_when_a_caller_forgets(self, tmp_path):
+        """The guarantee belongs to _stage, not to its callers."""
+        out = tmp_path / "d"
+        out.mkdir()
+        refresh._stage(out, f"careless diagnostic {self.SENTINEL}")
+        written = (out / "refresh_stage.txt").read_text(encoding="utf-8")
+        assert "ZZSYNTHETICPAYLOAD" not in written
+        assert "[redacted]" in written

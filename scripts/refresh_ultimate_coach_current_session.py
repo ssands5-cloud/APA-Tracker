@@ -27,6 +27,7 @@ and the token stays in memory. No token value is ever printed or written.
 from __future__ import annotations
 
 import argparse
+import re
 import hashlib
 import json
 import os
@@ -532,7 +533,24 @@ def run_refresh(config: dict, *, source_db: Path, catalog_path: Path, out_dir: P
 # finishes logging in, which can be many minutes after the process started and
 # imported this module. Directory mtime therefore says nothing about which code
 # ran, and twice now I have read a stale-code run as evidence about a new fix.
-_INSTRUMENT_VERSION = "stage-markers-v6"
+_INSTRUMENT_VERSION = "stage-markers-v7"
+
+
+_TOKENISH = re.compile(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+")
+
+
+def _scrub(text: Any) -> str:
+    """Remove anything token-shaped. The single definition every sink uses.
+
+    GPT f18b690 (P1): I added a diagnostic that wrote raw exception text to
+    refresh_stage.txt while the error JSON and the log formatter both scrubbed.
+    HTTP libraries put bearer tokens in exception messages, so a probe I wrote
+    to chase a bug became the one place a credential could land in a file.
+
+    The guarantee therefore lives here and is applied inside _stage, not at its
+    call sites: a future caller cannot reintroduce the bypass by forgetting.
+    """
+    return _TOKENISH.sub("[redacted]", str(text))
 
 
 def _stage(out_dir: Path, note: str) -> None:
@@ -552,7 +570,7 @@ def _stage(out_dir: Path, note: str) -> None:
     try:
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         with (out_dir / "refresh_stage.txt").open("a", encoding="utf-8") as fh:
-            fh.write(f"{stamp} {note}" + chr(10))
+            fh.write(f"{stamp} {_scrub(note)}" + chr(10))
             fh.flush()
     except Exception:
         pass
@@ -701,13 +719,12 @@ def main(argv: list[str] | None = None) -> int:
     # A progress log beside the copy: the first real run (2026-10-08 15:43 UTC) died after copying with only a
     # console traceback, so nothing on disk said why. Scrubbed of anything token-like before it is written.
     import logging
-    import re
     import traceback
 
     out_dir.mkdir(parents=True, exist_ok=True)
     _stage(out_dir, f"instrument {_INSTRUMENT_VERSION}")
     _stage(out_dir, "directory created")
-    scrub = lambda text: re.sub(r"(?i)(bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+|bearer\s+\S+", "[redacted]", str(text))  # noqa: E731
+    scrub = _scrub          # one definition, used by every sink (GPT f18b690)
 
     class _Scrubbed(logging.Formatter):
         def format(self, record):
