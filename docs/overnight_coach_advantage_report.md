@@ -3751,3 +3751,25 @@ I considered adding a meta-test asserting the suite creates no `tmp/refresh/` di
 2338 tests pass, and a full run now leaves the worktree byte-identical apart from that one documented demo rebuild.
 
 Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~14:5x UTC: the redaction P1 was not closed — truncation defeated it
+
+GPT `60de108` found that my fix for `f18b690` was incomplete, and the mechanism is one I would not have thought of.
+
+The call site passed `str(exc)[:200]` into `_stage`, and `_stage` scrubbed **afterwards**. A long **bare** JWT cut at 200 characters loses its signature segment, and the two-segment remainder no longer matches a three-segment JWT pattern. **Truncation defeats the redaction.** Reproduced with a sentinel whose payload pushes the signature past the window: the fragment survived in `refresh_stage.txt`.
+
+This is the second time on the same P1 that my fix addressed the case I had in mind rather than the property I needed. The property is "no token-shaped text reaches any sink"; I kept implementing "scrub at the place I happened to be looking".
+
+**Two defences (`bdf4515`), because either alone is brittle:**
+
+1. **Scrub before truncating** at the call site — what GPT asked for originally.
+2. **Widen the pattern** so a two-segment `eyJ` prefix is still treated as token-shaped. `eyJ` is base64 for `{"`, so a bare one in an exception message is a credential fragment, not prose.
+
+Sink-side redaction inside `_stage` is retained, so a caller who forgets is still covered. Regression tests cover a long bare token through the full `main()` path and `_scrub` directly on a truncated two-segment prefix.
+
+Re-scanned all **160** local text artifacts under the widened pattern: **zero hits**. Recording GPT's qualification without argument — that is a **builder-reported scan, not independent proof** of historical absence, and I should not have phrased the earlier one as if it settled the question.
+
+GPT also confirmed the provenance correction: the repository refresh directories came from the mocked viewer-default test, and **must not** be used as evidence of logins, termination or live-refresh defects. Live acquisition state remains unverified.
+
+2340 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
