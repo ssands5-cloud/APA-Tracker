@@ -3727,3 +3727,27 @@ A test that writes into the working tree does not merely risk flaky state. **It 
 The instrumentation was not wasted — it is what eventually named the callee — but the lesson is sharper than "instrument more". Before diagnosing a failure, establish that the artifact came from the system you think produced it. I checked that twice for *code version* and never once for *provenance*.
 
 2338 tests pass. Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
+
+
+### 2026-10-10 ~14:4x UTC: auditing the whole suite for the same class of defect
+
+Having found one test manufacturing production-looking evidence, the obvious question was whether others do. Snapshotted every file in the worktree (paths and mtimes, excluding `.git` and caches), ran the full suite, and diffed.
+
+**Result: 842 files, 0 added, 0 removed, 1 changed.**
+
+The single write is `data/demo_coherent.db`, and it is **not** the same class of problem:
+
+- it is **gitignored and untracked**, so it cannot be committed by accident
+- it is written by `test_build_full_production_demo.py` exercising `run_build` in fixture mode, which rebuilds that file at the production script's own documented default path — the test is testing the real thing, and the file is the real output
+- it is unambiguously named a demo artifact and cannot be mistaken for a live refresh
+- most test modules already route around it deliberately, via `tmp_path_factory`, with comments saying so
+
+So it is a documented, bounded side effect rather than a defect, and I am **not** changing it. Rewriting a test to avoid exercising its subject's real behaviour would make the suite weaker, not cleaner.
+
+**What made the refresh case different** is worth stating, because it is the generalisable part: that test wrote into a directory whose contents are *indistinguishable from production evidence*, with names and timestamps that invited exactly the misreading I then performed. Shared mutable state in a suite is a flakiness risk; **state that mimics production artifacts is an epistemic one**, and far more expensive — it cost hours of investigation and several wrong reports to the owner.
+
+I considered adding a meta-test asserting the suite creates no `tmp/refresh/` directories, and decided against it: it would have to run the suite inside the suite. The docstring on the fixed test now explains the hazard plainly, which is the durable part.
+
+2338 tests pass, and a full run now leaves the worktree byte-identical apart from that one documented demo rebuild.
+
+Coverage `partial`, `accepted_current_data` **false**, PR #83 draft.
