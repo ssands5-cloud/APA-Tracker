@@ -4991,3 +4991,48 @@ gate, which is not the same as a closed question.
 
 The two native usability failures from the previous run need no login and are the next thing
 I execute. No product code changed yet, no database written. PR #83 stays draft.
+
+## PRINT-01: one dense section is making the whole packet unreadable, and the trade is pages
+
+The packet prints at 58 percent and I had been treating that as a fixed property to judge.
+It is not: it is a computed consequence of one section, and measuring which one turns an
+aesthetic argument into an arithmetic one.
+
+Excel applies a single print scale to a whole sheet, so the densest section sets the size of
+every other page. Measured against the printable area of landscape Letter at the margins the
+builder sets: the front page would allow 0.717, the scouting cards 0.667, the meeting history
+0.782, and the sheet's own width allows 0.805. The evidence section allows 0.294 on its own,
+and spread over the two pages it is designed to occupy, 0.588. That is the 58 percent. Every
+other page is printing at roughly two thirds the size it could, purely because the evidence
+table is in the same sheet.
+
+So the lever is pagination, and the cost is paper:
+
+| layout | scale | 10.5pt prints | 9pt prints | pages |
+|---|---|---|---|---|
+| today, evidence over 2 pages | 0.588 | 6.2pt | 5.3pt | 5 |
+| evidence over 3 pages | 0.667 | 7.0pt | 6.0pt | 6 |
+| evidence 3, cards over 2 | 0.717 | 7.5pt | 6.5pt | 7 |
+| evidence 3, cards 2, front 2 | 0.782 | 8.2pt | 7.0pt | 8 |
+| freely paginated | 0.805 | 8.4pt | 7.2pt | many |
+
+The ceiling is 0.805 and it is the sheet's width, not its height, so no amount of extra paper
+prints larger than 8.4pt without narrowing columns. For reference, newspaper body text is
+about 8 to 9 point and fine print about 6, which puts today's 5.3pt below fine print and the
+one-extra-page option at the fine-print boundary.
+
+**The best ratio is the first step.** One additional sheet of paper moves the body from 6.2pt
+to 7.0pt, and it is also the step I can make safely, because the evidence section already
+paginates explicitly after the header fix -- splitting it three ways is the same mechanism
+with a different divisor. Beyond that, each further point costs a page and touches sections
+that do not currently break at all.
+
+Two things I should be honest about. The first is that this does not fix the 363 shrink-to-fit
+cells, which shrink below whatever the table above says in order to fit their column; the
+scale raises the ceiling, not the floor, and those cells need their own answer. The second is
+that this is Paul's decision rather than mine. He is the one who carries the packet to a
+match, and a captain who wants one sheet per section will choose differently from one who
+wants the fewest pages. I have made the trade explicit and measured instead of picking for him.
+
+No product code changed for this entry; the measurement is read-only against the bound
+candidate. PR #83 stays draft.
