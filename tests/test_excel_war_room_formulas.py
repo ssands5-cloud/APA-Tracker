@@ -950,3 +950,73 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     book.set(LL, "C12", "Unavailable")
     assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
     assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: best-supported send: {FAY} — reason: 2-0 direct record (2 meetings) — favorable"
+
+
+def test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause(built):
+    """The whole point of that warning is the clause saying the marks are NOT applied.
+
+    Native Excel run 2026-10-11 against build-40d02c6: planning for one fixture and then
+    switching Match Day to another rendered only "...· match <id> —" and clipped the rest,
+    because the row was a fixed 30pt (two lines) while the warning needs three. The marks
+    stay visible in the table underneath, so a captain reading a warning that stops at a
+    dash can reasonably conclude they still apply. They do not. Excel never auto-fits a
+    formula row, which is why _worst_height exists for exactly these cells.
+    """
+    from openpyxl.utils import get_column_letter
+
+    ll = built[LL]
+    width = lambda ws, c1, c2: sum(ws.column_dimensions[get_column_letter(k)].width or 8.43 for k in range(c1, c2 + 1))
+    status_width = width(ll, 4, 6)
+
+    sched = built["Schedule"]
+    head = [c.value for c in sched[1]]
+    col = {name: head.index(name) + 1 for name in ("Date Display", "Kickoff", "Home/Away", "Opponent", "Match ID")}
+    keys = []
+    for row in sched.iter_rows(min_row=2, values_only=True):
+        parts = [row[col[n] - 1] for n in ("Date Display", "Kickoff", "Home/Away", "Opponent", "Match ID")]
+        if all(p not in (None, "") for p in parts):
+            keys.append(f"{parts[0]} · {parts[1]} · {parts[2]} vs {parts[3]} · match {parts[4]}")
+    assert keys, "the schedule must offer at least one fixture for this to mean anything"
+    worst_key = max(keys, key=len)
+
+    warning = (f"⚠ Match Day’s fixture is {worst_key} — availability, lineup and played are NOT applied. "
+               "Notes still are.")
+    need = _wrapped_lines(warning, status_width, 11) * 11 * 1.2
+    assert (ll.row_dimensions[9].height or 15) >= need, (ll.row_dimensions[9].height, need, warning)
+
+    # The two team-scope warnings above it carry the same shape and the same fixed height.
+    teams = [str(c.value) for c in built["Teams"]["A"][1:] if c.value] if "Teams" in built.sheetnames else []
+    worst_team = max(teams, key=len) if teams else "A Reasonably Long Team Name · Fall 2026 · 8-Ball"
+    for row, text in ((5, f"⚠ Match Day shows {worst_team} — these marks are NOT applied there."),
+                      (6, f"⚠ Match Day’s opponent is {worst_team} — opponent marks are NOT applied there.")):
+        need = _wrapped_lines(text, status_width, 11) * 11 * 1.2
+        assert (ll.row_dimensions[row].height or 15) >= need, (row, ll.row_dimensions[row].height, need)
+
+
+def test_captain_packet_evidence_table_repeats_its_headers_on_the_continued_page(built):
+    """Page 4 of the printed packet continued the evidence table with no column headers.
+
+    print_title_rows can only repeat TOP rows, so it carries the packet title and fixture
+    line but never the mid-sheet column header. The builder already treats evidence as one
+    section deliberately spread over two printed pages, so the split is a known place: it
+    must be an explicit break with the header repeated directly after it, or the reader has
+    to flip back a page to find out which column is Rank and which is Basis.
+    """
+    cp = built[CP]
+    hdr = _row(built, CP, "Opponent (APA record ID)")
+    ev_first = hdr + 1
+    ev_rows = [c.row for c in cp["A"]
+               if isinstance(c.value, str) and c.value.startswith('=IF(P') and c.row > hdr]
+    assert ev_rows, "the evidence table must have data rows"
+    ev_last = max(ev_rows)
+
+    breaks = sorted(b.id for b in cp.row_breaks.brk if ev_first <= b.id < ev_last)
+    assert breaks, ("evidence spans two printed pages but splits on an automatic break, "
+                    "so the continued page carries no column headers")
+
+    for b in breaks:
+        repeated = b + 1
+        assert cp.cell(row=repeated, column=1).value == "Opponent (APA record ID)", (
+            b, cp.cell(row=repeated, column=1).value)
+        for col, text in ((3, "Rank"), (4, "Our player (APA record ID)"), (8, "Evidence"), (11, "Basis")):
+            assert cp.cell(row=repeated, column=col).value == text, (repeated, col)

@@ -481,12 +481,17 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
     cards = next(r for v, r in starts.items() if v.startswith("Scouting cards"))
     evidence = next(r for v, r in starts.items() if v.startswith("Evidence by opponent"))
     meetings = next(r for v, r in starts.items() if v.startswith("Meeting history"))
-    assert [b.id for b in sheet.row_breaks.brk] == [cards - 1, evidence - 1, meetings - 1]
+    # Evidence is one section printed over two pages, so it carries its own break with the
+    # column header repeated after it -- page 4 used to continue the table with no headers.
+    ev_split = next(b.id for b in sheet.row_breaks.brk if evidence < b.id < meetings - 1)
+    assert [b.id for b in sheet.row_breaks.brk] == [cards - 1, evidence - 1, ev_split, meetings - 1]
+    assert sheet[f"A{ev_split + 1}"].value == "Opponent (APA record ID)"
     for row in range(1, last + 1):
         assert sheet.row_dimensions[row].height, row                  # nothing left to auto-height
     hpt = lambda a, b: sum(sheet.row_dimensions[r].height for r in range(a, b + 1))
     title = sum(PACKET_TITLE_ROWS)
-    pages = [hpt(1, cards - 1), title + hpt(cards, evidence - 1), (title * 2 + hpt(evidence, meetings - 1)) / 2,
+    pages = [hpt(1, cards - 1), title + hpt(cards, evidence - 1),
+             title + hpt(evidence, ev_split), title + hpt(ev_split + 1, meetings - 1),
              title + hpt(meetings, last)]
     for n, page in enumerate(pages, start=1):
         assert page * scale <= PACKET_PRINTABLE[1] + 0.5, (n, page, scale)
@@ -496,7 +501,8 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
                    and "already played" in sheet[f"A{r}"].value]
     assert header_rows and all(sheet[f"A{r}"].fill.fgColor.rgb in (None, "00000000") for r in header_rows)
     # Every evidence line names its own opponent (no separate heading rows that a page break can orphan).
-    ev_rows = [r for r in range(evidence + 3, meetings) if isinstance(sheet[f"A{r}"].value, str)]
+    ev_rows = [r for r in range(evidence + 3, meetings)
+               if isinstance(sheet[f"A{r}"].value, str) and r != ev_split + 1]
     assert ev_rows and all('"vs "&INDEX(md_OppLabels,P' in sheet[f"A{r}"].value for r in ev_rows)
     assert any(c.value == "OUR TEAM" for c in sheet["A"]) and any(c.value == "OPPONENT" for c in sheet["G"])
     assert sheet["N1"].hyperlink is not None and sheet.data_validations.dataValidation == []

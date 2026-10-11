@@ -1326,6 +1326,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
     ws = wb.create_sheet("Lineup Lab", 2)
     for letter, width in zip("ABCDEFGH", (6, 44, 18, 30, 10, 12, 3, 3)):
         ws.column_dimensions[letter].width = width
+    status_width = sum(ws.column_dimensions[c].width for c in "DEF")   # the merged status span
     _head(ws, "Lineup Lab", "Your planning marks for tonight — inputs, never evidence. Results update instantly on this "
                             "sheet and on the War Room.", last=6, current="Lineup Lab")
     rows = [(5, "Planning for our team", default_team or "", "TeamNameList",
@@ -1342,7 +1343,12 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         if source:
             _dv(ws, f"C{r}", source, "Pick a team.")
         _span(ws, r, 4, 6, status, font=base.MUTED_FONT)
-        ws.row_dimensions[r].height = 30
+        # Excel never auto-fits a FORMULA row, so a fixed height silently clips the longer
+        # branch. The mismatch warnings are the whole point of these cells, so size them for
+        # the widest team label this workbook can actually name (native run 2026-10-11).
+        ws.row_dimensions[r].height = _worst_height(
+            f"⚠ Match Day’s opponent is {_longest_team_label(wb)} — opponent marks are NOT applied there.",
+            status_width, 11, 30)
     _span(ws, 8, 1, 6, "Marks are for ONE fixture (below, ending in its match number). Pick another fixture on Match Day "
                        "— even later the same day — and these marks stop applying (it says so). Clear them, pick the new "
                        "fixture in the cell below, and plan again. Coach notes describe the player and always follow the "
@@ -1355,7 +1361,12 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
                        'IF(uc_PlanKey="","Choose a fixture on Match Day first.",'
                        '"⚠ Match Day’s fixture is "&uc_PlanKey&" — availability, lineup and played are NOT applied. Notes still are."))',
           font=base.MUTED_FONT)
-    ws.row_dimensions[9].height = 30
+    # Clipped on the real candidate at a fixed 30pt: the warning rendered only up to the match
+    # number and cut the clause saying the marks are NOT applied, while the marks stayed visible
+    # in the table below it. Size it for the longest fixture key this workbook can offer.
+    ws.row_dimensions[9].height = _worst_height(
+        f"⚠ Match Day’s fixture is {_longest_plan_key(wb)} — availability, lineup and played are "
+        "NOT applied. Notes still are.", status_width, 11, 30)
     base._section(ws, 10, "Our roster — availability and lineup (blank availability = Unknown)", last_col=6)
     base._subheader(ws, 11, [(1, "#"), (2, "Player (APA record ID)"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])
     our_first = 12
@@ -1635,17 +1646,31 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                              "(n shared) = records against shared opponents. Basis = the evidence category.",
           font=font(9, color="5B6A61"))
     h(p3 + 1, 26)
+    EVIDENCE_HEADINGS = ((1, "Opponent (APA record ID)"), (3, "Rank"), (4, "Our player (APA record ID)"),
+                         (8, "Evidence"), (11, "Basis"))
+
+    def _evidence_header(row: int) -> None:
+        for col, text in EVIDENCE_HEADINGS:
+            ws.cell(row=row, column=col, value=text).font = font(9, bold=True, color=base.FELT_DEEP)
+        for c in range(1, 13):
+            ws.cell(row=row, column=c).fill = base.SUBHEAD_FILL
+        h(row, 16)
+
     hdr = p3 + 2
-    for col, text in ((1, "Opponent (APA record ID)"), (3, "Rank"), (4, "Our player (APA record ID)"), (8, "Evidence"),
-                      (11, "Basis")):
-        cell = ws.cell(row=hdr, column=col, value=text)
-        cell.font = font(9, bold=True, color=base.FELT_DEEP)
-    for c in range(1, 13):
-        ws.cell(row=hdr, column=c).fill = base.SUBHEAD_FILL
-    h(hdr, 16)
+    _evidence_header(hdr)
     ev_first = hdr + 1
+    # This section is deliberately spread over two printed pages (the scale budget below halves
+    # it). Left to an automatic break the continued page carried no column headers at all, so the
+    # reader had to flip back to tell Rank from Basis -- print_title_rows can only repeat TOP rows,
+    # never this mid-sheet one. Split it explicitly at the halfway row and repeat the header there.
+    split_after = R * R // 2
+    r = ev_first - 1
     for n in range(1, R * R + 1):
-        r = ev_first + n - 1
+        r += 1
+        if n == split_after + 1:
+            ws.row_breaks.append(Break(id=r - 1))
+            _evidence_header(r)
+            r += 1
         ws.cell(row=r, column=16, value=f'=IF({n}>wr_PkTotal,"",MATCH({n},wr_PkStart,1))').font = base.HELPER_FONT
         ws.cell(row=r, column=17, value=f'=IF(P{r}="","",{n}-INDEX(wr_PkStart,P{r})+1)').font = base.HELPER_FONT
         ws.cell(row=r, column=18, value=f'=IF(P{r}="","",INDEX(wr_OppStart,P{r})+Q{r})').font = base.HELPER_FONT
@@ -1658,7 +1683,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
                              f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence")))))', font=f10, wrap=False)
         h(r, 14.5)
-    last_ev = ev_first + R * R - 1
+    last_ev = r
     ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
                                   FormulaRule(formula=[f'AND($P{ev_first}<>"",$Q{ev_first}=1)'], fill=_cf_fill(base.FELT_SOFT),
                                               font=Font(bold=True)))
@@ -1855,8 +1880,42 @@ def _longest_label(wb) -> str:
     return max(labels, key=len) if labels else WORST_LABEL
 
 
+def _longest_plan_key(wb) -> str:
+    """The longest fixture plan key this workbook can offer (Schedule sheet), or a long generic one.
+
+    uc_PlanKey concatenates these five schedule columns, so the warning that quotes it is
+    only as wide as the widest fixture actually present.
+    """
+    parts = ("Date Display", "Kickoff", "Home/Away", "Opponent", "Match ID")
+    keys = []
+    if "Schedule" in wb.sheetnames:
+        ws = wb["Schedule"]
+        head = [c.value for c in ws[1]]
+        if all(name in head for name in parts):
+            idx = [head.index(name) for name in parts]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                got = [row[i] for i in idx]
+                if all(v not in (None, "") for v in got):
+                    keys.append(f"{got[0]} · {got[1]} · {got[2]} vs {got[3]} · match {got[4]}")
+    return max(keys, key=len) if keys else WORST_PLAN_KEY
+
+
+def _longest_team_label(wb) -> str:
+    """The longest team label this workbook can show (Teams sheet), or a long generic one."""
+    labels = []
+    if "Teams" in wb.sheetnames:
+        ws = wb["Teams"]
+        head = [c.value for c in ws[1]]
+        if "Team" in head:
+            col = head.index("Team") + 1
+            labels = [str(v) for (v,) in ws.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True) if v]
+    return max(labels, key=len) if labels else WORST_TEAM_LABEL
+
+
 # A long but realistic player label, and the longest matrix evidence text, for sizing formula rows.
 WORST_LABEL = "Christopher Fitzgerald (APA record ID 3487149)"
+WORST_PLAN_KEY = "Sun Oct 11, 2026 · 11:00 AM MDT · Away vs A Long Opponent Team Name · match 51419777"
+WORST_TEAM_LABEL = "A Long Opponent Team Name · Fall 2026 · 8-Ball Open"
 WORST_EVIDENCE = "≈ 41-53 vs 81-58 (61 shared)"
 WORST_BASIS = ("Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; "
                "compare ours vs theirs")
