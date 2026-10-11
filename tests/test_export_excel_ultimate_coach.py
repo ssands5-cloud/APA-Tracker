@@ -481,18 +481,24 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
     cards = next(r for v, r in starts.items() if v.startswith("Scouting cards"))
     evidence = next(r for v, r in starts.items() if v.startswith("Evidence by opponent"))
     meetings = next(r for v, r in starts.items() if v.startswith("Meeting history"))
-    # Evidence is one section printed over two pages, so it carries its own break with the
-    # column header repeated after it -- page 4 used to continue the table with no headers.
-    ev_split = next(b.id for b in sheet.row_breaks.brk if evidence < b.id < meetings - 1)
-    assert [b.id for b in sheet.row_breaks.brk] == [cards - 1, evidence - 1, ev_split, meetings - 1]
-    assert sheet[f"A{ev_split + 1}"].value == "Opponent (APA record ID)"
+    # Every section starts on its own page, and the two repeating-block sections additionally
+    # split inside themselves so neither sets the print scale for the whole sheet. Evidence
+    # repeats its column header after each split; scouting cards are self-labelled and do not.
+    from ui.excel_war_room import CARD_PAGES, EVIDENCE_PAGES
+    brk = [b.id for b in sheet.row_breaks.brk]
+    assert {cards - 1, evidence - 1, meetings - 1} <= set(brk)
+    card_splits = [b for b in brk if cards <= b < evidence - 1]
+    ev_splits = [b for b in brk if evidence <= b < meetings - 1]
+    assert len(card_splits) == CARD_PAGES - 1 and len(ev_splits) == EVIDENCE_PAGES - 1, brk
+    assert brk == sorted(set(brk)), brk
+    for b in ev_splits:
+        assert sheet[f"A{b + 1}"].value == "Opponent (APA record ID)"
     for row in range(1, last + 1):
         assert sheet.row_dimensions[row].height, row                  # nothing left to auto-height
     hpt = lambda a, b: sum(sheet.row_dimensions[r].height for r in range(a, b + 1))
     title = sum(PACKET_TITLE_ROWS)
-    pages = [hpt(1, cards - 1), title + hpt(cards, evidence - 1),
-             title + hpt(evidence, ev_split), title + hpt(ev_split + 1, meetings - 1),
-             title + hpt(meetings, last)]
+    bounds = [1] + [b + 1 for b in brk] + [last + 1]
+    pages = [hpt(a, bounds[i + 1] - 1) + (0 if i == 0 else title) for i, a in enumerate(bounds[:-1])]
     for n, page in enumerate(pages, start=1):
         assert page * scale <= PACKET_PRINTABLE[1] + 0.5, (n, page, scale)
     assert scale >= 0.75                                               # was ~0.75 with 9pt text before
@@ -501,8 +507,9 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
                    and "already played" in sheet[f"A{r}"].value]
     assert header_rows and all(sheet[f"A{r}"].fill.fgColor.rgb in (None, "00000000") for r in header_rows)
     # Every evidence line names its own opponent (no separate heading rows that a page break can orphan).
+    repeated = {b + 1 for b in ev_splits}
     ev_rows = [r for r in range(evidence + 3, meetings)
-               if isinstance(sheet[f"A{r}"].value, str) and r != ev_split + 1]
+               if isinstance(sheet[f"A{r}"].value, str) and r not in repeated]
     assert ev_rows and all('"vs "&INDEX(md_OppLabels,P' in sheet[f"A{r}"].value for r in ev_rows)
     assert any(c.value == "OUR TEAM" for c in sheet["A"]) and any(c.value == "OPPONENT" for c in sheet["G"])
     assert sheet["N1"].hyperlink is not None and sheet.data_validations.dataValidation == []

@@ -1480,6 +1480,14 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
 PACKET_WIDTHS = (26, 22, 7, 11, 24, 2, 14, 10, 9, 10, 22, 10)        # A..L
 PACKET_PRINTABLE = ((11 - 2 * 0.35) * 72, (8.5 - 2 * 0.45) * 72)     # landscape Letter, margins below
 PACKET_TITLE_ROWS = (26, 20)                                          # rows 1-2 repeat on every page
+# Printed pages the evidence section is allowed to occupy. It is the densest section, so this
+# number sets the print scale for the ENTIRE packet (see build_captain_packet): 2 -> 58% and
+# 6.2pt body text, 3 -> 67% and 7.0pt, 4 -> 72% and 7.5pt once the scouting cards also break.
+EVIDENCE_PAGES = 3
+# Printed pages for the scouting-card section, which binds the scale next once evidence has
+# room: 1 -> 0.667 (7.0pt body), 2 -> the front page binds at 0.717 (7.5pt). The front page is
+# deliberately NOT split -- it is the at-a-glance summary and its value is being one page.
+CARD_PAGES = 2
 
 
 def _width_pt(width: float) -> float:
@@ -1603,7 +1611,14 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                    ("Missing · notes", None, 24)]
     sides = ((1, 1, 2, 5), (7, 8, 9, 12))            # (header from, label from, value from, to)
     header_rows = []
-    for band in range((R + 1) // 2):
+    bands = (R + 1) // 2
+    # Each band is two self-labelled cards, so a band boundary is a clean page break and needs no
+    # repeated header. Splitting here stops this section binding the whole sheet's print scale
+    # (it allowed 0.667 as one page; Paul authorised extra pages for readable text).
+    card_splits = {bands * k // CARD_PAGES for k in range(1, CARD_PAGES)}
+    for band in range(bands):
+        if band in card_splits:
+            ws.row_breaks.append(Break(id=r))
         r += 1
         header_rows.append(r)
         h(r, 18)
@@ -1663,11 +1678,18 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # it). Left to an automatic break the continued page carried no column headers at all, so the
     # reader had to flip back to tell Rank from Basis -- print_title_rows can only repeat TOP rows,
     # never this mid-sheet one. Split it explicitly at the halfway row and repeat the header there.
-    split_after = R * R // 2
+    # Excel applies ONE scale to the whole sheet, so this section was setting the print size of
+    # every other page: measured on the bound candidate it allowed 0.294 alone and 0.588 over two
+    # pages, against 0.717 for the front page, 0.667 for the cards, 0.782 for the history and 0.805
+    # for the sheet width. That is where 58% came from -- 10.5pt body text printing at 6.2pt, below
+    # newspaper fine print. A third page costs one sheet of paper and lifts the whole packet to the
+    # next binding constraint (0.667, ~7.0pt). The ceiling is the WIDTH at 0.805, so more pages than
+    # this buy progressively less; raise it only together with the sections that then bind.
+    splits = {R * R * k // EVIDENCE_PAGES for k in range(1, EVIDENCE_PAGES)}
     r = ev_first - 1
     for n in range(1, R * R + 1):
         r += 1
-        if n == split_after + 1:
+        if n - 1 in splits:
             ws.row_breaks.append(Break(id=r - 1))
             _evidence_header(r)
             r += 1
@@ -1752,7 +1774,8 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         body = sum(heights.get(x, 15) for x in range(a, b + 1))
         page_heights.append(body if i == 0 else body + title_pt)
     # Evidence (pages 3-4) is one section spread over two printed pages.
-    budget = [ph / (2 if i == 2 else 1) for i, ph in enumerate(page_heights)]
+    section_pages = (1, CARD_PAGES, EVIDENCE_PAGES, 1)
+    budget = [ph / section_pages[i] for i, ph in enumerate(page_heights)]
     scale = min(1.0, PACKET_PRINTABLE[0] / width_pt, *(PACKET_PRINTABLE[1] / b for b in budget))
     ws.page_setup.orientation = "landscape"
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER

@@ -1020,3 +1020,45 @@ def test_captain_packet_evidence_table_repeats_its_headers_on_the_continued_page
             b, cp.cell(row=repeated, column=1).value)
         for col, text in ((3, "Rank"), (4, "Our player (APA record ID)"), (8, "Evidence"), (11, "Basis")):
             assert cp.cell(row=repeated, column=col).value == text, (repeated, col)
+
+
+def test_captain_packet_scale_is_never_smaller_than_its_own_pagination_allows(built):
+    """One dense section was setting the print size of every other page.
+
+    Excel applies ONE scale to a sheet, so the bound candidate printed at 58% -- 10.5pt body
+    text landing at 6.2pt, below newspaper fine print -- purely because the evidence table
+    shares the sheet. The builder budgeted that section as a fixed two pages regardless of how
+    many it actually breaks into, so giving it a third page bought nothing.
+
+    This asserts the property rather than a number, because the small test fixture is not dense
+    enough to be shrunk at all (it prints at 78%, so asserting "body >= 6.9pt" here would pass
+    without any fix): whatever the pagination is, the scale must be the largest that still fits
+    every printed page and the sheet width. A section budgeted over fewer pages than it really
+    occupies shows up here as a scale smaller than the pages allow.
+    """
+    from ui.excel_war_room import PACKET_PRINTABLE, PACKET_TITLE_ROWS, PACKET_WIDTHS
+
+    cp = built[CP]
+    scale = cp.page_setup.scale / 100
+    last = int(cp.print_area.split("$")[-1])
+    title = sum(PACKET_TITLE_ROWS)
+    hpt = lambda a, b: sum(cp.row_dimensions[r].height or 15 for r in range(a, b + 1))
+
+    bounds = [1] + [b.id + 1 for b in cp.row_breaks.brk] + [last + 1]
+    pages = [hpt(a, bounds[i + 1] - 1) + (0 if i == 0 else title) for i, a in enumerate(bounds[:-1])]
+    width_pt = sum(int(w * 7 + 5) * 0.75 for w in PACKET_WIDTHS)
+
+    allowed = min(1.0, PACKET_PRINTABLE[0] / width_pt, *(PACKET_PRINTABLE[1] / h for h in pages))
+    assert scale * width_pt <= PACKET_PRINTABLE[0] + 0.5            # never wider than the page
+    for n, h in enumerate(pages, start=1):
+        assert h * scale <= PACKET_PRINTABLE[1] + 0.5, (n, h, scale)
+    # and never needlessly smaller: int() truncation of the percent costs at most 0.01
+    assert scale >= allowed - 0.011, (scale, allowed, pages)
+
+    # Paid for by pagination, not by squeezing: evidence breaks twice, header repeated each time.
+    hdr = _row(built, CP, "Opponent (APA record ID)")
+    meetings = _row(built, CP, "Meeting history — direct meetings between the rosters (newest first)")
+    splits = [b.id for b in cp.row_breaks.brk if hdr < b.id < meetings - 1]
+    assert len(splits) == 2, splits
+    for b in splits:
+        assert cp.cell(row=b + 1, column=1).value == "Opponent (APA record ID)", b
