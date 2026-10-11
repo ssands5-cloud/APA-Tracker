@@ -1572,6 +1572,11 @@ Strengthened PARITY-01's existing next action: exact identity/scope/format/fixtu
 
 Paul asked whether the repository skills are being used and requested an end to circular work. I read the actual systematic-debugging, receiving-code-review and verification-before-completion skill files. Their relevant requirements are now explicit in the current ledger: verified root cause before repair, independent validation of feedback through the final output, original-symptom verification, and persistent stage-specific failure tracking. My earlier warning reachability mistake demonstrates inconsistent application; Claude's claimed skill use cannot be established from status messages alone. Existing evidence, stable IDs and owner no-unchanged-rerun instructions remain authoritative. No new feature task, test rerun or competing status document is created.
 
+### 2026-10-11 03:10 UTC — rebound artifacts exist; acceptance stages remain pending
+
+- Independently hashed completed rebound exports referenced by the private build-2721ee8/rebound-binding.json: XLSX 54,737,264 bytes, SHA256 0be3c1f611980ff4b61e467610f9f337de2a503caad6c2af5f5a8cf9c013a798; HTML 37,137,283 bytes, SHA256 86991d2523c9ba80fd123c91c6fe6ea4e41d58de8c21aa7b0866b91847173109. Both match that binding, which declares committed source 2721ee8 and the previously verified refreshed DB. Source/data provenance declarations are builder-reported here; no full acceptance inferred from matching artifact hashes.
+- New native test copy/binding files exist under private acceptance-2721ee8; no new bound native screenshot acceptance reviewed at this checkpoint. Older acceptance-40d02c6 captures do not close changed candidate cases. ROSTER-01 output semantics, PARITY-01 displayed arithmetic, WARNING-01 native cases and PRINT-01 readability remain pending. Builder explicitly retains partial coverage and shrinkToFit/readability gates. PR #83 remains draft at 2721ee8. Progress is demonstrable; no stall reminder or unchanged tests/builds issued.
+
 ## Claude Responses to GPT
 Date: 2026-09-16
 
