@@ -1,5 +1,47 @@
 # Overnight Coach Advantage Report
 
+## Current acceptance ledger
+
+**Read this section first. Older entries below are reference history, not today's task list.**
+
+Owner: Jeeves maintains acceptance status; Claude executes builder tasks and provides evidence. The authoritative copy is this report on `origin/codex/audit-pr83-privacy`. Other branches must point here rather than maintain competing current ledgers. Latest direct human instructions take precedence. Read new issue #84 comments even when the audit commit is unchanged.
+
+**Completion stages:** defect proved -> source fix verified -> data fix applied -> bound outputs verified -> required native acceptance complete. Record each stage separately. A source closure never means the owner's visible outcome is fixed. The row's remaining action is the next step; historical wording such as "all closed" cannot override it.
+
+**Operating rules approved by Paul:**
+
+- Keep one stable ID per required outcome. Cite prior evidence instead of asking Paul to prove the same issue again.
+- Each checkpoint states the ID, executed result, source/data/artifact hashes or private evidence path, remaining dependency and next action.
+- Reopen only for a relevant changed source/data input, failed new evidence or a specifically named missing acceptance case. State that trigger explicitly.
+- Preserve passed unchanged cases. Run focused changed-case tests; do not rerun the full suite or rebuild unchanged artifacts to show activity.
+- Before saying "nothing to do", read the latest owner/issue instructions and this ledger, then distinguish executable work from genuine blockers. Existing authorization carries forward; no routine confirmation loop.
+- Keep history intact and reference-only. Update this current section in place when verified state changes; append concise dated evidence under GPT Audit Notes. Only Jeeves closes acceptance rows; Claude reports results without promoting source tests to full acceptance.
+- No merge, real-data publication or destructive cleanup is implied by these workflow rules. Keep real screenshots/identifiers/credentials/record oracles private; preserve owner workbooks and the running refresh.
+
+**Stable acceptance ledger — one item per required outcome**
+
+| ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
+|---|---|---|---|
+| ROSTER-01 | Original official eight-versus-ten fixture discrepancy; source retirement/history protection and partial-response safeguards tested | Apply complete authoritative response from active refresh; resolve same-fixture effective roster; retain former-player history; exact active-set parity across DB/HTML/XLSX/send/packet | OPEN end to end |
+| REFRESH-01 | Reconcile/resume/failure-metadata/legacy-refusal source cases verified; new run starts from retained all-scope input | Finish refresh-20261011-004400Z; verify finalized source/report/DB hashes, scope, failures and no silent history loss. Do not inspect/promote a running copy as accepted | IN PROGRESS; owner login supplied |
+| QUALITY-01 | Nine exact player-match groups correspond to nine prior failures; ingest repair source verified | Check those real outcomes after finalized refresh; verify aggregate duplicate/identity/mirror counts and accurate remaining gap causes. No guessed merges | OPEN live verification |
+| SCOPE-01 | Latest catalog matches the prior 30 configured current divisions; all-nightly Arapahoe requirement established | Verify actual finalized league/division coverage and membership, including in-scope Doubles/Ladies Alt gaps; catalog parity alone is insufficient | OPEN data coverage |
+| DISCLOSURE-01 | Final snapshot-qualified no-evidence/either-direction limitation source fixes verified | Confirm retained warnings/gaps in rebound artifacts; reopen source only if changed behavior regresses | SOURCE CLOSED; artifact continuation |
+| PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
+| PARITY-01 | GPT verified current fixture 80 cells/nine direct records, 18 identity resolutions, exact target sets, three record samples, Monday snapshot mirrors | Global 541,052 Games/key parity and additional samples remain builder-reported; preserve scope labels and reproduce only material outstanding acceptance claims | PARTIAL independent artifact coverage |
+| NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
+| WARNING-01 | Actual clipped fixture-mismatch warning independently reviewed | Claude fixes disclosure layout, rebinds changed candidate and supplies native retest screenshot with full operative clause | OPEN; source edits underway |
+| PRINT-01 | Continued-page column-header failure reviewed; 58% scale and 363 shrink-to-fit cells verified | Repair section/page headers and readable print layout; complete legible full-page/closeup evidence. Small print is an acceptance failure to improve, not another routine permission question | OPEN |
+| RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
+
+**Execution order and stop rules**
+
+Claude's independent next work is WARNING-01/PRINT-01 and remaining native scenarios; preserve the owner's active browser/refresh and do not edit capture/refresh tooling during it. Once REFRESH-01 finalizes, verify ROSTER-01/QUALITY-01/SCOPE-01 before rebinding exports. Then run only changed native/artifact cases and complete remaining gaps. No new user proof request for the established roster mismatch; no new generic duplicate guard; no re-investigation of known test-created folders; no changed acceptance flag based only on count parity; no unchanged full-suite reruns. A finding reopens only for changed relevant source/data, failed new evidence or an identified missing acceptance case, naming the trigger explicitly. Every checkpoint must name an item ID, concrete executed result, exact evidence binding and remaining dependency. If all executable work is exhausted, state the actual gate and next dependency rather than claiming production ready or inventing adjacent work.
+
+## Historical record — reference only
+
+The dated record below is preserved for traceability. Read it only for a named item's evidence or chronology. Old priority lists, conclusions, deadlines, counts and build references are not current instructions.
+
 ## Claude Build Notes
 Date: 2026-09-16
 
@@ -1476,25 +1518,11 @@ Paul requested a review of the shared logs to stop circular work. Reviewed the r
 6. **Routing and provenance caused false "nothing to do".** Unchanged audit-branch head did not mean no task: owner's run-tests instruction was on issue #84. Stale scheduler parameters named 1ded3fa/build-8979397 after newer evidence existed. PR #83 currently still pins b285a79/a1cda12 while the bound candidate is build-40d02c6. Read current owner instructions, latest issue comments and this ledger together; record separate code head, build source, DB/report and test-copy hashes.
 7. **Source closure was mistaken for acceptance.** Passing source tests, workbook structure, snapshot parity and native screenshots are different proofs. Old-candidate native results cannot silently close changed-candidate cases. The known clipping/header/small-print failures are actual unfinished work, not a repeat of a solved source guard.
 
-**Stable acceptance ledger — one item per required outcome**
+The live table and execution rules have been moved to **Current acceptance ledger** at the front of this report. This historical review is evidence/reference only; it is not a second task list.
 
-| ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
-|---|---|---|---|
-| ROSTER-01 | Original official eight-versus-ten fixture discrepancy; source retirement/history protection and partial-response safeguards tested | Apply complete authoritative response from active refresh; resolve same-fixture effective roster; retain former-player history; exact active-set parity across DB/HTML/XLSX/send/packet | OPEN end to end |
-| REFRESH-01 | Reconcile/resume/failure-metadata/legacy-refusal source cases verified; new run starts from retained all-scope input | Finish refresh-20261011-004400Z; verify finalized source/report/DB hashes, scope, failures and no silent history loss. Do not inspect/promote a running copy as accepted | IN PROGRESS; owner login supplied |
-| QUALITY-01 | Nine exact player-match groups correspond to nine prior failures; ingest repair source verified | Check those real outcomes after finalized refresh; verify aggregate duplicate/identity/mirror counts and accurate remaining gap causes. No guessed merges | OPEN live verification |
-| SCOPE-01 | Latest catalog matches the prior 30 configured current divisions; all-nightly Arapahoe requirement established | Verify actual finalized league/division coverage and membership, including in-scope Doubles/Ladies Alt gaps; catalog parity alone is insufficient | OPEN data coverage |
-| DISCLOSURE-01 | Final snapshot-qualified no-evidence/either-direction limitation source fixes verified | Confirm retained warnings/gaps in rebound artifacts; reopen source only if changed behavior regresses | SOURCE CLOSED; artifact continuation |
-| PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
-| PARITY-01 | GPT verified current fixture 80 cells/nine direct records, 18 identity resolutions, exact target sets, three record samples, Monday snapshot mirrors | Global 541,052 Games/key parity and additional samples remain builder-reported; preserve scope labels and reproduce only material outstanding acceptance claims | PARTIAL independent artifact coverage |
-| NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
-| WARNING-01 | Actual clipped fixture-mismatch warning independently reviewed | Claude fixes disclosure layout, rebinds changed candidate and supplies native retest screenshot with full operative clause | OPEN; source edits underway |
-| PRINT-01 | Continued-page column-header failure reviewed; 58% scale and 363 shrink-to-fit cells verified | Repair section/page headers and readable print layout; complete legible full-page/closeup evidence. Small print is an acceptance failure to improve, not another routine permission question | OPEN |
-| RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
+### 2026-10-11 — owner-approved single-ledger workflow implemented
 
-**Execution order and stop rules**
-
-Claude's independent next work is WARNING-01/PRINT-01 and remaining native scenarios; preserve the owner's active browser/refresh and do not edit capture/refresh tooling during it. Once REFRESH-01 finalizes, verify ROSTER-01/QUALITY-01/SCOPE-01 before rebinding exports. Then run only changed native/artifact cases and complete remaining gaps. No new user proof request for the established roster mismatch; no new generic duplicate guard; no re-investigation of known test-created folders; no changed acceptance flag based only on count parity; no unchanged full-suite reruns. A finding reopens only for changed relevant source/data, failed new evidence or an identified missing acceptance case, naming the trigger explicitly. Every checkpoint must name an item ID, concrete executed result, exact evidence binding and remaining dependency. If all executable work is exhausted, state the actual gate and next dependency rather than claiming production ready or inventing adjacent work.
+Paul approved one current ledger with preserved reference history. Moved the existing status table and execution rules to the front of this same report, replacing the old location with a pointer; historical evidence was retained, not deleted or archived out of Git. Defined separate source/data/artifact/native completion stages, one item ID, explicit reopening triggers and evidence-only historical use. Jeeves maintains current acceptance state; Claude executes and submits results. Other branch copies must link to the authoritative audit-branch ledger, not fork its mutable status. Running owner refresh, feature work, databases and cleanup untouched.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
