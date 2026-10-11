@@ -10,11 +10,12 @@
 
 # CURRENT PRIORITIES
 
-1. **Captain decisions the product does not answer.** This is the job now: find a decision a
-   captain actually makes, implement the smallest useful answer, test it, move on. Two closed
-   so far (blind lead, lineup budget); the next candidates are "what don't we know about
-   tonight?" and "who should I save?".
-2. **Next Send Engine** — answers correctly; refinement only.
+1. **Next Send Engine** — the current feature. One at a time; Blind Send is finished and closed
+   below, so this is the only thing in flight. Goal is a decision component a captain reads in
+   one glance: opponents remaining, recommended responses with their reason, and who to avoid.
+2. Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
+   Matrix, Mobile. Candidate gaps noted for later, not started: "what don't we know about
+   tonight?" and "who should I save, and from whom?".
 3. **Threat panel** — who on their roster is dangerous to us, stated as a decision.
 4. **Quick-read scouting cards** — one card, one read, no scrolling to the point.
 5. **Coach Notes integration** — surfaced in cards, threat panel, packet and Next Send,
@@ -40,13 +41,17 @@ historical section.
 - **PRINT-01 shrink-to-fit — closed as no defect, by measurement.** Worst case across all
   players prints 7.1pt, above fine print; 68 of 207,755 evidence texts (0.03%) shrink at all.
   This retracts my earlier unmeasured claim that 363 cells shrank below the body size.
-- **Blind lead — "we put up first, who goes?"** Every recommendation in the product was
+- **Blind Send / We Put Up First — VERIFIED COMPLETE (HTML + Captain Packet).** Every
   conditioned on knowing who *they* put up; in APA the lead alternates, so a captain regularly
   chooses first and had no answer at all. Verified nothing of the kind existed. Implemented as
   maximin over recorded results — worst case first, coverage as tiebreak, no odds and no guess
   at their lineup — and rendered at the top of Tonight, above the "they put up" chips. 5 engine
   tests, 1 browser test proving it is present without interaction, precedes the chips, reacts
-  to Unavailable, and contains no "%", "odds", "probability" or "chance".
+  to Unavailable, and contains no "%", "odds", "probability" or "chance". The printed packet
+  carries the same answer as `IF WE PUT UP FIRST`, verified to print above the per-opponent
+  sends, driven by the workbook's own category grid so HTML and Excel cannot disagree. Full
+  suite 2371 passed at `dd9dd4c`. Technical acceptance taken under the delegated authority;
+  release approval is still Paul's.
 - **Lineup budget — "will this send leave me able to field a legal lineup?"** APA caps the
   total skill level you put up; spend the low numbers early and the match is lost to arithmetic.
   The page carried a `STANDARD_SKILL_CAP` constant that was never used, and the Excel cap was
