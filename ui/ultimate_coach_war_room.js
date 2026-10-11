@@ -303,6 +303,91 @@
     w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
     return wrNextSendLines(wrNextSend(w,j,rem,unplayed||w.theirs.map(function(){return true;})));
   };
+  // ---- Blind send: WE lead and have not seen their player (mirrors analytics.blind_send) ----
+  // Every other recommendation here answers "they put up X, who answers?". In APA the lead
+  // alternates, so a captain regularly chooses first. Worst case first (maximin), coverage
+  // second; nothing predicts their lineup and no record means unknown, never weak.
+  function wrBlindSend(w,plan){
+    var live=[],i;
+    for(i=0;i<w.blocks.length;i++) if(plan.unplayed[i]) live.push(w.blocks[i]);
+    if(!live.length) return null;
+    var stats={},order=0,any=false;
+    w.ours.forEach(function(m){ if(plan.rem[String(m.id)]){ stats[m.id]={member:m,order:order++,concerning:0,favorable:0,meetings:0}; any=true; } });
+    if(!any) return null;
+    live.forEach(function(b){ b.rows.forEach(function(r){
+      var st=stats[r.member.id]; if(!st) return;
+      var cat=r.category;
+      if(cat==="R") st.concerning++; else if(cat==="G") st.favorable++;
+      if(r.c&&r.c.direct) st.meetings+=r.c.direct.g||0;
+    });});
+    var ranked=Object.keys(stats).map(function(k){return stats[k];}).sort(function(a,b){
+      return a.concerning-b.concerning || b.favorable-a.favorable || b.meetings-a.meetings || a.order-b.order;});
+    var t=ranked[0],n=live.length,opp=n===1?"the 1 they have left":n+" they have left",why;
+    if(t.concerning) why=t.favorable===0
+        ? t.concerning+" concerning record among "+opp+" — the best available, not a good one"
+        : t.favorable+" favorable and "+t.concerning+" concerning among "+opp;
+    else if(t.favorable) why="no concerning record vs any of "+opp+" · "+t.favorable+" favorable";
+    else if(t.meetings) why="no concerning record vs any of "+opp+", on "+plural(t.meetings,"recorded meeting");
+    else why="little recorded evidence either way vs "+opp+" — a weak recommendation, not a strong pick";
+    return {member:t.member,why:why,weak:t.favorable===0&&t.meetings===0};
+  }
+
+  // ---- Lineup budget (mirrors analytics.lineup_budget) ----
+  // APA caps the total skill level of the players you put up. Spend the low numbers early and you
+  // can be left unable to field a legal lineup -- a match lost to arithmetic. The cap is NEVER
+  // assumed: with nothing entered in Lineup Lab this renders nothing at all. An uncaptured SL
+  // makes the answer incomplete rather than guessed.
+  function wrLineupBudget(w,plan,ta,sending){
+    var cap=parseInt(WR_PLAN.cap[ta.key],10);
+    if(!(cap>0)) return null;
+    var used=0,unknown=0,pool=[],slots=0,i;
+    for(i=0;i<w.blocks.length;i++) if(plan.unplayed[i]) slots++;
+    w.ours.forEach(function(m){
+      var sl=wrKnown(m.skill_level)?Number(m.skill_level):null;
+      if(wrLineup(plan.ck,m.id)==="Played"){ if(sl!==null) used+=sl; else unknown++; return; }
+      if(!plan.rem[String(m.id)]) return;
+      if(sl===null) unknown++; else pool.push(sl);
+    });
+    pool.sort(function(a,b){return a-b;});
+    var left=cap-used,need=pool.length>=slots?pool.slice(0,slots).reduce(function(a,b){return a+b;},0):null;
+    var out={cap:cap,used:used,left:left,slots:slots,unknown:unknown,
+             feasible:need===null?null:need<=left,cheapest:need,sendingKeepsLegal:null};
+    if(sending!=null){
+      var sm=null;w.ours.forEach(function(m){if(String(m.id)===String(sending)) sm=m;});
+      if(sm&&wrKnown(sm.skill_level)){
+        var rest=[];w.ours.forEach(function(m){
+          if(String(m.id)===String(sending)||!plan.rem[String(m.id)]||wrLineup(plan.ck,m.id)==="Played") return;
+          if(wrKnown(m.skill_level)) rest.push(Number(m.skill_level));});
+        rest.sort(function(a,b){return a-b;});
+        var k=Math.max(0,slots-1),after=rest.length>=k?rest.slice(0,k).reduce(function(a,b){return a+b;},0):null;
+        if(after!==null) out.sendingKeepsLegal=(Number(sm.skill_level)+after+used)<=cap;
+      }
+    }
+    return out;
+  }
+
+  function wrBudgetLine(w,plan,ta,sending){
+    var b=wrLineupBudget(w,plan,ta,sending);
+    if(!b||!b.slots) return "";
+    var bits=[],cls="ok";
+    if(b.feasible===false){cls="bad";bits.push("Cannot field a legal lineup: the cheapest "+b.slots+" left total "+b.cheapest+", "+(b.cheapest-b.left)+" over your remaining "+b.left);}
+    else if(b.feasible===null) bits.push(b.left+" left for "+b.slots+" more — not enough captured skill levels to check");
+    else bits.push(b.left+" of "+b.cap+" left for "+b.slots+" more (cheapest "+b.cheapest+")");
+    if(b.sendingKeepsLegal===false){cls="bad";bits.push("sending this player would leave you unable to field a legal lineup");}
+    if(b.unknown) bits.push(b.unknown+" without a captured SL — incomplete");
+    return '<div class="lineup-budget '+cls+'"><span class="lb-label">Skill cap '+b.cap+' (yours)</span><span>'+esc(bits.join(" · "))+'</span></div>';
+  }
+
+  function wrBlindSendCard(w,plan,ta){
+    var b=wrBlindSend(w,plan);
+    if(!b) return "";
+    return '<div class="blind-send'+(b.weak?" weak":"")+'">'
+      +'<span class="bs-label">If we put up first</span>'
+      +'<b class="bs-name">'+esc(b.member.name)+'</b>'
+      +'<span class="bs-why">'+esc(b.why)+'</span></div>'
+      +wrBudgetLine(w,plan,ta,b.member.id);
+  }
+
   // The Next Send card: chips for every unplayed opponent (the one they put up), then the responses.
   function wrNextSendCard(w,plan){
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
@@ -374,6 +459,7 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
+      +wrBlindSendCard(w,plan,ta)
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'

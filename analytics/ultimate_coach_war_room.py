@@ -484,6 +484,133 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
             "medals": medals, "more": more, "unordered": unordered, "avoid": avoid, "unknown": unknown}
 
 
+def lineup_budget(war_room: dict[str, Any], *, cap: int | None, slots: int,
+                  played: dict[Any, int] | None = None, remaining: set[Any] | None = None,
+                  sending: Any = None) -> dict[str, Any]:
+    """Can we still field a legal lineup, and does sending this player keep it legal?
+
+    APA caps the total skill level of the players you put up (23 in standard 8-Ball). Spend the
+    low numbers early and you can be left unable to field a legal five -- a match lost to
+    arithmetic rather than to pool. Nothing in the product checked this: the constant existed
+    and was never used, and the Excel cap was echoed as text that said outright it was not a
+    legality check.
+
+    The cap is never assumed. With no cap from the captain this returns an inert result and
+    claims nothing, because divisions differ and guessing a rule would be worse than silence.
+    A player without a captured skill level is counted as unknown and makes the answer
+    incomplete rather than being given a number.
+    """
+    played = played or {}
+    ours = war_room["ours"]
+    remaining = {m["id"] for m in ours} if remaining is None else remaining
+    used = sum(int(v) for v in played.values())
+    slots_left = max(0, slots - len(played))
+    pool = [m for m in ours if m["id"] in remaining and m["id"] not in played]
+    known = sorted(int(m["skill_level"]) for m in pool if isinstance(m.get("skill_level"), (int, float)))
+    unknown = sum(1 for m in pool if not isinstance(m.get("skill_level"), (int, float)))
+    out = {"cap": cap, "used": used, "left": None if cap is None else cap - used,
+           "slots_left": slots_left, "unknown_sl": unknown, "complete": unknown == 0,
+           "feasible": None, "cheapest": None, "sending_keeps_legal": None, "note": ""}
+    if cap is None:
+        return out
+    left = cap - used
+
+    def cheapest(pool_sl: list[int], n: int) -> int | None:
+        return sum(pool_sl[:n]) if len(pool_sl) >= n else None
+
+    need = cheapest(known, slots_left)
+    out["cheapest"] = need
+    out["feasible"] = None if need is None else need <= left
+    if sending is not None:
+        send_m = next((m for m in ours if m["id"] == sending), None)
+        sl = send_m.get("skill_level") if send_m else None
+        if isinstance(sl, (int, float)):
+            rest = sorted(int(m["skill_level"]) for m in pool
+                          if m["id"] != sending and isinstance(m.get("skill_level"), (int, float)))
+            after = cheapest(rest, max(0, slots_left - 1))
+            out["sending_keeps_legal"] = (None if after is None
+                                          else int(sl) + after + used <= cap)
+    bits = []
+    if out["feasible"] is False:
+        bits.append(f"cannot field a legal lineup: the cheapest {slots_left} left total {need}, "
+                    f"{need - left} over your remaining {left}")
+    elif need is None and slots_left:
+        bits.append(f"not enough players with a captured skill level to check {slots_left} more slots")
+    elif out["feasible"]:
+        bits.append(f"{left} left for {slots_left} more")
+    if unknown:
+        bits.append(f"{unknown} player(s) without a captured skill level — this check is incomplete")
+    out["note"] = " · ".join(bits)
+    return out
+
+
+def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
+               unplayed: list[bool] | None = None) -> dict[str, Any]:
+    """Who to put up when WE lead and have not seen their player yet.
+
+    Every other recommendation here answers "they put up X, who answers?". In APA the lead
+    alternates, so a captain regularly chooses first, and for that decision the product had no
+    answer at all. This fills it WITHOUT predicting their lineup: it ranks our remaining players
+    by what is already recorded against the opponents still unplayed.
+
+    Worst case first (maximin), because leading into a player we hold a losing record against is
+    the one outcome a captain can actually avoid here; coverage second. Nothing is weighted,
+    blended or turned into odds, and a player with no record is unknown, never weak -- so a pick
+    resting on nothing says so instead of reading like a confident call.
+    """
+    blocks = war_room["blocks"]
+    remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
+    unplayed = [True] * len(blocks) if unplayed is None else unplayed
+    live = [b for b, open_ in zip(blocks, unplayed) if open_]
+    empty = {"member": None, "why": "", "concerning": 0, "favorable": 0, "meetings": 0,
+             "weak": True, "ranked": [], "opponents_left": len(live)}
+    if not live or not remaining:
+        return empty
+
+    by_member: dict[Any, dict[str, Any]] = {}
+    for order, m in enumerate(war_room["ours"]):
+        if m["id"] in remaining:
+            by_member[m["id"]] = {"member": m, "order": order, "concerning": 0, "favorable": 0,
+                                  "meetings": 0}
+    for block in live:
+        for r in block["rows"]:
+            stat = by_member.get(r["member"]["id"])
+            if stat is None:
+                continue
+            if r["category"] == "R":
+                stat["concerning"] += 1
+            elif r["category"] == "G":
+                stat["favorable"] += 1
+            direct = r.get("direct")          # (wins, games) or None
+            if direct:
+                stat["meetings"] += int(direct[1] or 0)
+    if not by_member:
+        return empty
+
+    ranked = sorted(by_member.values(),
+                    key=lambda s: (s["concerning"], -s["favorable"], -s["meetings"], s["order"]))
+    top = ranked[0]
+    n = len(live)
+    opp = f"{n} they have left" if n != 1 else "the 1 they have left"
+    if top["concerning"]:
+        why = (f"{top['concerning']} concerning record among {opp} -- the best available, not a good one"
+               if top["favorable"] == 0 else
+               f"{top['favorable']} favorable and {top['concerning']} concerning among {opp}")
+    elif top["favorable"]:
+        why = f"no concerning record vs any of {opp} · {top['favorable']} favorable"
+    elif top["meetings"]:
+        meets = top["meetings"]
+        why = (f"no concerning record vs any of {opp}, on "
+               f"{meets} recorded meeting{'' if meets == 1 else 's'}")
+    else:
+        why = (f"little recorded evidence either way vs {opp} -- a weak recommendation, "
+               "not a strong pick")
+    return {"member": top["member"], "why": why, "concerning": top["concerning"],
+            "favorable": top["favorable"], "meetings": top["meetings"],
+            "weak": top["favorable"] == 0 and top["meetings"] == 0,
+            "ranked": ranked, "opponents_left": n}
+
+
 def next_send_lines(ns: dict[str, Any]) -> list[str]:
     """Plain-text Next Send lines shared by the HTML (cross-checked) and Excel/packet texts."""
     lines = [ns["headline"]]

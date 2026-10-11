@@ -81,6 +81,23 @@ button.secondary:hover { background:var(--felt-soft); }
 .tonight h2 { margin:0 0 4px; font-size:19px; }
 .tonight .when { font-weight:800; font-size:16px; }
 .tonight .vs { font-size:15px; margin:2px 0 8px; }
+.lineup-budget { display:flex; flex-wrap:wrap; gap:3px 9px; align-items:baseline; width:100%;
+  margin-top:7px; padding-top:7px; border-top:1px dashed #cfd8d2; font-size:12.5px; color:#3f4a43; }
+.lineup-budget .lb-label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+.lineup-budget.bad { color:#8c2f1d; font-weight:600; }
+.lineup-budget.bad .lb-label { color:#8c2f1d; }
+/* Blind send: the answer when WE lead, before any opponent is chosen. Decision first -- this is
+   the first thing on the page that is an answer rather than a question. */
+.blind-send { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin:8px 0 10px;
+  padding:10px 12px; border:2px solid var(--felt-deep,#1d4b35); border-left-width:7px; border-radius:10px;
+  background:#f2f8f4; }
+.blind-send .bs-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); width:100%; }
+.blind-send .bs-name { font-size:21px; line-height:1.15; color:var(--felt-deep,#1d4b35); }
+.blind-send .bs-why { font-size:13px; color:#3f4a43; }
+.blind-send.weak { border-color:#b9b2a2; border-left-color:#b9b2a2; background:#f7f5ef; }
+.blind-send.weak .bs-name { color:#3f4a43; }
+@media (max-width:620px){ .blind-send { margin:6px 0 8px; padding:8px 10px; }
+  .blind-send .bs-name { font-size:19px; } .blind-send .bs-why { font-size:12px; } }
 .tonight-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
 .tonight-grid > div { background:#f7f5ef; border:1px solid #ece6d8; border-radius:9px; padding:8px 10px; font-size:13px; }
 .tonight-grid b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:3px; }
@@ -108,6 +125,13 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.match-night .demo-flag { padding:3px 8px; margin:0 0 6px; font-size:13px; }
   body.match-night .freshness span { padding:2px 8px; }
   body.match-night nav.sections { margin-top:6px; }
+  /* Match night on a phone: the lead answer must not push Open risks off a short Safari screen.
+     The label moves inline so the card costs one line instead of two. */
+  body.match-night .blind-send { margin:4px 0 6px; padding:6px 9px; gap:1px 7px; border-left-width:5px; }
+  body.match-night .blind-send .bs-label { width:auto; }
+  body.match-night .blind-send .bs-name { font-size:17px; }
+  body.match-night .blind-send .bs-why { font-size:11.5px; width:100%; }
+  body.match-night .lineup-budget { margin-top:4px; padding-top:4px; font-size:11.5px; }
   /* Status as two short text lines instead of pills; the UTC stamp repeats the date (shown on the lock screen). */
   body.match-night .freshness { gap:0 10px; margin-top:4px; }
   body.match-night .freshness span { border:0; background:none; padding:0; }

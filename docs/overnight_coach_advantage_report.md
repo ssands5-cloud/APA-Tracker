@@ -10,10 +10,11 @@
 
 # CURRENT PRIORITIES
 
-1. **Decision-first hierarchy** — the recommendation appears before the evidence on every
-   surface a captain reads on match night. Design: `docs/superpowers/specs/`.
-2. **Next Send Engine** — already answers correctly; the work is making the answer land first
-   and read in one glance.
+1. **Captain decisions the product does not answer.** This is the job now: find a decision a
+   captain actually makes, implement the smallest useful answer, test it, move on. Two closed
+   so far (blind lead, lineup budget); the next candidates are "what don't we know about
+   tonight?" and "who should I save?".
+2. **Next Send Engine** — answers correctly; refinement only.
 3. **Threat panel** — who on their roster is dangerous to us, stated as a decision.
 4. **Quick-read scouting cards** — one card, one read, no scrolling to the point.
 5. **Coach Notes integration** — surfaced in cards, threat panel, packet and Next Send,
@@ -39,6 +40,20 @@ historical section.
 - **PRINT-01 shrink-to-fit — closed as no defect, by measurement.** Worst case across all
   players prints 7.1pt, above fine print; 68 of 207,755 evidence texts (0.03%) shrink at all.
   This retracts my earlier unmeasured claim that 363 cells shrank below the body size.
+- **Blind lead — "we put up first, who goes?"** Every recommendation in the product was
+  conditioned on knowing who *they* put up; in APA the lead alternates, so a captain regularly
+  chooses first and had no answer at all. Verified nothing of the kind existed. Implemented as
+  maximin over recorded results — worst case first, coverage as tiebreak, no odds and no guess
+  at their lineup — and rendered at the top of Tonight, above the "they put up" chips. 5 engine
+  tests, 1 browser test proving it is present without interaction, precedes the chips, reacts
+  to Unavailable, and contains no "%", "odds", "probability" or "chance".
+- **Lineup budget — "will this send leave me able to field a legal lineup?"** APA caps the
+  total skill level you put up; spend the low numbers early and the match is lost to arithmetic.
+  The page carried a `STANDARD_SKILL_CAP` constant that was never used, and the Excel cap was
+  echoed as text that said outright it was not a legality check. Now the captain's own entered
+  cap drives a real check: points left, cheapest remaining lineup, whether this send keeps a
+  legal five possible. Never assumed — no cap entered, nothing claimed — and an uncaptured
+  skill level makes the answer incomplete rather than guessed. 6 engine tests, 1 browser test.
 - **PARITY-01 (bound fixture scope)** — an oracle built from raw records, not from either
   payload builder, agrees with both exports on all 64 pairs in three directions: nothing
   dropped, nothing invented, and no disagreement between Excel and HTML.
@@ -91,9 +106,15 @@ unavailable. Each carries the assumption it was built on.
   of 6.1pt. One constant reverses it.
 - **Front page deliberately left whole.** Splitting it would reach 8.2pt elsewhere, but its
   value is being one at-a-glance page. Assumption: that is worth more than the extra point.
-- **Decision-first design** — the design document is written and self-reviewed rather than
-  approved, because the `brainstorming` skill's approval gate cannot be satisfied while Paul
-  is away. The substitution is deliberate and recorded, not skipped.
+- **Blind lead assumes the SAFE lead, not the aggressive one.** It recommends the player whose
+  worst recorded matchup is least bad. The common alternative — hold your best back for their
+  ace — needs Paul's judgement, because it means predicting their lineup, which the product
+  refuses to do. One ranking rule changes it.
+- **Lineup budget derives remaining slots from unplayed opponents** rather than assuming a
+  five-match format. If a division plays a different number, the count follows the fixture.
+- **Design docs are written and self-reviewed rather than approved**, because the
+  `brainstorming` skill's approval gate cannot be satisfied while Paul is away. Deliberate
+  substitution, recorded rather than skipped.
 
 ---
 

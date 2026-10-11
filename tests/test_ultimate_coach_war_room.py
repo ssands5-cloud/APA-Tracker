@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from analytics.ultimate_coach_matchup_evidence import build_pair_index
 from analytics.ultimate_coach_war_room import (
+    blind_send,
+    lineup_budget,
     CATEGORY_LABELS,
     build_local_date,
     category,
@@ -392,3 +394,111 @@ class TestInternalSheetsAreHidden:
         assert wb.active.title == "START HERE"
         # Excel refuses to open a workbook with no visible sheet
         assert any(ws.sheet_state == "visible" for ws in wb.worksheets)
+
+
+# ---------------------------------------------------------------------------
+# Blind send: "we put up first". Every other recommendation in the product is
+# conditioned on knowing who they put up, but in APA the lead alternates, so a
+# captain regularly has to choose before seeing their player.
+# Design: docs/superpowers/specs/2026-10-11-blind-send-design.md
+
+
+def test_blind_send_leads_with_the_player_who_has_no_concerning_record_not_the_highest_skill():
+    """Maximin: the worst case first, coverage second. Ann is our highest SL and the wrong answer.
+
+    Matrix in this fixture: Ann is concerning vs Opal, Bea favorable vs Opal and shared-only vs
+    Pip, Cal even vs Pip. Leading Ann risks handing Opal a game we have already lost 0-3.
+    """
+    wr = _war_room()
+    out = blind_send(wr)
+    assert out["member"]["name"] == "Bea", out
+    assert out["concerning"] == 0 and out["favorable"] == 1, out
+    assert "Ann" not in out["why"], out["why"]
+
+
+def test_blind_send_ignores_opponents_who_have_already_played():
+    """Bea's only favorable record is against Opal, so once Opal has played it stops counting."""
+    wr = _war_room()
+    out = blind_send(wr, unplayed=[False, True, True])
+    assert out["member"]["name"] == "Cal", out        # the only recorded meetings left are Cal's
+    assert out["favorable"] == 0, out
+
+
+def test_blind_send_excludes_players_we_marked_unavailable():
+    wr = _war_room()
+    keep = {m["id"] for m in wr["ours"] if m["name"] != "Bea"}
+    out = blind_send(wr, remaining=keep)
+    assert out["member"]["name"] != "Bea", out
+    assert all(c["member"]["name"] != "Bea" for c in out["ranked"]), out
+
+
+def test_blind_send_says_plainly_when_the_recommendation_rests_on_almost_nothing():
+    """A pick with no recorded record either way must not read like a confident call."""
+    wr = _war_room()
+    out = blind_send(wr, unplayed=[False, False, True])   # only Quin left; nobody has evidence vs Quin
+    assert out["weak"] is True, out
+    assert "little recorded evidence" in out["why"].lower(), out["why"]
+
+
+def test_blind_send_returns_nothing_to_recommend_when_no_one_is_left():
+    wr = _war_room()
+    assert blind_send(wr, remaining=set())["member"] is None
+    assert blind_send(wr, unplayed=[False, False, False])["member"] is None
+
+
+# ---------------------------------------------------------------------------
+# Lineup budget: APA caps the five players you put up at a total skill level
+# (23 in standard 8-Ball). Burn the low numbers early and you can be left unable
+# to field a legal five. Nothing in the product checked this.
+
+
+def test_lineup_budget_says_what_is_left_and_whether_a_legal_five_is_still_possible():
+    wr = _war_room()            # Ann SL5, Bea SL4, Cal no SL captured
+    out = lineup_budget(wr, cap=23, slots=2, played={})     # Ann 5 + Bea 4 are both captured
+    assert out["cap"] == 23 and out["used"] == 0 and out["left"] == 23
+    assert out["slots_left"] == 2 and out["cheapest"] == 9
+    assert out["feasible"] is True
+    # Needing a third slot drags in Cal, whose SL was never captured, so legality becomes
+    # UNKNOWN rather than true. Refusing to guess is the point.
+    assert lineup_budget(wr, cap=23, slots=3, played={})["feasible"] is None
+
+
+def test_lineup_budget_subtracts_who_has_already_played():
+    wr = _war_room()
+    out = lineup_budget(wr, cap=23, slots=3, played={1: 5})      # Ann (SL 5) already up
+    assert out["used"] == 5 and out["left"] == 18 and out["slots_left"] == 2
+
+
+def test_lineup_budget_reports_that_a_legal_lineup_is_no_longer_possible():
+    """The trap this exists to catch: the cheapest remaining players still blow the cap."""
+    wr = _war_room()
+    out = lineup_budget(wr, cap=6, slots=2, played={})           # Ann 5 + Bea 4 = 9 > 6
+    assert out["feasible"] is False
+    assert "cannot" in out["note"].lower() or "no legal" in out["note"].lower(), out["note"]
+
+
+def test_lineup_budget_will_not_guess_a_missing_skill_level():
+    """Cal has no captured SL. An unknown must make the answer incomplete, never assumed."""
+    wr = _war_room()
+    out = lineup_budget(wr, cap=23, slots=3, played={})
+    assert out["unknown_sl"] == 1
+    assert out["complete"] is False
+    assert "without a captured" in out["note"].lower(), out["note"]
+
+
+def test_lineup_budget_is_inert_until_the_captain_supplies_the_cap():
+    """The product never assumes a division rule. No cap entered, no claim made."""
+    wr = _war_room()
+    out = lineup_budget(wr, cap=None, slots=3, played={})
+    assert out["cap"] is None and out["feasible"] is None and out["note"] == ""
+
+
+def test_lineup_budget_checks_whether_sending_one_player_keeps_a_legal_lineup():
+    wr = _war_room()
+    ann = next(m for m in wr["ours"] if m["name"] == "Ann")
+    ok = lineup_budget(wr, cap=23, slots=2, played={}, sending=ann["id"])
+    assert ok["sending_keeps_legal"] is True
+    tight = lineup_budget(wr, cap=9, slots=2, played={}, sending=ann["id"])   # 5 then cheapest 4 = 9
+    assert tight["sending_keeps_legal"] is True
+    blown = lineup_budget(wr, cap=8, slots=2, played={}, sending=ann["id"])   # 5 + 4 = 9 > 8
+    assert blown["sending_keeps_legal"] is False

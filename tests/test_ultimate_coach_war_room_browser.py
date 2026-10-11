@@ -1416,3 +1416,75 @@ def test_a_note_does_not_reset_an_alternate_next_send_opponent(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_blind_send_answers_before_the_captain_picks_an_opponent(tmp_path: Path):
+    """Decision-first: when WE lead there is no chip to pick, so the answer must already be there.
+
+    Every other recommendation on this page is conditioned on "they put up X". In APA the lead
+    alternates, so a captain regularly chooses first and had no answer at all.
+    Design: docs/superpowers/specs/2026-10-11-blind-send-design.md
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            card = page.locator("#tonight .blind-send")
+            assert card.count() == 1, "the lead answer must be present without any interaction"
+            text = card.inner_text()
+            assert "if we put up first" in text.lower(), text   # the label is styled uppercase
+            # It names one of our players and says why, in recorded terms -- never odds.
+            names = [n.split(" (APA")[0] for n in (ANN, BEA, DEE)]
+            assert any(n in text for n in names), text
+            for banned in ("%", "odds", "probability", "chance"):
+                assert banned not in text.lower(), (banned, text)
+
+            # It appears ABOVE the "they put up" chips: the answer precedes the question.
+            order = page.evaluate(
+                "() => {const t=document.querySelector('#tonight');"
+                " const b=t.querySelector('.blind-send'), n=t.querySelector('#next-send');"
+                " return b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING ? 'before' : 'after';}")
+            assert order == "before", "the lead recommendation must precede the opponent chips"
+
+            # Marking our lead candidate unavailable must change the answer, not keep a stale one.
+            first = card.locator(".bs-name").inner_text()
+            assert first in names, first
+            pid = page.evaluate(
+                "(nm) => {const r=[...document.querySelectorAll('#lineup-lab select[data-plan=\"avail\"]')];"
+                " const row=r.find(s=>s.closest('tr')&&s.closest('tr').innerText.includes(nm));"
+                " return row?row.getAttribute('data-pid'):null;}", first)
+            if pid:
+                page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
+                assert page.locator("#tonight .blind-send .bs-name").inner_text() != first
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(tmp_path: Path):
+    """APA caps the total skill level you put up; spend the low numbers early and you are stuck.
+
+    The cap constant existed in the page and was never used, and the Excel cap said outright it
+    was not a legality check. Nothing is assumed: with no cap entered this renders nothing.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            assert page.locator("#tonight .lineup-budget").count() == 0, "no cap entered, no claim"
+
+            page.fill("#ll-cap", "23")
+            page.dispatch_event("#ll-cap", "change")
+            budget = page.locator("#tonight .lineup-budget")
+            assert budget.count() == 1, "a cap the captain entered must be used, not just stored"
+            assert "23" in budget.inner_text(), budget.inner_text()
+
+            # A cap too small for the cheapest remaining players must say so, in the captain's terms.
+            page.fill("#ll-cap", "2")
+            page.dispatch_event("#ll-cap", "change")
+            txt = page.locator("#tonight .lineup-budget").inner_text()
+            assert "cannot field a legal lineup" in txt.lower(), txt
+            assert "bad" in page.locator("#tonight .lineup-budget").get_attribute("class")
+            assert errors == []
+        finally:
+            browser.close()
