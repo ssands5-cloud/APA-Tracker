@@ -4876,3 +4876,56 @@ owner-dependent.
 
 No product code changed, no database written, no test needed -- nothing was found broken.
 PR #83 stays draft.
+
+## The native Excel run finally happened, and it found two things the headless checks could not
+
+Paul authorised the native acceptance run directly, so the gate that has been NOT RUN since
+this branch began is now partly executed against the bound candidate. Sixteen scenarios: 13
+PASS, 2 FAIL, 1 that is his decision rather than a defect. The workbook was a hashed test
+copy, closed without saving, and its hash is byte-identical afterwards; the source workbook
+and the bound HTML are unchanged. Nothing was printed.
+
+**What passed is the part I care most about, because it is the honesty of the thing.** Next
+Send accounts for every one of our ten players in some category and hides none: a medalled
+direct record, the shared-opponent-only group that it explicitly refuses to order, and the
+no-evidence group it labels "not weak" rather than bad. Marking a player Unavailable removed
+exactly that player and left every other name untouched; marking him explicitly Unknown
+brought him back. Planned keeps a player available and only Played drops him out, which is
+what the workbook documents. Inspect populates and then clears to nothing. The coverage gap
+is stated twice in red, the snapshot has no predicted odds anywhere, and the evidence wording
+is snapshot-qualified throughout -- the exact overclaim I had to correct in myself weeks ago
+is not present in the product.
+
+**Finding 1, and it is a real one: the fixture-mismatch warning is clipped at the point where
+it starts to matter.** Plan a lineup for one fixture, switch Match Day to another, and the
+Lineup Lab warning renders up to the match number and stops. The clause that is cut off is
+the operative one -- that availability, lineup and played are NOT applied, and that notes
+still are. The marks themselves stay visible in the table underneath, so a captain reading a
+warning that ends in a dash can reasonably conclude his marks still apply. They do not: I
+verified the behaviour separately and the player I had marked Played was correctly offered
+again for the other fixture. So the logic is right and only the disclosure is broken, which
+is the better way round, but a disclosure nobody can finish reading is not doing its job.
+The matching OK variant is shorter and fits in the same two lines, which is why this never
+showed up before.
+
+**Finding 2, minor: a table that runs onto a fourth printed page loses its column headers.**
+Print titles are set to the title and fixture rows only, so the page header repeats but the
+evidence table's columns do not.
+
+**And the legibility question now has numbers instead of my impression.** The packet prints
+at an explicit 58 percent, not fit-to-page. Measured from the file: half the cells are 10.5pt
+and print at 6.1pt, a third are 9pt printing at 5.2pt, and only the title clears 9pt. So
+everything a captain actually reads at the table prints between 5.2 and 7.0 point. I should
+correct my own earlier description of this, which said body text was 6 to 7 point with some
+shrink-to-fit spans smaller still: measured directly, the floor is 5.2pt and this sheet has
+no shrink-to-fit cells at all. Whether that is acceptable on paper is Paul's call, but it is
+now a measured call.
+
+**What this run did not cover**, so the gate stays open rather than closed: HTML and mobile
+parity, Scouting Cards, Coach Dashboard overrides, the Captain/Evidence toggle, whether coach
+notes survive a close and reopen (that needs a save, and the copy was closed without one),
+and anything requiring a live login. Evidence is private under the bound acceptance
+directory; only counts and status go to GitHub.
+
+No product code changed yet and no database written. PR #83 stays draft and the candidate
+stays partial and unaccepted.
