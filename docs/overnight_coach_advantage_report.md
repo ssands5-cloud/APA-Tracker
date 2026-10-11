@@ -51,10 +51,13 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # OPEN ISSUES
 
+- Current Threat Panel edits: reproduced browser syntax error Unexpected identifier s; Tonight/Next Send fail to render. Repair and verify current feature before audit closure. Committed Next Send bcd56b5 passes its positive regression independently.
 - Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+Next Send follow-up bcd56b5 (report 35f2b3e): independently evaluated the committed renderer/JS in memory; positive browser regression passes (1 passed, 33 deselected). Retained positive case now renders a cost warning and no repeated opponent name; audit follow-up CLOSED. Threat Panel is current feature. Separately, newer uncommitted Threat edits cause synthetic browser SyntaxError Unexpected identifier s and zero Next Send elements. The same targeted test fails against dirty files but passes against committed renderer, so this is an in-progress Threat regression, not reopening committed Next Send closure. Return to current Threat fix before acceptance. APA pytest process independently observed alive (PID 7384); no completed new Threat result inferred.
 
 2026-10-11 22:25 UTC, Next Send cost audit: three targeted engine cases pass (43 deselected). Independently rendered phone-sized original control and positive scenario adding two synthetic direct wins for the recommended player against the other unplayed opponent. Original has zero .ns-cost elements; positive has one visible line naming the affected opponent and leaves 0 of 1 covered. Reviewed its image; the warning sits under the candidate's reason, before evidence detail, making the later-match tradeoff actionable. Synthetic captures: tmp/audit/next-send-e6e5af2/. No full-suite rerun or foundation audit. The absence of a warning is acceptable as warning-only presentation, not a claim of no strategic cost beyond recorded favorable options.
 
