@@ -10,18 +10,9 @@
 
 # CURRENT PRIORITIES
 
-**Next Send Engine** — the only feature in flight. Everything needed to start is below; nothing
-of it has been built yet, so there is no partial work to pick up.
-
-The gap to close: every recommendation is made one pairing at a time, and a captain choosing
-between two candidates cannot see what the choice **costs him for the rest of the night**. The
-"consider saving" flag fires only in the extreme case — when a player is our *sole* favorable
-option against someone still to come. Between that and silence there is nothing. Verified
-2026-10-11: no cost/coverage-after-send concept exists in `analytics/` or `ui/`.
-
-Smallest useful solution: for each recommended candidate, state how many of the remaining
-opponents still have a favorable option **after** sending him. Exact count over recorded
-categories — no model, no odds, no guess at their lineup.
+**Next Send Engine** — in flight. First gap closed at `e6e5af2` (cost of a send, below).
+Remaining for this feature: the opponents-remaining list and avoid block already exist and read
+well; no further gap identified yet. When none remains, request audit and move to Threat Panel.
 
 Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
 Matrix, Mobile match-night. One at a time.
@@ -40,6 +31,13 @@ Matrix, Mobile match-night. One at a time.
   unknown"* — or a straight refusal to pick: *"No evidence-backed pick — nothing recorded
   either way."* Unknown is never dressed up as safe, and a player is never named just because
   he sorted above someone with a losing record.
+
+- **Cost of a send — "what does using him here leave me for the rest of the night?"**
+  Next Send answered one pairing at a time, and the "consider saving" flag fired only when a
+  player was our *sole* favorable option against someone still to come. A recommendation that
+  spends that option now says so at the point of decision — *"costs your only favorable option
+  vs Opal · leaves 0 of 2 covered"* — and a send that gives up nothing stays silent, because a
+  line on every candidate is noise the phone has no room for.
 
 - **Lineup budget — "will this send leave me able to field a legal lineup?"** The captain's own
   cap drives a real check: points left, cheapest remaining lineup, and whether this send keeps a
@@ -60,13 +58,16 @@ Matrix, Mobile match-night. One at a time.
 
 # OPEN ISSUES
 
-- **Unattended continuation is NOT proven.** One durable task is enabled
-  (`ultimate-coach-overnight-continuation`, every 18 min, on disk). As of 16:24Z it has
-  `totalRuns: 0` and no `lastRunAt`; a one-shot test set for 10:18 local never fired, and
-  `run_scheduled_task` refused with "already being started by its schedule" while no run
-  appeared. Both mechanisms appear to need the session idle, so a wake-up cannot be observed
-  from inside a turn. **Proof is `lastRunAt` becoming non-null.** Four overlapping jobs were
-  consolidated to this one.
+- **Unattended continuation DOES NOT WORK — exact blocker, needs Paul.** The durable task fired
+  once (16:30:49Z), made two Bash calls and hung ten seconds in. It sat `status: running` for
+  5.5 hours, produced zero commits, and blocked every later run (`nextRunAt` slid 16:48 → 22:12).
+  Two causes: the run's `cwd` is `.worktrees\pr83`, not the session worktree, and tool
+  permissions are folder-scoped, so its Bash calls waited on an approval nobody was present to
+  give. **Fix: open the task in the sidebar and click "Run now" once while present, approving the
+  tools it requests.** Those approvals are stored on the task and auto-apply to later runs; they
+  cannot be granted on the owner's behalf. The zombie session was stopped and the task left
+  enabled. `lastRunAt` being non-null is NOT proof — a completed run with commits is.
+
 - **PARITY-01 global scope** — record-level proof covers one fixture's 64 pairs in 8-Ball; the
   541,052-row comparison remains builder-reported.
 - **148 disclosed data gaps** (139 identity, 7 scored-with-no-scoresheet-rows, 2 division
