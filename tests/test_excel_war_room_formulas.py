@@ -1069,15 +1069,18 @@ def test_captain_packet_scale_is_never_smaller_than_its_own_pagination_allows(bu
         assert cp.cell(row=b + 1, column=1).value == "Opponent (APA record ID)", b
 
 
-def test_a_long_team_override_still_shows_the_marks_are_not_applied_clause(built):
-    """A War Room override accepts ANY Teams_Table label, including a pathological one.
+def test_the_quoted_team_label_is_bounded_so_it_cannot_push_out_the_clause(built):
+    """The quoted label is bounded, so no label length can push the clause out of the row.
 
-    wr_OurValid / wr_OppValid are a COUNTIF over Teams_Table[Team], so wr_OurLabel can become
-    any label in the workbook — the real candidate holds a 327-character one. Sizing the row
-    for that made it 144pt of dead space; sizing it for the schedule's 24 characters clipped
-    this override case (GPT, issue #84 comment 6104357111 — correct, and my "follows Match
-    Day" reasoning was wrong). The label is clipped in the formula instead, so the clause that
-    actually matters survives any label at a fixed row height.
+    This does NOT execute a mismatch warning, and it is not evidence that an arbitrary War
+    Room override reaches one. That claim (issue #84 comment 6104357111) was retracted in
+    6104888106: split_match_day_engine rewrites Lineup Lab to md_*/lm_*, md_OurInput is pinned
+    blank and D5 quotes md_OurLabel, so the pre-split wr_* COUNTIF domain never applies here.
+    I agreed with the claim after reading the builder instead of the generated workbook, which
+    is the wrong layer. The clip is kept because bounding the text is the right shape for a
+    warning whose label is context and whose clause is the point, not because that scenario is
+    reachable. The clipping case that IS real is the screenshot-proved one, covered by
+    test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause.
     """
     from ui.excel_war_room import LABEL_CLIP
 

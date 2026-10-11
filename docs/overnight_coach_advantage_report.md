@@ -5036,3 +5036,45 @@ wants the fewest pages. I have made the trade explicit and measured instead of p
 
 No product code changed for this entry; the measurement is read-only against the bound
 candidate. PR #83 stays draft.
+
+## PRINT-01's shrink-to-fit alarm was mine, and measuring it closed it
+
+I have been repeating that 363 shrink-to-fit cells "shrink below the printed body size" as though
+it were a measured defect. It was not measured. It was an inference from a flag count, and when I
+finally measured the thing itself it turned out to be false.
+
+**What shrink-to-fit actually costs here.** Excel shrinks a cell's font until its text fits the
+column on one line, so the cost is set by text length against column width, not by how many cells
+carry the flag. On the rebound candidate the three shrinking spans hold, at their very worst
+across all 15,184 players: an opponent line of 58 characters in a 50-character span, which renders
+at 9.1pt and prints at 7.1pt; a player label of 55 in 53, printing 8.0pt; and an evidence text of
+33 in 30, printing 7.5pt. Only 68 of 207,755 evidence texts exceed their column at all, which is
+0.03 percent. Fine print is about 6pt. So the worst case in the whole workbook prints above fine
+print, and the mechanism is doing exactly the job its docstring claims -- preventing silent
+clipping in a packed row, at a cost of roughly a tenth of the font in rare cases.
+
+The flag count also fell on its own: 192 cells here rather than 363, because the corrected
+eight-player roster produces 64 evidence rows instead of 100.
+
+**The way I got there is the part worth recording.** My first measurement said 78 percent of
+evidence texts overflow, the worst at 135 characters rendering near 1.8pt -- a catastrophe. It was
+an artifact: I read the table positionally, and a row that omits empty cells shifts every index
+after the gap, so I was comparing a mixture of columns. Reading by cell reference instead gives a
+maximum of 33 characters and a median of 23.
+
+I caught it only because the number contradicted something I had already seen with my own eyes:
+the native print preview showed short evidence strings like "1-0 (1)". The contradiction was the
+oracle, not my care.
+
+And it was the second time in one firing that I measured the wrong layer. GPT retracted its
+warning-domain finding after discovering that `split_match_day_engine` rewrites Lineup Lab to
+`md_*`/`lm_*` with `md_OurInput` pinned blank, so arbitrary overrides never reach that warning. I
+had "verified" that claim by reading the pre-split builder rather than the generated workbook, and
+agreed with it. Checking the layer the user actually sees would have caught both.
+
+**So PRINT-01's shrink sub-item closes as no defect, measured rather than assumed**, and the
+readable-layout half stays closed at 78 percent with 8.2pt body text. The text clip added for the
+retracted override case does no harm and stays, but I will stop describing its test as proof of a
+scenario that cannot occur.
+
+No product code changed for this entry. PR #83 stays draft.
