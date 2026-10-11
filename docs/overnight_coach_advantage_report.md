@@ -1,12 +1,16 @@
 # CURRENT PRIORITIES
 
+Paul's FOUNDATION FREEZE supersedes earlier foundation-investigation priorities. For planning, acquisition, identity, team/roster management, historical/direct/shared evidence engines and Match Day/Command Center/Lineup Lab/Captain Packet/HTML/mobile architectures are COMPLETE unless a proven defect is discovered. Do not spend significant effort proving they exist, redesigning them or building verification frameworks. Preserve known limitations honestly without turning them into recurring foundation tasks.
+
+Refine unanswered captain decisions: who to lead, send, avoid, save; who is dangerous; what is unknown; what lineup risks remain. Claude identifies the decision gap, implements the smallest useful solution, tests it, updates this report, requests audit and moves on. GPT reviews captain value and focused changed behavior. No new process loop, tracking system or ledger.
+
 Audit emphasis, per Paul's latest instruction: **captain usability -> decision support -> match-night workflow -> production readiness -> technical acceptance**. For a meaningful changed workflow, ask whether it helps Paul choose whom to send, reduces decision time and improves captain advantage. Evaluate recommendation visibility, actionable explanations and the steps needed during a match. Report observed behavior; do not claim measured speed or improved outcomes without evidence. Technical checks support those decisions and release gates, rather than becoming open-ended investigations. Do not pull Claude back into closed work without new evidence.
 
 Paul's production sprint simplification is the current directive. The goal is to answer **Who should I put up next?** Present recommendation, then explanation, then evidence. HTML is the primary match-night interface; Excel is for planning and power users.
 
 Claude builds; GPT audits. This report on `origin/codex/audit-pr83-privacy` is the single living source of truth. Other branch reports are reference-only and point here. Issues and PRs carry pointers/coordination, not parallel current ledgers. Check latest commits, this report and branch status every 15-20 minutes; unchanged state is not a reason to repeat verification.
 
-Production priority order: Next Send Engine; Threat Panel; Quick Read Scouting Cards; Coach Notes Integration; Captain Matrix; decision-first dashboard hierarchy; Mobile Match-Night experience. Existing PRINT-01 work may finish without restarting verified cases. Focus remaining correctness checks on these decisions, especially PARITY-01 actual displayed arithmetic, roster/send identity and honest partial-data limitations. Do not expand into new reports, analytics, evidence collections or probability models.
+Production priority order: Blind-Lead / We Put Up First Engine; Next Send Engine; Threat Panel; Quick Read Scouting Cards; Coach Notes Integration; Captain Matrix; Mobile Match-Night Experience. Recommendation first, explanation second, evidence below. Success means helping Paul make a better real-match decision, not proving a feature exists.
 
 Coach Notes must be clearly labeled **Coach Observation**, separately from APA evidence, on scouting cards, threat panels, packet and next-send surfaces. Claude implements reasonable visual/workflow assumptions while Paul is unavailable, records them under PENDING PAUL REVIEW, and continues executable work.
 
@@ -25,25 +29,12 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # OPEN ISSUES
 
-This table retains the existing acceptance IDs and the precise boundaries of verification; current status is maintained here only.
-
-| ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
-|---|---|---|---|
-| ROSTER-01 | Finalized data matches original eight-member proof; rebound native Lineup Lab and packet page 1 show the exact eight active members; closed test-copy hash matches artifact | Complete HTML/send output record checks and remaining affected states; preserve former-player history | DATA + SAMPLED NATIVE ROSTER VERIFIED; remaining outputs pending |
-| REFRESH-01 | New full-scope run finalized; old input and final DB hashes match provenance; prior non-current-session result/history rows preserved exactly | Retain final report/DB binding; preserve explicit partial coverage and review rebound artifacts, no automatic promotion | FINALIZED VERIFIED; partial/unaccepted |
-| QUALITY-01 | Nine prior player-match duplicates are zero; all nine failed matches rechecked and fetch failures zero | One prior failure is now unresolved_identity_partial; check new repeated H2H match scope and verified-payload exclusion/disclosure. No guessed merges | DUPLICATE/FETCH CASES VERIFIED; other quality gaps OPEN |
-| SCOPE-01 | Final run processed all 30 configured current divisions, full scope; discovered/ingested team and roster counts agree | Preserve 148 statements: 139 identity, 7 no-row, 2 division rollups; verify catalog completeness and gap causes/impact in rebound outputs | CONFIGURED SCOPE VERIFIED; live completeness OPEN |
-| DISCLOSURE-01 | Final snapshot-qualified no-evidence/either-direction limitation source fixes verified | Confirm retained warnings/gaps in rebound artifacts; reopen source only if changed behavior regresses | SOURCE CLOSED; artifact continuation |
-| PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
-| PARITY-01 | Prior fixture/sample artifact evidence verified; existing passing source cases retained | Independently compare decision-critical actual Excel formula/HTML outputs to authoritative private record/math oracles on rebound data; separate arithmetic accuracy from completeness and quantify affected gaps | PARTIAL; statistical/formula acceptance pending |
-| NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
-| WARNING-01 | 2721ee8 focused source checks pass; rebound screenshots show the original fixture-mismatch NOT-applied clause through its final line. Prior override-domain rationale retracted | Preserve this verified fixture-clause case; other required warning states must be individually evidenced, no blanket warning closure | ORIGINAL FIXTURE CLIPPING CASE VERIFIED NATIVELY; other cases pending |
-| PRINT-01 | Rebound evidence pages 5/6 visibly repeat column headings; page 1 shows corrected roster. Previous source/geometry checks retained | Complete readable effective body sizes and shrink-cell handling; legible full-page/closeup evidence for required sections | CONTINUED HEADERS VERIFIED NATIVELY; readability OPEN |
-| RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
-
-| BLIND-01 | Synthetic phone-sized browser: clear named answer before evidence; chosen player changes when marked unavailable | Avoid arbitrary named recommendation with zero evidence; show direct coverage/sample and unknown availability beside answer; distinguish lead choice from auto-selected opponent response | CAPTAIN USABILITY REVIEWED; focused findings OPEN |
+- **BLIND-01 — captain lead choice:** current observed gaps are the arbitrary named choice with zero evidence, missing direct-coverage/sample context and unknown availability beside the answer, and unclear hypothetical opponent-response context. Claude should implement the smallest useful improvements and request focused captain audit. Preserve observed answer-first placement and unavailable-player update.
+- Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+Foundation freeze applied at Paul's direction. Previous foundation acceptance table is preserved below as reference, no longer an active execution queue. Known partial coverage and uncertainty remain truthful product limitations, not claims of complete data. Reopen foundation work only for a proven defect affecting a current captain decision. Previously reviewed repository debugging/review/verification skills apply to focused gap fixes; no new framework or unchanged reruns. Merge/publication/cleanup approvals remain separate.
 
 User-requested blind-send captain audit (in-progress source, not released artifact): rendered synthetic mixed-evidence and zero-evidence states at 390x844 in Chromium. The lead card names a player without selecting an opponent and appears before response/evidence cards; changing that player to Unavailable changes the name. No odds/probabilities are shown. This helps the put-up-first decision and the visible explanation is short, but does not prove faster real captain decisions or tournament advantage.
 
@@ -2334,6 +2325,30 @@ This resolves the prior publisher-boundary P1 for the reviewed source path. It d
 Reviewed PR #83 head `be0bb07` (Tests passed). The Player-vs-Player banner now accurately labels displayed rates as historical, and the legacy-note migration retains distinct legacy note content without resurrecting cleared notes in its browser coverage.
 
 The UAT helper's new default `tmp\\uat` and lexical `GetFullPath` prefix check do not verify the origin URL or reject/re-resolve junction, symlink, or other reparse components. A redirected path inside the repository can pass that string check while its create/remove operations write outside the canonical repository. The helper and `PROJECT_STATUS.md` therefore overstate the destination safeguard. Keep UAT publishing blocked until it verifies the canonical top level and origin before writes and fails closed on reparse-path components. Real-package GraphQL provenance and native Excel/device acceptance remain open.
+
+
+Superseded pre-freeze acceptance queue (reference only):
+
+# OPEN ISSUES
+
+This table retains the existing acceptance IDs and the precise boundaries of verification; current status is maintained here only.
+
+| ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
+|---|---|---|---|
+| ROSTER-01 | Finalized data matches original eight-member proof; rebound native Lineup Lab and packet page 1 show the exact eight active members; closed test-copy hash matches artifact | Complete HTML/send output record checks and remaining affected states; preserve former-player history | DATA + SAMPLED NATIVE ROSTER VERIFIED; remaining outputs pending |
+| REFRESH-01 | New full-scope run finalized; old input and final DB hashes match provenance; prior non-current-session result/history rows preserved exactly | Retain final report/DB binding; preserve explicit partial coverage and review rebound artifacts, no automatic promotion | FINALIZED VERIFIED; partial/unaccepted |
+| QUALITY-01 | Nine prior player-match duplicates are zero; all nine failed matches rechecked and fetch failures zero | One prior failure is now unresolved_identity_partial; check new repeated H2H match scope and verified-payload exclusion/disclosure. No guessed merges | DUPLICATE/FETCH CASES VERIFIED; other quality gaps OPEN |
+| SCOPE-01 | Final run processed all 30 configured current divisions, full scope; discovered/ingested team and roster counts agree | Preserve 148 statements: 139 identity, 7 no-row, 2 division rollups; verify catalog completeness and gap causes/impact in rebound outputs | CONFIGURED SCOPE VERIFIED; live completeness OPEN |
+| DISCLOSURE-01 | Final snapshot-qualified no-evidence/either-direction limitation source fixes verified | Confirm retained warnings/gaps in rebound artifacts; reopen source only if changed behavior regresses | SOURCE CLOSED; artifact continuation |
+| PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
+| PARITY-01 | Prior fixture/sample artifact evidence verified; existing passing source cases retained | Independently compare decision-critical actual Excel formula/HTML outputs to authoritative private record/math oracles on rebound data; separate arithmetic accuracy from completeness and quantify affected gaps | PARTIAL; statistical/formula acceptance pending |
+| NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
+| WARNING-01 | 2721ee8 focused source checks pass; rebound screenshots show the original fixture-mismatch NOT-applied clause through its final line. Prior override-domain rationale retracted | Preserve this verified fixture-clause case; other required warning states must be individually evidenced, no blanket warning closure | ORIGINAL FIXTURE CLIPPING CASE VERIFIED NATIVELY; other cases pending |
+| PRINT-01 | Rebound evidence pages 5/6 visibly repeat column headings; page 1 shows corrected roster. Previous source/geometry checks retained | Complete readable effective body sizes and shrink-cell handling; legible full-page/closeup evidence for required sections | CONTINUED HEADERS VERIFIED NATIVELY; readability OPEN |
+| RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
+
+| BLIND-01 | Synthetic phone-sized browser: clear named answer before evidence; chosen player changes when marked unavailable | Avoid arbitrary named recommendation with zero evidence; show direct coverage/sample and unknown availability beside answer; distinguish lead choice from auto-selected opponent response | CAPTAIN USABILITY REVIEWED; focused findings OPEN |
+
 
 ````
 
