@@ -50,9 +50,12 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # OPEN ISSUES
 
+- Unattended builder continuation remains unverified: the promised 10:48 AM scheduler demonstration produced no observable APA work by 10:55 AM. Scheduler execution needs a demonstrated run plus useful work; the current auditor can monitor but cannot wake Claude through GitHub.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-11 16:55 UTC scheduler demonstration: the promised 10:48 AM Mountain wake-up has not produced observable APA execution. Builder head remains cfac14d, tree clean, no new issue response; latest APA worktree session log is still 16:28:24 UTC, and canonical-root APA logs show no new session. Only the scheduled-task prompt file is locally visible to this auditor; scheduler counters/error state are unavailable through current tools. Therefore unattended continuation is not demonstrated and cannot be relied on. Do not infer a root cause or future success from registration. Blind Send audited closure remains preserved; Next Send is queued, with no new work accepted. No repeated feature tests or competing builder work.
 
 2026-10-11 16:10 UTC: BLIND-01 remaining selected-unknown boundary independently verified at clean e015162/2d84213. Three new targeted engine/browser/evaluated-packet checks pass (116 deselected). Reproduced the original selected-zero-evidence phone case: card now names nobody, No evidence-backed pick, and explicitly says unknown not safer / unranked, your read decides; distinguishes other candidates' concerning records. Reviewed synthetic card image, no clipping in the captured case. Private capture: tmp/audit/blind-send-usability/e015162/unknown-lead.png. Preserve four earlier verified fixes at 5a7d15d; no unchanged suite rerun. Audit findings closed; proceed to Next Send. Packet closure here is the evaluated synthetic formula case, not a claim that the newly rebuilt production packet has been inspected natively. Final bound-artifact release review retains that distinction without owner repetition.
 
