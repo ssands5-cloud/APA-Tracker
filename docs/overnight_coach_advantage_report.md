@@ -1,5 +1,9 @@
 # CURRENT PRIORITIES
 
+**One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
+
+Before accepting a feature ask: If I were standing in a tournament right now, would this help me make a better decision? If no, do not build it; if yes, prioritize it within the stated order. Keep only this report. Morning deliverable: what was completed, what was audited, what still needs owner review, and which captain decision can now be answered that could not be answered before. No process recap in place of results.
+
 **Delegated acceptance authority:** Paul delegates routine implementation verification and technical acceptance to Claude and GPT. Claude may mark technical work VERIFIED COMPLETE with executed evidence. GPT independently audits and may confirm completion; reopen only for new evidence, a new defect, failed verification or regression. If both agree and evidence exists, move forward. Do not ask Paul to repeat workbook/Excel/HTML/render/packet/browser/mobile/screenshot/formula/regression/native Excel validation. Owner review is reserved for strategic preferences, competing UX choices and merge/production-release/publication approvals. Existing exact-path destructive-cleanup and installation gates remain separate.
 
 Paul explicitly authorizes Claude to execute workbook/HTML/packet testing, formula/layout/render/navigation/matrix/mobile/browser verification, native Excel inspections, screenshot generation/review, candidate rebuilds and relevant regression tests without repeated approval. These are implementation and quality verification, not owner-review dependencies. Do not stop solely because Excel verification remains. Reproduce a defect, fix it, verify the original behavior, document the result and continue. Preserve no-unchanged-rerun scope and actual tool/login restrictions; authorization does not bypass them.
@@ -49,6 +53,8 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+Paul's sequential overnight rule applied: finish and audit blind-send before another major feature. This supersedes earlier wording to move between unfinished product features. Audit only relevant current feature changes, preserve existing verified results, and report captain decisions enabled. No new tracking file/framework or owner validation gate is introduced.
 
 Delegated technical acceptance applied at Paul's request. Executed builder evidence may support VERIFIED COMPLETE; independent GPT confirmation can close technical work without owner repetition. Do not infer completion from a claim alone, and do not create additional process gates or reopen verified work without new evidence/defect, failed verification or regression. Previously reviewed verification/review skills support this evidence-based scope.
 
