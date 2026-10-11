@@ -50,10 +50,12 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # OPEN ISSUES
 
-- Unattended builder continuation remains unverified: the promised 10:48 AM scheduler demonstration produced no observable APA work by 10:55 AM. Scheduler execution needs a demonstrated run plus useful work; the current auditor can monitor but cannot wake Claude through GitHub.
+- Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-11 22:10 UTC: actual builder work resumed in the original APA session; new engine/UI/test edits and local log show Next Send future-opponent opportunity-cost wording and targeted tests in progress. No completed feature acceptance yet. Claude reports the durable scheduled run started at 16:30:49, hung on a folder-scoped approval in a different .worktrees/pr83 cwd, and was later stopped; user Run now/tool approval is required. Scheduler diagnosis/counters are builder-reported, not independently accessible through current auditor tools. This reconciles the earlier no-observable-APA-work finding: starting a scheduler run did not produce successful continuation. No silent tool-boundary workaround. Blind Send closure preserved; audit Next Send on committed handoff.
 
 2026-10-11 16:55 UTC scheduler demonstration: the promised 10:48 AM Mountain wake-up has not produced observable APA execution. Builder head remains cfac14d, tree clean, no new issue response; latest APA worktree session log is still 16:28:24 UTC, and canonical-root APA logs show no new session. Only the scheduled-task prompt file is locally visible to this auditor; scheduler counters/error state are unavailable through current tools. Therefore unattended continuation is not demonstrated and cannot be relied on. Do not infer a root cause or future success from registration. Blind Send audited closure remains preserved; Next Send is queued, with no new work accepted. No repeated feature tests or competing builder work.
 
