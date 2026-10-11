@@ -30,8 +30,8 @@ Owner: Jeeves maintains acceptance status; Claude executes builder tasks and pro
 | PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
 | PARITY-01 | GPT verified current fixture 80 cells/nine direct records, 18 identity resolutions, exact target sets, three record samples, Monday snapshot mirrors | Global 541,052 Games/key parity and additional samples remain builder-reported; preserve scope labels and reproduce only material outstanding acceptance claims | PARTIAL independent artifact coverage |
 | NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
-| WARNING-01 | Actual clipped fixture-mismatch warning independently reviewed | Claude fixes disclosure layout, rebinds changed candidate and supplies native retest screenshot with full operative clause | OPEN; source edits underway |
-| PRINT-01 | Continued-page column-header failure reviewed; 58% scale and 363 shrink-to-fit cells verified | Repair section/page headers and readable print layout; complete legible full-page/closeup evidence. Small print is an acceptance failure to improve, not another routine permission question | OPEN |
+| WARNING-01 | Actual clipped fixture warning reviewed; efb0f7c sizing/source repair independently checked | Rebuild/rebind changed candidate and natively verify the full operative clause on the mismatch state | SOURCE FIX VERIFIED; native pending |
+| PRINT-01 | Continued-page failure and shrink/scale verified; efb0f7c explicit repeated-header source repair independently checked | Implement readable layout without a fixed five-page limit; preserve all content, rebind and verify every preview page, section headers and worst-case text | HEADER SOURCE VERIFIED; readability/native OPEN |
 | RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
 
 **Execution order and stop rules**
@@ -1523,6 +1523,11 @@ The live table and execution rules have been moved to **Current acceptance ledge
 ### 2026-10-11 — owner-approved single-ledger workflow implemented
 
 Paul approved one current ledger with preserved reference history. Moved the existing status table and execution rules to the front of this same report, replacing the old location with a pointer; historical evidence was retained, not deleted or archived out of Git. Defined separate source/data/artifact/native completion stages, one item ID, explicit reopening triggers and evidence-only historical use. Jeeves maintains current acceptance state; Claude executes and submits results. Other branch copies must link to the authoritative audit-branch ledger, not fork its mutable status. Running owner refresh, feature work, databases and cleanup untouched.
+### 2026-10-11 — owner authorizes completing existing fixes; warning/header source verified
+
+Paul explicitly requested completion of the roster issue and other existing ledger outcomes. Readability/page-count implementation is within that authorization: additional pages are acceptable when needed for complete readable text; no routine page-count confirmation loop. Coordinated this in issue #84 comment 6104109345 while preserving the active full-scope refresh and desktop login.
+
+Reviewed efb0f7c at immutable source. Four focused affected cases pass independently (4 passed, 58 deselected): mismatch-warning height, explicit continued evidence headers, packed evidence rows and packet geometry. Updated WARNING-01/PRINT-01 source status only; real rebound artifact/native screenshots and readable effective font size remain pending. Current source layout is not completion of roster/data repair or native acceptance. New refresh was still active at the initial check (18 divisions completed); do not accept partial checkpoint state. No feature edits, builder, live acquisition, database mutation, publication or cleanup by GPT.
 ## Claude Responses to GPT
 Date: 2026-09-16
 
