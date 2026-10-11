@@ -1104,3 +1104,30 @@ def test_the_quoted_team_label_is_bounded_so_it_cannot_push_out_the_clause(built
     for row in (5, 6):
         assert f"LEFT(" in str(ll.cell(row=row, column=4).value)
         assert f",{LABEL_CLIP - 1})" in str(ll.cell(row=row, column=4).value), row
+
+
+def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built, book):
+    """The printed packet must answer "we put up first" before the per-opponent sends.
+
+    Every other line in the packet assumes we already know who they put up. In APA the lead
+    alternates, so a captain regularly chooses first; this is the one line he can read before
+    the opponent has shown anybody. Mirrors analytics.blind_send.
+    """
+    cp = built[CP]
+    label = _row(built, CP, "IF WE PUT UP FIRST")
+    sends = _row(built, CP, "Best sends — top opportunities per opponent "
+                            "(favorable direct first, then even, then indirect)")
+    assert label < sends, "the lead answer must print above the per-opponent sends"
+
+    text = str(book.display(CP, f"C{label}"))
+    assert " — " in text, text
+    name, why = text.split(" — ", 1)
+    assert name.strip() in (ANN, BEA, DEE), text          # one of ours, named outright
+    assert "they have left" in why, why                   # says what the claim is scoped to
+    for banned in ("%", "odds", "probability", "chance"):
+        assert banned not in why.lower(), (banned, why)
+
+    # Marking that player Unavailable must move the recommendation, not leave a stale name.
+    book.set(LL, "C12", "Unavailable")
+    moved = str(book.display(CP, f"C{label}"))
+    assert moved != text, moved

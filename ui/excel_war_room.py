@@ -577,6 +577,34 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_RiskRun", lambda k, r: f'={"0" if k == 1 else f"E{r - 1}"}+IF(D{r},1,0)'),
     ])
     e.cell("wr_RiskCount", "Open risks", "=MAX(wr_RiskRun)")
+
+    # ---- blind send: who do we put up when WE lead? (mirrors analytics.blind_send) ----
+    # Every other recommendation in this workbook answers "they put up X, who answers?". In APA
+    # the lead alternates, so a captain regularly chooses first and had no answer at all. Worst
+    # case first: fewest concerning records among the opponents still unplayed, then most
+    # favorable, then most even. Recorded results only -- nothing predicts their lineup.
+    def _blind_count(kind: str):
+        def f(k: int, r: int) -> str:
+            return "=" + "+".join(
+                f'IF(AND(INDEX(wr_OppUnplayed,{j}),{grid[(k, j)][0]}="{kind}"),1,0)'
+                for j in range(1, R + 1))
+        return f
+
+    e.block("Blind send counts", R, [
+        ("wr_BlindR", _blind_count("R")),
+        ("wr_BlindG", _blind_count("G")),
+        ("wr_BlindE", _blind_count("E")),
+        # One sortable key, smallest wins: concerning dominates, then favorable, then even.
+        # A player we are not sending gets no key at all rather than a losing one.
+        ("wr_BlindKey", lambda k, r: f'=IF(AND(INDEX(wr_OurRemaining,{k}),wr_UnplayedCount>0),'
+                                     f'B{r}*10000-C{r}*100-D{r},"")'),
+    ])
+    # No opponents left to face, or nobody left to send: no recommendation rather than a wrong one.
+    e.cell("wr_BlindBest", "Blind send key",
+           '=IF(OR(wr_UnplayedCount=0,wr_RemainingCount=0),"",MIN(wr_BlindKey))')
+    e.cell("wr_BlindIdx", "Blind send row", '=IF(wr_BlindBest="","",MATCH(wr_BlindBest,wr_BlindKey,0))')
+    e.cell("wr_BlindName", "Blind send player", '=IF(wr_BlindIdx="","",INDEX(wr_OurLabels,wr_BlindIdx))')
+    e.cell("wr_BlindWhy", "Blind send reason", '=IF(wr_BlindIdx="","",IF(INDEX(wr_BlindR,wr_BlindIdx)>0,IF(INDEX(wr_BlindG,wr_BlindIdx)=0,INDEX(wr_BlindR,wr_BlindIdx)&" concerning among the "&wr_UnplayedCount&" they have left"&" — the best available, not a good one",INDEX(wr_BlindG,wr_BlindIdx)&" favorable and "&INDEX(wr_BlindR,wr_BlindIdx)&" concerning among the "&wr_UnplayedCount&" they have left"),IF(INDEX(wr_BlindG,wr_BlindIdx)>0,"no concerning record vs any of the "&wr_UnplayedCount&" they have left"&" · "&INDEX(wr_BlindG,wr_BlindIdx)&" favorable",IF(INDEX(wr_BlindE,wr_BlindIdx)>0,"no concerning record vs any of the "&wr_UnplayedCount&" they have left"&", on "&INDEX(wr_BlindE,wr_BlindIdx)&" even direct","little recorded evidence either way vs the "&wr_UnplayedCount&" they have left"&" — a weak recommendation, not a strong pick"))))')
     # Captain Packet evidence list: where each opponent's rows start in one continuous, packed list.
     e.block("Packet evidence start", R, [
         ("wr_PkStart", lambda k, r: "=1" if k == 1 else f"=B{r - 1}+INDEX(wr_OppCount,{k - 1})"),
@@ -1543,8 +1571,15 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     h(3, 15)
     h(4, 4)
 
-    # ---------------- page 1 (decision first): best sends, risks, then the rosters ----------------
+    # ---------------- page 1 (decision first): the lead, best sends, risks, then rosters ----------------
     r = 4
+    # The lead answer comes before everything else on the printed page: every other line in this
+    # packet assumes we already know who they put up, and when WE lead there is nobody to look up.
+    r += 1
+    _span(ws, r, 1, 2, "IF WE PUT UP FIRST", font=font(9, bold=True, color="5B6A61"))
+    _span(ws, r, 3, 12, '=IF(wr_BlindName="","Every opponent has already played.",wr_BlindName&" — "&wr_BlindWhy)',
+          font=font(12, bold=True, color=base.FELT_DEEP))
+    h(r, 30)
     r += 1
     base._section(ws, r, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)",
                   last_col=12)

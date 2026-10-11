@@ -562,7 +562,7 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
     unplayed = [True] * len(blocks) if unplayed is None else unplayed
     live = [b for b, open_ in zip(blocks, unplayed) if open_]
-    empty = {"member": None, "why": "", "concerning": 0, "favorable": 0, "meetings": 0,
+    empty = {"member": None, "why": "", "concerning": 0, "favorable": 0, "even": 0,
              "weak": True, "ranked": [], "opponents_left": len(live)}
     if not live or not remaining:
         return empty
@@ -571,7 +571,7 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     for order, m in enumerate(war_room["ours"]):
         if m["id"] in remaining:
             by_member[m["id"]] = {"member": m, "order": order, "concerning": 0, "favorable": 0,
-                                  "meetings": 0}
+                                  "even": 0}
     for block in live:
         for r in block["rows"]:
             stat = by_member.get(r["member"]["id"])
@@ -581,14 +581,13 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
                 stat["concerning"] += 1
             elif r["category"] == "G":
                 stat["favorable"] += 1
-            direct = r.get("direct")          # (wins, games) or None
-            if direct:
-                stat["meetings"] += int(direct[1] or 0)
+            elif r["category"] == "E":
+                stat["even"] += 1
     if not by_member:
         return empty
 
     ranked = sorted(by_member.values(),
-                    key=lambda s: (s["concerning"], -s["favorable"], -s["meetings"], s["order"]))
+                    key=lambda s: (s["concerning"], -s["favorable"], -s["even"], s["order"]))
     top = ranked[0]
     n = len(live)
     opp = f"{n} they have left" if n != 1 else "the 1 they have left"
@@ -598,16 +597,15 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
                f"{top['favorable']} favorable and {top['concerning']} concerning among {opp}")
     elif top["favorable"]:
         why = f"no concerning record vs any of {opp} · {top['favorable']} favorable"
-    elif top["meetings"]:
-        meets = top["meetings"]
+    elif top["even"]:
         why = (f"no concerning record vs any of {opp}, on "
-               f"{meets} recorded meeting{'' if meets == 1 else 's'}")
+               f"{top['even']} even direct record{'' if top['even'] == 1 else 's'}")
     else:
         why = (f"little recorded evidence either way vs {opp} -- a weak recommendation, "
                "not a strong pick")
     return {"member": top["member"], "why": why, "concerning": top["concerning"],
-            "favorable": top["favorable"], "meetings": top["meetings"],
-            "weak": top["favorable"] == 0 and top["meetings"] == 0,
+            "favorable": top["favorable"], "even": top["even"],
+            "weak": top["favorable"] == 0 and top["even"] == 0,
             "ranked": ranked, "opponents_left": n}
 
 

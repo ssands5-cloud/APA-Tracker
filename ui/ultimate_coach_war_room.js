@@ -312,24 +312,23 @@
     for(i=0;i<w.blocks.length;i++) if(plan.unplayed[i]) live.push(w.blocks[i]);
     if(!live.length) return null;
     var stats={},order=0,any=false;
-    w.ours.forEach(function(m){ if(plan.rem[String(m.id)]){ stats[m.id]={member:m,order:order++,concerning:0,favorable:0,meetings:0}; any=true; } });
+    w.ours.forEach(function(m){ if(plan.rem[String(m.id)]){ stats[m.id]={member:m,order:order++,concerning:0,favorable:0,even:0}; any=true; } });
     if(!any) return null;
     live.forEach(function(b){ b.rows.forEach(function(r){
       var st=stats[r.member.id]; if(!st) return;
       var cat=r.category;
-      if(cat==="R") st.concerning++; else if(cat==="G") st.favorable++;
-      if(r.c&&r.c.direct) st.meetings+=r.c.direct.g||0;
+      if(cat==="R") st.concerning++; else if(cat==="G") st.favorable++; else if(cat==="E") st.even++;
     });});
     var ranked=Object.keys(stats).map(function(k){return stats[k];}).sort(function(a,b){
-      return a.concerning-b.concerning || b.favorable-a.favorable || b.meetings-a.meetings || a.order-b.order;});
+      return a.concerning-b.concerning || b.favorable-a.favorable || b.even-a.even || a.order-b.order;});
     var t=ranked[0],n=live.length,opp=n===1?"the 1 they have left":n+" they have left",why;
     if(t.concerning) why=t.favorable===0
         ? t.concerning+" concerning record among "+opp+" — the best available, not a good one"
         : t.favorable+" favorable and "+t.concerning+" concerning among "+opp;
     else if(t.favorable) why="no concerning record vs any of "+opp+" · "+t.favorable+" favorable";
-    else if(t.meetings) why="no concerning record vs any of "+opp+", on "+plural(t.meetings,"recorded meeting");
+    else if(t.even) why="no concerning record vs any of "+opp+", on "+plural(t.even,"even direct record");
     else why="little recorded evidence either way vs "+opp+" — a weak recommendation, not a strong pick";
-    return {member:t.member,why:why,weak:t.favorable===0&&t.meetings===0};
+    return {member:t.member,why:why,weak:t.favorable===0&&t.even===0};
   }
 
   // ---- Lineup budget (mirrors analytics.lineup_budget) ----
