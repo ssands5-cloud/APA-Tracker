@@ -1,3 +1,55 @@
+# CURRENT PRIORITIES
+
+Paul's production sprint simplification is the current directive. The goal is to answer **Who should I put up next?** Present recommendation, then explanation, then evidence. HTML is the primary match-night interface; Excel is for planning and power users.
+
+Claude builds; GPT audits. This report on `origin/codex/audit-pr83-privacy` is the single living source of truth. Other branch reports are reference-only and point here. Issues and PRs carry pointers/coordination, not parallel current ledgers. Check latest commits, this report and branch status every 15-20 minutes; unchanged state is not a reason to repeat verification.
+
+Production priority order: Next Send Engine; Threat Panel; Quick Read Scouting Cards; Coach Notes Integration; Captain Matrix; decision-first dashboard hierarchy; Mobile Match-Night experience. Existing PRINT-01 work may finish without restarting verified cases. Focus remaining correctness checks on these decisions, especially PARITY-01 actual displayed arithmetic, roster/send identity and honest partial-data limitations. Do not expand into new reports, analytics, evidence collections or probability models.
+
+Coach Notes must be clearly labeled **Coach Observation**, separately from APA evidence, on scouting cards, threat panels, packet and next-send surfaces. Claude implements reasonable visual/workflow assumptions while Paul is unavailable, records them under PENDING PAUL REVIEW, and continues executable work.
+
+All execution stays inside canonical APA-Tracker or existing linked worktrees located beneath it. No new outside workspaces, scratch repositories, external test environments or duplicate trees. Verify canonical/common Git directory and exact origin before writes. Existing outside artifacts/checkouts remain untouched; no inferred cleanup approval. Auditor report commits can be prepared from canonical Git objects without replacing owner or builder checkouts.
+
+Before applicable UI/workflow/dashboard/workbook/automation/report changes, review relevant repository skills in `.github`, and record actual usage below. Preserve one ID per unresolved outcome, verified stages and exact private evidence bindings. Reopen only for new evidence, new failure, relevant source change or owner request. Apply data/output/native stages separately; a passing source test is not final acceptance. Do not repeat unchanged tests/builds or the established roster proof.
+
+Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
+
+# COMPLETED
+
+- Original roster discrepancy established; refreshed data contains the exact eight active members while retaining former-player history. Reviewed native Lineup Lab and packet page-1 roster samples show the same eight.
+- Refreshed full-scope run finalized; previously verified provenance, historical-row preservation and configured scope retained. Nine prior player-match duplicate groups are zero and failed-fetch cases were rechecked. This does not establish complete data.
+- Original native fixture-warning clipping case and continued evidence-page column headings verified on bound 2721ee8 samples. Prior incorrect War Room-to-Lineup Lab reachability rationale was retracted.
+- Rebound XLSX/HTML hashes independently match recorded bindings. Source privacy closures and unchanged verified cases remain preserved.
+
+# OPEN ISSUES
+
+This table retains the existing acceptance IDs and the precise boundaries of verification; current status is maintained here only.
+
+| ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
+| ROSTER-01 | Finalized data matches original eight-member proof; rebound native Lineup Lab and packet page 1 show the exact eight active members; closed test-copy hash matches artifact | Complete HTML/send output record checks and remaining affected states; preserve former-player history | DATA + SAMPLED NATIVE ROSTER VERIFIED; remaining outputs pending |
+| REFRESH-01 | New full-scope run finalized; old input and final DB hashes match provenance; prior non-current-session result/history rows preserved exactly | Retain final report/DB binding; preserve explicit partial coverage and review rebound artifacts, no automatic promotion | FINALIZED VERIFIED; partial/unaccepted |
+| QUALITY-01 | Nine prior player-match duplicates are zero; all nine failed matches rechecked and fetch failures zero | One prior failure is now unresolved_identity_partial; check new repeated H2H match scope and verified-payload exclusion/disclosure. No guessed merges | DUPLICATE/FETCH CASES VERIFIED; other quality gaps OPEN |
+| SCOPE-01 | Final run processed all 30 configured current divisions, full scope; discovered/ingested team and roster counts agree | Preserve 148 statements: 139 identity, 7 no-row, 2 division rollups; verify catalog completeness and gap causes/impact in rebound outputs | CONFIGURED SCOPE VERIFIED; live completeness OPEN |
+| DISCLOSURE-01 | Final snapshot-qualified no-evidence/either-direction limitation source fixes verified | Confirm retained warnings/gaps in rebound artifacts; reopen source only if changed behavior regresses | SOURCE CLOSED; artifact continuation |
+| PRIVACY-01 | Mixed-batch capture redaction and long/truncated diagnostic redaction verified in tested scope | Keep real evidence private; historical public-identity exposure is a separate owner decision, not permission for new publication | SOURCE CASES CLOSED; publication gate retained |
+| PARITY-01 | Prior fixture/sample artifact evidence verified; existing passing source cases retained | Independently compare decision-critical actual Excel formula/HTML outputs to authoritative private record/math oracles on rebound data; separate arithmetic accuracy from completeness and quantify affected gaps | PARTIAL; statistical/formula acceptance pending |
+| NATIVE-01 | Current test-copy hash verified; real run/scenario screenshots exist; some fixture/mark/Inspect cases performed | Complete explicitly NOT RUN cases on the correct bound candidate. Do not rerun unaffected passed cases for activity | PARTIAL |
+| WARNING-01 | 2721ee8 focused source checks pass; rebound screenshots show the original fixture-mismatch NOT-applied clause through its final line. Prior override-domain rationale retracted | Preserve this verified fixture-clause case; other required warning states must be individually evidenced, no blanket warning closure | ORIGINAL FIXTURE CLIPPING CASE VERIFIED NATIVELY; other cases pending |
+| PRINT-01 | Rebound evidence pages 5/6 visibly repeat column headings; page 1 shows corrected roster. Previous source/geometry checks retained | Complete readable effective body sizes and shrink-cell handling; legible full-page/closeup evidence for required sections | CONTINUED HEADERS VERIFIED NATIVELY; readability OPEN |
+| RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
+
+# GPT AUDIT NOTES
+
+Production simplification applied at Paul's request. GPT reviewed repository systematic-debugging, receiving-code-review and verification-before-completion skills. Applied requirements: trace final outputs before repair requests, independently evaluate feedback, verify original symptoms, and preserve evidence rather than manufacture repeated tests. Claude must document applicable skill use and executed results; GPT checks that evidence. The new report structure is a reporting change only, not acceptance of new feature behavior.
+
+Builder global claims remain distinct from independently verified samples. Remaining 148 gap statements and repeated-H2H disposition constrain complete-data claims; keep limitations beside recommendations and evaluate their decision impact. No new collection program or guessed identity repair is implied.
+
+Historical material below is immutable reference evidence, not a competing task/status list. Consult only for a named current item.
+
+<details>
+<summary>Preserved historical report and superseded ledger</summary>
+
+````text
 # Overnight Coach Advantage Report
 
 ## Current acceptance ledger
@@ -2267,3 +2319,16 @@ This resolves the prior publisher-boundary P1 for the reviewed source path. It d
 Reviewed PR #83 head `be0bb07` (Tests passed). The Player-vs-Player banner now accurately labels displayed rates as historical, and the legacy-note migration retains distinct legacy note content without resurrecting cleared notes in its browser coverage.
 
 The UAT helper's new default `tmp\\uat` and lexical `GetFullPath` prefix check do not verify the origin URL or reject/re-resolve junction, symlink, or other reparse components. A redirected path inside the repository can pass that string check while its create/remove operations write outside the canonical repository. The helper and `PROJECT_STATUS.md` therefore overstate the destination safeguard. Keep UAT publishing blocked until it verifies the canonical top level and origin before writes and fails closed on reparse-path components. Real-package GraphQL provenance and native Excel/device acceptance remain open.
+
+````
+
+</details>
+
+# CLAUDE RESPONSES
+
+Claude: put current responses here, naming the relevant existing item, applicable skills, executed result, private evidence binding and next action/blocker. Historical branch notes remain evidence only. Do not copy stale status summaries into a new task list. Awaiting response to this production directive; no new completion inferred.
+
+# PENDING PAUL REVIEW
+
+- Visual preferences and owner UAT of decision-first HTML/mobile and Excel planning workflows. Claude should implement/document reasonable assumptions and continue; this is not a routine-work blocker.
+- Final release acceptance, merge, real-data publication, automatic refresh installation and exact-path destructive cleanup remain separate owner approvals. Do not classify unresolved arithmetic/data defects as mere visual preferences.
