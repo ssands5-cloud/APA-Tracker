@@ -21,7 +21,10 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The suite takes ~3 minutes, but the Chromium download alone once took 7+ minutes on a slow runner
+    # (run 37742704211), cancelling the job at the old 10-minute limit. 25 minutes tolerates that; the
+    # browser is also cached below, and each slow step has its own limit so a hang fails clearly.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -45,14 +48,30 @@ jobs:
           # docs/reproducible_builds.md.
           pip install -r requirements-dev.txt
 
+      - name: Read the pinned Playwright version
+        id: playwright
+        run: echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright's browsers
+        # Keyed by the exact pinned playwright version (requirements-dev.txt), so a version bump downloads
+        # the matching browser once and every later run reuses it.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Playwright's Chromium browser
         # requirements-dev.txt installs the playwright package, but the
         # actual browser binary is a separate download this step fetches --
         # needed for tests/test_dashboard_browser.py's real, headless
-        # Chromium regression test of the Coach Dashboard.
+        # Chromium regression test of the Coach Dashboard. With a cache hit
+        # the browser download is skipped; --with-deps still installs the
+        # system libraries, which are not cached.
+        timeout-minutes: 12
         run: playwright install --with-deps chromium
 
       - name: Run test suite
+        timeout-minutes: 10
         run: python -m pytest tests/ -v
 
       - name: CI-mode full pipeline smoke test (no live scrape, no credentials)

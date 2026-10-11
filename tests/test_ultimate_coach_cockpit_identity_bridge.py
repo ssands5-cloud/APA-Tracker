@@ -116,7 +116,8 @@ def _base_fixture() -> dict[str, Any]:
         # player 3 intentionally has NO history rows at all.
     ]
     team_matches = [
-        {"match_id": 900, "home_team_id": "T1", "away_team_id": "T2"},
+        {"match_id": 900, "home_team_id": "T1", "away_team_id": "T2",
+         "session_name": "Fall 2026", "match_date": "2026-10-11T19:00:00-06:00"},
     ]
     all_games = [
         # Clean, identity-verified, mirror-safe game -- must appear as evidence.
@@ -263,6 +264,92 @@ class TestEvidenceFiltering:
             if row["game_key"] == "G-NINE-1" and row["format"] == "EIGHT"
         ]
         assert eight_ball_rows_from_that_game == []
+
+
+class TestTeamFormatDerivation:
+    """Real team_matches rows can carry MASTERS/MASTERS ALT, not just
+    EIGHT/NINE (see scraper.graphql_scraper._VALID_FORMATS) -- a hardcoded
+    {"EIGHT","NINE"} allowlist previously discarded those rows before they
+    ever reached team_formats_by_scope/by_id, so a team whose only matches
+    were Masters/Masters Alt always derived an empty format instead of the
+    real one."""
+
+    def _fixture(self, *, team_matches: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "schema": CONTRACT_SCHEMA,
+            "tables": {
+                "players": [_player_row(1, "1001", "Ann Fixture")],
+                "team_matches": team_matches,
+                "player_match_stats": [],
+                "raw_h2h_evidence": [],
+                "all_games": [],
+                "career_stats": [],
+                "team_history": [_history_row(1, "T1", "Fall 2026", member_external_id="1001")],
+                "coverage_issues": [],
+            },
+            "counts": {"players": 1, "team_matches": len(team_matches), "all_games": 0, "coverage_issues": 0},
+            "notes": {},
+        }
+
+    def _derived_format(self, monkeypatch, *, format: str) -> str:
+        fixture = self._fixture(
+            team_matches=[{"match_id": 900, "home_team_id": "T1", "away_team_id": "T2", "format": format}]
+        )
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        payload = bridge.build_verified_cockpit_payload(db=None)
+        return payload["players"][0]["team_history"][0]["format"]
+
+    def test_masters_format_team_match_is_no_longer_discarded(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="MASTERS") == "MASTERS"
+
+    def test_masters_alt_format_team_match_is_no_longer_discarded(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="MASTERS ALT") == "MASTERS ALT"
+
+    def test_eight_and_nine_still_derive_correctly(self, monkeypatch):
+        assert self._derived_format(monkeypatch, format="EIGHT") == "EIGHT"
+        assert self._derived_format(monkeypatch, format="NINE") == "NINE"
+
+    def test_blank_format_still_derives_to_unknown(self, monkeypatch):
+        fixture = self._fixture(
+            team_matches=[{"match_id": 900, "home_team_id": "T1", "away_team_id": "T2"}]
+        )
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        payload = bridge.build_verified_cockpit_payload(db=None)
+        assert payload["players"][0]["team_history"][0]["format"] == ""
+
+
+class TestFixtures:
+    def test_match_day_fixtures_are_populated_from_team_matches(self, payload):
+        """The shared payload's base fixture carries one team_matches row
+        (match_id 900, T1 vs T2, Fall 2026) and T1 is a current roster
+        scope -- Match Day's section must expose it, not a re-derivation
+        that could silently disagree with what evidence/rosters use."""
+        fixtures = payload["match_day"]["fixtures"]
+        assert len(fixtures) == 1
+        assert fixtures[0]["match_id"] == 900
+        assert fixtures[0]["home_team_id"] == "T1"
+        assert fixtures[0]["away_team_id"] == "T2"
+        assert payload["match_day"]["display_timezone"] == "America/Denver"
+        assert payload["match_day"]["coverage"]["stored_fixture_count"] == 1
+        assert payload["match_day"]["coverage"]["excluded_fixture_count"] == 0
+
+    def test_match_day_section_present_even_with_zero_matches(self, monkeypatch):
+        empty_fixture = _base_fixture()
+        empty_fixture["tables"]["team_matches"] = []
+        monkeypatch.setattr(bridge, "build_contract", lambda db: empty_fixture)
+        empty_payload = bridge.build_verified_cockpit_payload(db=None)
+        assert empty_payload["match_day"]["fixtures"] == []
+        assert empty_payload["match_day"]["schedule"] == {}
+
+    def test_match_day_dates_use_the_requested_display_timezone(self, monkeypatch):
+        fixture = _base_fixture()
+        fixture["tables"]["team_matches"][0]["match_date"] = "2026-08-30T01:00:00Z"
+        monkeypatch.setattr(bridge, "build_contract", lambda db: fixture)
+        denver = bridge.build_verified_cockpit_payload(db=None)["match_day"]["fixtures"][0]
+        assert (denver["local_date"], denver["local_time"], denver["local_tz_abbrev"]) == ("2026-08-29", "7:00 PM", "MDT")
+        utc = bridge.build_verified_cockpit_payload(db=None, match_day_timezone="UTC")["match_day"]["fixtures"][0]
+        assert utc["local_date"] == "2026-08-30"
+        assert denver["match_date"] == utc["match_date"] == "2026-08-30T01:00:00Z"
 
 
 class TestProbabilityLocks:

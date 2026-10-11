@@ -32,6 +32,8 @@ USAGE
     python tools/capture_apa_graphql.py              # capture only
     python tools/capture_apa_graphql.py --sync       # capture, then sync live
     python tools/capture_apa_graphql.py --game-night # login, refresh, verify, build + open Cockpit
+    python tools/capture_apa_graphql.py --refresh-ultimate-coach --mine-only --verify-member <id> --verify-date 2026-10-05
+        # login, then refresh the current session into a NEW COPY of the Ultimate Coach staging DB (original untouched)
 
 Be a normal user while it runs: visit the pages you want captured, at the pace
 you would anyway. This is not a crawler and must not be used as one.
@@ -57,6 +59,23 @@ LEAGUE_URL = "https://league.poolplayers.com"
 
 SHAPES_PATH = Path("apa-capture-shapes.json")
 FULL_PATH = Path("apa-capture-full.json")
+
+#: Operations whose variables or responses carry live credentials or tokens.
+#: These are never recorded into `captures`, so they never reach either output
+#: file -- matching scraper/full_auto_scrape.py's AUTH_OPERATIONS, the existing
+#: contract in this project after a real run there once captured a valid
+#: refresh token into a file. GPT audit 34f8a12 (2026-10-09) found this file
+#: had never had the same exclusion: a live run recorded `login`'s variables
+#: (plaintext username/password) and `GenerateAccessTokenMutation`'s refresh
+#: token into apa-capture-full.json on disk (gitignored, never pushed, but
+#: real). The exclusion only applies to what gets RECORDED for export; the
+#: in-memory-only Authorization-header token capture in
+#: _extract_auth_and_captures is unaffected and still required for --sync/
+#: --refresh-ultimate-coach to work.
+AUTH_OPERATIONS = {
+    "login", "authorize", "GenerateAccessTokenMutation",
+    "RefreshAccessTokenMutation", "logout",
+}
 
 #: A short, all-caps token is a GraphQL enum ("COMPLETED", "HOME", "THURSDAY"),
 #: not anyone's data. Keeping these makes the shape file far more useful for
@@ -101,7 +120,98 @@ def _record(captures: dict, operation: str, variables: Any, query: str, response
     }
 
 
-def capture(sync: bool = False, game_night: bool = False) -> dict:
+def _extract_auth_and_captures(
+    url: str, headers: dict, body: Any, fetch_json, captures: dict, token_holder: dict, *, host: str = GRAPHQL_HOST
+) -> None:
+    """Handle one GraphQL response: capture its token, then its operations -- independently of each other.
+
+    Authorization capture happens first and unconditionally, before anything
+    that depends on the request having a parseable body or a named operation.
+    The whole point of this tool is lifting the token off the request header;
+    gating that behind body/JSON handling would silently discard a perfectly
+    good token on any response with no post body, or whose body later failed
+    to parse.
+    """
+    if host not in url:
+        return
+
+    auth = headers.get("authorization")
+    if auth and "token" not in token_holder:
+        print("  [token] signed-in session detected (access token captured)")
+    if auth:
+        token_holder["token"] = auth
+
+    if not body:
+        return
+    # GPT audit 34f8a12 (follow-up, 2026-10-09 05:42 UTC): a batched request mixing a credential op with a real
+    # one (e.g. [GenerateAccessTokenMutation, dashboard]) still leaked the credential op's response, because
+    # fetch_json() returns the WHOLE batch's response array and the old code stored that entire array under the
+    # real op's key for every surviving item -- the exclusion only ever covered the request-side operation name,
+    # never the response data sitting next to it. Each surviving item is now matched to its OWN response by
+    # index; a response that isn't a same-length list for a batched (list) body can't be safely attributed to
+    # any one item, so the whole response is refused rather than guessed at.
+    is_batch = isinstance(body, list)
+    items = body if is_batch else [body]
+    payload, payload_fetched = None, False
+    for index, item in enumerate(items):
+        operation = (item or {}).get("operationName")
+        if not operation or operation in AUTH_OPERATIONS:
+            continue
+        if not payload_fetched:
+            try:
+                payload = fetch_json()
+            except Exception:
+                return
+            payload_fetched = True
+        if is_batch:
+            if not isinstance(payload, list) or len(payload) != len(items):
+                continue
+            item_payload = payload[index]
+        else:
+            item_payload = payload
+        _record(captures, operation, item.get("variables"), item.get("query"), item_payload)
+        print(f"  captured: {operation}")
+
+
+def _pump_until(page, ready: "threading.Event", poll_ms: int = 250) -> None:
+    """Block the main thread until ``ready`` is set, without blocking Playwright's event dispatch.
+
+    Playwright's sync API dispatches context.on(...) callbacks back onto the
+    main thread's greenlet, and that handoff happens only when the main thread
+    makes its own next Playwright call. A bare input() call never does that --
+    confirmed live on 2026-10-09, when a real login and real page visits
+    produced zero live "captured:" lines and a token that only got recorded
+    (and every response body failed with TargetClosedError) once
+    browser.close() finally forced the backlog to flush, by which point the
+    browser was already closing. page.wait_for_timeout() IS a real Playwright
+    call, so looping on it here keeps the queue draining live while we wait.
+    """
+    while not ready.is_set():
+        page.wait_for_timeout(poll_ms)
+
+
+def _read_line_in_background(prompt: str) -> "threading.Event":
+    """Read one line from stdin on a background thread; set the returned Event when done.
+
+    Keeps the main thread free to call _pump_until instead of blocking in
+    input() itself -- see _pump_until's docstring for why that matters.
+    """
+    import threading
+
+    ready = threading.Event()
+
+    def _wait() -> None:
+        try:
+            input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            pass
+        ready.set()
+
+    threading.Thread(target=_wait, daemon=True).start()
+    return ready
+
+
+def capture(sync: bool = False, game_night: bool = False, refresh_uc: list[str] | None = None) -> dict:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -129,32 +239,14 @@ def capture(sync: bool = False, game_night: bool = False) -> dict:
         page = context.new_page()
 
         def on_response(response) -> None:
-            if GRAPHQL_HOST not in response.url:
-                return
             request = response.request
             try:
                 body = request.post_data_json
             except Exception:
-                return
-            if not body:
-                return
-
+                body = None
             # Held in memory only, never written or printed: it lets --sync
             # reuse the session you just opened instead of you pasting a token.
-            auth = request.headers.get("authorization")
-            if auth:
-                token_holder["token"] = auth
-
-            for item in body if isinstance(body, list) else [body]:
-                operation = (item or {}).get("operationName")
-                if not operation:
-                    continue
-                try:
-                    payload = response.json()
-                except Exception:
-                    continue
-                _record(captures, operation, item.get("variables"), item.get("query"), payload)
-                print(f"  captured: {operation}")
+            _extract_auth_and_captures(response.url, request.headers, body, response.json, captures, token_holder)
 
         # Listening on the context, not the page: logging in redirects through
         # accounts.poolplayers.com and can land in a new tab, and a page-level
@@ -171,10 +263,48 @@ def capture(sync: bool = False, game_night: bool = False) -> dict:
         print("=" * 70)
         page.goto(LEAGUE_URL)
 
+        # input() runs on a background thread and only signals readiness; the
+        # main thread stays in _pump_until so Playwright keeps dispatching
+        # context.on("response", ...) live the whole time you're logging in
+        # and browsing, instead of queuing it all up unprocessed. See
+        # _pump_until's docstring.
         try:
-            input("\nPress Enter when you have visited those pages... ")
-        except (EOFError, KeyboardInterrupt):
+            _pump_until(page, _read_line_in_background("\nPress Enter when you have visited those pages... "))
+        except KeyboardInterrupt:
             pass
+
+        if token_holder.get("token"):
+            print("\nSigned-in session detected (access token captured).")
+
+        if refresh_uc is not None:
+            try:
+                while not token_holder.get("token"):
+                    print("\nNo access token has been seen yet -- this usually means login hasn't")
+                    print("finished, or no data page has loaded yet. The browser window is still")
+                    print("open: go back to it, finish logging in, and open one data page (e.g.")
+                    print("your Division Standings), then return here.")
+                    _pump_until(page, _read_line_in_background("Press Enter to check again (or Ctrl+C to cancel)... "))
+            except KeyboardInterrupt:
+                print("\nCancelled before a token was seen. The browser stays open if you want to keep looking.")
+
+            # Run the refresh WHILE the browser is still open: APA tokens expire in minutes (the first live run
+            # lost its token after ~14 min of a >1 h scope), so on expiry the open page is reloaded -- the user's
+            # own logged-in session -- and the fresh token it sends lets the refresh resume. In memory only.
+            def renew(old: str | None) -> str | None:
+                token_holder.pop("token", None)
+                try:
+                    page.reload(wait_until="networkidle", timeout=60000)
+                except Exception:
+                    pass
+                for _ in range(45):
+                    if token_holder.get("token") and token_holder["token"] != old:
+                        return token_holder["token"]
+                    page.wait_for_timeout(1000)
+                return None
+
+            if token_holder.get("token"):
+                _run_uc_refresh(token_holder.get("token"), refresh_uc, renew=renew)
+            refresh_uc = None
 
         browser.close()
 
@@ -205,6 +335,8 @@ def capture(sync: bool = False, game_night: bool = False) -> dict:
         _run_sync(token_holder.get("token"))
     elif game_night:
         _run_game_night(token_holder.get("token"))
+    elif refresh_uc is not None:
+        _run_uc_refresh(token_holder.get("token"), refresh_uc)
 
     return captures
 
@@ -227,6 +359,55 @@ def _run_game_night(token: str | None) -> None:
             raise SystemExit(code)
     finally:
         os.environ.pop("APA_ACCESS_TOKEN", None)
+
+
+MAX_TOKEN_RENEWALS = 12
+
+
+def _run_uc_refresh(token: str | None, extra: list[str], renew=None) -> None:
+    """Refresh the current session into a copy of the Ultimate Coach staging DB with this in-memory token.
+
+    When the token expires mid-run (exit code 3) and ``renew`` can get a fresh one from the still-open browser,
+    the same refresh is resumed (--resume <its folder>), up to MAX_TOKEN_RENEWALS times. Tokens stay in memory."""
+    if not token:
+        print("\nNo access token was seen, so the Ultimate Coach refresh cannot start.")
+        return
+
+    import os
+
+    from scripts import refresh_ultimate_coach_current_session as refresh
+
+    print("\nRefreshing the current session into a COPY of the Ultimate Coach staging database...")
+    args, renewals = list(extra), 0
+    while True:
+        os.environ["APA_ACCESS_TOKEN"] = token  # this process only; never persisted
+        try:
+            code = refresh.main(args)
+        finally:
+            os.environ.pop("APA_ACCESS_TOKEN", None)
+        if not code:
+            return
+        folder = refresh.LAST_OUT_DIR
+        resumable = code == 3 and folder is not None and (folder / "refresh_progress.json").is_file()
+        if not (resumable and renew and renewals < MAX_TOKEN_RENEWALS):
+            raise SystemExit(code)
+        print("\nThe APA token expired; renewing it from the open browser (your existing login)...")
+        fresh = renew(token)
+        if not fresh or fresh == token:
+            print("No fresh token came from the browser. Log in again and continue with:\n"
+                  f'  python tools/capture_apa_graphql.py --refresh-ultimate-coach --resume "{folder}"')
+            raise SystemExit(3)
+        token, renewals = fresh, renewals + 1
+        cleaned, skip = [], False
+        for a in args:                                   # drop any earlier --resume DIR, then resume this folder
+            if skip:
+                skip = False
+            elif a == "--resume":
+                skip = True
+            else:
+                cleaned.append(a)
+        args = cleaned + ["--resume", str(folder)]
+        print(f"Token renewed ({renewals}); resuming {folder.name}...")
 
 
 def _run_sync(token: str | None) -> None:
@@ -268,5 +449,16 @@ if __name__ == "__main__":
             "protection, and open the verified dashboard."
         ),
     )
-    args = parser.parse_args()
-    capture(sync=args.sync, game_night=args.game_night)
+    mode.add_argument(
+        "--refresh-ultimate-coach",
+        action="store_true",
+        help=(
+            "After login, refresh the current session's real results into a NEW copy of the Ultimate Coach "
+            "staging DB (scripts/refresh_ultimate_coach_current_session.py; any further arguments go to it)."
+        ),
+    )
+    args, extra = parser.parse_known_args()
+    if extra and not args.refresh_ultimate_coach:
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    capture(sync=args.sync, game_night=args.game_night,
+            refresh_uc=extra if args.refresh_ultimate_coach else None)

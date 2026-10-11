@@ -156,6 +156,11 @@ def build_contract(db: Session) -> dict[str, Any]:
             "match_date": row.match_date,
             "session_name": row.session_name,
             "format": normalize_format(row.format),
+            # The raw recorded label ("8-Ball Doubles", "8-Ball Open
+            # Tournament", ...) -- normalize_format() folds those variants
+            # into one category, but Match Day must still show and filter
+            # by what was actually recorded.
+            "format_raw": row.format or "",
             "week": row.week,
             "status": row.status,
             "location": row.location,
