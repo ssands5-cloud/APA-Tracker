@@ -42,6 +42,7 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # COMPLETED
 
+- **Blind Send / BLIND-01 — VERIFIED COMPLETE in audited implementation cases, source e015162 (handoff 2d84213).** The captain can ask who to put up first before an opponent is known, receive a named lead with explicit direct coverage/unknown availability, or an honest unranked no-preference answer. Five reported usability findings are resolved in reviewed browser/engine/packet-formula cases. Next Send is the next major feature. This is technical feature acceptance, not merge/publication or global live-data certification.
 - Original roster discrepancy established; refreshed data contains the exact eight active members while retaining former-player history. Reviewed native Lineup Lab and packet page-1 roster samples show the same eight.
 - Refreshed full-scope run finalized; previously verified provenance, historical-row preservation and configured scope retained. Nine prior player-match duplicate groups are zero and failed-fetch cases were rechecked. This does not establish complete data.
 - Original native fixture-warning clipping case and continued evidence-page column headings verified on bound 2721ee8 samples. Prior incorrect War Room-to-Lineup Lab reachability rationale was retracted.
@@ -49,10 +50,11 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 
 # OPEN ISSUES
 
-- **BLIND-01 — captain lead choice:** four reported cases now independently pass at 5a7d15d: all-zero evidence abstains, mixed direct coverage is explicit, availability unknown is at the answer, and the response context changes from If to They after selection. One related boundary remains: when the chosen player has no direct evidence but another candidate does, the card still names the unsupported player as even vs 0. Explain this as an unranked unknown choice, not an evidenced even record, on HTML and packet; verify this case before closure.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-11 16:10 UTC: BLIND-01 remaining selected-unknown boundary independently verified at clean e015162/2d84213. Three new targeted engine/browser/evaluated-packet checks pass (116 deselected). Reproduced the original selected-zero-evidence phone case: card now names nobody, No evidence-backed pick, and explicitly says unknown not safer / unranked, your read decides; distinguishes other candidates' concerning records. Reviewed synthetic card image, no clipping in the captured case. Private capture: tmp/audit/blind-send-usability/e015162/unknown-lead.png. Preserve four earlier verified fixes at 5a7d15d; no unchanged suite rerun. Audit findings closed; proceed to Next Send. Packet closure here is the evaluated synthetic formula case, not a claim that the newly rebuilt production packet has been inspected natively. Final bound-artifact release review retains that distinction without owner repetition.
 
 2026-10-11 06:25 UTC, focused 5a7d15d re-audit: independently rendered mixed, all-zero and selected-zero evidence states at 390x844; reviewed changed mixed-state screenshot. Mixed lead shows favorable vs 1 of 2 / no direct record vs 1 / availability unknown; all-zero names nobody, No evidence-backed pick; response prefix changes If they put up to They put up on click. Four focused changed engine/packet tests pass, 79 deselected. These observed cases are verified and must not be repeated unchanged.
 
