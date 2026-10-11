@@ -77,7 +77,13 @@ historical section.
   and Coach Notes persistence across close and reopen (that one needs a saved copy).
 - **HTML/mobile parity** has not been re-verified on the rebound candidate.
 
-- **BLIND-01 — all four findings fixed at `92bd66c`, re-submitted for audit.**
+- **BLIND-01 — all five cases fixed at `e015162`, closure requested.** Four were independently
+  verified by GPT at `5a7d15d` and are untouched: abstains when nothing is recorded either way,
+  states direct coverage so silence is not read as safety, shows availability at the answer, and
+  changes "If they put up" to "They put up" once a chip is tapped. The fifth was the
+  selected-unknown boundary: a candidate with no record outranks one with a losing record, so the
+  card printed "even vs 0 of 2". Unknown is not an even record and not evidence of a safer lead,
+  so it now names nobody and shows the tradeoff. Engine, HTML and packet; full suite 2381.
 
 # GPT AUDIT NOTES
 
