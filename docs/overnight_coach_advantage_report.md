@@ -10,80 +10,72 @@
 
 # CURRENT PRIORITIES
 
-1. **Next Send Engine** — the current feature. One at a time; Blind Send is finished and closed
-   below, so this is the only thing in flight. Goal is a decision component a captain reads in
-   one glance: opponents remaining, recommended responses with their reason, and who to avoid.
-2. Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
-   Matrix, Mobile. Candidate gaps noted for later, not started: "what don't we know about
-   tonight?" and "who should I save, and from whom?".
-3. **Threat panel** — who on their roster is dangerous to us, stated as a decision.
-4. **Quick-read scouting cards** — one card, one read, no scrolling to the point.
-5. **Coach Notes integration** — surfaced in cards, threat panel, packet and Next Send,
-   always labelled **Coach Observation**, never as APA evidence.
-6. **Captain matrix** — readable at a glance, colour carrying meaning without needing a key.
-7. **Mobile match-night experience** — HTML is the match-night interface; Excel is planning
-   and power use.
+**Next Send Engine** — the only feature in flight. Everything needed to start is below; nothing
+of it has been built yet, so there is no partial work to pick up.
+
+The gap to close: every recommendation is made one pairing at a time, and a captain choosing
+between two candidates cannot see what the choice **costs him for the rest of the night**. The
+"consider saving" flag fires only in the extreme case — when a player is our *sole* favorable
+option against someone still to come. Between that and silence there is nothing. Verified
+2026-10-11: no cost/coverage-after-send concept exists in `analytics/` or `ui/`.
+
+Smallest useful solution: for each recommended candidate, state how many of the remaining
+opponents still have a favorable option **after** sending him. Exact count over recorded
+categories — no model, no odds, no guess at their lineup.
+
+Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
+Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
 
-Verified with evidence. Hashes and private evidence paths are recorded with each entry in the
-historical section.
+- **Blind Send / We Put Up First — COMPLETE, audit CLOSED by GPT at `e015162` / `2d84213`.**
+  GPT independently reproduced the original phone case and the three boundary checks (3 passed,
+  116 deselected), and retained the four earlier verified fixes without rerun.
 
-- **ROSTER-01 — applied and verified end to end.** The corrected eight-player roster appears
-  in the refreshed database, both exports, the Lineup Lab on screen and the printed Captain
-  Packet. Former players are retired, not deleted; 34 historical rows preserved.
-- **WARNING-01 — fixed and natively verified.** The fixture-mismatch warning renders its
-  operative clause ("availability, lineup and played are NOT applied. Notes still are.")
-  instead of clipping at the match number.
-- **PRINT-01 readable layout — fixed and natively verified.** The packet prints at 78% with
-  10.5pt body text landing at 8.2pt, over seven pages, with the evidence table's column
-  headers repeated on every continued page.
-- **PRINT-01 shrink-to-fit — closed as no defect, by measurement.** Worst case across all
-  players prints 7.1pt, above fine print; 68 of 207,755 evidence texts (0.03%) shrink at all.
-  This retracts my earlier unmeasured claim that 363 cells shrank below the body size.
-- **Blind Send / We Put Up First — VERIFIED COMPLETE (HTML + Captain Packet).** Every
-  conditioned on knowing who *they* put up; in APA the lead alternates, so a captain regularly
-  chooses first and had no answer at all. Verified nothing of the kind existed. Implemented as
-  maximin over recorded results — worst case first, coverage as tiebreak, no odds and no guess
-  at their lineup — and rendered at the top of Tonight, above the "they put up" chips. 5 engine
-  tests, 1 browser test proving it is present without interaction, precedes the chips, reacts
-  to Unavailable, and contains no "%", "odds", "probability" or "chance". The printed packet
-  carries the same answer as `IF WE PUT UP FIRST`, verified to print above the per-opponent
-  sends, driven by the workbook's own category grid so HTML and Excel cannot disagree. Full
-  suite 2371 passed at `dd9dd4c`. Technical acceptance taken under the delegated authority;
-  release approval is still Paul's.
-- **Lineup budget — "will this send leave me able to field a legal lineup?"** APA caps the
-  total skill level you put up; spend the low numbers early and the match is lost to arithmetic.
-  The page carried a `STANDARD_SKILL_CAP` constant that was never used, and the Excel cap was
-  echoed as text that said outright it was not a legality check. Now the captain's own entered
-  cap drives a real check: points left, cheapest remaining lineup, whether this send keeps a
-  legal five possible. Never assumed — no cap entered, nothing claimed — and an uncaptured
-  skill level makes the answer incomplete rather than guessed. 6 engine tests, 1 browser test.
-- **PARITY-01 (bound fixture scope)** — an oracle built from raw records, not from either
-  payload builder, agrees with both exports on all 64 pairs in three directions: nothing
-  dropped, nothing invented, and no disagreement between Excel and HTML.
+  **Captain decision now supported, which was impossible before:** *"We're putting up first —
+  who goes?"* Every recommendation in the product required knowing who **they** put up. In APA
+  the lead alternates, so a captain faces this most match nights and the product was silent.
+  Now, on the phone and on the printed packet, he gets either a named player with the honest
+  shape of the evidence — *"favorable vs 1 of 2 · no direct record vs 1 · availability
+  unknown"* — or a straight refusal to pick: *"No evidence-backed pick — nothing recorded
+  either way."* Unknown is never dressed up as safe, and a player is never named just because
+  he sorted above someone with a losing record.
+
+- **Lineup budget — "will this send leave me able to field a legal lineup?"** The captain's own
+  cap drives a real check: points left, cheapest remaining lineup, and whether this send keeps a
+  legal five possible. Never assumed; an uncaptured skill level makes it incomplete, not guessed.
+
+- **Save warning extended to shared-opponent candidates.** It previously attached only to
+  medalled picks, so choosing off the "≈ not ordered" list — exactly when a captain is most
+  blind — could silently burn the only favorable option against someone still to come.
+
+- **ROSTER-01** applied and verified end to end: the corrected eight-player roster appears in the
+  refreshed database, both exports, Lineup Lab on screen and the printed packet, with former
+  players retired rather than deleted.
+- **PRINT-01** packet prints at 78% with 8.2pt body text over seven pages, headers repeated on
+  every continued evidence page. The shrink-to-fit alarm was closed by measurement, retracting
+  my own unmeasured claim.
+- **PARITY-01 (bound fixture scope)** — a record-based oracle agrees with both exports on all 64
+  pairs in three directions: nothing dropped, nothing invented, no Excel/HTML disagreement.
 
 # OPEN ISSUES
 
-- **Decision-first hierarchy is not built yet.** Today the surfaces still lead with evidence
-  in several places; that is the active work.
-- **PARITY-01 global scope.** Record-level proof covers one fixture's 64 pairs in 8-Ball. The
+- **Unattended continuation is NOT proven.** One durable task is enabled
+  (`ultimate-coach-overnight-continuation`, every 18 min, on disk). As of 16:24Z it has
+  `totalRuns: 0` and no `lastRunAt`; a one-shot test set for 10:18 local never fired, and
+  `run_scheduled_task` refused with "already being started by its schedule" while no run
+  appeared. Both mechanisms appear to need the session idle, so a wake-up cannot be observed
+  from inside a turn. **Proof is `lastRunAt` becoming non-null.** Four overlapping jobs were
+  consolidated to this one.
+- **PARITY-01 global scope** — record-level proof covers one fixture's 64 pairs in 8-Ball; the
   541,052-row comparison remains builder-reported.
-- **Data gaps: 148 disclosed** (139 identity, 7 scored-with-no-scoresheet-rows, 2 division
-  rollups for 8-Ball Ladies Alt and 8-Ball Doubles). Disclosed, not collapsed.
-- **Repeated directed head-to-head groups rose 388 → 390**; disposition under the existing
-  mirror/identity contract is not finished.
-- **Native controls not run:** Coach Dashboard scoped overrides, the Captain/Evidence toggle,
-  and Coach Notes persistence across close and reopen (that one needs a saved copy).
-- **HTML/mobile parity** has not been re-verified on the rebound candidate.
-
-- **BLIND-01 — all five cases fixed at `e015162`, closure requested.** Four were independently
-  verified by GPT at `5a7d15d` and are untouched: abstains when nothing is recorded either way,
-  states direct coverage so silence is not read as safety, shows availability at the answer, and
-  changes "If they put up" to "They put up" once a chip is tapped. The fifth was the
-  selected-unknown boundary: a candidate with no record outranks one with a losing record, so the
-  card printed "even vs 0 of 2". Unknown is not an even record and not evidence of a safer lead,
-  so it now names nobody and shows the tradeoff. Engine, HTML and packet; full suite 2381.
+- **148 disclosed data gaps** (139 identity, 7 scored-with-no-scoresheet-rows, 2 division
+  rollups) and the **388 → 390** repeated-H2H change, still to be dispositioned under the
+  mirror/identity contract. Disclosed, not collapsed.
+- **Native controls not run:** Coach Dashboard scoped overrides, Captain/Evidence toggle, Coach
+  Notes persistence across close and reopen.
+- **HTML/mobile parity** not re-verified on the rebound candidate.
+- Final production-candidate native packet/render binding remains part of release review.
 
 # GPT AUDIT NOTES
 
