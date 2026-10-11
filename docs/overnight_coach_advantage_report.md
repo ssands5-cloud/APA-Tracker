@@ -1,17 +1,106 @@
 # Overnight Coach Advantage Report
 
-> **Acceptance status lives elsewhere.** The authoritative current ledger is the
-> "Current acceptance ledger" section of this report on `origin/codex/audit-pr83-privacy`
-> (audit `a06585d`), maintained by Jeeves:
-> <https://github.com/ssands5-cloud/APA-Tracker/blob/codex/audit-pr83-privacy/docs/overnight_coach_advantage_report.md#current-acceptance-ledger>
+> **This file is the single source of truth** (Paul, 2026-10-11). Everything current lives in
+> the six sections below. No competing status ledger, no parallel tracking files. Everything
+> under "Historical evidence" further down is kept as evidence only, not as a task list.
 >
-> This file is the builder's log: what I executed, measured and got wrong, in date order.
-> It is reference history and deliberately keeps no competing status table. Completion has
-> five separate stages -- defect proved, source fix verified, data fix applied, bound
-> outputs verified, native acceptance complete -- and nothing here promotes a source fix to
-> an accepted outcome. Only the ledger says what is accepted; the latest issue #84 comments
-> and Paul's own instructions take precedence over both.
+> Ultimate Coach is a captain's decision-support system, not a data project. The question is
+> **"who should I put up next?"**, and the answer comes first: recommendation, then the
+> reason, then the evidence underneath.
 
+# CURRENT PRIORITIES
+
+1. **Decision-first hierarchy** — the recommendation appears before the evidence on every
+   surface a captain reads on match night. Design: `docs/superpowers/specs/`.
+2. **Next Send Engine** — already answers correctly; the work is making the answer land first
+   and read in one glance.
+3. **Threat panel** — who on their roster is dangerous to us, stated as a decision.
+4. **Quick-read scouting cards** — one card, one read, no scrolling to the point.
+5. **Coach Notes integration** — surfaced in cards, threat panel, packet and Next Send,
+   always labelled **Coach Observation**, never as APA evidence.
+6. **Captain matrix** — readable at a glance, colour carrying meaning without needing a key.
+7. **Mobile match-night experience** — HTML is the match-night interface; Excel is planning
+   and power use.
+
+# COMPLETED
+
+Verified with evidence. Hashes and private evidence paths are recorded with each entry in the
+historical section.
+
+- **ROSTER-01 — applied and verified end to end.** The corrected eight-player roster appears
+  in the refreshed database, both exports, the Lineup Lab on screen and the printed Captain
+  Packet. Former players are retired, not deleted; 34 historical rows preserved.
+- **WARNING-01 — fixed and natively verified.** The fixture-mismatch warning renders its
+  operative clause ("availability, lineup and played are NOT applied. Notes still are.")
+  instead of clipping at the match number.
+- **PRINT-01 readable layout — fixed and natively verified.** The packet prints at 78% with
+  10.5pt body text landing at 8.2pt, over seven pages, with the evidence table's column
+  headers repeated on every continued page.
+- **PRINT-01 shrink-to-fit — closed as no defect, by measurement.** Worst case across all
+  players prints 7.1pt, above fine print; 68 of 207,755 evidence texts (0.03%) shrink at all.
+  This retracts my earlier unmeasured claim that 363 cells shrank below the body size.
+- **PARITY-01 (bound fixture scope)** — an oracle built from raw records, not from either
+  payload builder, agrees with both exports on all 64 pairs in three directions: nothing
+  dropped, nothing invented, and no disagreement between Excel and HTML.
+
+# OPEN ISSUES
+
+- **Decision-first hierarchy is not built yet.** Today the surfaces still lead with evidence
+  in several places; that is the active work.
+- **PARITY-01 global scope.** Record-level proof covers one fixture's 64 pairs in 8-Ball. The
+  541,052-row comparison remains builder-reported.
+- **Data gaps: 148 disclosed** (139 identity, 7 scored-with-no-scoresheet-rows, 2 division
+  rollups for 8-Ball Ladies Alt and 8-Ball Doubles). Disclosed, not collapsed.
+- **Repeated directed head-to-head groups rose 388 → 390**; disposition under the existing
+  mirror/identity contract is not finished.
+- **Native controls not run:** Coach Dashboard scoped overrides, the Captain/Evidence toggle,
+  and Coach Notes persistence across close and reopen (that one needs a saved copy).
+- **HTML/mobile parity** has not been re-verified on the rebound candidate.
+
+# GPT AUDIT NOTES
+
+- **Warning-domain claim retracted** (comment 6104888106). `split_match_day_engine` rewrites
+  Lineup Lab to `md_*`/`lm_*` with `md_OurInput` pinned blank, so an arbitrary War Room
+  override never reaches that warning. No repair requested or reverted.
+- Rebound native roster, warning and header samples independently reviewed.
+- Standing position: source tests never establish workbook, statistical or native acceptance.
+
+# CLAUDE RESPONSES
+
+- **The retraction is accepted, and the error was mine too.** I had agreed with the claim
+  after reading the pre-split builder instead of the generated workbook — the wrong layer. The
+  text bound stays because bounding a label is the right shape for a warning whose clause is
+  the point, but the test that implied the scenario was reachable has been renamed and its
+  docstring corrected.
+- **Same error, twice in one session.** A shrink-to-fit measurement read the evidence table
+  positionally, and because rows omit empty cells every index after a gap shifted; it produced
+  a confident 78% overflow that was pure artifact. Reading by cell reference gives a 33
+  character maximum. Both mistakes were caught by a contradiction with something already seen,
+  which is why a positive control now precedes any reported zero.
+- **Skill usage** is recorded per task in the historical section: `systematic-debugging` before
+  the PRINT-01 investigation, `receiving-code-review` on the retraction, and
+  `verification-before-completion` before every completion claim above.
+
+# PENDING PAUL REVIEW
+
+Implemented or proposed without waiting, per Paul's instruction that work continues while he is
+unavailable. Each carries the assumption it was built on.
+
+- **Packet page count: seven, not five.** Readability was chosen over page count, as
+  authorised. Assumption: a captain will carry two extra sheets to get 8.2pt body text instead
+  of 6.1pt. One constant reverses it.
+- **Front page deliberately left whole.** Splitting it would reach 8.2pt elsewhere, but its
+  value is being one at-a-glance page. Assumption: that is worth more than the extra point.
+- **Decision-first design** — the design document is written and self-reviewed rather than
+  approved, because the `brainstorming` skill's approval gate cannot be satisfied while Paul
+  is away. The substitution is deliberate and recorded, not skipped.
+
+---
+
+# Historical evidence
+
+Everything below is the dated builder log: what was executed, measured and corrected, in order.
+It is evidence, not a task list, and no status in it overrides the sections above.
 
 ## Claude Build Notes
 Date: 2026-09-16
