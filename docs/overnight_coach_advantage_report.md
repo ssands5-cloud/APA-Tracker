@@ -10,9 +10,10 @@
 
 # CURRENT PRIORITIES
 
-**Next Send Engine** — in flight. First gap closed at `e6e5af2` (cost of a send, below).
-Remaining for this feature: the opponents-remaining list and avoid block already exist and read
-well; no further gap identified yet. When none remains, request audit and move to Threat Panel.
+**Next Send Engine** — first gap closed and audited (`bcd56b5`). The opponents-remaining list
+and avoid block already exist and read well; no further gap identified in Next Send itself.
+Treating this feature as COMPLETE and moving to **Threat Panel**: surface dangerous opponents
+with why they're dangerous and a short evidence summary.
 
 Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
 Matrix, Mobile match-night. One at a time.
@@ -32,12 +33,14 @@ Matrix, Mobile match-night. One at a time.
   either way."* Unknown is never dressed up as safe, and a player is never named just because
   he sorted above someone with a losing record.
 
-- **Cost of a send — "what does using him here leave me for the rest of the night?"**
-  Next Send answered one pairing at a time, and the "consider saving" flag fired only when a
-  player was our *sole* favorable option against someone still to come. A recommendation that
-  spends that option now says so at the point of decision — *"costs your only favorable option
-  vs Opal · leaves 0 of 2 covered"* — and a send that gives up nothing stays silent, because a
-  line on every candidate is noise the phone has no room for.
+- **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
+  CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
+  flag fired only when a player was our *sole* favorable option against someone still to come. A
+  recommendation that spends that option now says so at the point of decision — *"leaves 1 of 2
+  with a favorable direct option"* beside the save flag that names who is spent — and a send that
+  gives up nothing stays silent, because a line on every candidate is noise the phone has no
+  room for. GPT caught a vacuous browser test (looped over elements the fixture never produced)
+  and redundant wording (the opponent's name said twice); both fixed.
 
 - **Lineup budget — "will this send leave me able to field a legal lineup?"** The captain's own
   cap drives a real check: points left, cheapest remaining lineup, and whether this send keeps a
