@@ -26,6 +26,7 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 This table retains the existing acceptance IDs and the precise boundaries of verification; current status is maintained here only.
 
 | ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
+|---|---|---|---|
 | ROSTER-01 | Finalized data matches original eight-member proof; rebound native Lineup Lab and packet page 1 show the exact eight active members; closed test-copy hash matches artifact | Complete HTML/send output record checks and remaining affected states; preserve former-player history | DATA + SAMPLED NATIVE ROSTER VERIFIED; remaining outputs pending |
 | REFRESH-01 | New full-scope run finalized; old input and final DB hashes match provenance; prior non-current-session result/history rows preserved exactly | Retain final report/DB binding; preserve explicit partial coverage and review rebound artifacts, no automatic promotion | FINALIZED VERIFIED; partial/unaccepted |
 | QUALITY-01 | Nine prior player-match duplicates are zero; all nine failed matches rechecked and fetch failures zero | One prior failure is now unresolved_identity_partial; check new repeated H2H match scope and verified-payload exclusion/disclosure. No guessed merges | DUPLICATE/FETCH CASES VERIFIED; other quality gaps OPEN |
@@ -39,6 +40,8 @@ This table retains the existing acceptance IDs and the precise boundaries of ver
 | RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
 
 # GPT AUDIT NOTES
+
+2026-10-11 05:10 UTC: Claude has resumed executable work. New private PARITY-01 index reports agreement on one fixture's 64 8-Ball pairs (11 directed rows, nine pairs with direct evidence) against raw records and both exports. This is builder-reported pending independent reproduction; it does not establish actual recalculated formulas, global correctness or complete coverage. Source 35f6ff8 changes report/test naming, not the bound artifact production code. Builder print-size estimates do not establish native minimum-font guarantees or owner readability acceptance; retain the verified header cases and remaining preference/readability scope. New blind-send design 574edaa and uncommitted engine/test/UI work are aligned with Next Send priority but not audited or accepted yet. No unchanged checks rerun.
 
 Production simplification applied at Paul's request. GPT reviewed repository systematic-debugging, receiving-code-review and verification-before-completion skills. Applied requirements: trace final outputs before repair requests, independently evaluate feedback, verify original symptoms, and preserve evidence rather than manufacture repeated tests. Claude must document applicable skill use and executed results; GPT checks that evidence. The new report structure is a reporting change only, not acceptance of new feature behavior.
 
@@ -2326,7 +2329,7 @@ The UAT helper's new default `tmp\\uat` and lexical `GetFullPath` prefix check d
 
 # CLAUDE RESPONSES
 
-Claude: put current responses here, naming the relevant existing item, applicable skills, executed result, private evidence binding and next action/blocker. Historical branch notes remain evidence only. Do not copy stale status summaries into a new task list. Awaiting response to this production directive; no new completion inferred.
+Claude reports PRINT-01 estimates and a PARITY-01 record oracle in 35f6ff8, and documents skill use in integration report df98ef1. Current design 574edaa addresses choosing first without a known opponent; engine/UI implementation is progressing locally. Those are builder claims, not independent closure. Integration report current sections must point here rather than maintain another living status list; builder responses and assumptions belong in this report. Preserve named verified samples and continue decision-support work.
 
 # PENDING PAUL REVIEW
 
