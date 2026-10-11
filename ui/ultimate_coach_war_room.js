@@ -409,6 +409,33 @@
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
 
+  // ---- What a send costs for the rest of the night (mirrors analytics.send_cost) ----
+  // Next Send answers one pairing at a time, so the captain could not see what spending this
+  // player leaves him for the opponents still to come. Exact count over records already shown.
+  function wrSendCost(w,j,memberId,rem,unplayed){
+    var others=[],k;
+    for(k=0;k<w.blocks.length;k++) if(k!==j&&unplayed[k]) others.push(w.blocks[k]);
+    function covered(skip){
+      return others.filter(function(b){
+        return b.rows.some(function(r){
+          return r.category==="G"&&rem[String(r.member.id)]&&String(r.member.id)!==String(skip);});
+      }).map(function(b){return b.opponent.name;});
+    }
+    var before=covered(null),still=covered(memberId),
+        lost=before.filter(function(n){return still.indexOf(n)===-1;});
+    return {others:others.length,before:before.length,after:still.length,lost:lost};
+  }
+
+  function wrCostText(w,j,memberId,rem,unplayed){
+    var c=wrSendCost(w,j,memberId,rem,unplayed);
+    // Only say it when there IS a cost. "Leaves 2 of 2 covered" on every candidate is noise, and
+    // noise on this card costs height a phone does not have -- it pushed Open risks off a Safari
+    // screen. Silence here means nothing is given up.
+    if(!c.others||!c.lost.length) return "";
+    return "costs your only favorable option vs "+c.lost.join(", ")
+      +" · leaves "+c.after+" of "+c.others+" covered";
+  }
+
   // The Next Send card: chips for every unplayed opponent (the one they put up), then the responses.
   function wrNextSendCard(w,plan){
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
@@ -430,8 +457,10 @@
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.medals.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
-      +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)+'</span>'
+      +ns.medals.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
+        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
+        +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
       +(function(){

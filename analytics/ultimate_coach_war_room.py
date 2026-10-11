@@ -645,6 +645,36 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
             "unranked": False, "weak": top["favorable"] == 0 and top["even"] == 0,
             "ranked": ranked, "opponents_left": n}
 
+def send_cost(war_room: dict[str, Any], j: int, member_id: Any, *,
+              remaining: set[Any] | None = None,
+              unplayed: list[bool] | None = None) -> dict[str, Any]:
+    """What spending this player on opponent j costs for the rest of the night.
+
+    Next Send answers one pairing at a time, so a captain choosing between two candidates could
+    not see what the choice leaves him for the opponents still to come. The existing "consider
+    saving" flag only fires in the extreme case -- when a player is our SOLE favorable option
+    against someone else -- and between that and silence there was nothing.
+
+    This counts, exactly: of the other unplayed opponents, how many have a favorable direct
+    option among our remaining players now, and how many still would once this player is gone.
+    No model and no prediction of their lineup; it is arithmetic over records already shown.
+    """
+    blocks = war_room["blocks"]
+    remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
+    unplayed = [True] * len(blocks) if unplayed is None else unplayed
+    after = remaining - {member_id}
+    others = [b for k, b in enumerate(blocks) if k != j and unplayed[k]]
+
+    def covered(pool: set[Any]) -> list[str]:
+        return [b["opponent"]["name"] for b in others
+                if any(r["category"] == "G" and r["member"]["id"] in pool for r in b["rows"])]
+
+    before, still = covered(remaining), covered(after)
+    lost = [n for n in before if n not in still]
+    return {"others": len(others), "covered_before": len(before), "covered_after": len(still),
+            "lost": lost}
+
+
 def next_send_lines(ns: dict[str, Any]) -> list[str]:
     """Plain-text Next Send lines shared by the HTML (cross-checked) and Excel/packet texts."""
     lines = [ns["headline"]]

@@ -81,6 +81,8 @@ button.secondary:hover { background:var(--felt-soft); }
 .tonight h2 { margin:0 0 4px; font-size:19px; }
 .tonight .when { font-weight:800; font-size:16px; }
 .tonight .vs { font-size:15px; margin:2px 0 8px; }
+.ns-cost { display:block; font-size:12px; color:#5B6A61; margin-top:1px; }
+@media (max-width:620px){ body.match-night .ns-cost { font-size:11px; } }
 .ns-hypothetical { margin:2px 0 6px; font-size:12px; color:#8a6d3b; background:#fdf6e3;
   border-left:3px solid #d9b870; padding:4px 8px; border-radius:4px; }
 @media (max-width:620px){ body.match-night .ns-hypothetical { display:none; } }

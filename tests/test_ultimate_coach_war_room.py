@@ -6,6 +6,7 @@ from analytics.ultimate_coach_matchup_evidence import build_pair_index
 from analytics.ultimate_coach_war_room import (
     blind_send,
     lineup_budget,
+    send_cost,
     CATEGORY_LABELS,
     build_local_date,
     category,
@@ -605,3 +606,40 @@ def test_blind_send_still_recommends_when_the_leader_actually_has_evidence():
     out = blind_send(wr)
     assert out["member"] is not None and out["unranked"] is False, out
     assert out["direct_coverage"] >= 1, out
+
+
+# Next Send: what a send COSTS for the rest of the night. The "consider saving" flag only fires
+# in the extreme case -- when a player is our sole favorable option against someone still to
+# come. Between that and silence a captain had nothing.
+
+
+def test_send_cost_reports_coverage_before_and_after_the_send():
+    """Sending Bea vs Pip costs our only favorable option against Opal.
+
+    The captain should see the size of that, not just a flag: how many of the other unplayed
+    opponents still have a favorable option once this player is spent.
+    """
+    wr = _war_room()
+    pip = next(j for j, b in enumerate(wr["blocks"]) if b["opponent"]["name"] == "Pip")
+    bea = next(m for m in wr["ours"] if m["name"] == "Bea")
+    cost = send_cost(wr, pip, bea["id"])
+    assert cost["others"] == 2                      # Opal and Quin are still unplayed
+    assert cost["covered_before"] == 1              # only Opal has a favorable option (Bea)
+    assert cost["covered_after"] == 0               # and she is the one being spent
+    assert cost["lost"] == ["Opal"], cost
+
+
+def test_send_cost_is_zero_when_the_player_is_nobody_last_favorable_option():
+    wr = _war_room()
+    pip = next(j for j, b in enumerate(wr["blocks"]) if b["opponent"]["name"] == "Pip")
+    cal = next(m for m in wr["ours"] if m["name"] == "Cal")
+    cost = send_cost(wr, pip, cal["id"])
+    assert cost["lost"] == [] and cost["covered_after"] == cost["covered_before"], cost
+
+
+def test_send_cost_ignores_opponents_already_played():
+    wr = _war_room()
+    pip = next(j for j, b in enumerate(wr["blocks"]) if b["opponent"]["name"] == "Pip")
+    bea = next(m for m in wr["ours"] if m["name"] == "Bea")
+    cost = send_cost(wr, pip, bea["id"], unplayed=[False, True, True])   # Opal already played
+    assert cost["others"] == 1 and cost["lost"] == [], cost

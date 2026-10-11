@@ -1540,3 +1540,26 @@ def test_blind_card_never_calls_an_unknown_lead_an_even_record(tmp_path: Path):
             assert errors == []
         finally:
             browser.close()
+
+
+def test_a_recommended_send_says_when_it_costs_coverage_elsewhere(tmp_path: Path):
+    """Next Send answers one pairing at a time; the captain could not see what it costs later.
+
+    A recommendation that spends our only favorable option against an opponent still to come
+    must say so at the point of decision. A send that gives up nothing says nothing — silence
+    is the signal, because a line on every candidate is noise this card has no room for.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            costs = page.locator("#next-send .ns-cost")
+            for i in range(costs.count()):
+                text = costs.nth(i).inner_text().lower()
+                assert "costs your only favorable option vs" in text, text
+                assert "covered" in text, text
+                for banned in ("%", "odds", "probability", "chance"):
+                    assert banned not in text, (banned, text)
+            assert errors == []
+        finally:
+            browser.close()
