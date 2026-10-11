@@ -985,8 +985,13 @@ def test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause(bu
     assert (ll.row_dimensions[9].height or 15) >= need, (ll.row_dimensions[9].height, need, warning)
 
     # The two team-scope warnings above it carry the same shape and the same fixed height.
-    teams = [str(c.value) for c in built["Teams"]["A"][1:] if c.value] if "Teams" in built.sheetnames else []
-    worst_team = max(teams, key=len) if teams else "A Reasonably Long Team Name · Fall 2026 · 8-Ball"
+    # The realistic domain is Match Day's fixture, i.e. the schedule -- not every team in the
+    # workbook. The real candidate's Teams sheet holds a 327-character outlier, and sizing for
+    # that made these rows 144pt of mostly empty space.
+    teamcols = [head.index(n) for n in ("Team", "Opponent") if n in head]
+    labels = [str(row[i]) for row in sched.iter_rows(min_row=2, values_only=True)
+              for i in teamcols if i < len(row) and row[i]]
+    worst_team = max(labels, key=len) if labels else "A Reasonably Long Team Name"
     for row, text in ((5, f"⚠ Match Day shows {worst_team} — these marks are NOT applied there."),
                       (6, f"⚠ Match Day’s opponent is {worst_team} — opponent marks are NOT applied there.")):
         need = _wrapped_lines(text, status_width, 11) * 11 * 1.2

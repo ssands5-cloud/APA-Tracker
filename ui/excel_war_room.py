@@ -1924,14 +1924,22 @@ def _longest_plan_key(wb) -> str:
 
 
 def _longest_team_label(wb) -> str:
-    """The longest team label this workbook can show (Teams sheet), or a long generic one."""
+    """The longest team label these warnings can actually show, or a long generic one.
+
+    They quote wr_OurLabel / wr_OppLabel, which follow Match Day's fixture, so the realistic
+    domain is the schedule rather than every team in the workbook. That matters: the Teams
+    sheet on the real candidate holds a 327-character label, and sizing three rows for it made
+    them 144pt -- nearly two inches of empty space on screen for a case the fixture warnings
+    cannot reach. The schedule's longest is 24 characters.
+    """
     labels = []
-    if "Teams" in wb.sheetnames:
-        ws = wb["Teams"]
+    if "Schedule" in wb.sheetnames:
+        ws = wb["Schedule"]
         head = [c.value for c in ws[1]]
-        if "Team" in head:
-            col = head.index("Team") + 1
-            labels = [str(v) for (v,) in ws.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True) if v]
+        cols = [head.index(n) for n in ("Team", "Opponent") if n in head]
+        if cols:
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                labels += [str(row[i]) for i in cols if i < len(row) and row[i]]
     return max(labels, key=len) if labels else WORST_TEAM_LABEL
 
 
