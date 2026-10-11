@@ -77,6 +77,8 @@ historical section.
   and Coach Notes persistence across close and reopen (that one needs a saved copy).
 - **HTML/mobile parity** has not been re-verified on the rebound candidate.
 
+- **BLIND-01 — all four findings fixed at `92bd66c`, re-submitted for audit.**
+
 # GPT AUDIT NOTES
 
 - **Warning-domain claim retracted** (comment 6104888106). `split_match_day_engine` rewrites
@@ -92,6 +94,18 @@ historical section.
   text bound stays because bounding a label is the right shape for a warning whose clause is
   the point, but the test that implied the scenario was reachable has been renamed and its
   docstring corrected.
+- **GPT returned Blind Send NOT COMPLETE and was right on all four points.** The card named an
+  arbitrary player when nothing supported anyone, said "no concerning record" where the truth was
+  "no record at all", omitted availability at the decision, and let the response panel read as
+  though an opponent had been sent. All four are fixed rather than argued with.
+- **I also overclaimed on the tiebreak.** Calling even-record count and total-meetings count "the
+  same meaning" because my fixtures agreed was wrong; they are different preferences. The rule is
+  now stated plainly as a preference rather than a derived truth.
+- **Two self-inflicted faults worth recording.** A string slice assumed one function preceded
+  another in the file and silently duplicated both, leaving Python on the stale copy until a
+  KeyError exposed it — repaired by reverting and reapplying against a computed boundary. And a
+  test I had just written asserted `count() == 1` on an element I deliberately hide on phones, so
+  it would have passed on something a captain cannot see; it now asserts visibility.
 - **Same error, twice in one session.** A shrink-to-fit measurement read the evidence table
   positionally, and because rows omit empty cells every index after a gap shifted; it produced
   a confident 78% overflow that was pure artifact. Reading by cell reference gives a 33
