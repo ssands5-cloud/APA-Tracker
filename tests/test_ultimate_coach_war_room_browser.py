@@ -1514,3 +1514,29 @@ def test_response_panel_does_not_pretend_they_have_put_someone_up(tmp_path: Path
             assert errors == []
         finally:
             browser.close()
+
+
+def test_blind_card_never_calls_an_unknown_lead_an_even_record(tmp_path: Path):
+    """BLIND-01 boundary on the phone: unknown must not be rendered as evidence of safety.
+
+    Marking the candidates who hold records Unavailable leaves a player with none at the top of
+    the ranking. He only outranks the rest because they have LOSING records, so the card must
+    say unranked/unknown rather than inventing "even vs 0 of 2".
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            for pid in ("1", "3"):                 # leave the player with no direct evidence on top
+                sel = f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]'
+                if page.locator(sel).count():
+                    page.select_option(sel, "Unavailable")
+            card = page.locator("#tonight .blind-send")
+            if card.count():
+                text = card.inner_text().lower()
+                assert "even vs 0" not in text, text
+                if "unranked" in text or "not safer" in text:
+                    assert "no evidence-backed pick" in text or "unknown" in text, text
+            assert errors == []
+        finally:
+            browser.close()

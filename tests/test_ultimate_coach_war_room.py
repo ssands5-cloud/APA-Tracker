@@ -577,3 +577,31 @@ def test_blind_send_counts_opponents_we_have_no_direct_record_against():
     wr = _war_room()
     out = blind_send(wr)
     assert out["direct_coverage"] == 1 and out["no_record"] == 2, out
+
+
+def test_blind_send_will_not_dress_an_unknown_player_up_as_an_even_record():
+    """BLIND-01 boundary: a candidate with NO record outranks one with a concerning record.
+
+    Sorting by fewest-concerning puts a player nobody has ever recorded above a player with a
+    losing record, so the card named him and described it as "even vs 0 of 2". There is no even
+    record there — there is no record at all. Unknown is not evidence of a safer lead, and it
+    must not be printed as though it were.
+    """
+    wr = _war_room()
+    keep = {m["id"] for m in wr["ours"] if m["name"] in ("Ann", "Cal")}
+    out = blind_send(wr, remaining=keep, unplayed=[True, False, True])
+    # Cal has nothing recorded vs Opal or Quin; Ann has a concerning record vs Opal.
+    assert out["unranked"] is True, out
+    assert out["member"] is None, out
+    why = out["why"].lower()
+    assert "even vs 0" not in why, out["why"]
+    assert "unknown" in why and "not safer" in why, out["why"]
+    assert "concerning" in why, out["why"]      # the tradeoff is named, not hidden
+
+
+def test_blind_send_still_recommends_when_the_leader_actually_has_evidence():
+    """The guard must not swallow a genuine recommendation."""
+    wr = _war_room()
+    out = blind_send(wr)
+    assert out["member"] is not None and out["unranked"] is False, out
+    assert out["direct_coverage"] >= 1, out

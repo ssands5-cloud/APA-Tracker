@@ -611,16 +611,25 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
                     key=lambda s: (s["concerning"], -s["favorable"], -s["even"], s["order"]))
     n = len(live)
 
-    # Nothing recorded for or against anyone: name no one and say why. Kept short on purpose --
-    # this sits above the fold on a phone, and a longer honest sentence pushed Open risks off a
-    # Safari screen once already.
-    if not any(s["direct_coverage"] for s in ranked):
+    # If the leading candidate holds no direct record at all, we are not recommending him -- he
+    # simply sorted above players who have a LOSING record. Unknown is not evidence of a safer
+    # lead, so it is never dressed up as one ("even vs 0 of 2" was the shape of that bug). Name
+    # nobody, and say what the alternatives actually look like so the tradeoff is visible.
+    # Kept short on purpose: this sits above the fold on a phone.
+    top = ranked[0]
+    if not top["direct_coverage"]:
+        bad = sum(1 for x in ranked if x["concerning"])
+        known = sum(1 for x in ranked if x["direct_coverage"])
         out = dict(empty)
-        out.update(ranked=ranked, opponents_left=n, no_record=n,
-                   why=f"nothing recorded either way vs any of {n} — your read decides")
+        if not known:
+            why = f"nothing recorded either way vs any of {n} — your read decides"
+        else:
+            why = (f"no record either way for our best-placed option — unknown, not safer"
+                   + (f" · {bad} of your remaining have a concerning record" if bad else "")
+                   + " · unranked, your read decides")
+        out.update(ranked=ranked, opponents_left=n, no_record=n, why=why)
         return out
 
-    top = ranked[0]
     gap = f" · no direct record vs {top['no_record']}" if top["no_record"] else ""
     if top["concerning"]:
         why = (f"{top['concerning']} concerning of {n} — best available, not good{gap}"

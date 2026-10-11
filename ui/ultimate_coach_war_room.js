@@ -324,14 +324,21 @@
     ranked.forEach(function(x){x.coverage=x.concerning+x.favorable+x.even;x.gap=live.length-x.coverage;});
     ranked.sort(function(a,b){
       return a.concerning-b.concerning || b.favorable-a.favorable || b.even-a.even || a.order-b.order;});
-    var n=live.length;
-    // Nothing recorded for or against anyone: naming the first roster player implies an edge that
-    // does not exist, and contradicts the response panel below it (BLIND-01). Kept short: this
-    // sits above the fold on a phone.
-    if(!ranked.filter(function(x){return x.coverage>0;}).length)
+    var n=live.length,t=ranked[0];
+    // If the leading candidate holds no direct record at all he is not a recommendation -- he just
+    // sorted above players with a LOSING record. Unknown is not evidence of a safer lead and must
+    // never be printed as one ("even vs 0 of 2" was that bug). Name nobody and show the tradeoff.
+    // Kept short: this sits above the fold on a phone (BLIND-01).
+    if(!t.coverage){
+      var known=ranked.filter(function(x){return x.coverage>0;}).length,
+          bad=ranked.filter(function(x){return x.concerning>0;}).length;
       return {member:null,unranked:true,weak:true,
-        why:"nothing recorded either way vs any of "+n+" — your read decides"};
-    var t=ranked[0],gap=t.gap?" · no direct record vs "+t.gap:"",why;
+        why:known?("no record either way for our best-placed option — unknown, not safer"
+                   +(bad?" · "+bad+" of your remaining have a concerning record":"")
+                   +" · unranked, your read decides")
+                : ("nothing recorded either way vs any of "+n+" — your read decides")};
+    }
+    var gap=t.gap?" · no direct record vs "+t.gap:"",why;
     if(t.concerning) why=t.favorable===0
         ? t.concerning+" concerning of "+n+" — best available, not good"+gap
         : t.favorable+" favorable, "+t.concerning+" concerning of "+n+gap;

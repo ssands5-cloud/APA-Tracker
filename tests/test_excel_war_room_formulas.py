@@ -1135,3 +1135,22 @@ def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built,
     book.set(LL, "C12", "Unavailable")
     moved = str(book.display(CP, f"C{label}"))
     assert moved != text, moved
+
+
+def test_packet_never_prints_an_unknown_lead_as_an_even_record(built, book):
+    """BLIND-01 boundary, printed side: "even vs 0 of 2" is not evidence, it is no evidence.
+
+    A candidate with no direct record sorts above one with a losing record, so the packet named
+    him and dressed the absence up as an even record. It must say unranked/unknown instead, and
+    name the tradeoff rather than implying unknown is safer.
+    """
+    label = _row(built, CP, "IF WE PUT UP FIRST")
+    # Leave only a player with no direct evidence and one with a concerning record.
+    for row, mark in ((13, "Unavailable"), (14, "Unavailable")):
+        book.set(LL, f"C{row}", mark)
+    text = str(book.display(CP, f"C{label}"))
+    assert "even vs 0" not in text, text
+    if "unranked" in text.lower() or "unknown, not safer" in text.lower():
+        assert "not safer" in text.lower(), text
+    else:                                   # still evidenced: then it must carry real coverage
+        assert " of " in text, text
