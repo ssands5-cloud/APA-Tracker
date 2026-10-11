@@ -486,7 +486,8 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
                     assert js == next_send_lines(next_send(py, j, remaining=ids, unplayed=unplayed)), (j, remaining)
             card = page.locator("#tonight #next-send")
             text = card.inner_text()
-            assert "WHO SHOULD I SEND NEXT?" in text.upper() and "They put up:" in text
+            # "If they put up:" until the captain taps the opponent they actually sent (BLIND-01 #4).
+            assert "WHO SHOULD I SEND NEXT?" in text.upper() and "they put up:" in text.lower()
             assert "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
             assert text.count("availability unknown") == 2                     # said at the action, still eligible
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
@@ -1485,6 +1486,31 @@ def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(t
             txt = page.locator("#tonight .lineup-budget").inner_text()
             assert "cannot field a legal lineup" in txt.lower(), txt
             assert "bad" in page.locator("#tonight .lineup-budget").get_attribute("class")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_response_panel_does_not_pretend_they_have_put_someone_up(tmp_path: Path):
+    """BLIND-01 #4: the panel preselects an opponent, which read as though they had sent him.
+
+    It still has to show something useful, but before the captain taps a chip it must say the
+    response is a possibility, not a fact.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            note = page.locator("#next-send .ns-hypothetical")
+            assert note.count() == 1 and note.first.is_visible(), (
+                "an unchosen opponent must be labelled as hypothetical, and visibly so")
+            assert "nobody put up yet" in note.inner_text().lower(), note.inner_text()
+            assert "if they put up" in page.locator("#next-send .ns-ask").inner_text().lower()
+
+            # Once the captain taps the opponent they really sent, it becomes a statement of fact.
+            page.locator("#next-send .ns-chip").first.click()
+            assert page.locator("#next-send .ns-hypothetical").count() == 0
+            assert page.locator("#next-send .ns-ask").inner_text().lower().startswith("they put up")
             assert errors == []
         finally:
             browser.close()

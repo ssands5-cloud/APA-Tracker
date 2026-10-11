@@ -407,13 +407,20 @@
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
-    if(sel===undefined) sel=open[0];
+    // Nobody has been put up yet: the panel still has to show something, but it must not read as
+    // though they HAVE sent this player. Say it is a possibility until the captain taps a chip
+    // (BLIND-01 #4).
+    var chosen=sel!==undefined;
+    if(!chosen) sel=open[0];
     var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel],note=wrCoachSummary(opp.id);
     // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
     var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
     return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
-      +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">They put up:</span>'
+      +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
+        +esc(opp.name)+'. Tap who they actually put up.</p>')
+      +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
+      +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.medals.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
       +ns.medals.map(function(m){return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
