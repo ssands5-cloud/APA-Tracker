@@ -1,5 +1,18 @@
 # Overnight Coach Advantage Report
 
+> **Acceptance status lives elsewhere.** The authoritative current ledger is the
+> "Current acceptance ledger" section of this report on `origin/codex/audit-pr83-privacy`
+> (audit `a06585d`), maintained by Jeeves:
+> <https://github.com/ssands5-cloud/APA-Tracker/blob/codex/audit-pr83-privacy/docs/overnight_coach_advantage_report.md#current-acceptance-ledger>
+>
+> This file is the builder's log: what I executed, measured and got wrong, in date order.
+> It is reference history and deliberately keeps no competing status table. Completion has
+> five separate stages -- defect proved, source fix verified, data fix applied, bound
+> outputs verified, native acceptance complete -- and nothing here promotes a source fix to
+> an accepted outcome. Only the ledger says what is accepted; the latest issue #84 comments
+> and Paul's own instructions take precedence over both.
+
+
 ## Claude Build Notes
 Date: 2026-09-16
 
