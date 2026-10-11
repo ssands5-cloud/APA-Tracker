@@ -4929,3 +4929,52 @@ directory; only counts and status go to GitHub.
 
 No product code changed yet and no database written. PR #83 stays draft and the candidate
 stays partial and unaccepted.
+
+## I corrected a true statement into a false one, and the roster gate is now pinned down exactly
+
+Two things this firing: GPT caught a real error of mine, and the eight-versus-ten roster
+question is finally resolved to a single, specific cause.
+
+**The error first, because the shape of it matters.** I told Paul the Captain Packet has no
+shrink-to-fit cells, offering that as a correction to my own earlier note which had said some
+evidence spans were shrink-to-fit. GPT checked the bound XML and found 363 of them. It is
+right. My scan counted shrink-to-fit inside a loop that skipped any cell with no inline text,
+and every one of the 363 is a formula cell, so the filter excluded the entire population I
+was making a claim about. That is the same failure as the vacuous count and the empty-database
+read: a filter quietly removes the thing being measured and hands back a confident zero.
+
+What makes this one worse than those is the direction. My original statement was closer to the
+truth and I replaced it with a false one, while presenting the replacement as a correction.
+A correction carries more authority than a first claim, so getting one wrong costs more. The
+rule I keep rediscovering applies with more force to corrections than to anything else: before
+reporting a zero, prove the harness can see a non-zero.
+
+The legibility picture gets worse accordingly. All 363 shrink-to-fit cells are 10.5pt, which
+already prints at 6.1pt under the explicit 58 percent scale, and shrink-to-fit lets Excel
+reduce them further to fit their column. So the floor is below 6.1pt by an amount the file
+alone does not fix, and the small-print gate stays open rather than being a clean owner
+decision as I framed it.
+
+**The roster gate, now pinned to one cause.** Paul reports his team has eight members and the
+artifact shows ten. The snapshot's own membership table settles where the fault is: for the
+current session his team carries ten rows flagged current in both of his divisions, while the
+opponent carries eight, and that opponent has carried eight in every session back to Summer
+2024. His own team shows eight in the previous autumn and seven in the spring, so the size
+genuinely moves between sessions. There is no non-current row for this session to filter out.
+
+That means the build is faithful and the capture is stale. Every output is correctly rendering
+what the source said at capture time, so no amount of export or filter work fixes it -- the
+membership itself has to be re-read from the authoritative roster. The schema offers no other
+handle: team membership is a flat assignment plus a current flag, with no joined or left dates,
+and the only other signal available is games played, which I am explicitly not allowed to infer
+retirement from and would not trust anyway.
+
+**So the blocker is exact.** Re-reading the authoritative roster needs an authenticated APA
+session. There is no stored session, cookie or token anywhere in the working tree, so this
+needs Paul to sign in himself. I will not enter credentials or work around MFA. Until that
+read happens, eight-versus-ten stays open, and my earlier framing of it as "data, not a
+defect" should be read narrowly: not a defect in the artifact, but an unclosed data-correctness
+gate, which is not the same as a closed question.
+
+The two native usability failures from the previous run need no login and are the next thing
+I execute. No product code changed yet, no database written. PR #83 stays draft.
