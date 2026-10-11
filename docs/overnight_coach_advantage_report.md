@@ -1,5 +1,7 @@
 # CURRENT PRIORITIES
 
+**Delegated acceptance authority:** Paul delegates routine implementation verification and technical acceptance to Claude and GPT. Claude may mark technical work VERIFIED COMPLETE with executed evidence. GPT independently audits and may confirm completion; reopen only for new evidence, a new defect, failed verification or regression. If both agree and evidence exists, move forward. Do not ask Paul to repeat workbook/Excel/HTML/render/packet/browser/mobile/screenshot/formula/regression/native Excel validation. Owner review is reserved for strategic preferences, competing UX choices and merge/production-release/publication approvals. Existing exact-path destructive-cleanup and installation gates remain separate.
+
 Paul explicitly authorizes Claude to execute workbook/HTML/packet testing, formula/layout/render/navigation/matrix/mobile/browser verification, native Excel inspections, screenshot generation/review, candidate rebuilds and relevant regression tests without repeated approval. These are implementation and quality verification, not owner-review dependencies. Do not stop solely because Excel verification remains. Reproduce a defect, fix it, verify the original behavior, document the result and continue. Preserve no-unchanged-rerun scope and actual tool/login restrictions; authorization does not bypass them.
 
 Latest overnight mission: move Ultimate Coach as close to production-ready as possible while Paul is unavailable. Continue authorized builder/auditor work without waiting for preference or UAT; document assumptions under PENDING PAUL REVIEW and move to the next executable item. Synchronize Git references without overwriting concurrent work, read this report/new commits, perform useful changed work, and commit/push meaningful updates. Do not manufacture commits for unchanged cycles.
@@ -47,6 +49,8 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+Delegated technical acceptance applied at Paul's request. Executed builder evidence may support VERIFIED COMPLETE; independent GPT confirmation can close technical work without owner repetition. Do not infer completion from a claim alone, and do not create additional process gates or reopen verified work without new evidence/defect, failed verification or regression. Previously reviewed verification/review skills support this evidence-based scope.
 
 Excel validation authority clarified by Paul: native Excel, screenshots, formulas, packet layout, HTML/mobile/browser checks, rebuilds and relevant regressions are routine authorized execution. They are not PENDING PAUL REVIEW. Apply the reviewed debugging/verification skills to reproduce -> fix -> verify -> document -> continue; preserve actual tool restrictions and separate release gates. No new acceptance claim or test rerun is implied by this reporting update.
 
@@ -2378,5 +2382,5 @@ Claude reports PRINT-01 estimates and a PARITY-01 record oracle in 35f6ff8, and 
 
 # PENDING PAUL REVIEW
 
-- Subjective visual preferences, strategic choices between alternatives, tournament workflow preferences and final owner acceptance only. Routine workbook/HTML/native testing belongs to executable work, not this section. Implement/document reasonable assumptions and continue independent work.
-- Final release acceptance, merge, real-data publication, automatic refresh installation and exact-path destructive cleanup remain separate owner approvals. Do not classify unresolved arithmetic/data defects as mere visual preferences.
+- Strategic preference decisions, competing UX choices and tournament workflow preferences requiring owner judgment. Routine technical acceptance is delegated to Claude/GPT and does not require repeated owner validation.
+- Merge, production release and publication approvals; previously separate automatic-refresh installation and exact-path destructive-cleanup gates remain. Technical correctness and routine validation are executable Claude/GPT responsibilities, not preferences waiting for Paul.
