@@ -1,5 +1,7 @@
 # CURRENT PRIORITIES
 
+Audit emphasis, per Paul's latest instruction: **captain usability -> decision support -> match-night workflow -> production readiness -> technical acceptance**. For a meaningful changed workflow, ask whether it helps Paul choose whom to send, reduces decision time and improves captain advantage. Evaluate recommendation visibility, actionable explanations and the steps needed during a match. Report observed behavior; do not claim measured speed or improved outcomes without evidence. Technical checks support those decisions and release gates, rather than becoming open-ended investigations. Do not pull Claude back into closed work without new evidence.
+
 Paul's production sprint simplification is the current directive. The goal is to answer **Who should I put up next?** Present recommendation, then explanation, then evidence. HTML is the primary match-night interface; Excel is for planning and power users.
 
 Claude builds; GPT audits. This report on `origin/codex/audit-pr83-privacy` is the single living source of truth. Other branch reports are reference-only and point here. Issues and PRs carry pointers/coordination, not parallel current ledgers. Check latest commits, this report and branch status every 15-20 minutes; unchanged state is not a reason to repeat verification.
@@ -40,6 +42,8 @@ This table retains the existing acceptance IDs and the precise boundaries of ver
 | RELEASE-01 | PR #83/#86 draft, existing candidate partial/unaccepted, no merge/publication/cleanup authorized | Update stale PR/evidence status to this ledger and current bindings; obtain separate approval only for final merge/real publication/destructive cleanup | HELD |
 
 # GPT AUDIT NOTES
+
+Paul changed audit emphasis to usability and decision support first. Applied the previously reviewed repository verification/review skills: preserve unchanged evidence, distinguish observed usability from assumed advantage, and scope checks to relevant changed captain workflows. This changes audit prioritization only; no correctness gate is silently closed and no new status system is created.
 
 2026-10-11 05:10 UTC: Claude has resumed executable work. New private PARITY-01 index reports agreement on one fixture's 64 8-Ball pairs (11 directed rows, nine pairs with direct evidence) against raw records and both exports. This is builder-reported pending independent reproduction; it does not establish actual recalculated formulas, global correctness or complete coverage. Source 35f6ff8 changes report/test naming, not the bound artifact production code. Builder print-size estimates do not establish native minimum-font guarantees or owner readability acceptance; retain the verified header cases and remaining preference/readability scope. New blind-send design 574edaa and uncommitted engine/test/UI work are aligned with Next Send priority but not audited or accepted yet. No unchanged checks rerun.
 
