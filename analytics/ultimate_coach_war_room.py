@@ -467,7 +467,15 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
                 "reason": r["reason"], "tied_with": tied,
                 "save": f"consider saving — our only favorable direct option vs {', '.join(save)}" if save else "",
             })
-    unordered = [{"member": r["member"], "player": r["player"], "reason": r["reason"]}
+    # The save warning belongs here too, not only on medals. With no direct record to order,
+    # every candidate shows as "≈ not ordered" -- and picking one off that list is exactly when
+    # a captain can unknowingly spend his only favorable option against an opponent still to come.
+    def _save_for(member_id: Any) -> str:
+        names = only_green.get(member_id)
+        return f"consider saving — our only favorable direct option vs {', '.join(names)}" if names else ""
+
+    unordered = [{"member": r["member"], "player": r["player"], "reason": r["reason"],
+                  "save": _save_for(r["member"]["id"])}
                  for r in rows if r["category"] == "I"]
     # Worst recorded direct record first: the reverse of the ranking order.
     avoid = [{"member": r["member"], "player": r["player"], "reason": r["reason"]}
@@ -553,16 +561,26 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     answer at all. This fills it WITHOUT predicting their lineup: it ranks our remaining players
     by what is already recorded against the opponents still unplayed.
 
-    Worst case first (maximin), because leading into a player we hold a losing record against is
-    the one outcome a captain can actually avoid here; coverage second. Nothing is weighted,
-    blended or turned into odds, and a player with no record is unknown, never weak -- so a pick
-    resting on nothing says so instead of reading like a confident call.
+    The order is fewest concerning direct records, then most favorable, then most even direct,
+    then roster order. That is a stated preference rather than a derived truth: it assumes a
+    captain leading blind would rather dodge a known bad matchup than chase a known good one.
+    The third key was changed from total meetings to even-record count so the workbook can
+    compute the same ranking from its category grid; those two are DIFFERENT preferences that
+    happen to agree on our fixtures, not equivalent rules (GPT, BLIND-01).
+
+    Two things it refuses to do, both from that audit. It will not name anybody when nothing is
+    recorded for or against any candidate, because naming the first player in roster order
+    implies an edge that does not exist and contradicts the response panel below it. And it
+    never says "no concerning record" without saying how much of the remaining field we actually
+    hold a direct record against: silence about an opponent is missing evidence, not a clean
+    sheet.
     """
     blocks = war_room["blocks"]
     remaining = {m["id"] for m in war_room["ours"]} if remaining is None else remaining
     unplayed = [True] * len(blocks) if unplayed is None else unplayed
     live = [b for b, open_ in zip(blocks, unplayed) if open_]
     empty = {"member": None, "why": "", "concerning": 0, "favorable": 0, "even": 0,
+             "direct_coverage": 0, "no_record": len(live), "unranked": True,
              "weak": True, "ranked": [], "opponents_left": len(live)}
     if not live or not remaining:
         return empty
@@ -570,8 +588,8 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     by_member: dict[Any, dict[str, Any]] = {}
     for order, m in enumerate(war_room["ours"]):
         if m["id"] in remaining:
-            by_member[m["id"]] = {"member": m, "order": order, "concerning": 0, "favorable": 0,
-                                  "even": 0}
+            by_member[m["id"]] = {"member": m, "order": order, "concerning": 0,
+                                  "favorable": 0, "even": 0}
     for block in live:
         for r in block["rows"]:
             stat = by_member.get(r["member"]["id"])
@@ -585,29 +603,38 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
                 stat["even"] += 1
     if not by_member:
         return empty
+    for stat in by_member.values():
+        stat["direct_coverage"] = stat["concerning"] + stat["favorable"] + stat["even"]
+        stat["no_record"] = len(live) - stat["direct_coverage"]
 
     ranked = sorted(by_member.values(),
                     key=lambda s: (s["concerning"], -s["favorable"], -s["even"], s["order"]))
-    top = ranked[0]
     n = len(live)
-    opp = f"{n} they have left" if n != 1 else "the 1 they have left"
+
+    # Nothing recorded for or against anyone: name no one and say why. Kept short on purpose --
+    # this sits above the fold on a phone, and a longer honest sentence pushed Open risks off a
+    # Safari screen once already.
+    if not any(s["direct_coverage"] for s in ranked):
+        out = dict(empty)
+        out.update(ranked=ranked, opponents_left=n, no_record=n,
+                   why=f"nothing recorded either way vs any of {n} — your read decides")
+        return out
+
+    top = ranked[0]
+    gap = f" · no direct record vs {top['no_record']}" if top["no_record"] else ""
     if top["concerning"]:
-        why = (f"{top['concerning']} concerning record among {opp} -- the best available, not a good one"
+        why = (f"{top['concerning']} concerning of {n} — best available, not good{gap}"
                if top["favorable"] == 0 else
-               f"{top['favorable']} favorable and {top['concerning']} concerning among {opp}")
+               f"{top['favorable']} favorable, {top['concerning']} concerning of {n}{gap}")
     elif top["favorable"]:
-        why = f"no concerning record vs any of {opp} · {top['favorable']} favorable"
-    elif top["even"]:
-        why = (f"no concerning record vs any of {opp}, on "
-               f"{top['even']} even direct record{'' if top['even'] == 1 else 's'}")
+        why = f"favorable vs {top['favorable']} of {n}{gap}"
     else:
-        why = (f"little recorded evidence either way vs {opp} -- a weak recommendation, "
-               "not a strong pick")
+        why = f"even vs {top['even']} of {n}{gap}"
     return {"member": top["member"], "why": why, "concerning": top["concerning"],
             "favorable": top["favorable"], "even": top["even"],
-            "weak": top["favorable"] == 0 and top["even"] == 0,
+            "direct_coverage": top["direct_coverage"], "no_record": top["no_record"],
+            "unranked": False, "weak": top["favorable"] == 0 and top["even"] == 0,
             "ranked": ranked, "opponents_left": n}
-
 
 def next_send_lines(ns: dict[str, Any]) -> list[str]:
     """Plain-text Next Send lines shared by the HTML (cross-checked) and Excel/packet texts."""
@@ -619,7 +646,8 @@ def next_send_lines(ns: dict[str, Any]) -> list[str]:
     if ns["more"]:
         lines.append(f"+ {plural(ns['more'], 'more direct candidate')} below the top three")
     for u in ns["unordered"]:
-        lines.append(f"≈ {u['player']} — {u['reason']}")
+        lines.append(f"≈ {u['player']} — {u['reason']}"
+                     + (f" · {u['save']}" if u.get("save") else ""))
     for a in ns["avoid"]:
         lines.append(f"⚠ Avoid {a['player']} — {a['reason']}")
     if ns["unknown"]:

@@ -234,8 +234,11 @@ def test_next_send_medals_only_ordered_direct_candidates_and_lists_avoid_and_unk
     assert next_send_lines(pip) == [
         "Best-supported response: Cal",
         "🥇 Cal (APA record ID 1003) — 1-1 direct record (2 meetings) — even",
+        # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
+        # who has not played. Sending her off this unordered list used to cost that silently.
         "≈ Bea (APA record ID 1002) — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
-        "opponent (no verified direct meetings in this snapshot)",
+        "opponent (no verified direct meetings in this snapshot) · consider saving — our only favorable "
+        "direct option vs Opal",
         "❓ Unknown (no verified evidence, not weak): Ann (APA record ID 1001)"]
     quin = next_send(wr, 2)
     assert quin["medals"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
@@ -433,11 +436,16 @@ def test_blind_send_excludes_players_we_marked_unavailable():
 
 
 def test_blind_send_says_plainly_when_the_recommendation_rests_on_almost_nothing():
-    """A pick with no recorded record either way must not read like a confident call."""
+    """A pick with no recorded record either way must not read like a confident call.
+
+    Superseded by BLIND-01: this used to name a player and call the pick weak. Naming the first
+    player in roster order implies an edge that does not exist, so it now names nobody at all.
+    """
     wr = _war_room()
     out = blind_send(wr, unplayed=[False, False, True])   # only Quin left; nobody has evidence vs Quin
-    assert out["weak"] is True, out
-    assert "little recorded evidence" in out["why"].lower(), out["why"]
+    assert out["weak"] is True and out["unranked"] is True, out
+    assert out["member"] is None, out
+    assert "nothing recorded either way" in out["why"].lower(), out["why"]
 
 
 def test_blind_send_returns_nothing_to_recommend_when_no_one_is_left():
@@ -502,3 +510,70 @@ def test_lineup_budget_checks_whether_sending_one_player_keeps_a_legal_lineup():
     assert tight["sending_keeps_legal"] is True
     blown = lineup_budget(wr, cap=8, slots=2, played={}, sending=ann["id"])   # 5 + 4 = 9 > 8
     assert blown["sending_keeps_legal"] is False
+
+
+def test_save_warning_reaches_shared_opponent_candidates_not_only_medalled_ones():
+    """The moment a captain is most blind is the moment the warning went missing.
+
+    With no direct record against this opponent every candidate shows as "≈ not ordered".
+    Picking one off that list can burn the only favorable direct option against an opponent
+    still to come, and the "consider saving" flag was attached to medals only -- so in exactly
+    that situation the product said nothing.
+
+    Here: Bea is shared-opponent-only against Pip, and she is our ONLY favorable direct record
+    against Opal, who has not played yet.
+    """
+    wr = _war_room()
+    pip = next(j for j, b in enumerate(wr["blocks"]) if b["opponent"]["name"] == "Pip")
+    ns = next_send(wr, pip)
+    bea = next((u for u in ns["unordered"] if u["member"]["name"] == "Bea"), None)
+    assert bea is not None, [u["member"]["name"] for u in ns["unordered"]]
+    assert bea.get("save"), "sending Bea here costs our only favorable option vs Opal"
+    assert "Opal" in bea["save"], bea["save"]
+
+
+def test_save_warning_is_absent_when_nothing_would_be_given_up():
+    """It must not cry wolf: a candidate who is nobody's last favorable option carries no flag."""
+    wr = _war_room()
+    pip = next(j for j, b in enumerate(wr["blocks"]) if b["opponent"]["name"] == "Pip")
+    ns = next_send(wr, pip, unplayed=[False, True, True])   # Opal already played
+    for u in ns["unordered"]:
+        assert not u.get("save"), (u["member"]["name"], u.get("save"))
+
+
+# BLIND-01 audit findings (GPT, issue #84): the lead card named an arbitrary player when
+# nothing supported anyone, and read "no concerning record" when the truth was "no record".
+
+
+def test_blind_send_names_nobody_when_no_evidence_supports_any_lead():
+    """With nothing recorded either way, naming the first roster player implies an edge.
+
+    The response panel below already says "no evidence-backed option". The lead answer must
+    agree instead of contradicting it with an arbitrary name.
+    """
+    wr = _war_room()
+    out = blind_send(wr, unplayed=[False, False, True])    # only Quin left; nobody has any record
+    assert out["member"] is None, out
+    assert out["unranked"] is True
+    assert "nothing recorded either way" in out["why"].lower(), out["why"]
+
+
+def test_blind_send_states_direct_coverage_so_missing_evidence_is_not_read_as_safety():
+    """"No concerning record vs any of 3" is misleading when we only have a record against 1.
+
+    Silence about an opponent is not a clean sheet. The reason must say how much of the field
+    we actually have a direct record against.
+    """
+    wr = _war_room()
+    out = blind_send(wr)                                   # Bea: favorable vs Opal, nothing vs Pip/Quin
+    assert out["member"]["name"] == "Bea"
+    why = out["why"].lower()
+    assert "1 of the 3" in why or "1 of 3" in why, out["why"]
+    assert "no direct record" in why, out["why"]
+    assert "no concerning record vs any of" not in why, out["why"]
+
+
+def test_blind_send_counts_opponents_we_have_no_direct_record_against():
+    wr = _war_room()
+    out = blind_send(wr)
+    assert out["direct_coverage"] == 1 and out["no_record"] == 2, out

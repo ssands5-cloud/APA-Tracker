@@ -127,9 +127,9 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.match-night nav.sections { margin-top:6px; }
   /* Match night on a phone: the lead answer must not push Open risks off a short Safari screen.
      The label moves inline so the card costs one line instead of two. */
-  body.match-night .blind-send { margin:4px 0 6px; padding:6px 9px; gap:1px 7px; border-left-width:5px; }
+  body.match-night .blind-send { margin:3px 0 4px; padding:5px 9px; gap:0 7px; border-left-width:5px; }
   body.match-night .blind-send .bs-label { width:auto; }
-  body.match-night .blind-send .bs-name { font-size:17px; }
+  body.match-night .blind-send .bs-name { font-size:16px; line-height:1.1; }
   body.match-night .blind-send .bs-why { font-size:11.5px; width:100%; }
   body.match-night .lineup-budget { margin-top:4px; padding-top:4px; font-size:11.5px; }
   /* Status as two short text lines instead of pills; the UTC stamp repeats the date (shown on the lock screen). */

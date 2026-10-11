@@ -281,7 +281,9 @@
           tied_with:group.filter(function(o){return o!==r;}).map(function(o){return o.member.name;}),
           save:save?"consider saving — our only favorable direct option vs "+save.join(", "):""});});
     });
-    var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){return {member:r.member,player:r.player,reason:r.reason};};
+    var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){var sv=onlyGreen[String(r.member.id)];
+      return {member:r.member,player:r.player,reason:r.reason,
+              save:sv?"consider saving — our only favorable direct option vs "+sv.join(", "):""};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return r.player;});
     var headline=medals.length?"Best-supported response: "+medals[0].member.name+(medals[0].tied_with.length?" or "+medals[0].tied_with.join(", ")+" (tied)":"")
@@ -293,7 +295,7 @@
     var lines=[ns.headline];
     ns.medals.forEach(function(m){lines.push(m.medal+" "+m.player+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
     if(ns.more) lines.push("+ "+plural(ns.more,"more direct candidate")+" below the top three");
-    ns.unordered.forEach(function(u){lines.push("≈ "+u.player+" — "+u.reason);});
+    ns.unordered.forEach(function(u){lines.push("≈ "+u.player+" — "+u.reason+(u.save?" · "+u.save:""));});
     ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.player+" — "+a.reason);});
     if(ns.unknown.length) lines.push("❓ Unknown (no verified evidence, not weak): "+ns.unknown.join(", "));
     return lines;
@@ -316,19 +318,26 @@
     if(!any) return null;
     live.forEach(function(b){ b.rows.forEach(function(r){
       var st=stats[r.member.id]; if(!st) return;
-      var cat=r.category;
-      if(cat==="R") st.concerning++; else if(cat==="G") st.favorable++; else if(cat==="E") st.even++;
+      if(r.category==="R") st.concerning++; else if(r.category==="G") st.favorable++; else if(r.category==="E") st.even++;
     });});
-    var ranked=Object.keys(stats).map(function(k){return stats[k];}).sort(function(a,b){
+    var ranked=Object.keys(stats).map(function(k){return stats[k];});
+    ranked.forEach(function(x){x.coverage=x.concerning+x.favorable+x.even;x.gap=live.length-x.coverage;});
+    ranked.sort(function(a,b){
       return a.concerning-b.concerning || b.favorable-a.favorable || b.even-a.even || a.order-b.order;});
-    var t=ranked[0],n=live.length,opp=n===1?"the 1 they have left":n+" they have left",why;
+    var n=live.length;
+    // Nothing recorded for or against anyone: naming the first roster player implies an edge that
+    // does not exist, and contradicts the response panel below it (BLIND-01). Kept short: this
+    // sits above the fold on a phone.
+    if(!ranked.filter(function(x){return x.coverage>0;}).length)
+      return {member:null,unranked:true,weak:true,
+        why:"nothing recorded either way vs any of "+n+" — your read decides"};
+    var t=ranked[0],gap=t.gap?" · no direct record vs "+t.gap:"",why;
     if(t.concerning) why=t.favorable===0
-        ? t.concerning+" concerning record among "+opp+" — the best available, not a good one"
-        : t.favorable+" favorable and "+t.concerning+" concerning among "+opp;
-    else if(t.favorable) why="no concerning record vs any of "+opp+" · "+t.favorable+" favorable";
-    else if(t.even) why="no concerning record vs any of "+opp+", on "+plural(t.even,"even direct record");
-    else why="little recorded evidence either way vs "+opp+" — a weak recommendation, not a strong pick";
-    return {member:t.member,why:why,weak:t.favorable===0&&t.even===0};
+        ? t.concerning+" concerning of "+n+" — best available, not good"+gap
+        : t.favorable+" favorable, "+t.concerning+" concerning of "+n+gap;
+    else if(t.favorable) why="favorable vs "+t.favorable+" of "+n+gap;
+    else why="even vs "+t.even+" of "+n+gap;
+    return {member:t.member,why:why,unranked:false,weak:t.favorable===0&&t.even===0};
   }
 
   // ---- Lineup budget (mirrors analytics.lineup_budget) ----
@@ -380,10 +389,16 @@
   function wrBlindSendCard(w,plan,ta){
     var b=wrBlindSend(w,plan);
     if(!b) return "";
+    if(b.unranked)
+      return '<div class="blind-send weak"><span class="bs-label">If we put up first</span>'
+        +'<b class="bs-name">No evidence-backed pick</b>'
+        +'<span class="bs-why">'+esc(b.why)+'</span></div>'+wrBudgetLine(w,plan,ta,null);
+    // Unknown availability is said AT the decision, not only in the response card below.
+    var av=wrAvail(plan.ck,b.member.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';
     return '<div class="blind-send'+(b.weak?" weak":"")+'">'
       +'<span class="bs-label">If we put up first</span>'
       +'<b class="bs-name">'+esc(b.member.name)+'</b>'
-      +'<span class="bs-why">'+esc(b.why)+'</span></div>'
+      +'<span class="bs-why">'+esc(b.why)+av+'</span></div>'
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
 
@@ -407,7 +422,7 @@
       +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
       +(function(){
         // With medals, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+avail(u.member));}).join("");
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
           +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
         if(!ns.medals.length) return unord+rest+'</ul>';

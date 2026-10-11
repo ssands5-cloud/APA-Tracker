@@ -1123,7 +1123,11 @@ def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built,
     assert " — " in text, text
     name, why = text.split(" — ", 1)
     assert name.strip() in (ANN, BEA, DEE), text          # one of ours, named outright
-    assert "they have left" in why, why                   # says what the claim is scoped to
+    # BLIND-01: the reason must carry its own coverage, so silence about an opponent can never
+    # be read as safety, and must say availability at the decision rather than only below it.
+    assert " of " in why, why                             # how many of the field we have a record against
+    assert "no direct record vs" in why or "concerning" in why, why
+    assert "availability unknown" in why or "Unknown" not in why, why
     for banned in ("%", "odds", "probability", "chance"):
         assert banned not in why.lower(), (banned, why)
 

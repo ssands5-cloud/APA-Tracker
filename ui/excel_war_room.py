@@ -598,13 +598,20 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         # A player we are not sending gets no key at all rather than a losing one.
         ("wr_BlindKey", lambda k, r: f'=IF(AND(INDEX(wr_OurRemaining,{k}),wr_UnplayedCount>0),'
                                      f'B{r}*10000-C{r}*100-D{r},"")'),
+        # Opponents we hold ANY direct record against. Silence is missing evidence, not safety,
+        # so the reason below never claims "none concerning" without this beside it (BLIND-01).
+        ("wr_BlindCov", lambda k, r: f'=IF(INDEX(wr_OurRemaining,{k}),B{r}+C{r}+D{r},"")'),
     ])
     # No opponents left to face, or nobody left to send: no recommendation rather than a wrong one.
     e.cell("wr_BlindBest", "Blind send key",
            '=IF(OR(wr_UnplayedCount=0,wr_RemainingCount=0),"",MIN(wr_BlindKey))')
     e.cell("wr_BlindIdx", "Blind send row", '=IF(wr_BlindBest="","",MATCH(wr_BlindBest,wr_BlindKey,0))')
-    e.cell("wr_BlindName", "Blind send player", '=IF(wr_BlindIdx="","",INDEX(wr_OurLabels,wr_BlindIdx))')
-    e.cell("wr_BlindWhy", "Blind send reason", '=IF(wr_BlindIdx="","",IF(INDEX(wr_BlindR,wr_BlindIdx)>0,IF(INDEX(wr_BlindG,wr_BlindIdx)=0,INDEX(wr_BlindR,wr_BlindIdx)&" concerning among the "&wr_UnplayedCount&" they have left"&" — the best available, not a good one",INDEX(wr_BlindG,wr_BlindIdx)&" favorable and "&INDEX(wr_BlindR,wr_BlindIdx)&" concerning among the "&wr_UnplayedCount&" they have left"),IF(INDEX(wr_BlindG,wr_BlindIdx)>0,"no concerning record vs any of the "&wr_UnplayedCount&" they have left"&" · "&INDEX(wr_BlindG,wr_BlindIdx)&" favorable",IF(INDEX(wr_BlindE,wr_BlindIdx)>0,"no concerning record vs any of the "&wr_UnplayedCount&" they have left"&", on "&INDEX(wr_BlindE,wr_BlindIdx)&" even direct","little recorded evidence either way vs the "&wr_UnplayedCount&" they have left"&" — a weak recommendation, not a strong pick"))))')
+    e.cell("wr_BlindUnranked", "Blind send unranked",
+           '=IF(wr_BlindIdx="",TRUE,MAX(wr_BlindCov)=0)')
+    # Naming the first player in roster order implies an edge that does not exist (BLIND-01).
+    e.cell("wr_BlindName", "Blind send player",
+           '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),"",INDEX(wr_OurLabels,wr_BlindIdx))')
+    e.cell("wr_BlindWhy", "Blind send reason", '=IF(wr_BlindIdx="","",IF(wr_BlindUnranked,"nothing recorded either way vs any of "&wr_UnplayedCount&" — your read decides",IF(INDEX(wr_BlindR,wr_BlindIdx)>0,IF(INDEX(wr_BlindG,wr_BlindIdx)=0,INDEX(wr_BlindR,wr_BlindIdx)&" concerning of "&wr_UnplayedCount&" — best available, not good"&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),""),INDEX(wr_BlindG,wr_BlindIdx)&" favorable, "&INDEX(wr_BlindR,wr_BlindIdx)&" concerning of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),"")),IF(INDEX(wr_BlindG,wr_BlindIdx)>0,"favorable vs "&INDEX(wr_BlindG,wr_BlindIdx)&" of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),""),"even vs "&INDEX(wr_BlindE,wr_BlindIdx)&" of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),"")))))')
     # Captain Packet evidence list: where each opponent's rows start in one continuous, packed list.
     e.block("Packet evidence start", R, [
         ("wr_PkStart", lambda k, r: "=1" if k == 1 else f"=B{r - 1}+INDEX(wr_OppCount,{k - 1})"),
@@ -1577,7 +1584,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # packet assumes we already know who they put up, and when WE lead there is nobody to look up.
     r += 1
     _span(ws, r, 1, 2, "IF WE PUT UP FIRST", font=font(9, bold=True, color="5B6A61"))
-    _span(ws, r, 3, 12, '=IF(wr_BlindName="","Every opponent has already played.",wr_BlindName&" — "&wr_BlindWhy)',
+    _span(ws, r, 3, 12,
+          '=IF(wr_UnplayedCount=0,"Every opponent has already played.",'
+          'IF(wr_BlindName="","No evidence-backed pick — "&wr_BlindWhy,'
+          'wr_BlindName&" — "&wr_BlindWhy&'
+          'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")))',
           font=font(12, bold=True, color=base.FELT_DEEP))
     h(r, 30)
     r += 1
