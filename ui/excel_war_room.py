@@ -1320,6 +1320,16 @@ def split_match_day_engine(wb) -> None:
     md.sheet_state = "hidden" if src.sheet_state == "hidden" else src.sheet_state
 
 
+# A War Room override accepts ANY Teams_Table label (wr_OurValid/wr_OppValid are a COUNTIF over
+# that column, ui/excel_war_room.py:419-424), so these warnings can be asked to quote the real
+# candidate's 327-character label. Sizing the row for that made it 144pt of mostly empty space;
+# sizing it for the schedule's 24 characters clipped the override case (GPT, issue #84 comment
+# 6104357111 -- confirmed against the source, my "follows Match Day" reasoning was wrong). So bound
+# the TEXT: the label is context, the clause saying the marks are NOT applied is the point, and a
+# clipped row loses the clause while a clipped label loses nothing that matters.
+LABEL_CLIP = 60
+
+
 def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, default_opp: str | None,
                      default_date: str | None = None) -> None:
     R = slots["roster"]
@@ -1331,10 +1341,10 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
                             "sheet and on the War Room.", last=6, current="Lineup Lab")
     rows = [(5, "Planning for our team", default_team or "", "TeamNameList",
              '=IF(ll_OurTeamOK,"✓ Matches Match Day’s team.",IF(ll_OurTeam="","Name the team you are planning for.",'
-             '"⚠ Match Day shows "&IF(wr_OurLabel="","no team",wr_OurLabel)&" — these marks are NOT applied there."))'),
+             '"⚠ Match Day shows "&IF(LEN(IF(wr_OurLabel="","no team",wr_OurLabel))>60,LEFT(IF(wr_OurLabel="","no team",wr_OurLabel),59)&"…",IF(wr_OurLabel="","no team",wr_OurLabel))&" — these marks are NOT applied there."))'),
             (6, "Planning for opponent", default_opp or "", "TeamNameList",
              '=IF(ll_OppOK,"✓ Matches Match Day’s opponent.",IF(ll_OppTeam="","Name the opponent team.","⚠ Match Day’s opponent is "&'
-             'IF(wr_OppLabel="","none",wr_OppLabel)&" — opponent marks are NOT applied there."))'),
+             'IF(LEN(IF(wr_OppLabel="","none",wr_OppLabel))>60,LEFT(IF(wr_OppLabel="","none",wr_OppLabel),59)&"…",IF(wr_OppLabel="","none",wr_OppLabel))&" — opponent marks are NOT applied there."))'),
             (7, "Reference skill cap (optional)", "", None,
              '="Your own reference number (e.g. your division rule). Never assumed, never applied automatically."')]
     for r, label, value, source, status in rows:
@@ -1346,8 +1356,10 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         # Excel never auto-fits a FORMULA row, so a fixed height silently clips the longer
         # branch. The mismatch warnings are the whole point of these cells, so size them for
         # the widest team label this workbook can actually name (native run 2026-10-11).
+        # The quoted label is clipped to LABEL_CLIP in the formulas above, so this worst case holds
+        # for ANY label the data or a War Room override can produce.
         ws.row_dimensions[r].height = _worst_height(
-            f"⚠ Match Day’s opponent is {_longest_team_label(wb)} — opponent marks are NOT applied there.",
+            "⚠ Match Day’s opponent is " + "W" * LABEL_CLIP + " — opponent marks are NOT applied there.",
             status_width, 11, 30)
     _span(ws, 8, 1, 6, "Marks are for ONE fixture (below, ending in its match number). Pick another fixture on Match Day "
                        "— even later the same day — and these marks stop applying (it says so). Clear them, pick the new "

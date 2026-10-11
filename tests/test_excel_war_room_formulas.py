@@ -1067,3 +1067,37 @@ def test_captain_packet_scale_is_never_smaller_than_its_own_pagination_allows(bu
     assert len(splits) == 2, splits
     for b in splits:
         assert cp.cell(row=b + 1, column=1).value == "Opponent (APA record ID)", b
+
+
+def test_a_long_team_override_still_shows_the_marks_are_not_applied_clause(built):
+    """A War Room override accepts ANY Teams_Table label, including a pathological one.
+
+    wr_OurValid / wr_OppValid are a COUNTIF over Teams_Table[Team], so wr_OurLabel can become
+    any label in the workbook — the real candidate holds a 327-character one. Sizing the row
+    for that made it 144pt of dead space; sizing it for the schedule's 24 characters clipped
+    this override case (GPT, issue #84 comment 6104357111 — correct, and my "follows Match
+    Day" reasoning was wrong). The label is clipped in the formula instead, so the clause that
+    actually matters survives any label at a fixed row height.
+    """
+    from ui.excel_war_room import LABEL_CLIP
+
+    ll = built[LL]
+    for row in (5, 6):
+        formula = str(ll.cell(row=row, column=4).value)
+        assert "NOT applied" in formula, (row, formula[:120])
+        assert f"LEN(" in formula and f"LEFT(" in formula and str(LABEL_CLIP) in formula, (
+            row, "the quoted label must be clipped, or a long override clips the clause instead")
+
+    # The row is sized for the clipped worst case, so no label can overflow it.
+    from openpyxl.utils import get_column_letter
+    width = sum(ll.column_dimensions[c].width or 8.43 for c in "DEF")
+    worst = "⚠ Match Day’s opponent is " + "W" * LABEL_CLIP + " — opponent marks are NOT applied there."
+    need = _wrapped_lines(worst, width, 11) * 11 * 1.2
+    for row in (5, 6):
+        assert (ll.row_dimensions[row].height or 15) >= need, (row, ll.row_dimensions[row].height, need)
+
+    # The bound is on the TEXT, so no label length can change the rendering: the formula shows at
+    # most LABEL_CLIP characters (LABEL_CLIP-1 plus an ellipsis) however long the real label is.
+    for row in (5, 6):
+        assert f"LEFT(" in str(ll.cell(row=row, column=4).value)
+        assert f",{LABEL_CLIP - 1})" in str(ll.cell(row=row, column=4).value), row
