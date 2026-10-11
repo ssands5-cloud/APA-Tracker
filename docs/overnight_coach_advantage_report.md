@@ -1,5 +1,17 @@
 # CURRENT PRIORITIES
 
+Latest overnight mission: move Ultimate Coach as close to production-ready as possible while Paul is unavailable. Continue authorized builder/auditor work without waiting for preference or UAT; document assumptions under PENDING PAUL REVIEW and move to the next executable item. Synchronize Git references without overwriting concurrent work, read this report/new commits, perform useful changed work, and commit/push meaningful updates. Do not manufacture commits for unchanged cycles.
+
+1. Finish Blind Send / We Put Up First completely, including **HTML and Captain Packet support**, addressing the observed BLIND-01 limitations.
+2. Refine Next Send into a clear answer/reason/avoid component, with remaining opponents visible and honest direct/shared/unknown labels.
+3. Surface dangerous opponents with the reason and short evidence summary.
+4. Put Quick Read before detailed scouting analysis, including limited evidence and missing coach observations.
+5. Integrate Coach Observation into scouting, threats, packet and next send, distinct from APA evidence.
+6. Keep the existing matrix; provide Captain View and Evidence View with meaningful favorable/limited/unknown/concerning colors.
+7. Refine Tonight, War Room, Lineup Lab and mobile match-night usability. HTML is primary; Excel is planning/power-user.
+
+Production blockers to resolve when present: #VALUE! errors, missing matrix colors, packet header defects, clipped printed content and remaining meaningful polish defects. This is not an instruction to reopen already-verified cases without new evidence. Audit captain usability, decision speed, match-night usefulness, readiness and captain advantage rather than paperwork. Do not imply stronger evidence, ranked shared-only choices or guaranteed advantage merely from illustrative wording.
+
 Paul's FOUNDATION FREEZE supersedes earlier foundation-investigation priorities. For planning, acquisition, identity, team/roster management, historical/direct/shared evidence engines and Match Day/Command Center/Lineup Lab/Captain Packet/HTML/mobile architectures are COMPLETE unless a proven defect is discovered. Do not spend significant effort proving they exist, redesigning them or building verification frameworks. Preserve known limitations honestly without turning them into recurring foundation tasks.
 
 Refine unanswered captain decisions: who to lead, send, avoid, save; who is dangerous; what is unknown; what lineup risks remain. Claude identifies the decision gap, implements the smallest useful solution, tests it, updates this report, requests audit and moves on. GPT reviews captain value and focused changed behavior. No new process loop, tracking system or ledger.
@@ -33,6 +45,8 @@ Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Kee
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+Paul's overnight directive applied: blind-lead scope now explicitly includes HTML and packet. Continue focused product-gap audits under the foundation freeze; use previously reviewed repository skills for relevant changes, record executed evidence, preserve closed cases and keep assumptions pending owner review rather than waiting. No new tracker or verification framework. Draft/merge/publication/installation/cleanup gates remain separate.
 
 Foundation freeze applied at Paul's direction. Previous foundation acceptance table is preserved below as reference, no longer an active execution queue. Known partial coverage and uncertainty remain truthful product limitations, not claims of complete data. Reopen foundation work only for a proven defect affecting a current captain decision. Previously reviewed repository debugging/review/verification skills apply to focused gap fixes; no new framework or unchanged reruns. Merge/publication/cleanup approvals remain separate.
 
