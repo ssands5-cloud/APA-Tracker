@@ -1545,21 +1545,36 @@ def test_blind_card_never_calls_an_unknown_lead_an_even_record(tmp_path: Path):
 def test_a_recommended_send_says_when_it_costs_coverage_elsewhere(tmp_path: Path):
     """Next Send answers one pairing at a time; the captain could not see what it costs later.
 
-    A recommendation that spends our only favorable option against an opponent still to come
-    must say so at the point of decision. A send that gives up nothing says nothing — silence
-    is the signal, because a line on every candidate is noise this card has no room for.
+    This test previously looped over .ns-cost elements that the stock fixture never produces, so
+    it passed without ever exercising a warning (GPT caught it). It now BUILDS the positive case:
+    Ann is the only favorable option against both Cam and Eve, so sending her at Cam spends the
+    one we hold against Eve, and the card has to say so.
     """
+    payload = _payload()
+    payload["evidence"] = payload["evidence"] + _games(1, 11, "WW")      # Ann beats Eve twice
+    path = tmp_path / "wr-cost.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"),
+                    encoding="utf-8")
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
-            page, errors = _page(tmp_path, browser)
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+
             costs = page.locator("#next-send .ns-cost")
-            for i in range(costs.count()):
-                text = costs.nth(i).inner_text().lower()
-                assert "costs your only favorable option vs" in text, text
-                assert "covered" in text, text
-                for banned in ("%", "odds", "probability", "chance"):
-                    assert banned not in text, (banned, text)
+            assert costs.count() >= 1, "the positive case must actually render a warning"
+            text = costs.first.inner_text().lower()
+            assert "favorable direct option" in text, text
+            assert "leaves" in text, text
+            # The save flag beside it names the opponent; the cost line must not repeat it.
+            assert "eve" not in text, ("the opponent is named once, by the save flag", text)
+            for banned in ("%", "odds", "probability", "chance"):
+                assert banned not in text, (banned, text)
+            # And the save flag is the thing that names who is given up.
+            assert "eve" in page.locator("#next-send .ns-save").first.inner_text().lower()
             assert errors == []
         finally:
             browser.close()

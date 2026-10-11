@@ -428,12 +428,12 @@
 
   function wrCostText(w,j,memberId,rem,unplayed){
     var c=wrSendCost(w,j,memberId,rem,unplayed);
-    // Only say it when there IS a cost. "Leaves 2 of 2 covered" on every candidate is noise, and
-    // noise on this card costs height a phone does not have -- it pushed Open risks off a Safari
-    // screen. Silence here means nothing is given up.
+    // Only say it when there IS a cost: "leaves 2 of 2" on every candidate is noise, and noise on
+    // this card costs height a phone does not have. Silence means nothing is given up.
+    // The save flag beside it already NAMES the opponent being given up, so this adds only the
+    // size of it -- saying the name twice in one line reads like two different problems (GPT).
     if(!c.others||!c.lost.length) return "";
-    return "costs your only favorable option vs "+c.lost.join(", ")
-      +" · leaves "+c.after+" of "+c.others+" covered";
+    return "leaves "+c.after+" of "+c.others+" with a favorable direct option";
   }
 
   // The Next Send card: chips for every unplayed opponent (the one they put up), then the responses.
