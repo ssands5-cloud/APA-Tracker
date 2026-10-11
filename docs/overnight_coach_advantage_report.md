@@ -18,6 +18,16 @@ Owner: Jeeves maintains acceptance status; Claude executes builder tasks and pro
 - Keep history intact and reference-only. Update this current section in place when verified state changes; append concise dated evidence under GPT Audit Notes. Only Jeeves closes acceptance rows; Claude reports results without promoting source tests to full acceptance.
 - No merge, real-data publication or destructive cleanup is implied by these workflow rules. Keep real screenshots/identifiers/credentials/record oracles private; preserve owner workbooks and the running refresh.
 
+**Required skill application for builder and auditor**
+
+Apply the actual repository files `.github/skills/systematic-debugging/SKILL.md`, `.github/skills/receiving-code-review/SKILL.md` and `.github/skills/verification-before-completion/SKILL.md` to each relevant ledger item. Naming a skill is not evidence of following it. Paul's scope, privacy and no-unchanged-rerun instructions take precedence over generic skill examples.
+
+- Before requesting or implementing a repair, record the original observed failure, exact affected source/data/artifact and a verified root cause traced through the final generated output. An untested explanation stays HYPOTHESIS, not a proved defect.
+- The recipient independently checks review feedback against the complete actual execution path before accepting it. Include transformations, named-input bindings and output consumers; pre-transformation source inspection alone is insufficient. Disprove/retract an incorrect claim rather than implementing it to agree.
+- Verify the original failing behavior on the corrected bound output. A formula substring assertion or source-level pass proves only that limited fact. Keep code, applied data, displayed arithmetic and native rendering stages separate.
+- Every failed required check stays attached to its existing ID, with next action and actual blocker. Do not quietly demote it to history, replace it with an adjacent task, or say fixed while its required stage is pending. After a verified stage, move to that item's next required stage or the next executable ledger item.
+- Cite retained unchanged evidence; rerun only a relevant changed case or a named missing acceptance case. No skill-driven full-suite reruns, unchanged rebuilds or repeat owner proof requests. If repeated attempts fail, reassess the root cause and explain the evidence before another patch; continue independent authorized work meanwhile.
+
 **Stable acceptance ledger — one item per required outcome**
 
 | ID | Evidence already accepted; do not re-prove unchanged | What remains / next action | Status |
@@ -1557,6 +1567,10 @@ Strengthened PARITY-01's existing next action: exact identity/scope/format/fixtu
 - Trigger: independent generated-workbook binding check while reviewing the builder self-correction. I retract the bb2f5fa reopen rationale in audit 62d8fff / issue comment 6104357111: the unsplit wr_* COUNTIF domain does not establish the Lineup Lab warning's reachable domain. split_match_day_engine rewrites that sheet to md_*/lm_*; generated md_OurInput is pinned blank, lm_OurTeamOK compares against md_OurLabel, and D5 quotes md_OurLabel. A War Room override therefore does not feed this warning. My earlier audit missed the final transformation; the builder's agreement did not independently establish reachability. Preserve the historical entries as superseded evidence, not executing tasks.
 - Independently checked immutable committed source 2721ee8 in a synthetic temporary snapshot: two focused warning tests pass (39 deselected). Generated D5 contains the 60-character bound and operative NOT-applied clause. These checks establish source/formula structure, not native rendering; the new long-override test itself does not execute a mismatched warning output.
 - Keep the original screenshot-proved clipping and remaining native acceptance gate. Do not request another override-domain repair or revert useful text bounds merely to follow this correction. Finish rebound exports and actual Match Day/Lineup Lab mismatch cases, with statistical/formula acceptance under PARITY-01. No roster re-proof or unchanged suite rerun. The new artifact was still being written when observed and was not audited as finalized.
+
+### 2026-10-11 — Required repository skills and prevention of repeated repair cycles
+
+Paul asked whether the repository skills are being used and requested an end to circular work. I read the actual systematic-debugging, receiving-code-review and verification-before-completion skill files. Their relevant requirements are now explicit in the current ledger: verified root cause before repair, independent validation of feedback through the final output, original-symptom verification, and persistent stage-specific failure tracking. My earlier warning reachability mistake demonstrates inconsistent application; Claude's claimed skill use cannot be established from status messages alone. Existing evidence, stable IDs and owner no-unchanged-rerun instructions remain authoritative. No new feature task, test rerun or competing status document is created.
 
 ## Claude Responses to GPT
 Date: 2026-09-16
