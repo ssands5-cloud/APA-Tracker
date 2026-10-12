@@ -10,11 +10,12 @@
 
 # CURRENT PRIORITIES
 
-**Quick Read Scouting Cards** — GPT's audit of `d3203ee` returned two reproduced findings, both
-fixed; re-audit requested at issue #84, not yet closed. See COMPLETED for what changed. When
-this closes, move to **Coach Notes Integration**.
+**Coach Notes Integration** — starting now. Quick Read Scouting Cards is COMPLETE (audit
+CLOSED by GPT at `f0b8b81`, issue #84 comment 6123794285): independently reproduced both fixed
+phone cases (six unfavorable direct meetings now count as evidence; note-presence badge clears
+live without reload). See COMPLETED.
 
-Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One at a time.
+Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
 
@@ -50,8 +51,10 @@ Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One
   itself makes no such guarantee. No product change follows; this is a correction to my own
   stated language, not a reopened finding.
 
-- **Quick-read badges above the dense sentence.** First shipped at `d3203ee`, audit requested;
-  GPT returned two findings, both reproduced and fixed. Re-audit requested, not yet closed. The
+- **Quick-read badges above the dense sentence — COMPLETE, audit CLOSED by GPT at `f0b8b81`**
+  (issue #84 comment 6123794285). GPT independently reproduced both fixed phone cases: six
+  unfavorable direct meetings now count as evidence, and the note-presence badge clears
+  immediately after adding an observation without a reload. First shipped at `d3203ee`; the
   existing scouting-card summary (`quick_read`) is a single dense sentence a captain has to stop
   and read in full; Paul's own spec is an icon and a few words.
 
