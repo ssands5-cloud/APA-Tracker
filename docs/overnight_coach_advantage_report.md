@@ -10,8 +10,9 @@
 
 # CURRENT PRIORITIES
 
-**Threat Panel** — gap closed at `0d1fb71`, audit requested, not yet closed. Next Send is
-COMPLETE (audited). When Threat Panel closes, move to **Quick Read Scouting Cards**.
+**Threat Panel** — wording correction at `f6c45d0` for GPT's safety-implication finding, audit
+re-requested, not yet closed. Next Send is COMPLETE (audited). When Threat Panel closes, move to
+**Quick Read Scouting Cards**.
 
 Then, in order: Quick Read Scouting Cards, Coach Notes Integration, Captain Matrix, Mobile
 match-night. One at a time.
@@ -31,14 +32,22 @@ match-night. One at a time.
   either way."* Unknown is never dressed up as safe, and a player is never named just because
   he sorted above someone with a losing record.
 
-- **Dangerous opponents, scoped to who is actually left tonight.** Audit requested at
-  `0d1fb71`, not yet closed. The old flag summed a win/loss record against our WHOLE roster's
+- **Dangerous opponents, scoped to who is actually left tonight.** Audit re-requested at
+  `f6c45d0`, not yet closed. The old flag summed a win/loss record against our WHOLE roster's
   history with an opponent, including players who are Unavailable or have already Played, so a
-  danger built entirely on a departed player's evidence read exactly like a live one. Now split
-  into LIVE (the record holds among players still remaining) and STALE (the old flag would have
-  fired, but only on evidence against someone no longer in play) — named explicitly either way,
-  never silently dropped: *"no longer a live risk: their 2-0 record is only against player(s)
-  not in tonight's remaining lineup."* Engine 49, browser 35, mobile 11, full suite 2389.
+  danger built entirely on a departed player's evidence read exactly like a live one.
+
+  First fix (`0d1fb71`) split this into LIVE vs STALE, but GPT caught two real problems with it:
+  "no longer a live risk" reads as a clearance the data does not support when the true state is
+  zero evidence, not safety; and the branch could fire even when partial live evidence existed
+  (just not winning), making an "only against departed players" claim that was sometimes false.
+
+  Corrected at `f6c45d0` into three outcomes: LIVE (winning record holds among players still
+  remaining, unchanged); UNKNOWN (reachable only when live evidence is exactly zero, worded
+  *"historically 2-0 vs our roster, but that record is only against player(s) not in tonight's
+  remaining lineup — unknown vs who is left, not cleared"*); or not flagged at all, because any
+  live evidence that exists and simply is not winning is real evidence of no danger, not an
+  unresolved case. Engine 50, browser 35, mobile 11, full suite 2390.
 
 - **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
   CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
