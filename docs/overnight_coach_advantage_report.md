@@ -10,9 +10,9 @@
 
 # CURRENT PRIORITIES
 
-**Quick Read Scouting Cards** — the feature in flight. Threat Panel and Next Send are both
-COMPLETE (audited, closed). Gap not yet identified; exploring the current Scouting Cards surface
-against Paul's priority wording ("quick read before detailed analysis") first.
+**Quick Read Scouting Cards** — gap closed at `d3203ee`, audit requested, not yet closed.
+Threat Panel and Next Send are both COMPLETE (audited, closed). When this closes, move to
+**Coach Notes Integration**.
 
 Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One at a time.
 
@@ -49,6 +49,24 @@ Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One
   flag's winning-record trigger, but that is not the same as a safety guarantee, and the product
   itself makes no such guarantee. No product change follows; this is a correction to my own
   stated language, not a reopened finding.
+
+- **Quick-read badges above the dense sentence.** Audit requested at `d3203ee`, not yet
+  closed. The existing scouting-card summary (`quick_read`) is a single dense sentence a
+  captain has to stop and read in full; Paul's own spec is an icon and a few words.
+
+  **Captain decision now supported:** can I tell, at a glance and before opening a card,
+  whether this evidence is worth trusting, whether there's a known weak spot, and whether I've
+  actually scouted this player myself? `quick_read_badges` reuses the SAME evidence quick_read
+  already computes (same category rule, same SL buckets) as a short badge row above the
+  sentence: *Strong/Limited direct evidence* (≥3 meetings), *Strong/Limited shared-opponent
+  evidence*, *No evidence on our roster*, *Weak against SL{n}*, *No coach observations*.
+
+  **Correction made along the way:** the missing-observations badge first updated live on every
+  keystroke, which broke three hardened opinion/evidence isolation-guard tests (GPT
+  fba0f15/f6dcb35/5b8e525) built specifically to catch a coach opinion silently moving anything
+  else on the page. Reverted rather than weaken that guard — the badge now updates on the same
+  cadence as every other quick-read fact (the next real render), not mid-keystroke. Engine 56,
+  browser 36, mobile 11, full suite 2397.
 
 - **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
   CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
