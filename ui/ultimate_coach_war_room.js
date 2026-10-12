@@ -225,7 +225,7 @@
     var greenOpps=0,sendOpps=0;w.theirs.forEach(function(o,j){if(!unplayed[j]) return;if(green[j]>0) greenOpps++;if(sends[j].length>0) sendOpps++;});
     var n=w.ours.length;
     return {ck:ck,rem:rem,unplayed:unplayed,sends:sends,risks:risks,unique:unique,
-      threats:w.threats.filter(function(c){return unplayed[c.j];}).slice(0,3),
+      threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}).slice(0,3),
       concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}).slice(0,5),
       metrics:[
         ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
@@ -409,6 +409,40 @@
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
 
+  // ---- Dangerous opponents, against who's actually left tonight (mirrors analytics.live_threats) ----
+  // The old flag summed a win/loss record across our WHOLE roster's history with an opponent,
+  // including players who are Unavailable or have already Played. A captain reading "dangerous"
+  // needs to know whether that danger is still live for the sends still ahead.
+  function wrLiveThreats(w,rem){
+    var out=[];
+    if(!Object.keys(rem).some(function(k){return rem[k];})) return out;
+    w.blocks.forEach(function(b,j){
+      var live=b.rows.filter(function(r){return r.c.direct&&rem[String(r.member.id)];});
+      var gone=b.rows.filter(function(r){return r.c.direct&&!rem[String(r.member.id)];});
+      var lw=0,lg=0;live.forEach(function(r){lw+=r.c.direct.g-r.c.direct.w;lg+=r.c.direct.g;});
+      var gw=0,gg=0;gone.forEach(function(r){gw+=r.c.direct.g-r.c.direct.w;gg+=r.c.direct.g;});
+      var tw=lw+gw,tg=lg+gg,dangerousLive=lg>0&&lw>lg-lw,dangerousOverall=tg>0&&tw>tg-tw;
+      if(dangerousLive) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:true,stale:false,
+        wins:lw,games:lg,playersMet:live.length,
+        // Full detail for the War Room risk panel, which has room; a compact line for Tonight,
+        // which does not -- a longer version of this exact text pushed Open risks off a 390x844
+        // Safari screen (the fourth time an addition here has done that).
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)",
+        short:b.opponent.name+" — "+wlText(lw,lg)+" vs our roster still in play"});
+      else if(dangerousOverall&&gg) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,stale:true,
+        wins:gw,games:gg,playersMet:gone.length,
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · no longer a live risk: their "+wlText(gw,gg)+" record is only against player(s) not in tonight's remaining lineup",
+        short:b.opponent.name+" — no longer a live risk"});
+    });
+    out.sort(function(a,b2){
+      if(a.stale!==b2.stale) return a.stale?1:-1;
+      var ka=a.games?(2*a.wins-a.games):0,kb=b2.games?(2*b2.wins-b2.games):0;
+      if(ka!==kb) return kb-ka;
+      return memberOrder(a.opponent,b2.opponent);
+    });
+    return out;
+  }
+
   // ---- What a send costs for the rest of the night (mirrors analytics.send_cost) ----
   // Next Send answers one pairing at a time, so the captain could not see what spending this
   // player leaves him for the opponents still to come. Exact count over records already shown.
@@ -520,7 +554,7 @@
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span>'+esc(t.opponent.name+" — "+wlText(t.their_wins,t.their_games)+" vs our roster ("+plural(t.their_games,"meeting")+")")+(n?wrNotePreview(n,"opinion"):'')+'</span>';}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.stale?' class="stale"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
@@ -561,7 +595,7 @@
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
-      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against our roster (unplayed only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.threat_text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a winning recorded record against our roster.")+'</div>'
+      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a live winning record against our remaining roster.")+'</div>'
       +'<div><h3>Avoid sends</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents).</p>'+wrList(plan.concerning.map(function(c){return c.text;}),"No concerning direct records among remaining pairings.")+'</div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix

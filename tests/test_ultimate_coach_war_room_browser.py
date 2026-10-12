@@ -92,7 +92,9 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert f"1. {ANN} — 2-0 (2)" in sends and f"2. {DEE} — 1-1 (2)" in sends
             assert f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)" in sends and f"1. {ANN} — ≈" not in sends
             risks = page.inner_text("#wr-risks")
-            assert f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players)" in risks
+            # Superseded wording: see the Threat Panel gap fix (live_threats) -- scoped to
+            # players still in tonight's lineup rather than our whole roster's history.
+            assert f"{EVE} · SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of our remaining players)" in risks
             assert f"{BEA} vs {CAM}: 0-2 direct (2 meetings)" in risks
             cells = page.locator("#wr-matrix .mcell")
             assert [cells.nth(i).inner_text() for i in range(6)] == [
@@ -242,7 +244,9 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 assert box and box["y"] < vp["height"] * 0.6, (vp, box)
                 text = page.inner_text("#tonight")
                 assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
-                assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text and "Eve Ellis — 2-0 vs our roster (2 meetings)" in text
+                assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text
+                # Superseded wording: see the Threat Panel gap fix (live_threats).
+                assert "Eve Ellis — 2-0 vs our roster still in play" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
                 assert "vs Eve Ellis: Ann Archer — ≈ shared-opponent only (the only shared-opponent candidate)" in text
                 assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
                 assert errors == []
@@ -1575,6 +1579,34 @@ def test_a_recommended_send_says_when_it_costs_coverage_elsewhere(tmp_path: Path
                 assert banned not in text, (banned, text)
             # And the save flag is the thing that names who is given up.
             assert "eve" in page.locator("#next-send .ns-save").first.inner_text().lower()
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_dangerous_opponents_reflects_who_is_actually_left_tonight(tmp_path: Path):
+    """Threat Panel gap: the old flag summed a record across our WHOLE roster's history,
+
+    including players who are Unavailable or have already Played. In the stock fixture, Eve
+    Ellis's entire "dangerous" record (2-0) is built on Dee alone (the only one of our players
+    who has ever met her). Marking Dee Unavailable must turn that from a live warning into an
+    explicit "no longer a live risk" rather than leaving a now-inaccurate claim on screen.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            before = page.locator("#tonight .decide-threats").inner_text()
+            assert "Eve" in before and "still in play" in before.lower(), before
+
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="3"]', "Unavailable")
+            after = page.locator("#tonight .decide-threats").inner_text()
+            assert "no longer a live risk" in after.lower(), after
+            assert "still in play" not in after.lower(), after
+            assert "Eve" in after, after      # named, not silently dropped
+
+            risks_panel = page.locator("#wr-risks").inner_text()
+            assert "no longer a live risk" in risks_panel.lower(), risks_panel
             assert errors == []
         finally:
             browser.close()

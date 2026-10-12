@@ -645,6 +645,60 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
             "unranked": False, "weak": top["favorable"] == 0 and top["even"] == 0,
             "ranked": ranked, "opponents_left": n}
 
+def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None) -> list[dict[str, Any]]:
+    """Dangerous opponents, evaluated against our roster AS IT STANDS TONIGHT.
+
+    The existing threat flag sums a win/loss record against our WHOLE roster's history with
+    that opponent, including players who are Unavailable or have already Played. A captain
+    reading "dangerous" needs to know whether that danger is still live for the sends still
+    ahead -- a record built entirely on a player no longer in tonight's lineup is not a risk
+    for what is left to decide.
+
+    Returns opponents who are either a LIVE threat (their winning record holds among players
+    still in play) or a STALE one (they looked dangerous only because of evidence against
+    players no longer available) -- named explicitly rather than silently dropped, so a captain
+    who remembers an opponent as dangerous is told why that is no longer true tonight.
+    """
+    ours_ids = {m["id"] for m in war_room["ours"]}
+    remaining = ours_ids if remaining is None else remaining
+    if not remaining:
+        return []
+    out: list[dict[str, Any]] = []
+    for block in war_room["blocks"]:
+        opp = block["opponent"]
+        live = [r for r in block["rows"] if r["direct"] and r["member"]["id"] in remaining]
+        gone = [r for r in block["rows"] if r["direct"] and r["member"]["id"] not in remaining]
+        live_wins = sum(r["direct"][1] - r["direct"][0] for r in live)
+        live_games = sum(r["direct"][1] for r in live)
+        gone_wins = sum(r["direct"][1] - r["direct"][0] for r in gone)
+        gone_games = sum(r["direct"][1] for r in gone)
+        total_wins, total_games = live_wins + gone_wins, live_games + gone_games
+        dangerous_live = bool(live_games) and live_wins > live_games - live_wins
+        # What the old, roster-wide flag would have said -- used only to detect the case where
+        # that flag depended entirely on evidence against a player no longer in play.
+        dangerous_overall = bool(total_games) and total_wins > total_games - total_wins
+        if dangerous_live:
+            out.append({
+                "opponent": opp, "label": block["opponent_label"], "live": True, "stale": False,
+                "wins": live_wins, "games": live_games, "players_met": len(live),
+                "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
+                        f"{record_text(live_wins, live_games)} vs our roster still in play "
+                        f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)",
+            })
+        elif dangerous_overall and gone_games:
+            out.append({
+                "opponent": opp, "label": block["opponent_label"], "live": False, "stale": True,
+                "wins": gone_wins, "games": gone_games, "players_met": len(gone),
+                "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
+                        "no longer a live risk: their "
+                        f"{record_text(gone_wins, gone_games)} record is only against player(s) "
+                        "not in tonight's remaining lineup",
+            })
+    out.sort(key=lambda c: (c["stale"], -(2 * c["wins"] - c["games"]) if c["games"] else 0,
+                            member_order_key(c["opponent"])))
+    return out
+
+
 def send_cost(war_room: dict[str, Any], j: int, member_id: Any, *,
               remaining: set[Any] | None = None,
               unplayed: list[bool] | None = None) -> dict[str, Any]:

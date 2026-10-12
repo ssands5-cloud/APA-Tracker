@@ -6,6 +6,7 @@ from analytics.ultimate_coach_matchup_evidence import build_pair_index
 from analytics.ultimate_coach_war_room import (
     blind_send,
     lineup_budget,
+    live_threats,
     send_cost,
     CATEGORY_LABELS,
     build_local_date,
@@ -643,3 +644,41 @@ def test_send_cost_ignores_opponents_already_played():
     bea = next(m for m in wr["ours"] if m["name"] == "Bea")
     cost = send_cost(wr, pip, bea["id"], unplayed=[False, True, True])   # Opal already played
     assert cost["others"] == 1 and cost["lost"] == [], cost
+
+
+# Threat Panel: "dangerous opponents" sums a win/loss record against our WHOLE roster's
+# history, including players who are Unavailable or have already Played. A captain reading
+# "dangerous" needs to know whether that danger is still live for the sends still ahead.
+
+
+def test_live_threats_drops_a_danger_built_only_on_a_player_no_longer_in_play():
+    """Opal beat Ann 3-0 and lost to Bea 1-2: aggregate 4-2, flagged dangerous today.
+
+    If Ann is no longer in tonight's lineup, Opal's only live evidence is the 1-2 LOSS to Bea.
+    She is not a live threat, and the captain should be told that plainly rather than carry a
+    stale warning or have it silently vanish.
+    """
+    wr = _war_room()
+    ann = next(m for m in wr["ours"] if m["name"] == "Ann")
+    live = {m["id"] for m in wr["ours"] if m["id"] != ann["id"]}
+    out = live_threats(wr, remaining=live)
+    opal = next((c for c in out if c["opponent"]["name"] == "Opal"), None)
+    assert opal is not None, out
+    assert opal["live"] is False and opal["stale"] is True, opal
+    assert "no longer a live risk" in opal["text"].lower(), opal["text"]
+    assert "ann" not in opal["text"].lower(), opal["text"]           # names the record, not the player
+
+
+def test_live_threats_keeps_a_danger_that_is_still_live():
+    """With everyone remaining, Opal's aggregate record (4-2) is still a live threat."""
+    wr = _war_room()
+    out = live_threats(wr)
+    opal = next((c for c in out if c["opponent"]["name"] == "Opal"), None)
+    assert opal is not None and opal["live"] is True and opal["stale"] is False, out
+    assert opal["wins"] == 4 and opal["games"] == 6, opal
+
+
+def test_live_threats_is_empty_when_nothing_is_dangerous_either_way():
+    wr = _war_room()
+    out = live_threats(wr, remaining=set())
+    assert out == []
