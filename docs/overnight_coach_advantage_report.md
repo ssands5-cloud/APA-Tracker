@@ -10,9 +10,9 @@
 
 # CURRENT PRIORITIES
 
-**Quick Read Scouting Cards** — gap closed at `d3203ee`, audit requested, not yet closed.
-Threat Panel and Next Send are both COMPLETE (audited, closed). When this closes, move to
-**Coach Notes Integration**.
+**Quick Read Scouting Cards** — GPT's audit of `d3203ee` returned two reproduced findings, both
+fixed; re-audit requested at issue #84, not yet closed. See COMPLETED for what changed. When
+this closes, move to **Coach Notes Integration**.
 
 Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One at a time.
 
@@ -50,23 +50,43 @@ Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One
   itself makes no such guarantee. No product change follows; this is a correction to my own
   stated language, not a reopened finding.
 
-- **Quick-read badges above the dense sentence.** Audit requested at `d3203ee`, not yet
-  closed. The existing scouting-card summary (`quick_read`) is a single dense sentence a
-  captain has to stop and read in full; Paul's own spec is an icon and a few words.
+- **Quick-read badges above the dense sentence.** First shipped at `d3203ee`, audit requested;
+  GPT returned two findings, both reproduced and fixed. Re-audit requested, not yet closed. The
+  existing scouting-card summary (`quick_read`) is a single dense sentence a captain has to stop
+  and read in full; Paul's own spec is an icon and a few words.
 
   **Captain decision now supported:** can I tell, at a glance and before opening a card,
   whether this evidence is worth trusting, whether there's a known weak spot, and whether I've
   actually scouted this player myself? `quick_read_badges` reuses the SAME evidence quick_read
   already computes (same category rule, same SL buckets) as a short badge row above the
-  sentence: *Strong/Limited direct evidence* (≥3 meetings), *Strong/Limited shared-opponent
-  evidence*, *No evidence on our roster*, *Weak against SL{n}*, *No coach observations*.
+  sentence: *Direct evidence: N meetings* (small sample under 3), *Shared-opponent evidence: N
+  players, M shared games* (thin under 3 players/6 games), *No evidence on our roster*, *Weak
+  against SL{n}*, *No coach observations*.
 
-  **Correction made along the way:** the missing-observations badge first updated live on every
-  keystroke, which broke three hardened opinion/evidence isolation-guard tests (GPT
-  fba0f15/f6dcb35/5b8e525) built specifically to catch a coach opinion silently moving anything
-  else on the page. Reverted rather than weaken that guard — the badge now updates on the same
-  cadence as every other quick-read fact (the next real render), not mid-keystroke. Engine 56,
-  browser 36, mobile 11, full suite 2397.
+  **GPT audit finding 1 (real bug), fixed:** the first version filtered to categories G/E only
+  before counting evidence, so an opponent with nothing but CONCERNING (R) direct records — real
+  games we lost — showed "No evidence on our roster". R is evidence, not its absence. Fixed by
+  switching the evidence-presence check to `card["their_games"]`, the same total `quick_read`'s
+  own prose already uses, built from every direct row regardless of category.
+
+  **GPT audit finding 1b (wording overclaim), fixed:** "Strong/Limited direct evidence" at
+  exactly 3 meetings implied a confidence a 3-game sample does not support. Replaced with plain
+  counts: "Direct evidence: N meetings" (plus "(small sample)" under 3), and the equivalent for
+  shared-opponent evidence.
+
+  **GPT audit finding 2, fixed — reversing my own earlier over-caution:** the missing-
+  observations badge first updated live on every keystroke, which broke three hardened
+  opinion/evidence isolation-guard tests (GPT fba0f15/f6dcb35/5b8e525). I reverted to non-live
+  updates, reasoning a boolean icon "cannot honestly satisfy every changed line contains the
+  note." **GPT explicitly disagreed and authorized a narrow exception**: note-presence is
+  metadata about the opinion, not evidence the opinion could corrupt, and should update live,
+  while everything else (matrix, ranks, numeric records, recommendations) stays frozen. The live
+  toggle is reinstated; the three isolation-guard tests now carry one narrow, exact-text
+  exemption (`_leaked_excluding_note_badge` in `tests/test_ultimate_coach_war_room_browser.py`)
+  that allows only the literal sentinel line `T|SPAN|❓ No coach observations` to appear or
+  disappear, matched by full text content and capped at one occurrence — not a tag- or
+  selector-shaped exemption, which is exactly what GPT's prior finding `fba0f15` showed could
+  mask a real leak. Engine 57, browser 36, mobile 11.
 
 - **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
   CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
@@ -105,6 +125,11 @@ Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One
   tools it requests.** Those approvals are stored on the task and auto-apply to later runs; they
   cannot be granted on the owner's behalf. The zombie session was stopped and the task left
   enabled. `lastRunAt` being non-null is NOT proof — a completed run with commits is.
+
+- **Authorization window extended to Sunday.** Paul: "extend block until next Sunday." Today was
+  Monday 2026-10-12, so the window now runs to Sunday 2026-10-18, terminal checkpoint 08:00 MDT
+  (14:00 UTC), matching the prior convention. Same constraints apply: one feature at a time,
+  routine validation delegated, report this file, continue through GPT check-ins unattended.
 
 - **PARITY-01 global scope** — record-level proof covers one fixture's 64 pairs in 8-Ball; the
   541,052-row comparison remains builder-reported.

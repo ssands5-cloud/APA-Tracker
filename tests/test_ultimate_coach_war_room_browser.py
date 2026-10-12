@@ -23,6 +23,26 @@ OURS, THEIRS = "sharks-a|d1|Fall 2026", "falcons-a|d1|Fall 2026"
 ANN, BEA, DEE = "Ann Archer (APA record ID 1001)", "Bea Baker (APA record ID 1002)", "Dee Diaz (APA record ID 1003)"
 CAM, EVE = "Cam Cole (APA record ID 2001)", "Eve Ellis (APA record ID 2002)"
 
+# GPT audit (349815e) explicit authorization: "No coach observations" is metadata
+# about the opinion (whether a note exists), not evidence the opinion could
+# corrupt, so the isolation guard below allows exactly this one sentinel line to
+# appear or disappear. It is matched by its full literal text, not by tag or
+# selector -- GPT fba0f15 showed a tag-shaped exemption lets an unrelated change
+# of the same tag ride along unnoticed, which is exactly the hole this avoids.
+_NOTE_BADGE_SENTINEL = "T|SPAN|❓ No coach observations"
+
+
+def _leaked_excluding_note_badge(changed: list[str], note: str) -> list[str]:
+    """changed lines that are neither the note itself nor the one authorized
+    note-presence badge toggling off or on. Capped at one toggle so a second,
+    unrelated change that happened to collide with the exact sentinel text is
+    still caught rather than silently absorbed by the exemption."""
+    badge_toggle = [line for line in changed
+                    if line in ("+" + _NOTE_BADGE_SENTINEL, "-" + _NOTE_BADGE_SENTINEL)]
+    assert len(badge_toggle) <= 1, f"note-presence badge moved more than once: {badge_toggle!r}"
+    rest = [line for line in changed if line not in badge_toggle]
+    return [line for line in rest if note not in line]
+
 
 def _page(tmp_path: Path, browser):
     path = tmp_path / "wr.html"
@@ -978,12 +998,12 @@ def test_writing_a_coach_note_changes_nothing_on_the_page_except_the_note(tmp_pa
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
 
-            # No key-based exemption. GPT fba0f15 showed a tag-shaped key lets a new
-            # note under T|SPAN exempt EVERY changed SPAN, masking an unrelated
-            # "Rank 1" -> "Rank 2" in the same tag. The only thing excused now is the
-            # edited control's own value, excluded above by element identity, so a
-            # changed line is a leak unless it literally contains the note.
-            leaked = [line for line in changed if note not in line]
+            # Only two things are excused: the edited control's own value (excluded
+            # above by element identity) and the one note-presence badge sentinel
+            # (excused by _leaked_excluding_note_badge, matched by exact text, not
+            # by tag). Anything else that changed is a leak unless it literally
+            # contains the note.
+            leaked = _leaked_excluding_note_badge(changed, note)
             assert leaked == [], (
                 "writing a coach note moved text that is not the note itself: " + repr(leaked[:5]))
             assert changed, "the note should at least render somewhere"
@@ -1072,7 +1092,7 @@ def test_a_coach_note_changes_nothing_once_the_workflows_are_populated(tmp_path:
 
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
-            leaked = [line for line in changed if note not in line]
+            leaked = _leaked_excluding_note_badge(changed, note)
             assert leaked == [], (
                 "a coach note disturbed a populated workflow: " + repr(leaked[:5]))
             # Non-vacuity (GPT b85f13c): without this a DROPPED note passes with
@@ -1272,7 +1292,7 @@ def test_a_note_does_not_disturb_a_populated_inspect_selection(tmp_path: Path):
 
             changed = [line for line in difflib.unified_diff(before, after, lineterm="", n=0)
                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
-            leaked = [line for line in changed if note not in line]
+            leaked = _leaked_excluding_note_badge(changed, note)
             assert leaked == [], "a note disturbed a populated Inspect view: " + repr(leaked[:5])
             assert changed, "the note must render somewhere, or this proves nothing"
 
@@ -1620,11 +1640,17 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
     """Quick Read Scouting Cards gap: the existing quick-read line is a dense sentence a captain
     has to actually read; Paul's own spec is an icon and a few words.
 
-    Badges deliberately do NOT update mid-keystroke: the opinion/evidence isolation guard
-    (GPT fba0f15/f6dcb35/5b8e525, see test_writing_a_coach_note_changes_nothing_on_the_page_
-    except_the_note) asserts that typing a note changes nothing else on the page, and a boolean
-    icon cannot honestly satisfy "every changed line contains the note". They update on the same
-    cadence as every other quick-read fact: the next real render.
+    GPT audit correction (d3203ee/349815e): the first version of this test asserted the old,
+    confidence-implying wording ("Limited direct evidence") and treated CAM's record as
+    shared-opponent evidence. Both were wrong. CAM's six meetings are all CONCERNING (category
+    R, real losses) -- direct evidence, not an absence of it -- so the badge states the plain
+    count instead of an adjective: "Direct evidence: 6 meetings". EVE's two meetings are direct
+    too (small sample), which the pre-fix category-filtered logic missed entirely and fell
+    through to the shared-opponent branch; that was exactly the bug.
+
+    Only the "No coach observations" badge is live (GPT's explicit, narrow authorization): it is
+    metadata about whether an opinion exists, not evidence the opinion could corrupt, so it
+    updates on input without a reload while every numeric badge stays exactly as last rendered.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1635,11 +1661,11 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
 
             cam, eve = cards.nth(0), cards.nth(1)
             cam_badges = cam.locator(".quick-read-badges").inner_text()
-            assert "Limited direct evidence" in cam_badges, cam_badges
+            assert "Direct evidence: 6 meetings" in cam_badges, cam_badges
             assert "No coach observations" in cam_badges, cam_badges
 
             eve_badges = eve.locator(".quick-read-badges").inner_text()
-            assert "Limited shared-opponent evidence" in eve_badges, eve_badges
+            assert "Direct evidence: 2 meetings (small sample)" in eve_badges, eve_badges
             assert "Weak against SL4" in eve_badges, eve_badges
             assert "No coach observations" in eve_badges, eve_badges
 
@@ -1650,15 +1676,26 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
                 " return b.compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING ? 'before' : 'after';}")
             assert order == "before"
 
-            # Writing an observation and reloading (a real re-render, note persisted in
-            # localStorage) clears the missing-observations badge -- and only that opponent's.
+            # Writing an observation clears the missing-observations badge immediately, with no
+            # reload -- and only that opponent's, and only that one badge. Evidence and weak-SL
+            # stay exactly as last rendered, same as before.
             page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
-            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
-            page.reload()
-            page.wait_for_load_state("load")
+            page.locator('#scouting-cards textarea[data-pid="10"]').dispatch_event("input")
+            page.wait_for_timeout(200)
             cards = page.locator("#scouting-cards .scout")
-            assert "No coach observations" not in cards.nth(0).locator(".quick-read-badges").inner_text()
-            assert "No coach observations" in cards.nth(1).locator(".quick-read-badges").inner_text()
+            cam_badges_after = cards.nth(0).locator(".quick-read-badges").inner_text()
+            assert "No coach observations" not in cam_badges_after, cam_badges_after
+            assert "Direct evidence: 6 meetings" in cam_badges_after, cam_badges_after
+            eve_badges_after = cards.nth(1).locator(".quick-read-badges").inner_text()
+            assert "No coach observations" in eve_badges_after, eve_badges_after
+            assert "Direct evidence: 2 meetings (small sample)" in eve_badges_after, eve_badges_after
+            assert "Weak against SL4" in eve_badges_after, eve_badges_after
+
+            # Clearing the note back out restores the missing-observations badge, live.
+            page.fill('#scouting-cards textarea[data-pid="10"]', "")
+            page.locator('#scouting-cards textarea[data-pid="10"]').dispatch_event("input")
+            page.wait_for_timeout(200)
+            assert "No coach observations" in cards.nth(0).locator(".quick-read-badges").inner_text()
             assert errors == []
         finally:
             browser.close()

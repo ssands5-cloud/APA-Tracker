@@ -705,47 +705,69 @@ def test_live_threats_is_empty_when_nothing_is_dangerous_either_way():
 
 
 # Quick Read Scouting Cards: Paul's own spec is an icon and a few words a captain can read
-# without stopping -- "✅ Strong direct evidence", "⚠ Weak against SL4", "❓ No coach
-# observations" -- before the detailed facts below, not another sentence to parse.
+# without stopping -- before the detailed facts below, not another sentence to parse.
 
 
-def _badge_block(category, direct=None, shared=0):
-    return {"rows": [{"category": category, "direct": direct, "shared_count": shared}]}
+def _badge_card(rows, losing_sl="—"):
+    """A (card, block) pair with their_games computed the SAME way quick_read's own card-building
+    loop does: every row with direct evidence counts, whatever its category. The first version of
+    quick_read_badges filtered to G/E only and this is exactly the bug that hid (GPT, d3203ee)."""
+    tg = sum(r["direct"][1] for r in rows if r.get("direct"))
+    return {"losing_sl": losing_sl, "their_games": tg}, {"rows": rows}
 
 
-def test_quick_read_flags_strong_direct_evidence_at_three_or_more_meetings():
-    block = _badge_block("G", direct=(3, 4))
-    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
-    assert badges[0] == "✅ Strong direct evidence", badges
+def _badge_row(category, direct=None, shared=0):
+    return {"category": category, "direct": direct, "shared_count": shared}
 
 
-def test_quick_read_flags_limited_direct_evidence_under_three_meetings():
-    block = _badge_block("E", direct=(1, 2))
-    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
-    assert badges[0] == "⚠ Limited direct evidence", badges
+def test_quick_read_states_the_actual_meeting_count_at_three_or_more():
+    card, block = _badge_card([_badge_row("G", direct=(3, 4))])
+    badges = quick_read_badges(card, block, has_note=True)
+    assert badges[0] == "✅ Direct evidence: 4 meetings", badges
 
 
-def test_quick_read_falls_back_to_shared_opponent_strength_when_nothing_direct():
-    strong = {"rows": [{"category": "I", "direct": None, "shared_count": 4},
-                       {"category": "I", "direct": None, "shared_count": 3}]}
-    assert quick_read_badges({"losing_sl": "—"}, strong, has_note=True)[0] == "✅ Strong shared-opponent evidence"
-    weak = _badge_block("I", shared=1)
-    assert quick_read_badges({"losing_sl": "—"}, weak, has_note=True)[0] == "⚠ Limited shared-opponent evidence"
+def test_quick_read_flags_a_small_sample_under_three_meetings_without_overclaiming_strength():
+    card, block = _badge_card([_badge_row("E", direct=(1, 2))])
+    badges = quick_read_badges(card, block, has_note=True)
+    assert badges[0] == "⚠ Direct evidence: 2 meetings (small sample)", badges
+    assert "strong" not in badges[0].lower() and "limited" not in badges[0].lower(), badges
+
+
+def test_quick_read_counts_concerning_records_as_evidence_not_its_absence():
+    """GPT audit finding (d3203ee): six synthetic unfavorable direct meetings -- the dense
+    sentence shows "Threat: 6-0 (6 meetings)" with three avoid records -- produced "No evidence
+    on our roster". R is a real direct game we lost, not an absence of data.
+    """
+    card, block = _badge_card([_badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2))])
+    assert card["their_games"] == 6, card
+    badges = quick_read_badges(card, block, has_note=True)
+    assert badges[0] == "✅ Direct evidence: 6 meetings", badges
+    assert "no evidence" not in badges[0].lower(), badges
+
+
+def test_quick_read_falls_back_to_shared_opponent_evidence_when_nothing_direct():
+    strong_card, strong_block = _badge_card([_badge_row("I", shared=4), _badge_row("I", shared=3)])
+    strong = quick_read_badges(strong_card, strong_block, has_note=True)
+    assert strong[0] == "✅ Shared-opponent evidence: 2 players, 7 shared games", strong
+
+    weak_card, weak_block = _badge_card([_badge_row("I", shared=1)])
+    weak = quick_read_badges(weak_card, weak_block, has_note=True)
+    assert weak[0] == "⚠ Shared-opponent evidence: 1 player, 1 shared game (thin)", weak
 
 
 def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
-    block = _badge_block("X")
-    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
+    card, block = _badge_card([_badge_row("X")])
+    badges = quick_read_badges(card, block, has_note=True)
     assert badges[0] == "⚠ No evidence on our roster", badges
 
 
 def test_quick_read_surfaces_a_known_weak_skill_level():
-    block = _badge_block("G", direct=(3, 4))
-    badges = quick_read_badges({"losing_sl": "SL4 (1-3)"}, block, has_note=True)
+    card, block = _badge_card([_badge_row("G", direct=(3, 4))], losing_sl="SL4 (1-3)")
+    badges = quick_read_badges(card, block, has_note=True)
     assert "⚠ Weak against SL4 (1-3)" in badges, badges
 
 
 def test_quick_read_flags_missing_coach_observations_but_only_when_actually_missing():
-    block = _badge_block("G", direct=(3, 4))
-    assert "❓ No coach observations" in quick_read_badges({"losing_sl": "—"}, block, has_note=False)
-    assert "❓ No coach observations" not in quick_read_badges({"losing_sl": "—"}, block, has_note=True)
+    card, block = _badge_card([_badge_row("G", direct=(3, 4))])
+    assert "❓ No coach observations" in quick_read_badges(card, block, has_note=False)
+    assert "❓ No coach observations" not in quick_read_badges(card, block, has_note=True)

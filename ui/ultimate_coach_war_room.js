@@ -68,16 +68,21 @@
   // Facts-only one-liner for the top of a scouting card (mirrors analytics quick_read).
   // ---- Quick read badges: icon + a few words, above the dense sentence below (mirrors
   // analytics.quick_read_badges). Paul's own spec -- a captain reads these without stopping.
+  // GPT audit correction (d3203ee): filtering to category G/E only made an opponent with
+  // nothing but CONCERNING (R) direct records -- real games we lost -- show "No evidence on
+  // our roster", which is false. Uses c.their_games, the SAME total wrQuickRead's own
+  // "Threat:/Even:/Vs our roster:" line already shows (every direct row, any result). Also
+  // drops "Strong/Limited" adjectives for the actual count: three meetings does not earn the
+  // word "strong".
   function wrQuickReadBadges(c,b,hasNote){
-    var direct=b.rows.filter(function(r){return r.category==="G"||r.category==="E";}),badges=[];
-    if(direct.length){
-      var games=Math.max.apply(null,direct.map(function(r){return r.c.direct.g;}));
-      badges.push(games>=3?"✅ Strong direct evidence":"⚠ Limited direct evidence");
+    var tg=c.their_games,badges=[];
+    if(tg){
+      badges.push((tg>=3?"✅ ":"⚠ ")+"Direct evidence: "+plural(tg,"meeting")+(tg>=3?"":" (small sample)"));
     } else {
       var shared=b.rows.filter(function(r){return r.category==="I";});
       if(shared.length){
-        var total=shared.reduce(function(a,r){return a+r.c.shared;},0);
-        badges.push((shared.length>=3||total>=6)?"✅ Strong shared-opponent evidence":"⚠ Limited shared-opponent evidence");
+        var total=shared.reduce(function(a,r){return a+r.c.shared;},0),strong=shared.length>=3||total>=6;
+        badges.push((strong?"✅ ":"⚠ ")+"Shared-opponent evidence: "+plural(shared.length,"player")+", "+plural(total,"shared game")+(strong?"":" (thin)"));
       } else badges.push("⚠ No evidence on our roster");
     }
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Weak against "+c.losing_sl);
@@ -727,12 +732,21 @@
       var npid=t.getAttribute("data-pid");
       wrSetCoach(npid,"n",t.value);
       var box=t.parentNode.querySelector(".coach-summary");if(box) box.textContent=wrCoachSummary(npid);
-      // Deliberately NOT a live patch to the quick-read badges: the opinion/evidence isolation
-      // guard (GPT fba0f15/f6dcb35/5b8e525) asserts that typing a note changes nothing on the
-      // page except text that literally contains the note, specifically to catch an opinion
-      // silently moving something else. A boolean icon cannot satisfy that honestly. The badge
-      // reflects reality on the next real render (switching fixture, reload), same cadence as
-      // every other quick-read badge -- none of which update mid-keystroke either.
+      // GPT audit (d3203ee/349815e): a visible note next to "No coach observations" is a worse,
+      // actively misleading state than a narrow live update -- the opinion/evidence isolation
+      // guard protects EVIDENCE (the matrix, ranks, recommendations, numeric records) from being
+      // moved by a captain's opinion; whether a note EXISTS is metadata about the opinion itself,
+      // not evidence the opinion could corrupt. Only this one boolean icon is patched in place;
+      // everything else on the card -- evidence strength, weak-SL -- stays exactly as computed at
+      // last render, same as before. The isolation-guard tests carry a matching narrow, exact-text
+      // exemption for only this sentinel string, not a tag- or selector-shaped one.
+      var scout=t.closest?t.closest(".scout"):null,row=scout?scout.querySelector(".quick-read-badges"):null;
+      if(row){
+        var has=!!t.value.trim(),spans=row.querySelectorAll("span"),found=null,i;
+        for(i=0;i<spans.length;i++) if(spans[i].textContent==="\u2753 No coach observations") found=spans[i];
+        if(has&&found) found.remove();
+        else if(!has&&!found){var sp=document.createElement("span");sp.textContent="\u2753 No coach observations";row.appendChild(sp);}
+      }
     });
     root.addEventListener("click",function(ev){
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
