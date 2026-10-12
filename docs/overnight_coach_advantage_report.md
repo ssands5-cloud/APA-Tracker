@@ -10,13 +10,11 @@
 
 # CURRENT PRIORITIES
 
-**Next Send Engine** — first gap closed and audited (`bcd56b5`). The opponents-remaining list
-and avoid block already exist and read well; no further gap identified in Next Send itself.
-Treating this feature as COMPLETE and moving to **Threat Panel**: surface dangerous opponents
-with why they're dangerous and a short evidence summary.
+**Threat Panel** — gap closed at `0d1fb71`, audit requested, not yet closed. Next Send is
+COMPLETE (audited). When Threat Panel closes, move to **Quick Read Scouting Cards**.
 
-Then, in order: Threat Panel, Quick Read Scouting Cards, Coach Notes Integration, Captain
-Matrix, Mobile match-night. One at a time.
+Then, in order: Quick Read Scouting Cards, Coach Notes Integration, Captain Matrix, Mobile
+match-night. One at a time.
 
 # COMPLETED
 
@@ -32,6 +30,15 @@ Matrix, Mobile match-night. One at a time.
   unknown"* — or a straight refusal to pick: *"No evidence-backed pick — nothing recorded
   either way."* Unknown is never dressed up as safe, and a player is never named just because
   he sorted above someone with a losing record.
+
+- **Dangerous opponents, scoped to who is actually left tonight.** Audit requested at
+  `0d1fb71`, not yet closed. The old flag summed a win/loss record against our WHOLE roster's
+  history with an opponent, including players who are Unavailable or have already Played, so a
+  danger built entirely on a departed player's evidence read exactly like a live one. Now split
+  into LIVE (the record holds among players still remaining) and STALE (the old flag would have
+  fired, but only on evidence against someone no longer in play) — named explicitly either way,
+  never silently dropped: *"no longer a live risk: their 2-0 record is only against player(s)
+  not in tonight's remaining lineup."* Engine 49, browser 35, mobile 11, full suite 2389.
 
 - **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
   CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
