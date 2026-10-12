@@ -10,12 +10,11 @@
 
 # CURRENT PRIORITIES
 
-**Threat Panel** — wording correction at `f6c45d0` for GPT's safety-implication finding, audit
-re-requested, not yet closed. Next Send is COMPLETE (audited). When Threat Panel closes, move to
-**Quick Read Scouting Cards**.
+**Quick Read Scouting Cards** — the feature in flight. Threat Panel and Next Send are both
+COMPLETE (audited, closed). Gap not yet identified; exploring the current Scouting Cards surface
+against Paul's priority wording ("quick read before detailed analysis") first.
 
-Then, in order: Quick Read Scouting Cards, Coach Notes Integration, Captain Matrix, Mobile
-match-night. One at a time.
+Then, in order: Coach Notes Integration, Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
 
@@ -32,22 +31,24 @@ match-night. One at a time.
   either way."* Unknown is never dressed up as safe, and a player is never named just because
   he sorted above someone with a losing record.
 
-- **Dangerous opponents, scoped to who is actually left tonight.** Audit re-requested at
-  `f6c45d0`, not yet closed. The old flag summed a win/loss record against our WHOLE roster's
-  history with an opponent, including players who are Unavailable or have already Played, so a
-  danger built entirely on a departed player's evidence read exactly like a live one.
+- **Dangerous opponents, scoped to who is actually left tonight — COMPLETE, audit CLOSED by
+  GPT at `f6c45d0` / `5376b2c`.** GPT independently ran five focused cases and reproduced the
+  original phone transition: history retained, remaining matchups explicitly unknown/not
+  cleared, no page errors.
 
-  First fix (`0d1fb71`) split this into LIVE vs STALE, but GPT caught two real problems with it:
-  "no longer a live risk" reads as a clearance the data does not support when the true state is
-  zero evidence, not safety; and the branch could fire even when partial live evidence existed
-  (just not winning), making an "only against departed players" claim that was sometimes false.
+  **Captain decision now supported, which was impossible before:** is this opponent still a
+  real threat with the lineup I actually have left? The old flag summed a win/loss record
+  against our WHOLE roster's history, including players Unavailable or already Played, so a
+  danger built entirely on a departed player's evidence read exactly like a live one. Now:
+  LIVE (the winning record holds among players still remaining), UNKNOWN (zero evidence against
+  who is left, kept visible and explicitly uncleared rather than declared safe), or not flagged
+  at all when real non-winning live evidence exists.
 
-  Corrected at `f6c45d0` into three outcomes: LIVE (winning record holds among players still
-  remaining, unchanged); UNKNOWN (reachable only when live evidence is exactly zero, worded
-  *"historically 2-0 vs our roster, but that record is only against player(s) not in tonight's
-  remaining lineup — unknown vs who is left, not cleared"*); or not flagged at all, because any
-  live evidence that exists and simply is not winning is real evidence of no danger, not an
-  unresolved case. Engine 50, browser 35, mobile 11, full suite 2390.
+  **Correction on record:** in requesting this closure I described non-winning live evidence as
+  "conclusive evidence of no danger." GPT caught the overclaim — it correctly does not meet this
+  flag's winning-record trigger, but that is not the same as a safety guarantee, and the product
+  itself makes no such guarantee. No product change follows; this is a correction to my own
+  stated language, not a reopened finding.
 
 - **Cost of a send — "what does using him here leave me for the rest of the night?"** Audit
   CLOSED by GPT at `bcd56b5`. Next Send answered one pairing at a time, and the "consider saving"
