@@ -1,5 +1,7 @@
 # CURRENT PRIORITIES
 
+Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; finish current Quick Read findings before the next major feature.
+
 **One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
 
 Before accepting a feature ask: If I were standing in a tournament right now, would this help me make a better decision? If no, do not build it; if yes, prioritize it within the stated order. Keep only this report. Morning deliverable: what was completed, what was audited, what still needs owner review, and which captain decision can now be answered that could not be answered before. No process recap in place of results.
@@ -34,11 +36,11 @@ Production priority order: Blind-Lead / We Put Up First Engine; Next Send Engine
 
 Coach Notes must be clearly labeled **Coach Observation**, separately from APA evidence, on scouting cards, threat panels, packet and next-send surfaces. Claude implements reasonable visual/workflow assumptions while Paul is unavailable, records them under PENDING PAUL REVIEW, and continues executable work.
 
-All execution stays inside canonical APA-Tracker or existing linked worktrees located beneath it. No new outside workspaces, scratch repositories, external test environments or duplicate trees. Verify canonical/common Git directory and exact origin before writes. Existing outside artifacts/checkouts remain untouched; no inferred cleanup approval. Auditor report commits can be prepared from canonical Git objects without replacing owner or builder checkouts.
+All execution stays inside canonical APA-Tracker or existing linked worktrees located beneath it. No new outside workspaces, scratch repositories, external test environments or duplicate trees. Verify canonical/common Git directory and exact origin before writes. Existing outside artifacts/checkouts remain untouched; no inferred cleanup approval. Auditor report changes use normal hook-checked commits in an existing clean auditor-owned worktree, preserving owner and builder work.
 
 Before applicable UI/workflow/dashboard/workbook/automation/report changes, review relevant repository skills in `.github`, and record actual usage below. Preserve one ID per unresolved outcome, verified stages and exact private evidence bindings. Reopen only for new evidence, new failure, relevant source change or owner request. Apply data/output/native stages separately; a passing source test is not final acceptance. Do not repeat unchanged tests/builds or the established roster proof.
 
-Continue through Monday October 12, 2026 at 8 AM America/Denver (14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
+Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
 
 # COMPLETED
 
