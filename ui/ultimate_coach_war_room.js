@@ -66,6 +66,25 @@
     return wlText(c.w,c.g)+" (league-scoped lifetime "+fmtLabel(fmt)+(gap?"; "+gap+")":")");
   }
   // Facts-only one-liner for the top of a scouting card (mirrors analytics quick_read).
+  // ---- Quick read badges: icon + a few words, above the dense sentence below (mirrors
+  // analytics.quick_read_badges). Paul's own spec -- a captain reads these without stopping.
+  function wrQuickReadBadges(c,b,hasNote){
+    var direct=b.rows.filter(function(r){return r.category==="G"||r.category==="E";}),badges=[];
+    if(direct.length){
+      var games=Math.max.apply(null,direct.map(function(r){return r.c.direct.g;}));
+      badges.push(games>=3?"✅ Strong direct evidence":"⚠ Limited direct evidence");
+    } else {
+      var shared=b.rows.filter(function(r){return r.category==="I";});
+      if(shared.length){
+        var total=shared.reduce(function(a,r){return a+r.c.shared;},0);
+        badges.push((shared.length>=3||total>=6)?"✅ Strong shared-opponent evidence":"⚠ Limited shared-opponent evidence");
+      } else badges.push("⚠ No evidence on our roster");
+    }
+    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Weak against "+c.losing_sl);
+    if(!hasNote) badges.push("❓ No coach observations");
+    return badges;
+  }
+
   function wrQuickRead(c,b){
     var tw=c.their_wins,tg=c.their_games,parts=[];
     if(!tg) parts.push("Unknown vs our roster — no meetings (not weak)");
@@ -647,8 +666,10 @@
         var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
           +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
-        var cs=wrCoachSummary(c.opponent.id);
+        var cs=wrCoachSummary(c.opponent.id),hasNote=!!(cc.n&&cc.n.trim());
+        var badges=wrQuickReadBadges(c,w.blocks[j],hasNote);
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
+          +'<p class="quick-read-badges">'+badges.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</p>'
           +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+(cs?'<p class="ns-coach">📝 '+esc(cs)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
@@ -706,6 +727,12 @@
       var npid=t.getAttribute("data-pid");
       wrSetCoach(npid,"n",t.value);
       var box=t.parentNode.querySelector(".coach-summary");if(box) box.textContent=wrCoachSummary(npid);
+      // Deliberately NOT a live patch to the quick-read badges: the opinion/evidence isolation
+      // guard (GPT fba0f15/f6dcb35/5b8e525) asserts that typing a note changes nothing on the
+      // page except text that literally contains the note, specifically to catch an opinion
+      // silently moving something else. A boolean icon cannot satisfy that honestly. The badge
+      // reflects reality on the next real render (switching fixture, reload), same cadence as
+      // every other quick-read badge -- none of which update mid-keystroke either.
     });
     root.addEventListener("click",function(ev){
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;

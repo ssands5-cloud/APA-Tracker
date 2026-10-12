@@ -7,6 +7,7 @@ from analytics.ultimate_coach_war_room import (
     blind_send,
     lineup_budget,
     live_threats,
+    quick_read_badges,
     send_cost,
     CATEGORY_LABELS,
     build_local_date,
@@ -701,3 +702,50 @@ def test_live_threats_is_empty_when_nothing_is_dangerous_either_way():
     wr = _war_room()
     out = live_threats(wr, remaining=set())
     assert out == []
+
+
+# Quick Read Scouting Cards: Paul's own spec is an icon and a few words a captain can read
+# without stopping -- "✅ Strong direct evidence", "⚠ Weak against SL4", "❓ No coach
+# observations" -- before the detailed facts below, not another sentence to parse.
+
+
+def _badge_block(category, direct=None, shared=0):
+    return {"rows": [{"category": category, "direct": direct, "shared_count": shared}]}
+
+
+def test_quick_read_flags_strong_direct_evidence_at_three_or_more_meetings():
+    block = _badge_block("G", direct=(3, 4))
+    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
+    assert badges[0] == "✅ Strong direct evidence", badges
+
+
+def test_quick_read_flags_limited_direct_evidence_under_three_meetings():
+    block = _badge_block("E", direct=(1, 2))
+    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
+    assert badges[0] == "⚠ Limited direct evidence", badges
+
+
+def test_quick_read_falls_back_to_shared_opponent_strength_when_nothing_direct():
+    strong = {"rows": [{"category": "I", "direct": None, "shared_count": 4},
+                       {"category": "I", "direct": None, "shared_count": 3}]}
+    assert quick_read_badges({"losing_sl": "—"}, strong, has_note=True)[0] == "✅ Strong shared-opponent evidence"
+    weak = _badge_block("I", shared=1)
+    assert quick_read_badges({"losing_sl": "—"}, weak, has_note=True)[0] == "⚠ Limited shared-opponent evidence"
+
+
+def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
+    block = _badge_block("X")
+    badges = quick_read_badges({"losing_sl": "—"}, block, has_note=True)
+    assert badges[0] == "⚠ No evidence on our roster", badges
+
+
+def test_quick_read_surfaces_a_known_weak_skill_level():
+    block = _badge_block("G", direct=(3, 4))
+    badges = quick_read_badges({"losing_sl": "SL4 (1-3)"}, block, has_note=True)
+    assert "⚠ Weak against SL4 (1-3)" in badges, badges
+
+
+def test_quick_read_flags_missing_coach_observations_but_only_when_actually_missing():
+    block = _badge_block("G", direct=(3, 4))
+    assert "❓ No coach observations" in quick_read_badges({"losing_sl": "—"}, block, has_note=False)
+    assert "❓ No coach observations" not in quick_read_badges({"losing_sl": "—"}, block, has_note=True)

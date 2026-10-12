@@ -341,6 +341,39 @@ def war_room_pair(
     }
 
 
+def quick_read_badges(card: dict[str, Any], block: dict[str, Any], *, has_note: bool = False) -> list[str]:
+    """Short, glanceable badges for the TOP of a scouting card, above the dense facts below.
+
+    Paul's own spec (an icon and a few words a captain can read without stopping), not another
+    restatement of quick_read's one-line sentence. Reuses exactly the evidence quick_read already
+    computes -- same category rule, same SL buckets -- as a yes/no read on evidence strength and
+    on whether this opponent has actually been scouted, rather than the facts themselves.
+
+    has_note is passed in rather than looked up here: coach notes live client-side only (this
+    browser's localStorage), never in the server payload, the same boundary every other coach-note
+    surface in this file respects.
+    """
+    rows = block["rows"]
+    direct = [r for r in rows if r["category"] in ("G", "E")]
+    badges: list[str] = []
+    if direct:
+        games = max(r["direct"][1] for r in direct)
+        badges.append("✅ Strong direct evidence" if games >= 3 else "⚠ Limited direct evidence")
+    else:
+        shared = [r for r in rows if r["category"] == "I"]
+        if shared:
+            total = sum(r["shared_count"] for r in shared)
+            badges.append("✅ Strong shared-opponent evidence" if len(shared) >= 3 or total >= 6
+                          else "⚠ Limited shared-opponent evidence")
+        else:
+            badges.append("⚠ No evidence on our roster")
+    if card["losing_sl"] not in ("—", "None recorded"):
+        badges.append(f"⚠ Weak against {card['losing_sl']}")
+    if not has_note:
+        badges.append("❓ No coach observations")
+    return badges
+
+
 def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
     """One-line, facts-only summary for the top of a scouting card (full roster, no planning marks):
     the opponent's record vs our roster, our best answer on record, who to avoid, and SL directions."""

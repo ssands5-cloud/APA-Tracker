@@ -1614,3 +1614,51 @@ def test_dangerous_opponents_reflects_who_is_actually_left_tonight(tmp_path: Pat
             assert errors == []
         finally:
             browser.close()
+
+
+def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_path: Path):
+    """Quick Read Scouting Cards gap: the existing quick-read line is a dense sentence a captain
+    has to actually read; Paul's own spec is an icon and a few words.
+
+    Badges deliberately do NOT update mid-keystroke: the opinion/evidence isolation guard
+    (GPT fba0f15/f6dcb35/5b8e525, see test_writing_a_coach_note_changes_nothing_on_the_page_
+    except_the_note) asserts that typing a note changes nothing else on the page, and a boolean
+    icon cannot honestly satisfy "every changed line contains the note". They update on the same
+    cadence as every other quick-read fact: the next real render.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            cards = page.locator("#scouting-cards .scout")
+            assert cards.count() == 2, cards.count()
+
+            cam, eve = cards.nth(0), cards.nth(1)
+            cam_badges = cam.locator(".quick-read-badges").inner_text()
+            assert "Limited direct evidence" in cam_badges, cam_badges
+            assert "No coach observations" in cam_badges, cam_badges
+
+            eve_badges = eve.locator(".quick-read-badges").inner_text()
+            assert "Limited shared-opponent evidence" in eve_badges, eve_badges
+            assert "Weak against SL4" in eve_badges, eve_badges
+            assert "No coach observations" in eve_badges, eve_badges
+
+            # Badges precede the dense sentence in document order (decision before detail).
+            order = page.evaluate(
+                "() => {const c=document.querySelectorAll('#scouting-cards .scout')[0];"
+                " const b=c.querySelector('.quick-read-badges'), q=c.querySelector('.quick-read');"
+                " return b.compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING ? 'before' : 'after';}")
+            assert order == "before"
+
+            # Writing an observation and reloading (a real re-render, note persisted in
+            # localStorage) clears the missing-observations badge -- and only that opponent's.
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.reload()
+            page.wait_for_load_state("load")
+            cards = page.locator("#scouting-cards .scout")
+            assert "No coach observations" not in cards.nth(0).locator(".quick-read-badges").inner_text()
+            assert "No coach observations" in cards.nth(1).locator(".quick-read-badges").inner_text()
+            assert errors == []
+        finally:
+            browser.close()

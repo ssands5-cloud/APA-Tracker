@@ -171,6 +171,9 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-unknown { color:var(--muted); }
 .ns-send { margin-left:4px; min-height:28px; padding:2px 8px; font-size:12px; line-height:1.2; vertical-align:baseline; }
 .ns-coach { margin:6px 0 0; font-size:13px; background:#eef4ff; padding:4px 6px; border-radius:6px; }
+.quick-read-badges { margin:8px 8px 0; display:flex; flex-wrap:wrap; gap:5px; }
+.quick-read-badges span { font-size:11.5px; font-weight:700; padding:2px 7px; border-radius:11px;
+  background:#eef1ea; color:#3f4a43; white-space:nowrap; }
 .quick-read { margin:6px 8px; padding:5px 7px; background:#fff8e8; border-left:4px solid #c9a24a; font-size:13px; }
 .quick-read b { text-transform:uppercase; font-size:11px; letter-spacing:.4px; color:#5d4413; margin-right:4px; }
 .mv-toggle { display:inline-flex; border:1px solid #c9b88f; border-radius:999px; overflow:hidden; }
