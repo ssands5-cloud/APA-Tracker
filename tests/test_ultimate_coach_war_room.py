@@ -651,30 +651,49 @@ def test_send_cost_ignores_opponents_already_played():
 # "dangerous" needs to know whether that danger is still live for the sends still ahead.
 
 
-def test_live_threats_drops_a_danger_built_only_on_a_player_no_longer_in_play():
-    """Opal beat Ann 3-0 and lost to Bea 1-2: aggregate 4-2, flagged dangerous today.
+def test_live_threats_drops_the_flag_entirely_once_real_live_evidence_says_not_dangerous():
+    """GPT audit correction: Opal beat Ann 3-0 (gone) but LOSES to Bea 1-2 (still live).
 
-    If Ann is no longer in tonight's lineup, Opal's only live evidence is the 1-2 LOSS to Bea.
-    She is not a live threat, and the captain should be told that plainly rather than carry a
-    stale warning or have it silently vanish.
+    The first version of this called Opal "no longer a live risk" here, which is correct in
+    conclusion but was reached through a branch that could also fire when the live evidence was
+    merely absent, not losing. With Bea still in play we have REAL evidence Opal is not
+    currently dangerous (a losing record), which is a clean "not dangerous" rather than an
+    "unknown" -- so this must not be flagged at all, live or unknown.
     """
     wr = _war_room()
     ann = next(m for m in wr["ours"] if m["name"] == "Ann")
     live = {m["id"] for m in wr["ours"] if m["id"] != ann["id"]}
     out = live_threats(wr, remaining=live)
+    assert all(c["opponent"]["name"] != "Opal" for c in out), out
+
+
+def test_live_threats_calls_it_unknown_not_cleared_when_every_witness_has_left():
+    """GPT audit finding: missing evidence is uncertainty, not safety.
+
+    Opal beat Ann 3-0 and beat Bea's record too in aggregate (4-2 vs our whole roster). If BOTH
+    Ann and Bea -- the only two players who have ever met her -- are no longer in tonight's
+    lineup, there is ZERO evidence against who is actually left. The first version of this said
+    "no longer a live risk", which reads as a clearance the data does not support. It must say
+    unknown and keep the historical record visible, not declare the opponent safe.
+    """
+    wr = _war_room()
+    cal = next(m for m in wr["ours"] if m["name"] == "Cal")
+    out = live_threats(wr, remaining={cal["id"]})
     opal = next((c for c in out if c["opponent"]["name"] == "Opal"), None)
     assert opal is not None, out
-    assert opal["live"] is False and opal["stale"] is True, opal
-    assert "no longer a live risk" in opal["text"].lower(), opal["text"]
+    assert opal["live"] is False and opal["unknown"] is True, opal
+    assert "no longer a live risk" not in opal["text"].lower(), opal["text"]
+    assert "unknown" in opal["text"].lower() and "not cleared" in opal["text"].lower(), opal["text"]
+    assert "historically 4-2" in opal["text"].lower(), opal["text"]
     assert "ann" not in opal["text"].lower(), opal["text"]           # names the record, not the player
 
 
 def test_live_threats_keeps_a_danger_that_is_still_live():
-    """With everyone remaining, Opal's aggregate record (4-2) is still a live threat."""
+    """With everyone remaining, Opal's live record (4-2) is still a live threat."""
     wr = _war_room()
     out = live_threats(wr)
     opal = next((c for c in out if c["opponent"]["name"] == "Opal"), None)
-    assert opal is not None and opal["live"] is True and opal["stale"] is False, out
+    assert opal is not None and opal["live"] is True and opal["unknown"] is False, out
     assert opal["wins"] == 4 and opal["games"] == 6, opal
 
 

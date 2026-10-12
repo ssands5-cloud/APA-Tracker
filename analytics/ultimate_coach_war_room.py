@@ -651,13 +651,18 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
     The existing threat flag sums a win/loss record against our WHOLE roster's history with
     that opponent, including players who are Unavailable or have already Played. A captain
     reading "dangerous" needs to know whether that danger is still live for the sends still
-    ahead -- a record built entirely on a player no longer in tonight's lineup is not a risk
-    for what is left to decide.
+    ahead -- a record built entirely on a player no longer in tonight's lineup proves nothing
+    about the players actually left to send.
 
     Returns opponents who are either a LIVE threat (their winning record holds among players
-    still in play) or a STALE one (they looked dangerous only because of evidence against
-    players no longer available) -- named explicitly rather than silently dropped, so a captain
-    who remembers an opponent as dangerous is told why that is no longer true tonight.
+    still in play) or UNKNOWN (the old roster-wide flag would have fired, but every game behind
+    it was against a player no longer available, so there is no evidence at all against the
+    remaining roster). GPT audit correction: missing evidence is uncertainty, not safety -- the
+    first version of this said "no longer a live risk", which reads as a clearance the data does
+    not support. If ANY live evidence exists and simply is not winning, that is real evidence of
+    no danger, not an unresolved case, so it is not flagged here at all; UNKNOWN only ever means
+    zero games against players still in play, which is also what makes "only against player(s)
+    not in tonight's remaining lineup" a true statement rather than an overclaim.
     """
     ours_ids = {m["id"] for m in war_room["ours"]}
     remaining = ours_ids if remaining is None else remaining
@@ -672,29 +677,33 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
         live_games = sum(r["direct"][1] for r in live)
         gone_wins = sum(r["direct"][1] - r["direct"][0] for r in gone)
         gone_games = sum(r["direct"][1] for r in gone)
-        total_wins, total_games = live_wins + gone_wins, live_games + gone_games
         dangerous_live = bool(live_games) and live_wins > live_games - live_wins
-        # What the old, roster-wide flag would have said -- used only to detect the case where
-        # that flag depended entirely on evidence against a player no longer in play.
-        dangerous_overall = bool(total_games) and total_wins > total_games - total_wins
+        # Only reachable when live_games is zero, so "only against departed players" is literally
+        # true here, and the record is silent about the players actually still in play, not safe.
+        dangerous_on_departed_evidence_only = (not live_games and gone_games
+                                               and gone_wins > gone_games - gone_wins)
         if dangerous_live:
             out.append({
-                "opponent": opp, "label": block["opponent_label"], "live": True, "stale": False,
+                "opponent": opp, "label": block["opponent_label"], "live": True, "unknown": False,
                 "wins": live_wins, "games": live_games, "players_met": len(live),
                 "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
                         f"{record_text(live_wins, live_games)} vs our roster still in play "
                         f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)",
+                "short": f"{opp['name']} — {record_text(live_wins, live_games)} vs our roster "
+                        "still in play",
             })
-        elif dangerous_overall and gone_games:
+        elif dangerous_on_departed_evidence_only:
             out.append({
-                "opponent": opp, "label": block["opponent_label"], "live": False, "stale": True,
+                "opponent": opp, "label": block["opponent_label"], "live": False, "unknown": True,
                 "wins": gone_wins, "games": gone_games, "players_met": len(gone),
                 "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
-                        "no longer a live risk: their "
-                        f"{record_text(gone_wins, gone_games)} record is only against player(s) "
-                        "not in tonight's remaining lineup",
+                        f"historically {record_text(gone_wins, gone_games)} vs our roster, but that "
+                        "record is only against player(s) not in tonight's remaining lineup — "
+                        "unknown vs who is left, not cleared",
+                "short": f"{opp['name']} — unknown vs our remaining roster (historically "
+                        f"{record_text(gone_wins, gone_games)})",
             })
-    out.sort(key=lambda c: (c["stale"], -(2 * c["wins"] - c["games"]) if c["games"] else 0,
+    out.sort(key=lambda c: (c["unknown"], -(2 * c["wins"] - c["games"]) if c["games"] else 0,
                             member_order_key(c["opponent"])))
     return out
 

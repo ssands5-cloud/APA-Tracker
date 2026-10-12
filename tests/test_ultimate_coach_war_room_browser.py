@@ -1590,7 +1590,9 @@ def test_dangerous_opponents_reflects_who_is_actually_left_tonight(tmp_path: Pat
     including players who are Unavailable or have already Played. In the stock fixture, Eve
     Ellis's entire "dangerous" record (2-0) is built on Dee alone (the only one of our players
     who has ever met her). Marking Dee Unavailable must turn that from a live warning into an
-    explicit "no longer a live risk" rather than leaving a now-inaccurate claim on screen.
+    explicit UNKNOWN -- not a declaration that Eve is safe. GPT audit correction: the first
+    version of this said "no longer a live risk" here, which reads as a clearance the data does
+    not support -- missing evidence is uncertainty, not safety.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1601,12 +1603,14 @@ def test_dangerous_opponents_reflects_who_is_actually_left_tonight(tmp_path: Pat
 
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="3"]', "Unavailable")
             after = page.locator("#tonight .decide-threats").inner_text()
-            assert "no longer a live risk" in after.lower(), after
+            assert "no longer a live risk" not in after.lower(), after
+            assert "unknown" in after.lower(), after
             assert "still in play" not in after.lower(), after
             assert "Eve" in after, after      # named, not silently dropped
 
             risks_panel = page.locator("#wr-risks").inner_text()
-            assert "no longer a live risk" in risks_panel.lower(), risks_panel
+            assert "unknown vs who is left, not cleared" in risks_panel.lower(), risks_panel
+            assert "historically 2-0" in risks_panel.lower(), risks_panel
             assert errors == []
         finally:
             browser.close()

@@ -411,8 +411,12 @@
 
   // ---- Dangerous opponents, against who's actually left tonight (mirrors analytics.live_threats) ----
   // The old flag summed a win/loss record across our WHOLE roster's history with an opponent,
-  // including players who are Unavailable or have already Played. A captain reading "dangerous"
-  // needs to know whether that danger is still live for the sends still ahead.
+  // including players who are Unavailable or have already Played. GPT audit correction: missing
+  // evidence is uncertainty, not safety -- this used to say "no longer a live risk" whenever the
+  // roster-wide flag depended on departed players, even when some LIVE evidence also existed and
+  // simply was not winning. If any live evidence exists, that IS real evidence of no danger and
+  // needs no flag at all; "unknown" is reserved for zero live games, where "only against
+  // player(s) not in tonight's remaining lineup" is a true statement rather than an overclaim.
   function wrLiveThreats(w,rem){
     var out=[];
     if(!Object.keys(rem).some(function(k){return rem[k];})) return out;
@@ -421,21 +425,21 @@
       var gone=b.rows.filter(function(r){return r.c.direct&&!rem[String(r.member.id)];});
       var lw=0,lg=0;live.forEach(function(r){lw+=r.c.direct.g-r.c.direct.w;lg+=r.c.direct.g;});
       var gw=0,gg=0;gone.forEach(function(r){gw+=r.c.direct.g-r.c.direct.w;gg+=r.c.direct.g;});
-      var tw=lw+gw,tg=lg+gg,dangerousLive=lg>0&&lw>lg-lw,dangerousOverall=tg>0&&tw>tg-tw;
-      if(dangerousLive) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:true,stale:false,
+      var dangerousLive=lg>0&&lw>lg-lw,unknownOnly=!lg&&gg>0&&gw>gg-gw;
+      if(dangerousLive) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:true,unknown:false,
         wins:lw,games:lg,playersMet:live.length,
         // Full detail for the War Room risk panel, which has room; a compact line for Tonight,
         // which does not -- a longer version of this exact text pushed Open risks off a 390x844
         // Safari screen (the fourth time an addition here has done that).
         text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)",
         short:b.opponent.name+" — "+wlText(lw,lg)+" vs our roster still in play"});
-      else if(dangerousOverall&&gg) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,stale:true,
+      else if(unknownOnly) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,unknown:true,
         wins:gw,games:gg,playersMet:gone.length,
-        text:b.opponent_label+" · SL "+slText(b.opponent)+" · no longer a live risk: their "+wlText(gw,gg)+" record is only against player(s) not in tonight's remaining lineup",
-        short:b.opponent.name+" — no longer a live risk"});
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · historically "+wlText(gw,gg)+" vs our roster, but that record is only against player(s) not in tonight's remaining lineup — unknown vs who is left, not cleared",
+        short:b.opponent.name+" — unknown vs our remaining roster (historically "+wlText(gw,gg)+")"});
     });
     out.sort(function(a,b2){
-      if(a.stale!==b2.stale) return a.stale?1:-1;
+      if(a.unknown!==b2.unknown) return a.unknown?1:-1;
       var ka=a.games?(2*a.wins-a.games):0,kb=b2.games?(2*b2.wins-b2.games):0;
       if(ka!==kb) return kb-ka;
       return memberOrder(a.opponent,b2.opponent);
@@ -554,7 +558,7 @@
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.stale?' class="stale"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
