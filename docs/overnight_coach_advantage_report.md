@@ -44,6 +44,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **Coach Notes stale-display follow-up — CLOSED, 92a482a.** Dangerous opponents, Next Send observation box and scouting-card paragraph now update live; clearing hides styled wrappers. Five focused browser checks and phone create/edit/clear support this closure.
+
 - **NOTES-01 — CLOSED, 5a49cd1.** Matrix headers, Tonight Best sends now, Lineup Lab and opportunities now update observation presentation without reload. Phone create/edit/clear reproduced; affected isolation checks pass. This closes the scoped finding, not all Coach Notes Integration.
 
 - **Quick Read Scouting Cards — VERIFIED COMPLETE in audited implementation cases, f0b8b81.** Badge row gives actual recorded evidence counts before dense detail, counts unfavorable direct history as evidence, and clears the missing-observations badge immediately when a note exists. Original phone failures reproduced and resolved; note metadata changes leave evidence/recommendation guards intact in checked workflows. Coach Notes Integration is next.
@@ -57,12 +59,14 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
-**Coach Notes Integration remains current.** NOTES-01 is closed at 5a49cd1 in the audited four-surface save/edit/clear workflow. Builder identified related stale observations in Dangerous opponents, the Next Send note box and scouting-card note paragraph; reproduce and finish those same-feature corrections before declaring integration complete. Empty visual wrappers are an implementation detail to resolve, not an owner-acceptance dependency. Preserve numerical evidence and active selections.
+**Coach Notes Integration:** NOTES-01 and its remaining stale-display corrections are CLOSED in audited HTML workflows at 5a49cd1 / 92a482a. Preserve existing packet/observation separation and earlier verified work. Builder should reconcile whole-feature completion with these closures; no additional indicator duplication is required solely because another list names an opponent. Captain Matrix follows once current feature completion is recorded with any genuinely unresolved captain outcome stated.
 
 - Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 01:40 UTC Coach Notes follow-up independently verified at 92a482a: three new live-display cases and two affected isolation checks PASS (five checks). Additional 390x844 synthetic create/edit/clear shows Next Send and scouting observation wrappers visible on entry/edit and hidden on clear, without reload or browser errors. Initial custom phone selector matched three wrappers; corrected to the precise Next Send container and completed that check without rerunning the five passes. Private synthetic artifact tmp/audit/coach-notes-92a482a/wr.html. Related findings CLOSED. No unchanged packet/native/foundation proof or full-suite rerun. Avoid sends/Open risks icon duplication is not a completion gate absent a concrete unanswered decision; preserve APA-based reasons separately from observations. Builder whole-feature completion response remains to be reconciled, not routine Paul acceptance.
 
 2026-10-13 01:10 UTC NOTES-01 closure: six focused committed browser checks PASS at 5a49cd1 (four live-note surfaces plus default/populated opinion-evidence isolation). Original 390x844 phone workflow now creates and edits the matrix flag and Tonight observation immediately; clearing removes both, without reload or page errors. Committed JS evaluated in memory, private synthetic artifact tmp/audit/coach-notes-5a49cd1/wr.html. Scoped finding CLOSED. Builder response 6135813274 identifies the same staleness in remaining existing observation surfaces; finish those related corrections as Coach Notes Integration, with reproduction and scoped evidence, before Captain Matrix. Do not defer routine implementation to owner preference or treat four flags as whole-feature completion. Earlier feature closures retained; no full-suite repeat.
 
