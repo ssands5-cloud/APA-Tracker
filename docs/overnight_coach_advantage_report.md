@@ -61,12 +61,16 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
+**MATRIX-01 — explain the new counts visibly at the decision point.** At 8ca0e3f, phone matrix headers show only a green dot times N; row-versus-column meaning is in hover title attributes. Add a compact visible key: row counts favorable direct matchups against unplayed opponents, column counts remaining players with favorable direct records. Zero favorable options can reflect missing/even/unfavorable evidence and does not establish that an opponent is hardest or safe. Preserve the verified arithmetic, availability behavior and print-page budget.
+
 **Captain Matrix is current.** Coach Notes Integration is VERIFIED COMPLETE in the recorded implementation scope: builder completion 2fee9b6 agrees with independent closures at 5a49cd1 / 92a482a. No unresolved current-feature captain outcome was identified. Preserve known live-artifact/release limits and existing packet observation separation; no repeat foundation proof.
 
 - Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 02:25 UTC Captain Matrix first increment audited at 8ca0e3f: new count/availability/evidence browser case PASS; affected full-roster print-page-budget case PASS with committed JS/CSS bound in memory. Reviewed actual 390x844 synthetic matrix capture: count badges fit their headers and preserve readable evidence cells, but their meaning is available only via hover titles. MATRIX-01 requests visible concise semantics for phone use, including honest zero/unknown interpretation. Private synthetic capture tmp/audit/matrix-8ca0e3f/phone-matrix.png. Counts help scan recorded favorable alternatives; do not endorse builder language that zero identifies the collectively hardest opponent. No measured speed/winning claim, no unchanged suite/foundation proof. Current Captain Matrix remains open pending this focused usability correction and builder completion.
 
 2026-10-13 02:10 UTC delegated Coach Notes completion confirmed: builder 2fee9b6 / issue response 6136417550 reconciles the independently executed four-surface and remaining stale-display closures. Accept the explained decision to omit redundant Avoid sends/Open risks indicators; no demonstrated remaining captain outcome requires those copies. No repeated tests or new acceptance gate. Captain Matrix is now current; actual local source/test edits observed, not yet audited or accepted. Preserve prior packet/foundation scope and separate live-artifact/release approvals.
 
