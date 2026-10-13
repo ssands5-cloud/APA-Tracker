@@ -409,9 +409,10 @@ def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(serve
     The slim payload strips everything but the two rosters' own data and shared-opponent stubs;
     this proves that reduction never breaks either feature, rather than assuming it because the
     same render() function is shared. GPT audit precision correction: scoped to exactly what is
-    asserted below (column counts, row counts, the legend, and the matrix+Tonight note update
-    surviving one offline reload) -- not row counts "the same way" as column counts were first
-    claimed to be checked when they were not, and not every post-reload behavior.
+    asserted below -- before reload, column counts, row counts, the legend, the matrix note flag
+    and Tonight's note update; after one offline reload, only the matrix note flag and column
+    counts are re-checked. Row counts and Tonight's own note display are not re-asserted after
+    reload, and no other post-reload behavior is claimed.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -441,8 +442,9 @@ def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(serve
             assert page.locator(".matrix thead th .note-flag").count() == 1
             assert "📝 Coach: Breaks hard, go even (opinion)" in page.locator("#tonight .decide-sends").inner_text()
 
-            # The note, the matrix flag and the column counts all survive one offline reload --
-            # not a claim about every other post-reload behavior.
+            # The matrix note flag and column counts survive one offline reload -- row counts
+            # and Tonight's own note display are not re-checked here, and no other post-reload
+            # behavior is claimed.
             page.context.set_offline(True)
             page.reload()
             page.wait_for_selector("#tonight .decide-sends", timeout=20000)

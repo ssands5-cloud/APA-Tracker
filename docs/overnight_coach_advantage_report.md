@@ -10,19 +10,27 @@
 
 # CURRENT PRIORITIES
 
-**Mobile Match-Night** — first increment shipped at `6af2f37`, audit CLOSED by GPT at `3d1c17c`
-with an evidence-precision correction, fixed at `e69caec`, audit requested. That commit also
+**Mobile Match-Night — COMPLETE.** First increment shipped at `6af2f37`, audit CLOSED by GPT at
+`3d1c17c` with an evidence-precision correction, fixed at `e69caec` and independently confirmed
+by GPT at `7e2eff9` (own re-run against the installed package: expected row counts, document
+width, matrix cell geometry, hidden empty note wrapper — no defect found). That commit also
 investigated for an actual observed mobile gap per GPT's direction: built and served the real
 encrypted package and inspected it directly in a 375×812 mobile viewport via the browser tool
 (not just logic tests) — no duplication or horizontal overflow, the note-flag-slot correctly
 collapses to zero size when empty, green-count badges fit within the header cell, matrix touch
 targets are 90×44px (above the 44px minimum). **No new mobile usability gap found this pass,
-stated explicitly rather than invented.** GPT's closure set the scope: this covers BOTH actual
-phone captain use of Tonight/War Room/Lineup Lab AND carrying their changes through the existing
-slim/encrypted `ui/match_night.py` wrapper — not an either/or. Explicit direction: "preserve
-architecture freeze; do not build a verification project. Next identify an actual observed
-mobile decision/usability gap, or state none found." Captain Matrix is COMPLETE: row/column
-favorable-option counts
+stated explicitly rather than invented.** GPT's `7e2eff9` closure delegated the completion call
+per the same pattern as Captain Matrix and Coach Notes Integration below: "reconcile Mobile
+Match-Night completion in this sampled implementation scope if no actual unresolved captain
+outcome remains; no more test increments solely for activity." Judgment made: GPT's closure set
+the scope as BOTH actual phone captain use of Tonight/War Room/Lineup Lab AND carrying their
+changes through the existing slim/encrypted `ui/match_night.py` wrapper, not an either/or; both
+are now verified against the real installed package with no gap found, and no further unanswered
+captain decision remains in this scope. `7e2eff9` also flagged one wording-precision note, fixed:
+the test's docstring claimed post-offline-reload assertions on Tonight's note display and on row
+counts that the test does not actually make — narrowed to name exactly what is re-checked after
+reload (the matrix note flag and column counts only), rather than expanding the test just to
+justify the wording. Captain Matrix is COMPLETE: row/column favorable-option counts
 (`8ca0e3f`) plus the visible phone legend MATRIX-01 required (`d32549e`), both audit CLOSED by
 GPT (`594ad06`, `8558b3a`). GPT's last closure explicitly delegated the completion call:
 "reconcile Captain Matrix whole-feature technical completion with existing Captain/Evidence
@@ -36,7 +44,17 @@ closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
-  that found no new gap.** Shipped at `e69caec`, audit requested, not yet closed.
+  that found no new gap — COMPLETE, audit CLOSED by GPT at `7e2eff9`.** Shipped at `e69caec`.
+  GPT independently re-ran the investigation against the installed package (expected row
+  counts, document width, matrix cell geometry, hidden empty note wrapper) and found no defect,
+  then delegated the completion call: reconcile Mobile Match-Night as complete in this sampled
+  scope since no unresolved captain outcome remains, with one wording-precision note — the test
+  docstring claimed post-offline-reload assertions on Tonight's note display and row counts that
+  the test does not make. Fixed at `91c8f5e`/this commit: the docstring and inline comment now
+  name exactly what is re-checked after reload (the matrix note flag and column counts only),
+  rather than expanding the test just to justify the overclaim. Engine/browser/match-night suite
+  counts unchanged (match night 12/12 passed in this file); no new test was needed since this was
+  a wording correction, not a missing assertion.
 
   **The investigation, done the way GPT asked (not more logic tests):** built and served the
   real encrypted package, then inspected it directly in a 375×812 mobile viewport through the
