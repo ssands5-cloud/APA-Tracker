@@ -1891,3 +1891,112 @@ def test_opportunities_table_flags_the_opponent_with_a_coach_note(tmp_path: Path
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_dangerous_opponents_note_flag_updates_live(tmp_path: Path):
+    """GPT audit (issue #84, NOTES-01 follow-up): the same staleness bug the matrix header and
+    Best sends now had, found in a third and fourth place that predate this session -- Dangerous
+    opponents in both Tonight's decide-threats and the #wr-risks panel. Eve Ellis is the stock
+    fixture's default dangerous opponent (her 2-0 record against Dee is still live). Fixed the
+    same way: wrNoteFlagSlot/wrPatchNoteFlags, reusing the existing bare-span rendering --
+    #wr-risks previously went through wrList() (escapes every item, same defect Lineup Lab had),
+    now a hand-built <ul class="wr-list">.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            before_tonight = page.locator("#tonight .decide-threats").inner_text()
+            before_risks = page.locator("#wr-risks").inner_text()
+            assert "Eve" in before_tonight and "📝" not in before_tonight
+            assert "Eve" in before_risks and "📝" not in before_risks
+
+            page.fill('#scouting-cards textarea[data-pid="11"]', "Slow, careful safeties")
+            page.locator('#scouting-cards textarea[data-pid="11"]').blur()
+            page.wait_for_timeout(200)
+
+            tonight_text = page.locator("#tonight .decide-threats").inner_text()
+            risks_text = page.locator("#wr-risks").inner_text()
+            assert "📝 Coach: Slow, careful safeties (opinion)" in tonight_text, (
+                "Tonight's Dangerous opponents must update live, with no reload: " + tonight_text)
+            assert "📝 Coach: Slow, careful safeties (your opinion, not APA facts)" in risks_text, (
+                "#wr-risks Dangerous opponents must update live, with no reload: " + risks_text)
+
+            # Clearing it removes the flag live too, in both places.
+            page.fill('#scouting-cards textarea[data-pid="11"]', "")
+            page.locator('#scouting-cards textarea[data-pid="11"]').blur()
+            page.wait_for_timeout(200)
+            assert "📝" not in page.locator("#tonight .decide-threats").inner_text()
+            assert "📝" not in page.locator("#wr-risks").inner_text()
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+def test_next_send_note_box_updates_live(tmp_path: Path):
+    """GPT audit (issue #84, NOTES-01 follow-up): the Next Send card's own note box
+    (`.ns-coach`) has a background-styled wrapper that is only shown when a note exists, so it
+    cannot just be an empty slot -- GPT: "empty wrappers are implementation work, not an owner-
+    review gate." Fixed by always rendering the wrapper and toggling its CSS display, so an
+    absent note never shows an empty colored box.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.click("#next-send .ns-chip:has-text('Cam Cole')")
+            # The slot is rendered (so it can be patched live) but hidden until a note exists --
+            # never an empty colored box.
+            assert not page.locator("#next-send .ns-coach").is_visible()
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.wait_for_timeout(200)
+
+            box = page.locator("#next-send .ns-coach")
+            assert box.count() == 1
+            assert box.is_visible(), "the note box must appear live, with no reload"
+            assert "📝 Coach: Breaks hard, go even (your opinion, not APA facts)" in box.inner_text()
+
+            # Clearing the note hides the box again, live -- not an empty colored box left behind.
+            page.fill('#scouting-cards textarea[data-pid="10"]', "")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.wait_for_timeout(200)
+            assert not page.locator("#next-send .ns-coach").is_visible()
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+def test_scouting_card_own_note_paragraph_updates_live(tmp_path: Path):
+    """GPT audit (issue #84, NOTES-01 follow-up): the scouting card's own <p class="ns-coach">
+    (distinct from the .coach-summary div at the bottom of the same card, which was already live)
+    sits right under Quick read, and was still stale pre-fix. Same box-wrapper treatment as Next
+    Send's note box: always rendered, display toggled, never an empty colored box.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            cam_card = page.locator("#scouting-cards .scout").nth(0)
+            # The slot is rendered (so it can be patched live) but hidden until a note exists.
+            assert not cam_card.locator("p.ns-coach").is_visible()
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.wait_for_timeout(200)
+
+            cam_card = page.locator("#scouting-cards .scout").nth(0)
+            note_p = cam_card.locator("p.ns-coach")
+            assert note_p.is_visible(), "the card's own note paragraph must appear live, with no reload"
+            assert "📝 Coach: Breaks hard, go even (your opinion, not APA facts)" in note_p.inner_text()
+            # The .coach-summary div (bottom of card) was already live; both now agree.
+            assert "Coach: Breaks hard, go even" in cam_card.locator(".coach-summary").inner_text()
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.wait_for_timeout(200)
+            assert not page.locator("#scouting-cards .scout").nth(0).locator("p.ns-coach").is_visible()
+            assert errors == [], errors
+        finally:
+            browser.close()

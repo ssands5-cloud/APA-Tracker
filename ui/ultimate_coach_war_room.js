@@ -216,15 +216,26 @@
     if(!n) return "";
     if(kind==="icon") return '<span class="note-flag" title="'+esc(n+" (your opinion, not APA facts)")+'">📝</span>';
     if(kind==="preview-space") return ' <span>'+wrNotePreview(n,label)+'</span>';
+    if(kind==="dot") return ' · 📝 '+esc(n)+' (your opinion, not APA facts)';
+    if(kind==="card") return '📝 '+esc(n+" (your opinion, not APA facts)");
     return '<span>'+wrNotePreview(n,label)+'</span>';
   }
-  function wrNoteFlagSlot(pid,kind,label){
-    return '<span class="note-flag-slot" data-note-pid="'+esc(pid)+'" data-note-kind="'+esc(kind)+'" data-note-label="'+esc(label||"")+'">'+wrNoteFlagHtml(pid,kind,label)+'</span>';
+  // GPT audit (issue #84, NOTES-01 follow-up): "empty wrappers are implementation work, not an
+  // owner-review gate" -- a box-styled wrapper (Next Send's and the scouting card's own note
+  // box) is always present in the DOM so it can be patched live, hidden via style when there is
+  // no note so an empty colored box never shows, same as a bare icon/text slot shows nothing.
+  function wrNoteFlagSlot(pid,kind,label,tag,cls){
+    tag=tag||"span";
+    var html=wrNoteFlagHtml(pid,kind,label);
+    return '<'+tag+' class="note-flag-slot'+(cls?" "+cls:"")+'" data-note-pid="'+esc(pid)+'" data-note-kind="'+esc(kind)+'" data-note-label="'+esc(label||"")+'"'+(html?"":' style="display:none"')+'>'+html+'</'+tag+'>';
   }
   function wrPatchNoteFlags(pid){
     document.querySelectorAll(".note-flag-slot").forEach(function(s){
-      if(s.getAttribute("data-note-pid")===String(pid))
-        s.innerHTML=wrNoteFlagHtml(pid,s.getAttribute("data-note-kind"),s.getAttribute("data-note-label"));
+      if(s.getAttribute("data-note-pid")===String(pid)){
+        var html=wrNoteFlagHtml(pid,s.getAttribute("data-note-kind"),s.getAttribute("data-note-label"));
+        s.innerHTML=html;
+        s.style.display=html?"":"none";
+      }
     });
   }
   function wrArchiveHtml(pid){
@@ -530,7 +541,7 @@
     // (BLIND-01 #4).
     var chosen=sel!==undefined;
     if(!chosen) sel=open[0];
-    var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel],note=wrCoachSummary(opp.id);
+    var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel];
     // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
     var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
@@ -560,7 +571,7 @@
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
       })()
-      +(note?'<div class="ns-coach">'+wrNotePreview(note,"your opinion, not APA facts")+'</div>':'')
+      +wrNoteFlagSlot(opp.id,"preview","your opinion, not APA facts","div","ns-coach")
       +'</div>';
   }
 
@@ -604,7 +615,7 @@
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
@@ -645,7 +656,10 @@
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+wrNoteFlagSlot(b.opponent.id,"icon")+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
-      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a live winning record against our remaining roster.")+'</div>'
+      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+(function(){
+        var items=plan.threats.map(function(c){return '<li>'+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
+        return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("No unplayed opponent has a live winning record against our remaining roster.")+'</li>')+'</ul>';
+      })()+'</div>'
       +'<div><h3>Avoid sends</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents).</p>'+wrList(plan.concerning.map(function(c){return c.text;}),"No concerning direct records among remaining pairings.")+'</div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
@@ -701,11 +715,11 @@
         var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
           +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
-        var cs=wrCoachSummary(c.opponent.id),hasNote=!!(cc.n&&cc.n.trim());
+        var hasNote=!!(cc.n&&cc.n.trim());
         var badges=wrQuickReadBadges(c,w.blocks[j],hasNote);
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
           +'<p class="quick-read-badges">'+badges.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</p>'
-          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+(cs?'<p class="ns-coach">📝 '+esc(cs)+' <span class="muted">(your opinion, not APA facts)</span></p>':'')+'<dl>'
+          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
           +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'
