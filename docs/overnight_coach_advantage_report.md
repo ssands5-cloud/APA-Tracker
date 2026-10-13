@@ -12,12 +12,24 @@
 
 **Coach Notes Integration** — matrix column header note-flag shipped at `7730072`, audit
 requested at issue #84, not yet closed. Best-sends-now note-flag shipped at `0c0b2f9`, audit
-requested. Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`, issue #84
-comment 6123794285). See COMPLETED.
+requested. Lineup Lab best-remaining-sends note-flag shipped at `8703efd`, audit requested.
+Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`, issue #84 comment
+6123794285). See COMPLETED.
 
 Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **Lineup Lab's "Best remaining sends" list flags the opponent with a coach note.** Shipped at
+  `8703efd`, audit requested, not yet closed.
+
+  **Captain decision now supported:** the same question as Best sends now, asked from the panel
+  a captain is actually working from while marking availability and lineup — could I tell which
+  unplayed opponent I've already scouted without leaving Lineup Lab? The list previously went
+  through `wrList()`, which escapes every item and so could not carry the note's HTML; replaced
+  with an equivalent hand-built `<ul class="wr-list">` so the existing `wrNotePreview()` markup
+  survives. Verified the new test fails red without the fix and passes green with it. Engine 57,
+  browser 39.
 
 - **"Best sends now" (Tonight, first screen) flags the opponent with a coach note.** Shipped at
   `0c0b2f9`, audit requested, not yet closed.
