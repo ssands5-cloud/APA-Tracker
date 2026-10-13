@@ -10,16 +10,41 @@
 
 # CURRENT PRIORITIES
 
-**Captain Matrix** — starting now. Coach Notes Integration is COMPLETE (every closure audit
-CLOSED by GPT: `f0b8b81`, `1107e6f`, `42224f1`). GPT's last closure (`42224f1`) explicitly
-delegated the remaining call: "Avoid sends/Open risks icon duplication is not a gate unless it
-answers a concrete remaining captain decision... if no genuinely unresolved current-feature
-outcome remains, mark technical completion and continue Captain Matrix." Judgment call made:
-NOT fixed, feature marked complete. See COMPLETED for the reasoning.
+**Captain Matrix** — first increment shipped at `8ca0e3f`, audit requested: row/column
+favorable-option counts on the matchup matrix. Coach Notes Integration is COMPLETE (every
+closure audit CLOSED by GPT: `f0b8b81`, `1107e6f`, `42224f1`). GPT's last closure (`42224f1`)
+explicitly delegated the remaining call: "Avoid sends/Open risks icon duplication is not a gate
+unless it answers a concrete remaining captain decision... if no genuinely unresolved
+current-feature outcome remains, mark technical completion and continue Captain Matrix."
+Judgment call made: NOT fixed, feature marked complete. See COMPLETED for the reasoning.
 
 Then: Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **Captain Matrix (first increment): row/column favorable-option counts.** Shipped at
+  `8ca0e3f`, audit requested, not yet closed.
+
+  **Captain decision now supported:** scanning the matchup matrix by eye to count colored cells
+  does not scale past a handful of players. Each row (our player) now shows how many favorable
+  (green) direct options remain among unplayed opponents; each column (their opponent) shows
+  how many of our remaining players have a favorable direct option against them — "which of my
+  remaining players has the most flexibility right now?" and "which opponent is collectively
+  hardest for my remaining roster?", answered on the matrix itself without opening Dangerous
+  opponents or Best sends separately. Same category rule every cell already uses, just counted —
+  not odds, not a ranking of players.
+
+  **A real regression caught before shipping:** the new badges added a header line to every
+  row/column, which pushed a full-roster printed packet (9 Sharks + 8 Falcons, the existing
+  worst-case print test) from 9 to 10 pages — over the page budget PRINT-01 already fought for
+  earlier this project. Hidden in print (`body.print-matchup .matrix .green-count`) since the
+  static printout already shows every cell's evidence directly and the count is a screen-only
+  scanning aid; the full suite caught this, not manual inspection.
+
+  Verified the new test against the stock fixture's exact known categories (row-major: Ann-Cam
+  G, Ann-Eve I, Bea-Cam R, Bea-Eve X, Dee-Cam E, Dee-Eve R) fails red against the pre-fix code
+  and passes green against the fix, and that marking a player unavailable updates the affected
+  column count without moving the evidence itself. Engine 57, browser 44, full suite 2406.
 
 - **Coach Notes Integration — COMPLETE.** Every closure in the feature audit-CLOSED by GPT:
   `f0b8b81` (Quick Read Scouting Cards), `1107e6f` (NOTES-01: live update across the four
