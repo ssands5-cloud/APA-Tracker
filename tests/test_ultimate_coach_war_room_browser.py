@@ -31,16 +31,32 @@ CAM, EVE = "Cam Cole (APA record ID 2001)", "Eve Ellis (APA record ID 2002)"
 # of the same tag ride along unnoticed, which is exactly the hole this avoids.
 _NOTE_BADGE_SENTINEL = "T|SPAN|❓ No coach observations"
 
+# GPT audit (issue #84, NOTES-01): the matrix header and the Best-sends opportunities table
+# flag a noted opponent with the bare glyph alone (the note text itself lives in a title
+# attribute, not a text node, so it carries no identifying text to exempt it the way the
+# preview-style occurrences elsewhere are already exempted by containing the note). This is the
+# same class of authorized live metadata as the badge above -- whether a note exists, not
+# evidence it could corrupt -- so up to one occurrence per of those two icon-style locations may
+# appear or disappear, matched by the exact literal glyph text, same bar as the sentinel above,
+# not a tag-shaped exemption.
+_NOTE_FLAG_GLYPH_LINE = "T|SPAN|📝"
+_NOTE_FLAG_GLYPH_LOCATIONS = 2
+
 
 def _leaked_excluding_note_badge(changed: list[str], note: str) -> list[str]:
-    """changed lines that are neither the note itself nor the one authorized
-    note-presence badge toggling off or on. Capped at one toggle so a second,
-    unrelated change that happened to collide with the exact sentinel text is
-    still caught rather than silently absorbed by the exemption."""
+    """changed lines that are neither the note itself, the one authorized note-presence badge
+    toggling off or on, nor the bare note-flag glyph toggling in its (at most two) icon-style
+    locations. Each is capped so a second, unrelated change that happened to collide with the
+    exact text is still caught rather than silently absorbed by the exemption."""
     badge_toggle = [line for line in changed
                     if line in ("+" + _NOTE_BADGE_SENTINEL, "-" + _NOTE_BADGE_SENTINEL)]
     assert len(badge_toggle) <= 1, f"note-presence badge moved more than once: {badge_toggle!r}"
     rest = [line for line in changed if line not in badge_toggle]
+    glyph_toggle = [line for line in rest
+                    if line in ("+" + _NOTE_FLAG_GLYPH_LINE, "-" + _NOTE_FLAG_GLYPH_LINE)]
+    assert len(glyph_toggle) <= _NOTE_FLAG_GLYPH_LOCATIONS, (
+        f"note-flag glyph moved in more locations than expected: {glyph_toggle!r}")
+    rest = [line for line in rest if line not in glyph_toggle]
     return [line for line in rest if note not in line]
 
 
@@ -688,7 +704,11 @@ def test_a_coach_note_is_remembered_cleared_and_never_changes_the_evidence(tmp_p
             box.evaluate("e => { e.dispatchEvent(new Event('input', {bubbles: true})); e.blur(); }")
             page.wait_for_timeout(400)
 
-            assert tables() == before, "a coach note must never reorder the evidence"
+            # GPT audit (issue #84, NOTES-01): the Best-sends table's note-flag glyph is now live
+            # (authorized metadata about the opinion, not evidence), so it is stripped before
+            # comparing -- the comparison still catches any real evidence change underneath it.
+            strip_flag = lambda rows: [t.replace("📝", "") for t in rows]
+            assert strip_flag(tables()) == strip_flag(before), "a coach note must never reorder the evidence"
 
             stored = page.evaluate(
                 "n => Object.keys(localStorage).filter(k => (localStorage.getItem(k) || '').includes(n))",
@@ -1709,8 +1729,10 @@ def test_matrix_column_header_flags_opponents_with_a_coach_note(tmp_path: Path):
     name -- never inside the evidence cell itself -- and carries the same "(your opinion, not
     APA facts)" qualifier used everywhere else a coach note surfaces.
 
-    Not live, by design: like every other quick-read fact, it updates on the next real render,
-    not mid-keystroke, so it needs no new isolation-guard exemption.
+    Live, not just on reload (GPT audit issue #84, NOTES-01): the first version of this flag only
+    updated on the next full render, so typing and blurring an observation left the flag absent
+    until something else (a reload, a lineup mark) forced a re-render -- a captain who only wrote
+    a note would never see it appear. Fixed by patching the flag's own stable slot on input.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1724,20 +1746,23 @@ def test_matrix_column_header_flags_opponents_with_a_coach_note(tmp_path: Path):
 
             page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
             page.locator('#scouting-cards textarea[data-pid="10"]').blur()
-            page.reload()
-            page.wait_for_load_state("load")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(200)
 
             flags = page.locator(".matrix thead th .note-flag")
-            assert flags.count() == 1, "exactly the one opponent with a note should be flagged"
+            assert flags.count() == 1, "the flag must appear live, with no reload"
             cam_head = page.locator(".matrix thead th").nth(1)
             assert "Cam Cole" in cam_head.inner_text()
             assert "📝" in cam_head.inner_text()
             assert flags.first.get_attribute("title") == (
                 "Coach: Breaks hard, go even (your opinion, not APA facts)")
-
             eve_head = page.locator(".matrix thead th").nth(2)
             assert "📝" not in eve_head.inner_text(), eve_head.inner_text()
+
+            # And it survives a reload, same as the note itself.
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert page.locator(".matrix thead th .note-flag").count() == 1
             assert errors == [], errors
         finally:
             browser.close()
@@ -1750,8 +1775,9 @@ def test_best_sends_now_flags_the_opponent_with_a_coach_note(tmp_path: Path):
     Dangerous opponents, two columns over on the same screen, already surfaces the exact same
     note via wrNotePreview; Best sends now was the one decide-grid column left out.
 
-    Not live, by design, same as the matrix header flag: wrTonight() only runs on a full render,
-    never per keystroke, so no isolation-guard exemption is needed.
+    Live, not just on reload (GPT audit issue #84, NOTES-01): the first version only updated on
+    the next full render, so typing and blurring an observation left this line stale until
+    something else forced a re-render. Fixed by patching the flag's own stable slot on input.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1763,17 +1789,21 @@ def test_best_sends_now_flags_the_opponent_with_a_coach_note(tmp_path: Path):
 
             page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
             page.locator('#scouting-cards textarea[data-pid="10"]').blur()
-            page.reload()
-            page.wait_for_load_state("load")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(200)
 
-            sends = page.locator("#tonight .decide-sends")
-            text = sends.inner_text()
-            assert "📝 Coach: Breaks hard, go even (opinion)" in text
+            text = page.locator("#tonight .decide-sends").inner_text()
+            assert "📝 Coach: Breaks hard, go even (opinion)" in text, (
+                "the note must appear live, with no reload: " + text)
             # The note sits on Cam's line, not Eve's -- confirmed by splitting on the opponent names.
             cam_part, _, eve_part = text.partition("Eve Ellis")
             assert "Breaks hard, go even" in cam_part
             assert "Breaks hard, go even" not in eve_part
+
+            # And it survives a reload, same as the note itself.
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert "📝 Coach: Breaks hard, go even (opinion)" in page.locator("#tonight .decide-sends").inner_text()
             assert errors == [], errors
         finally:
             browser.close()
@@ -1786,6 +1816,9 @@ def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tm
     whether a personal scouting note exists without leaving the panel. Fixed the same way, reusing
     wrCoachSummary/wrNotePreview, replacing the plain wrList() call with an equivalent <ul
     class="wr-list"> built by hand so the note HTML is not escaped away.
+
+    Live, not just on reload (GPT audit issue #84, NOTES-01): fixed the same way as the matrix
+    header and Best sends now, via the flag's own stable slot patched on input.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1797,17 +1830,22 @@ def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tm
 
             page.fill('#scouting-cards textarea[data-pid="11"]', "Shaky on the break")
             page.locator('#scouting-cards textarea[data-pid="11"]').blur()
-            page.reload()
-            page.wait_for_load_state("load")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(200)
 
-            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
             text = best.inner_text()
-            assert "📝 Coach: Shaky on the break (your opinion, not APA facts)" in text
+            assert "📝 Coach: Shaky on the break (your opinion, not APA facts)" in text, (
+                "the note must appear live, with no reload: " + text)
             # The note sits on Eve's line, not Cam's.
             cam_part, _, eve_part = text.partition("Eve Ellis")
             assert "Shaky on the break" not in cam_part
             assert "Shaky on the break" in eve_part
+
+            # And it survives a reload, same as the note itself.
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
+            assert "📝 Coach: Shaky on the break (your opinion, not APA facts)" in best.inner_text()
             assert errors == [], errors
         finally:
             browser.close()
@@ -1819,6 +1857,9 @@ def test_opportunities_table_flags_the_opponent_with_a_coach_note(tmp_path: Path
     phone-first send lists already fixed, but carried no note indicator. Fixed with the same
     compact note-flag span used in the matrix header (a dense data table, not prose, so the icon
     + title pattern fits better here than wrNotePreview's inline text).
+
+    Live, not just on reload (GPT audit issue #84, NOTES-01): fixed the same way as the matrix
+    header, via the flag's own stable slot patched on input.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1831,18 +1872,22 @@ def test_opportunities_table_flags_the_opponent_with_a_coach_note(tmp_path: Path
 
             page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
             page.locator('#scouting-cards textarea[data-pid="10"]').blur()
-            page.reload()
-            page.wait_for_load_state("load")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(200)
 
             flags = page.locator("#wr-opportunities .note-flag")
-            assert flags.count() == 1, "exactly the one opponent with a note should be flagged"
+            assert flags.count() == 1, "the flag must appear live, with no reload"
             cam_row = page.locator("#wr-opportunities .send-table tbody tr").nth(0)
             assert "Cam Cole" in cam_row.inner_text()
             assert flags.first.get_attribute("title") == (
                 "Coach: Breaks hard, go even (your opinion, not APA facts)")
             eve_row = page.locator("#wr-opportunities .send-table tbody tr").nth(1)
             assert "📝" not in eve_row.inner_text(), eve_row.inner_text()
+
+            # And it survives a reload, same as the note itself.
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+            assert page.locator("#wr-opportunities .note-flag").count() == 1
             assert errors == [], errors
         finally:
             browser.close()

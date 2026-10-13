@@ -205,6 +205,28 @@
     if(n.length<=48) return '<span class="note-line">📝 '+esc(full)+'</span>';
     return '<details class="note-more"><summary>📝 '+esc(n.slice(0,36).replace(/\s+\S*$/,""))+'… <span class="muted">('+esc(label)+')</span></summary>'+esc(n)+'</details>';
   }
+  // GPT audit (issue #84, NOTES-01): a note-flag rendered at full-render time only went stale the
+  // moment a captain typed and blurred a new observation -- the flag they just created would not
+  // appear anywhere (matrix header, Tonight, Lineup Lab, the opportunities table) until something
+  // else forced a full re-render. Same authorization as the scouting card's own live "No coach
+  // observations" badge below: note PRESENCE is metadata about the opinion, not evidence it could
+  // corrupt, so every occurrence of it is kept live via a stable slot, patched by pid on input.
+  function wrNoteFlagHtml(pid,kind,label){
+    var n=wrCoachSummary(pid);
+    if(!n) return "";
+    if(kind==="icon") return '<span class="note-flag" title="'+esc(n+" (your opinion, not APA facts)")+'">📝</span>';
+    if(kind==="preview-space") return ' <span>'+wrNotePreview(n,label)+'</span>';
+    return '<span>'+wrNotePreview(n,label)+'</span>';
+  }
+  function wrNoteFlagSlot(pid,kind,label){
+    return '<span class="note-flag-slot" data-note-pid="'+esc(pid)+'" data-note-kind="'+esc(kind)+'" data-note-label="'+esc(label||"")+'">'+wrNoteFlagHtml(pid,kind,label)+'</span>';
+  }
+  function wrPatchNoteFlags(pid){
+    document.querySelectorAll(".note-flag-slot").forEach(function(s){
+      if(s.getAttribute("data-note-pid")===String(pid))
+        s.innerHTML=wrNoteFlagHtml(pid,s.getAttribute("data-note-kind"),s.getAttribute("data-note-label"));
+    });
+  }
   function wrArchiveHtml(pid){
     var a=WR_PLAN.archive[String(pid)]||[];
     if(!a.length) return "";
@@ -567,11 +589,11 @@
     // pick is labelled as one unordered candidate, never "best" (GPT audit #84 P2).
     var sends=[];w.blocks.forEach(function(b,j){
       if(!plan.unplayed[j]||sends.length>=3) return;
-      var s=plan.sends[j],note=wrCoachSummary(b.opponent.id);
-      if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",note:note});return;}
+      var s=plan.sends[j];
+      if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",pid:b.opponent.id});return;}
       var r=s[0],direct=r.category!=="I";
       var tied=direct&&s.length>1&&s[1].rank===r.rank;
-      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)),note:note});
+      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)),pid:b.opponent.id});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});
@@ -581,7 +603,7 @@
       +wrBlindSendCard(w,plan,ta)
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
-      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+(x.note?'<span>'+wrNotePreview(x.note,"opinion")+'</span>':'');}).join(''):'<span>Every opponent has played.</span>')+'</div>'
+      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
@@ -620,8 +642,7 @@
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
           :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>');})(wrSendLabels(plan.sends[j]))
           :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
-        var note=wrCoachSummary(b.opponent.id),flag=note?' <span class="note-flag" title="'+esc(note+" (your opinion, not APA facts)")+'">📝</span>':"";
-        return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+flag+'</td><td>'+cell+'</td></tr>';
+        return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+wrNoteFlagSlot(b.opponent.id,"icon")+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
       +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a live winning record against our remaining roster.")+'</div>'
@@ -630,8 +651,7 @@
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
     var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){
-      var cs=wrCoachSummary(o.id),flag=cs?'<span class="note-flag" title="'+esc(cs+" (your opinion, not APA facts)")+'">📝</span>':'';
-      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+flag+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';
+      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';
     }).join("")+'</tr>';
     var body=w.matrix.map(function(row,i){
       var m=row.member,out=!plan.rem[String(m.id)];
@@ -668,9 +688,8 @@
       +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
       +(function(){
         var items=w.blocks.map(function(b,j){if(!plan.unplayed[j]) return null;
-          var note=wrCoachSummary(b.opponent.id);
           var text="vs "+b.opponent_label+": "+(plan.sends[j].length?wrBestSendText(plan.sends[j]):"no evidence-backed option left among our remaining players");
-          return '<li>'+esc(text)+(note?' <span>'+wrNotePreview(note,"your opinion, not APA facts")+'</span>':'')+'</li>';
+          return '<li>'+esc(text)+wrNoteFlagSlot(b.opponent.id,"preview-space","your opinion, not APA facts")+'</li>';
         }).filter(Boolean);
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("Every opponent has already played.")+'</li>')+'</ul>';
       })()
@@ -758,6 +777,9 @@
         if(has&&found) found.remove();
         else if(!has&&!found){var sp=document.createElement("span");sp.textContent="\u2753 No coach observations";row.appendChild(sp);}
       }
+      // GPT audit (issue #84, NOTES-01): the note-flag occurrences below are the same kind of
+      // live metadata as the badge above, not evidence -- see wrPatchNoteFlags.
+      wrPatchNoteFlags(npid);
     });
     root.addEventListener("click",function(ev){
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
