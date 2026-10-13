@@ -1,6 +1,6 @@
 # CURRENT PRIORITIES
 
-Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; Quick Read is audited complete; Coach Notes Integration is current.
+Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; Quick Read and Coach Notes Integration are audited complete in the recorded implementation scope; Captain Matrix is current.
 
 **One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
 
@@ -44,6 +44,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **Coach Notes Integration — VERIFIED COMPLETE in recorded implementation scope, builder 2fee9b6 / GPT closures 1107e6f and 42224f1.** Captain can see personally recorded observations alongside send/threat/scouting choices and update them without reloading; notes remain separate from APA evidence. Avoid sends/Open risks duplicate indicators deliberately omitted because the observations are already available on the decision surfaces. Technical closure does not approve merge, publication or production release.
+
 - **Coach Notes stale-display follow-up — CLOSED, 92a482a.** Dangerous opponents, Next Send observation box and scouting-card paragraph now update live; clearing hides styled wrappers. Five focused browser checks and phone create/edit/clear support this closure.
 
 - **NOTES-01 — CLOSED, 5a49cd1.** Matrix headers, Tonight Best sends now, Lineup Lab and opportunities now update observation presentation without reload. Phone create/edit/clear reproduced; affected isolation checks pass. This closes the scoped finding, not all Coach Notes Integration.
@@ -59,12 +61,14 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
-**Coach Notes Integration:** NOTES-01 and its remaining stale-display corrections are CLOSED in audited HTML workflows at 5a49cd1 / 92a482a. Preserve existing packet/observation separation and earlier verified work. Builder should reconcile whole-feature completion with these closures; no additional indicator duplication is required solely because another list names an opponent. Captain Matrix follows once current feature completion is recorded with any genuinely unresolved captain outcome stated.
+**Captain Matrix is current.** Coach Notes Integration is VERIFIED COMPLETE in the recorded implementation scope: builder completion 2fee9b6 agrees with independent closures at 5a49cd1 / 92a482a. No unresolved current-feature captain outcome was identified. Preserve known live-artifact/release limits and existing packet observation separation; no repeat foundation proof.
 
 - Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 02:10 UTC delegated Coach Notes completion confirmed: builder 2fee9b6 / issue response 6136417550 reconciles the independently executed four-surface and remaining stale-display closures. Accept the explained decision to omit redundant Avoid sends/Open risks indicators; no demonstrated remaining captain outcome requires those copies. No repeated tests or new acceptance gate. Captain Matrix is now current; actual local source/test edits observed, not yet audited or accepted. Preserve prior packet/foundation scope and separate live-artifact/release approvals.
 
 2026-10-13 01:40 UTC Coach Notes follow-up independently verified at 92a482a: three new live-display cases and two affected isolation checks PASS (five checks). Additional 390x844 synthetic create/edit/clear shows Next Send and scouting observation wrappers visible on entry/edit and hidden on clear, without reload or browser errors. Initial custom phone selector matched three wrappers; corrected to the precise Next Send container and completed that check without rerunning the five passes. Private synthetic artifact tmp/audit/coach-notes-92a482a/wr.html. Related findings CLOSED. No unchanged packet/native/foundation proof or full-suite rerun. Avoid sends/Open risks icon duplication is not a completion gate absent a concrete unanswered decision; preserve APA-based reasons separately from observations. Builder whole-feature completion response remains to be reconciled, not routine Paul acceptance.
 
