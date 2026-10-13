@@ -1,6 +1,6 @@
 # CURRENT PRIORITIES
 
-Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; Quick Read, Coach Notes Integration and Captain Matrix are audited complete in the recorded implementation scope; Mobile Match-Night is current.
+Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; The ordered feature sequence is technically complete in the recorded implementation scope, including bounded Mobile Match-Night. Preserve all closures; current-artifact readiness and separate release approvals remain.
 
 **One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
 
@@ -44,6 +44,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **Mobile Match-Night — VERIFIED COMPLETE in bounded sampled implementation scope, builder 172fa4d / GPT 3d1c17c and 7e2eff9.** Newly changed Coach Notes/matrix behavior works in the synthetic slim/encrypted wrapper; phone geometry sampling found no defect. Chromium emulation, not native installed Safari or production-package acceptance. No new captain behavior was built in this mobile pass.
+
 - **Captain Matrix — VERIFIED COMPLETE in recorded implementation scope, 8ca0e3f / d32549e, builder completion 826157d.** Captain can scan remaining favorable direct alternatives by player/opponent with visible phone semantics and zero caution; count/availability/evidence and affected print checks passed. Existing Captain/Evidence toggle and colors remain preserved. No new release approval.
 
 - **MATRIX-01 — CLOSED, d32549e.** Favorable direct-option counts have a visible phone explanation; zero is not opponent strength. Changed legend browser case and affected print-budget case pass; actual phone capture reviewed.
@@ -65,14 +67,14 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
-**Mobile Match-Night is current.** Captain Matrix technical completion is confirmed from builder 826157d and the executed count/availability, phone explanation and affected print closures. Preserve existing Captain/Evidence toggle and colors, foundation freeze, all prior closures and separate release gates. Audit only genuinely changed mobile behavior or proven defects.
-
-**Captain Matrix is current.** Coach Notes Integration is VERIFIED COMPLETE in the recorded implementation scope: builder completion 2fee9b6 agrees with independent closures at 5a49cd1 / 92a482a. No unresolved current-feature captain outcome was identified. Preserve known live-artifact/release limits and existing packet observation separation; no repeat foundation proof.
+**Current-artifact readiness remains separate from feature closure.** The ordered sequence is complete in its recorded implementation scope; no open sampled mobile defect remains. Retain existing final artifact/source/data bindings and release gates. Current HTML/workbook/packet candidates must carry the completed changes before release; do not infer that an older bound artifact includes them. Any necessary changed-artifact checks remain delegated, with no unchanged foundation proof or new verification framework.
 
 - Scheduled continuation is blocked pending a present-user task/tool approval, per Claude diagnosis: run started in a different worktree and hung on folder-scoped approval. Align the task working directory and permissions with its intended canonical-linked builder location before approving Run now. No bypass or guaranteed future success inferred. Main builder session has resumed Next Send; do not confuse this with successful unattended execution.
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 05:40 UTC builder 172fa4d reconciles bounded Mobile Match-Night completion and narrows test wording without changing behavior. GPT confirms completion in the executed synthetic wrapper/phone sampling scope; no repeated tests. All ordered feature closures now stand. Builder wording calling the sample an installed package remains broader than evidence: it was locally served/unlocked synthetic output in Chromium, not a home-screen-installed native Safari application. Keep that limit explicit rather than introducing an owner repeat or new platform gate. Remaining work is the existing current-artifact readiness/release boundary, honest known data limits and any genuinely new defect, not new feature increments for activity.
 
 2026-10-13 03:55 UTC bounded mobile review at clean e69caec / 91c8f5e: evidence framing now identifies Chromium emulation. Independently unlocked the existing synthetic slim/encrypted fixture at 375x812 and inspected the changed features: expected row counts 1/0/0; document width 375 equals viewport; first matrix cell 90x44; three empty styled note wrappers display none with zero height. Confirms the stated sampled geometry, with no defect found. Prior live-note/offline matrix-flag integration pass remains preserved; did not repeat it or a full suite. Post-reload Tonight/count behavior and native installed Safari remain outside this evidence, regardless of broader wording in the test docstring. Private artifacts tmp/audit/mobile-e69caec. No newly unanswered captain outcome identified in this sampled mobile pass. Builder can reconcile bounded Mobile Match-Night completion without inventing more tests; retain the existing final current-artifact/owner release gates and honest data limits.
 
