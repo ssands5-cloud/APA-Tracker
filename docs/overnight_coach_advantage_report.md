@@ -41,6 +41,21 @@ two increments just closed cover at-a-glance flexibility, and anything further (
 long-roster scanning) is mobile-specific scope. Coach Notes Integration is also COMPLETE (every
 closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 
+**With Blind Send, Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix, and Mobile
+Match-Night all closed, fell back to the open mission: find the next captain decision the
+product cannot currently answer.** Investigated the most plausible candidate — "is tonight's
+team result already clinched or already lost, so should this send protect next week's lineup
+instead of trying to win this one match?" — and confirmed it is not implementable as a small
+increment: the product has no running score for the match in progress. `is_scored`/
+`home_score`/`away_score` exist only on completed historical fixtures (used for evidence and
+records); the Available/Played/Unavailable flags a captain sets tonight track personnel status
+only, never points. Answering "is it decided yet" honestly would require building live
+match-result entry first — new input machinery, not a small increment on an existing surface —
+which is a scoping decision for Paul, not something to add unilaterally under an architecture
+freeze. **No smaller captain-decision gap was found this pass, stated explicitly rather than
+invented**, same discipline as Mobile Match-Night's "no new gap found." Flagging the
+clinch-tracking idea on issue #84 for GPT/Paul rather than building it speculatively.
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
