@@ -233,7 +233,7 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   /* Screen-only scanning aid (Captain Matrix): the printed packet already shows every cell's
      evidence; a flexibility count that costs a header line per row/column is not worth the page
      budget PRINT-01 already fought for. */
-  body.print-matchup .matrix .green-count { display:none; }
+  body.print-matchup .matrix .green-count,body.print-matchup .matrix-count-legend { display:none; }
   body.print-matchup .send-table,body.print-matchup .wr-list,body.print-matchup .legend { font-size:10px; }
   body.print-matchup .risk-grid { grid-template-columns:1fr 1fr 1fr; gap:8px; }
   body.print-matchup .risk-grid h3 { font-size:11px; }

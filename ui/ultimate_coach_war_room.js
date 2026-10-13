@@ -692,6 +692,10 @@
       +[["captain","Captain view"],["evidence","Evidence view"]].map(function(v){return '<button type="button" class="mv'+(WR_VIEW===v[0]?' on':'')+'" data-view="'+v[0]+'" aria-pressed="'+(WR_VIEW===v[0])+'">'+v[1]+'</button>';}).join("")+'</div></div>'
       +(WR_VIEW==="captain"?'<p class="legend">🟢 Favorable direct record · 🟡 Even direct, or shared-opponent evidence only (≈) · ⚪ No verified evidence — unknown, not weak · 🔴 More direct losses than wins. Numbers are our direct record. Not odds. Tap a cell for the evidence, or switch to Evidence view for sample sizes.</p>':'')
       +'<p class="legend'+(WR_VIEW==="captain"?' print-only':'')+'"><span class="cat-dot cat-G"></span>Green = more direct wins than losses <span class="cat-dot cat-R"></span>Red = more direct losses than wins <span class="cat-dot cat-E"></span>Yellow = even direct record, or shared-opponent evidence only (≈ ours vs theirs) <span class="cat-dot cat-X"></span>Gray = no verified evidence in this snapshot. Numbers in () are meetings. Colors describe recorded results only — not odds or predictions. Where identities are unresolved or excluded a pairing’s history can be incomplete, and the missing results can move a category either way — favorable can prove concerning. Tap a cell for the evidence behind it.</p>'
+      // GPT audit (issue #84, MATRIX-01): a hover title explains nothing on a phone, which has
+      // no hover. 🟢×N needs a visible explanation, worded so a 0 is never read as "hardest" or
+      // "safe" -- it can just as easily mean even, shared-only or no verified evidence at all.
+      +'<p class="legend matrix-count-legend">🟢×N next to a player = favorable direct options left among unplayed opponents. 🟢×N next to an opponent = how many of your remaining players have a favorable direct record against them. 0 does not mean hardest or safe — it can mean even, shared-opponent-only or no verified evidence; check the row or column for which.</p>'
       +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
       +'<div id="wr-pair">'+pairHtml+'</div>';
     // Lineup Lab

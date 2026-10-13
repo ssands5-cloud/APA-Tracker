@@ -2042,3 +2042,25 @@ def test_captain_matrix_row_and_column_show_favorable_option_counts(tmp_path: Pa
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_captain_matrix_counts_have_a_visible_phone_explanation(tmp_path: Path):
+    """GPT audit (issue #84, MATRIX-01): a hover title explains nothing on a phone, which has no
+    hover -- the actual synthetic phone case showed only a bare green dot x N with no visible
+    meaning. Needed a compact visible key, worded so 0 is never read as "hardest" or "safe": it
+    can just as easily mean even, shared-opponent-only or no verified evidence at all.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            legend = page.locator("#wr-matrix .matrix-count-legend")
+            assert legend.count() == 1
+            text = legend.inner_text()
+            assert "favorable direct options left among unplayed opponents" in text
+            assert "favorable direct record against them" in text
+            # The caution against overreading a 0 must be visible, not just implied.
+            assert "does not mean hardest or safe" in text
+            assert errors == [], errors
+        finally:
+            browser.close()
