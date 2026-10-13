@@ -44,6 +44,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **MATRIX-01 — CLOSED, d32549e.** Favorable direct-option counts have a visible phone explanation; zero is not opponent strength. Changed legend browser case and affected print-budget case pass; actual phone capture reviewed.
+
 - **Coach Notes Integration — VERIFIED COMPLETE in recorded implementation scope, builder 2fee9b6 / GPT closures 1107e6f and 42224f1.** Captain can see personally recorded observations alongside send/threat/scouting choices and update them without reloading; notes remain separate from APA evidence. Avoid sends/Open risks duplicate indicators deliberately omitted because the observations are already available on the decision surfaces. Technical closure does not approve merge, publication or production release.
 
 - **Coach Notes stale-display follow-up — CLOSED, 92a482a.** Dangerous opponents, Next Send observation box and scouting-card paragraph now update live; clearing hides styled wrappers. Five focused browser checks and phone create/edit/clear support this closure.
@@ -61,7 +63,7 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
-**MATRIX-01 — explain the new counts visibly at the decision point.** At 8ca0e3f, phone matrix headers show only a green dot times N; row-versus-column meaning is in hover title attributes. Add a compact visible key: row counts favorable direct matchups against unplayed opponents, column counts remaining players with favorable direct records. Zero favorable options can reflect missing/even/unfavorable evidence and does not establish that an opponent is hardest or safe. Preserve the verified arithmetic, availability behavior and print-page budget.
+**Captain Matrix completion response pending.** MATRIX-01 is CLOSED at d32549e: visible phone key explains both count directions and cautions against interpreting zero as hardest or safe. Preserve verified arithmetic/availability and print-budget cases. Reconcile current-feature completion before Mobile Match-Night; do not invent more matrix increments without an unanswered captain decision.
 
 **Captain Matrix is current.** Coach Notes Integration is VERIFIED COMPLETE in the recorded implementation scope: builder completion 2fee9b6 agrees with independent closures at 5a49cd1 / 92a482a. No unresolved current-feature captain outcome was identified. Preserve known live-artifact/release limits and existing packet observation separation; no repeat foundation proof.
 
@@ -69,6 +71,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 02:55 UTC MATRIX-01 closure: independently executed new visible-explanation case and affected full-roster print budget with committed d32549e JS/CSS; both PASS. Reviewed actual 390x844 synthetic capture: row/column explanation and zero caution are visible above readable matrix cells, without hover or page errors. Private capture tmp/audit/matrix-d32549e/phone.png. Count arithmetic/availability case remains preserved from 8ca0e3f; no repeat. One audit script indentation error occurred before execution and was corrected; no product defect inferred. Findings CLOSED; builder should reconcile whole Captain Matrix technical completion, retaining existing Captain/Evidence toggle and meaningful colors. No owner repetition, new framework or unsolicited additional increments.
 
 2026-10-13 02:25 UTC Captain Matrix first increment audited at 8ca0e3f: new count/availability/evidence browser case PASS; affected full-roster print-page-budget case PASS with committed JS/CSS bound in memory. Reviewed actual 390x844 synthetic matrix capture: count badges fit their headers and preserve readable evidence cells, but their meaning is available only via hover titles. MATRIX-01 requests visible concise semantics for phone use, including honest zero/unknown interpretation. Private synthetic capture tmp/audit/matrix-8ca0e3f/phone-matrix.png. Counts help scan recorded favorable alternatives; do not endorse builder language that zero identifies the collectively hardest opponent. No measured speed/winning claim, no unchanged suite/foundation proof. Current Captain Matrix remains open pending this focused usability correction and builder completion.
 
