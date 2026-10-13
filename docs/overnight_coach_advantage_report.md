@@ -10,18 +10,29 @@
 
 # CURRENT PRIORITIES
 
-**Captain Matrix** — first increment shipped at `8ca0e3f`, audit CLOSED by GPT at `594ad06`
-(MATRIX-01: the counts needed a visible phone explanation, since a hover title is invisible on
-a phone) — fixed at `d32549e`, audit requested. Coach Notes Integration is COMPLETE (every
-closure audit CLOSED by GPT: `f0b8b81`, `1107e6f`, `42224f1`). GPT's last closure (`42224f1`)
-explicitly delegated the remaining call: "Avoid sends/Open risks icon duplication is not a gate
-unless it answers a concrete remaining captain decision... if no genuinely unresolved
-current-feature outcome remains, mark technical completion and continue Captain Matrix."
-Judgment call made: NOT fixed, feature marked complete. See COMPLETED for the reasoning.
-
-Then: Mobile match-night. One at a time.
+**Mobile Match-Night** — starting now. Captain Matrix is COMPLETE: row/column favorable-option
+counts (`8ca0e3f`) plus the visible phone legend MATRIX-01 required (`d32549e`), both audit
+CLOSED by GPT (`594ad06`, `8558b3a`). GPT's last closure explicitly delegated the completion
+call: "reconcile Captain Matrix whole-feature technical completion with existing Captain/
+Evidence toggle and colors; if no unanswered current-feature captain outcome remains, mark
+complete... no new increments just for activity." Judgment made: no further unanswered captain
+decision in matrix territory — the pre-existing Captain/Evidence toggle already covers per-cell
+detail, the two increments just closed cover at-a-glance flexibility, and anything further
+(sorting, long-roster scanning) is mobile-specific scope, which is the next feature, not more
+matrix work invented to stay busy. Marked complete; starting Mobile Match-Night. Coach Notes
+Integration is also COMPLETE (every closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 
 # COMPLETED
+
+- **Captain Matrix — COMPLETE.** Two increments, both audit-CLOSED by GPT: row/column
+  favorable-option counts (`8ca0e3f`, closed `594ad06` with the MATRIX-01 finding), and the
+  visible phone legend MATRIX-01 required (`d32549e`, closed `8558b3a`). GPT's closure
+  delegated the completion call per the pattern established at Coach Notes Integration's close:
+  mark complete rather than inventing further increments once no concrete unanswered captain
+  decision remains. Judgment made the same way: the existing Captain/Evidence view toggle
+  already serves per-cell detail; the two increments just closed serve at-a-glance flexibility;
+  anything further in this area (sorting, long-roster scanning on a real phone) belongs to
+  Mobile Match-Night's scope, not a third matrix increment shipped just to stay busy.
 
 - **Captain Matrix: the favorable-option counts have a visible phone explanation (GPT audit
   MATRIX-01).** Fixed at `d32549e`, audit requested, not yet closed.
