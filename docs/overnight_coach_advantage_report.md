@@ -348,22 +348,28 @@ closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 
 # OPEN ISSUES
 
-- **Unattended continuation: same hang reproduced again, partially unstuck, still NOT proven
-  unattended.** The 18-minute `ultimate-coach-overnight-continuation` task hung on its very
-  first Bash call again — this run started 2026-10-11 23:17:31Z and sat `isRunning: true` doing
-  nothing for over 24 hours, exactly the earlier cwd/approval pattern (`cwd` is `.worktrees\pr83`,
-  not the session worktree the prompt tells it to `cd` into). While present just now I stopped
-  that zombie, dispatched a fresh run, and switched its permission mode to `auto` — but the mode
-  change did not retroactively clear its already-pending approval either, and it hung a second
-  time. Stopping it again and sending it an explicit resume message finally got it producing real
-  work (531 transcript messages, status `succeeded`). **That required my live intervention twice;
-  it is not proof the recurring schedule itself runs unattended.** The actual test is whether the
-  *next* fire (`nextRunAt` 2026-10-13T00:30:20Z) completes with no manual run_scheduled_task,
-  stop_session or permission-mode call from me — checking that now and will record the outcome
-  here rather than claim it before it happens. No tool available to me sets a scheduled task's
-  default permission mode ahead of dispatch, so if this keeps happening the durable fix needs
-  Paul: approve the task's tool requests once from the sidebar's "Run now" so the approval is
-  stored on the task itself, not on a live session I can only patch while present.
+- **Unattended continuation: same hang reproduced a third time, still NOT proven unattended.**
+  The 18-minute `ultimate-coach-overnight-continuation` task hung on its very first Bash call
+  again — this run started 2026-10-11 23:17:31Z and sat `isRunning: true` doing nothing for over
+  24 hours, exactly the earlier cwd/approval pattern (`cwd` is `.worktrees\pr83`, not the session
+  worktree the prompt tells it to `cd` into). While present just now I stopped that zombie,
+  dispatched a fresh run, and switched its permission mode to `auto` — but the mode change did
+  not retroactively clear its already-pending approval either, and it hung a second time.
+  Stopping it again and sending it an explicit resume message finally got it producing real work
+  (531 transcript messages, status `succeeded`). **That required my live intervention twice; it
+  is not proof the recurring schedule itself runs unattended.**
+
+  **This same fire (2026-10-13, ~03:5x–04:0x UTC) hit the identical first-call stall a third
+  time:** the session's opening Bash call (cd into the worktree + git fetch/status) came back
+  rejected with no approver present, and the session sat waiting rather than producing work. A
+  separate Claude session (`local_0e25580e-...`) noticed, switched this session's permission mode
+  to Auto, and sent an explicit cross-session resume message — only after that did this run
+  proceed. That is a third occurrence of the same pattern, and a third live intervention from
+  outside the scheduled task itself, not a case of the schedule completing unattended. No tool
+  available to me sets a scheduled task's default permission mode ahead of dispatch, so the
+  durable fix still needs Paul: approve the task's tool requests once from the sidebar's "Run
+  now" so the approval is stored on the task itself, not on a live session someone else has to be
+  present to patch.
 
 - **Authorization window extended to Sunday.** Paul: "extend block until next Sunday." Today was
   Monday 2026-10-12, so the window now runs to Sunday 2026-10-18, terminal checkpoint 08:00 MDT
