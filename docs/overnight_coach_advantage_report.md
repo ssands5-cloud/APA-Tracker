@@ -13,12 +13,28 @@
 **Coach Notes Integration** — matrix column header note-flag shipped at `7730072`, audit
 requested at issue #84, not yet closed. Best-sends-now note-flag shipped at `0c0b2f9`, audit
 requested. Lineup Lab best-remaining-sends note-flag shipped at `8703efd`, audit requested.
-Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`, issue #84 comment
-6123794285). See COMPLETED.
+Opportunities table note-flag shipped at `7bb6d2b`, audit requested. That closes every opponent
+send-recommendation surface (Tonight, Lineup Lab, the desktop opportunities table, the matrix).
+Two further surfaces name an opponent without a note and remain open, deliberately not fixed
+this pass pending GPT's read on the first four (see OPEN ISSUES): "Avoid sends" and "Open risks"
+in the Top risks panel. Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`,
+issue #84 comment 6123794285). See COMPLETED.
 
 Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **The desktop "Best sends — top opportunities per opponent" table flags the opponent with a
+  coach note.** Shipped at `7bb6d2b`, audit requested, not yet closed.
+
+  **Captain decision now supported:** third instance of the same gap, this time in the
+  comprehensive desktop table rather than a phone-first list — could I tell which opponent I've
+  scouted while scanning the full ranked send table, without switching to the matrix or scouting
+  cards? Reuses the matrix header's compact note-flag span (icon + title), not
+  `wrNotePreview`'s inline text, since a dense data-table row is a worse fit for inline prose
+  than the matrix header is. The shared `.note-flag` CSS rule was generalized off its old
+  `.matrix th` scope now that two render paths use it. Verified the new test fails red without
+  the fix and passes green with it. Engine 57, browser 40.
 
 - **Lineup Lab's "Best remaining sends" list flags the opponent with a coach note.** Shipped at
   `8703efd`, audit requested, not yet closed.
@@ -157,6 +173,16 @@ Then, in order: Captain Matrix, Mobile match-night. One at a time.
   pairs in three directions: nothing dropped, nothing invented, no Excel/HTML disagreement.
 
 # OPEN ISSUES
+
+- **Two more opponent-naming lists still lack a coach-note flag, deliberately not fixed this
+  pass.** "Avoid sends" and "Open risks" in the Top risks panel (`#wr-risks`) both name an
+  unplayed opponent without any note indicator, the same shape of gap just fixed four times over
+  (matrix header, Tonight's Best sends now, Lineup Lab, the opportunities table). Held back
+  rather than shipped immediately so GPT can weigh in on the first four before a fifth and sixth
+  near-identical change lands un-reviewed; also worth GPT's judgment on whether "Avoid sends" in
+  particular should carry a note at all — it is advice to avoid OUR player's send, not a warning
+  about the opponent, so a captain's personal opinion on the opponent may be less load-bearing
+  there than on every other surface fixed so far.
 
 - **Unattended continuation: same hang reproduced again, partially unstuck, still NOT proven
   unattended.** The 18-minute `ultimate-coach-overnight-continuation` task hung on its very
