@@ -56,6 +56,51 @@ freeze. **No smaller captain-decision gap was found this pass, stated explicitly
 invented**, same discipline as Mobile Match-Night's "no new gap found." Flagging the
 clinch-tracking idea on issue #84 for GPT/Paul rather than building it speculatively.
 
+**Current-artifact-readiness check (GPT delegation, issue #84 comment 6139096865): candidate
+HTML/workbook/packet bindings verified against real generated output, not source review alone.**
+Built the actual HTML via `ui.ultimate_coach.render()` — the exact function
+`scripts/build_ultimate_coach_html.py`, `scripts/build_ultimate_coach_production.py`, and
+`ui/match_night.py` all import at current HEAD, so any future candidate rebuild carries these
+changes automatically; nothing pins an older template. Generated real output from the shared war-
+room fixture (`tests.test_excel_war_room_formulas._payload()`) and grepped the actual bytes
+rather than trusting passing unit tests alone: Quick Read badges (`Direct evidence:`,
+`Shared-opponent evidence:`, `No evidence on our roster`), the live note-presence sentinel, the
+matrix green-count badges, the MATRIX-01 legend text, the note-flag glyph, and the note-preview
+wording are all present in the real generated HTML. The one marker absent — `Weak against SLn` —
+is correctly absent only because this fixture has no SL-weakness scenario; a dedicated fixture in
+`tests/test_ultimate_coach_war_room_browser.py` (`eve_badges`) already covers that case. Print CSS
+for the packet (`body.print-matchup .matrix .green-count,.matrix-count-legend { display:none; }`)
+is present in the real output, confirmed by byte search, not assumed. Fresh run (not reused from
+an earlier pass): `tests/test_ultimate_coach_war_room.py` 57 passed,
+`tests/test_ultimate_coach_war_room_browser.py` 45 passed, `tests/test_ultimate_coach_browser.py`
+39 passed — 141/141.
+
+**The Excel workbook/packet genuinely has no binding gap here, checked rather than assumed.**
+Traced `card["quick_read"]` (the dense sentence) into the `Scouting_Table` sheet
+(`ui/excel_war_room.py`) and confirmed `quick_read_badges()` is never called there — at first
+glance a missing binding. Checked the actual reason before treating it as one: `has_note` for
+`quick_read_badges()` is deliberately NOT computed server-side at all — coach notes live
+client-side only (browser localStorage), by the same design this project's isolation-guard work
+depended on throughout Coach Notes Integration, so no offline Excel export can ever carry a
+per-captain note state. The remaining, server-computable badges (direct/shared-evidence counts,
+weak-SL) are not wired into the Excel export either, but checked whether that is a real gap: the
+visual "Scouting Cards" print sheet never renders `quick_read` or any derived badge at all — it
+already lays out every underlying field (SL, team record, lifetime, sample, met list, shared
+summary, by-SL, winning/losing SL, missing) as its own row, which is strictly more detail than the
+badges summarize, not less. Badges exist to compress a dense sentence for a phone screen with no
+room for a multi-row card; Excel's card layout has that room already. Adding a badges column to
+the flat `Scouting_Table` data sheet alone (and not the visual card sheet) would be inconsistent
+with no captain decision it newly answers, since the full sentence is already there. **No
+candidate-binding gap found on the Excel side, stated explicitly rather than invented** — same
+discipline as the fallback-mission search above, applied to verification instead of a new feature.
+Matrix green-count's nearest Excel formula (`wr_UniqueCount`/"Unique favorable options") computes
+a different thing (sole-remaining-option detection for Next Send's save warning, not a per-row/
+column favorable tally) and was not changed, since the HTML green-count badge was never meant to
+duplicate it.
+
+Merge/publication/production release/installation/destructive cleanup remain separately gated,
+per GPT's comments 6139096865 and 6139277926 — none attempted.
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
