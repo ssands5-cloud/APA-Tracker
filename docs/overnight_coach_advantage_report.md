@@ -10,14 +10,26 @@
 
 # CURRENT PRIORITIES
 
-**Coach Notes Integration** — starting now. Quick Read Scouting Cards is COMPLETE (audit
-CLOSED by GPT at `f0b8b81`, issue #84 comment 6123794285): independently reproduced both fixed
-phone cases (six unfavorable direct meetings now count as evidence; note-presence badge clears
-live without reload). See COMPLETED.
+**Coach Notes Integration** — matrix column header note-flag shipped at `7730072`, audit
+requested at issue #84, not yet closed. Quick Read Scouting Cards is COMPLETE (audit CLOSED by
+GPT at `f0b8b81`, issue #84 comment 6123794285). See COMPLETED.
 
 Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **Matrix column header flags opponents with a coach note.** Shipped at `7730072`, audit
+  requested, not yet closed.
+
+  **Captain decision now supported:** scanning the matchup matrix to decide who to send, could I
+  tell which opponents I have already personally scouted, without leaving the matrix for the
+  scouting cards below? Notes are per-opponent and matrix columns are per opponent, so a small
+  📝 flag now sits in the column header next to the opponent's name, with the same "(your
+  opinion, not APA facts)" wording used everywhere else a note surfaces. Kept out of the
+  evidence cell itself, consistent with the opinion/evidence isolation guard — the flag lives in
+  header text, not the `.mcell` button — and like every other quick-read fact it updates on the
+  next real render, not mid-keystroke, so it needed no new isolation-guard exemption. Engine 57,
+  browser 37 (94 combined).
 
 - **Blind Send / We Put Up First — COMPLETE, audit CLOSED by GPT at `e015162` / `2d84213`.**
   GPT independently reproduced the original phone case and the three boundary checks (3 passed,
@@ -119,15 +131,22 @@ Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # OPEN ISSUES
 
-- **Unattended continuation DOES NOT WORK — exact blocker, needs Paul.** The durable task fired
-  once (16:30:49Z), made two Bash calls and hung ten seconds in. It sat `status: running` for
-  5.5 hours, produced zero commits, and blocked every later run (`nextRunAt` slid 16:48 → 22:12).
-  Two causes: the run's `cwd` is `.worktrees\pr83`, not the session worktree, and tool
-  permissions are folder-scoped, so its Bash calls waited on an approval nobody was present to
-  give. **Fix: open the task in the sidebar and click "Run now" once while present, approving the
-  tools it requests.** Those approvals are stored on the task and auto-apply to later runs; they
-  cannot be granted on the owner's behalf. The zombie session was stopped and the task left
-  enabled. `lastRunAt` being non-null is NOT proof — a completed run with commits is.
+- **Unattended continuation: same hang reproduced again, partially unstuck, still NOT proven
+  unattended.** The 18-minute `ultimate-coach-overnight-continuation` task hung on its very
+  first Bash call again — this run started 2026-10-11 23:17:31Z and sat `isRunning: true` doing
+  nothing for over 24 hours, exactly the earlier cwd/approval pattern (`cwd` is `.worktrees\pr83`,
+  not the session worktree the prompt tells it to `cd` into). While present just now I stopped
+  that zombie, dispatched a fresh run, and switched its permission mode to `auto` — but the mode
+  change did not retroactively clear its already-pending approval either, and it hung a second
+  time. Stopping it again and sending it an explicit resume message finally got it producing real
+  work (531 transcript messages, status `succeeded`). **That required my live intervention twice;
+  it is not proof the recurring schedule itself runs unattended.** The actual test is whether the
+  *next* fire (`nextRunAt` 2026-10-13T00:30:20Z) completes with no manual run_scheduled_task,
+  stop_session or permission-mode call from me — checking that now and will record the outcome
+  here rather than claim it before it happens. No tool available to me sets a scheduled task's
+  default permission mode ahead of dispatch, so if this keeps happening the durable fix needs
+  Paul: approve the task's tool requests once from the sidebar's "Run now" so the approval is
+  stored on the task itself, not on a live session I can only patch while present.
 
 - **Authorization window extended to Sunday.** Paul: "extend block until next Sunday." Today was
   Monday 2026-10-12, so the window now runs to Sunday 2026-10-18, terminal checkpoint 08:00 MDT
