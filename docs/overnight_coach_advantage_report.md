@@ -363,7 +363,14 @@ clinch-tracking idea on issue #84 for GPT/Paul rather than building it speculati
 
 # OPEN ISSUES
 
-- **Unattended continuation: same hang reproduced a third time, still NOT proven unattended.**
+- **Unattended continuation: same hang reproduced a fourth time — every fresh dispatch so far
+  has stalled, zero have completed on their own.** (Fourth occurrence, 2026-10-13 05:34:37Z:
+  session `local_b88cc80a-...` sat `isRunning: true` with zero activity for ~7 hours; stopped,
+  switched to Auto, resumed by message, same as every prior time.) This is now a 4-for-4
+  pattern, not an occasional flake: every single automatic dispatch of this task has hung on its
+  first tool call, and every single one has only moved after a live session stopped it, changed
+  its permission mode, and sent it an explicit resume message. The schedule itself has never once
+  completed a run unattended. The fix below is unchanged and is now overdue:
   The 18-minute `ultimate-coach-overnight-continuation` task hung on its very first Bash call
   again — this run started 2026-10-11 23:17:31Z and sat `isRunning: true` doing nothing for over
   24 hours, exactly the earlier cwd/approval pattern (`cwd` is `.worktrees\pr83`, not the session
