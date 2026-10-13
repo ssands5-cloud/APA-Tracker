@@ -628,7 +628,10 @@
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
-    var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a><span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';}).join("")+'</tr>';
+    var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){
+      var cs=wrCoachSummary(o.id),flag=cs?'<span class="note-flag" title="'+esc(cs+" (your opinion, not APA facts)")+'">📝</span>':'';
+      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+flag+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';
+    }).join("")+'</tr>';
     var body=w.matrix.map(function(row,i){
       var m=row.member,out=!plan.rem[String(m.id)];
       return '<tr class="'+(out?'out':'')+'"><th>'+esc(m.name)+'<span class="id-line">SL '+esc(slText(m))+' · ID '+esc(recordIdText(m))+'</span></th>'

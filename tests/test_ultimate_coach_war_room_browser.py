@@ -1699,3 +1699,45 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
             assert errors == []
         finally:
             browser.close()
+
+
+def test_matrix_column_header_flags_opponents_with_a_coach_note(tmp_path: Path):
+    """Coach Notes Integration gap: a captain scanning the matrix to decide who to send has no
+    way to tell, without leaving the matrix for the scouting cards below, which opponents they
+    have already personally scouted. The matrix is otherwise evidence-only (GPT's opinion/
+    evidence isolation guard), so the flag lives in the column header text next to the opponent's
+    name -- never inside the evidence cell itself -- and carries the same "(your opinion, not
+    APA facts)" qualifier used everywhere else a coach note surfaces.
+
+    Not live, by design: like every other quick-read fact, it updates on the next real render,
+    not mid-keystroke, so it needs no new isolation-guard exemption.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            heads = page.locator(".matrix thead th")
+            assert heads.count() == 3, heads.count()  # corner + CAM + EVE
+
+            assert page.locator(".matrix thead th .note-flag").count() == 0, (
+                "no note yet written, so no column should be flagged")
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            flags = page.locator(".matrix thead th .note-flag")
+            assert flags.count() == 1, "exactly the one opponent with a note should be flagged"
+            cam_head = page.locator(".matrix thead th").nth(1)
+            assert "Cam Cole" in cam_head.inner_text()
+            assert "📝" in cam_head.inner_text()
+            assert flags.first.get_attribute("title") == (
+                "Coach: Breaks hard, go even (your opinion, not APA facts)")
+
+            eve_head = page.locator(".matrix thead th").nth(2)
+            assert "📝" not in eve_head.inner_text(), eve_head.inner_text()
+            assert errors == [], errors
+        finally:
+            browser.close()
