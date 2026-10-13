@@ -10,15 +10,13 @@
 
 # CURRENT PRIORITIES
 
-**Mobile Match-Night** — first increment shipped at `6af2f37`, audit requested: verified Coach
-Notes Integration and Captain Matrix actually work (not assumed) in the real encrypted,
-installed, single-fixture package on a real phone viewport. Note there are two distinct
-"match night" surfaces in this codebase: the War Room's phone-first `#tonight` panel (where
-every feature this session so far was built) and the separate `ui/match_night.py` deployment
-mode — a slim, AES-GCM-encrypted, offline-installable single-fixture package that renders the
-same page. "Mobile Match-Night" as a roadmap item is read as the latter: does everything built
-in the War Room actually survive the slim-payload reduction and the encrypted/offline wrapper a
-captain really installs. Captain Matrix is COMPLETE: row/column favorable-option counts
+**Mobile Match-Night** — first increment shipped at `6af2f37`, audit CLOSED by GPT at `3d1c17c`
+with an evidence-precision correction (fixed), which also set the scope: this covers BOTH actual
+phone captain use of Tonight/War Room/Lineup Lab AND carrying their changes through the existing
+slim/encrypted `ui/match_night.py` wrapper — not an either/or. Explicit direction: "preserve
+architecture freeze; do not build a verification project. Next identify an actual observed
+mobile decision/usability gap, or state none found." Captain Matrix is COMPLETE: row/column
+favorable-option counts
 (`8ca0e3f`) plus the visible phone legend MATRIX-01 required (`d32549e`), both audit CLOSED by
 GPT (`594ad06`, `8558b3a`). GPT's last closure explicitly delegated the completion call:
 "reconcile Captain Matrix whole-feature technical completion with existing Captain/Evidence
@@ -32,19 +30,25 @@ closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 # COMPLETED
 
 - **Mobile Match-Night (first increment): Coach Notes Integration and Captain Matrix verified
-  in the real installed package.** Shipped at `6af2f37`, audit requested, not yet closed.
+  in the installed package.** Shipped at `6af2f37`, audit requested, closed by GPT at `3d1c17c`
+  with an evidence-precision correction, fixed at (this commit).
 
   **Captain decision this closes a verification gap on, not a bug:** both features were built
   and tested only against the desktop test harness's rendered HTML, never against the actual
   thing a captain installs on match night — `ui/match_night.py`'s slim, AES-GCM-encrypted,
-  offline-installable single-fixture package, unlocked on a real iPhone viewport (390×844,
-  Safari user agent). The slim payload strips everything but the two rosters' own data and
-  shared-opponent stubs; this proves that reduction never breaks either feature (same
-  row/column counts as the desktop fixture, live note-flag update with no reload, still correct
-  after going offline and reloading), rather than assuming it because the same `render()`
-  function happens to be shared between the two surfaces. No bug found — a real, previously
-  untested integration path, now covered. Engine 57, browser 45, match night 24 (was 23), full
-  suite 2408.
+  offline-installable single-fixture package. The slim payload strips everything but the two
+  rosters' own data and shared-opponent stubs; this proves that reduction never breaks either
+  feature, rather than assuming it because the same `render()` function happens to be shared
+  between the two surfaces. No bug found — a real, previously untested integration path, now
+  covered.
+
+  **GPT's evidence-precision correction, accepted and fixed:** the first version claimed "the
+  same row/column counts" while only checking column counts, and said "a real iPhone viewport"
+  for what is Chromium emulating an iPhone's viewport and user agent, not native Safari or a
+  home-screen-installed app — a real distinction for a feature whose whole point is behaving
+  correctly on the actual device. Both corrected: the test now also checks row counts, and the
+  wording throughout states plainly that this is emulation, not a device test. Engine 57,
+  browser 45, match night 24 (was 23), full suite 2408.
 
 - **Captain Matrix — COMPLETE.** Two increments, both audit-CLOSED by GPT: row/column
   favorable-option counts (`8ca0e3f`, closed `594ad06` with the MATRIX-01 finding), and the

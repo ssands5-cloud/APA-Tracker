@@ -403,10 +403,15 @@ def test_match_night_html_shows_the_teams_own_gap_before_the_league_wide_warning
 def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(served):
     """Mobile Match-Night gap: Coach Notes Integration and Captain Matrix were built and tested
     against the desktop test harness's rendered HTML, never against the actual thing a captain
-    installs on match night -- the encrypted, slim, single-fixture package, unlocked on a real
-    iPhone viewport. The slim payload strips everything but the two rosters' own data and
-    shared-opponent stubs; this proves that reduction never breaks either feature, rather than
-    assuming it because the same render() function is shared.
+    installs on match night -- the encrypted, slim, single-fixture package, unlocked in a browser
+    emulating an iPhone viewport and user agent (Chromium, not native Safari or a home-screen-
+    installed app -- that distinction matters, so it is stated plainly rather than implied away).
+    The slim payload strips everything but the two rosters' own data and shared-opponent stubs;
+    this proves that reduction never breaks either feature, rather than assuming it because the
+    same render() function is shared. GPT audit precision correction: scoped to exactly what is
+    asserted below (column counts, row counts, the legend, and the matrix+Tonight note update
+    surviving one offline reload) -- not row counts "the same way" as column counts were first
+    claimed to be checked when they were not, and not every post-reload behavior.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -419,10 +424,13 @@ def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(serve
             page.click("#go")
             page.wait_for_selector("#tonight .decide-sends", timeout=20000)
 
-            # Captain Matrix: the same row/column counts the desktop fixture produces.
+            # Captain Matrix: the same row AND column counts the desktop fixture produces.
+            rows = page.locator(".matrix tbody tr")
+            row_counts = [rows.nth(i).locator("th .green-count").inner_text() for i in range(3)]
+            assert row_counts == ["🟢×1", "🟢×0", "🟢×0"], row_counts  # Ann, Bea, Dee
             heads = page.locator(".matrix thead th")
             col_counts = [heads.nth(i).locator(".green-count").inner_text() for i in (1, 2)]
-            assert col_counts == ["🟢×1", "🟢×0"], col_counts  # Cam, Eve -- same as the desktop fixture
+            assert col_counts == ["🟢×1", "🟢×0"], col_counts  # Cam, Eve
             assert page.locator(".matrix-count-legend").is_visible()
 
             # Coach Notes Integration: writing a note updates the matrix flag and Tonight's Best
@@ -433,11 +441,14 @@ def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(serve
             assert page.locator(".matrix thead th .note-flag").count() == 1
             assert "📝 Coach: Breaks hard, go even (opinion)" in page.locator("#tonight .decide-sends").inner_text()
 
-            # Still true offline, same as every other Match Night guarantee.
+            # The note, the matrix flag and the column counts all survive one offline reload --
+            # not a claim about every other post-reload behavior.
             page.context.set_offline(True)
             page.reload()
             page.wait_for_selector("#tonight .decide-sends", timeout=20000)
             assert page.locator(".matrix thead th .note-flag").count() == 1
+            heads = page.locator(".matrix thead th")
+            assert [heads.nth(i).locator(".green-count").inner_text() for i in (1, 2)] == col_counts
             assert errors == []
         finally:
             browser.close()
