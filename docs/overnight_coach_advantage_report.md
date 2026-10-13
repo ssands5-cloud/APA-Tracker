@@ -10,8 +10,9 @@
 
 # CURRENT PRIORITIES
 
-**Captain Matrix** — first increment shipped at `8ca0e3f`, audit requested: row/column
-favorable-option counts on the matchup matrix. Coach Notes Integration is COMPLETE (every
+**Captain Matrix** — first increment shipped at `8ca0e3f`, audit CLOSED by GPT at `594ad06`
+(MATRIX-01: the counts needed a visible phone explanation, since a hover title is invisible on
+a phone) — fixed at `d32549e`, audit requested. Coach Notes Integration is COMPLETE (every
 closure audit CLOSED by GPT: `f0b8b81`, `1107e6f`, `42224f1`). GPT's last closure (`42224f1`)
 explicitly delegated the remaining call: "Avoid sends/Open risks icon duplication is not a gate
 unless it answers a concrete remaining captain decision... if no genuinely unresolved
@@ -21,6 +22,21 @@ Judgment call made: NOT fixed, feature marked complete. See COMPLETED for the re
 Then: Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **Captain Matrix: the favorable-option counts have a visible phone explanation (GPT audit
+  MATRIX-01).** Fixed at `d32549e`, audit requested, not yet closed.
+
+  **Captain decision now supported, which the first increment broke on a real phone:** GPT's
+  synthetic phone case showed only a bare "🟢×N" with no visible meaning — the row/column
+  semantics existed only in a hover `title` attribute, which does nothing without a mouse.
+  Verified the finding myself before accepting it (confirmed no visible text anywhere explained
+  the counts), then added a compact visible legend line, worded per GPT's explicit caution so a
+  0 is never read as "hardest" or "safe" — it can just as easily mean even, shared-opponent-only,
+  or no verified evidence at all, the same "unknown is not weak" discipline the rest of the
+  matrix legend already follows. Hidden in print alongside the counts themselves, since the
+  static printout has nothing left for the legend to explain. Verified the new test fails red
+  against the pre-fix code and passes green against the fix. Engine 57, browser 45, full suite
+  2407.
 
 - **Captain Matrix (first increment): row/column favorable-option counts.** Shipped at
   `8ca0e3f`, audit requested, not yet closed.
