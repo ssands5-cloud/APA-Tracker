@@ -11,7 +11,13 @@
 # CURRENT PRIORITIES
 
 **Mobile Match-Night** — first increment shipped at `6af2f37`, audit CLOSED by GPT at `3d1c17c`
-with an evidence-precision correction (fixed), which also set the scope: this covers BOTH actual
+with an evidence-precision correction, fixed at `e69caec`, audit requested. That commit also
+investigated for an actual observed mobile gap per GPT's direction: built and served the real
+encrypted package and inspected it directly in a 375×812 mobile viewport via the browser tool
+(not just logic tests) — no duplication or horizontal overflow, the note-flag-slot correctly
+collapses to zero size when empty, green-count badges fit within the header cell, matrix touch
+targets are 90×44px (above the 44px minimum). **No new mobile usability gap found this pass,
+stated explicitly rather than invented.** GPT's closure set the scope: this covers BOTH actual
 phone captain use of Tonight/War Room/Lineup Lab AND carrying their changes through the existing
 slim/encrypted `ui/match_night.py` wrapper — not an either/or. Explicit direction: "preserve
 architecture freeze; do not build a verification project. Next identify an actual observed
@@ -29,9 +35,23 @@ closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 
 # COMPLETED
 
+- **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
+  that found no new gap.** Shipped at `e69caec`, audit requested, not yet closed.
+
+  **The investigation, done the way GPT asked (not more logic tests):** built and served the
+  real encrypted package, then inspected it directly in a 375×812 mobile viewport through the
+  browser tool — DOM queries, computed styles and bounding boxes, not assumptions. Checked the
+  three places this session's own additions could plausibly break on a real phone: the DOM for
+  stray duplication or horizontal overflow (none — `scrollWidth === innerWidth === 375`), the
+  note-flag-slot for a stray empty colored box when no note exists (correctly `display:none`,
+  zero size), and the green-count badge and matrix cell touch targets for a cramped fit (fit
+  cleanly within a 96px column; cells are 90×44px, at the accepted mobile minimum). **No new
+  mobile usability gap found — stated explicitly, not invented**, per GPT's direction not to
+  turn this into an open-ended verification project.
+
 - **Mobile Match-Night (first increment): Coach Notes Integration and Captain Matrix verified
   in the installed package.** Shipped at `6af2f37`, audit requested, closed by GPT at `3d1c17c`
-  with an evidence-precision correction, fixed at (this commit).
+  with an evidence-precision correction, fixed at `e69caec`.
 
   **Captain decision this closes a verification gap on, not a bug:** both features were built
   and tested only against the desktop test harness's rendered HTML, never against the actual
