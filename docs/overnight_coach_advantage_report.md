@@ -15,14 +15,37 @@ requested at issue #84, not yet closed. Best-sends-now note-flag shipped at `0c0
 requested. Lineup Lab best-remaining-sends note-flag shipped at `8703efd`, audit requested.
 Opportunities table note-flag shipped at `7bb6d2b`, audit requested. That closes every opponent
 send-recommendation surface (Tonight, Lineup Lab, the desktop opportunities table, the matrix).
-Two further surfaces name an opponent without a note and remain open, deliberately not fixed
-this pass pending GPT's read on the first four (see OPEN ISSUES): "Avoid sends" and "Open risks"
-in the Top risks panel. Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`,
-issue #84 comment 6123794285). See COMPLETED.
+**GPT audit `1e7d87d` (NOTES-01) then found all four of those flags were stale until reload —
+fixed at `5a49cd1`, audit requested; see COMPLETED.** Two further surfaces name an opponent
+without a note and remain open, deliberately not fixed this pass pending GPT's read on the first
+four (see OPEN ISSUES): "Avoid sends" and "Open risks" in the Top risks panel. Quick Read
+Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`, issue #84 comment 6123794285). See
+COMPLETED.
 
 Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **Note-flags update live on save, not only on reload (GPT audit NOTES-01, `1e7d87d`).** Fixed
+  at `5a49cd1`, audit requested, not yet closed.
+
+  **Captain decision now supported, which was broken by my own prior four closures:** GPT
+  reproduced a synthetic phone case where typing and blurring an observation left the matrix
+  flag and Tonight's Best sends now line absent until something else forced a full re-render —
+  a captain who only wrote a note would never see it appear anywhere. Verified the finding
+  myself against the code before accepting it: confirmed the note textarea's `input` handler
+  only ever live-patched the scouting card's own badge, never any of the four note-flags shipped
+  this session. Fixed with one shared mechanism (`wrNoteFlagSlot`/`wrPatchNoteFlags`) instead of
+  four bespoke patches: every occurrence renders into a stable `data-note-pid` slot, and the
+  existing input handler — which already live-patches the scouting card's "No coach
+  observations" badge under GPT's prior narrow authorization — now refreshes every matching slot
+  on the same authorization (note presence is metadata about the opinion, not evidence it could
+  corrupt). Extended the opinion/evidence isolation guard with a second narrow, exact-text,
+  capped-count exemption for the bare note-flag glyph (the matrix header and opportunities table
+  show the glyph alone, with the note text only in a `title` attribute, so the existing
+  note-text exemption does not reach it) — same bar as the original sentinel, not a tag-shaped
+  one. Verified each of the four fixes fails red against the pre-fix code and passes green
+  against the fix. Engine 57, browser 40, full suite 2402.
 
 - **The desktop "Best sends — top opportunities per opponent" table flags the opponent with a
   coach note.** Shipped at `7bb6d2b`, audit requested, not yet closed.
@@ -173,6 +196,20 @@ Then, in order: Captain Matrix, Mobile match-night. One at a time.
   pairs in three directions: nothing dropped, nothing invented, no Excel/HTML disagreement.
 
 # OPEN ISSUES
+
+- **Three pre-existing note displays were found to share the same NOTES-01 staleness bug, but
+  were deliberately NOT fixed this pass.** While fixing NOTES-01 I found the identical "stale
+  until something else re-renders" defect in three surfaces that predate this session: Dangerous
+  opponents (both in Tonight's `decide-threats` and in `#wr-risks`), and the Next Send card's own
+  `.ns-coach` note box, plus the scouting card's own `<p class="ns-coach">` paragraph (distinct
+  from the `.coach-summary` div right below it on the same card, which already is live). All four
+  render a note-styled `<div>`/`<p>` wrapper with background/padding that is only shown when a
+  note exists, so the generic `wrNoteFlagSlot` mechanism just shipped — which assumes the slot can
+  sit empty-but-present with no visual cost — would leave an ugly empty colored box when no note
+  exists. Fixing these needs a different, slightly more involved live-patch (show/hide the wrapper
+  itself, not just its contents), and GPT's NOTES-01 finding named only the matrix flag and Best
+  sends now, so this was scoped out rather than expanded without review. Flagging now so it is not
+  lost.
 
 - **Two more opponent-naming lists still lack a coach-note flag, deliberately not fixed this
   pass.** "Avoid sends" and "Open risks" in the Top risks panel (`#wr-risks`) both name an
