@@ -398,3 +398,46 @@ def test_match_night_html_shows_the_teams_own_gap_before_the_league_wide_warning
                 browser.close()
     finally:
         httpd.shutdown()
+
+
+def test_captain_matrix_and_coach_notes_work_in_the_real_installed_package(served):
+    """Mobile Match-Night gap: Coach Notes Integration and Captain Matrix were built and tested
+    against the desktop test harness's rendered HTML, never against the actual thing a captain
+    installs on match night -- the encrypted, slim, single-fixture package, unlocked on a real
+    iPhone viewport. The slim payload strips everything but the two rosters' own data and
+    shared-opponent stubs; this proves that reduction never breaks either feature, rather than
+    assuming it because the same render() function is shared.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_context(**IPHONE).new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(served)
+            page.fill("#pass", PASS)
+            page.click("#go")
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+
+            # Captain Matrix: the same row/column counts the desktop fixture produces.
+            heads = page.locator(".matrix thead th")
+            col_counts = [heads.nth(i).locator(".green-count").inner_text() for i in (1, 2)]
+            assert col_counts == ["🟢×1", "🟢×0"], col_counts  # Cam, Eve -- same as the desktop fixture
+            assert page.locator(".matrix-count-legend").is_visible()
+
+            # Coach Notes Integration: writing a note updates the matrix flag and Tonight's Best
+            # sends now live, with no reload, inside the real installed/encrypted package.
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.wait_for_timeout(200)
+            assert page.locator(".matrix thead th .note-flag").count() == 1
+            assert "📝 Coach: Breaks hard, go even (opinion)" in page.locator("#tonight .decide-sends").inner_text()
+
+            # Still true offline, same as every other Match Night guarantee.
+            page.context.set_offline(True)
+            page.reload()
+            page.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            assert page.locator(".matrix thead th .note-flag").count() == 1
+            assert errors == []
+        finally:
+            browser.close()
