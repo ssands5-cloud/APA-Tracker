@@ -76,7 +76,7 @@ button.secondary:hover { background:var(--felt-soft); }
 @media (max-width:480px) { .scout dl { grid-template-columns:minmax(0,1fr); gap:0 10px; } .scout dt { font-size:11px; text-transform:uppercase; letter-spacing:.3px; margin-top:5px; } }
 .md-date-list { margin-top:10px; }
 .matrix th .id-line { display:block; text-transform:none; letter-spacing:0; font-weight:400; }
-.matrix th .note-flag { cursor:default; margin-left:3px; }
+.note-flag { cursor:default; margin-left:3px; }
 .tonight { border-top:5px solid var(--brass); }
 .tonight:empty { display:none; }
 .tonight h2 { margin:0 0 4px; font-size:19px; }

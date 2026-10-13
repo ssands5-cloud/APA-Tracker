@@ -620,7 +620,8 @@
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
           :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>');})(wrSendLabels(plan.sends[j]))
           :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
-        return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+'</td><td>'+cell+'</td></tr>';
+        var note=wrCoachSummary(b.opponent.id),flag=note?' <span class="note-flag" title="'+esc(note+" (your opinion, not APA facts)")+'">📝</span>':"";
+        return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+flag+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
       +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+wrList(plan.threats.map(function(c){var n=wrCoachSummary(c.opponent.id);return c.text+(n?" · 📝 "+n+" (your opinion, not APA facts)":"");}),"No unplayed opponent has a live winning record against our remaining roster.")+'</div>'

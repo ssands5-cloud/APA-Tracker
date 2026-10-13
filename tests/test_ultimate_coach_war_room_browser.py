@@ -1811,3 +1811,38 @@ def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tm
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_opportunities_table_flags_the_opponent_with_a_coach_note(tmp_path: Path):
+    """Coach Notes Integration gap: the desktop "Best sends -- top opportunities per opponent"
+    table lists every opponent by name in its first column, same as the matrix header and the two
+    phone-first send lists already fixed, but carried no note indicator. Fixed with the same
+    compact note-flag span used in the matrix header (a dense data table, not prose, so the icon
+    + title pattern fits better here than wrNotePreview's inline text).
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            rows = page.locator("#wr-opportunities .send-table tbody tr")
+            assert rows.count() == 2, rows.count()
+            assert page.locator("#wr-opportunities .note-flag").count() == 0, (
+                "no note yet written, so no row should be flagged")
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            flags = page.locator("#wr-opportunities .note-flag")
+            assert flags.count() == 1, "exactly the one opponent with a note should be flagged"
+            cam_row = page.locator("#wr-opportunities .send-table tbody tr").nth(0)
+            assert "Cam Cole" in cam_row.inner_text()
+            assert flags.first.get_attribute("title") == (
+                "Coach: Breaks hard, go even (your opinion, not APA facts)")
+            eve_row = page.locator("#wr-opportunities .send-table tbody tr").nth(1)
+            assert "📝" not in eve_row.inner_text(), eve_row.inner_text()
+            assert errors == [], errors
+        finally:
+            browser.close()
