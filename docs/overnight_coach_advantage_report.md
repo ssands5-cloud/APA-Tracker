@@ -10,26 +10,39 @@
 
 # CURRENT PRIORITIES
 
-**Coach Notes Integration** — matrix column header note-flag shipped at `7730072`, audit
-requested at issue #84, not yet closed. Best-sends-now note-flag shipped at `0c0b2f9`, audit
-requested. Lineup Lab best-remaining-sends note-flag shipped at `8703efd`, audit requested.
-Opportunities table note-flag shipped at `7bb6d2b`, audit requested. That closes every opponent
-send-recommendation surface (Tonight, Lineup Lab, the desktop opportunities table, the matrix).
-**GPT audit `1e7d87d` (NOTES-01) then found all four of those flags were stale until reload —
-fixed at `5a49cd1`, CLOSED by GPT at `1107e6f`.** GPT's closure also directed fixing the same
-staleness bug in three pre-existing surfaces (Dangerous opponents, Next Send's note box, the
-scouting card's own note paragraph) as related corrections before Captain Matrix — fixed at
-`92a482a`, audit requested; see COMPLETED. Two further surfaces name an opponent without a note
-and remain open, deliberately not fixed this pass pending GPT's read (see OPEN ISSUES): "Avoid
-sends" and "Open risks" in the Top risks panel. Quick Read Scouting Cards is COMPLETE (audit
-CLOSED by GPT at `f0b8b81`, issue #84 comment 6123794285). See COMPLETED.
+**Captain Matrix** — starting now. Coach Notes Integration is COMPLETE (every closure audit
+CLOSED by GPT: `f0b8b81`, `1107e6f`, `42224f1`). GPT's last closure (`42224f1`) explicitly
+delegated the remaining call: "Avoid sends/Open risks icon duplication is not a gate unless it
+answers a concrete remaining captain decision... if no genuinely unresolved current-feature
+outcome remains, mark technical completion and continue Captain Matrix." Judgment call made:
+NOT fixed, feature marked complete. See COMPLETED for the reasoning.
 
-Then, in order: Captain Matrix, Mobile match-night. One at a time.
+Then: Mobile match-night. One at a time.
 
 # COMPLETED
 
-- **Three more pre-existing note displays now update live (NOTES-01 follow-up).** Fixed at
-  `92a482a`, audit requested, not yet closed.
+- **Coach Notes Integration — COMPLETE.** Every closure in the feature audit-CLOSED by GPT:
+  `f0b8b81` (Quick Read Scouting Cards), `1107e6f` (NOTES-01: live update across the four
+  send-recommendation surfaces), `42224f1` (NOTES-01 follow-up: live update across the three
+  pre-existing note displays).
+
+  **Judgment call on "Avoid sends"/"Open risks," made per GPT's explicit delegation** ("not a
+  gate unless it answers a concrete remaining captain decision"): NOT fixed. By the time a
+  captain reaches either list, the same opponent's note is already visible on seven other
+  surfaces (matrix header, Best sends now, Dangerous opponents ×2, Next Send, Lineup Lab, the
+  opportunities table, the scouting card itself) — adding an eighth, near-identical icon answers
+  no decision those don't already answer. The two lists are also a weaker fit for the pattern
+  than every surface already fixed: "Avoid sends" is advice about OUR player's recorded losses,
+  not a statement about the opponent, so a personal note on the opponent is not what the warning
+  is about; "Open risks" is already reachable from the SAME screen's Dangerous opponents and
+  Best sends now, both already flagged. Marking technical completion rather than shipping a
+  ninth copy-pasted icon that duplicates coverage without adding a new captain decision.
+
+- **Three more pre-existing note displays now update live (NOTES-01 follow-up) — CLOSED by GPT
+  at `42224f1`.** Fixed at `92a482a`. GPT independently verified five focused browser checks
+  (three new displays plus the affected isolation-guard tests); the synthetic phone
+  create/edit/clear case confirms the styled Next Send and scouting-card wrappers appear and
+  disappear live, with no reload and no page errors.
 
   **Captain decision now supported:** GPT's NOTES-01 closure directed fixing the identical
   staleness bug in Dangerous opponents (Tonight's `decide-threats` and `#wr-risks`), the Next
@@ -218,16 +231,6 @@ Then, in order: Captain Matrix, Mobile match-night. One at a time.
   pairs in three directions: nothing dropped, nothing invented, no Excel/HTML disagreement.
 
 # OPEN ISSUES
-
-- **Two more opponent-naming lists still lack a coach-note flag, deliberately not fixed this
-  pass.** "Avoid sends" and "Open risks" in the Top risks panel (`#wr-risks`) both name an
-  unplayed opponent without any note indicator, the same shape of gap just fixed four times over
-  (matrix header, Tonight's Best sends now, Lineup Lab, the opportunities table). Held back
-  rather than shipped immediately so GPT can weigh in on the first four before a fifth and sixth
-  near-identical change lands un-reviewed; also worth GPT's judgment on whether "Avoid sends" in
-  particular should carry a note at all — it is advice to avoid OUR player's send, not a warning
-  about the opponent, so a captain's personal opinion on the opponent may be less load-bearing
-  there than on every other surface fixed so far.
 
 - **Unattended continuation: same hang reproduced again, partially unstuck, still NOT proven
   unattended.** The 18-minute `ultimate-coach-overnight-continuation` task hung on its very
