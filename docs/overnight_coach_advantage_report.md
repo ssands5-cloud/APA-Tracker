@@ -10,19 +10,41 @@
 
 # CURRENT PRIORITIES
 
-**Mobile Match-Night** — starting now. Captain Matrix is COMPLETE: row/column favorable-option
-counts (`8ca0e3f`) plus the visible phone legend MATRIX-01 required (`d32549e`), both audit
-CLOSED by GPT (`594ad06`, `8558b3a`). GPT's last closure explicitly delegated the completion
-call: "reconcile Captain Matrix whole-feature technical completion with existing Captain/
-Evidence toggle and colors; if no unanswered current-feature captain outcome remains, mark
-complete... no new increments just for activity." Judgment made: no further unanswered captain
-decision in matrix territory — the pre-existing Captain/Evidence toggle already covers per-cell
-detail, the two increments just closed cover at-a-glance flexibility, and anything further
-(sorting, long-roster scanning) is mobile-specific scope, which is the next feature, not more
-matrix work invented to stay busy. Marked complete; starting Mobile Match-Night. Coach Notes
-Integration is also COMPLETE (every closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
+**Mobile Match-Night** — first increment shipped at `6af2f37`, audit requested: verified Coach
+Notes Integration and Captain Matrix actually work (not assumed) in the real encrypted,
+installed, single-fixture package on a real phone viewport. Note there are two distinct
+"match night" surfaces in this codebase: the War Room's phone-first `#tonight` panel (where
+every feature this session so far was built) and the separate `ui/match_night.py` deployment
+mode — a slim, AES-GCM-encrypted, offline-installable single-fixture package that renders the
+same page. "Mobile Match-Night" as a roadmap item is read as the latter: does everything built
+in the War Room actually survive the slim-payload reduction and the encrypted/offline wrapper a
+captain really installs. Captain Matrix is COMPLETE: row/column favorable-option counts
+(`8ca0e3f`) plus the visible phone legend MATRIX-01 required (`d32549e`), both audit CLOSED by
+GPT (`594ad06`, `8558b3a`). GPT's last closure explicitly delegated the completion call:
+"reconcile Captain Matrix whole-feature technical completion with existing Captain/Evidence
+toggle and colors; if no unanswered current-feature captain outcome remains, mark complete...
+no new increments just for activity." Judgment made: no further unanswered captain decision in
+matrix territory — the pre-existing Captain/Evidence toggle already covers per-cell detail, the
+two increments just closed cover at-a-glance flexibility, and anything further (sorting,
+long-roster scanning) is mobile-specific scope. Coach Notes Integration is also COMPLETE (every
+closure audit CLOSED: `f0b8b81`, `1107e6f`, `42224f1`).
 
 # COMPLETED
+
+- **Mobile Match-Night (first increment): Coach Notes Integration and Captain Matrix verified
+  in the real installed package.** Shipped at `6af2f37`, audit requested, not yet closed.
+
+  **Captain decision this closes a verification gap on, not a bug:** both features were built
+  and tested only against the desktop test harness's rendered HTML, never against the actual
+  thing a captain installs on match night — `ui/match_night.py`'s slim, AES-GCM-encrypted,
+  offline-installable single-fixture package, unlocked on a real iPhone viewport (390×844,
+  Safari user agent). The slim payload strips everything but the two rosters' own data and
+  shared-opponent stubs; this proves that reduction never breaks either feature (same
+  row/column counts as the desktop fixture, live note-flag update with no reload, still correct
+  after going offline and reloading), rather than assuming it because the same `render()`
+  function happens to be shared between the two surfaces. No bug found — a real, previously
+  untested integration path, now covered. Engine 57, browser 45, match night 24 (was 23), full
+  suite 2408.
 
 - **Captain Matrix — COMPLETE.** Two increments, both audit-CLOSED by GPT: row/column
   favorable-option counts (`8ca0e3f`, closed `594ad06` with the MATRIX-01 finding), and the
