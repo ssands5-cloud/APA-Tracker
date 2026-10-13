@@ -2000,3 +2000,45 @@ def test_scouting_card_own_note_paragraph_updates_live(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_captain_matrix_row_and_column_show_favorable_option_counts(tmp_path: Path):
+    """Captain Matrix gap (first increment): scanning the matrix by eye to count colored cells
+    does not scale past a handful of players. The stock fixture's categories (row-major: Ann-Cam
+    G, Ann-Eve I, Bea-Cam R, Bea-Eve X, Dee-Cam E, Dee-Eve R) give a row count of 1 favorable
+    option for Ann and 0 for Bea/Dee, and a column count of 1 favorable remaining player for Cam
+    and 0 for Eve. Marking Ann unavailable removes her from the column count (same category rule
+    every cell already uses -- plan.rem -- just counted) without touching the evidence itself.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            rows = page.locator(".matrix tbody tr")
+            assert rows.count() == 3, rows.count()
+            row_counts = [rows.nth(i).locator("th .green-count").inner_text() for i in range(3)]
+            assert row_counts == ["🟢×1", "🟢×0", "🟢×0"], row_counts  # Ann, Bea, Dee
+
+            heads = page.locator(".matrix thead th")
+            col_counts = [heads.nth(i).locator(".green-count").inner_text() for i in (1, 2)]
+            assert col_counts == ["🟢×1", "🟢×0"], col_counts  # Cam, Eve
+            assert heads.nth(1).locator(".green-count").get_attribute("title") == (
+                "Favorable direct options among our remaining players")
+            assert rows.nth(0).locator("th .green-count").get_attribute("title") == (
+                "Favorable direct options among unplayed opponents")
+
+            before_evidence = page.evaluate(
+                f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))")
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
+
+            heads = page.locator(".matrix thead th")
+            col_counts_after = [heads.nth(i).locator(".green-count").inner_text() for i in (1, 2)]
+            assert col_counts_after == ["🟢×0", "🟢×0"], (
+                "Cam's column count must drop to 0 once Ann (its only green row) is unavailable",
+                col_counts_after)
+            # Evidence itself never moves -- only who counts as remaining.
+            assert page.evaluate(
+                f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))") == before_evidence
+            assert errors == [], errors
+        finally:
+            browser.close()

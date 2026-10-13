@@ -664,12 +664,24 @@
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
+    // Captain Matrix (first increment): at-a-glance flexibility. Scanning rows and columns by
+    // eye to count colored cells does not scale past a few players -- this is the same category
+    // rule every cell already uses, just counted, so it answers "which of my remaining players
+    // has the most favorable options left?" and "which opponent is collectively hardest for my
+    // remaining roster?" without opening Dangerous opponents or Best sends separately. Counts
+    // only, same as every other number on this matrix -- not odds, not a ranking of players.
+    var colGreen=w.theirs.map(function(o,j){
+      return w.matrix.reduce(function(n,row){return n+(plan.rem[String(row.member.id)]&&row.cells[j].category==="G"?1:0);},0);
+    });
     var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){
-      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span></th>';
+      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span>'
+        +'<span class="green-count" title="Favorable direct options among our remaining players">🟢×'+colGreen[j]+'</span></th>';
     }).join("")+'</tr>';
     var body=w.matrix.map(function(row,i){
       var m=row.member,out=!plan.rem[String(m.id)];
-      return '<tr class="'+(out?'out':'')+'"><th>'+esc(m.name)+'<span class="id-line">SL '+esc(slText(m))+' · ID '+esc(recordIdText(m))+'</span></th>'
+      var rowGreen=row.cells.filter(function(c,j){return plan.unplayed[j]&&c.category==="G";}).length;
+      return '<tr class="'+(out?'out':'')+'"><th>'+esc(m.name)+'<span class="id-line">SL '+esc(slText(m))+' · ID '+esc(recordIdText(m))+'</span>'
+        +'<span class="green-count" title="Favorable direct options among unplayed opponents">🟢×'+rowGreen+'</span></th>'
         +row.cells.map(function(c,j){
           var on=pair&&pair.our===String(m.id)&&pair.opp===String(w.theirs[j].id);
           if(on) pairHtml=wrPairDetail(w,c,w.blocks[j],fmt);

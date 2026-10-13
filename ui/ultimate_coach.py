@@ -77,6 +77,7 @@ button.secondary:hover { background:var(--felt-soft); }
 .md-date-list { margin-top:10px; }
 .matrix th .id-line { display:block; text-transform:none; letter-spacing:0; font-weight:400; }
 .note-flag { cursor:default; margin-left:3px; }
+.matrix th .green-count { display:block; text-transform:none; letter-spacing:0; font-weight:400; cursor:default; }
 .tonight { border-top:5px solid var(--brass); }
 .tonight:empty { display:none; }
 .tonight h2 { margin:0 0 4px; font-size:19px; }
@@ -229,6 +230,10 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.print-matchup .mcell { min-height:0; padding:2px; font-size:9px; }
   body.print-matchup .matrix thead th { font-size:8.5px; min-width:0; }
   body.print-matchup .matrix tbody th { font-size:9px; min-width:0; }
+  /* Screen-only scanning aid (Captain Matrix): the printed packet already shows every cell's
+     evidence; a flexibility count that costs a header line per row/column is not worth the page
+     budget PRINT-01 already fought for. */
+  body.print-matchup .matrix .green-count { display:none; }
   body.print-matchup .send-table,body.print-matchup .wr-list,body.print-matchup .legend { font-size:10px; }
   body.print-matchup .risk-grid { grid-template-columns:1fr 1fr 1fr; gap:8px; }
   body.print-matchup .risk-grid h3 { font-size:11px; }
