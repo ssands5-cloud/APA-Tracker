@@ -1741,3 +1741,39 @@ def test_matrix_column_header_flags_opponents_with_a_coach_note(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_best_sends_now_flags_the_opponent_with_a_coach_note(tmp_path: Path):
+    """Coach Notes Integration gap: "Best sends now" on the Tonight screen -- the first thing a
+    captain sees on a phone before Dangerous opponents or the matrix -- named the opponent on
+    every line but never said whether that opponent was one the captain had personally scouted.
+    Dangerous opponents, two columns over on the same screen, already surfaces the exact same
+    note via wrNotePreview; Best sends now was the one decide-grid column left out.
+
+    Not live, by design, same as the matrix header flag: wrTonight() only runs on a full render,
+    never per keystroke, so no isolation-guard exemption is needed.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            sends = page.locator("#tonight .decide-sends")
+            assert "Cam Cole" in sends.inner_text() and "Eve Ellis" in sends.inner_text()
+            assert "📝" not in sends.inner_text(), "no note yet written, so no line should carry one"
+
+            page.fill('#scouting-cards textarea[data-pid="10"]', "Breaks hard, go even")
+            page.locator('#scouting-cards textarea[data-pid="10"]').blur()
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            sends = page.locator("#tonight .decide-sends")
+            text = sends.inner_text()
+            assert "📝 Coach: Breaks hard, go even (opinion)" in text
+            # The note sits on Cam's line, not Eve's -- confirmed by splitting on the opponent names.
+            cam_part, _, eve_part = text.partition("Eve Ellis")
+            assert "Breaks hard, go even" in cam_part
+            assert "Breaks hard, go even" not in eve_part
+            assert errors == [], errors
+        finally:
+            browser.close()

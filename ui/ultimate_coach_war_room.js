@@ -567,11 +567,11 @@
     // pick is labelled as one unordered candidate, never "best" (GPT audit #84 P2).
     var sends=[];w.blocks.forEach(function(b,j){
       if(!plan.unplayed[j]||sends.length>=3) return;
-      var s=plan.sends[j];
-      if(!s.length){sends.push("vs "+b.opponent.name+": no evidence-backed option left");return;}
+      var s=plan.sends[j],note=wrCoachSummary(b.opponent.id);
+      if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",note:note});return;}
       var r=s[0],direct=r.category!=="I";
       var tied=direct&&s.length>1&&s[1].rank===r.rank;
-      sends.push("vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)));
+      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)),note:note});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});
@@ -581,7 +581,7 @@
       +wrBlindSendCard(w,plan,ta)
       +wrNextSendCard(w,plan)
       +'<div class="tonight-grid decide">'
-      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x)+'</span>';}).join(''):'<span>Every opponent has played.</span>')+'</div>'
+      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+(x.note?'<span>'+wrNotePreview(x.note,"opinion")+'</span>':'');}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){var n=wrCoachSummary(t.opponent.id);return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+(n?'<span>'+wrNotePreview(n,"opinion")+'</span>':'');}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
