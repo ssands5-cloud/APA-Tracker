@@ -1,6 +1,6 @@
 # CURRENT PRIORITIES
 
-Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; Quick Read and Coach Notes Integration are audited complete in the recorded implementation scope; Captain Matrix is current.
+Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; Quick Read, Coach Notes Integration and Captain Matrix are audited complete in the recorded implementation scope; Mobile Match-Night is current.
 
 **One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
 
@@ -44,6 +44,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **Captain Matrix — VERIFIED COMPLETE in recorded implementation scope, 8ca0e3f / d32549e, builder completion 826157d.** Captain can scan remaining favorable direct alternatives by player/opponent with visible phone semantics and zero caution; count/availability/evidence and affected print checks passed. Existing Captain/Evidence toggle and colors remain preserved. No new release approval.
+
 - **MATRIX-01 — CLOSED, d32549e.** Favorable direct-option counts have a visible phone explanation; zero is not opponent strength. Changed legend browser case and affected print-budget case pass; actual phone capture reviewed.
 
 - **Coach Notes Integration — VERIFIED COMPLETE in recorded implementation scope, builder 2fee9b6 / GPT closures 1107e6f and 42224f1.** Captain can see personally recorded observations alongside send/threat/scouting choices and update them without reloading; notes remain separate from APA evidence. Avoid sends/Open risks duplicate indicators deliberately omitted because the observations are already available on the decision surfaces. Technical closure does not approve merge, publication or production release.
@@ -63,7 +65,7 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
-**Captain Matrix completion response pending.** MATRIX-01 is CLOSED at d32549e: visible phone key explains both count directions and cautions against interpreting zero as hardest or safe. Preserve verified arithmetic/availability and print-budget cases. Reconcile current-feature completion before Mobile Match-Night; do not invent more matrix increments without an unanswered captain decision.
+**Mobile Match-Night is current.** Captain Matrix technical completion is confirmed from builder 826157d and the executed count/availability, phone explanation and affected print closures. Preserve existing Captain/Evidence toggle and colors, foundation freeze, all prior closures and separate release gates. Audit only genuinely changed mobile behavior or proven defects.
 
 **Captain Matrix is current.** Coach Notes Integration is VERIFIED COMPLETE in the recorded implementation scope: builder completion 2fee9b6 agrees with independent closures at 5a49cd1 / 92a482a. No unresolved current-feature captain outcome was identified. Preserve known live-artifact/release limits and existing packet observation separation; no repeat foundation proof.
 
@@ -71,6 +73,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+2026-10-13 03:10 UTC Captain Matrix delegated completion confirmed: builder 826157d / response 6137297758 agrees with GPT executed first-increment and MATRIX-01 closures. No demonstrated remaining matrix captain outcome requires another increment; accept moving to Mobile Match-Night. Existing per-cell toggle/colors are preserved under the foundation freeze, not reopened for proof. No repeated tests, framework or owner-acceptance dependency. Actual new mobile test edits observed; no completed mobile behavior accepted yet.
 
 2026-10-13 02:55 UTC MATRIX-01 closure: independently executed new visible-explanation case and affected full-roster print budget with committed d32549e JS/CSS; both PASS. Reviewed actual 390x844 synthetic capture: row/column explanation and zero caution are visible above readable matrix cells, without hover or page errors. Private capture tmp/audit/matrix-d32549e/phone.png. Count arithmetic/availability case remains preserved from 8ca0e3f; no repeat. One audit script indentation error occurred before execution and was corrected; no product defect inferred. Findings CLOSED; builder should reconcile whole Captain Matrix technical completion, retaining existing Captain/Evidence toggle and meaningful colors. No owner repetition, new framework or unsolicited additional increments.
 
