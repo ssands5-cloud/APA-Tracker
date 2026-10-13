@@ -527,6 +527,42 @@ Center, and everything on the Excel side (see OPEN ISSUES below).
   intervention arrives; it does not fix the dispatch-time approval gate itself, which still
   needs Paul's one-time "Run now" approval per the fix already on record above.
 
+  **Sixth occurrence — settings-versus-launch mismatch confirmed by evidence, but my first read of
+  what it explains was wrong and is corrected here rather than left standing.** Per Paul's
+  instruction, no stop/resume, no permission-mode change, and no git-flag workaround is claimed to
+  fix anything — this is a diagnostic read only. `list_scheduled_tasks`/this task's own stored
+  prompt both correctly name `.claude\worktrees\unruffled-chatterjee-f4f65e` as the worktree.
+  `get_session` on this firing's three concurrently-running sessions showed three different launch
+  `cwd`/`originCwd` values, none matching that configured path: this session
+  (`local_132c02d8-...`) got `...\.git\worktrees\unruffled-chatterjee-f4f65e` — git's internal
+  worktree metadata directory, where a bare `git rev-parse --show-toplevel` fails with "this
+  operation must be run in a work tree" (confirmed by direct test); the other two running sessions
+  (`local_5fca1c17-...`, `local_74ae933f-...`, stale 30 minutes and 2h45m respectively at the time
+  of this check) both got `...\.worktrees\pr83` — a real, registered worktree (`git worktree list`
+  confirms it, on branch `claude/pr83-war-room`) but the wrong one.
+
+  **Then I ran the comparison I'd flagged as the next step, and it overturned my own framing:**
+  `get_session` on five more historical runs — every `succeeded` run available
+  (`local_9e14aef3`, `local_93e5e848`, `local_b88cc80a`, `local_10228cb4`, `local_52f4253e`) — shows
+  every single one *also* launched with `cwd`/`originCwd` = `...\.worktrees\pr83`, identical to the
+  two currently-stalled sessions. So the wrong-`.worktrees\pr83` launch cwd is not a signature of
+  failure — it is the norm across every historical run checked, successful and stalled alike, and
+  those 531-message/119-message successful runs clearly worked around it (this task's own prompt
+  says `cd` into the correct worktree as its first step). What's actually anomalous is not the two
+  currently-running sessions — it's *mine*: a `.git\worktrees\...` launch cwd never appears in any
+  of the five historical samples. Two corrected conclusions: (1) `.worktrees\pr83` as launch cwd is
+  a long-standing, already-worked-around quirk, not news and not this entry's finding; (2) why the
+  two currently-running sessions (`local_5fca1c17`, `local_74ae933f`) stopped producing activity is
+  **still unexplained** — they are well past their first tool call (119–121 transcript messages
+  each, real `Read`/`Bash` activity on record), so the historical "stalled on the very first call"
+  pattern does not describe them as-is, and `list_events`' compact rendering does not surface tool
+  *results*, only call names, so the actual blocking condition on their last call is not visible
+  from here. **Left untouched** — not stopped, not resumed, not permission-mode-changed, per
+  instruction. **Next diagnostic step available, not yet performed:** find a read path to a stalled
+  session's actual last tool *result* (not just the call), which would show directly whether it's
+  an approval rejection, a hung external command, or something else — `list_events` alone does not
+  reach it from outside that session.
+
 - **Native Excel COM acceptance (NATIVE-01) attempted this pass and genuinely blocked, not
   skipped.** `win32com.client.EnsureDispatch('Excel.Application')` failed immediately with
   `pywintypes.com_error: Error loading type library/DLL` — a corrupt/stale local `gen_py`
@@ -542,22 +578,28 @@ Center, and everything on the Excel side (see OPEN ISSUES below).
   both the tooling error and the idle-time doubt for Paul/GPT instead of silently retrying until
   something works.
 
-- **HTML/mobile parity on the rebound candidate: print-media rendering and the desktop/visual
-  read are now done (this commit); everything Excel-side stays open.** Served the same bound
+- **Desktop/visual read of Scouting Cards and the Tonight/War Room dashboard — done (this
+  commit). Print-media: correction, not a new closure — see below.** Served the same bound
   `build-b8159a1` artifact (hash re-checked against the manifest before use) and drove it through
-  the browser tool at desktop width. Scouting cards and the Tonight/War Room dashboard ("Command
-  Center") both render cleanly with no console errors and no overflow. For print media — never
-  rendered before, only byte-grepped — there is no browser-tool action to force true paged-media
-  emulation, so the exact live `@media print` selectors (read back from the page's own stylesheet,
-  not retyped) were copied into a temporary `<style>` with the media condition dropped, alongside
-  the real `print-matchup` class the product's own print trigger uses; this activates the genuine
-  CSS, not a reconstruction, but is still laid out in the browser viewport rather than a real page
-  box, which is a real limitation of this method, stated rather than glossed over. Under that
-  emulation: the matrix green-count badges and the MATRIX-01 legend text both visually disappear
-  (confirmed 0 of 16/1 visible, down from 16/1), matching the CSS rule exactly; the printed
-  packet's header, both rosters, risk/opportunity lists and the matrix itself all render without
-  overlap or cut-off content. Cleaned up (removed the injected style and class) before leaving the
-  page. **One tool-only false alarm caught before it was reported:** immediately after anchor-
+  the browser tool at desktop width. Scouting cards and the Tonight/War Room dashboard both render
+  cleanly with no console errors and no overflow.
+
+  **Self-correction on the print-media claim, caught before it compounded.** The first version of
+  this entry said print-media rendering had "never been rendered before, only byte-grepped" and
+  reported it closed. That was wrong: `cd5c8b6`'s own scope note already says print media correctly
+  hides the count/key decorations, under real print rendering — not byte-grep, and not something
+  I re-verified, something GPT had already established. What `cd5c8b6` actually left open is *full
+  printed-page visual acceptance* — real pagination, page breaks, margins — a materially different
+  claim. My follow-up check (copying the page's own live `@media print` selectors into an
+  unconditional `<style>` plus the real `print-matchup` class, since the browser tool has no true
+  paged-media emulation) exercises the genuine CSS and visually re-confirmed the same count/legend
+  hiding GPT had already shown (16/1 visible → 0/0), but it ran in the browser's normal viewport,
+  not a real page box — it proves nothing about pagination and does not close the item that was
+  actually still open. Net effect of this pass: one redundant re-confirmation by a weaker method,
+  zero progress on full printed-page visual acceptance, which **remains open**, unchanged from
+  `cd5c8b6`. Cleaned up (removed the injected style and class) before leaving the page.
+
+  **One tool-only false alarm caught before it was reported:** immediately after anchor-
   jumping deep into this 37 MB page, repeated screenshots came back blank even though
   `getBoundingClientRect` and computed styles confirmed the real content was laid out and visible
   at that exact scroll position — a stale-compositor paint issue in the browser pane, not a
