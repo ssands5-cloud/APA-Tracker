@@ -665,7 +665,14 @@
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
       +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
-      +wrList(w.blocks.map(function(b,j){return plan.unplayed[j]?"vs "+b.opponent_label+": "+(plan.sends[j].length?wrBestSendText(plan.sends[j]):"no evidence-backed option left among our remaining players"):null;}).filter(Boolean),"Every opponent has already played.")
+      +(function(){
+        var items=w.blocks.map(function(b,j){if(!plan.unplayed[j]) return null;
+          var note=wrCoachSummary(b.opponent.id);
+          var text="vs "+b.opponent_label+": "+(plan.sends[j].length?wrBestSendText(plan.sends[j]):"no evidence-backed option left among our remaining players");
+          return '<li>'+esc(text)+(note?' <span>'+wrNotePreview(note,"your opinion, not APA facts")+'</span>':'')+'</li>';
+        }).filter(Boolean);
+        return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("Every opponent has already played.")+'</li>')+'</ul>';
+      })()
       +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
     // Scouting cards
     document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'

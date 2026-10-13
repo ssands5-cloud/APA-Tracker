@@ -1777,3 +1777,37 @@ def test_best_sends_now_flags_the_opponent_with_a_coach_note(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tmp_path: Path):
+    """Coach Notes Integration gap: Lineup Lab's own "Best remaining sends" list -- what a
+    captain checks while actually marking availability and lineup -- has the identical gap Best
+    sends now had on the Tonight screen: it names the opponent on every line with no way to tell
+    whether a personal scouting note exists without leaving the panel. Fixed the same way, reusing
+    wrCoachSummary/wrNotePreview, replacing the plain wrList() call with an equivalent <ul
+    class="wr-list"> built by hand so the note HTML is not escaped away.
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
+            assert "Cam Cole" in best.inner_text() and "Eve Ellis" in best.inner_text()
+            assert "📝" not in best.inner_text(), "no note yet written, so no line should carry one"
+
+            page.fill('#scouting-cards textarea[data-pid="11"]', "Shaky on the break")
+            page.locator('#scouting-cards textarea[data-pid="11"]').blur()
+            page.reload()
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(300)
+
+            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
+            text = best.inner_text()
+            assert "📝 Coach: Shaky on the break (your opinion, not APA facts)" in text
+            # The note sits on Eve's line, not Cam's.
+            cam_part, _, eve_part = text.partition("Eve Ellis")
+            assert "Shaky on the break" not in cam_part
+            assert "Shaky on the break" in eve_part
+            assert errors == [], errors
+        finally:
+            browser.close()
