@@ -542,10 +542,27 @@ Center, and everything on the Excel side (see OPEN ISSUES below).
   both the tooling error and the idle-time doubt for Paul/GPT instead of silently retrying until
   something works.
 
-- **HTML/mobile parity on the rebound candidate: partially re-verified, not fully closed.** Load
-  health, mobile overflow, the Captain/Evidence toggle's persistence, and coach-note persistence
-  across reload are now checked against the real `build-b8159a1` artifact (above). Print-media
-  rendering and a desktop/visual read remain open, alongside everything Excel-side.
+- **HTML/mobile parity on the rebound candidate: print-media rendering and the desktop/visual
+  read are now done (this commit); everything Excel-side stays open.** Served the same bound
+  `build-b8159a1` artifact (hash re-checked against the manifest before use) and drove it through
+  the browser tool at desktop width. Scouting cards and the Tonight/War Room dashboard ("Command
+  Center") both render cleanly with no console errors and no overflow. For print media — never
+  rendered before, only byte-grepped — there is no browser-tool action to force true paged-media
+  emulation, so the exact live `@media print` selectors (read back from the page's own stylesheet,
+  not retyped) were copied into a temporary `<style>` with the media condition dropped, alongside
+  the real `print-matchup` class the product's own print trigger uses; this activates the genuine
+  CSS, not a reconstruction, but is still laid out in the browser viewport rather than a real page
+  box, which is a real limitation of this method, stated rather than glossed over. Under that
+  emulation: the matrix green-count badges and the MATRIX-01 legend text both visually disappear
+  (confirmed 0 of 16/1 visible, down from 16/1), matching the CSS rule exactly; the printed
+  packet's header, both rosters, risk/opportunity lists and the matrix itself all render without
+  overlap or cut-off content. Cleaned up (removed the injected style and class) before leaving the
+  page. **One tool-only false alarm caught before it was reported:** immediately after anchor-
+  jumping deep into this 37 MB page, repeated screenshots came back blank even though
+  `getBoundingClientRect` and computed styles confirmed the real content was laid out and visible
+  at that exact scroll position — a stale-compositor paint issue in the browser pane, not a
+  product defect. A `resize_window` call forced a fresh paint and the content appeared
+  immediately; this was verified before being ruled out, not assumed.
 
 - **Authorization window extended to Sunday.** Paul: "extend block until next Sunday." Today was
   Monday 2026-10-12, so the window now runs to Sunday 2026-10-18, terminal checkpoint 08:00 MDT
