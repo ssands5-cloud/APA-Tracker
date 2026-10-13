@@ -11,12 +11,27 @@
 # CURRENT PRIORITIES
 
 **Coach Notes Integration** — matrix column header note-flag shipped at `7730072`, audit
-requested at issue #84, not yet closed. Quick Read Scouting Cards is COMPLETE (audit CLOSED by
-GPT at `f0b8b81`, issue #84 comment 6123794285). See COMPLETED.
+requested at issue #84, not yet closed. Best-sends-now note-flag shipped at `0c0b2f9`, audit
+requested. Quick Read Scouting Cards is COMPLETE (audit CLOSED by GPT at `f0b8b81`, issue #84
+comment 6123794285). See COMPLETED.
 
 Then, in order: Captain Matrix, Mobile match-night. One at a time.
 
 # COMPLETED
+
+- **"Best sends now" (Tonight, first screen) flags the opponent with a coach note.** Shipped at
+  `0c0b2f9`, audit requested, not yet closed.
+
+  **Captain decision now supported:** on the very first screen, before Dangerous opponents or
+  the matrix, could I tell which of tonight's unplayed opponents I've already personally
+  scouted? Dangerous opponents, two columns over on the same Tonight grid, already surfaced the
+  note via `wrNotePreview`; Best sends now was the one decide-grid column left out, naming the
+  opponent on every recommendation line with no way to know whether a note existed without
+  scrolling to the scouting cards. Reuses the existing `wrCoachSummary`/`wrNotePreview` helpers
+  (same truncation/`<details>` behavior already used for long notes elsewhere on this screen),
+  same non-live render cadence as every other quick-read fact (`wrTonight()` only runs on a full
+  render, never per keystroke), so no new isolation-guard exemption was needed. Verified the new
+  test fails red without the fix and passes green with it. Engine 57, browser 38.
 
 - **Matrix column header flags opponents with a coach note.** Shipped at `7730072`, audit
   requested, not yet closed.
