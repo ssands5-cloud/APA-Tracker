@@ -10,7 +10,31 @@
 
 # CURRENT PRIORITIES
 
-**Follow-on firing (this session `local_899099e9`, head `9ad810a` at start): no new signal; step
+**Follow-on firing (this session `local_54c44448`, head `0c5bc74` at start): no new signal; step
+0/1 verification clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs` cross-
+checked against `get_session self`) found only this session `"running"` — the immediately prior
+run (`local_899099e9`) already shows `"succeeded"`, no overlapping builder, proceeded past step 0.
+Step 1 verified toplevel resolves under this worktree and `origin` is
+`https://github.com/ssands5-cloud/APA-Tracker.git`, per `AGENTS.md`. Verified branch identity from
+git directly rather than the task prompt's own stale header, per the standing correction: current
+branch is `claude/unruffled-chatterjee-f4f65e`, HEAD `0c5bc74`, already equal to
+`origin/claude/unruffled-chatterjee-f4f65e` (working tree clean, nothing local to push before this
+entry). `origin/integration/ultimate-coach-pr81-pr82-reconciliation` unchanged at `83c91d2`, still
+a strict ancestor of this HEAD — not touched this pass, same declined-pending-Paul status as every
+entry below. `origin/codex/audit-pr83-privacy` unchanged at `7f17179`. Issue #84's newest comment
+is still this session's own `fbca007` decline reply (07:35:02Z) — checked the full comment-
+timestamp list directly (not assumed), nothing newer. `gh pr view 83` unchanged in substance
+(`OPEN`, draft, head `integration/ultimate-coach-pr81-pr82-reconciliation`, base `main`, 37
+comments), `updatedAt` still `09:11:54Z`. Re-ran `tests/test_ultimate_coach_war_room.py` +
+`tests/test_ultimate_coach_war_room_browser.py` + `tests/test_ultimate_coach_browser.py` fresh:
+**142 passed, 0 failed**, no regressions (153s wall time). The standing open items are unchanged
+and none became newly actionable this pass: the unattended-dispatch approval gate, NATIVE-01's COM
+typelib corruption, the integration-branch sync (still Paul's call alone), and the live-match-
+clinch-tracking idea awaiting Paul's scoping call. **No new captain-decision gap found this pass,
+stated explicitly rather than invented; this entry records that the check was made, not a result to
+report.**
+
+**Follow-on firing (session `local_899099e9`, head `9ad810a` at start): no new signal; step
 0/1 verification clean, nothing pushed to the integration ref; one imprecise prior grep pattern
 corrected.** Step 0 (`list_task_runs`, cross-checked against `get_session self`) found only this
 session `"running"` — all 29 prior runs `"succeeded"`, none `"running"`/`"failed"` — no overlapping
