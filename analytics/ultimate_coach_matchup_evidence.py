@@ -73,6 +73,28 @@ def player_ref(member: dict[str, Any]) -> str:
     return f"{member['name']} (APA record ID {shown})"
 
 
+def display_name(member: dict[str, Any], roster: Iterable[dict[str, Any]]) -> str:
+    """Captain-facing name for surfaces outside Players (Next Send and the
+    like): no APA record ID. Every lookup still keys on member['id'] --
+    this is display text only.
+
+    Two players on the same roster can share a name. When they do, a
+    captured skill level that differs tells them apart; if even that ties
+    (or is missing), a readable "(n of m by this name)" position does --
+    never the raw record ID, per NAME-DISPLAY-01."""
+    name = member["name"]
+    dupes = [m for m in roster
+             if m["id"] != member["id"] and str(m.get("name", "")).strip().lower() == str(name).strip().lower()]
+    if not dupes:
+        return name
+    sl = member.get("skill_level")
+    if sl is not None and sl not in {m.get("skill_level") for m in dupes}:
+        return f"{name} (SL {sl})"
+    group = sorted([member, *dupes], key=member_order_key)
+    position = next(i for i, m in enumerate(group, start=1) if m["id"] == member["id"])
+    return f"{name} ({position} of {len(group)} by this name)"
+
+
 def member_order_key(member: dict[str, Any]) -> tuple[Any, ...]:
     """Roster display order shared with the HTML: captured SL high to low
     (missing SL last), then name, then record ID."""

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from analytics.ultimate_coach_matchup_evidence import (
     build_pair_index,
+    display_name,
     fixture_scope_pairs,
     matchup_evidence,
     member_order_key,
@@ -30,6 +31,24 @@ OPP = _m(50, "Opal Opp", sl=5)
 def test_player_ref_names_alongside_record_id():
     assert player_ref(_m(1, "Ann Archer", ext="3349374")) == "Ann Archer (APA record ID 3349374)"
     assert player_ref({"id": 2, "name": "No Id", "external_id": None}) == "No Id (APA record ID not captured)"
+
+
+def test_display_name_omits_the_record_id_and_tells_duplicate_names_apart_without_it():
+    """NAME-DISPLAY-01: Next Send and similar captain-facing surfaces (outside Players) never
+    show the raw APA record ID, but two players sharing a name still need telling apart --
+    a differing captured skill level does it; if even that ties, a readable position does,
+    never the record ID itself."""
+    roster = [_m(1, "Ann Archer", sl=5), _m(2, "Bea Baker", sl=4)]
+    assert display_name(roster[0], roster) == "Ann Archer"          # no duplicate: plain name
+    dup_roster = [_m(1, "Jordan Lee", sl=5), _m(2, "Jordan Lee", sl=7), _m(3, "Bea Baker", sl=4)]
+    assert display_name(dup_roster[0], dup_roster) == "Jordan Lee (SL 5)"
+    assert display_name(dup_roster[1], dup_roster) == "Jordan Lee (SL 7)"
+    # Same name AND same skill level: falls back to a readable position, ordered the same way
+    # the roster display order already is (member_order_key) -- lower external_id first here.
+    tied_roster = [_m(1, "Jordan Lee", sl=5, ext="1001"), _m(2, "Jordan Lee", sl=5, ext="1002")]
+    first, second = display_name(tied_roster[0], tied_roster), display_name(tied_roster[1], tied_roster)
+    assert (first, second) == ("Jordan Lee (1 of 2 by this name)", "Jordan Lee (2 of 2 by this name)")
+    assert "APA record ID" not in first and "APA record ID" not in second
 
 
 def test_direct_ranks_before_shared_before_none_and_records_are_shown_with_samples():

@@ -225,35 +225,36 @@ def test_reason_states_the_evidence_and_its_sample_size_only():
     assert reason({"direct": None, "shared_count": 0}) == "no recorded evidence"
 
 
-def test_next_send_medals_only_ordered_direct_candidates_and_lists_avoid_and_unknown():
+def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown():
     wr = _war_room()
     opal = next_send(wr, 0)
-    assert [(m["medal"], m["member"]["name"]) for m in opal["medals"]] == [("🥇", "Bea")]
+    assert [(m["medal"], m["display"]) for m in opal["ranked"]] == [("🥇", "Bea")]
     assert opal["headline"] == "Best-supported response: Bea"
-    assert [a["member"]["name"] for a in opal["avoid"]] == ["Ann"] and opal["unknown"] == ["Cal (APA record ID 1003)"]
-    pip = next_send(wr, 1)                  # an even direct record is ordered; shared-only is never medalled
-    assert [(m["medal"], m["member"]["name"], m["category"]) for m in pip["medals"]] == [("🥇", "Cal", "E")]
-    assert [u["member"]["name"] for u in pip["unordered"]] == ["Bea"]
+    # Names here never carry the APA record ID (NAME-DISPLAY-01) -- that's Players-tab-only text.
+    assert [a["display"] for a in opal["avoid"]] == ["Ann"] and opal["unknown"] == ["Cal"]
+    pip = next_send(wr, 1)                  # an even direct record is ranked; shared-only is never medalled
+    assert [(m["medal"], m["display"], m["category"]) for m in pip["ranked"]] == [("🥇", "Cal", "E")]
+    assert [u["display"] for u in pip["unordered"]] == ["Bea"]
     assert next_send_lines(pip) == [
         "Best-supported response: Cal",
-        "🥇 Cal (APA record ID 1003) — 1-1 direct record (2 meetings) — even",
+        "🥇 Cal — 1-1 direct record (2 meetings) — even",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
         # who has not played. Sending her off this unordered list used to cost that silently.
-        "≈ Bea (APA record ID 1002) — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
+        "≈ Bea — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
         "opponent (no verified direct meetings in this snapshot) · consider saving — our only favorable "
         "direct option vs Opal",
-        "❓ Unknown (no verified evidence, not weak): Ann (APA record ID 1001)"]
+        "❓ Unknown (no verified evidence, not weak): Ann"]
     quin = next_send(wr, 2)
-    assert quin["medals"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
+    assert quin["ranked"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
     # Marks: Bea used -> nothing to order vs Opal; Opal played -> says so.
-    assert next_send(wr, 0, remaining={1, 3})["medals"] == []
+    assert next_send(wr, 0, remaining={1, 3})["ranked"] == []
     used = next_send(wr, 0, unplayed=[False, True, True])          # a used target: no active response at all
     assert used["headline"] == "Opal has already played."
-    assert (used["medals"], used["unordered"], used["avoid"], used["unknown"], used["more"]) == ([], [], [], [], 0)
+    assert (used["ranked"], used["unordered"], used["avoid"], used["unknown"]) == ([], [], [], [])
     assert next_send_lines(used) == ["Opal has already played."]
 
 
-def test_next_send_ties_share_a_medal_flags_players_to_save_and_counts_the_rest():
+def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_rest():
     ours = [_m(1, "Ann"), _m(2, "Bo"), _m(3, "Cy"), _m(4, "Di"), _m(5, "Fay")]
     theirs = [_m(50, "Xan"), _m(51, "Yul")]
     index = build_pair_index(_pairs(
@@ -264,13 +265,15 @@ def test_next_send_ties_share_a_medal_flags_players_to_save_and_counts_the_rest(
     ))
     wr = war_room_pair(ours, theirs, index, "EIGHT")
     ns = next_send(wr, 0)
-    assert [(m["medal"], m["member"]["name"]) for m in ns["medals"]] == [
-        ("🥇", "Ann"), ("🥇", "Bo"), ("🥈", "Di"), ("🥉", "Fay")]
-    assert ns["medals"][0]["tied_with"] == ["Bo"] and ns["headline"] == "Best-supported response: Ann or Bo (tied)"
-    assert ns["medals"][0]["save"] == "consider saving — our only favorable direct option vs Yul"
-    assert ns["more"] == 1 and "+ 1 more direct candidate below the top three" in next_send_lines(ns)
-    assert next_send(wr, 0, unplayed=[True, False])["medals"][0]["save"] == ""   # Yul already played
-    assert next_send(wr, 0, remaining={1, 3, 4, 5})["medals"][0]["tied_with"] == []
+    # Cy (fourth group) used to be hidden behind "+1 more"; SEND-LAYOUT-01 gives it its own
+    # numbered line (no medal past the top three) instead of a collapse.
+    assert [(m["medal"], m["rank"], m["display"]) for m in ns["ranked"]] == [
+        ("🥇", "1=", "Ann"), ("🥇", "1=", "Bo"), ("🥈", "3", "Di"), ("🥉", "4", "Fay"), ("", "5", "Cy")]
+    assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "Best-supported response: Ann or Bo (tied)"
+    assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul"
+    assert "5. Cy — 1-1 direct record (2 meetings) — even" in next_send_lines(ns)
+    assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played
+    assert next_send(wr, 0, remaining={1, 3, 4, 5})["ranked"][0]["tied_with"] == []
 
 
 def test_send_labels_number_by_evidence_group_and_never_number_shared_only():

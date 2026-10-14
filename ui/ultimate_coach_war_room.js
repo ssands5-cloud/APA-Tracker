@@ -315,13 +315,28 @@
   };
 
   // ---- Next Send (mirrors analytics.ultimate_coach_war_room.next_send / next_send_lines) ----
-  // Medals only for ORDERED direct candidates (favorable, then even) in ranking order; same evidence = same
-  // medal, named as tied. Shared-opponent-only candidates are one unordered "≈" group; concerning records
-  // are "Avoid" (worst first); no evidence is unknown, never weak. Nothing is re-scored or weighted.
+  // Every ORDERED direct candidate (favorable, then even) gets its own numbered line, in ranking
+  // order -- nothing hidden behind a "+N more" collapse (SEND-LAYOUT-01); same evidence = same
+  // rank, named as tied, and the first three ranks also carry a medal. Shared-opponent-only
+  // candidates are one unordered "≈" group; concerning records are "Avoid" (worst first); no
+  // evidence is unknown, never weak. Names shown here omit the APA record ID (NAME-DISPLAY-01),
+  // via wrDisplayName; nothing is re-scored or weighted.
   var WR_MEDALS=["🥇","🥈","🥉"];
+  // Captain-facing name with no APA record ID. Every lookup still keys on member.id. Duplicate
+  // names on the roster are told apart by a differing captured skill level, or else a readable
+  // position among the duplicates -- never the raw record ID.
+  function wrDisplayName(member,roster){
+    var name=member.name,lname=String(name).trim().toLowerCase();
+    var dupes=roster.filter(function(m){return m.id!==member.id&&String(m.name||"").trim().toLowerCase()===lname;});
+    if(!dupes.length) return name;
+    var sl=member.skill_level,otherSl={};dupes.forEach(function(m){otherSl[m.skill_level]=true;});
+    if(wrKnown(sl)&&!otherSl[sl]) return name+" (SL "+sl+")";
+    var group=[member].concat(dupes).sort(memberOrder),pos=group.indexOf(member)+1;
+    return name+" ("+pos+" of "+group.length+" by this name)";
+  }
   function wrNextSend(w,j,rem,unplayed){
-    var b=w.blocks[j];
-    if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",medals:[],more:0,unordered:[],avoid:[],unknown:[]};
+    var b=w.blocks[j],roster=w.ours;
+    if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",ranked:[],unordered:[],avoid:[],unknown:[]};
     var rows=b.rows.filter(function(r){return rem[String(r.member.id)];});
     var onlyGreen={};
     w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
@@ -330,30 +345,30 @@
     var groups=[];
     rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var last=groups[groups.length-1];
       if(last&&String(last[0].rank).replace("=","")===String(r.rank).replace("=","")) last.push(r); else groups.push([r]);});
-    var medals=[],more=0;
+    var ranked=[];
     groups.forEach(function(group,g){
-      if(g>=WR_MEDALS.length){more+=group.length;return;}
+      var medal=g<WR_MEDALS.length?WR_MEDALS[g]:"";
       group.forEach(function(r){var save=onlyGreen[String(r.member.id)];
-        medals.push({medal:WR_MEDALS[g],member:r.member,player:r.player,category:r.category,reason:r.reason,
-          tied_with:group.filter(function(o){return o!==r;}).map(function(o){return o.member.name;}),
+        ranked.push({rank:r.rank,medal:medal,member:r.member,display:wrDisplayName(r.member,roster),category:r.category,reason:r.reason,
+          tied_with:group.filter(function(o){return o!==r;}).map(function(o){return wrDisplayName(o.member,roster);}),
           save:save?"consider saving — our only favorable direct option vs "+save.join(", "):""});});
     });
     var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){var sv=onlyGreen[String(r.member.id)];
-      return {member:r.member,player:r.player,reason:r.reason,
+      return {member:r.member,display:wrDisplayName(r.member,roster),reason:r.reason,
               save:sv?"consider saving — our only favorable direct option vs "+sv.join(", "):""};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
-    var unknown=rows.filter(pick("X")).map(function(r){return r.player;});
-    var headline=medals.length?"Best-supported response: "+medals[0].member.name+(medals[0].tied_with.length?" or "+medals[0].tied_with.join(", ")+" (tied)":"")
+    var unknown=rows.filter(pick("X")).map(function(r){return wrDisplayName(r.member,roster);});
+    var headline=ranked.length?"Best-supported response: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
       :unordered.length?"No direct record to order — shared-opponent candidates only (≈, not ordered)"
       :"No evidence-backed option left among our remaining players";
-    return {opponent:b.opponent,label:b.opponent_label,headline:headline,medals:medals,more:more,unordered:unordered,avoid:avoid,unknown:unknown};
+    return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
   function wrNextSendLines(ns){
     var lines=[ns.headline];
-    ns.medals.forEach(function(m){lines.push(m.medal+" "+m.player+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
-    if(ns.more) lines.push("+ "+plural(ns.more,"more direct candidate")+" below the top three");
-    ns.unordered.forEach(function(u){lines.push("≈ "+u.player+" — "+u.reason+(u.save?" · "+u.save:""));});
-    ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.player+" — "+a.reason);});
+    ns.ranked.forEach(function(m){var prefix=m.medal?m.medal:(m.rank+".");
+      lines.push(prefix+" "+m.display+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
+    ns.unordered.forEach(function(u){lines.push("≈ "+u.display+" — "+u.reason+(u.save?" · "+u.save:""));});
+    ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.display+" — "+a.reason);});
     if(ns.unknown.length) lines.push("❓ Unknown (no verified evidence, not weak): "+ns.unknown.join(", "));
     return lines;
   }
@@ -551,22 +566,21 @@
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +(ns.medals.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
-      +ns.medals.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
-        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+m.medal+'</span> <b>'+esc(m.member.name)+'</b> — '+esc(m.reason)
+      +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
+      +ns.ranked.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
+        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.medal||(m.rank+"."))+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+'</span>'
-        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.member.name)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
-      +(ns.more?li("muted","+ "+esc(plural(ns.more,"more direct candidate"))+" below the top three (see Best sends)"):"")
+        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
-        // With medals, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.member.name)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
-        var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.member.name)+'</b> — '+esc(a.reason));}).join("")
-          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(ns.unknown.map(function(p){return p.replace(/ \(APA record ID [^)]*\)$/,"");}).join(", "))):"");
-        if(!ns.medals.length) return unord+rest+'</ul>';
+        // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
+        var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
+          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(ns.unknown.join(", "))):"");
+        if(!ns.ranked.length) return unord+rest+'</ul>';
         if(!unord&&!rest) return '</ul>';
         var sum=[];
-        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.member.name+" ("+(a.reason.split(" ")[0])+")";}).join(", "));
+        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.display+" ("+(a.reason.split(" ")[0])+")";}).join(", "));
         if(ns.unordered.length) sum.push("≈ "+ns.unordered.length+" not ordered");
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
