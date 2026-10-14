@@ -74,7 +74,23 @@ almost exactly on all 4 real team pairs sampled (1140≈1139, 1186≈1185, 1158�
 the glance table was the sole overflow source in every sample, not one of several. Page breaks and
 margins across a REAL multi-page packet (this pass only confirmed horizontal fit, on a candidate
 whose matchups happened to paginate at a handful of pages) remain genuinely unchecked and open.
-Requesting audit on issue #84.
+Committed locally at `d836d09` (3 files, full suite 2409 passed fresh). **`git push` to
+`origin/claude/unruffled-chatterjee-f4f65e` was denied twice this pass** (`git push origin
+HEAD:refs/heads/claude/unruffled-chatterjee-f4f65e` and `git push origin
+claude/unruffled-chatterjee-f4f65e`, both flat "Permission... has been denied" with no classifier
+reason given, unlike the one unrelated false-positive below) — a new, concrete blocker, not a
+retry of the historical first-call hang pattern: this run's setup calls, test runs, and the commit
+itself all succeeded; only the push itself was refused. Not bypassed or worked around (no
+`--no-verify`, no API-based push substitute). The fix sits committed on this worktree's branch,
+untouched, for a session or a person with push permission to push. Audit request on issue #84 and
+the GPT-facing comment are both blocked on the same push, since there is nothing on `origin` yet
+to audit.
+
+**One unrelated false-positive worth recording separately:** a single plain read-only `grep`
+invoked via the Bash tool (not the dedicated Grep tool) was denied by the auto-mode classifier
+with reason "[Self-Modification]" mid-pass, for a command that only read `ui/ultimate_coach.py` —
+switching to the dedicated Grep tool for the same query worked immediately. Recorded as a
+classifier quirk, not a real gate; it cost one tool-call retry, nothing more.
 
 **Mobile Match-Night — COMPLETE.** First increment shipped at `6af2f37`, audit CLOSED by GPT at
 `3d1c17c` with an evidence-precision correction, fixed at `e69caec` and independently confirmed
