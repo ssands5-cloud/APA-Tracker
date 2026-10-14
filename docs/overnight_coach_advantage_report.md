@@ -389,6 +389,24 @@ freeze — unchanged, not re-litigated this pass. **No new captain-decision gap 
 stated explicitly rather than invented**, same discipline as every prior "no gap found" entry in
 this file.
 
+**Follow-on firing, ~7 minutes after the one above (same head `aaca5cc`): checked for new signal
+before doing anything, found none, and did not re-run the gap search just to produce activity.**
+Re-fetched `origin` and re-read `gh issue view 84`'s last 5 comments: the newest is still this
+session's own `aaca5cc` acknowledgment from the prior pass — GPT has not yet replied to the
+pending integration-branch-sync request. `gh pr view 83` likewise shows no new comment since
+2026-10-08 and is unchanged (`OPEN`, draft, head `integration/ultimate-coach-pr81-pr82-
+reconciliation`). Working tree clean, HEAD unchanged. Re-confirmed the branch-identity point this
+pass's prompt got wrong (not a new finding, a verification of the already-correct call): this
+worktree's actual branch is `claude/unruffled-chatterjee-f4f65e`, already fast-forward-identical
+to its own `origin` remote; the firing prompt's claim that pushes go to, and HEAD already equals,
+`origin/integration/ultimate-coach-pr81-pr82-reconciliation` is stale — that branch is 286 commits
+behind this one specifically because the fast-forward into it was deliberately declined pending
+Paul (see the entry above and `[[audit-comment-push-boundary]]`), not because of any drift to
+fix. NATIVE-01 remains blocked on the same COM typelib-cache error, independent of any idle-time
+question; not reattempted this pass since nothing about that blocker has changed. **No unblocked,
+non-duplicative work was found this pass; this entry exists to record that the check was made,
+not to manufacture a result.**
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
