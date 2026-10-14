@@ -24,11 +24,11 @@ ids untouched; Players surfaces and the ranking tables still show the record ID.
 cap, no "+ more" cell; ranks past 3 show the group number among remaining players, as Best Sends already
 does) and strips "(APA record ID n)" from the ranked, not-ordered, avoid and unknown names (`_nm` in
 ui/excel_war_room.py; FIND/LEFT added to tests/excel_formula_eval.py). Fresh: test_excel_war_room_formulas +
-test_export_excel_ultimate_coach = 66 passed. **Known gaps:** duplicate names are not told apart in the
-workbook once the ID is stripped (HTML/Python use SL or "n of m"); the "has already played" headline still
-echoes the picked label with its ID; no fixture has 4+ ranked players, so the numbered-past-3 branch is
-covered only by the row-height test; not natively opened in Excel; Captain Packet text not separately
-checked. Audit requested on #84.
+test_export_excel_ultimate_coach = 67 passed. Same-name rostered players are told apart by "(SL n)"; if the
+SL is missing or also ties, the workbook keeps the full label with its record ID (readable beats hidden).
+A new crowded-roster test covers a same-name pair plus a fourth rank group ("4." past the medals).
+**Known gaps:** the "has already played" headline still echoes the picked label with its ID; not natively
+opened in Excel; Captain Packet text not separately checked. Audit requested on #84.
 
 **Ranking-methodology worked examples, requested in chat as a follow-up to the review directly below
 — still documentation only, no behavior changed, no new ranking rule implemented, per explicit

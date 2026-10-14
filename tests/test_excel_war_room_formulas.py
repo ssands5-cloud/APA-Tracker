@@ -64,12 +64,12 @@ def _fixture(mid, date, home, away, *, bye=False, status="UNPLAYED", scored=Fals
             "home_score": hs, "away_score": as_, "is_bye": bye, "is_scored": scored, "is_finalized": scored}
 
 
-def _payload():
+def _payload(crowded=False):
     players = [
         _player(1, "1001", "Ann Archer", [_hist("sharks-a", "d1", "EIGHT", 5, 6, 8), _hist("sharks-b", "d9", "NINE", 4)]),
         _player(2, "1002", "Bea Baker", [_hist("sharks-a", "d1", "EIGHT", 4, 3, 6)]),
         _player(3, "1003", "Dee Diaz", [_hist("sharks-a", "d1", "EIGHT", None)]),
-        _player(4, "1004", "Ann Archer", []),
+        _player(4, "1004", "Ann Archer", [_hist("sharks-a", "d1", "EIGHT", 4, 1, 2)] if crowded else []),
         _player(10, "2001", "Cam Cole", [_hist("falcons-a", "d1", "EIGHT", 6, 7, 8)]),
         _player(11, "2002", "Eve Ellis", [_hist("falcons-a", "d1", "EIGHT", 3, 2, 4)]),
         _player(12, "2003", "Zed Zane", [_hist("owls-a", "d1", "EIGHT", 4, 1, 2)]),
@@ -77,6 +77,10 @@ def _payload():
     ]
     evidence = (_games(1, 10, "WW") + _games(2, 10, "LL") + _games(3, 10, "WL") + _games(1, 12, "W")
                 + _games(11, 12, "L") + _games(3, 11, "LL"))
+    if crowded:     # a same-name teammate and enough direct records vs Cam for four rank groups
+        players += [_player(5, "1005", "Fay Fox", [_hist("sharks-a", "d1", "EIGHT", 3, 1, 2)]),
+                    _player(6, "1006", "Gil Gray", [_hist("sharks-a", "d1", "EIGHT", 3, 1, 2)])]
+        evidence += _games(4, 10, "W") + _games(5, 10, "WL") + _games(6, 10, "WLWL")
     payload = {
         "schema": "test", "probability_publication": "FORBIDDEN", "matchup_probability": None,
         "predictive_confidence": None, "requires_live_apa_login": False, "database_mutated": False,
@@ -562,6 +566,21 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert _next_send(book)[1] == f"🥇 {DEE_N} — 1-1 direct record (2 meetings) — even"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
+
+
+def test_next_send_lists_every_rank_and_tells_same_name_teammates_apart_without_the_id(tmp_path):
+    payload = _payload(crowded=True)
+    path = write_workbook(payload, tmp_path / "uc.xlsx", built_at="2026-10-07 18:00 UTC",
+                          viewer_member_external_id="1001", viewer_card_number="80000001")
+    crowd = Workbook(load_workbook(path))
+    crowd.set("Command Center", "C6", CAM)
+    lines = _next_send(crowd)
+    text = "\n".join(lines)
+    assert "APA record ID" not in text.split("⚠")[0]
+    ranked = [x for x in lines if x[:1] in "🥇🥈🥉" or x[:2] == "4."]
+    heads = [x.split(" — ")[0] for x in ranked]
+    assert heads[:3] == ["🥇 Ann Archer (SL 5)", "🥈 Ann Archer (SL 4)", "🥉 Gil Gray"], heads
+    assert sorted(heads[3:]) == ["4. Dee Diaz", "4. Fay Fox"], heads      # tied fourth group, past the medals
 
 
 def test_command_center_summarises_tonight_from_match_day(book, built):

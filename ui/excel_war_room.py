@@ -731,9 +731,16 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
     medal = 'IF(H{r}=1,"🥇",IF(H{r}=2,"🥈",IF(H{r}=3,"🥉",H{r}&".")))'
 
-    def _nm(expr: str) -> str:
-        """Player label without its "(APA record ID n)" suffix (NAME-DISPLAY-01); Players sheet keeps the ID."""
-        return f'LEFT({expr},IFERROR(FIND(" (APA record ID",{expr})-1,LEN({expr})))'
+    def _nm(expr: str, slot: str) -> str:
+        """Player label without its "(APA record ID n)" suffix (NAME-DISPLAY-01); Players sheet keeps the ID.
+
+        `slot` is the player's roster position. If another rostered player shares the name, the skill level
+        tells them apart ("Name (SL 5)"); if that ties too, the full label with its record ID is kept, since
+        a readable distinction beats a hidden one."""
+        base = f'LEFT({expr},IFERROR(FIND(" (APA record ID",{expr})-1,LEN({expr})))'
+        like = f'{base}&" (APA record ID*"'
+        return (f'IF(COUNTIF(wr_OurLabels,{like})<2,{base},IF(AND(INDEX(wr_OurSLNum,{slot})<>"",COUNTIFS(wr_OurLabels,{like},wr_OurSLNum,INDEX(wr_OurSLNum,{slot}))=1),'
+                f'{base}&" (SL "&INDEX(wr_OurSLNum,{slot})&")",{expr}))')
 
     def _join(k: int, r: int, col: str, cond: str, text: str) -> str:
         """Running ", "-joined list down a column; the last row holds the whole list (no TEXTJOIN needed)."""
@@ -754,20 +761,20 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_NsLastKey", lambda k, r: (f'=IF(G{r},F{r},"")' if k == 1 else f'=IF(G{r},F{r},I{r - 1})')),
         ("wr_NsMedalRun", lambda k, r: (f'=IF(G{r},1,0)' if k == 1 else f'=J{r - 1}+IF(G{r},1,0)')),
         ("wr_NsMedalText", lambda k, r: (
-            f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})")}&" — "&INDEX({ME}[Reason],B{r})'
+            f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})", f"C{r}")}&" — "&INDEX({ME}[Reason],B{r})'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
             f'" · consider saving — our only favorable direct option vs another unplayed opponent","")'
             f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),"")')),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
-        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})")
+        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}")
                                               + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
-        ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})"))),
+        ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}"))),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
         ("wr_NsAvoidOk", lambda k, r: (f'=IF(O{r}="",FALSE,AND(INDEX({ME}[Category],O{r})="R",IFERROR(INDEX(wr_OurRemaining,'
                                         f'MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)),FALSE)))')),
         ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "Q", f'P{r}',
-                                              f'{_nm(f"INDEX({ME}[Player],O{r})")}&" — "&INDEX({ME}[Direct Record],O{r})')),
+                                              f'{_nm(f"INDEX({ME}[Player],O{r})", f"MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)")}&" — "&INDEX({ME}[Direct Record],O{r})')),
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'

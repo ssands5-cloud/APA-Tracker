@@ -254,6 +254,8 @@ def _criterion_match(value: Any, criterion: Any) -> bool:
             return value is BLANK or value == ""
     if value is BLANK:
         return False
+    if isinstance(criterion, str) and "*" in criterion:
+        return re.fullmatch(".*".join(re.escape(p) for p in criterion.split("*")), _to_text(value), re.I | re.S) is not None
     return _compare(value, criterion, "=")
 
 
