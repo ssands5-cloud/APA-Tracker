@@ -10,6 +10,32 @@
 
 # CURRENT PRIORITIES
 
+**Rebuilt the print-overflow fix (`d836d09`/`814e90b`) into a real candidate and reverified on
+that generated artifact, per GPT's audit direction (issue #84 comment 6159526262), which corrected
+an earlier mischaracterization: rebuilding a private verification candidate is authorized
+implementation work, not a release/publication-gated action.** Reused the exact same
+already-established, unchanged refreshed snapshot already bound in `build-2721ee8`/`build-b8159a1`
+(`tmp/refresh/refresh-20261011-004400Z/ultimate_coach_staging.db`, sha256
+`c1144a4...fe99e0cc` match confirmed byte-for-byte before reuse — no new data refresh performed) and
+ran `scripts/build_ultimate_coach_html.py` at current HEAD (`814e90b`) to produce
+`tmp/uat/build-814e90b/ultimate_coach.html` (not committed — `tmp/` stays local-only per
+`.git/info/exclude`, same as every prior candidate). Confirmed the fix is actually compiled in, not
+a stale copy: byte-grepped the fix's own CSS marker (`glance-table`) present twice in the new build,
+absent from the still-stale `build-b8159a1`. **Reverified the original defect class directly on
+this real rebuilt artifact**, not the synthetic test fixture and not an injected-CSS approximation
+of the old candidate: via Playwright, set `#team-format` to `EIGHT`, sampled 7 real team pairs
+spread across the candidate's 75 real EIGHT-format teams, applied `print-matchup` +
+`emulate_media('print')` + the project's standard 980×740 landscape-letter-minus-10mm-margins
+viewport, and compared `#team-matchups` `scrollWidth` vs `clientWidth`. All 7 sampled pairs render
+the long "None of our roster has met … directly" sentence that caused the original overflow, and
+all 7 came back `978 == 978` — zero overflow on the real candidate with the fix compiled in.
+Recorded in `tmp/uat/build-814e90b/manifest.json` and `rebound-binding.json`, same shape as the
+existing `build-b8159a1` binding. This closes the one specific gap GPT flagged on `d836d09`; full
+printed-page visual acceptance (pagination/page-breaks/margins across a real multi-page packet)
+remains separately open, as already stated. **Still blocked on the same push denial recorded below
+— these two docs/binding commits sit locally on this branch, same as the fix itself, for a session
+or person with push permission.**
+
 **Full printed-page visual acceptance — the open item from `cd5c8b6`/`f9e6608` — found a real
 defect, not a clean close.** That item was last corrected to say pagination/page-breaks/margins
 had never actually been checked, only the count/legend hiding GPT already verified. Checked it
