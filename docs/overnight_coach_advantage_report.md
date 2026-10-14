@@ -10,6 +10,35 @@
 
 # CURRENT PRIORITIES
 
+**Policy correction accepted — no-op "no new signal" commits stop here, per issue #84 comment
+6166522076 (2026-10-14T10:42:23Z) and this session's own standing judgment; nothing about
+push/release authorization changes.** This firing (session `local_e529e820`, head `e23dc23` at
+start) found the same pattern the comment names: six of the last several commits
+(`d096d09`, `0c5bc74`, `9ad810a`, `8ebc80c`, `6fba848`, `83c91d2`, plus `e23dc23` itself) are
+polling entries recording that nothing changed, and this file has grown past 6400 lines largely
+from that repetition. The comment's correction is accepted on its own merits, not because a
+GitHub comment can authorize anything by itself (it explicitly changes no push/release
+authorization, and none is inferred here) — it matches what this run independently verified and
+is the same discipline already on record from a prior session. **Going forward: when step 0/1
+verification and the issue #84 / PR #83 / audit-branch checks turn up no new defect, no new
+executed result, and no material change to a standing blocker, this task exits quietly — no new
+CURRENT PRIORITIES entry, no commit, no push, no test re-run performed solely to manufacture
+activity.** No new ledger, framework, or timer is introduced, per the comment's explicit
+request; this file's existing six sections remain the only source of truth, and every closed
+item and standing limitation below is preserved unchanged.
+
+This pass: checked issue #84 (newest comment is the one being acted on here), PR #83 (`OPEN`,
+draft, head `integration/ultimate-coach-pr81-pr82-reconciliation`, base `main`, unchanged in
+substance since the 2026-10-08 WP-A/4D comment), and `origin/codex/audit-pr83-privacy` (unchanged
+at `7f17179`) — no new defect or finding to verify or rebut. `origin/integration/ultimate-coach-
+pr81-pr82-reconciliation` is unchanged at `83c91d2`, still the subject of the standing,
+Paul-only integration-branch-sync decision below — not touched this pass. The standing open items
+(unattended-dispatch approval gate, NATIVE-01's COM typelib corruption, the integration-branch
+sync, and the live-match-clinch-tracking idea awaiting Paul's scoping call) are unchanged. This
+entry itself is the one exception to the new quiet-exit rule, since it is recording a real policy
+change, not an unchanged-state poll — future firings that find nothing new should follow the rule
+stated above instead of adding another entry like the one directly below.
+
 **Follow-on firing (this session `local_c65f304f`, head `d096d09` at start): no new signal; step
 0/1 verification clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs` cross-
 checked against `get_session self`) found only this session `"running"` — the immediately prior
