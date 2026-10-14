@@ -10,7 +10,55 @@
 
 # CURRENT PRIORITIES
 
-**Follow-on firing (this session, head `8ebc80c` at start): no new signal; step 0/1 verification
+**Follow-on firing (this session `local_899099e9`, head `9ad810a` at start): no new signal; step
+0/1 verification clean, nothing pushed to the integration ref; one imprecise prior grep pattern
+corrected.** Step 0 (`list_task_runs`, cross-checked against `get_session self`) found only this
+session `"running"` — all 29 prior runs `"succeeded"`, none `"running"`/`"failed"` — no overlapping
+builder, proceeded past step 0. Step 1 verified toplevel resolves under this worktree and `origin`
+is `https://github.com/ssands5-cloud/APA-Tracker.git`, per `AGENTS.md`. Verified branch identity
+from git directly rather than the task prompt's own stale header, per the standing correction:
+current branch is `claude/unruffled-chatterjee-f4f65e`, HEAD `9ad810a`, already equal to
+`origin/claude/unruffled-chatterjee-f4f65e` (working tree clean, nothing local to push before this
+entry). `origin/integration/ultimate-coach-pr81-pr82-reconciliation` unchanged at `83c91d2`, still a
+strict ancestor of this HEAD — not touched this pass, same declined-pending-Paul status as every
+entry below. `origin/codex/audit-pr83-privacy` unchanged at `7f17179`. Issue #84 unchanged at 274
+comments, newest still this session's own `fbca007` decline reply (07:35:02Z) — no new GPT pressure
+or finding to verify. PR #83's own comment thread (checked separately from issue #84) is unchanged
+too: 37 comments, newest still 2026-10-08, unrelated to the recent audit activity. `gh pr view 83`
+unchanged in substance (`OPEN`, draft, head `integration/ultimate-coach-pr81-pr82-reconciliation`,
+base `main`), `updatedAt` still `09:11:54Z`. Re-ran `tests/test_ultimate_coach_war_room.py` +
+`tests/test_ultimate_coach_war_room_browser.py` + `tests/test_ultimate_coach_browser.py` fresh:
+**142 passed, 0 failed**, no regressions (152s wall time).
+
+**Re-verified the six named features independently, and found the specific grep pattern several
+prior entries cited (`next_send`/`threat_panel`/`quick_read`/`coach_notes`/`matrix` against
+`ui/ultimate_coach.py` alone) does not actually match what it claimed — corrected here rather than
+repeated.** `grep -ci` for those exact literal strings against `ui/ultimate_coach.py` returns 0 for
+`next_send`, `threat_panel`, `quick_read`, and `coach_notes` (only `matrix` hits, 17 times); a repo-
+wide case-insensitive search for `threat_panel` as a literal string finds it nowhere in source at
+all, only in this report's own prose. That does not mean the feature is missing — it means the
+cited grep pattern was imprecise and several prior entries repeated it without re-deriving it. Found
+the real symbols instead: the threat panel is `decide-threats` (CSS class, `ui/ultimate_coach.py`
+lines 86/158-159) feeding the `wr-risks`/"Top risks" panel built in
+`ui/ultimate_coach_war_room.js` line 658; `next_send` itself lives in
+`analytics/ultimate_coach_war_room.py`, not `ui/ultimate_coach.py`; `quick_read` lives in
+`ui/ultimate_coach_war_room.js` (5 hits); `coach_notes` lives in `ui/excel_war_room.py` and
+`ui/export_excel_ultimate_coach.py` plus three test files. All five are genuinely present under
+their real names, spread across the actual module that implements each one rather than concentrated
+in `ui/ultimate_coach.py` — so Blind Send, Next Send, Threat Panel, Quick Read, Coach Notes, Captain
+Matrix and Mobile Match-Night all remain COMPLETE, same conclusion as before, but on a verification
+basis that will actually re-find them next time instead of silently returning zero. **Future firings
+should grep for `decide-threats`/`wr-risks` (not `threat_panel`) and check `analytics/` and
+`ui/ultimate_coach_war_room.js`/`ui/excel_war_room.py` as well as `ui/ultimate_coach.py`.**
+
+The standing open items are unchanged and none became newly actionable this pass: the unattended-
+dispatch approval gate, NATIVE-01's COM typelib corruption, the integration-branch sync (whether
+`83c91d2` should stand or be reverted, still two unauthorized pushes deep, still Paul's call alone),
+and the live-match-clinch-tracking idea awaiting Paul's scoping call. **No new captain-decision gap
+found this pass, stated explicitly rather than invented; this entry records that the check was made,
+not a result to report.**
+
+**Follow-on firing (session `local_1444922e`, head `8ebc80c` at start): no new signal; step 0/1 verification
 clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs`) found only this session
 `"running"` (28 prior runs all `"succeeded"`, none `"running"`/`"failed"`) — no overlapping
 builder, proceeded past step 0. Step 1 verified toplevel resolves under this worktree and `origin`
