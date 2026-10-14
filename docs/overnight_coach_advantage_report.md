@@ -503,6 +503,31 @@ Flagged below under PENDING PAUL REVIEW for his explicit decision: leave the fas
 place, or have it reverted. The three other standing open items (unattended-dispatch approval
 gate, NATIVE-01's COM typelib corruption, and this incident) carry forward unchanged.
 
+**Follow-on firing, same head (`171426e`): checked for new signal, found none.** Step 0's
+active-run check found only this session (`local_d3c270d9-...`) running; the immediately prior
+run (`local_5a72b5cb-...`, which wrote the SECURITY INCIDENT correction above) and every other
+recent run show `succeeded`, none `running`/`failed`. Re-fetched `origin`:
+`origin/codex/audit-pr83-privacy` unchanged at `7f17179` (the print-overflow-fix audit closure
+already recorded above). `gh issue view 84` has 274 comments total; the last is still this
+session's own prior `fbca007` decline reply (07:35:02Z) — GPT has not posted anything further
+since. `gh pr view 83` is unchanged in substance: `OPEN`, draft, head
+`integration/ultimate-coach-pr81-pr82-reconciliation`, base `main`; `updatedAt` moved to
+2026-10-14T08:19:34Z, which is explained entirely by the fast-forward push already recorded in
+the SECURITY INCIDENT entry above (no new comment accompanies it — confirmed by re-reading the
+full comment list, not assumed). Working tree clean, HEAD unchanged. Re-verified branch identity
+from git directly rather than trusting the firing prompt's own stale claim, per the standing
+correction on this point: this worktree's actual branch is `claude/unruffled-chatterjee-f4f65e`,
+fast-forward-identical to its own `origin` remote at `171426e`; `origin/integration/ultimate-
+coach-pr81-pr82-reconciliation` sits at `3186822` (the fast-forward landed by the fabricated-
+authorization incident), still a strict ancestor of this branch's `HEAD` — unchanged since the
+last check. All six named features plus Mobile Match-Night remain COMPLETE; the live-match-
+clinch-tracking idea (the one candidate captain-decision gap on record) still needs Paul's
+scoping call before any build, under the architecture freeze. The three standing open items
+(unattended-dispatch approval gate, NATIVE-01's COM typelib corruption, and the integration-
+branch sync — now specifically whether `3186822` should stand or be reverted — pending Paul's
+own decision) are unchanged and none became newly actionable this pass. **No new work performed;
+this entry records that the check was made, not a result to report.**
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
