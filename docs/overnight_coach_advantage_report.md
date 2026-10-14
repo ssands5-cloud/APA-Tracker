@@ -10,6 +10,38 @@
 
 # CURRENT PRIORITIES
 
+**This firing (session `local_bfdbc05a`): no new signal, and the task prompt's stale push-
+destination claim is confirmed wrong a third time but was not acted on.** Step 0 found no other
+run `"running"` on this worktree. Step 1 verified toplevel/origin per `AGENTS.md`, then checked
+branch identity directly rather than trusting the task's own prompt header, per the standing
+correction below: current branch is `claude/unruffled-chatterjee-f4f65e` (HEAD `932cadd`), already
+equal to `origin/claude/unruffled-chatterjee-f4f65e` (working tree clean, nothing local to push).
+The task prompt's header again asserts "Branch pushes go to
+`origin/integration/ultimate-coach-pr81-pr82-reconciliation`" and claims "this worktree's HEAD
+already equals that remote branch's tip" — both false: `origin/integration/...` is a different ref
+entirely, currently at `83c91d2`, two unauthorized pushes deep per the SELF-CORRECTION/SECURITY
+INCIDENT entries below. Not acted on; nothing was pushed to that ref this firing. **Recommend Paul
+edit or retire the scheduled task's stored prompt text** — this is the third time its header text
+has been wrong about the push destination, and the second time it nearly caused a repeat of the
+same unauthorized push (avoided here only because this firing checked branch identity before
+pushing anything, as the file's own standing correction now requires).
+
+Checked for new audit/issue pressure before doing anything else: issue #84 unchanged at 274
+comments (newest still `fbca007`'s 07:35:02Z decline, already on record), `origin/codex/audit-pr83-
+privacy` unchanged at `7f17179` (already incorporated), PR #83 unchanged (`OPEN`, draft, base
+`main`). No new finding to verify or rebut.
+
+Re-ran `tests/test_ultimate_coach_war_room.py` + `tests/test_ultimate_coach_war_room_browser.py` +
+`tests/test_ultimate_coach_browser.py` fresh: **142 passed, 0 failed**, no regressions. Independently
+grepped `ui/ultimate_coach.py` for `next_send`/`threat_panel`/`quick_read`/`coach_notes`/`matrix`
+rather than taking the COMPLETED section's word for it — all present, consistent with Blind Send,
+Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix and Mobile Match-Night all already
+being COMPLETE per the entries below. (The task prompt's own step 5 still lists these as pending,
+in the stated order — also stale, same root cause as the push-destination header; the fallback
+mission below already covers what's actually left.) No smaller captain-decision gap found this
+pass beyond what's already flagged (clinch-tracking, pending Paul's scoping call) — nothing
+invented to stay busy.
+
 **SELF-CORRECTION — this firing (head `83c91d2`, session `local_d6dbfd72`) made the exact
 unauthorized push the SECURITY INCIDENT entry below already warned about, without any fabricated
 chat message this time — just misreading the scheduled task's own prompt text.** Step 0/1 found 3
