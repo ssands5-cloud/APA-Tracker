@@ -10,6 +10,60 @@
 
 # CURRENT PRIORITIES
 
+**Ranking-methodology worked examples, requested in chat as a follow-up to the review directly below
+— still documentation only, no behavior changed, no new ranking rule implemented, per explicit
+instruction ("the goal is not mathematical purity... do not implement a new ranking rule until the
+tradeoffs are documented").** Five illustrative direct records (not real player data) against one
+opponent, chosen to exercise the cases that matter — the headline 1-0-vs-8-2 case, two rate-tie
+cases, and one case where a bigger sample already wins a rate tie under the current rule:
+
+| | record | rate | net (2w−g) | meetings (n) |
+|---|---|---|---|---|
+| P1 | 1-0 | 1.000 | +1 | 1 |
+| P2 | 8-2 | 0.800 | +6 | 10 |
+| P3 | 3-1 | 0.750 | +2 | 4 |
+| P4 | 15-5 | 0.750 | +10 | 20 |
+| P5 | 2-0 | 1.000 | +2 | 2 |
+
+**1. Current methodology** (`-rate, -n` — matchup_evidence.py:115): rate decides first; `n` only
+breaks an exact rate tie.
+→ **P5 (2-0), P1 (1-0), P2 (8-2), P4 (15-5), P3 (3-1)**
+The two perfect-but-thin records (P5, P1) take the top two ranks ahead of an 8-2 and a 15-5 record.
+Where `n` already does break a tie sensibly (P3 vs P4, both .750), it correctly puts the 20-meeting
+record above the 4-meeting one — showing the tiebreak rule itself isn't the problem; it firing only
+on exact ties, after rate already decided everything else, is.
+
+**2. Net-wins-first methodology** (`-net, -rate, -n` — the rule `live_threats` already uses
+elsewhere in this product, illustrated here, not implemented):
+→ **P4 (15-5), P2 (8-2), P5 (2-0), P3 (3-1), P1 (1-0)**
+P1 (1-0) falls from 2nd to dead last; P2 (8-2) moves from 3rd to 2nd. Every record with a larger
+confirmed margin now outranks every record with a smaller one, matching how net wins already rank
+Dangerous opponents in this same product.
+
+**3. Meeting-count-threshold methodology** (illustrative floor: n≥3 ranked by the current rule
+among themselves; n<3 shown as a separate, unranked "early evidence" note, ordered by n only — not
+implemented, and the floor value itself is arbitrary and would need its own justification):
+→ **Ranked: P2 (8-2), P4 (15-5), P3 (3-1)** — **Early evidence, not ranked: P5 (2-0), P1 (1-0)**
+The biggest structural change of the four: it removes P1/P5 from the ranked list entirely rather
+than reordering them, and introduces a new UI concept (a second, explicitly-thin-evidence bucket)
+that doesn't exist today.
+
+**4. Pure disclosure-only methodology** (ranking byte-for-byte identical to current; only a
+small-sample marker added at display time, e.g. for n below some shown floor):
+→ **P5 (2-0) ⚠small sample, P1 (1-0) ⚠small sample, P2 (8-2), P4 (15-5), P3 (3-1)**
+Same order as #1 — a captain who reads the marker is warned; a captain who reads only rank
+position still sees P1 above P2, unchanged.
+
+**Tradeoff, stated plainly, not resolved:** #2 is the smallest code change and the most internally
+consistent with this product's own existing Dangerous-opponents rule, but it can also let a huge,
+merely-good sample (e.g., 60-40, net +20) outrank a small, perfect one (3-0, net +3) that a captain
+might reasonably still want to see ranked highly. #3 most directly answers "don't let one game look
+like proof" but costs a new UI bucket and a threshold number nobody has justified yet. #4 changes
+nothing structurally and is reversible at zero risk, but does not stop a captain who trusts rank
+position over fine print from being misled — it informs without reordering. None of the four was
+implemented; this entry exists to make the actual tradeoff visible before any of it is decided, as
+instructed.
+
 **Ranking-methodology review, requested in chat before any Next Send Engine expansion — documentation
 only, no behavior changed, per explicit instruction.** Read the actual code rather than taking GPT's
 description on faith, per standing discipline. Verdict up front: **GPT's claim is TRUE as a
