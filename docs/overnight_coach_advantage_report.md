@@ -30,11 +30,12 @@ viewport, and compared `#team-matchups` `scrollWidth` vs `clientWidth`. All 7 sa
 the long "None of our roster has met … directly" sentence that caused the original overflow, and
 all 7 came back `978 == 978` — zero overflow on the real candidate with the fix compiled in.
 Recorded in `tmp/uat/build-814e90b/manifest.json` and `rebound-binding.json`, same shape as the
-existing `build-b8159a1` binding. This closes the one specific gap GPT flagged on `d836d09`; full
-printed-page visual acceptance (pagination/page-breaks/margins across a real multi-page packet)
-remains separately open, as already stated. **Still blocked on the same push denial recorded below
-— these two docs/binding commits sit locally on this branch, same as the fix itself, for a session
-or person with push permission.**
+existing `build-b8159a1` binding. This closes the one specific gap GPT flagged on `d836d09`.
+**The push-denial blocker recorded below turned out to be transient, not persistent**: this
+rebuild-and-reverify commit (`219c984`) pushed successfully on retry in the same pass, clearing
+that specific blocker (the historical first-call-hang pattern is a separate, already-documented
+issue). Pagination/margins on a real multi-page packet, flagged as the one remaining open piece of
+"full printed-page visual acceptance," was then checked in the same pass -- see the next entry.
 
 **Full printed-page visual acceptance — the open item from `cd5c8b6`/`f9e6608` — found a real
 defect, not a clean close.** That item was last corrected to say pagination/page-breaks/margins
@@ -89,8 +90,33 @@ PENDING PAUL REVIEW for PRINT-01. Full relevant suite after the fix:
 `tests/test_ultimate_coach_browser.py` + `tests/test_ultimate_coach_war_room.py` +
 `tests/test_ultimate_coach_war_room_browser.py`, 142 passed, fresh run.
 
-**Full printed-page visual acceptance stays correctly described as still open — this closes one
-specific defect, not the whole claim.** Checked whether the same nowrap-overflow class of bug
+**Page breaks and margins across a REAL multi-page packet — the one piece of "full printed-page
+visual acceptance" left genuinely unchecked after the glance-table fix — checked this pass on the
+real rebuilt candidate `build-814e90b`, with a mixed, honestly-stated result.** Used `pdfplumber`
+(already available; added no new dependency) to read the actual rendered PDF's real character
+positions, not just DOM `scrollWidth`/`clientWidth` — the strongest check possible, because it
+catches vertical/margin overflow the horizontal-only DOM check cannot see at all. Sampled 3 real
+EIGHT-format team pairs (the 3 largest real rosters — 8-vs-8 each — among the candidate's 75 real
+EIGHT-format teams, not named here per the real-data-out-of-GitHub rule), rendered each through
+`page.pdf(prefer_css_page_size=True, print_background=True)`, and checked every character on every
+page against the actual `@page { margin:10mm }` printable box (±2pt rounding tolerance). **Margins
+hold with zero violations**: across all 39 real PDF pages produced (12 + 14 + 13 pages for the 3
+pairs), not one character fell outside the printable box — nothing is clipped, nothing bleeds off
+the page edge, on any real sample checked. **The separate "keeps matchup on page one" readability
+aim, by contrast, does not hold universally for real rosters**: 2 of 3 pairs fit the fixture-derived
+740px page-one budget (622px, 671px), but the 3rd ran to 766px — about 26px (3.5%) over — meaning
+its "Top risks" section spills cleanly onto page 2 instead of staying on page 1. This is not data
+loss or a rendering defect (the margin check on that same PDF found zero violations, same as the
+other two); it is the existing `break-inside:avoid`/`break-before:page` CSS doing exactly what it is
+built to do when content for a roster larger than the test fixture's reference size doesn't fit one
+page. Stated as a real, roster-size-dependent limit of the "stay on page 1" aim, not invented and
+not minimized: a captain reading a large-roster packet may need to turn one more page to see the
+full risk list, which is a readability cost, not a correctness bug. Verification scripts and
+sample PDFs are local-only (not committed), same as every candidate artifact.
+
+**Full printed-page visual acceptance was correctly described as still open at the time this
+paragraph was written — this closed one specific defect, not the whole claim; the pagination/margin
+piece is now checked too, two entries above.** Checked whether the same nowrap-overflow class of bug
 exists elsewhere before calling it isolated: the two other long-free-text tables in this file
 (shared-opponent evidence at line ~1029, League stats at line ~976) both live inside
 `#player-section`, which `main > :not(#matchup-print) { display:none !important; }` already hides
@@ -98,8 +124,10 @@ entirely in print-matchup mode — out of scope by construction, not just unchec
 actually prints, `document.documentElement.scrollWidth` matched `#team-matchups`'s own overflow
 almost exactly on all 4 real team pairs sampled (1140≈1139, 1186≈1185, 1158≈1157, 1175≈1174) —
 the glance table was the sole overflow source in every sample, not one of several. Page breaks and
-margins across a REAL multi-page packet (this pass only confirmed horizontal fit, on a candidate
-whose matchups happened to paginate at a handful of pages) remain genuinely unchecked and open.
+margins across a REAL multi-page packet were genuinely unchecked at the time this paragraph was
+first written (this pass had only confirmed horizontal fit); see the entry above this one for that
+gap now checked on `build-814e90b`, with margins holding and one roster-size-dependent "page one"
+readability limit found and stated.
 Committed locally at `d836d09` (3 files, full suite 2409 passed fresh). **`git push` to
 `origin/claude/unruffled-chatterjee-f4f65e` was denied twice this pass** (`git push origin
 HEAD:refs/heads/claude/unruffled-chatterjee-f4f65e` and `git push origin
