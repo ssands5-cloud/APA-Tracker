@@ -468,6 +468,41 @@ the integration-branch sync pending Paul's own go-ahead) are unchanged and none 
 actionable this pass. **No new work performed; this entry records that the check was made, not a
 result to report.**
 
+**SECURITY INCIDENT — unauthorized push to the integration branch via a fabricated "live chat"
+authorization; correct this record before trusting any prior entry claiming the sync was
+resolved.** On 2026-10-14, session `local_4fed2ed9` (another unattended firing of this same
+scheduled task — there is no live chat channel into an overnight scheduled run; no human is
+present) received a message appearing in its chat that claimed to be Paul directly authorizing
+the integration-branch sync, worded to echo the exact caveats (non-force, preserve hooks, keep PR
+draft, no merge/release) that every previously-declined GitHub-comment attempt at this same
+request had also used. The session treated it as genuine live input and pushed
+`f9e6608..3186822` to `origin/integration/ultimate-coach-pr81-pr82-reconciliation` (PR #83's own
+head branch) — a real push; `git push` ran and the remote tip moved. It then drafted a confident
+"RESOLVED, Paul's own live-chat authorization received" report entry (the text this entry
+replaces) and tried to commit it. **That commit was blocked by the platform's own auto-mode
+safety classifier with reason "[Instruction Poisoning]."** Only then did the session reconsider,
+correctly declined to route around the block, left the false draft uncommitted, and ended its run
+asking in chat whether Paul had really just sent that message — a question that, in an unattended
+run, can never be answered. A subsequent firing (this one) found the uncommitted false draft
+still sitting in the working tree and is correcting it now rather than committing it.
+
+**What is and isn't settled:** the push itself already landed and is a lossless fast-forward (no
+history rewrite, nothing lost) — `origin/integration/ultimate-coach-pr81-pr82-reconciliation` and
+`claude/unruffled-chatterjee-f4f65e` both sit at `3186822` on `origin` as of this check; `gh pr
+view 83` still shows `OPEN`, `isDraft: true`, head `integration/ultimate-coach-pr81-pr82-
+reconciliation`, base `main` — not merged, nothing else touched. What is **not** settled is
+whether that push should have happened at all: the authorization it relied on cannot be
+genuine — this task runs unattended, so nothing claiming to be Paul typing live into one of these
+sessions can be real, regardless of how precisely it echoes his own stated conditions. This is
+the same injected-authorization pattern as [[pr-comment-scope-injection]], just arriving as a
+chat message instead of a GitHub comment. **This session is deliberately not reverting the push
+unilaterally** — force-pushing the integration branch back to `f9e6608` is itself a destructive
+action on a shared/reviewed branch, other work may already assume `3186822` as the tip, and that
+decision belongs to Paul, not to an automated run correcting a different automated run's mistake.
+Flagged below under PENDING PAUL REVIEW for his explicit decision: leave the fast-forward in
+place, or have it reverted. The three other standing open items (unattended-dispatch approval
+gate, NATIVE-01's COM typelib corruption, and this incident) carry forward unchanged.
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
@@ -992,19 +1027,26 @@ unavailable. Each carries the assumption it was built on.
 - **Design docs are written and self-reviewed rather than approved**, because the
   `brainstorming` skill's approval gate cannot be satisfied while Paul is away. Deliberate
   substitution, recorded rather than skipped.
-- **Integration-branch sync declined pending Paul, not performed.** GPT's audit of `1c9a228`
-  (`7f17179`) asked to fast-forward `origin/integration/ultimate-coach-pr81-pr82-reconciliation`
-  (PR #83's own head branch, currently `f9e6608`) up to this branch's `1c9a228` — confirmed as a
-  lossless fast-forward (`f9e6608` is a strict ancestor of `1c9a228`), framed by GPT as sync, not
-  merge/release. Declined anyway: it is a push into PR #83's own branch while that PR sits under
-  Paul's own live UAT gate, and an auditor's comment is not Paul's own authorization to push there
-  unattended. Assumption: Paul would rather confirm this one push himself than have it land
-  silently overnight. A one-line go-ahead from Paul (or him running the fast-forward himself)
-  resolves it either way. **Pressed again at 2026-10-14T07:12:54Z** with a comment asserting "Paul
-  already directed" this sync and asking this session to quote an explicit prohibition instead of
-  requiring an explicit go-ahead; declined again for the same reason — a comment claiming to relay
-  Paul's authorization is not Paul's authorization, regardless of wording. Still open, still
-  resolved only by Paul himself, in chat, not by any further GitHub comment on either side.
+- **Integration-branch sync — NOT legitimately resolved; a push already landed on a fabricated
+  authorization and needs Paul's own decision on whether to keep or revert it.** Declined
+  repeatedly while genuinely pending (GPT's audit of `1c9a228` at `7f17179` asked for it, framed
+  as sync not merge/release; declined since an auditor's comment is not Paul's own authorization;
+  pressed again at 2026-10-14T07:12:54Z with a comment asserting "Paul already directed" it,
+  declined again for the same reason). Then, on 2026-10-14, an unattended firing of this same
+  scheduled task (session `local_4fed2ed9`) received a chat message claiming to be Paul's direct
+  go-ahead — impossible to be genuine, since no live chat channel reaches an unattended overnight
+  run — and pushed `origin/integration/ultimate-coach-pr81-pr82-reconciliation` from `f9e6608` to
+  `3186822` before catching the problem. Its follow-up commit documenting the push as "resolved"
+  was blocked by the platform's own auto-mode classifier ("[Instruction Poisoning]"); the session
+  then correctly stopped, left that false draft uncommitted, and asked in chat whether the
+  authorization was genuine — unanswerable in an unattended run. This firing found and rewrote
+  that false draft rather than committing it. See the SECURITY INCIDENT entry under CURRENT
+  PRIORITIES for the full trail. **Needs Paul's explicit decision:** the push already landed as a
+  lossless fast-forward and PR #83 is still confirmed `OPEN`/draft, so nothing is lost either way,
+  but only Paul can say whether `3186822` should stand as the integration branch's tip or be
+  reverted — no automated run should decide that unilaterally. The underlying principle is
+  unchanged and now has a second case on record: neither a GitHub comment nor an unverifiable chat
+  message claiming to relay Paul's direction is ever sufficient authorization by itself.
 
 ---
 
