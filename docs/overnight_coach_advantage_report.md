@@ -10,6 +10,108 @@
 
 # CURRENT PRIORITIES
 
+**Ranking-methodology review, requested in chat before any Next Send Engine expansion — documentation
+only, no behavior changed, per explicit instruction.** Read the actual code rather than taking GPT's
+description on faith, per standing discipline. Verdict up front: **GPT's claim is TRUE as a
+description of the current implementation** — a 1-0 direct record does rank above an 8-2 direct
+record against the same opponent, and the reason is exactly as described: win rate is compared
+before meeting count, not the reverse.
+
+**1. Current methodology, by engine, verified against `analytics/ultimate_coach_matchup_evidence.py`
+and `analytics/ultimate_coach_war_room.py` (the HTML mirrors this in JS; a browser test checks both
+produce the same order):**
+
+- **Best Sends and Next Send Engine share one ranking, `rank_vs_opponent()`
+  (`ultimate_coach_matchup_evidence.py:87-115`).** For each of our players against one opponent:
+  classify into **tier** — DIRECT (we've met them), SHARED (no direct meeting, but opponents we've
+  both faced), or NONE. Sort key (`:115`): `(-tier, -rate, -n, -extra, roster_order)`. **Tier is
+  primary and absolute** — any direct record, including 0-1, outranks every shared-opponent
+  candidate, which outranks every no-evidence candidate; tiers are never blended or compared by
+  number. *Within* the DIRECT tier only, **win rate (`wins/games` as an exact fraction) is the
+  primary sort key, and meeting count (`n`) is a tiebreaker used only when rate is exactly equal.**
+  This is where 1-0 (rate 1.0) outranks 8-2 (rate 0.8): 1.0 > 0.8 is decided before either record's
+  `n` is ever consulted. Coverage (how many of our players have *some* evidence against this
+  opponent, `with_evidence` of `len(our_members)`) is reported in the block's summary note, not used
+  in the sort. Shared-opponent (SHARED-tier) results are **deliberately left as one unordered
+  group** — "our record vs the shared opponents says nothing about how the opponent did against
+  them, and no defensible single ordering combines the two" (code comment, citing a prior GPT audit
+  on PR #85) — so within SHARED, nothing is ranked against anything else; the raw our/their
+  shared-opponent split is shown as text (`"ours 3-1 (4 games) · theirs 1-2 (3 games)"`) for the
+  captain to read directly. NONE-tier (no direct or shared evidence) is listed last, unranked, and
+  explicitly labeled rather than silently omitted. Next Send layers medals (🥇🥈🥉) on top of this
+  same order for favorable/even direct groups only; it does not re-rank, re-weight, or blend
+  anything beyond what `rank_vs_opponent` already produced (`ultimate_coach_war_room.py:474`, "Nothing
+  is re-scored, weighted or blended").
+- **Blind Send Engine uses a different algorithm entirely** (`best_lead_candidate` /
+  `ultimate_coach_war_room.py:598-689`, the function backing "who do I put up blind"). It does
+  **not** rank by any single pairing's win rate at all. Instead, for each of our remaining players
+  it counts, across *every* unplayed opponent: how many are **concerning** (losing direct record),
+  how many are **favorable** (winning direct record), how many are **even**. Sort key (`:654`):
+  `(concerning, -favorable, -even, roster_order)` — fewest concerning records first, among those
+  most favorable, among those most even, then roster order as a final tiebreak. Win rate and meeting
+  count play no role here at all; it's a count of how many opponents fall in each category, not how
+  decisively. This function also refuses to name anyone when the top-ranked player has zero direct
+  coverage against the live field, specifically so "no evidence" is never dressed up as "safe" by
+  sorting above a bad record (code comment: "the shape of that bug").
+- **Unknown evidence**, consistently across all three: a player/pairing with no direct and no
+  shared-opponent record is its own category (NONE-tier / "X" / `no_record`), always ranked or
+  grouped last, never defaulted to 0, never treated as neutral-safe or counted as a loss. The
+  product's stated rule — "unknown is never presented as weak or as safe" — holds structurally in
+  this code, not just in prose: there is no code path that folds "no evidence" into either the
+  favorable or concerning bucket.
+
+**2. Why this is the actual behavior, not a misreading:** `Fraction(wins, games)` for 1-0 is exactly
+`1`; for 8-2 it is exactly `4/5`. Python tuple comparison evaluates `-rate` before `-n`, so any
+direct record with a strictly higher rate always sorts first regardless of how much smaller its `n`
+is — there is no minimum-sample floor, no regression toward a neutral rate, and no cap on how
+extreme the gap can be. A 1-0 record outranks not just 8-2 but a 50-3 record (rate ≈0.943 < 1.0)
+or any direct record short of a perfect one, no matter the sample size on the other side.
+
+**3. Evaluating whether this matches captain decision-making (analysis only, per instruction —
+no probabilities, no predictive model considered or proposed):**
+
+- **Strength:** the rule is simple, deterministic, fully disclosed in the module's own docstring,
+  and ties are shown explicitly ("2=") rather than silently broken — a captain can always see
+  *why* one name is above another. Tier-first (direct always beats shared, shared always beats
+  none) is a defensible, uncontroversial ordering nobody is likely to dispute.
+- **Weakness, and it is a real one:** within the DIRECT tier, the rule treats "1 game, won it" as
+  stronger evidence than "10 games, won 8" — the opposite of how a captain sizing up a reliable
+  edge would normally read two records side by side. A single win is not distinguishable from
+  variance; eight wins against two losses is much harder to get by chance alone, and that
+  difference in *how much the evidence should be trusted* currently plays no role in the sort at
+  all — `n` only matters when `rate` ties exactly, which a small sample rarely does. Meeting count
+  is displayed in the text next to every record (`"1-0 (1 meeting)"` vs `"8-2 (10 meetings)"`), so
+  the raw numbers are never hidden, but the rank position itself does not reflect that asymmetry —
+  a captain scanning only the medal/number order, not the fine print, would be led backwards.
+- **Worth naming directly: this is an internal inconsistency, not just an abstract concern.** Two
+  other ranking functions in this same codebase already reject rate-as-primary in favor of a
+  margin/count-based rule for exactly this reason — `live_threats` (Dangerous opponents) sorts by
+  `2*wins - games` (net wins, not a ratio), and Blind Send sorts by category counts, not rates.
+  Both of those already answer "which evidence should I trust more" without resorting to a
+  probability. Best Sends/Next Send Engine is the one ranking in this product that still uses a
+  bare rate as its primary key, and it is the one place GPT found the small-sample problem.
+- **Whether small-sample records can overshadow much larger evidence sets: yes, unconditionally,
+  whenever the smaller sample happens to be undefeated and the larger sample has any loss at all.**
+  This is not an edge case needing a rare combination of inputs — it is the direct, guaranteed
+  consequence of comparing `rate` before `n` with no floor, and it reproduces on any 1-0 vs 8-2 (or
+  similarly shaped) pair in the live data, not only a constructed example.
+- **Alternative approaches, all consistent with "no probabilities, no predictive models" since
+  they only reorder recorded facts, never estimate or project anything:**
+  1. **Primary-sort by net wins (`2*wins - games`) instead of rate within the DIRECT tier** — the
+     same rule `live_threats` already uses elsewhere in this product. 8-2 (net +6) would outrank
+     1-0 (net +1); ties still break by more meetings, then rate. This is the smallest change and
+     the one most consistent with the rest of the codebase's own existing conventions.
+  2. **Keep rate as primary, but only among records at or above some fixed meeting-count floor**
+     (e.g., require ≥3 meetings before rate alone decides order; group thinner samples separately,
+     labeled by their count rather than ranked above or below). Still rule-based, not probabilistic,
+     but introduces a specific threshold number that itself needs a defensible rationale.
+  3. **Leave the sort as-is, but make the asymmetry visible at the rank position, not only in the
+     adjoining text** — e.g., a visible small-sample marker on any #1 ranked purely on a single-
+     or two-game record, so a captain scanning rank position alone isn't misled even though the
+     order itself doesn't change. A disclosure fix, not an ordering fix.
+  No code change made — this entry is documentation and evaluation only, as instructed. Any of the
+  three above is implementable without a probability model if a decision is made to act on this.
+
 **Policy correction accepted — no-op "no new signal" commits stop here, per issue #84 comment
 6166522076 (2026-10-14T10:42:23Z) and this session's own standing judgment; nothing about
 push/release authorization changes.** This firing (session `local_e529e820`, head `e23dc23` at
