@@ -347,6 +347,48 @@ PDFs/PNGs and the verification script stay local-only under `tmp/` (confirmed ex
 GitHub rule. The roster-size-dependent page-one limitation stands as already described, and
 release/merge/publication/installation remain separately gated — neither changed by this pass.
 
+**GPT audit CLOSED the print-overflow fix itself (`7f17179`, issue #84, 2026-10-14T06:58:50Z);
+one new request in the same comment handled as a judgment call, not performed, this pass.** GPT
+independently opened the three retained glance-table PNGs and the page-1/page-2 risk-transition
+PNG and confirmed both VERIFIED: the original horizontal-overflow defect fix and the bounded
+visual sample hold, long reasons wrap within the table, no clipped text in any retained image.
+GPT restated the real limitation precisely, with one addition not previously recorded this
+explicitly: the two overflow risk bullets continue onto an otherwise mostly empty page **without
+a repeated heading** — still a page-count/readability tradeoff, not universal page-one fit, now
+stated with that added precision. GPT also noted the 39-page character check remains
+builder-executed, not an independent full-packet visual review, and confirmed no unchanged
+tests/builds were rerun this pass (correct — none were).
+
+**The same comment asked for one more thing: "synchronize the completed print fix/report to the
+intended integration branch (`origin/integration/ultimate-coach-pr81-pr82-reconciliation`)
+through normal hook-checked, non-force Git workflow," explicitly framed by GPT as branch
+synchronization, not merge/release/publication approval.** Checked the mechanics before deciding
+anything: `origin/integration/ultimate-coach-pr81-pr82-reconciliation` (`f9e6608`) is confirmed a
+strict git ancestor of this branch's own HEAD (`1c9a228`, already present on `origin` unchanged)
+— technically a clean fast-forward, zero rewrite risk, nothing to lose. **Declined to perform it
+unattended anyway, as a deliberate judgment call, not a tooling block:** that integration branch
+is PR #83's own head branch (`gh pr view 83`: head `integration/ultimate-coach-pr81-pr82-
+reconciliation`, base `main`, still draft) — the PR under Paul's own UAT gate, reviewed live on
+his own machine, not by test-suite-green. Pushing a new commit into it during an unattended
+overnight run — even a lossless fast-forward — changes what Paul finds there next time he looks,
+without his live confirmation, which is exactly the "pushing code into a shared/reviewed branch"
+class of action this project's own standing instructions reserve for his explicit say-so, not an
+auditor's GitHub comment. This is consistent with, not a reversal of, the audit scope-injection
+lesson already on record: a PR/issue comment is evidence to act on technically, never
+authorization to act on by itself, regardless of how clearly the commenter frames it as
+non-release. **Recorded here as pending Paul's explicit go-ahead, not as a blocker that stops
+other work** — logged under PENDING PAUL REVIEW below.
+
+**Checked for further unblocked work before closing out this pass rather than stopping on the
+audit response alone.** Working tree clean, nothing uncommitted. All six named features (Blind
+Send, Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix) and Mobile Match-Night
+remain COMPLETE, unchanged by this pass. The prior pass's fallback-mission search (live match-
+clinch tracking) remains the only candidate captain-decision gap on record, and it still needs
+Paul's scoping call before any build, not a unilateral implementation under the architecture
+freeze — unchanged, not re-litigated this pass. **No new captain-decision gap found this pass,
+stated explicitly rather than invented**, same discipline as every prior "no gap found" entry in
+this file.
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
@@ -871,6 +913,15 @@ unavailable. Each carries the assumption it was built on.
 - **Design docs are written and self-reviewed rather than approved**, because the
   `brainstorming` skill's approval gate cannot be satisfied while Paul is away. Deliberate
   substitution, recorded rather than skipped.
+- **Integration-branch sync declined pending Paul, not performed.** GPT's audit of `1c9a228`
+  (`7f17179`) asked to fast-forward `origin/integration/ultimate-coach-pr81-pr82-reconciliation`
+  (PR #83's own head branch, currently `f9e6608`) up to this branch's `1c9a228` — confirmed as a
+  lossless fast-forward (`f9e6608` is a strict ancestor of `1c9a228`), framed by GPT as sync, not
+  merge/release. Declined anyway: it is a push into PR #83's own branch while that PR sits under
+  Paul's own live UAT gate, and an auditor's comment is not Paul's own authorization to push there
+  unattended. Assumption: Paul would rather confirm this one push himself than have it land
+  silently overnight. A one-line go-ahead from Paul (or him running the fast-forward himself)
+  resolves it either way.
 
 ---
 
