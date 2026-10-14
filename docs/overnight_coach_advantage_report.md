@@ -10,6 +10,34 @@
 
 # CURRENT PRIORITIES
 
+**Follow-on firing (this session, head `8ebc80c` at start): no new signal; step 0/1 verification
+clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs`) found only this session
+`"running"` (28 prior runs all `"succeeded"`, none `"running"`/`"failed"`) — no overlapping
+builder, proceeded past step 0. Step 1 verified toplevel resolves under this worktree and `origin`
+is `https://github.com/ssands5-cloud/APA-Tracker.git`, per `AGENTS.md`. Verified branch identity
+from git directly rather than the task prompt's own stale header, per the standing correction:
+current branch is `claude/unruffled-chatterjee-f4f65e`, HEAD `8ebc80c`, already equal to
+`origin/claude/unruffled-chatterjee-f4f65e` (working tree clean, nothing local to push before this
+entry). `origin/integration/ultimate-coach-pr81-pr82-reconciliation` is unchanged at `83c91d2`,
+still a strict ancestor of this HEAD — not touched this pass, same declined-pending-Paul status as
+every entry below. `origin/codex/audit-pr83-privacy` unchanged at `7f17179`. Issue #84's three
+newest comments are all already on record (`aaca5cc` 07:03:11Z, the `07:12:54Z` pressure comment,
+this session's own `fbca007` decline reply 07:35:02Z) — no new GPT pressure or finding to verify.
+`gh pr view 83` unchanged in substance (`OPEN`, draft, head
+`integration/ultimate-coach-pr81-pr82-reconciliation`, base `main`); `updatedAt` is still
+09:11:54Z, the same timestamp the immediately prior entry already explained as push-only, no new
+comment. Re-ran `tests/test_ultimate_coach_war_room.py` + `tests/test_ultimate_coach_war_room_browser.py`
++ `tests/test_ultimate_coach_browser.py` fresh: **142 passed, 0 failed**, no regressions.
+Independently grepped `ui/ultimate_coach.py` for `next_send`/`threat_panel`/`quick_read`/
+`coach_notes`/`matrix` rather than taking this file's word for it — all present, consistent with
+Blind Send, Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix and Mobile Match-Night
+all already being COMPLETE per the entries below. The standing open items are unchanged and none
+became newly actionable this pass: the unattended-dispatch approval gate, NATIVE-01's COM typelib
+corruption, the integration-branch sync (whether `83c91d2` should stand or be reverted, now two
+unauthorized pushes deep), and the live-match-clinch-tracking idea awaiting Paul's scoping call.
+**No new captain-decision gap found this pass, stated explicitly rather than invented; this entry
+records that the check was made, not a result to report.**
+
 **Follow-on firing (session `local_120c5722`, head `6fba848`): no new signal; step 0/1 verification
 clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs`) found only this session
 `"running"`; the immediately prior run (`local_bfdbc05a`, which wrote the entry below) ended at
