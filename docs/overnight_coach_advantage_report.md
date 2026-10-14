@@ -313,6 +313,40 @@ than assumed closed:** print-media rendering (byte-grep already confirmed the CS
 this did not render it under `@media print`), a desktop/visual read of Scouting Cards and Command
 Center, and everything on the Excel side (see OPEN ISSUES below).
 
+**Retained the rendered sample PDFs and visually inspected them, per GPT's audit follow-up on
+`b0b0942` (issue #84, 2026-10-14T03:42:42Z): the 39-page character-bounds check supports sampled
+text containment but does not by itself establish full visual pagination/readability, table/header
+continuity, or absence of graphical clipping — correctly distinguished from a geometry check that
+only proves no character left the printable box.** Re-ran the identical pagination/margin method
+(`playwright page.pdf(prefer_css_page_size=True, print_background=True)` + `pdfplumber` char-bbox
+check) against the same real bound candidate `build-814e90b`, this time saving the PDFs to
+`tmp/uat/build-814e90b/retained_pdfs/` instead of discarding them after the in-memory check (the one
+concrete gap GPT found: the prior pass's local summary JSON existed but no PDFs were kept). Pair
+selection was deterministic (largest-roster real EIGHT-format teams by count, paired adjacently) and
+reproduced the prior pass's own numbers exactly — 621.6875 / 765.6875 / 670.6875 px and 12 / 14 / 13
+pages, digit for digit — strong evidence this is the same real data, not a coincidence. Rendered the
+actual "At a glance" table page to PNG (via `pypdfium2`) for all 3 real pairs and visually confirmed
+the long no-direct-evidence sentence wraps cleanly in its column on every one — no horizontal
+overflow, no clipped text, table header intact. Rendered the real page-1/page-2 boundary for the one
+pair whose page-one height exceeds the 740px budget (765.7px) and visually confirmed the break is
+clean: the "Top risks" box's "Open risks" bullet list splits across the page boundary with the box
+border intact on both pages, nothing duplicated or dropped, no clipping — a readability cost (one
+more page to turn), not a rendering defect. **Both items GPT named as unconfirmed by the char-bbox
+check alone are now confirmed by direct visual inspection, on top of the already-recorded
+zero-violation geometry result; no new defect found.** Also corrected the one-off verification
+script's `checked_utc` placeholder GPT flagged: `pagination-margin-check.json` recorded
+`2026-10-14T04:05:00+00:00`, which is later than both the audit comment reviewing it (03:42:42Z) and
+the candidate's own build time (`manifest.json` `built_at_utc` 03:12:00Z) — confirmed a placeholder
+by checking the file's actual on-disk mtime (`03:23:56Z` UTC via `date -u -r`), not a real capture
+time. The new check file, `tmp/uat/build-814e90b/pagination-visual-check.json`, records a real
+capture timestamp and documents the discrepancy rather than silently overwriting it. Did not rerun
+the full test suite and did not expand roster/foundation scope — this pass reused the exact same
+bound candidate and the exact same 3-pair selection method already on record. All retained
+PDFs/PNGs and the verification script stay local-only under `tmp/` (confirmed excluded via
+`.git/info/exclude`, not staged, not committed) and are not named here, per the real-data-out-of-
+GitHub rule. The roster-size-dependent page-one limitation stands as already described, and
+release/merge/publication/installation remain separately gated — neither changed by this pass.
+
 # COMPLETED
 
 - **Mobile Match-Night: evidence-precision correction, and a real mobile-viewport investigation
