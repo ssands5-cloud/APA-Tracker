@@ -729,7 +729,11 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
     e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
-    medal = 'IF(H{r}=1,"🥇",IF(H{r}=2,"🥈","🥉"))'
+    medal = 'IF(H{r}=1,"🥇",IF(H{r}=2,"🥈",IF(H{r}=3,"🥉",H{r}&".")))'
+
+    def _nm(expr: str) -> str:
+        """Player label without its "(APA record ID n)" suffix (NAME-DISPLAY-01); Players sheet keeps the ID."""
+        return f'LEFT({expr},IFERROR(FIND(" (APA record ID",{expr})-1,LEN({expr})))'
 
     def _join(k: int, r: int, col: str, cond: str, text: str) -> str:
         """Running ", "-joined list down a column; the last row holds the whole list (no TEXTJOIN needed)."""
@@ -748,28 +752,27 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_NsGrp", lambda k, r: (f'=IF(G{r},1,0)' if k == 1 else
                                     f'=IF(G{r},IF(H{r - 1}=0,1,IF(F{r}=I{r - 1},H{r - 1},H{r - 1}+1)),H{r - 1})')),
         ("wr_NsLastKey", lambda k, r: (f'=IF(G{r},F{r},"")' if k == 1 else f'=IF(G{r},F{r},I{r - 1})')),
-        ("wr_NsMedalRun", lambda k, r: (f'=IF(AND(G{r},H{r}<=3),1,0)' if k == 1 else f'=J{r - 1}+IF(AND(G{r},H{r}<=3),1,0)')),
+        ("wr_NsMedalRun", lambda k, r: (f'=IF(G{r},1,0)' if k == 1 else f'=J{r - 1}+IF(G{r},1,0)')),
         ("wr_NsMedalText", lambda k, r: (
-            f'=IF(G{r},IF(H{r}<=3,{medal.format(r=r)}&" "&INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Reason],B{r})'
+            f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})")}&" — "&INDEX({ME}[Reason],B{r})'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
             f'" · consider saving — our only favorable direct option vs another unplayed opponent","")'
-            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),""),"")')),
-        ("wr_NsMore", lambda k, r: f'=AND(G{r},H{r}>3)'),
-        ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=M{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
-        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="I")', f'INDEX({ME}[Player],B{r})'
-                                              f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
-        ("wr_NsUnkJoin", lambda k, r: _join(k, r, "O", f'AND(E{r},D{r}="X")', f'INDEX({ME}[Player],B{r})')),
+            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),"")')),
+        ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
+        ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})")
+                                              + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
+        ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})"))),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
-        ("wr_NsAvoidOk", lambda k, r: (f'=IF(P{r}="",FALSE,AND(INDEX({ME}[Category],P{r})="R",IFERROR(INDEX(wr_OurRemaining,'
-                                        f'MATCH(INDEX({ME}[Player ID],P{r}),wr_OurPids,0)),FALSE)))')),
-        ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "R", f'Q{r}',
-                                              f'INDEX({ME}[Player],P{r})&" — "&INDEX({ME}[Direct Record],P{r})')),
+        ("wr_NsAvoidOk", lambda k, r: (f'=IF(O{r}="",FALSE,AND(INDEX({ME}[Category],O{r})="R",IFERROR(INDEX(wr_OurRemaining,'
+                                        f'MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)),FALSE)))')),
+        ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "Q", f'P{r}',
+                                              f'{_nm(f"INDEX({ME}[Player],O{r})")}&" — "&INDEX({ME}[Direct Record],O{r})')),
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
-        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Medals = ordered direct records among our '
-        'remaining players (same evidence = same medal). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No direct record to order — '
+        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ranked direct records among our '
+        'remaining players (same evidence = same rank). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No direct record to order — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
     # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
     # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
@@ -782,16 +785,13 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsLists", "Next Send lists (one line each)",
            '=wr_NsUnordLine&IF(AND(wr_NsUnordLine<>"",wr_NsAvoidLine&wr_NsUnkLine<>""),CHAR(10),"")'
            '&wr_NsAvoidLine&IF(AND(wr_NsAvoidLine<>"",wr_NsUnkLine<>""),CHAR(10),"")&wr_NsUnkLine')
-    # The whole Next Send answer as ONE wrapped cell, a line per item: headline, up to four medal lines, the
-    # "+ more" note, then the lists. Fixed rows per medal left a tall empty gap between the medal and the lists
+    # The whole Next Send answer as ONE wrapped cell, a line per item: headline, every ranked line
+    # (SEND-LAYOUT-01), then the lists. Fixed rows per medal left a tall empty gap between the medal and the lists
     # on screen and on paper (real-Excel UAT 0c2e474); one cell keeps the answer contiguous and is sized once.
-    for n in range(1, 5):
+    for n in range(1, R + 1):
         e.cell(f"wr_NsMedal{n}", f"Next Send medal line {n}", f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
-    e.cell("wr_NsMoreLine", "Next Send more-candidates line",
-           '=IF(COUNTIF(wr_NsMedalRun,">4")+COUNTIF(wr_NsMore,TRUE)=0,"","+ more direct candidates — see War Room Inspect")')
     e.cell("wr_NsCard", "Next Send answer (one line each)", "=wr_NsHeadline" + "".join(
-        f'&IF({x}="","",CHAR(10)&{x})' for x in ("wr_NsMedal1", "wr_NsMedal2", "wr_NsMedal3", "wr_NsMedal4",
-                                                 "wr_NsMoreLine", "wr_NsLists")))
+        f'&IF({x}="","",CHAR(10)&{x})' for x in [f"wr_NsMedal{n}" for n in range(1, R + 1)] + ["wr_NsLists"]))
 
     # ---- Lineup Lab metrics ----
     e.section("Lineup Lab metrics")
@@ -1940,12 +1940,12 @@ def _worst_height(text: str, width_units: float, size: float, minimum: float) ->
 
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
-    headline = ("Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded "
+    headline = ("Ranked direct records among our remaining players (same evidence = same rank). Recorded "
                 "results only — not odds.")
     medal = (f"🥇 {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
     rest = max(roster - medals, 0)
-    lines = [headline] + [medal] * medals + ["+ more direct candidates — see War Room Inspect"]
+    lines = [headline] + [medal] * medals
     if rest:
         lines.append("≈ Not ordered (shared-opponent results only): "
                      + "; ".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
@@ -2143,11 +2143,11 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _dv(ws, "C6", "wr_OppLabels", "Pick the opponent player they just put up.")
     _span(ws, 6, 10, 11, '=IF(wr_OppLabel="","","Mark sends Played on Lineup Lab — they drop out here.")',
           font=Font(size=10, color="5B6A61"), height=22)
-    # The whole answer is ONE wrapped cell (wr_NsCard: headline, medals, "+ more", then the lists), so it reads top
+    # The whole answer is ONE wrapped cell (wr_NsCard: headline, every ranked line, then the lists), so it reads top
     # to bottom with no empty medal rows in between. Each remaining player appears at most once in it, so size the
     # cell for the worst mix -- k medal lines plus the other R-k names in the lists -- with this workbook's
     # longest label, or Excel hides the last names.
-    worst = max((_next_send_worst(_longest_label(wb), R, k) for k in range(0, 5)),
+    worst = max((_next_send_worst(_longest_label(wb), R, k) for k in range(0, R + 1)),
                 key=lambda t: _worst_height(t, 166, 11, 0))
     ns_lines = [
         ("=wr_NsCard", worst),

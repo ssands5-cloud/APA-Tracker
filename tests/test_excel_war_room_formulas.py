@@ -536,28 +536,30 @@ def _next_send(book):
 
 
 def test_command_center_next_send_answers_the_player_they_put_up(book, built):
+    # NAME-DISPLAY-01: Next Send names carry no APA record ID.
+    ANN_N, BEA_N, DEE_N = (x.split(" (APA record ID")[0] for x in (ANN, BEA, DEE))
     assert book.display("Command Center", "B6") == "They put up:" and book.display("Command Center", "B7") == "WHO SHOULD I SEND NEXT?"
     assert _next_send(book) == ["Pick the opponent player they put up (cell C6)."]
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
-        "Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded results only — not odds.",
-        f"🥇 {ANN} — 2-0 direct record (2 meetings) — favorable · availability unknown",
-        f"🥈 {DEE} — 1-1 direct record (2 meetings) — even · availability unknown",
-        f"⚠ Avoid: {BEA} — 0-2 (2 meetings)",
+        "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds.",
+        f"🥇 {ANN_N} — 2-0 direct record (2 meetings) — favorable · availability unknown",
+        f"🥈 {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+        f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
     ]
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
     assert _next_send(book) == [
         "No direct record to order — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN} (availability unknown)",
-        f"⚠ Avoid: {DEE} — 0-2 (2 meetings)",
-        f"❓ Unknown (no verified evidence, not weak): {BEA}",
+        f"≈ Not ordered (shared-opponent results only): {ANN_N} (availability unknown)",
+        f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings)",
+        f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"🥇 {DEE} — 1-1 direct record (2 meetings) — even · availability unknown",
-                                    f"⚠ Avoid: {BEA} — 0-2 (2 meetings)"]
+    assert _next_send(book)[1:] == [f"🥇 {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+                                    f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)"]
     book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
-    assert _next_send(book)[1] == f"🥇 {DEE} — 1-1 direct record (2 meetings) — even"
+    assert _next_send(book)[1] == f"🥇 {DEE_N} — 1-1 direct record (2 meetings) — even"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 
@@ -692,9 +694,9 @@ def test_formula_rows_fit_their_worst_case_text(built):
     assert not any("_NsMedalText" in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
     medal = (f"🥇 {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
-    headline = "Medals = ordered direct records among our remaining players (same evidence = same medal). Recorded results only — not odds."
-    for k in range(0, 5):
-        parts = [headline] + [medal] * k + ["+ more direct candidates — see War Room Inspect"]
+    headline = "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds."
+    for k in range(0, roster + 1):
+        parts = [headline] + [medal] * k
         if roster - k:
             parts.append("≈ Not ordered (shared-opponent results only): "
                          + "; ".join([f"{name} (availability unknown)"] * max(roster - k - 2, 1)))

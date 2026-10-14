@@ -548,6 +548,13 @@ class _Parser:
             return float(len(_to_text(self.scalar(args[0]))))
         if name == "TRIM":
             return " ".join(_to_text(self.scalar(args[0])).split())
+        if name == "LEFT":
+            return _to_text(self.scalar(args[0]))[:int(_to_number(self.scalar(args[1])))]
+        if name == "FIND":
+            at = _to_text(self.scalar(args[1])).find(_to_text(self.scalar(args[0])))
+            if at < 0:
+                raise ExcelError("#VALUE!")
+            return float(at + 1)
         if name == "HYPERLINK":
             return _to_text(self.scalar(args[1] if len(args) > 1 else args[0]))
         if name == "TEXT":

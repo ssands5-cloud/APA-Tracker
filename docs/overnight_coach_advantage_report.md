@@ -18,9 +18,17 @@ ranks, plain rank number after) — the old "+N more below the top three" collap
 ui/ultimate_coach_war_room.js) keeps duplicate names readable via SL, else "(n of m by this name)". Internal
 ids untouched; Players surfaces and the ranking tables still show the record ID. Result dicts renamed
 `medals`→`ranked`, `more` removed. Verified fresh: war_room + war_room_browser + ultimate_coach_browser =
-142 passed; matchup_evidence 11 passed. **Remaining:** the Excel Command Center Next Send formulas
-(ui/excel_war_room.py ~721-790) still cap at three medals with a "+more" note and pull the record-ID
-`Player` column; packet/workbook parity needs a separate, careful formula change. Audit requested on #84.
+142 passed; matchup_evidence 11 passed.
+
+**Workbook follow-up (same request):** Command Center Next Send now lists every ranked line (no three-medal
+cap, no "+ more" cell; ranks past 3 show the group number among remaining players, as Best Sends already
+does) and strips "(APA record ID n)" from the ranked, not-ordered, avoid and unknown names (`_nm` in
+ui/excel_war_room.py; FIND/LEFT added to tests/excel_formula_eval.py). Fresh: test_excel_war_room_formulas +
+test_export_excel_ultimate_coach = 66 passed. **Known gaps:** duplicate names are not told apart in the
+workbook once the ID is stripped (HTML/Python use SL or "n of m"); the "has already played" headline still
+echoes the picked label with its ID; no fixture has 4+ ranked players, so the numbered-past-3 branch is
+covered only by the row-height test; not natively opened in Excel; Captain Packet text not separately
+checked. Audit requested on #84.
 
 **Ranking-methodology worked examples, requested in chat as a follow-up to the review directly below
 — still documentation only, no behavior changed, no new ranking rule implemented, per explicit
