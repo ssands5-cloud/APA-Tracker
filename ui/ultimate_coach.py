@@ -741,6 +741,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .rank-block .muted {{ font-size:9.5px; }}
   body.print-matchup .rank-table {{ font-size:9px; }}
   body.print-matchup .rank-table th,body.print-matchup .rank-table td {{ padding:1px 3px; white-space:normal; }}
+  body.print-matchup .glance-table th,body.print-matchup .glance-table td {{ white-space:normal; }}
   body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
@@ -1377,7 +1378,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     out.innerHTML='<h2>Evidence ranking vs each opponent</h2>'
       +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
       +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (by our player\\'s record against opponents both players have faced, then more shared opponents, then more games); players with no verified evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
-      +'<h3>At a glance</h3><div class="table-wrap"><table><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
+      +'<h3>At a glance</h3><div class="table-wrap"><table class="glance-table"><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
       +'<div class="rank-blocks">'+detail+'</div>';
   }}
   renderTeamMatchups();

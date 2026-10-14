@@ -10,6 +10,72 @@
 
 # CURRENT PRIORITIES
 
+**Full printed-page visual acceptance — the open item from `cd5c8b6`/`f9e6608` — found a real
+defect, not a clean close.** That item was last corrected to say pagination/page-breaks/margins
+had never actually been checked, only the count/legend hiding GPT already verified. Checked it
+for real this time with a different tool than the browser pane (which has no true paged-media
+emulation): `playwright` (already a project dependency, used throughout
+`tests/test_ultimate_coach_browser.py`) renders actual `@page` boxes via `page.pdf()`, the same
+method `test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_compact` already
+uses for page-count assertions — this pass added the one check that test never made: horizontal
+fit within the printed content box.
+
+**Real defect found on the real bound candidate `build-b8159a1` (hash re-verified against its own
+manifest before use), reproduced on 4 of 4 real team pairs tried, not a one-off:** selecting any
+two real EIGHT-format teams from the actual candidate and printing the Matchup/Captain Packet
+overflows the landscape-letter print content box (~980 CSS px at 10 mm margins, the same figure
+`test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_compact` already
+documents) by 160–210px every time. Root-caused precisely, not guessed: `body.print-matchup td {{
+white-space:nowrap; }}` (ui/ultimate_coach.py) is a global print rule, exempted back to
+`white-space:normal` only for `.rank-table` cells. The "Evidence ranking vs each opponent → At a
+glance" summary table — which carries `evidenceLeader()`'s full prose sentence (e.g. "None of our
+roster has met Drew Diaz (APA record ID 4) directly. 1 player has shared-opponent evidence only —
+not ranked against each other; compare ours vs theirs in the matrix.") in its second column — had
+no class and so was never covered by that exemption, forcing that whole sentence onto one unbroken
+line wider than the printable page. This is the actual mechanism of "full printed-page visual
+acceptance" that byte-grep and viewport screenshots cannot see: it only shows up when the browser
+is told to lay out a real page box and the cell text is long, which the candidate's real evidence
+rankings routinely are.
+
+**Fixed with a one-line class addition plus a scoped CSS exemption, same shape as the existing
+`.rank-table` fix:** the "At a glance" table now carries `class="glance-table"`, and
+`body.print-matchup .glance-table th,td {{ white-space:normal; }}` was added next to the
+`.rank-table` rule it mirrors. **Test written and verified red-then-green, same discipline as
+every other fix in this file:**
+`test_printed_evidence_ranking_at_a_glance_table_fits_the_page_width`
+(tests/test_ultimate_coach_browser.py) reuses the stock `_team_payload()` fixture (Sharks vs
+Falcons) whose Drew Diaz matchup is already proven by
+`test_team_vs_team_recommends_direct_then_shared_then_no_evidence` to produce the long no-direct-
+evidence sentence; it failed red against the pre-fix code (`scrollWidth` 1029 > `clientWidth` 978)
+and passes green against the fix. The fix was then independently confirmed against the real
+candidate artifact itself (not just the synthetic fixture): injecting the identical class+CSS into
+the already-built `build-b8159a1` HTML brought all four previously-overflowing real team pairs
+back to exactly 978/980px, with zero overflow — proving the fix generalizes to real data, not just
+the test fixture. A full rebuild of the candidate artifact with this fix compiled in has NOT been
+performed this pass (that is a release-boundary action, not a source fix); the candidate on disk
+at `tmp/uat/build-b8159a1` still has the defect until rebuilt. One pre-existing test's upper bound
+had to move: `test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_compact`
+asserted `pages <= 9`, calibrated to the old broken layout where the glance table's long
+sentences never wrapped (invisible past the page edge instead of taking real vertical space); with
+the fix, that fixture's packet correctly grows to 11 pages, and the bound is now documented at 12
+with the reason inline — the same "readability over page count" call already on record under
+PENDING PAUL REVIEW for PRINT-01. Full relevant suite after the fix:
+`tests/test_ultimate_coach_browser.py` + `tests/test_ultimate_coach_war_room.py` +
+`tests/test_ultimate_coach_war_room_browser.py`, 142 passed, fresh run.
+
+**Full printed-page visual acceptance stays correctly described as still open — this closes one
+specific defect, not the whole claim.** Checked whether the same nowrap-overflow class of bug
+exists elsewhere before calling it isolated: the two other long-free-text tables in this file
+(shared-opponent evidence at line ~1029, League stats at line ~976) both live inside
+`#player-section`, which `main > :not(#matchup-print) { display:none !important; }` already hides
+entirely in print-matchup mode — out of scope by construction, not just unchecked. Within what
+actually prints, `document.documentElement.scrollWidth` matched `#team-matchups`'s own overflow
+almost exactly on all 4 real team pairs sampled (1140≈1139, 1186≈1185, 1158≈1157, 1175≈1174) —
+the glance table was the sole overflow source in every sample, not one of several. Page breaks and
+margins across a REAL multi-page packet (this pass only confirmed horizontal fit, on a candidate
+whose matchups happened to paginate at a handful of pages) remain genuinely unchecked and open.
+Requesting audit on issue #84.
+
 **Mobile Match-Night — COMPLETE.** First increment shipped at `6af2f37`, audit CLOSED by GPT at
 `3d1c17c` with an evidence-precision correction, fixed at `e69caec` and independently confirmed
 by GPT at `7e2eff9` (own re-run against the installed package: expected row counts, document
@@ -563,6 +629,21 @@ Center, and everything on the Excel side (see OPEN ISSUES below).
   an approval rejection, a hung external command, or something else — `list_events` alone does not
   reach it from outside that session.
 
+  **Seventh occurrence (this firing): the "still unexplained" question resolved itself, not
+  through the diagnostic step above.** Re-ran `list_sessions` this pass: both previously-stalled
+  sessions (`local_5fca1c17`, `local_74ae933f`) now show `isRunning: false`, with last activity at
+  2026-10-13T21:33:28Z and 21:13:33Z — they finished (or were stopped) sometime after the prior
+  entry was written, with no further intervention logged against them in this session. This
+  firing's own setup commands (`cd` into the worktree, `git fetch`, `git rev-parse`/`git remote
+  -v`) all returned normally, no rejection, no stall. The underlying dispatch-time approval gate
+  Paul still needs to clear from the sidebar's "Run now" is unchanged and unverified either way by
+  this. One live-session development, not a scheduled-task finding: mid-run the user asked to cut
+  down on permission prompts and chose switching this session to Auto mode
+  (`set_session_permission_mode`) over the narrower allowlist-only option — done, confirmed
+  active. Logged here because it changed how the rest of this run executed (no further
+  per-command approval prompts for the remainder of this pass), not because it bears on the
+  dispatch-time gate itself.
+
 - **Native Excel COM acceptance (NATIVE-01) attempted this pass and genuinely blocked, not
   skipped.** `win32com.client.EnsureDispatch('Excel.Application')` failed immediately with
   `pywintypes.com_error: Error loading type library/DLL` — a corrupt/stale local `gen_py`
@@ -577,6 +658,15 @@ Center, and everything on the Excel side (see OPEN ISSUES below).
   opening Excel rather than push past a gate the project built for exactly this reason. Flagging
   both the tooling error and the idle-time doubt for Paul/GPT instead of silently retrying until
   something works.
+
+  **The identical-reading doubt is resolved, not standing: re-checked this pass, got a different
+  number.** `GetLastInputInfo` now reports 13.5 seconds idle — different from the 12.8s read twice
+  before, so the signal is live, not frozen or cached. That answers the narrow doubt from last
+  time but changes nothing about the decision: 13.5s idle still means someone is very likely at
+  the keyboard right now (confirmed independently — the user sent a live chat message earlier in
+  this same run), which is exactly the condition this project's own idle gate exists to catch.
+  Still did not open a real Excel window on this basis. NATIVE-01 remains blocked on the COM
+  typelib-cache error above, independent of the idle question.
 
 - **Desktop/visual read of Scouting Cards and the Tonight/War Room dashboard — done (this
   commit). Print-media: correction, not a new closure — see below.** Served the same bound

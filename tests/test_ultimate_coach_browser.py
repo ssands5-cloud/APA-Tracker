@@ -1249,7 +1249,46 @@ def test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_com
             assert page_one <= 740, page_one
             pdf = page.pdf(prefer_css_page_size=True, print_background=True)
             pages = len(re.findall(rb"/Type\s*/Page[^s]", pdf))
-            assert 2 <= pages <= 9, pages  # then matrix, Lineup Lab, comparison, ranking, scouting cards, meetings
+            # Upper bound raised 9 -> 12: fixing the glance-table horizontal-overflow bug
+            # (test_printed_evidence_ranking_at_a_glance_table_fits_the_page_width) makes its
+            # long no-direct-evidence sentences wrap instead of running off the page, which
+            # legitimately costs 2 more pages here (this fixture's 8 extra opponents each get
+            # one). More pages of readable text beats fewer pages of text past the margin.
+            assert 2 <= pages <= 12, pages  # then matrix, Lineup Lab, comparison, ranking, scouting cards, meetings
+        finally:
+            browser.close()
+
+
+def test_printed_evidence_ranking_at_a_glance_table_fits_the_page_width(tmp_path: Path):
+    # "None of our roster has met X directly..." (the no-direct-evidence sentence every
+    # opponent with no direct meetings gets in the "At a glance" table) is long prose, not
+    # a short label. The global print rule `body.print-matchup td { white-space:nowrap }`
+    # (ui/ultimate_coach.py) is exempted back to wrapping for `.rank-table` cells but the
+    # "At a glance" summary table carries no class, so its long second column stays nowrap
+    # and can push the table past the printable page width.
+    path = tmp_path / "ultimate_coach_glance_print.html"
+    path.write_text(render(_team_payload(), built_at="test"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            page.select_option("#team-a", "Sharks|d1|Spring 2026")
+            page.select_option("#team-b", "Falcons|d1|Spring 2026")
+            # Drew Diaz's row carries the long shared-opponent-only sentence confirmed by
+            # test_team_vs_team_recommends_direct_then_shared_then_no_evidence above.
+            assert "None of our roster has met Drew Diaz" in page.locator("#team-matchups").inner_text()
+            page.evaluate("document.body.classList.add('print-matchup')")
+            page.emulate_media(media="print")
+            # Landscape Letter less 10 mm margins at 96 dpi: ~980 CSS px wide (same convention
+            # as test_focused_print_of_full_rosters_keeps_matchup_on_page_one_and_ranking_compact).
+            page.set_viewport_size({"width": 980, "height": 740})
+            widths = page.evaluate("""() => {
+                const el = document.getElementById('team-matchups');
+                return {scrollWidth: el.scrollWidth, clientWidth: el.clientWidth};
+            }""")
+            assert widths["scrollWidth"] <= widths["clientWidth"], widths
         finally:
             browser.close()
 
