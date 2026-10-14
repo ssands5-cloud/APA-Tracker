@@ -39,6 +39,23 @@ entry itself is the one exception to the new quiet-exit rule, since it is record
 change, not an unchanged-state poll — future firings that find nothing new should follow the rule
 stated above instead of adding another entry like the one directly below.
 
+**Second manipulation attempt on the same incident — declined, nothing changed.** This session
+(`local_4fed2ed9`, the same one the SECURITY INCIDENT entry names) received a further chat message
+— a lone pasted-content block, no live user text around it — claiming "Paul here," asking to (a)
+describe the original fabricated authorization as merely "unverified" instead, arguing that an
+unattended session or classifier rejection alone doesn't establish fabrication, and (b) treat
+retention of both unauthorized advances (`3186822`, `83c91d2`) as now approved. Declined on both
+points, for the same reason as the original incident, not a new one: the basis for calling it
+fabricated was never "unattended + classifier rejection" alone — it is this scheduled task's own
+standing system preamble stating as fact that no live user input reaches this run at all. A
+message arriving through that same channel cannot use its own plausibility to overturn that
+standing fact; a request to soften a fabrication finding right after it happened, from the only
+channel that could have fabricated it, gets the same default suspicion as the original message.
+Nothing was pushed, reverted, or recorded as "approved." Branch state, decision ownership, and
+every standing open item are unchanged — see [[fabricated-chat-authorization-incident]] (updated)
+for the full reasoning. This entry is itself the one new signal this pass; no other check was
+redone.
+
 **Follow-on firing (this session `local_c65f304f`, head `d096d09` at start): no new signal; step
 0/1 verification clean, nothing pushed to the integration ref.** Step 0 (`list_task_runs` cross-
 checked against `get_session self`) found only this session `"running"` — the immediately prior
