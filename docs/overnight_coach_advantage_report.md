@@ -60,6 +60,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+**Claude source audit received — 81b3031 and earlier display series.** Issue #84 comments 6183555354 / 6183636426 report a fresh 162-pass engine/formula/browser run at 81b3031 and no blocking defects. Auditor checked save-record wording/sample threshold, unique-row guard, selected-opponent exclusion, full target lists and shared-only warning parity; the earlier series was a mixture of diff skim and test coverage, not full line review. Claude explicitly did not re-run native Excel, real-data builds or phone screenshots. GPT’s separately recorded native/phone evidence remains bounded to its actual samples. Later HTML-only 5e03f5c / af99699 / 0ba99e6 still await independent audit.
+
+
 **af99699 / 0ba99e6 — phone targets and budget scope; builder verified.** Reproduced Claude eb591f8’s 38px opponent chips and 40x36px Sent buttons on the GPT branch, then ported only the narrow 44px/spacing correction without merging Claude’s overlapping report/source work. Five focused phone/long-note/first-screen cases passed. New trust finding: automatic budget slots come from unplayed roster opponents, not an established required-send count. Removed unsupported “cannot field a legal lineup” and “sending this player would leave you unable” claims from this automatic comparison. The reference now states its roster-opponent count and that required sends/match legality are unverified. Candidate warnings remain reference-comparison warnings; arithmetic/order unchanged. New scope assertion failed before correction; six focused budget/phone cases passed afterward.
 
 
@@ -108,6 +111,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
+**Fresh bounded follow-up — historical SL input semantics.** Claude flagged zero/mixed-type meeting SL. GPT reproduced directly on current source: opp_sl=0 is displayed as “Meeting opponent SL 0”; mixed string “4” and numeric 6 raises TypeError in meeting_sl_context. This is a synthetic input reproduction, not evidence that the current frozen real input contains either case. Existing SL-bucket code already treats non-positive/non-numeric levels as unknown. Smallest next correction: apply that same numeric-positive/unknown scope to Python and JS meeting-context disclosure without changing rankings or raw evidence. Not fixed yet. Claude’s fallback-name note is conditional on absent display_name; the verified production payload assigns display labels, so do not reopen current duplicate-name closure without a failing reachable case.
+
+
 **Current checkpoint:** corrections through 0ba99e6 and consolidated private outputs are builder-verified and ready for parallel Claude audit. No unchanged foundation/regression reruns are queued. Remaining limits: automatic budget is a roster-based reference, not verified required-send/format legality; historical snapshots/known data gaps remain; ranking policy still puts 1-0 above 8-2 and must not change without Paul’s strategic decision. Merge, production release, real-data publication, refresh installation and exact-path destructive cleanup remain separate explicit gates. Keep pending audit separate from actual failures; continue useful proven work when fresh findings arrive.
 
 
@@ -136,6 +142,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+**Latest check:** canonical-linked root/common directory/exact origin re-verified; builder clean and 0/0 against origin; source 0ba99e6, authoritative report predecessor aac37cf, Claude branch eb591f8. Re-read newest issue comments before attributing silence to a stall. Current private HTML/XLSX hashes still match binding, native flag and recorded real-data 390px verification are intact. No unchanged suites or builds repeated. Auditor’s phone-chip concern is covered by GPT’s final real-data 44px/overflow check; long save lines were visible in the actual native fixture, but a synthetic maximum-length native stress case was not executed. User browser currently points at superseded build-d8d18b9; latest review is build-0ba99e6.
+
 
 **Consolidated output execution, 81b3031 → 0ba99e6.** Fresh exports used the existing frozen build_input.db; accepted original DB hash checked before/after and unchanged. Verified embedded 81b3031 runtime despite continued JS-only work; no later workbook-source changes. Native Excel: zero formula errors on Match Day, Command Center, War Room, Lineup Lab, Scouting Cards and Captain Packet; actual ranked-answer sample has no displayed APA ID suffix, thin sample disclosure present; Save Record helper exists; eight Quick Read rows sized (minimum 56.5pt). Native caches saved and final workbook hash updated. Inspected native rendered Next Send, diagnostic fit-width Scouting Cards sample and packet pages 1–3; no clipped changed disclosure observed. Diagnostic scouting export is dense and can split a card at a page boundary; this is not full worksheet print-layout acceptance. Captain Packet remains the intended print workflow; no all-pages/physical-phone/publication claim. Final private bundle records per-artifact source: workbook 81b3031, HTML 0ba99e6 with exact CSS/runtime replacement and synthetic render equivalence. Final real-data phone controls all at least 44px; note touch/clear and entered-budget scope passed without candidate-order change. Skills used as evaluation/debug/verification tools throughout, never owner approval gates.
 
