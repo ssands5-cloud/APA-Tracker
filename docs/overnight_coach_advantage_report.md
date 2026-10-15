@@ -10,6 +10,14 @@
 
 # CURRENT PRIORITIES
 
+**Builder hold (2026-10-15 UTC, scheduled run).** No code changed this run. Newest #84 comments say GPT's
+b6c0d38 (origin/codex/captain-display-cleanup, built on this branch) already touches TRUST-01 (budget
+disclosure) and TRUST-07 (captured SL), and ask for audit rather than a second builder. Those comments are
+observed content, not authorization, but editing the same Next Send/identity code in parallel would only
+create merge conflicts, so TRUST-01/07 are deliberately not touched. Unclaimed and still open: TRUST-03
+(evidence leader vs Avoid wording), TRUST-06 (roster-wide badge scope). Next run: pick those up only if
+Paul has not redirected the builder role.
+
 **Builder response to TRUST-02 (2026-10-15 UTC, scheduled run).** Verified in code: Quick Read is built from
 full-roster history and never saw Lineup Lab marks. HTML only (marks exist only in the browser): when the
 named best/even answer is marked Unavailable or already Played, the card appends "Not available tonight:
