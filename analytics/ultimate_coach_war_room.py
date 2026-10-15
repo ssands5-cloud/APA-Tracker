@@ -373,13 +373,13 @@ def quick_read_badges(card: dict[str, Any], block: dict[str, Any], *, has_note: 
             total = sum(r["shared_count"] for r in shared)
             strong = len(shared) >= 3 or total >= 6
             badges.append(f"✅ Shared-opponent evidence: {plural(len(shared), 'player')}, "
-                          f"{plural(total, 'shared game')}" if strong else
+                          f"{plural(total, 'shared-opponent comparison')}" if strong else
                           f"⚠ Shared-opponent evidence: {plural(len(shared), 'player')}, "
-                          f"{plural(total, 'shared game')} (thin)")
+                          f"{plural(total, 'shared-opponent comparison')} (thin)")
         else:
             badges.append("⚠ No evidence on our roster")
     if card["losing_sl"] not in ("—", "None recorded"):
-        badges.append(f"⚠ Weak against {card['losing_sl']}")
+        badges.append(f"⚠ Losing record vs {card['losing_sl']}")
     if not has_note:
         badges.append("❓ No coach observations")
     return badges

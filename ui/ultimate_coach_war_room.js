@@ -82,10 +82,10 @@
       var shared=b.rows.filter(function(r){return r.category==="I";});
       if(shared.length){
         var total=shared.reduce(function(a,r){return a+r.c.shared;},0),strong=shared.length>=3||total>=6;
-        badges.push((strong?"✅ ":"⚠ ")+"Shared-opponent evidence: "+plural(shared.length,"player")+", "+plural(total,"shared game")+(strong?"":" (thin)"));
+        badges.push((strong?"✅ ":"⚠ ")+"Shared-opponent evidence: "+plural(shared.length,"player")+", "+plural(total,"shared-opponent comparison")+(strong?"":" (thin)"));
       } else badges.push("⚠ No evidence on our roster");
     }
-    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Weak against "+c.losing_sl);
+    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Losing record vs "+c.losing_sl);
     if(!hasNote) badges.push("❓ No coach observations");
     return badges;
   }

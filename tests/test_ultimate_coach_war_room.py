@@ -751,11 +751,11 @@ def test_quick_read_counts_concerning_records_as_evidence_not_its_absence():
 def test_quick_read_falls_back_to_shared_opponent_evidence_when_nothing_direct():
     strong_card, strong_block = _badge_card([_badge_row("I", shared=4), _badge_row("I", shared=3)])
     strong = quick_read_badges(strong_card, strong_block, has_note=True)
-    assert strong[0] == "✅ Shared-opponent evidence: 2 players, 7 shared games", strong
+    assert strong[0] == "✅ Shared-opponent evidence: 2 players, 7 shared-opponent comparisons", strong
 
     weak_card, weak_block = _badge_card([_badge_row("I", shared=1)])
     weak = quick_read_badges(weak_card, weak_block, has_note=True)
-    assert weak[0] == "⚠ Shared-opponent evidence: 1 player, 1 shared game (thin)", weak
+    assert weak[0] == "⚠ Shared-opponent evidence: 1 player, 1 shared-opponent comparison (thin)", weak
 
 
 def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
@@ -767,7 +767,7 @@ def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
 def test_quick_read_surfaces_a_known_weak_skill_level():
     card, block = _badge_card([_badge_row("G", direct=(3, 4))], losing_sl="SL4 (1-3)")
     badges = quick_read_badges(card, block, has_note=True)
-    assert "⚠ Weak against SL4 (1-3)" in badges, badges
+    assert "⚠ Losing record vs SL4 (1-3)" in badges, badges
 
 
 def test_quick_read_flags_missing_coach_observations_but_only_when_actually_missing():

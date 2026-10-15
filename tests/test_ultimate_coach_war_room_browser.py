@@ -1686,7 +1686,7 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
 
             eve_badges = eve.locator(".quick-read-badges").inner_text()
             assert "Direct evidence: 2 meetings (small sample)" in eve_badges, eve_badges
-            assert "Weak against SL4" in eve_badges, eve_badges
+            assert "Losing record vs SL4" in eve_badges, eve_badges
             assert "No coach observations" in eve_badges, eve_badges
 
             # Badges precede the dense sentence in document order (decision before detail).
@@ -1709,7 +1709,7 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
             eve_badges_after = cards.nth(1).locator(".quick-read-badges").inner_text()
             assert "No coach observations" in eve_badges_after, eve_badges_after
             assert "Direct evidence: 2 meetings (small sample)" in eve_badges_after, eve_badges_after
-            assert "Weak against SL4" in eve_badges_after, eve_badges_after
+            assert "Losing record vs SL4" in eve_badges_after, eve_badges_after
 
             # Clearing the note back out restores the missing-observations badge, live.
             page.fill('#scouting-cards textarea[data-pid="10"]', "")

@@ -10,6 +10,18 @@
 
 # CURRENT PRIORITIES
 
+**Builder response to auditor TRUST-04 and TRUST-05 (2026-10-15 UTC, scheduled run).** Both verified in code
+(auditor commits e902d4f/a63dd14 on the audit branch). TRUST-05 true: the Quick Read badge summed
+`shared_count` (shared *opponents* per pairing) and labelled it "shared game(s)". Now reads
+"N shared-opponent comparison(s)" in Python and JS; no new counting. TRUST-04 true: "Weak against SL4 (0-1)"
+turned one recorded loss into a strength claim; now "Losing record vs SL4 (0-1)", matching the detail row.
+No ranking change. Tests updated with the wording (not written failing-first; they pin the new strings).
+Fresh: war_room + war_room_browser + ultimate_coach_browser = 142 passed. **Still open, not touched:**
+TRUST-01 (Next Send first pick vs entered budget), TRUST-02 (unavailable player still named in Quick Read),
+TRUST-03 (evidence leader vs Avoid wording), TRUST-06 (roster-wide badge scope), TRUST-07 (captured vs
+meeting-time SL). Note: the newest #84 comment says GPT builds / Claude audits; this run's stored prompt says
+builder, so only these two wording-only fixes were made. Audit requested on #84.
+
 **Proposed draft skills (Paul's request, review only, not required workflow):** `.github/skills/proposed/`
 `matchup-trust-review`, `unanswered-captain-question`, `match-night-review`. No further skills until these are reviewed.
 
