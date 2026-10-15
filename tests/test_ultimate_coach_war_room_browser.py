@@ -2300,3 +2300,33 @@ def test_invalid_historical_sl_is_unknown_at_the_pick_without_changing_rank(tmp_
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
             assert errors==[]
         finally:browser.close()
+
+
+@pytest.mark.parametrize("meetings", [1, 2, 3])
+def test_tonight_send_summary_keeps_the_pick_sample_and_sl_cautions(tmp_path: Path, meetings):
+    payload = _payload()
+    payload["evidence"] = [r for r in payload["evidence"]
+                           if {r["player_id"], r["opponent_id"]} != {1, 10}] + _games(1, 10, "W" * meetings)
+    path = tmp_path / "tonight-cautions.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            for width in (1280, 390):
+                page.set_viewport_size({"width": width, "height": 844})
+                summary = page.locator("#tonight .decide-sends")
+                text = summary.inner_text()
+                first = summary.locator("span").first.inner_text()
+                assert ("small sample" in first) == (meetings < 3)
+                assert f"{meetings}-0 ({meetings}) direct" in first
+                assert "recorded options now" in text.lower()
+                assert "Meeting opponent SL 4; roster capture SL 6" in text
+                assert page.locator("#next-send [data-send-our]").first.get_attribute("data-send-our") == "1"
+                assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()

@@ -640,7 +640,7 @@
       if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",pid:b.opponent.id});return;}
       var r=s[0],direct=r.category!=="I";
       var tied=direct&&s.length>1&&s[1].rank===r.rank;
-      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length)),pid:b.opponent.id});
+      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(r.c.direct.g<3?" ("+plural(r.c.direct.g,"meeting")+", small sample)":"")+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length))+(direct&&r.sl_context?" · "+r.sl_context:""),pid:b.opponent.id});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});
@@ -650,7 +650,7 @@
       +wrBlindSendCard(w,plan,ta)
       +wrNextSendCard(w,plan,ta)
       +'<div class="tonight-grid decide">'
-      +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
+      +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous vs remaining roster</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
