@@ -27,9 +27,9 @@ SHARKS = "Sharks · Fall 2026 · 8-Ball"
 SHARKS9 = "Sharks · Fall 2026 · 9-Ball"
 FALCONS = "Falcons · Fall 2026 · 8-Ball"
 OWLS = "Owls · Fall 2026 · 8-Ball"
-ANN, BEA, DEE = "Ann Archer (APA record ID 1001)", "Bea Baker (APA record ID 1002)", "Dee Diaz (APA record ID 1003)"
-ANN2 = "Ann Archer (APA record ID 1004)"
-CAM, EVE, ZED = "Cam Cole (APA record ID 2001)", "Eve Ellis (APA record ID 2002)", "Zed Zane (APA record ID 2003)"
+ANN, BEA, DEE = "Ann Archer (player 1 of 2)", "Bea Baker", "Dee Diaz"
+ANN2 = "Ann Archer (player 2 of 2)"
+CAM, EVE, ZED = "Cam Cole", "Eve Ellis", "Zed Zane"
 
 
 def _hist(team, div, fmt, sl, won=None, played=None):
@@ -127,7 +127,7 @@ def _roster(book, sheet, first, R=8):
 def _packet_roster(book, R=8):
     """Captain Packet page-1 rosters: ours (A, C, D, E); theirs (G, K = "SL n · W-L", L = played).
     Page 1 is decision first (best sends, risks), so the rosters start below them."""
-    first = next(r for r in range(1, 80) if book.display(CP, f"A{r}") == "Player (APA record ID)") + 1
+    first = next(r for r in range(1, 80) if book.display(CP, f"A{r}") == "Player") + 1
     ours = [(book.display(CP, f"A{r}"), book.display(CP, f"C{r}"), book.display(CP, f"D{r}"),
              book.display(CP, f"E{r}")) for r in range(first, first + R)]
     theirs = [(book.display(CP, f"G{r}"), book.display(CP, f"K{r}"), book.display(CP, f"L{r}"))
@@ -136,7 +136,7 @@ def _packet_roster(book, R=8):
 
 
 def _opportunities(book, wb):
-    top = _row(wb, WR, "Top opportunities — best-supported sends (favorable direct first, then even, then indirect)")
+    top = _row(wb, WR, "Top opportunities — first by recorded direct results (favorable direct first, then even, then indirect)")
     return [(book.display(WR, f"A{r}"), book.display(WR, f"C{r}")) for r in range(top + 1, top + 3)]
 
 
@@ -256,7 +256,7 @@ def test_lineup_marks_only_apply_to_the_team_they_were_made_for(book, built):
     end = 15 + 8
     assert book.display(WR, f"A{end}").startswith(f"⚠ Lineup Lab marks are for {SHARKS9} — not applied to {SHARKS}.")
     assert book.display(LL, "D5") == f"⚠ Match Day shows {SHARKS} — these marks are NOT applied there."
-    assert book.display(LL, "B12") == "Ann Archer (APA record ID 1001)"  # rows list the named (9-Ball) team
+    assert book.display(LL, "B12") == ANN  # rows list the named (9-Ball) team
 
 
 def test_selected_lineup_and_remaining_totals_disclose_missing_skill_levels(book, built):
@@ -333,7 +333,7 @@ def test_format_and_team_changes_keep_valid_choices_and_explain_empty_schedules(
 def test_war_room_local_override_affects_only_that_tab_and_clearing_restores(book, built):
     book.set(WR, "C6", OWLS)
     assert book.display(WR, "A4") == f"Using local selections: {SHARKS} vs {OWLS} · 8-Ball"
-    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]
+    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale", ZED]
     assert book.display(MD, "B17").endswith("Home vs Falcons · 8-Ball Open")       # Match Day untouched
     assert book.display(CD, "A4").startswith("Following Match Day")
     # Only the War Room changed: the packet, scouting cards and Coach Dashboard still follow Match Day.
@@ -378,7 +378,7 @@ def test_inspect_views_rank_candidates_and_show_one_players_evidence_vs_all(book
 
 def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(book, built):
     card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 19)}
-    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Best answer on record: Ann Archer (2-0) · "
+    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Historical top record: Ann Archer (2-0) · "
                                   "Avoid: Bea Baker (0-2)")
     assert card["Team record"] == "7-1 (this team, Fall 2026)"
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
@@ -465,7 +465,7 @@ def test_war_room_overrides_never_change_other_tabs(book, built):
     card = book.display(SC, "A6")
     assert pool() == [CAM, EVE]
     book.set(WR, "C6", OWLS)
-    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale (APA record ID 2004)", ZED]   # War Room changed
+    assert [t[0] for t in _roster(book, WR, 15)[1]] == ["Gus Gale", ZED]   # War Room changed
     assert pool() == [CAM, EVE]                                   # Coach Dashboard did not
     assert book.display(CP, "A2") == packet_heading and _packet_roster(book) == packet_rosters
     assert book.display(SC, "A6") == card and book.display(SC, "A4").startswith("Following Match Day")
@@ -483,7 +483,7 @@ def test_war_room_overrides_never_change_other_tabs(book, built):
 
 def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built):
     ws = built[CP]
-    first = next(c.row for c in ws["A"] if c.value == "Opponent (APA record ID)") + 1
+    first = next(c.row for c in ws["A"] if c.value == "Opponent") + 1
     lines = [[book.display(CP, f"{c}{r}") for c in "ACDHK"] for r in range(first, first + 8)]
     assert lines[:6] == [
         [f"vs {CAM}", "1", ANN, "2-0 (2)", "Favorable direct"],
@@ -547,23 +547,23 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
         "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds.",
-        f"🥇 {ANN_N} — 2-0 direct record (2 meetings) — favorable · availability unknown",
-        f"🥈 {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · availability unknown",
+        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
         f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
     ]
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
     assert _next_send(book) == [
-        "No direct record to order — shared-opponent candidates only (≈, not ordered)",
+        "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
         f"≈ Not ordered (shared-opponent results only): {ANN_N} (availability unknown)",
         f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings)",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"🥇 {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
                                     f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)"]
     book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
-    assert _next_send(book)[1] == f"🥇 {DEE_N} — 1-1 direct record (2 meetings) — even"
+    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 
@@ -577,9 +577,9 @@ def test_next_send_lists_every_rank_and_tells_same_name_teammates_apart_without_
     lines = _next_send(crowd)
     text = "\n".join(lines)
     assert "APA record ID" not in text.split("⚠")[0]
-    ranked = [x for x in lines if x[:1] in "🥇🥈🥉" or x[:2] == "4."]
+    ranked = [x for x in lines if x[:2] in ("1.", "2.", "3.", "4.")]
     heads = [x.split(" — ")[0] for x in ranked]
-    assert heads[:3] == ["🥇 Ann Archer (SL 5)", "🥈 Ann Archer (SL 4)", "🥉 Gil Gray"], heads
+    assert heads[:3] == ["1. Ann Archer (player 1 of 2)", "2. Ann Archer (player 2 of 2)", "3. Gil Gray"], heads
     assert sorted(heads[3:]) == ["4. Dee Diaz", "4. Fay Fox"], heads      # tied fourth group, past the medals
 
 
@@ -593,10 +593,10 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient verified evidence in this snapshot: 1" in text
-    assert f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
+    assert f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: best-supported send: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: first by recorded direct results: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
@@ -634,7 +634,7 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
     top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
     lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
     assert lines[:2] == [
-        f"vs {CAM}: best-supported send: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
+        f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
         f"vs {EVE}: shared-opponent candidate, not ordered (the only one): {ANN} — reason: shared-opponent results only: "
         "ours 1-0 vs theirs 0-1 across "
         "1 shared opponent (no verified direct meetings in this snapshot)",
@@ -711,7 +711,7 @@ def test_formula_rows_fit_their_worst_case_text(built):
     # remaining player at most once: size it for k medal lines plus the other roster-k names in the lists.
     assert str(cc["B8"].value).endswith("_NsCard") and "NsOppNotes" not in str(cc["B8"].value)
     assert not any("_NsMedalText" in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
-    medal = (f"🥇 {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+    medal = (f"1. {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
     headline = "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds."
     for k in range(0, roster + 1):
@@ -758,7 +758,7 @@ def test_captain_packet_evidence_rows_cannot_silently_clip_identity_text(built):
     cp = built[CP]
     section = _row(built, CP, "Evidence by opponent — every line names the opponent")
     hdr = next(r for r in range(section, section + 6)
-               if cp.cell(row=r, column=1).value == "Opponent (APA record ID)")
+               if cp.cell(row=r, column=1).value == "Opponent")
     first = hdr + 1
 
     assert (cp.row_dimensions[first].height or 15) < 20, "evidence rows are single-line by design"
@@ -869,7 +869,7 @@ def test_captain_packet_page_one_is_decision_first(book, built):
     assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
 
 
-FAY = "Fay Fox (APA record ID 1005)"
+FAY = "Fay Fox"
 
 
 def _tied_payload():
@@ -953,7 +953,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     py = _python_war_room_for(payload)
     rows = [[r for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
     assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2) · 1= {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
-    assert best_send_text(rows[0]) == (f"best-supported send (tied with 1 other, same evidence): {ANN} — reason: "
+    assert best_send_text(rows[0]) == (f"first by recorded direct results (tied with 1 other, same evidence): {ANN} — reason: "
                                        "2-0 direct record (2 meetings) — favorable")
     # War Room top opportunities
     assert [x[1] for x in _opportunities(book, wb)] == [send_list_text(rows[0]), send_list_text(rows[1])]
@@ -970,7 +970,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
     assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
-    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: best-supported send: {FAY} — reason: 2-0 direct record (2 meetings) — favorable"
+    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable"
 
 
 def test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause(built):
@@ -1029,7 +1029,7 @@ def test_captain_packet_evidence_table_repeats_its_headers_on_the_continued_page
     to flip back a page to find out which column is Rank and which is Basis.
     """
     cp = built[CP]
-    hdr = _row(built, CP, "Opponent (APA record ID)")
+    hdr = _row(built, CP, "Opponent")
     ev_first = hdr + 1
     ev_rows = [c.row for c in cp["A"]
                if isinstance(c.value, str) and c.value.startswith('=IF(P') and c.row > hdr]
@@ -1042,9 +1042,9 @@ def test_captain_packet_evidence_table_repeats_its_headers_on_the_continued_page
 
     for b in breaks:
         repeated = b + 1
-        assert cp.cell(row=repeated, column=1).value == "Opponent (APA record ID)", (
+        assert cp.cell(row=repeated, column=1).value == "Opponent", (
             b, cp.cell(row=repeated, column=1).value)
-        for col, text in ((3, "Rank"), (4, "Our player (APA record ID)"), (8, "Evidence"), (11, "Basis")):
+        for col, text in ((3, "Rank"), (4, "Our player"), (8, "Evidence"), (11, "Basis")):
             assert cp.cell(row=repeated, column=col).value == text, (repeated, col)
 
 
@@ -1082,12 +1082,12 @@ def test_captain_packet_scale_is_never_smaller_than_its_own_pagination_allows(bu
     assert scale >= allowed - 0.011, (scale, allowed, pages)
 
     # Paid for by pagination, not by squeezing: evidence breaks twice, header repeated each time.
-    hdr = _row(built, CP, "Opponent (APA record ID)")
+    hdr = _row(built, CP, "Opponent")
     meetings = _row(built, CP, "Meeting history — direct meetings between the rosters (newest first)")
     splits = [b.id for b in cp.row_breaks.brk if hdr < b.id < meetings - 1]
     assert len(splits) == 2, splits
     for b in splits:
-        assert cp.cell(row=b + 1, column=1).value == "Opponent (APA record ID)", b
+        assert cp.cell(row=b + 1, column=1).value == "Opponent", b
 
 
 def test_the_quoted_team_label_is_bounded_so_it_cannot_push_out_the_clause(built):
@@ -1175,3 +1175,25 @@ def test_packet_never_prints_an_unknown_lead_as_an_even_record(built, book):
         assert "not safer" in text.lower(), text
     else:                                   # still evidenced: then it must carry real coverage
         assert " of " in text, text
+
+
+def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_identity(tmp_path):
+    payload = _payload(crowded=True)
+    payload["evidence"] += _games(4, 12, "W") + _games(5, 11, "L")
+    path = write_workbook(payload, tmp_path / "lists.xlsx", built_at="2026-10-07 18:00 UTC",
+                          viewer_member_external_id="1001")
+    wb = load_workbook(path)
+    book = Workbook(wb)
+    book.set("Command Center", "C6", EVE)
+    lines = _next_send(book)
+    assert any("Not ordered" in line and "Ann Archer (player 1 of 2)" in line for line in lines)
+    assert "Ann Archer (player 2 of 2) (availability unknown)" in lines
+    assert any("Avoid:" in line and "Fay Fox" in line for line in lines)
+    assert "Dee Diaz — 0-2 (2 meetings)" in lines
+    assert "Gil Gray" in lines  # a second unknown, separately visible
+    assert "APA record ID" not in "\n".join(lines)
+    # Friendly labels resolve to exact stored IDs, including same-name teammates.
+    book.set(MD, "B6", "Ann Archer (player 2 of 2)")
+    assert book.value("Engine", book.name("uc_ViewerKey").ref) == "1004"
+    assert wb["Players"]["C2"].value == "1001"
+    assert wb["Team Rosters"].column_dimensions["J"].hidden

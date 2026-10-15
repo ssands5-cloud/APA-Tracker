@@ -79,6 +79,7 @@ from analytics.ultimate_coach_excel_payload import (
 )
 from analytics.ultimate_coach_matchup_evidence import (
     member_order_key,
+    player_display_labels as _player_labels,
     build_pair_index,
     fixture_scope_pairs,
     matchup_evidence,
@@ -159,19 +160,14 @@ BYE_TEXT = "Bye — no opponent"
 NONE_TOKEN = "—"
 
 
-def _player_label(name: str, external_id: Any) -> str:
-    return f"{name} (APA record ID {external_id})"
+def _player_label(name: str, external_id: Any, players=()) -> str:
+    return _player_labels(players).get(str(external_id), name)
 
 
-# EIGHT/NINE are always offered even with zero matching evidence -- they are
-# the two primary APA team formats. Any other raw format recorded in the
-# source data (e.g. "MASTERS", "MASTERS ALT" -- both are real APA formats,
-# see scraper.graphql_scraper._VALID_FORMATS) is appended rather than
-# dropped, so a real recorded meeting can never be unreachable from the
-# dashboard's Format dropdown just because it happened outside 8-Ball/9-Ball.
+
+
 BASE_FORMAT_ORDER = ["EIGHT", "NINE"]
 FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
-
 
 def _format_label(fmt: str) -> str:
     return FORMAT_LABELS.get(fmt, fmt)
@@ -414,13 +410,14 @@ PLAYERS_WIDTHS = {
 
 
 def _players_sheet(wb: Workbook, payload: dict[str, Any]) -> None:
+    labels = _player_labels(payload.get("players") or [])
     sheet = wb.create_sheet("Players")
     _style_header(sheet, PLAYERS_COLUMNS)
     players = sorted(payload.get("players") or [], key=lambda p: (p["name"], str(p["external_id"])))
     for p in players:
         sheet.append(
             [
-                _player_label(p["name"], p["external_id"]),
+                labels.get(str(p["external_id"]), p["name"]),
                 # External ID is APA's record ID -- written as text so a typed
                 # ID on Match Day matches it exactly (never as a float).
                 p["id"], str(p["external_id"]), p["name"],
@@ -466,6 +463,7 @@ def _ordered_roster(rows: list[dict[str, Any]], external_ids: dict[Any, Any]) ->
 
 
 def _team_rosters_sheet(wb: Workbook, payload: dict[str, Any], rosters: list[dict[str, Any]]) -> int:
+    labels = _player_labels(payload.get("players") or [])
     players_by_id = {p["id"]: p for p in payload.get("players") or []}
     by_scope: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rosters:
@@ -482,7 +480,7 @@ def _team_rosters_sheet(wb: Workbook, payload: dict[str, Any], rosters: list[dic
         sheet.append(
             [
                 row["team_label"], row["division_id"], row["session_name"],
-                _player_label(row["player_name"], external_id), row["player_name"],
+                labels.get(str(external_id), row["player_name"]), row["player_name"],
                 row["skill_level"], f"This team ({_format_label(row.get('format') or '') or 'format not recorded'})",
                 row["matches_won"], row["matches_played"],
                 str(external_id or NO_DATA), scope, f"{scope}|{slot_by_identity[(scope, row['player_id'])]}",
@@ -491,6 +489,7 @@ def _team_rosters_sheet(wb: Workbook, payload: dict[str, Any], rosters: list[dic
         )
     _apply_widths(sheet, TEAM_ROSTERS_COLUMNS, TEAM_ROSTERS_WIDTHS)
     _autotable(sheet, "TeamRosters_Table", TEAM_ROSTERS_COLUMNS, len(rosters))
+    sheet.column_dimensions["J"].hidden = True  # Record IDs are looked up on Players.
     return max((len(rows) for rows in by_scope.values()), default=0)
 
 
@@ -552,6 +551,7 @@ PVP_WIDTHS = {"Player Label": 40, "Format": 10, "Opponent Label": 40, "Wins": 8,
 
 
 def _player_vs_player_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    labels = _player_labels(payload.get("players") or [])
     pairs = build_player_vs_player_pairs(payload)
     players_by_id = {p["id"]: p for p in payload.get("players") or []}
     sheet = wb.create_sheet("Player vs Player")
@@ -561,9 +561,9 @@ def _player_vs_player_sheet(wb: Workbook, payload: dict[str, Any]) -> list[dict[
         opponent = players_by_id.get(row["opponent_id"], {})
         sheet.append(
             [
-                _player_label(row["player_name"], player.get("external_id")),
+                labels.get(str(player.get("external_id")), row["player_name"]),
                 _format_label(row["format"]),
-                _player_label(row["opponent_name"], opponent.get("external_id")),
+                labels.get(str(opponent.get("external_id")), row["opponent_name"]),
                 row["wins"], row["losses"], row["games"], row["win_rate"],
                 row["pair_key"],
             ]
@@ -841,7 +841,7 @@ def build_workbook(
     slots = {"roster": roster_slots, "teams": max(4, max_teams), "dates": max(10, min(stats["max_dates"], 40)),
              "fixtures": fixture_slots, "ll_our_first": 12, "ll_opp_first": 15 + roster_slots}
     viewer = viewer_player(players, viewer_member_external_id)
-    viewer_label = _player_label(viewer["name"], viewer["external_id"]) if viewer else None
+    viewer_label = _player_label(viewer["name"], viewer["external_id"], payload.get("players") or []) if viewer else None
     label_by_scope = {t["team_scope_key"]: t["team_label"] for t in teams}
     default_team = default_opp = default_date = None
     example = None

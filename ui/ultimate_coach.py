@@ -18,7 +18,7 @@ from analytics.ultimate_coach_match_day import (
     viewer_player,
 )
 from analytics.ultimate_coach_excel_payload import build_team_rosters
-from analytics.ultimate_coach_matchup_evidence import player_ref
+from analytics.ultimate_coach_matchup_evidence import player_ref, player_display_labels
 from analytics.ultimate_coach_war_room import (
     COACH_TAGS,
     EVIDENCE_LIMITS_NOTE,
@@ -167,6 +167,8 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; }
 .ns-avail { color:#6b4d00; font-style:italic; }
 .ns-save { color:#7a4b00; font-weight:700; }
+.ns-budget { display:block; color:#7a4b00; font-weight:600; margin-top:3px; }
+.ns-budget.bad { color:#8f251b; }
 .ns-more summary { cursor:pointer; font-size:13px; padding:3px 6px; background:#fdecec; border-left:4px solid #b42318; border-radius:4px; }
 .ns-avoid { background:#fdecec; border-left-color:#b42318 !important; }
 .ns-unordered { background:#fff8db; }
@@ -543,7 +545,7 @@ def render(
     if resolved_viewer:
         viewer_scopes = sorted({r["team_scope_key"] for r in rosters if r["player_id"] == resolved_viewer["id"]})
         example = worked_example(match_day, default_matchup(match_day, viewer_scopes, build_local, label_by_scope),
-                                 player_ref(resolved_viewer), label_by_scope)
+                                 player_display_labels(players).get(str(resolved_viewer.get("external_id")), resolved_viewer["name"]), label_by_scope)
     version = build_version()
     compact_payload["coach_tags"] = COACH_TAGS
     li = lambda items: "".join(f"<li>{escape(x.lstrip('• '))}</li>" for x in items)
@@ -879,11 +881,14 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   function esc(v){{return String(v===null||v===undefined?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}}
   function pct(w,g){{return g?((w/g)*100).toFixed(1)+"%":"No data";}}
   function val(row,name){{return row[EC[name]];}}
-  // Names are shown next to the APA record ID everywhere a player is picked
-  // or listed; every lookup still keys on the player's id, never the name.
+  // Readable unique labels are display-only; lookups still use verified IDs.
   function recordIdText(p){{var x=p&&p.external_id;return x===null||x===undefined||x===""?"not captured":String(x);}}
-  function playerLabel(p){{return p.name+" · APA record ID "+recordIdText(p);}}
-  function playerRef(p){{return p.name+" (APA record ID "+recordIdText(p)+")";}}
+  var DISPLAY_LABELS={{}};
+  (function(){{var groups={{}};DATA.players.forEach(function(p){{var key=p.name.trim().toLowerCase();(groups[key]||(groups[key]=[])).push(p);}});
+    Object.keys(groups).forEach(function(key){{var group=groups[key];group.sort(function(a,b){{return String(a.external_id||"").localeCompare(String(b.external_id||""));}});
+      group.forEach(function(p,i){{DISPLAY_LABELS[String(p.id)]=p.name+(group.length>1?" (player "+(i+1)+" of "+group.length+")":"");}});}});}})();
+  function playerLabel(p){{return DISPLAY_LABELS[String(p.id)]||p.name;}}
+  function playerRef(p){{return playerLabel(p);}}
   var SORTED=DATA.players.slice().sort(function(x,y){{return x.name.localeCompare(y.name);}});
   var SEARCH_NAMES={{}}; SORTED.forEach(function(p){{SEARCH_NAMES[String(p.id)]=(p.name+" "+recordIdText(p)).toLowerCase();}});
 
@@ -970,7 +975,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       seenTeamTags[tag]=true;
       return true;
     }}).slice(0,12);
-    return '<h2>'+esc(p.name)+'</h2><p class="id-line">APA record ID '+esc(recordIdText(p))+'</p>'
+    return '<h2>'+esc(playerLabel(p))+'</h2>'
       +'<div class="metric-grid"><div class="metric"><b>'+(p.current_skill_level===null?'—':p.current_skill_level)+'</b><span>Current captured SL</span></div>'
       +'<div class="metric"><b>'+(totalG?(totalW+'-'+(totalG-totalW)):(c.length?'No data':'Pending'))+'</b><span>League-scoped lifetime '+esc(formatName(fmt))+' W-L'+(cc.incomplete?' ('+cc.incomplete+' scope'+(cc.incomplete===1?'':'s')+' with missing wins or games not counted)':'')+'</span></div>'
       +'<div class="metric"><b>'+(totalG?pct(totalW,totalG):'—')+'</b><span>Lifetime win rate</span></div></div>'
@@ -1164,7 +1169,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       var evid=rowsFor(m.id,fmt).length;
       var slLabel=m.skill_level===null||m.skill_level===undefined?'—':String(m.skill_level);
       var wl=m.matches_won===null||m.matches_won===undefined||m.matches_played===null||m.matches_played===undefined?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won);
-      return '<tr><td>'+(i+1)+'</td><td>'+esc(m.name)+'</td><td>'+esc(recordIdText(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td></tr>';
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(playerLabel(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td></tr>';
     }}).join("");
     // The team-specific summary (including any "from k of n players" missing-SL disclosure) always stays with
     // the roster; the generic cap/asterisk fine print is repeated in the matchup notes, so the focused print
@@ -1172,7 +1177,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return head+'<p class="roster-scope">'+esc(teamDisplay(team))+'</p><p class="roster-summary">'+team.players.length+' rostered · '+totalNote+'</p>'+
       '<p class="muted roster-fineprint">Not a 5-player lineup total. This data does not capture your division\\'s skill cap; enter one in Lineup Lab if you want a reference shown.'+
       '</p>'+
-      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>APA record ID</th><th>SL (this format)</th><th>Team W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>SL (this format)</th><th>Team W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
   // ---- Match Night evidence: team comparison + ranking ----
@@ -1367,17 +1372,17 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     }}
     var blocks=theirs.map(function(opp){{return rankVsOpponent(ours,opp,fmt);}});
     var glance=blocks.map(function(b){{
-      return '<tr><td>'+esc(b.opponent.name)+(b.opponent.skill_level===null||b.opponent.skill_level===undefined?'':' (SL '+b.opponent.skill_level+')')+'<span class="id-line">APA record ID '+esc(recordIdText(b.opponent))+'</span></td><td>'+esc(evidenceLeader(b))+'</td></tr>';
+      return '<tr><td>'+esc(playerRef(b.opponent))+(b.opponent.skill_level===null||b.opponent.skill_level===undefined?'':' (SL '+b.opponent.skill_level+')')+'</td><td>'+esc(evidenceLeader(b))+'</td></tr>';
     }}).join("");
     var detail=blocks.map(function(b,bi){{
       return '<div class="rank-block" id="rank-block-'+bi+'"><h3>vs '+esc(b.opponent_label)+' · SL '+esc(slText(b.opponent))+' · '+esc(b.opponent_sample)+'</h3><p class="muted">'+esc(b.note)+'</p>'
-        +'<div class="table-wrap"><table class="rank-table"><thead><tr><th>Rank</th><th>Our player (APA record ID)</th><th>SL</th><th>Direct record (meetings)</th><th>Shared-opponent evidence (samples)</th><th>Basis · ties · missing evidence</th></tr></thead><tbody>'
+        +'<div class="table-wrap"><table class="rank-table"><thead><tr><th>Rank</th><th>Our player</th><th>SL</th><th>Direct record (meetings)</th><th>Shared-opponent evidence (samples)</th><th>Basis · ties · missing evidence</th></tr></thead><tbody>'
         +b.rows.map(function(r){{return '<tr class="tier-'+r.tier+'"><td>'+esc(r.rank)+'</td><td>'+esc(r.player)+'</td><td>'+esc(slText(r.member))+'</td><td>'+esc(r.direct_text)+'</td><td>'+esc(r.shared_text)+'</td><td>'+esc(r.basis)+'</td></tr>';}}).join("")
         +'</tbody></table></div></div>';
     }}).join("");
     out.innerHTML='<h2>Evidence ranking vs each opponent</h2>'
       +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
-      +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (by our player\\'s record against opponents both players have faced, then more shared opponents, then more games); players with no verified evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
+      +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (shown together without ranking); players with no verified evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
       +'<h3>At a glance</h3><div class="table-wrap"><table class="glance-table"><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
       +'<div class="rank-blocks">'+detail+'</div>';
   }}
@@ -1447,7 +1452,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     currentScopes(p).forEach(function(s){{names[s.team_name]=true;}});
     var teamNames=Object.keys(names);
     var dupes=NAME_COUNTS[String(p.name||"").toLowerCase()]||1;
-    return p.name+" · APA record ID "+p.external_id+" · "+(teamNames.length?teamNames.join(", "):"no current team")+(dupes>1?" · "+dupes+" players share this name":"");
+    return playerLabel(p)+" · "+(teamNames.length?teamNames.join(", "):"no current team")+(dupes>1?" · "+dupes+" players share this name":"");
   }}
   var VIEWER_SEARCH={{}};
   SORTED.forEach(function(p){{VIEWER_SEARCH[String(p.id)]=(p.name+" "+p.external_id).toLowerCase();}});
@@ -1473,16 +1478,16 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     var searchNote=String(MDVS.value||"").trim()?(" "+totalMatches+" matching player"+(totalMatches===1?"":"s")+(totalMatches>MAX_OPTIONS?" (showing first "+MAX_OPTIONS+")":"")+"."):"";
     if(!p) {{
       if(VIEWER.configured&&!VIEWER.resolved) {{
-        MDVST.textContent="The configured viewer identity (APA record ID "+(VIEWER.external_id||"")+") was not found among this build's verified players. Search for yourself above."+searchNote;
+        MDVST.textContent="The configured viewer identity was not found among this build's verified players. Search for yourself above."+searchNote;
       }} else {{
-        MDVST.textContent="No viewer identity configured. Search your name or APA record ID above and choose yourself — same-name players are told apart by record ID and current teams. Nothing is guessed."+searchNote;
+        MDVST.textContent="No viewer identity configured. Search your name or APA record ID above and choose yourself — same-name players have distinct labels and current teams. Nothing is guessed."+searchNote;
       }}
       return;
     }}
     var scopes=viewerScopes();
     var src=mdViewerId.source==="config"?"default from this build's configuration":(mdViewerId.source==="saved"?"your saved choice on this device":"your choice");
     var card=(String(p.external_id)===String(VIEWER.external_id||"")&&VIEWER.card_number)?" League card #"+VIEWER.card_number+" was verified to this record when the build was configured (card numbers are per league and are not used as identity).":"";
-    MDVST.innerHTML='Match Day for <strong>'+esc(p.name)+'</strong> · APA record ID '+esc(p.external_id)+' ('+esc(src)+').'+esc(card)+' '
+    MDVST.innerHTML='Match Day for <strong>'+esc(playerLabel(p))+'</strong> ('+esc(src)+').'+esc(card)+' '
       +(scopes.length?scopes.length+' current team scope'+(scopes.length===1?'':'s')+': '+scopes.map(function(s){{return '<span class="tag">'+esc(s.display)+'</span>';}}).join(''):'No current team captured for this player.')
       +esc(searchNote);
   }}

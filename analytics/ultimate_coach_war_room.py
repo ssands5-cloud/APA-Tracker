@@ -6,7 +6,7 @@ rule: direct meetings first, then shared-opponent results, ties shown) and
 adds, for one directed team pairing (our roster vs theirs, one format):
 
 * an evidence CATEGORY for every pairing of our player vs their player,
-* best-supported sends per opponent player,
+* first by recorded direct results per opponent player,
 * concerning pairings, and opponents with winning records vs our roster,
 * an opponent scouting card per opponent player,
 * every recorded direct meeting between the two rosters.
@@ -365,21 +365,21 @@ def quick_read_badges(card: dict[str, Any], block: dict[str, Any], *, has_note: 
     tg = card["their_games"]
     badges: list[str] = []
     if tg:
-        badges.append(f"✅ Direct evidence: {plural(tg, 'meeting')}" if tg >= 3
-                      else f"⚠ Direct evidence: {plural(tg, 'meeting')} (small sample)")
+        badges.append(f"✅ Direct meetings vs roster: {plural(tg, 'meeting')}" if tg >= 3
+                      else f"⚠ Direct meetings vs roster: {plural(tg, 'meeting')} (small sample)")
     else:
         shared = [r for r in block["rows"] if r["category"] == "I"]
         if shared:
             total = sum(r["shared_count"] for r in shared)
             strong = len(shared) >= 3 or total >= 6
             badges.append(f"✅ Shared-opponent evidence: {plural(len(shared), 'player')}, "
-                          f"{plural(total, 'shared game')}" if strong else
+                          f"{plural(total, 'opponent link')}" if strong else
                           f"⚠ Shared-opponent evidence: {plural(len(shared), 'player')}, "
-                          f"{plural(total, 'shared game')} (thin)")
+                          f"{plural(total, 'opponent link')} (thin)")
         else:
             badges.append("⚠ No evidence on our roster")
     if card["losing_sl"] not in ("—", "None recorded"):
-        badges.append(f"⚠ Weak against {card['losing_sl']}")
+        badges.append(f"⚠ Recorded losses vs {card['losing_sl']}")
     if not has_note:
         badges.append("❓ No coach observations")
     return badges
@@ -397,7 +397,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
     rows = block["rows"]
     def names(group):
         return ", ".join(r["member"]["name"] for r in group)
-    for cat, label in (("G", "Best answer on record"), ("E", "Even option on record")):
+    for cat, label in (("G", "Historical top record"), ("E", "Even option on record")):
         group = [r for r in rows if r["category"] == cat]
         if group:
             top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
@@ -454,8 +454,8 @@ def best_send_text(rows: list[dict[str, Any]]) -> str:
         tag = f"shared-opponent candidate, not ordered ({'the only one' if n == 1 else f'one of {n}'}): "
     else:
         tied = sum(1 for r in rows if r["category"] in ("G", "E") and _group_key(r) == _group_key(first))
-        tag = ("best-supported send: " if tied == 1 else
-               f"best-supported send (tied with {tied - 1} other{'s' if tied > 2 else ''}, same evidence): ")
+        tag = ("first by recorded direct results: " if tied == 1 else
+               f"first by recorded direct results (tied with {tied - 1} other{'s' if tied > 2 else ''}, same evidence): ")
     return f"{tag}{first['player']} — reason: {first['reason']}"
 
 
@@ -509,7 +509,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
             tied = [display_name(o["member"], roster) for o in group if o is not r]
             save = only_green.get(r["member"]["id"])
             ranked.append({
-                "rank": r["rank"], "medal": medal, "member": r["member"],
+                "rank": r["rank"], "choice_number": g + 1, "medal": medal, "member": r["member"],
                 "display": display_name(r["member"], roster), "category": r["category"],
                 "reason": r["reason"], "tied_with": tied,
                 "save": f"consider saving — our only favorable direct option vs {', '.join(save)}" if save else "",
@@ -530,10 +530,10 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
              for r in reversed(rows) if r["category"] == "R"]
     unknown = [display_name(r["member"], roster) for r in rows if r["category"] == "X"]
     if ranked:
-        headline = f"Best-supported response: {ranked[0]['display']}" + (
+        headline = f"First by recorded direct results: {ranked[0]['display']}" + (
             f" or {', '.join(ranked[0]['tied_with'])} (tied)" if ranked[0]["tied_with"] else "")
     elif unordered:
-        headline = "No direct record to order — shared-opponent candidates only (≈, not ordered)"
+        headline = "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)"
     else:
         headline = "No evidence-backed option left among our remaining players"
     return {"opponent": block["opponent"], "label": block["opponent_label"], "headline": headline,
@@ -789,11 +789,11 @@ def send_cost(war_room: dict[str, Any], j: int, member_id: Any, *,
 def next_send_lines(ns: dict[str, Any]) -> list[str]:
     """Plain-text Next Send lines shared by the HTML (cross-checked) and Excel/packet texts.
 
-    Every ranked candidate gets its own line (SEND-LAYOUT-01): the medal where one applies,
-    otherwise the plain rank number, so nothing below the top three is hidden."""
+    Every ranked candidate gets its own numbered line (SEND-LAYOUT-01); tied candidates
+    retain equal numbers, and nothing below the top three is hidden."""
     lines = [ns["headline"]]
     for m in ns["ranked"]:
-        prefix = m["medal"] if m["medal"] else f"{m['rank']}."
+        prefix = f"{m['choice_number']}."
         lines.append(f"{prefix} {m['display']} — {m['reason']}"
                      + (f" · tied with {', '.join(m['tied_with'])}" if m["tied_with"] else "")
                      + (f" · {m['save']}" if m["save"] else ""))
@@ -803,7 +803,7 @@ def next_send_lines(ns: dict[str, Any]) -> list[str]:
     for a in ns["avoid"]:
         lines.append(f"⚠ Avoid {a['display']} — {a['reason']}")
     if ns["unknown"]:
-        lines.append("❓ Unknown (no verified evidence, not weak): " + ", ".join(ns["unknown"]))
+        lines.extend("❓ Unknown (no verified evidence, not weak): " + name for name in ns["unknown"])
     return lines
 
 

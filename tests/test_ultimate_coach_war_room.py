@@ -107,13 +107,13 @@ def test_best_sends_keep_ranking_order_and_drop_only_concerning_and_missing_evid
 def test_concerning_pairings_and_threats_are_factual_and_unknown_is_not_weak():
     wr = _war_room()
     assert [c["text"] for c in wr["concerning"]] == [
-        "Ann (APA record ID 1001) vs Opal (APA record ID 1050): 0-3 direct (3 meetings)"]
+        "Ann vs Opal: 0-3 direct (3 meetings)"]
     opal, pip, quin = wr["cards"]
     assert opal["vs_ours"] == "4-2 in 6 meetings with 2 of our 3 players"
-    assert opal["met_list"] == "vs Ann (APA record ID 1001): 3-0 · vs Bea (APA record ID 1002): 1-2"
+    assert opal["met_list"] == "vs Ann: 3-0 · vs Bea: 1-2"
     assert [t["opponent"]["name"] for t in wr["threats"]] == ["Opal"]
     assert wr["threats"][0]["threat_text"] == (
-        "Opal (APA record ID 1050) · SL 6 · 4-2 vs our roster (6 meetings, 2 of our players)")
+        "Opal · SL 6 · 4-2 vs our roster (6 meetings, 2 of our players)")
     assert quin["vs_ours"] == "No recorded meetings with our roster — unknown, not a sign of weakness"
     assert "No captured SL on this team's roster" in quin["missing"]
 
@@ -229,15 +229,15 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
     wr = _war_room()
     opal = next_send(wr, 0)
     assert [(m["medal"], m["display"]) for m in opal["ranked"]] == [("🥇", "Bea")]
-    assert opal["headline"] == "Best-supported response: Bea"
+    assert opal["headline"] == "First by recorded direct results: Bea"
     # Names here never carry the APA record ID (NAME-DISPLAY-01) -- that's Players-tab-only text.
     assert [a["display"] for a in opal["avoid"]] == ["Ann"] and opal["unknown"] == ["Cal"]
     pip = next_send(wr, 1)                  # an even direct record is ranked; shared-only is never medalled
     assert [(m["medal"], m["display"], m["category"]) for m in pip["ranked"]] == [("🥇", "Cal", "E")]
     assert [u["display"] for u in pip["unordered"]] == ["Bea"]
     assert next_send_lines(pip) == [
-        "Best-supported response: Cal",
-        "🥇 Cal — 1-1 direct record (2 meetings) — even",
+        "First by recorded direct results: Cal",
+        "1. Cal — 1-1 direct record (2 meetings) — even",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
         # who has not played. Sending her off this unordered list used to cost that silently.
         "≈ Bea — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
@@ -269,9 +269,10 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     # numbered line (no medal past the top three) instead of a collapse.
     assert [(m["medal"], m["rank"], m["display"]) for m in ns["ranked"]] == [
         ("🥇", "1=", "Ann"), ("🥇", "1=", "Bo"), ("🥈", "3", "Di"), ("🥉", "4", "Fay"), ("", "5", "Cy")]
-    assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "Best-supported response: Ann or Bo (tied)"
+    assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
     assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul"
-    assert "5. Cy — 1-1 direct record (2 meetings) — even" in next_send_lines(ns)
+    assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
+    assert "4. Cy — 1-1 direct record (2 meetings) — even" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played
     assert next_send(wr, 0, remaining={1, 3, 4, 5})["ranked"][0]["tied_with"] == []
 
@@ -288,9 +289,9 @@ def test_send_labels_number_by_evidence_group_and_never_number_shared_only():
     wr = war_room_pair(ours, theirs, index, "EIGHT")
     xan = [r for r in wr["blocks"][0]["rows"] if r["category"] in ("G", "E", "I")]
     assert send_labels(xan) == ["1=", "1=", "2.", "3.", "4."]
-    assert send_list_text(xan).startswith("1= Ann (APA record ID 1001) — 2-0 (2) · 1= Bo (APA record ID 1002) — 2-0 (2) · 2. Di")
-    assert best_send_text(xan).startswith("best-supported send (tied with 1 other, same evidence): Ann")
-    assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("best-supported send: Ann")
+    assert send_list_text(xan).startswith("1= Ann — 2-0 (2) · 1= Bo — 2-0 (2) · 2. Di")
+    assert best_send_text(xan).startswith("first by recorded direct results (tied with 1 other, same evidence): Ann")
+    assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("first by recorded direct results: Ann")
     yul = [r for r in wr["blocks"][1]["rows"] if r["category"] in ("G", "E", "I")]
     assert send_labels(yul) == ["≈", "≈"]
     assert best_send_text(yul).startswith("shared-opponent candidate, not ordered (one of 2): ")
@@ -726,13 +727,13 @@ def _badge_row(category, direct=None, shared=0):
 def test_quick_read_states_the_actual_meeting_count_at_three_or_more():
     card, block = _badge_card([_badge_row("G", direct=(3, 4))])
     badges = quick_read_badges(card, block, has_note=True)
-    assert badges[0] == "✅ Direct evidence: 4 meetings", badges
+    assert badges[0] == "✅ Direct meetings vs roster: 4 meetings", badges
 
 
 def test_quick_read_flags_a_small_sample_under_three_meetings_without_overclaiming_strength():
     card, block = _badge_card([_badge_row("E", direct=(1, 2))])
     badges = quick_read_badges(card, block, has_note=True)
-    assert badges[0] == "⚠ Direct evidence: 2 meetings (small sample)", badges
+    assert badges[0] == "⚠ Direct meetings vs roster: 2 meetings (small sample)", badges
     assert "strong" not in badges[0].lower() and "limited" not in badges[0].lower(), badges
 
 
@@ -744,18 +745,18 @@ def test_quick_read_counts_concerning_records_as_evidence_not_its_absence():
     card, block = _badge_card([_badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2))])
     assert card["their_games"] == 6, card
     badges = quick_read_badges(card, block, has_note=True)
-    assert badges[0] == "✅ Direct evidence: 6 meetings", badges
+    assert badges[0] == "✅ Direct meetings vs roster: 6 meetings", badges
     assert "no evidence" not in badges[0].lower(), badges
 
 
 def test_quick_read_falls_back_to_shared_opponent_evidence_when_nothing_direct():
     strong_card, strong_block = _badge_card([_badge_row("I", shared=4), _badge_row("I", shared=3)])
     strong = quick_read_badges(strong_card, strong_block, has_note=True)
-    assert strong[0] == "✅ Shared-opponent evidence: 2 players, 7 shared games", strong
+    assert strong[0] == "✅ Shared-opponent evidence: 2 players, 7 opponent links", strong
 
     weak_card, weak_block = _badge_card([_badge_row("I", shared=1)])
     weak = quick_read_badges(weak_card, weak_block, has_note=True)
-    assert weak[0] == "⚠ Shared-opponent evidence: 1 player, 1 shared game (thin)", weak
+    assert weak[0] == "⚠ Shared-opponent evidence: 1 player, 1 opponent link (thin)", weak
 
 
 def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
@@ -767,7 +768,7 @@ def test_quick_read_says_plainly_when_there_is_nothing_on_our_roster():
 def test_quick_read_surfaces_a_known_weak_skill_level():
     card, block = _badge_card([_badge_row("G", direct=(3, 4))], losing_sl="SL4 (1-3)")
     badges = quick_read_badges(card, block, has_note=True)
-    assert "⚠ Weak against SL4 (1-3)" in badges, badges
+    assert "⚠ Recorded losses vs SL4 (1-3)" in badges, badges
 
 
 def test_quick_read_flags_missing_coach_observations_but_only_when_actually_missing():

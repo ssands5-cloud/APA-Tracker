@@ -127,8 +127,8 @@ def test_players_sheet_disambiguates_duplicate_names(tmp_path):
     wb = load_workbook(path)
 
     labels = [row[0].value for row in wb["Players"].iter_rows(min_row=2, max_col=1)]
-    assert "Ann Archer (APA record ID 1001)" in labels
-    assert "Ann Archer (APA record ID 1004)" in labels
+    assert "Ann Archer (player 1 of 2)" in labels
+    assert "Ann Archer (player 2 of 2)" in labels
     assert len(labels) == len(set(labels))
 
 
@@ -390,7 +390,7 @@ def test_match_day_sheet_inputs_dropdowns_and_viewer_default(tmp_path):
     assert sources == {"B6": "PlayerLabelList", "B7": "uc_TeamList", "B8": "FormatFilterList", "B9": "uc_DateList",
                        "B10": "uc_FixtureList"}
     assert [md[f"A{r}"].value for r in range(6, 11)] == ["Player", "Team", "Format", "Scheduled date", "Fixture"]
-    assert md["B6"].value == "Ann Archer (APA record ID 1001)"  # name shown alongside the verified record ID
+    assert md["B6"].value == "Ann Archer (player 1 of 2)"  # name shown alongside the verified record ID
     assert md["B7"].value == "Sharks · Spring 2026 · 8-Ball"   # the viewer's next fixture's team
     assert md["B8"].value == "8-Ball & 9-Ball" and md["B9"].value in (None, "") and md["B10"].value in (None, "")
     for r in range(6, 11):
@@ -492,7 +492,7 @@ def test_captain_packet_print_geometry_fits_five_pages_at_one_readable_scale(tmp
     assert len(card_splits) == CARD_PAGES - 1 and len(ev_splits) == EVIDENCE_PAGES - 1, brk
     assert brk == sorted(set(brk)), brk
     for b in ev_splits:
-        assert sheet[f"A{b + 1}"].value == "Opponent (APA record ID)"
+        assert sheet[f"A{b + 1}"].value == "Opponent"
     for row in range(1, last + 1):
         assert sheet.row_dimensions[row].height, row                  # nothing left to auto-height
     hpt = lambda a, b: sum(sheet.row_dimensions[r].height for r in range(a, b + 1))

@@ -29,8 +29,8 @@ OPP = _m(50, "Opal Opp", sl=5)
 
 
 def test_player_ref_names_alongside_record_id():
-    assert player_ref(_m(1, "Ann Archer", ext="3349374")) == "Ann Archer (APA record ID 3349374)"
-    assert player_ref({"id": 2, "name": "No Id", "external_id": None}) == "No Id (APA record ID not captured)"
+    assert player_ref(_m(1, "Ann Archer", ext="3349374")) == "Ann Archer"
+    assert player_ref({"id": 2, "name": "No Id", "external_id": None}) == "No Id"
 
 
 def test_display_name_omits_the_record_id_and_tells_duplicate_names_apart_without_it():
@@ -60,7 +60,7 @@ def test_direct_ranks_before_shared_before_none_and_records_are_shown_with_sampl
     ))
     block = rank_vs_opponent(ours, OPP, index, "EIGHT")
     rows = block["rows"]
-    assert [r["player"] for r in rows] == ["Ann (APA record ID 1001)", "Bea (APA record ID 1002)", "Cal (APA record ID 1003)"]
+    assert [r["player"] for r in rows] == ["Ann", "Bea", "Cal"]
     assert [r["rank"] for r in rows] == ["1", "≈", "—"]  # indirect evidence is shown, never given a rank number
     assert rows[0]["direct_text"] == "1-2 (3 meetings)" and rows[0]["basis"] == "Direct record"
     assert rows[1]["direct_text"] == "No verified direct meetings in this snapshot"
@@ -86,9 +86,9 @@ def test_identical_evidence_is_a_tie_with_competition_ranking_and_an_explanation
     rows = rank_vs_opponent(ours, OPP, index, "EIGHT")["rows"]
     assert [r["rank"] for r in rows] == ["1=", "1=", "3", "4"]
     assert [r["player"].split(" (")[0] for r in rows] == ["Bea", "Cal", "Ann", "Dee"]
-    assert rows[0]["basis"] == ("Direct record · Tied with Cal (APA record ID 1003) — same evidence; "
+    assert rows[0]["basis"] == ("Direct record · Tied with Cal — same evidence; "
                                 "the ranking can't separate them")
-    assert rows[1]["basis"].endswith("Tied with Bea (APA record ID 1002) — same evidence; the ranking can't separate them")
+    assert rows[1]["basis"].endswith("Tied with Bea — same evidence; the ranking can't separate them")
     assert "Tied" not in rows[2]["basis"]
 
 

@@ -20,8 +20,8 @@ from tests.test_excel_war_room_formulas import _games, _payload
 from ui.ultimate_coach import render
 
 OURS, THEIRS = "sharks-a|d1|Fall 2026", "falcons-a|d1|Fall 2026"
-ANN, BEA, DEE = "Ann Archer (APA record ID 1001)", "Bea Baker (APA record ID 1002)", "Dee Diaz (APA record ID 1003)"
-CAM, EVE = "Cam Cole (APA record ID 2001)", "Eve Ellis (APA record ID 2002)"
+ANN, BEA, DEE = "Ann Archer (player 1 of 2)", "Bea Baker", "Dee Diaz"
+CAM, EVE = "Cam Cole", "Eve Ellis"
 
 # GPT audit (349815e) explicit authorization: "No coach observations" is metadata
 # about the opinion (whether a note exists), not evidence the opinion could
@@ -189,7 +189,7 @@ def test_matrix_cell_opens_the_evidence_behind_it(tmp_path: Path):
             page.locator("#wr-matrix .mcell").nth(1).click()   # Ann vs Eve: shared opponents only
             detail = page.inner_text("#wr-pair")
             assert f"{ANN} vs {EVE}" in detail and "Indirect evidence only" in detail
-            assert "Zed Zane (APA record ID 2003)" in detail and "1-0 (1 game)" in detail and "0-1 (1 game)" in detail
+            assert "Zed Zane" in detail and "1-0 (1 game)" in detail and "0-1 (1 game)" in detail
             page.locator("#wr-matrix .mcell").nth(0).click()   # Ann vs Cam: direct 2-0
             detail = page.inner_text("#wr-pair")
             assert "Favorable direct record" in detail and "Sun Sep 20, 2026" in detail
@@ -528,7 +528,7 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             text = card.inner_text()
             # "If they put up:" until the captain taps the opponent they actually sent (BLIND-01 #4).
             assert "WHO SHOULD I SEND NEXT?" in text.upper() and "they put up:" in text.lower()
-            assert "🥇 Ann Archer — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
+            assert "1. Ann Archer (player 1 of 2) — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
             assert text.count("availability unknown") == 2                     # said at the action, still eligible
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
             assert page.locator("#next-send .ns-medal").nth(0).inner_text().count("availability unknown") == 0
@@ -536,7 +536,7 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
             text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
-            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2)"
+            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2 (2 meetings))"
             card.locator(".ns-more summary").click()
             assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning" in card.inner_text()
             # Chips: tap Eve -> shared-only, never medalled.
@@ -670,7 +670,7 @@ def test_send_lists_and_best_send_text_match_python_including_ties(tmp_path: Pat
                 assert js == expected, remaining
             assert js[0][0].startswith("1. ") and "1= " in page.evaluate(f"window.__ucSendTexts({OURS!r}, {THEIRS!r}, 'EIGHT', null)")[0][0]
             assert "1= Ann Archer" in page.inner_text("#wr-opportunities") and "1= Fay Fox" in page.inner_text("#wr-opportunities")
-            assert "best-supported send (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
+            assert "first by recorded direct results (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
         finally:
             browser.close()
 
@@ -766,11 +766,11 @@ def test_html_head_to_head_never_mixes_formats(tmp_path: Path):
 
                 pool = page.eval_on_selector_all(
                     "#player-b option", "els => els.filter(e => e.value).map(e => e.textContent)")
-                cam = [t for t in pool if "2001" in t]
+                cam = [t for t in pool if "Cam Cole" in t]
                 assert len(cam) == 1, (fmt, pool)
                 assert f"{meetings} meeting" in cam[0], (fmt, cam[0])
                 # Zed was met in 8-Ball only, so 9-Ball must not offer him
-                assert any("2003" in t for t in pool) == (fmt == "EIGHT"), (fmt, pool)
+                assert any("Zed Zane" in t for t in pool) == (fmt == "EIGHT"), (fmt, pool)
 
                 page.select_option("#player-b", "10")
                 page.wait_for_timeout(300)
@@ -1664,7 +1664,7 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
     confidence-implying wording ("Limited direct evidence") and treated CAM's record as
     shared-opponent evidence. Both were wrong. CAM's six meetings are all CONCERNING (category
     R, real losses) -- direct evidence, not an absence of it -- so the badge states the plain
-    count instead of an adjective: "Direct evidence: 6 meetings". EVE's two meetings are direct
+    count instead of an adjective: "Direct meetings vs roster: 6 meetings". EVE's two meetings are direct
     too (small sample), which the pre-fix category-filtered logic missed entirely and fell
     through to the shared-opponent branch; that was exactly the bug.
 
@@ -1681,12 +1681,12 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
 
             cam, eve = cards.nth(0), cards.nth(1)
             cam_badges = cam.locator(".quick-read-badges").inner_text()
-            assert "Direct evidence: 6 meetings" in cam_badges, cam_badges
+            assert "Direct meetings vs roster: 6 meetings" in cam_badges, cam_badges
             assert "No coach observations" in cam_badges, cam_badges
 
             eve_badges = eve.locator(".quick-read-badges").inner_text()
-            assert "Direct evidence: 2 meetings (small sample)" in eve_badges, eve_badges
-            assert "Weak against SL4" in eve_badges, eve_badges
+            assert "Direct meetings vs roster: 2 meetings (small sample)" in eve_badges, eve_badges
+            assert "Recorded losses vs SL4" in eve_badges, eve_badges
             assert "No coach observations" in eve_badges, eve_badges
 
             # Badges precede the dense sentence in document order (decision before detail).
@@ -1705,11 +1705,11 @@ def test_quick_read_badges_are_glanceable_and_sit_above_the_dense_sentence(tmp_p
             cards = page.locator("#scouting-cards .scout")
             cam_badges_after = cards.nth(0).locator(".quick-read-badges").inner_text()
             assert "No coach observations" not in cam_badges_after, cam_badges_after
-            assert "Direct evidence: 6 meetings" in cam_badges_after, cam_badges_after
+            assert "Direct meetings vs roster: 6 meetings" in cam_badges_after, cam_badges_after
             eve_badges_after = cards.nth(1).locator(".quick-read-badges").inner_text()
             assert "No coach observations" in eve_badges_after, eve_badges_after
-            assert "Direct evidence: 2 meetings (small sample)" in eve_badges_after, eve_badges_after
-            assert "Weak against SL4" in eve_badges_after, eve_badges_after
+            assert "Direct meetings vs roster: 2 meetings (small sample)" in eve_badges_after, eve_badges_after
+            assert "Recorded losses vs SL4" in eve_badges_after, eve_badges_after
 
             # Clearing the note back out restores the missing-observations badge, live.
             page.fill('#scouting-cards textarea[data-pid="10"]', "")
@@ -2062,5 +2062,38 @@ def test_captain_matrix_counts_have_a_visible_phone_explanation(tmp_path: Path):
             # The caution against overreading a 0 must be visible, not just implied.
             assert "does not mean hardest or safe" in text
             assert errors == [], errors
+        finally:
+            browser.close()
+
+
+def test_next_send_warns_before_spending_breaks_the_entered_budget(tmp_path: Path):
+    payload = _payload()
+    payload["players"][2]["team_history"][0]["skill_level"] = 3
+    payload["evidence"] = [r for r in payload["evidence"]
+                           if {r["player_id"], r["opponent_id"]} not in ({3, 10}, {3, 11})]
+    payload["evidence"] += _games(3, 10, "WWWL") + _games(3, 11, "WW")
+    path = tmp_path / "candidate_budget.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"),
+                    encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            assert page.locator("#next-send .ns-budget").count() == 0  # no cap is assumed
+            page.fill("#ll-cap", "7")
+            page.locator("#ll-cap").dispatch_event("change")
+            first = page.locator("#next-send .ns-medal").first
+            assert first.locator("[data-send-our]").get_attribute("data-send-our") == "1"
+            assert "exceeds your entered skill budget" in first.locator(".ns-budget").inner_text()
+            assert page.locator("#next-send [data-send-our='3']").locator("..").locator(".ns-budget").count() == 0
+            # Raising the budget changes the warning, not the evidence order.
+            page.fill("#ll-cap", "8")
+            page.locator("#ll-cap").dispatch_event("change")
+            assert page.locator("#next-send .ns-budget").count() == 0
+            assert page.locator("#next-send .ns-medal").first.locator("[data-send-our]").get_attribute("data-send-our") == "1"
+            assert errors == []
         finally:
             browser.close()

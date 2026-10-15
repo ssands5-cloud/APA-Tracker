@@ -450,7 +450,7 @@ def test_search_is_bounded_for_large_player_lists(tmp_path: Path):
             page.wait_for_timeout(400)
             assert page.locator("#player-a option").count() == 2
             assert page.locator("#player-a").input_value() == ""
-            assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599 · APA record ID 599"
+            assert page.locator("#player-a option").nth(1).inner_text() == "Player 0599"
         finally:
             browser.close()
 
@@ -509,14 +509,14 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
 
             matchups = page.locator("#team-matchups").inner_text()
             # Cam: Ann has 2 direct wins, must be the strongest-evidence pick.
-            assert ("Ann Archer (APA record ID 1) — ranks first on direct evidence: 2-0 direct (2 meetings) "
-                    "vs Cam Cole (APA record ID 3)") in matchups
+            assert ("Ann Archer — ranks first on direct evidence: 2-0 direct (2 meetings) "
+                    "vs Cam Cole") in matchups
             # Drew: no direct history for anyone, but Bea shares Evan with Drew.
             # Indirect-only evidence is never given a "first" (GPT audit, PR #85).
-            assert ("None of our roster has met Drew Diaz (APA record ID 4) directly. 1 player has shared-opponent "
+            assert ("None of our roster has met Drew Diaz directly. 1 player has shared-opponent "
                     "evidence only — not ranked against each other; compare ours vs theirs in the matrix.") in matchups
             # Finn: nobody on our roster has any direct or shared evidence at all.
-            assert "No verified direct or shared-opponent evidence in this snapshot for any of our roster against Finn Frost (APA record ID 5)" in matchups
+            assert "No verified direct or shared-opponent evidence in this snapshot for any of our roster against Finn Frost" in matchups
 
             assert "FORBIDDEN" in matchups
 
@@ -527,7 +527,7 @@ def test_team_vs_team_recommends_direct_then_shared_then_no_evidence(tmp_path: P
             # read a "current_skill_level" field roster-member objects
             # never carry (only "skill_level" does).
             assert "Cam Cole (SL 3)" in matchups
-            assert "APA record ID 3" in matchups
+            assert "APA record ID 3" not in matchups
             assert "Drew Diaz (SL 6)" in matchups
             assert "undefined" not in matchups
         finally:
@@ -726,7 +726,7 @@ def test_same_named_teams_in_different_divisions_never_merge_rosters(tmp_path: P
             assert roster_a.count("Gale Grant") == 1
             assert "1 rostered" in roster_a
             assert "full-roster skill total 5" in roster_a
-            assert "Gale Grant	7	5	" in roster_a  # this team's format-specific SL, no live-SL asterisk
+            assert page.locator("#team-rosters tbody tr").filter(has_text="Gale Grant").first.locator("td").nth(2).inner_text() == "5"
 
             page.select_option("#team-a", "sharks-div-b|db|Spring 2026")
             roster_b = page.locator("#team-rosters").inner_text()
@@ -782,7 +782,7 @@ def test_match_day_without_configured_viewer_offers_explicit_identity_choice(tmp
 
             page.select_option("#md-viewer", "1")
             assert not page.locator("#md-team").is_disabled()
-            assert "APA record ID 1" in page.locator("#md-viewer-status").inner_text()
+            assert "Ann Archer" in page.locator("#md-viewer-status").inner_text()
             assert "Sharks" in page.locator("#md-team").inner_text()
             assert errors == []
         finally:
@@ -813,7 +813,7 @@ def test_match_day_unresolved_configured_viewer_is_disclosed_not_guessed(tmp_pat
         try:
             page, _ = _open(browser, path)
             assert page.locator("#md-viewer").input_value() == ""
-            assert "424242" in page.locator("#md-viewer-status").inner_text()
+            assert "configured viewer identity was not found" in page.locator("#md-viewer-status").inner_text()
             assert "not found" in page.locator("#md-status").inner_text()
         finally:
             browser.close()
@@ -829,7 +829,7 @@ def test_match_day_finds_fixture_and_applies_it_to_team_vs_team(tmp_path: Path):
             assert page.locator("#md-team option").count() == 1
             assert "Sharks" in page.locator("#md-team").inner_text()
             viewer_status = page.locator("#md-viewer-status").inner_text()
-            assert "APA record ID 1" in viewer_status
+            assert "Ann Archer" in viewer_status
             assert "card #80000001" in viewer_status and "not used as identity" in viewer_status
 
             # The team's real scheduled date is offered as a quick pick.
@@ -1054,8 +1054,8 @@ def test_match_day_identity_selector_distinguishes_duplicate_names_and_remembers
             labels = page.locator("#md-viewer option").all_inner_texts()[1:]
             assert len(labels) == 2
             assert all("2 players share this name" in label for label in labels)
-            assert any("APA record ID 1 · Sharks" in label for label in labels)
-            assert any("APA record ID 777 · no current team" in label for label in labels)
+            assert any("Ann Archer (player 1 of 2) · Sharks" in label for label in labels)
+            assert any("Ann Archer (player 2 of 2) · no current team" in label for label in labels)
 
             page.select_option("#md-viewer", "1")
             page.reload()
@@ -1096,23 +1096,23 @@ def test_player_selectors_show_record_ids_and_keep_duplicate_names_distinct(tmp_
             page = browser.new_page()
             page.goto(path.as_uri())
             labels = page.locator("#player-a option").all_inner_texts()[1:]
-            assert "Alpha Adams · APA record ID 1" in labels
-            assert "Alpha Adams · APA record ID 5005" in labels
+            assert "Alpha Adams (player 1 of 2)" in labels
+            assert "Alpha Adams (player 2 of 2)" in labels
             # Searching by record ID finds exactly that identity.
             page.fill("#search-a", "5005")
             page.wait_for_timeout(400)
-            assert page.locator("#player-a option").all_inner_texts()[1:] == ["Alpha Adams · APA record ID 5005"]
+            assert page.locator("#player-a option").all_inner_texts()[1:] == ["Alpha Adams (player 2 of 2)"]
             page.select_option("#player-a", "5")
             profile = page.locator("#profile-a").inner_text()
-            assert "Alpha Adams" in profile and "APA record ID 5005" in profile
+            assert "Alpha Adams (player 2 of 2)" in profile and "APA record ID" not in profile
             # The other Alpha (record 1) keeps her own evidence -- selection is by id, never by name.
             page.fill("#search-a", "")
             page.wait_for_timeout(400)
             page.select_option("#player-a", "1")
-            assert "APA record ID 1" in page.locator("#profile-a").inner_text()
-            assert "Bravo Brown · APA record ID 2 · 1 meeting" in page.locator("#player-b").inner_text()
+            assert "Alpha Adams (player 1 of 2)" in page.locator("#profile-a").inner_text()
+            assert "Bravo Brown · 1 meeting" in page.locator("#player-b").inner_text()
             page.select_option("#player-b", "2")
-            assert "Charlie Clark · APA record ID 3" in page.locator("#shared").inner_text()
+            assert "Charlie Clark" in page.locator("#shared").inner_text()
         finally:
             browser.close()
 
@@ -1138,10 +1138,10 @@ def test_team_rosters_are_labeled_and_list_record_ids(tmp_path: Path):
             assert ours.startswith("OUR TEAM") and "Sharks" in ours
             assert theirs.startswith("OPPONENT") and "Falcons" in theirs
             headers = cards.nth(1).locator("th").all_inner_texts()
-            assert [h.upper() for h in headers][:5] == ["#", "PLAYER", "APA RECORD ID", "SL (THIS FORMAT)", "TEAM W-L"]
+            assert [h.upper() for h in headers][:5] == ["#", "PLAYER", "SL (THIS FORMAT)", "TEAM W-L", "EVIDENCE ROWS (8-BALL)"]
             nia = [r for r in cards.nth(1).locator("tbody tr").all_inner_texts() if "Nia Null" in r][0]
-            assert "7007" in nia and nia.count("—") == 2  # missing SL and W-L are disclosed, never 0
-            assert "Drew Diaz\t4" in theirs  # name next to its record ID
+            assert "7007" not in nia and nia.count("—") == 2  # missing SL and W-L are disclosed, never 0
+            assert "Drew Diaz\t6" in theirs  # name next to its record ID
             head = page.locator("#matchup-head").inner_text()
             assert "Teams chosen manually" in head
             notes = page.locator("#matchup-notes").inner_text()
@@ -1168,7 +1168,7 @@ def test_focused_printable_matchup_shows_fixture_and_both_labeled_rosters_only(t
             assert "Home" in head and "Away" in head
             assert "2026-10-11T11:00:00-06:00" in head and "No data" in head  # source time + missing venue
             ours = page.locator("#team-rosters > .card").nth(0).inner_text()
-            assert "Home" in ours and "Ann Archer" in ours and "\t1\t" in ours
+            assert "Home" in ours and "Ann Archer" in ours and "Ann Archer\t4\t" in ours
 
             page.evaluate("window.print = () => { window.__printed = true; }")
             page.click("#print-matchup")
@@ -1311,22 +1311,22 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
             heads = page.locator(".rank-block h3").all_inner_texts()
             # Opponents in roster order (SL high to low): Drew 6, Finn 4, Cam 3.
             assert heads == [
-                "vs Drew Diaz (APA record ID 4) · SL 6 · 1 recorded game in 8-Ball",
-                "vs Finn Frost (APA record ID 5) · SL 4 · 0 recorded games in 8-Ball",
-                "vs Cam Cole (APA record ID 3) · SL 3 · 2 recorded games in 8-Ball",
+                "vs Drew Diaz · SL 6 · 1 recorded game in 8-Ball",
+                "vs Finn Frost · SL 4 · 0 recorded games in 8-Ball",
+                "vs Cam Cole · SL 3 · 2 recorded games in 8-Ball",
             ]
             assert _ranking_rows(page, 0) == [
-                ["≈", "Bea Baker (APA record ID 2)", "5", "No verified direct meetings in this snapshot",
+                ["≈", "Bea Baker", "5", "No verified direct meetings in this snapshot",
                  "1 shared opponent · ours 1-0 (1 game) · theirs 0-1 (1 game)",
                  "Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; "
                  "compare ours vs theirs"],
-                ["—", "Ann Archer (APA record ID 1)", "4", "No verified direct meetings in this snapshot", "No shared opponents",
+                ["—", "Ann Archer", "4", "No verified direct meetings in this snapshot", "No shared opponents",
                  "No verified direct or shared-opponent evidence in this snapshot"],
             ]
             notes = page.locator(".rank-block p.muted").all_inner_texts()
             assert notes[0] == "1 of 2 of our players have direct or shared-opponent evidence against this opponent."
             assert notes[1] == "No recorded 8-Ball games for this opponent in the verified evidence — nothing to rank on."
-            assert _ranking_rows(page, 2)[0] == ["1", "Ann Archer (APA record ID 1)", "4", "2-0 (2 meetings)",
+            assert _ranking_rows(page, 2)[0] == ["1", "Ann Archer", "4", "2-0 (2 meetings)",
                                                 "No shared opponents", "Direct record"]
             text = page.locator("#team-matchups").inner_text()
             assert "not a win probability" in text and "not a guaranteed or optimal lineup" in text
@@ -1376,14 +1376,14 @@ def test_ties_are_marked_and_explained_never_broken_silently(tmp_path: Path):
             page.select_option("#team-b", "Falcons|d1|Spring 2026")
             cam = _ranking_rows(page, 2)
             assert [r[0] for r in cam[:2]] == ["1=", "1="]
-            assert cam[0][5] == ("Direct record · Tied with Gia Green (APA record ID 9) — same evidence; "
+            assert cam[0][5] == ("Direct record · Tied with Gia Green — same evidence; "
                                  "the ranking can't separate them")
-            assert cam[1][5] == ("Direct record · Tied with Ann Archer (APA record ID 1) — same evidence; "
+            assert cam[1][5] == ("Direct record · Tied with Ann Archer — same evidence; "
                                  "the ranking can't separate them")
             assert cam[2][0] == "—"  # Bea: no evidence, unranked
             glance = page.locator("#team-matchups table").first.inner_text()
-            assert ("Insufficient evidence to distinguish Ann Archer (APA record ID 1) / Gia Green (APA record ID 9) "
-                    "against Cam Cole (APA record ID 3) — identical direct records (2-0, 2 meetings each).") in glance
+            assert ("Insufficient evidence to distinguish Ann Archer / Gia Green "
+                    "against Cam Cole — identical direct records (2-0, 2 meetings each).") in glance
         finally:
             browser.close()
 

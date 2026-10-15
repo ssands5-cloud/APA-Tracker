@@ -77,15 +77,15 @@
   function wrQuickReadBadges(c,b,hasNote){
     var tg=c.their_games,badges=[];
     if(tg){
-      badges.push((tg>=3?"✅ ":"⚠ ")+"Direct evidence: "+plural(tg,"meeting")+(tg>=3?"":" (small sample)"));
+      badges.push((tg>=3?"✅ ":"⚠ ")+"Direct meetings vs roster: "+plural(tg,"meeting")+(tg>=3?"":" (small sample)"));
     } else {
       var shared=b.rows.filter(function(r){return r.category==="I";});
       if(shared.length){
         var total=shared.reduce(function(a,r){return a+r.c.shared;},0),strong=shared.length>=3||total>=6;
-        badges.push((strong?"✅ ":"⚠ ")+"Shared-opponent evidence: "+plural(shared.length,"player")+", "+plural(total,"shared game")+(strong?"":" (thin)"));
+        badges.push((strong?"✅ ":"⚠ ")+"Shared-opponent evidence: "+plural(shared.length,"player")+", "+plural(total,"opponent link")+(strong?"":" (thin)"));
       } else badges.push("⚠ No evidence on our roster");
     }
-    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Weak against "+c.losing_sl);
+    if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") badges.push("⚠ Recorded losses vs "+c.losing_sl);
     if(!hasNote) badges.push("❓ No coach observations");
     return badges;
   }
@@ -95,7 +95,7 @@
     if(!tg) parts.push("Unknown vs our roster — no meetings (not weak)");
     else parts.push((tw>tg-tw?"Threat":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+")");
     var names=function(g){return g.map(function(r){return r.member.name;}).join(", ");},done=false;
-    [["G","Best answer on record"],["E","Even option on record"]].forEach(function(x){
+    [["G","Historical top record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
       parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top.length>1?", tied":"")+")");done=true;});
@@ -305,7 +305,7 @@
     var f=rows[0],tag;
     if(f.category==="I"){var n=rows.filter(function(r){return r.category==="I";}).length;tag="shared-opponent candidate, not ordered ("+(n===1?"the only one":"one of "+n)+"): ";}
     else{var t=rows.filter(function(r){return (r.category==="G"||r.category==="E")&&wrGroupKey(r)===wrGroupKey(f);}).length;
-      tag=t===1?"best-supported send: ":"best-supported send (tied with "+(t-1)+" other"+(t>2?"s":"")+", same evidence): ";}
+      tag=t===1?"first by recorded direct results: ":"first by recorded direct results (tied with "+(t-1)+" other"+(t>2?"s":"")+", same evidence): ";}
     return tag+f.player+" — reason: "+f.reason;
   }
   window.__ucSendTexts=function(ourKey,oppKey,fmt,remainingIds){
@@ -325,15 +325,7 @@
   // Captain-facing name with no APA record ID. Every lookup still keys on member.id. Duplicate
   // names on the roster are told apart by a differing captured skill level, or else a readable
   // position among the duplicates -- never the raw record ID.
-  function wrDisplayName(member,roster){
-    var name=member.name,lname=String(name).trim().toLowerCase();
-    var dupes=roster.filter(function(m){return m.id!==member.id&&String(m.name||"").trim().toLowerCase()===lname;});
-    if(!dupes.length) return name;
-    var sl=member.skill_level,otherSl={};dupes.forEach(function(m){otherSl[m.skill_level]=true;});
-    if(wrKnown(sl)&&!otherSl[sl]) return name+" (SL "+sl+")";
-    var group=[member].concat(dupes).sort(memberOrder),pos=group.indexOf(member)+1;
-    return name+" ("+pos+" of "+group.length+" by this name)";
-  }
+  function wrDisplayName(member,roster){return playerRef(member);}
   function wrNextSend(w,j,rem,unplayed){
     var b=w.blocks[j],roster=w.ours;
     if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",ranked:[],unordered:[],avoid:[],unknown:[]};
@@ -349,7 +341,7 @@
     groups.forEach(function(group,g){
       var medal=g<WR_MEDALS.length?WR_MEDALS[g]:"";
       group.forEach(function(r){var save=onlyGreen[String(r.member.id)];
-        ranked.push({rank:r.rank,medal:medal,member:r.member,display:wrDisplayName(r.member,roster),category:r.category,reason:r.reason,
+        ranked.push({rank:r.rank,choice_number:g+1,medal:medal,member:r.member,display:wrDisplayName(r.member,roster),category:r.category,reason:r.reason,
           tied_with:group.filter(function(o){return o!==r;}).map(function(o){return wrDisplayName(o.member,roster);}),
           save:save?"consider saving — our only favorable direct option vs "+save.join(", "):""});});
     });
@@ -358,18 +350,18 @@
               save:sv?"consider saving — our only favorable direct option vs "+sv.join(", "):""};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return wrDisplayName(r.member,roster);});
-    var headline=ranked.length?"Best-supported response: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
-      :unordered.length?"No direct record to order — shared-opponent candidates only (≈, not ordered)"
+    var headline=ranked.length?"First by recorded direct results: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
+      :unordered.length?"No favorable/even direct option — shared-opponent candidates only (≈, not ordered)"
       :"No evidence-backed option left among our remaining players";
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
   function wrNextSendLines(ns){
     var lines=[ns.headline];
-    ns.ranked.forEach(function(m){var prefix=m.medal?m.medal:(m.rank+".");
+    ns.ranked.forEach(function(m){var prefix=m.choice_number+".";
       lines.push(prefix+" "+m.display+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
     ns.unordered.forEach(function(u){lines.push("≈ "+u.display+" — "+u.reason+(u.save?" · "+u.save:""));});
     ns.avoid.forEach(function(a){lines.push("⚠ Avoid "+a.display+" — "+a.reason);});
-    if(ns.unknown.length) lines.push("❓ Unknown (no verified evidence, not weak): "+ns.unknown.join(", "));
+    ns.unknown.forEach(function(name){lines.push("❓ Unknown (no verified evidence, not weak): "+name);});
     return lines;
   }
   window.__ucNextSend=function(ourKey,oppKey,fmt,j,remainingIds,unplayed){
@@ -476,7 +468,7 @@
     var av=wrAvail(plan.ck,b.member.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';
     return '<div class="blind-send'+(b.weak?" weak":"")+'">'
       +'<span class="bs-label">If we put up first</span>'
-      +'<b class="bs-name">'+esc(b.member.name)+'</b>'
+      +'<b class="bs-name">'+esc(playerRef(b.member))+'</b>'
       +'<span class="bs-why">'+esc(b.why)+av+'</span></div>'
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
@@ -547,7 +539,21 @@
   }
 
   // The Next Send card: chips for every unplayed opponent (the one they put up), then the responses.
-  function wrNextSendCard(w,plan){
+  function wrCandidateBudget(w,plan,ta,member){
+    var b=wrLineupBudget(w,plan,ta,member.id);
+    if(!b||!b.slots) return "";
+    var text="",bad=false;
+    if(b.sendingKeepsLegal===false){
+      bad=true;
+      text="Skill cap: this choice exceeds your entered skill budget for the remaining lineup";
+      if(b.unknown) text+=" using captured SLs; "+b.unknown+" SL unknown — check manually";
+    } else if(b.sendingKeepsLegal===null||b.unknown){
+      text="Entered skill-budget check incomplete — missing skill levels or remaining players";
+    }
+    return text?'<span class="ns-budget'+(bad?' bad':'')+'">'+esc(text)+'</span>':"";
+  }
+
+  function wrNextSendCard(w,plan,ta){
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
@@ -568,19 +574,19 @@
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
       +ns.ranked.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
-        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.medal||(m.rank+"."))+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
+        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
-        +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+'</span>'
+        +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
         // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
         var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
-          +(ns.unknown.length?li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(ns.unknown.join(", "))):"");
+          +ns.unknown.map(function(name){return li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(name));}).join("");
         if(!ns.ranked.length) return unord+rest+'</ul>';
         if(!unord&&!rest) return '</ul>';
         var sum=[];
-        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.display+" ("+(a.reason.split(" ")[0])+")";}).join(", "));
+        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.display+" ("+a.reason.split(" — ")[0].replace(" direct record","")+")";}).join(", "));
         if(ns.unordered.length) sum.push("≈ "+ns.unordered.length+" not ordered");
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
@@ -626,7 +632,7 @@
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
       +wrBlindSendCard(w,plan,ta)
-      +wrNextSendCard(w,plan)
+      +wrNextSendCard(w,plan,ta)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
@@ -688,13 +694,13 @@
       return w.matrix.reduce(function(n,row){return n+(plan.rem[String(row.member.id)]&&row.cells[j].category==="G"?1:0);},0);
     });
     var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){
-      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(o.name)+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+' · ID '+esc(recordIdText(o))+'</span>'
+      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(playerRef(o))+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+'</span>'
         +'<span class="green-count" title="Favorable direct options among our remaining players">🟢×'+colGreen[j]+'</span></th>';
     }).join("")+'</tr>';
     var body=w.matrix.map(function(row,i){
       var m=row.member,out=!plan.rem[String(m.id)];
       var rowGreen=row.cells.filter(function(c,j){return plan.unplayed[j]&&c.category==="G";}).length;
-      return '<tr class="'+(out?'out':'')+'"><th>'+esc(m.name)+'<span class="id-line">SL '+esc(slText(m))+' · ID '+esc(recordIdText(m))+'</span>'
+      return '<tr class="'+(out?'out':'')+'"><th>'+esc(playerRef(m))+'<span class="id-line">SL '+esc(slText(m))+'</span>'
         +'<span class="green-count" title="Favorable direct options among unplayed opponents">🟢×'+rowGreen+'</span></th>'
         +row.cells.map(function(c,j){
           var on=pair&&pair.our===String(m.id)&&pair.opp===String(w.theirs[j].id);
@@ -716,8 +722,8 @@
     var ourRows=w.ours.map(function(m){
       var a=wrAvail(plan.ck,m.id),l=wrLineup(plan.ck,m.id),pid=esc(m.id);
       return '<tr class="'+(plan.rem[String(m.id)]?'':'out')+'"><td>'+esc(playerRef(m))+'</td><td>'+esc(slText(m))+'</td>'
-        +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(m.name)+'">'+["Unknown","Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
-        +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(m.name)+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td></tr>';
+        +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(playerRef(m))+'">'+["Unknown","Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
+        +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(playerRef(m))+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td></tr>';
     }).join("");
     var oppRows=w.theirs.map(function(o,j){
       return '<tr class="'+(plan.unplayed[j]?'':'out')+'"><td>'+esc(playerRef(o))+'</td><td>'+esc(slText(o))+'</td><td><label class="inline"><input type="checkbox" class="plan" data-plan="played" data-pid="'+esc(o.id)+'"'+(plan.unplayed[j]?'':' checked')+'> Played</label><span class="print-only">'+(plan.unplayed[j]?'—':'Played')+'</span></td></tr>';
@@ -725,8 +731,8 @@
     var cap=WR_PLAN.cap[ta.key];
     document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for this fixture</button></div>'
       +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
-      +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player (APA record ID)</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
-      +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player (APA record ID)</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
+      +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
+      +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
       +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
@@ -739,7 +745,7 @@
       })()
       +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
     // Scouting cards
-    document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Recorded facts per opponent. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
+    document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Full-roster history; ignores tonight’s availability marks. Use Next Send for current choices. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
       +w.cards.map(function(c,j){
         var pid=esc(c.opponent.id),cc=wrCoach(c.opponent.id),played=!plan.unplayed[j];
         var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
@@ -774,7 +780,7 @@
     return '<div class="pair cat-border-'+row.category+'"><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
       +'<p>'+wrChip(row.category)+' <b>'+esc(WR_CAT_LABELS[row.category])+'</b> · rank '+esc(row.rank)+' of '+block.rows.length+' vs this opponent · '+esc(row.explanation)+'</p>'
       +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No verified direct meetings in this snapshot.</p>')
-      +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(m.name)+' vs them</th><th>'+esc(o.name)+' vs them</th></tr></thead><tbody>'
+      +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(playerRef(m))+' vs them</th><th>'+esc(playerRef(o))+' vs them</th></tr></thead><tbody>'
         +shared.slice(0,25).map(function(k){return '<tr><td>'+esc(PLAYERS[k]?playerRef(PLAYERS[k]):k)+'</td><td>'+esc(wlText(mm[k].w,mm[k].g)+" ("+plural(mm[k].g,"game")+")")+'</td><td>'+esc(wlText(om[k].w,om[k].g)+" ("+plural(om[k].g,"game")+")")+'</td></tr>';}).join("")+'</tbody></table></div>'
         +(shared.length>25?'<p class="muted">Showing 25 of '+shared.length+' (largest combined samples).</p>':''):'<p class="muted">No shared opponents.</p>')
       +'</div>';

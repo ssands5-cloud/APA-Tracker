@@ -8,8 +8,7 @@ Player vs Player pairs), and the ordering rule is fixed and disclosed:
 1. players with DIRECT meetings against that opponent first, ordered by
    their observed direct record, then by more meetings;
 2. then players with only SHARED-OPPONENT results (opponents both players
-   have faced), ordered by our player's record against those shared
-   opponents, then by more shared opponents, then by more games;
+   have faced), shown together as an unranked comparison group;
 3. players with neither are listed last and NOT ranked.
 
 Identical evidence is a tie ("2=") and is explained, never broken silently.
@@ -18,7 +17,7 @@ not a guaranteed or optimal lineup. The standalone HTML mirrors these rules
 and texts in JavaScript (ui/ultimate_coach.py); a browser test checks both
 produce the same ranking for the same rosters.
 
-Players are always named alongside their APA record ID; every lookup keys
+Names use readable labels; record IDs are available on Players. Every lookup keys
 on the verified player id and roster scope, never on a name.
 """
 
@@ -67,10 +66,22 @@ def record_text(wins: int, games: int) -> str:
     return f"{wins}-{games - wins}"
 
 
+def player_display_labels(players) -> dict[str, str]:
+    """Unique readable names, with stable ordinal labels only for duplicate names."""
+    groups = defaultdict(list)
+    for p in players:
+        groups[p["name"].strip().casefold()].append(p)
+    labels = {}
+    for group in groups.values():
+        group.sort(key=lambda p: str(p.get("external_id") or ""))
+        for position, p in enumerate(group, 1):
+            labels[str(p.get("external_id"))] = (p["name"] if len(group) == 1 else
+                f"{p['name']} (player {position} of {len(group)})")
+    return labels
+
+
 def player_ref(member: dict[str, Any]) -> str:
-    external_id = member.get("external_id")
-    shown = "not captured" if external_id in (None, "") else str(external_id)
-    return f"{member['name']} (APA record ID {shown})"
+    return member.get("display_name") or member["name"]
 
 
 def display_name(member: dict[str, Any], roster: Iterable[dict[str, Any]]) -> str:
@@ -82,6 +93,8 @@ def display_name(member: dict[str, Any], roster: Iterable[dict[str, Any]]) -> st
     captured skill level that differs tells them apart; if even that ties
     (or is missing), a readable "(n of m by this name)" position does --
     never the raw record ID, per NAME-DISPLAY-01."""
+    if member.get("display_name"):
+        return member["display_name"]
     name = member["name"]
     dupes = [m for m in roster
              if m["id"] != member["id"] and str(m.get("name", "")).strip().lower() == str(name).strip().lower()]
@@ -169,12 +182,12 @@ def rank_vs_opponent(
             else:
                 basis = "No verified direct or shared-opponent evidence in this snapshot"
             if tied:
-                others = [player_ref(o["member"]) for o in group if o is not c]
+                others = [display_name(o["member"], our_members) for o in group if o is not c]
                 basis += " · Tied with " + ", ".join(others) + " — same evidence; the ranking can't separate them"
             rows.append({
                 "rank": (f"{start_rank}=" if tied else str(start_rank)) if ranked else
                         ("≈" if c["tier"] == TIER_SHARED else "—"),
-                "member": c["member"], "player": player_ref(c["member"]), "tier": c["tier"],
+                "member": c["member"], "player": display_name(c["member"], our_members), "tier": c["tier"],
                 "direct_text": direct_text, "shared_text": shared_text, "basis": basis,
                 "direct": c["direct"], "shared_count": c["shared_count"], "ours": c["ours"], "theirs": c["theirs"],
             })
@@ -271,11 +284,13 @@ def members_by_scope(rosters: list[dict[str, Any]], players: list[dict[str, Any]
     """Roster members per scope from analytics.ultimate_coach_excel_payload.build_team_rosters()
     rows -- the same live-SL-else-division-SL rule the HTML's TEAM_INDEX uses."""
     external_ids = {p["id"]: p.get("external_id") for p in players}
+    labels = player_display_labels(players)
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rosters:
         out[row["team_scope_key"]].append({
             "id": row["player_id"], "external_id": external_ids.get(row["player_id"]), "name": row["player_name"],
             "skill_level": row["skill_level"],
+            "display_name": labels.get(str(external_ids.get(row["player_id"])), row["player_name"]),
             "matches_won": row.get("matches_won"), "matches_played": row.get("matches_played"),
         })
     return out

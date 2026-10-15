@@ -118,6 +118,7 @@ def _text(value: Any, empty: str = "No data") -> str:
 def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any], rosters: list[dict[str, Any]],
                         teams: list[dict[str, Any]], pairs: list[dict[str, Any]], built_at: str) -> dict[str, Any]:
     players = payload.get("players") or []
+    labels = base._player_labels(players)
     tz_name = match_day.get("display_timezone") or DEFAULT_MATCH_DAY_TIMEZONE
     index = build_pair_index(pairs)
     members = members_by_scope(rosters, players)
@@ -165,8 +166,8 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
             concern_rows.append([f"{key}|{k}", item["our"]["id"], item["opp"]["id"], item["text"]])
         max_concern = max(max_concern, min(len(wr["concerning"]), CONCERNING_SLOTS))
         for k, game in enumerate(wr["meetings"], start=1):
-            meeting_rows.append([f"{key}|{k}", game["date"], base._player_label(game["our"]["name"], game["our"]["external_id"]),
-                                 base._player_label(game["opp"]["name"], game["opp"]["external_id"]),
+            meeting_rows.append([f"{key}|{k}", game["date"], labels.get(str(game["our"]["external_id"]), game["our"]["name"]),
+                                 labels.get(str(game["opp"]["external_id"]), game["opp"]["name"]),
                                  _text(game["result"]), _text(game["own_sl"]), _text(game["opp_sl"]),
                                  _text(game["session"]), _text(game["points"]), key])
         max_meetings = max(max_meetings, len(wr["meetings"]))
@@ -298,7 +299,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            f'MATCH(TRIM({md}$B$6),Players_Table[Player Label],0)),TRIM({md}$B$6))))')
     e.cell("uc_ViewerName", "Player name",
            '=IF(uc_ViewerKey="","",IFERROR(INDEX(Players_Table[Player Name],MATCH(uc_ViewerKey,Players_Table[External ID],0)),""))')
-    e.cell("uc_ViewerLabel", "Player label", '=IF(uc_ViewerName="","",uc_ViewerName&" (APA record ID "&uc_ViewerKey&")")')
+    e.cell("uc_ViewerLabel", "Player label", '=IF(uc_ViewerKey="","",IFERROR(INDEX(Players_Table[Player Label],MATCH(uc_ViewerKey,Players_Table[External ID],0)),""))')
     e.cell("uc_TeamCount", "Current team scopes",
            '=IF(uc_ViewerName="",0,COUNTIF(PlayerTeams_Table[APA Record ID],uc_ViewerKey))')
     e.cell("uc_FormatInput", "Format input", "=" + guard(f"{md}$B$8"))
@@ -622,7 +623,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     ])
     e.cell("wr_PkTotal", "Packet evidence lines", "=SUM(wr_OppCount)")
 
-    # ---- best-supported sends per opponent (ranking order, sendable + remaining) ----
+    # ---- first by recorded direct results per opponent (ranking order, sendable + remaining) ----
     e.section("Best-supported sends (per opponent: candidate rows in ranking order)")
     # Per opponent j, one row per ranked candidate: pid, category, remaining, sendable (ok), running count of
     # sendable rows, evidence group key (MatchupEvidence_Table[Rank Group]), direct (G/E and ok), group number
@@ -675,8 +676,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         n_i = f'COUNTIFS({rng["cat"]},"I",{rng["ok"]},TRUE)'
         tie = f'COUNTIFS({rng["grp"]},1,{rng["dir"]},TRUE)'
         tag = (f'IF(INDEX({rng["cat"]},{m})="I","shared-opponent candidate, not ordered ("&IF({n_i}=1,"the only one",'
-               f'"one of "&{n_i})&"): ",IF({tie}>1,"best-supported send (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
-               f'", same evidence): ","best-supported send: "))')
+               f'"one of "&{n_i})&"): ",IF({tie}>1,"first by recorded direct results (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
+               f'", same evidence): ","first by recorded direct results: "))')
         return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR({tag}&'
                 f'INDEX(MatchupEvidence_Table[Player],{row})&" — reason: "&INDEX(MatchupEvidence_Table[Reason],{row}),""))')
 
@@ -729,25 +730,18 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
     e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
-    medal = 'IF(H{r}=1,"🥇",IF(H{r}=2,"🥈",IF(H{r}=3,"🥉",H{r}&".")))'
+    medal = 'H{r}&"."'
 
     def _nm(expr: str, slot: str) -> str:
-        """Player label without its "(APA record ID n)" suffix (NAME-DISPLAY-01); Players sheet keeps the ID.
-
-        `slot` is the player's roster position. If another rostered player shares the name, the skill level
-        tells them apart ("Name (SL 5)"); if that ties too, the full label with its record ID is kept, since
-        a readable distinction beats a hidden one."""
-        base = f'LEFT({expr},IFERROR(FIND(" (APA record ID",{expr})-1,LEN({expr})))'
-        like = f'{base}&" (APA record ID*"'
-        return (f'IF(COUNTIF(wr_OurLabels,{like})<2,{base},IF(AND(INDEX(wr_OurSLNum,{slot})<>"",COUNTIFS(wr_OurLabels,{like},wr_OurSLNum,INDEX(wr_OurSLNum,{slot}))=1),'
-                f'{base}&" (SL "&INDEX(wr_OurSLNum,{slot})&")",{expr}))')
+        # Lookup labels are already unique display names; identity columns are unchanged.
+        return expr
 
     def _join(k: int, r: int, col: str, cond: str, text: str) -> str:
         """Running ", "-joined list down a column; the last row holds the whole list (no TEXTJOIN needed)."""
         if k == 1:
             return f'=IF({cond},{text},"")'
         prev = f"{col}{r - 1}"
-        return f'=IF({cond},{prev}&IF({prev}="","","; ")&{text},{prev})'
+        return f'=IF({cond},{prev}&IF({prev}="","",CHAR(10))&{text},{prev})'
 
     e.block("Next Send ranked row", R, [
         ("wr_NsRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+{k})'),
@@ -779,7 +773,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
         'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ranked direct records among our '
-        'remaining players (same evidence = same rank). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No direct record to order — '
+        'remaining players (same evidence = same rank). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
     # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
     # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
@@ -937,7 +931,7 @@ def build_match_day(wb, *, slots: dict[str, int], viewer_label: str | None, view
           font=WARN_FONT if stale else base.MUTED_FONT, height=58 if stale else 30)
     base._section(ws, 5, "1 · Set up the matchup (yellow = your input)", last_col=12)
     rows = [
-        (6, "Player", viewer_label or "", "Pick your name — every entry shows the APA record ID. Typing just the record ID also works.",
+        (6, "Player", viewer_label or "", "Pick your name/label. Record IDs are available on Players.",
          "PlayerLabelList"),
         (7, "Team", default_team or "", "Only this player's current teams (team · session · format).", "uc_TeamList"),
         (8, "Format", "8-Ball & 9-Ball", "Default: every 8-Ball and 9-Ball variant. Or pick one recorded format.",
@@ -1034,8 +1028,8 @@ def _roster_section(ws, top: int, R: int, *, title_ours: str, title_theirs: str)
     ws.cell(row=top, column=7).font = base.SECTION_FONT
     _span(ws, top, 2, 5, title_ours, font=base.SUBHEAD_FONT)
     _span(ws, top, 8, 12, title_theirs, font=base.SUBHEAD_FONT)
-    base._subheader(ws, top + 1, [(1, "Player (APA record ID)"), (3, "SL"), (4, "Team W-L"), (5, "Availability · lineup"),
-                                  (7, "Player (APA record ID)"), (9, "SL"), (10, "Team W-L"), (11, "vs our roster"),
+    base._subheader(ws, top + 1, [(1, "Player"), (3, "SL"), (4, "Team W-L"), (5, "Availability · lineup"),
+                                  (7, "Player"), (9, "SL"), (10, "Team W-L"), (11, "vs our roster"),
                                   (12, "Played")])
     for k in range(1, R + 1):
         r = top + 1 + k
@@ -1089,7 +1083,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
           font=base.MUTED_FONT, height=30)
 
     top = end + 2
-    base._section(ws, top, "Top opportunities — best-supported sends (favorable direct first, then even, then indirect)",
+    base._section(ws, top, "Top opportunities — first by recorded direct results (favorable direct first, then even, then indirect)",
                   last_col=12)
     for k in range(1, R + 1):
         r = top + k
@@ -1206,7 +1200,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     _span(ws, top + 1, 7, 12, f'=IF({insp}="","Pick an opponent to rank our players against them (ranking rule below).","")',
           font=base.MUTED_FONT)
     j_ref = f'IFERROR(MATCH({insp},wr_OppLabels,0),"")'
-    base._subheader(ws, top + 2, [(1, "Our player (APA record ID)"), (3, "Rank"), (4, "SL"), (5, "Direct record"),
+    base._subheader(ws, top + 2, [(1, "Our player"), (3, "Rank"), (4, "SL"), (5, "Direct record"),
                                   (7, "Shared-opponent evidence (samples)"), (10, "Basis · ties · missing evidence")])
     for rr in range(1, R + 1):
         r = top + 2 + rr
@@ -1232,7 +1226,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     _dv(ws, f"C{top2}", "wr_OurLabels", "Pick one of our players.")
     insp2 = f"$C${top2}"
     i_ref = f'IFERROR(MATCH({insp2},wr_OurLabels,0),"")'
-    base._subheader(ws, top2 + 1, [(1, "Opponent (APA record ID)"), (3, "Evidence"), (5, "Direct record"),
+    base._subheader(ws, top2 + 1, [(1, "Opponent"), (3, "Evidence"), (5, "Direct record"),
                                    (7, "Shared-opponent evidence (samples)"), (10, "Rank vs this opponent")])
     for j in range(1, R + 1):
         r = top2 + 1 + j
@@ -1426,7 +1420,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         f"⚠ Match Day’s fixture is {_longest_plan_key(wb)} — availability, lineup and played are "
         "NOT applied. Notes still are.", status_width, 11, 30)
     base._section(ws, 10, "Our roster — availability and lineup (blank availability = Unknown)", last_col=6)
-    base._subheader(ws, 11, [(1, "#"), (2, "Player (APA record ID)"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])
+    base._subheader(ws, 11, [(1, "#"), (2, "Player"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])
     our_first = 12
     avail = DataValidation(type="list", formula1='"' + ",".join(AVAILABILITY_CHOICES) + '"', allow_blank=True)
     lineup = DataValidation(type="list", formula1='"' + ",".join(LINEUP_CHOICES) + '"', allow_blank=True)
@@ -1446,7 +1440,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         ws.cell(row=r, column=6, value=f'=INDEX(ll_OurWL,{k})')
     opp_top = our_first + R + 1
     base._section(ws, opp_top, "Opponent roster — who has played, and your scouting notes", last_col=6)
-    base._subheader(ws, opp_top + 1, [(1, "#"), (2, "Player (APA record ID)"), (3, "Played"), (4, "Coach notes"), (5, "SL"),
+    base._subheader(ws, opp_top + 1, [(1, "#"), (2, "Player"), (3, "Played"), (4, "Coach notes"), (5, "SL"),
                                       (6, "Team W-L")])
     opp_first = opp_top + 2
     for k in range(1, R + 1):
@@ -1635,8 +1629,8 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, c1 + 1, c1 + 4 if c1 == 1 else 12, sub, font=font(10.5, bold=True, color=base.FELT_DEEP))
     h(r, 18)
     r += 1
-    for col, text in ((1, "Player (APA record ID)"), (3, "SL"), (4, "Team W-L"), (5, "Availability · lineup"),
-                      (7, "Player (APA record ID)"), (11, "SL · Team W-L"), (12, "Played")):
+    for col, text in ((1, "Player"), (3, "SL"), (4, "Team W-L"), (5, "Availability · lineup"),
+                      (7, "Player"), (11, "SL · Team W-L"), (12, "Played")):
         cell = ws.cell(row=r, column=col, value=text)
         cell.font = font(9, bold=True, color=base.FELT_DEEP)
         cell.fill = base.SUBHEAD_FILL
@@ -1730,7 +1724,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                              "(n shared) = records against shared opponents. Basis = the evidence category.",
           font=font(9, color="5B6A61"))
     h(p3 + 1, 26)
-    EVIDENCE_HEADINGS = ((1, "Opponent (APA record ID)"), (3, "Rank"), (4, "Our player (APA record ID)"),
+    EVIDENCE_HEADINGS = ((1, "Opponent"), (3, "Rank"), (4, "Our player"),
                          (8, "Evidence"), (11, "Basis"))
 
     def _evidence_header(row: int) -> None:
@@ -1800,7 +1794,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     blocks = ((1, 1, 2, 5), (7, 8, 9, 12))     # (first col, date/result to, names from, names to)
     for c0, cd, cn, c9 in blocks:
         _span(ws, hdr, c0, cd, "No. Date / Result · SL ours/theirs", font=font(9, bold=True, color=base.FELT_DEEP))
-        _span(ws, hdr, cn, c9, "Our player (APA record ID) / vs Opponent (APA record ID)", font=font(9, bold=True, color=base.FELT_DEEP))
+        _span(ws, hdr, cn, c9, "Our player / vs Opponent", font=font(9, bold=True, color=base.FELT_DEEP))
     for c in range(1, 13):
         ws.cell(row=hdr, column=c).fill = base.SUBHEAD_FILL
     h(hdr, 16)
@@ -1949,13 +1943,13 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
     headline = ("Ranked direct records among our remaining players (same evidence = same rank). Recorded "
                 "results only — not odds.")
-    medal = (f"🥇 {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+    medal = (f"1. {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
     rest = max(roster - medals, 0)
     lines = [headline] + [medal] * medals
     if rest:
         lines.append("≈ Not ordered (shared-opponent results only): "
-                     + "; ".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
+                     + "\n".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
         lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {label}"]
     return "\n".join(lines)
 
@@ -2216,11 +2210,11 @@ def build_coach_notes(wb) -> None:
         ws.column_dimensions[letter].width = width
     _span(ws, 1, 1, 5, "Coach Notes — your observations (opinions, not APA facts)", font=Font(bold=True, size=18, color=base.FELT_DEEP),
           wrap=False, height=30)
-    _span(ws, 2, 1, 5, "One row per player. Pick the player (name + APA record ID), up to two tags, and write what you saw. "
+    _span(ws, 2, 1, 5, "One row per player. Pick the player name/label, up to two tags, and write what you saw. "
                        "These notes appear on that player's scouting card and in the Captain Packet, always marked “Coach:”. "
                        "They never change any recorded result.", font=Font(size=10, color="5B6A61"), height=30)
     _link(ws, 1, 7, "← START HERE", "START HERE")
-    heads = ["Player (APA record ID)", "Tag 1", "Tag 2", "Observation", "Date noted"]
+    heads = ["Player", "Tag 1", "Tag 2", "Observation", "Date noted"]
     for c, text in enumerate(heads, start=1):
         cell = ws.cell(row=4, column=c, value=text)
         cell.font = Font(bold=True, color="FFFFFF")
