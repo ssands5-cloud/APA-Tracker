@@ -159,3 +159,14 @@ def test_shared_opponent_candidates_are_not_ordered_by_our_record_alone():
     assert "theirs 10-0" in ranked[0]["shared_text"] and "theirs 0-10" in ranked[1]["shared_text"]
     assert all("not ordered against other indirect candidates" in r["basis"] for r in ranked)
     assert not any("Tied with" in r["basis"] for r in ranked)
+
+
+def test_precomputed_duplicate_label_does_not_hide_distinguishing_roster_skill():
+    from analytics.ultimate_coach_matchup_evidence import display_name
+    a = dict(_m(1, "Ann", sl=5), display_name="Ann (player 1 of 2)")
+    b = dict(_m(2, "Ann", sl=4), display_name="Ann (player 2 of 2)")
+    assert display_name(a, [a,b]) == "Ann (SL 5)"
+    assert display_name(b, [a,b]) == "Ann (SL 4)"
+    # Identical/missing cues must still preserve two separate identities.
+    b['skill_level'] = 5
+    assert display_name(a, [a,b]) != display_name(b, [a,b])

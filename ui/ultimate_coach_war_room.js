@@ -30,7 +30,7 @@
   var WR_CAT_WORD={G:"favorable",R:"concerning",E:"even"};
   // Why a player appears as a send (mirrors analytics.ultimate_coach_war_room.reason).
   function wrReason(c){
-    if(c.direct) return wlText(c.direct.w,c.direct.g)+" direct record ("+plural(c.direct.g,"meeting")+") — "+WR_CAT_WORD[wrCategory(c)];
+    if(c.direct) return wlText(c.direct.w,c.direct.g)+" direct record ("+plural(c.direct.g,"meeting")+") — "+WR_CAT_WORD[wrCategory(c)]+(c.direct.g<3?" · small sample":"");
     if(c.shared) return "shared-opponent results only: ours "+wlText(c.ow,c.og)+" vs theirs "+wlText(c.tw,c.tg)+" across "+plural(c.shared,"shared opponent")+" (no verified direct meetings in this snapshot)";
     return "no recorded evidence";
   }
@@ -77,7 +77,7 @@
   function wrQuickReadBadges(c,b,hasNote){
     var tg=c.their_games,badges=[];
     if(tg){
-      badges.push((tg>=3?"✅ ":"⚠ ")+"Direct meetings vs roster: "+plural(tg,"meeting")+(tg>=3?"":" (small sample)"));
+      badges.push((tg>=3?"":"⚠ ")+"Direct meetings vs roster: "+plural(tg,"meeting")+(tg>=3?"":" (small sample)"));
     } else {
       var shared=b.rows.filter(function(r){return r.category==="I";});
       if(shared.length){
@@ -325,7 +325,12 @@
   // Captain-facing name with no APA record ID. Every lookup still keys on member.id. Duplicate
   // names on the roster are told apart by a differing captured skill level, or else a readable
   // position among the duplicates -- never the raw record ID.
-  function wrDisplayName(member,roster){return playerRef(member);}
+  function wrDisplayName(member,roster){
+    var dupes=roster.filter(function(m){return m.id!==member.id&&String(m.name||"").trim().toLowerCase()===String(member.name||"").trim().toLowerCase();});
+    if(dupes.length&&wrKnown(member.skill_level)&&!dupes.some(function(m){return m.skill_level===member.skill_level;}))
+      return member.name+" (SL "+member.skill_level+")";
+    return playerRef(member);
+  }
   function wrNextSend(w,j,rem,unplayed){
     var b=w.blocks[j],roster=w.ours;
     if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",ranked:[],unordered:[],avoid:[],unknown:[]};
@@ -547,13 +552,14 @@
       bad=true;
       text="Skill cap: this choice exceeds your entered skill budget for the remaining lineup";
       if(b.unknown) text+=" using captured SLs; "+b.unknown+" SL unknown — check manually";
-    } else if(b.sendingKeepsLegal===null||b.unknown){
-      text="Entered skill-budget check incomplete — missing skill levels or remaining players";
     }
     return text?'<span class="ns-budget'+(bad?' bad':'')+'">'+esc(text)+'</span>':"";
   }
 
   function wrNextSendCard(w,plan,ta){
+    var budget=wrLineupBudget(w,plan,ta,null);
+    var budgetScope=budget&&budget.slots&&(budget.unknown||budget.feasible===null)
+      ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete for these choices — missing skill levels or remaining players. Check manually.</p>':"";
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
@@ -572,7 +578,7 @@
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+'<ul class="ns-list">'
+      +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)

@@ -93,16 +93,16 @@ def display_name(member: dict[str, Any], roster: Iterable[dict[str, Any]]) -> st
     captured skill level that differs tells them apart; if even that ties
     (or is missing), a readable "(n of m by this name)" position does --
     never the raw record ID, per NAME-DISPLAY-01."""
-    if member.get("display_name"):
-        return member["display_name"]
     name = member["name"]
     dupes = [m for m in roster
              if m["id"] != member["id"] and str(m.get("name", "")).strip().lower() == str(name).strip().lower()]
     if not dupes:
-        return name
+        return player_ref(member)
     sl = member.get("skill_level")
     if sl is not None and sl not in {m.get("skill_level") for m in dupes}:
         return f"{name} (SL {sl})"
+    if member.get("display_name"):
+        return member["display_name"]
     group = sorted([member, *dupes], key=member_order_key)
     position = next(i for i, m in enumerate(group, start=1) if m["id"] == member["id"])
     return f"{name} ({position} of {len(group)} by this name)"

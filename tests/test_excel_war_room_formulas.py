@@ -547,8 +547,8 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
         "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds.",
-        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · availability unknown",
-        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · small sample · availability unknown",
+        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · availability unknown",
         f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
     ]
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
@@ -560,10 +560,10 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · availability unknown",
+    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · availability unknown",
                                     f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)"]
     book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
-    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even"
+    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 
@@ -579,7 +579,7 @@ def test_next_send_lists_every_rank_and_tells_same_name_teammates_apart_without_
     assert "APA record ID" not in text.split("⚠")[0]
     ranked = [x for x in lines if x[:2] in ("1.", "2.", "3.", "4.")]
     heads = [x.split(" — ")[0] for x in ranked]
-    assert heads[:3] == ["1. Ann Archer (player 1 of 2)", "2. Ann Archer (player 2 of 2)", "3. Gil Gray"], heads
+    assert heads[:3] == ["1. Ann Archer (SL 5)", "2. Ann Archer (SL 4)", "3. Gil Gray"], heads
     assert sorted(heads[3:]) == ["4. Dee Diaz", "4. Fay Fox"], heads      # tied fourth group, past the medals
 
 
@@ -593,10 +593,10 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient verified evidence in this snapshot: 1" in text
-    assert f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable" in text
+    assert f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: first by recorded direct results: {DEE} — reason: 1-1 direct record (2 meetings) — even" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: first by recorded direct results: {DEE} — reason: 1-1 direct record (2 meetings) — even · small sample" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
@@ -634,7 +634,7 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
     top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
     lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
     assert lines[:2] == [
-        f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable",
+        f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample",
         f"vs {EVE}: shared-opponent candidate, not ordered (the only one): {ANN} — reason: shared-opponent results only: "
         "ours 1-0 vs theirs 0-1 across "
         "1 shared opponent (no verified direct meetings in this snapshot)",
@@ -954,7 +954,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     rows = [[r for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
     assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2) · 1= {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
     assert best_send_text(rows[0]) == (f"first by recorded direct results (tied with 1 other, same evidence): {ANN} — reason: "
-                                       "2-0 direct record (2 meetings) — favorable")
+                                       "2-0 direct record (2 meetings) — favorable · small sample")
     # War Room top opportunities
     assert [x[1] for x in _opportunities(book, wb)] == [send_list_text(rows[0]), send_list_text(rows[1])]
     # Command Center
@@ -970,7 +970,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
     assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
-    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable"
+    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable · small sample"
 
 
 def test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause(built):
@@ -1186,8 +1186,8 @@ def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_ide
     book = Workbook(wb)
     book.set("Command Center", "C6", EVE)
     lines = _next_send(book)
-    assert any("Not ordered" in line and "Ann Archer (player 1 of 2)" in line for line in lines)
-    assert "Ann Archer (player 2 of 2) (availability unknown)" in lines
+    assert any("Not ordered" in line and "Ann Archer (SL 5)" in line for line in lines)
+    assert "Ann Archer (SL 4) (availability unknown)" in lines
     assert any("Avoid:" in line and "Fay Fox" in line for line in lines)
     assert "Dee Diaz — 0-2 (2 meetings)" in lines
     assert "Gil Gray" in lines  # a second unknown, separately visible

@@ -217,9 +217,9 @@ def test_career_genuine_zero_wins_is_kept():
 
 def test_reason_states_the_evidence_and_its_sample_size_only():
     from analytics.ultimate_coach_war_room import reason
-    assert reason({"direct": (2, 2)}) == "2-0 direct record (2 meetings) — favorable"
-    assert reason({"direct": (0, 1)}) == "0-1 direct record (1 meeting) — concerning"
-    assert reason({"direct": (1, 2)}) == "1-1 direct record (2 meetings) — even"
+    assert reason({"direct": (2, 2)}) == "2-0 direct record (2 meetings) — favorable · small sample"
+    assert reason({"direct": (0, 1)}) == "0-1 direct record (1 meeting) — concerning · small sample"
+    assert reason({"direct": (1, 2)}) == "1-1 direct record (2 meetings) — even · small sample"
     assert reason({"direct": None, "shared_count": 1, "ours": (1, 1), "theirs": (0, 1)}) == (
         "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)")
     assert reason({"direct": None, "shared_count": 0}) == "no recorded evidence"
@@ -237,7 +237,7 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
     assert [u["display"] for u in pip["unordered"]] == ["Bea"]
     assert next_send_lines(pip) == [
         "First by recorded direct results: Cal",
-        "1. Cal — 1-1 direct record (2 meetings) — even",
+        "1. Cal — 1-1 direct record (2 meetings) — even · small sample",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
         # who has not played. Sending her off this unordered list used to cost that silently.
         "≈ Bea — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
@@ -272,7 +272,7 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
     assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul"
     assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
-    assert "4. Cy — 1-1 direct record (2 meetings) — even" in next_send_lines(ns)
+    assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played
     assert next_send(wr, 0, remaining={1, 3, 4, 5})["ranked"][0]["tied_with"] == []
 
@@ -727,7 +727,7 @@ def _badge_row(category, direct=None, shared=0):
 def test_quick_read_states_the_actual_meeting_count_at_three_or_more():
     card, block = _badge_card([_badge_row("G", direct=(3, 4))])
     badges = quick_read_badges(card, block, has_note=True)
-    assert badges[0] == "✅ Direct meetings vs roster: 4 meetings", badges
+    assert badges[0] == "Direct meetings vs roster: 4 meetings", badges
 
 
 def test_quick_read_flags_a_small_sample_under_three_meetings_without_overclaiming_strength():
@@ -745,7 +745,7 @@ def test_quick_read_counts_concerning_records_as_evidence_not_its_absence():
     card, block = _badge_card([_badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2)), _badge_row("R", direct=(0, 2))])
     assert card["their_games"] == 6, card
     badges = quick_read_badges(card, block, has_note=True)
-    assert badges[0] == "✅ Direct meetings vs roster: 6 meetings", badges
+    assert badges[0] == "Direct meetings vs roster: 6 meetings", badges
     assert "no evidence" not in badges[0].lower(), badges
 
 
@@ -775,3 +775,12 @@ def test_quick_read_flags_missing_coach_observations_but_only_when_actually_miss
     card, block = _badge_card([_badge_row("G", direct=(3, 4))])
     assert "❓ No coach observations" in quick_read_badges(card, block, has_note=False)
     assert "❓ No coach observations" not in quick_read_badges(card, block, has_note=True)
+
+
+def test_next_send_one_game_leader_discloses_small_sample_without_reranking():
+    ours=[_m(1,"One meeting"),_m(2,"Ten meetings")];theirs=[_m(50,"Opponent")]
+    index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10)))
+    ns=next_send(war_room_pair(ours,theirs,index,"EIGHT"),0)
+    assert [r['member']['id'] for r in ns['ranked']]==[1,2]
+    assert 'small sample' in ns['ranked'][0]['reason']
+    assert 'small sample' not in ns['ranked'][1]['reason']

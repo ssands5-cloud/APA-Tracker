@@ -1239,10 +1239,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       group.forEach(function(c){{
         var ranked=c.tier===3,tied=ranked&&group.length>1;
         var basis=c.tier===3?"Direct record":(c.tier===2?"Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other indirect candidates; compare ours vs theirs":"No verified direct or shared-opponent evidence in this snapshot");
-        if(tied) basis+=" · Tied with "+group.filter(function(o){{return o!==c;}}).map(function(o){{return playerRef(o.member);}}).join(", ")+" — same evidence; the ranking can't separate them";
+        if(tied) basis+=" · Tied with "+group.filter(function(o){{return o!==c;}}).map(function(o){{return wrDisplayName(o.member,ours);}}).join(", ")+" — same evidence; the ranking can't separate them";
         rows.push({{
           rank:ranked?(tied?start+"=":String(start)):(c.tier===2?"≈":"—"),
-          member:c.member,player:playerRef(c.member),tier:c.tier,c:c,
+          member:c.member,player:wrDisplayName(c.member,ours),tier:c.tier,c:c,
           direct_text:c.direct?wlText(c.direct.w,c.direct.g)+" ("+plural(c.direct.g,"meeting")+")":"No verified direct meetings in this snapshot",
           shared_text:c.shared?plural(c.shared,"shared opponent")+" · ours "+wlText(c.ow,c.og)+" ("+plural(c.og,"game")+") · theirs "+wlText(c.tw,c.tg)+" ("+plural(c.tg,"game")+")":"No shared opponents",
           basis:basis

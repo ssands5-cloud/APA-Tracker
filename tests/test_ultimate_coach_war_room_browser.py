@@ -538,7 +538,7 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
             assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2 (2 meetings))"
             card.locator(".ns-more summary").click()
-            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning" in card.inner_text()
+            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning · small sample" in card.inner_text()
             # Chips: tap Eve -> shared-only, never medalled.
             page.click("#next-send .ns-chip:has-text('Eve Ellis')")
             text = page.locator("#next-send").inner_text()
@@ -2097,3 +2097,37 @@ def test_next_send_warns_before_spending_breaks_the_entered_budget(tmp_path: Pat
             assert errors == []
         finally:
             browser.close()
+
+
+def test_next_send_duplicate_names_keep_distinguishing_captured_skill(tmp_path: Path):
+    from tests.test_excel_war_room_formulas import _payload as crowded_payload
+    payload=crowded_payload(crowded=True)
+    path=tmp_path/'duplicate.html'
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page();page.goto(path.as_uri())
+            a=page.locator('#next-send [data-send-our="1"]').locator('..')
+            b=page.locator('#next-send [data-send-our="4"]').locator('..')
+            assert "Ann Archer (SL 5)" in a.inner_text()
+            assert "Ann Archer (SL 4)" in b.inner_text()
+            assert "APA record ID" not in a.inner_text()+b.inner_text()
+        finally:browser.close()
+
+
+def test_incomplete_budget_is_disclosed_once_for_shared_missing_skill(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page,errors=_page(tmp_path,browser)
+            page.set_viewport_size({'width':390,'height':844})
+            assert page.locator('#next-send .ns-budget-scope').count()==0
+            before=page.locator('#next-send [data-send-our]').evaluate_all('(els)=>els.map(e=>e.dataset.sendOur)')
+            page.fill('#ll-cap','20');page.locator('#ll-cap').dispatch_event('change')
+            assert page.locator('#next-send .ns-budget-scope').count()==1
+            assert page.locator('#next-send .ns-budget').count()==0
+            assert page.locator('#next-send [data-send-our]').evaluate_all('(els)=>els.map(e=>e.dataset.sendOur)')==before
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors==[]
+        finally:browser.close()

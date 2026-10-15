@@ -142,7 +142,7 @@ def reason(row: dict[str, Any]) -> str:
     direct = row.get("direct")
     if direct:
         wins, games = direct
-        return f"{record_text(wins, games)} direct record ({plural(games, 'meeting')}) — {_CATEGORY_WORD[category(row)]}"
+        return f"{record_text(wins, games)} direct record ({plural(games, 'meeting')}) — {_CATEGORY_WORD[category(row)]}" + (" · small sample" if games < 3 else "")
     if row.get("shared_count"):
         (ow, og), (tw, tg) = row["ours"], row["theirs"]
         return (f"shared-opponent results only: ours {record_text(ow, og)} vs theirs {record_text(tw, tg)} across "
@@ -365,7 +365,7 @@ def quick_read_badges(card: dict[str, Any], block: dict[str, Any], *, has_note: 
     tg = card["their_games"]
     badges: list[str] = []
     if tg:
-        badges.append(f"✅ Direct meetings vs roster: {plural(tg, 'meeting')}" if tg >= 3
+        badges.append(f"Direct meetings vs roster: {plural(tg, 'meeting')}" if tg >= 3
                       else f"⚠ Direct meetings vs roster: {plural(tg, 'meeting')} (small sample)")
     else:
         shared = [r for r in block["rows"] if r["category"] == "I"]
