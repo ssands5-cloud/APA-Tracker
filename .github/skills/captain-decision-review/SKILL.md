@@ -9,6 +9,8 @@ description: Use when building, changing or auditing any Ultimate Coach recommen
 
 Ultimate Coach is a captain's decision-support system, not an APA data project. A feature is judged by the decision it supports during a live league night or tournament, not by whether the code is correct. Code can be right and the recommendation still misleading.
 
+**This is not a planning step or an approval gate.** Do not block or delay implementation on it. Its job is to catch "technically correct but captain-misleading" features and to improve trust, clarity and decision quality. Apply it while building or auditing, fix what it finds, and keep going.
+
 **Core principle:** decision first, then reason, then evidence. Unknown is never shown as weak or as safe. No odds, no probability models.
 
 ## When to Use
