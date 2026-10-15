@@ -586,18 +586,11 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
 def lineup_budget(war_room: dict[str, Any], *, cap: int | None, slots: int,
                   played: dict[Any, int] | None = None, remaining: set[Any] | None = None,
                   sending: Any = None) -> dict[str, Any]:
-    """Can we still field a legal lineup, and does sending this player keep it legal?
+    """Reference skill arithmetic for a supplied cap and slot count, not match legality.
 
-    APA caps the total skill level of the players you put up (23 in standard 8-Ball). Spend the
-    low numbers early and you can be left unable to field a legal five -- a match lost to
-    arithmetic rather than to pool. Nothing in the product checked this: the constant existed
-    and was never used, and the Excel cap was echoed as text that said outright it was not a
-    legality check.
-
-    The cap is never assumed. With no cap from the captain this returns an inert result and
-    claims nothing, because divisions differ and guessing a rule would be worse than silence.
-    A player without a captured skill level is counted as unknown and makes the answer
-    incomplete rather than being given a number.
+    Required sends, format and other match constraints are not verified here. Legacy boolean
+    field names describe only the captured-SL comparison under the caller's supplied count.
+    No cap is assumed; missing captured skill levels keep the comparison incomplete.
     """
     played = played or {}
     ours = war_room["ours"]
@@ -629,11 +622,11 @@ def lineup_budget(war_room: dict[str, Any], *, cap: int | None, slots: int,
             after = cheapest(rest, max(0, slots_left - 1))
             out["sending_keeps_legal"] = (None if after is None
                                           else int(sl) + after + used <= cap)
-    bits = []
+    bits = [f"Reference: {slots_left} supplied slots; required sends/format not verified — not a match-legality check"]
     if unknown:
         bits.append(f"{unknown} player(s) without a captured skill level — this check is incomplete; no lineup cleared")
     elif out["feasible"] is False:
-        bits.append(f"cannot field a legal lineup: the cheapest {slots_left} left total {need}, "
+        bits.append(f"captured-SL comparison exceeds entered budget: the cheapest {slots_left} left total {need}, "
                     f"{need - left} over your remaining {left}")
     elif need is None and slots_left:
         bits.append(f"not enough players with a captured skill level to check {slots_left} more slots")

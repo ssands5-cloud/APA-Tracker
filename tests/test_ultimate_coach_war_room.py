@@ -484,12 +484,14 @@ def test_lineup_budget_subtracts_who_has_already_played():
     assert out["used"] == 5 and out["left"] == 18 and out["slots_left"] == 2
 
 
-def test_lineup_budget_reports_that_a_legal_lineup_is_no_longer_possible():
+def test_lineup_budget_reports_reference_subtotal_exceeding_the_entered_cap():
     """The trap this exists to catch: the cheapest remaining players still blow the cap."""
     wr = _war_room()
     out = lineup_budget(wr, cap=6, slots=2, played={}, remaining={1, 2})           # Ann 5 + Bea 4 = 9 > 6
     assert out["feasible"] is False
-    assert "cannot" in out["note"].lower() or "no legal" in out["note"].lower(), out["note"]
+    assert "captured-SL comparison exceeds entered budget" in out["note"], out["note"]
+    assert "not a match-legality check" in out["note"]
+    assert "cannot field a legal lineup" not in out["note"]
 
 
 def test_lineup_budget_will_not_guess_a_missing_skill_level():
@@ -854,3 +856,11 @@ def test_meeting_sl_context_handles_mixed_types_and_normalizes_numeric_display()
     assert meeting_sl_context([{"opp_sl": "4"}, {"opp_sl": 6}], 6) == (
         "Meeting opponent SL 6; roster capture SL 6; some meeting SLs not captured")
     assert meeting_sl_context([{"opp_sl": 4.0}], 6.0) == "Meeting opponent SL 4; roster capture SL 6"
+
+
+def test_lineup_budget_note_is_reference_only_for_complete_and_incomplete_inputs():
+    wr=_war_room()
+    for cap,remaining in ((6,{1,2}),(23,{1,2}),(6,{1,2,3})):
+        note=lineup_budget(wr,cap=cap,slots=2,remaining=remaining)["note"]
+        assert "Reference" in note and "not a match-legality check" in note
+        assert "cannot field a legal lineup" not in note and "unable to field a legal lineup" not in note

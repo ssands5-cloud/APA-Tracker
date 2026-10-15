@@ -2268,6 +2268,11 @@ def test_phone_matrix_note_flag_opens_the_actual_coach_observation(tmp_path: Pat
             assert note.evaluate("e=>e===document.activeElement")
             assert note.input_value()=="Patient safeties; coach opinion."
             assert page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")==before
+            # Played styling must not turn this existing opinion link into a dead jump.
+            page.check('#lineup-lab input[data-plan="played"][data-pid="10"]')
+            flag.tap()
+            assert note.evaluate("e=>e===document.activeElement")
+            assert note.input_value()=="Patient safeties; coach opinion."
             assert errors==[]
         finally:browser.close()
 
