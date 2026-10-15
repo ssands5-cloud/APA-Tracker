@@ -2170,3 +2170,19 @@ def test_one_meeting_threat_stays_flagged_with_visible_sample_and_unknown_scope(
             assert 'small sample' in panel.inner_text()
             assert 'not cleared' in page.locator('#wr-risks').inner_text()
         finally:browser.close()
+
+
+def test_next_send_distinguishes_meeting_sl_from_captured_roster_sl(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page,errors=_page(tmp_path,browser)
+            first=page.locator('#next-send .ns-medal').first
+            assert 'Meeting opponent SL 4; roster capture SL 6' in first.inner_text()
+            assert 'Captured SL 6' in page.locator('#next-send .ns-chip').first.inner_text()
+            assert 'Meeting opponent SL 4; roster capture SL 6' in page.locator('#scouting-cards .quick-read').first.inner_text()
+            assert first.locator('[data-send-our]').get_attribute('data-send-our')=='1'
+            page.set_viewport_size({'width':390,'height':844})
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors==[]
+        finally:browser.close()

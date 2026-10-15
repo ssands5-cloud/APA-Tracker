@@ -229,6 +229,22 @@ def _career_text(player: dict[str, Any] | None, fmt: str) -> str:
 
 # ---- the War Room for one directed pairing ----
 
+
+def meeting_sl_context(games, roster_sl) -> str:
+    """Factual meeting-versus-roster scope; never re-score the recorded result."""
+    if not games:
+        return ""
+    levels = sorted({g.get("opp_sl") for g in games if g.get("opp_sl") is not None})
+    if not levels:
+        return "Meeting opponent SL not captured"
+    missing = any(g.get("opp_sl") is None for g in games)
+    if roster_sl is not None and all(sl == roster_sl for sl in levels) and not missing:
+        return ""
+    note = "Meeting opponent SL " + ", ".join(str(sl) for sl in levels)
+    note += "; roster capture SL " + (str(roster_sl) if roster_sl is not None else "not captured")
+    return note + ("; some meeting SLs not captured" if missing else "")
+
+
 def war_room_pair(
     our_members: list[dict[str, Any]],
     opp_members: list[dict[str, Any]],
@@ -253,7 +269,9 @@ def war_room_pair(
             row["category"] = category(row)
             row["cell"] = cell_text(row)
             row["explanation"] = explanation(row)
-            row["reason"] = reason(row)
+            row["sl_context"] = (meeting_sl_context(meetings.get((row["member"]["id"], block["opponent"]["id"], fmt), []), block["opponent"].get("skill_level"))
+                                 if row["direct"] else "")
+            row["reason"] = reason(row) + (" · " + row["sl_context"] if row["sl_context"] else "")
             row["captain"] = captain_cell(row)
             row["position"] = position
 
@@ -404,6 +422,9 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
             top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
             rec = record_text(*top[0]["direct"])
             parts.append(f"{label}: {names(top)} ({rec}{', small sample' if top[0]['direct'][1] < 3 else ''}{', tied' if len(top) > 1 else ''})")
+            contexts = sorted({r.get("sl_context", "") for r in top if r.get("sl_context")})
+            if contexts:
+                parts.append(contexts[0] if len(top) == 1 else "Meeting SLs differ or are missing; check each pairing's detail")
             break
     else:
         shared = [r for r in rows if r["category"] == "I"]

@@ -806,3 +806,35 @@ def test_one_meeting_threat_discloses_thin_history_without_clearing_the_flag():
     assert '1 meeting' in row['short']
     assert 'small sample' in wr['threats'][0]['threat_text']
     assert 'small sample' in wr['cards'][0]['quick_read']
+
+
+def test_next_send_discloses_historical_opponent_sl_without_reranking():
+    ours=[_m(1,'Ann',sl=5),_m(2,'Bea',sl=4)];theirs=[_m(50,'Opponent',sl=6)]
+    index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10)))
+    history={(1,50,'EIGHT'):[{'sort':'2026-09-27','opp_sl':4}]}
+    wr=war_room_pair(ours,theirs,index,'EIGHT',meetings=history)
+    ns=next_send(wr,0)
+    assert [r['member']['id'] for r in ns['ranked']]==[1,2]
+    assert 'Meeting opponent SL 4; roster capture SL 6' in ns['ranked'][0]['reason']
+    assert 'Meeting opponent SL 4; roster capture SL 6' in wr['cards'][0]['quick_read']
+
+
+def test_meeting_sl_disclosure_handles_missing_mixed_and_unchanged_capture():
+    from analytics.ultimate_coach_war_room import meeting_sl_context
+    assert meeting_sl_context([], 6) == ""
+    assert meeting_sl_context([{"opp_sl": 6}], 6) == ""
+    assert meeting_sl_context([{"opp_sl": None}], 6) == "Meeting opponent SL not captured"
+    assert meeting_sl_context([{"opp_sl": 4}, {"opp_sl": 6}, {"opp_sl": None}], 6) == (
+        "Meeting opponent SL 4, 6; roster capture SL 6; some meeting SLs not captured")
+    assert meeting_sl_context([{"opp_sl": 4}], None) == "Meeting opponent SL 4; roster capture SL not captured"
+
+
+def test_tied_quick_read_does_not_assign_one_players_meeting_sl_to_the_other():
+    ours=[_m(1,"Ann"),_m(2,"Bea")];theirs=[_m(50,"Opponent",sl=6)]
+    index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,1,1),(50,2,0,1)))
+    history={(1,50,"EIGHT"):[{"sort":"2026-09-27","opp_sl":4}],
+             (2,50,"EIGHT"):[{"sort":"2026-09-27","opp_sl":6}]}
+    wr=war_room_pair(ours,theirs,index,"EIGHT",meetings=history)
+    assert "check each pairing's detail" in wr["cards"][0]["quick_read"]
+    assert "roster capture SL 6" in next_send(wr,0)["ranked"][0]["reason"]
+    assert "roster capture SL" not in next_send(wr,0)["ranked"][1]["reason"]

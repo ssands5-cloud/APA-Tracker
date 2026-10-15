@@ -98,7 +98,9 @@
     [["G","Historical top record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
-      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");done=true;});
+      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");
+      var contexts=top.map(function(r){return r.sl_context;}).filter(function(x,i,a){return x&&a.indexOf(x)===i;}).sort();
+      if(contexts.length) parts.push(top.length===1?contexts[0]:"Meeting SLs differ or are missing; check each pairing's detail");done=true;});
     if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
       parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
     var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
@@ -107,10 +109,18 @@
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
     return parts.join(" · ");
   }
+  function wrMeetingSLContext(games,rosterSL){
+    if(!games.length) return "";
+    var seen={},missing=false;games.forEach(function(g){if(!wrKnown(g.opp_sl)) missing=true;else seen[g.opp_sl]=true;});
+    var levels=Object.keys(seen).map(Number).sort(function(a,b){return a-b;});
+    if(!levels.length) return "Meeting opponent SL not captured";
+    if(wrKnown(rosterSL)&&levels.every(function(sl){return sl===rosterSL;})&&!missing) return "";
+    return "Meeting opponent SL "+levels.join(", ")+"; roster capture SL "+(wrKnown(rosterSL)?rosterSL:"not captured")+(missing?"; some meeting SLs not captured":"");
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
-    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.reason=wrReason(r.c);r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
+    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.sl_context=r.c.direct?wrMeetingSLContext(rowsFor(r.member.id,fmt).filter(function(g){return String(val(g,"opponent_id"))===String(b.opponent.id);}).map(function(g){return {opp_sl:val(g,"opponent_skill_level")};}),b.opponent.skill_level):"";r.reason=wrReason(r.c)+(r.sl_context?" · "+r.sl_context:"");r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
     blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
@@ -577,7 +587,7 @@
         +esc(opp.name)+'. Tap who they actually put up.</p>')
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
-      +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · SL "+slText(o))+'</button>';}).join("")+'</div>'
+      +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)

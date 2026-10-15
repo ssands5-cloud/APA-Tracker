@@ -1954,7 +1954,7 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
     headline = ("Ranked direct records among our remaining players (same evidence = same rank). Recorded "
                 "results only — not odds.")
     medal = (f"1. {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
-             "our only favorable direct option vs another unplayed opponent · availability unknown")
+             "our only favorable direct option vs another unplayed opponent · Meeting opponent SL 1, 2, 3, 4, 5, 6, 7, 8, 9; roster capture SL 9; some meeting SLs not captured · availability unknown")
     rest = max(roster - medals, 0)
     lines = [headline] + [medal] * medals
     if rest:
