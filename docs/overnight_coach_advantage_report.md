@@ -1,5 +1,8 @@
 # CURRENT PRIORITIES
 
+**Current audit target / private review build: b6c0d38 on `codex/captain-display-cleanup`.** GPT is the sole builder; Claude audits that commit in the existing canonical-linked `.worktrees/codex-candidate-validation` without editing/switching it. Preserve Claude's unfinished edits; no competing builder or automatic merge of overlapping wording. Post sanitized recommendations on issue #84. The authoritative report is this audit-branch version, not either builder branch's report. `tmp/uat/build-b6c0d38/ultimate_coach.html` and `Ultimate_Coach_REVIEW.xlsx` are now rebuilt and bounded-output verified; the older 9f0d790 preview does not include these corrections. Independent Claude execution/audit of this handoff remains pending.
+
+
 **Required captain-facing review, per Paul (2026-10-14 Mountain).** captain-decision-review is now the primary quality review before changing recommendations, labels, rankings, warnings or workflows across Next Send, Blind Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix, War Room, packet and match-night HTML. Read the actual skill at Claude commit 1266e9f plus its 5144b43 clarification: it is a quality review, not a new owner-approval/planning gate. Use systematic-debugging, verification-before-completion, receiving-code-review and validator for implementation; brainstorming only for major product decisions. The project is designed. Identify captain-value defects and document tradeoffs before implementation; do not redesign the recommendation engine or change ranking tonight.
 
 
@@ -51,6 +54,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # COMPLETED
 
+- **Review corrections b6c0d38 — GPT implementation / bounded output verification complete; Claude audit pending.** Restores captured-SL cues where they distinguish same-name roster members; stable ordinal fallback remains when no distinguishing captured cue exists, with exact IDs retained internally. Direct reasons with 1-2 meetings now say small sample, using the existing Quick Read definition, without changing ordering. Roster-wide meeting volume no longer carries a green checkmark. Shared budget incompleteness appears once per card; candidate-specific over-budget warnings remain at the pick. Actual new HTML and native-saved Excel hashes match local `private_binding.json` in `tmp/uat/build-b6c0d38`. No data refresh, ranking change, merge or release.
+
+
 - **GPT builder handoff 9f0d790 — implementation and bounded output verification complete; Claude audit pending.** Numbered per-player Next Send lines, shared/avoid/unknown lists, readable labels without displayed record-ID suffixes, duplicate-name selector labels and retained internal identity keys. HTML candidate-specific entered-budget warning and factual scouting/send wording address TRUST-01 through TRUST-05; TRUST-06 is only partially addressed. No ranking comparator, evidence category, data refresh or probability model changed. Private rebuilt HTML/workbook are in the builder worktree under `tmp/uat/build-9f0d790`; the Excel filename is `Ultimate_Coach_REVIEW.xlsx`. This replaces the older preview for reviewing these changes, not for production release.
 
 
@@ -81,6 +87,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 
 # OPEN ISSUES
 
+**b6c0d38 follow-up:** TRUST-06's pairing disclosure and roster-volume checkmark concerns now have implemented corrections, awaiting independent audit; the 1-0-above-8-2 policy deliberately remains unchanged for Paul. NAME-DISPLAY-01 now prioritizes differing captured roster SLs for same-name recommendation labels, with preserved exact selector identities and an honest fallback when cues are identical/missing. TRUST-01's repeated missing-SL note was reproduced and consolidated, not hidden. The reviewer-mentioned one-game Threat label and phone-notes gap are not verified/closed by this handoff; require a bounded reproduction before changing them. TRUST-07 and future-opponent save-sample/strategy review remain open. One-player-per-line Unknown disclosure remains the owner-requested presentation; added scrolling alone has not established a defect.
+
+
 **Current handoff scope, 9f0d790:** baseline descriptions below preserve the reproduced findings; their old “later response/no implementation” wording describes the discovery state. TRUST-01 now warns beside ranked HTML choices using the existing entered-budget arithmetic, without reranking or claiming full APA legality. Excel remains an explicitly limited reference subtotal, not a new lineup-legality engine. TRUST-02 adds Historical top record plus full-roster/availability scope wording. TRUST-03 says no favorable/even direct option. TRUST-04 says Recorded losses. TRUST-05 counts opponent links, not games. TRUST-06 now names the roster-wide sample scope and replaces best-supported claims with first by recorded direct results; pair-specific small-sample caution remains a limitation. TRUST-07 and save-for-later sample/strategic tradeoffs remain open. SEND-LAYOUT-01's changed complete Next Send list is on HTML and workbook Command Center; packet name cleanup and existing compact top-two-per-opponent summary were rendered, without claiming that compact packet summary is a full Next Send list. No unchanged closure is reopened and no new ranking permission inferred.
 
 
@@ -103,6 +112,23 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+**Owner-relayed Claude review of 9f0d790, addressed in b6c0d38.** Claude explicitly read code without executing GPT's tests/native checks. Preserve that distinction: his review identifies valid concerns, not independent runtime acceptance. Receiving-code-review was applied by reproducing each implemented correction; no blanket acceptance or merge of Claude's parallel wording edits.
+
+- **Captain decision:** identify the actual same-name teammate and judge whether a first-choice record is only one meeting, while seeing budget uncertainty without repeated phone noise.
+- **Trust concerns:** confirmed the precomputed ordinal returned before the existing distinguishing-SL logic. A focused test failed on that condition, then passed after restoring the real cue. A separate 1-0 versus 8-2 test failed for missing caution, then passed with the exact same candidate order and small-sample disclosure on 1-0 only. No minimum sample or new ranking threshold.
+- **Missing information:** same-name players with identical/missing captured cues still need the stable fallback/Players lookup; no invented identifying facts. Historical SL-at-meeting remains in detail. Sample disclosure does not establish stronger evidence, full lineup legality or a predicted result.
+- **Contradictions:** Python/Excel/HTML use the restored roster cue and matching direct-reason caution. A roster-wide volume label is neutral rather than a green indication of pairing strength. New small-sample text is beside the displayed choice; answer remains first. Five-second usability is not measured.
+- **Recommendation:** Claude should audit b6c0d38 against these concrete behaviors and use issue #84 for findings. Existing GPT checkout plus separate tmp test output is sufficient; no outside/scratch repository, checkout switch or competing build is requested. Coordination posted at Paul's request; GitHub comments themselves do not wake Claude.
+
+**Executed changed checks:** 103 War Room engine / Excel formula tests passed; 57 evidence/formula checks passed during the duplicate-cue correction; 47 affected War Room browser checks passed, then 2 focused final budget checks passed after consolidating the note. Two general HTML/Python ranking cross-checks passed. Expected wording assertions were updated after the deliberate sample/neutral-label changes; actual ranks and IDs stay asserted. No unchanged full-suite certification.
+
+**Phone noise reproduced, then verified corrected:** synthetic 390px case with one missing SL and two ranked choices showed two identical incomplete-budget notes, card height 416px. Corrected case shows one shared notice and no repeated per-choice notice, height 372px with the new sample disclosures included; no page-wide overflow or page errors. These are geometry observations, not measured decision-speed or tournament advantage.
+
+**Actual rebuilt output:** reused the same frozen input; original database hash stayed unchanged. Desktop and 390px phone direct-choice examples show the one-meeting caution, no displayed ID suffix and no page errors/overflow. Fresh owned native Excel 16 recalculation found zero formula errors on Match Day, Command Center, War Room, Lineup Lab and Captain Packet. A selected real direct-record Command Center card was checked for the small-sample text and exported/rendered: sampled lines remain visible without clipping. Native packet first-three-page export was regenerated; prior unchanged packet layout review is reused. Final HTML and native-saved workbook hashes were checked against the private source binding. Captures and identities remain local. Routine test/output acceptance is delegated; independent audit and release gates remain separate.
+
+Skills actually applied: existing captain-decision-review to the decision/trust/scope above; systematic-debugging to reproduce the bypass and missing sample marker; receiving-code-review to verify external concerns before changing them; verification-before-completion and validator to execute changed checks and inspect output. No new skill, brainstorming, framework or parallel status file.
+
 
 **GPT builder verification, 9f0d790 (2026-10-14 Mountain).**
 - **Captain decision being supported:** choose the next player while seeing the actual recorded pairing, meeting count, remaining alternatives and an entered-budget conflict before sending.
