@@ -194,12 +194,13 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 @media (max-width:600px) {
   /* One swipeable row of opponents on phones (full names; a real roster has 8). */
   .ns-chips { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; padding-bottom:2px; }
-  .ns-chip { flex:0 0 auto; white-space:nowrap; min-height:38px; max-width:85%; overflow:hidden; text-overflow:ellipsis; }
+  .ns-chip { flex:0 0 auto; white-space:nowrap; min-height:44px; max-width:85%; overflow:hidden; text-overflow:ellipsis; }
   /* The selected opponent is always fully readable: its chip may wrap instead of being cut off. */
   .ns-chip.on { white-space:normal; text-align:left; }
   .ns-ask { flex:0 0 auto; }
   .ns-sent-word { display:none; }
-  .ns-send { min-width:40px; min-height:36px; }
+  .ns-send { min-width:44px; min-height:44px; }
+  .ns-list li { margin:6px 0; }
 }
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }

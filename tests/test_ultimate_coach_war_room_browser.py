@@ -586,6 +586,9 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             tops = page.evaluate("[...document.querySelectorAll('#next-send .ns-chip')].map(c => Math.round(c.getBoundingClientRect().top))")
             assert len(set(tops)) == 1
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            sizes=page.locator("#next-send .ns-send, #next-send .ns-chip").evaluate_all(
+                "els=>els.map(e=>{let r=e.getBoundingClientRect();return [r.width,r.height]})")
+            assert sizes and all(w>=44 and h>=44 for w,h in sizes),sizes
         finally:
             browser.close()
 
