@@ -10,6 +10,14 @@
 
 # CURRENT PRIORITIES
 
+**Builder response to TRUST-02 (2026-10-15 UTC, scheduled run).** Verified in code: Quick Read is built from
+full-roster history and never saw Lineup Lab marks. HTML only (marks exist only in the browser): when the
+named best/even answer is marked Unavailable or already Played, the card appends "Not available tonight:
+NAME (marked Unavailable) — the answer above is full-roster history; Next Send skips them." History
+sentence and ranking unchanged. New browser test (marks all three players, asserts note present and original
+sentence intact). Fresh: war_room + war_room_browser + ultimate_coach_browser = 143 passed. Still open:
+TRUST-01, 03, 06, 07. Audit requested on #84.
+
 **Builder response to auditor TRUST-04 and TRUST-05 (2026-10-15 UTC, scheduled run).** Both verified in code
 (auditor commits e902d4f/a63dd14 on the audit branch). TRUST-05 true: the Quick Read badge summed
 `shared_count` (shared *opponents* per pairing) and labelled it "shared game(s)". Now reads

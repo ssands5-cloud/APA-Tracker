@@ -107,6 +107,18 @@
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
     return parts.join(" · ");
   }
+  // TRUST-02: the Quick Read answers from the whole roster's history; Next Send answers from who is
+  // left tonight. When the Quick Read's named answer is someone the captain has marked Unavailable or
+  // Played, say so at that answer instead of leaving the two screens silently disagreeing.
+  function wrQuickReadScopeNote(b,ck){
+    var g=null;
+    [["G"],["E"]].some(function(x){var rows=b.rows.filter(function(r){return r.category===x[0];});if(!rows.length) return false;g=rows;return true;});
+    if(!g) return "";
+    var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
+    var gone=top.filter(function(r){return !wrRemaining(ck,r.member.id);}).map(function(r){
+      return r.member.name+(wrAvail(ck,r.member.id)==="Unavailable"?" (marked Unavailable)":" (already played)");});
+    return gone.length?"Not available tonight: "+gone.join(", ")+" — the answer above is full-roster history; Next Send skips them.":"";
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
@@ -746,10 +758,10 @@
           +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
         var hasNote=!!(cc.n&&cc.n.trim());
-        var badges=wrQuickReadBadges(c,w.blocks[j],hasNote);
+        var badges=wrQuickReadBadges(c,w.blocks[j],hasNote),qrNote=wrQuickReadScopeNote(w.blocks[j],wrCtx(ta,tb));
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
           +'<p class="quick-read-badges">'+badges.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</p>'
-          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
+          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+(qrNote?' <span class="quick-read-scope">'+esc(qrNote)+'</span>':'')+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
           +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'

@@ -2064,3 +2064,29 @@ def test_captain_matrix_counts_have_a_visible_phone_explanation(tmp_path: Path):
             assert errors == [], errors
         finally:
             browser.close()
+
+
+def test_quick_read_flags_a_named_answer_the_captain_has_marked_unavailable(tmp_path: Path):
+    """TRUST-02: Quick Read answers from full-roster history while Next Send answers from who is
+    left tonight. A named answer who is marked Unavailable must say so at that answer; history
+    itself is untouched."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            answered = [i for i in range(page.locator("#scouting-cards .scout").count())
+                        if "on record:" in page.locator("#scouting-cards .quick-read").nth(i).inner_text()]
+            assert answered, "fixture must have a card with a named answer"
+            assert page.locator("#scouting-cards .quick-read-scope").count() == 0
+
+            before = [page.locator("#scouting-cards .quick-read").nth(i).inner_text() for i in answered]
+            for pid in ("1", "2", "3"):
+                page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
+            for k, i in enumerate(answered):
+                t = page.locator("#scouting-cards .quick-read").nth(i).inner_text()
+                assert "Not available tonight:" in t and "marked Unavailable" in t, t
+                assert "Next Send skips them" in t, t
+                assert before[k] in t, (before[k], t)   # history sentence unchanged, note appended
+            assert errors == []
+        finally:
+            browser.close()
