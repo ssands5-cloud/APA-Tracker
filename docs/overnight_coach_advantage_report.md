@@ -10,6 +10,9 @@
 
 # CURRENT PRIORITIES
 
+**Proposed draft skills (Paul's request, review only, not required workflow):** `.github/skills/proposed/`
+`matchup-trust-review`, `unanswered-captain-question`, `match-night-review`. No further skills until these are reviewed.
+
 **New repository skill `.github/skills/captain-decision-review/SKILL.md` (Paul's request).** Captain, Trust,
 Consistency and Match-Night tests plus a fixed audit output. Use it on every review of Next Send, Blind Send,
 Threat Panel, Scouting Cards, Coach Notes, Captain Matrix, War Room and Captain Packet. Written to the
