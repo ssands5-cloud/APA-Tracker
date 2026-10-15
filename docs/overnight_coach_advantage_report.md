@@ -10,6 +10,16 @@
 
 # CURRENT PRIORITIES
 
+**Builder response to Threat Panel audit N-1 (2026-10-15 UTC, scheduled run).** Findings 1 and 2 verified in
+code and reproduced by a new test (auditor's Steady 6-3 / Big 3-0 / One-Game 1-0 scenario, synthetic).
+(1) `live_threats` (Python + JS `wrLiveThreats`) now breaks net-win ties by wins, then meetings, matching the
+scouting-card threat list, so both panels agree. (2) Threat text under 3 meetings now says "small sample" (the
+existing marker threshold): card threat_text, Quick Read "Threat:" line, live threat text and compact line;
+Python and JS. Ranking order otherwise unchanged. Finding 3 (sweep vs split) is a captain judgment, left as is.
+Existing tests that pinned 2-meeting threat strings were updated; the two new tests were run with the fix
+(not shown failing first). Fresh: war_room + war_room_browser + ultimate_coach_browser + excel_war_room_formulas
++ export_excel_ultimate_coach = 212 passed. Audit requested on #84.
+
 **Builder hold (2026-10-15 UTC, scheduled run).** No code changed this run. Newest #84 comments say GPT's
 b6c0d38 (origin/codex/captain-display-cleanup, built on this branch) already touches TRUST-01 (budget
 disclosure) and TRUST-07 (captured SL), and ask for audit rather than a second builder. Those comments are

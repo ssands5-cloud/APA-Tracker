@@ -130,7 +130,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             risks = page.inner_text("#wr-risks")
             # Superseded wording: see the Threat Panel gap fix (live_threats) -- scoped to
             # players still in tonight's lineup rather than our whole roster's history.
-            assert f"{EVE} · SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of our remaining players)" in risks
+            assert f"{EVE} · SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of our remaining players, small sample)" in risks
             assert f"{BEA} vs {CAM}: 0-2 direct (2 meetings)" in risks
             cells = page.locator("#wr-matrix .mcell")
             assert [cells.nth(i).inner_text() for i in range(6)] == [
@@ -282,7 +282,7 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
                 assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text
                 # Superseded wording: see the Threat Panel gap fix (live_threats).
-                assert "Eve Ellis — 2-0 vs our roster still in play" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
+                assert "Eve Ellis — 2-0 vs our roster still in play (small sample)" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
                 assert "vs Eve Ellis: Ann Archer — ≈ shared-opponent only (the only shared-opponent candidate)" in text
                 assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
                 assert errors == []
@@ -577,7 +577,7 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             reads = page.locator("#scouting-cards .quick-read")
             assert [reads.nth(i).inner_text().replace("QUICK READ", "Quick read").split(" ", 2)[2]
                     for i in range(reads.count())] == [c["quick_read"] for c in py["cards"]]
-            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings) · No direct answer")
+            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings, small sample) · No direct answer")
             clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
                 .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
             assert clipped == 0

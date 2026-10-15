@@ -221,7 +221,7 @@ def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built
         (f"vs {EVE} · SL 3", f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),      # shared-only: never numbered
     ]
     threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
-    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players)"]
+    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players, small sample)"]
     concerning = _list_after(book, built, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)", 5)
     assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings)", f"{DEE} vs {EVE}: 0-2 direct (2 meetings)"]
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
@@ -614,7 +614,7 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     book.set("Coach Notes", "A6", EVE)           # a threat's note is shown with the threat, labelled as opinion
     book.set("Coach Notes", "D6", "Runs out from anywhere")
     threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
-    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · 📝 Coach: Runs out from anywhere "
+    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players, small sample) · 📝 Coach: Runs out from anywhere "
                        "(your opinion, not APA facts)"]
 
 

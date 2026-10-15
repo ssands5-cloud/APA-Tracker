@@ -707,6 +707,38 @@ def test_live_threats_is_empty_when_nothing_is_dangerous_either_way():
     assert out == []
 
 
+def _threat_room():
+    ours = [_m(1, "Ann"), _m(2, "Bea"), _m(3, "Cal")]
+    theirs = [_m(60, "Big"), _m(61, "OneGame"), _m(62, "Steady")]
+    index = build_pair_index(_pairs(
+        (1, 62, 3, 9), (62, 1, 6, 9),     # Steady 6-3 over Ann, 9 meetings
+        (2, 60, 0, 3), (60, 2, 3, 3),     # Big 3-0 over Bea
+        (3, 61, 0, 1), (61, 3, 1, 1),     # OneGame 1-0 over Cal
+    ))
+    return war_room_pair(ours, theirs, index, "EIGHT")
+
+
+def test_both_threat_lists_break_a_net_win_tie_the_same_way():
+    """Steady 6-3 and Big 3-0 are both +3 net; scouting cards and live threats must agree."""
+    wr = _threat_room()
+    cards = [t["opponent"]["name"] for t in wr["threats"]]
+    live = [t["opponent"]["name"] for t in live_threats(wr)]
+    assert cards == live == ["Steady", "Big", "OneGame"], (cards, live)
+
+
+def test_threat_text_marks_a_small_sample_and_leaves_larger_ones_alone():
+    wr = _threat_room()
+    by = {t["opponent"]["name"]: t for t in wr["threats"]}
+    assert "small sample" in by["OneGame"]["threat_text"]
+    assert "small sample" not in by["Big"]["threat_text"]
+    live = {t["opponent"]["name"]: t for t in live_threats(wr)}
+    assert "small sample" in live["OneGame"]["text"] and "small sample" in live["OneGame"]["short"]
+    assert "small sample" not in live["Steady"]["text"]
+    quick = {c["opponent"]["name"]: c["quick_read"] for c in wr["cards"]}
+    assert quick["OneGame"].startswith("Threat: 1-0 vs our roster (1 meeting, small sample)")
+    assert quick["Big"].startswith("Threat: 3-0 vs our roster (3 meetings)")
+
+
 # Quick Read Scouting Cards: Paul's own spec is an icon and a few words a captain can read
 # without stopping -- before the detailed facts below, not another sentence to parse.
 
