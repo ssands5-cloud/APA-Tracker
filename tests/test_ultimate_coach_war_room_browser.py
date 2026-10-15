@@ -2369,3 +2369,26 @@ def test_tonight_summary_counts_all_tied_first_choices(tmp_path: Path):
             assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
         finally:
             browser.close()
+
+@pytest.mark.parametrize('width', [390, 1280])
+@pytest.mark.parametrize('level,display', [(0, 'not captured'), ('4', 'not captured'), (6, '6')])
+def test_meeting_tables_disclose_uncaptured_sl_in_overview_and_pair(tmp_path: Path, width, level, display):
+    payload = _payload()
+    for game in payload['evidence']:
+        if game['player_id'] == 1 and game['opponent_id'] == 10:
+            game['own_skill_level'] = level
+            game['opponent_skill_level'] = level
+    path = tmp_path / 'meeting-display.html'
+    path.write_text(render(payload, built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001'), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width': width, 'height': 844}); errors = []
+            page.on('pageerror', lambda e: errors.append(str(e))); page.goto(path.as_uri())
+            assert display + ' / ' + display in page.locator('#wr-meetings').inner_text()
+            page.locator('#wr-matrix .mcell[data-our="1"][data-opp="10"]').click()
+            assert display + ' / ' + display in page.locator('#wr-pair').inner_text()
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()

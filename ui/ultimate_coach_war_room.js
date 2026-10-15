@@ -17,6 +17,7 @@
   // panel then states that instead of going blank or keeping a previous fixture (GPT audit #84).
   var WR_TONIGHT_NOTE=null;
   function wrKnown(x){return x!==null&&x!==undefined;}
+  function wrHistoricalSLText(x){return typeof x==="number"&&isFinite(x)&&x>0?String(x):"not captured";}
   function wrCategory(c){if(c.direct){var w=c.direct.w,l=c.direct.g-w;return w>l?"G":(w<l?"R":"E");}return c.shared?"I":"X";}
   function wrCell(c){
     if(c.direct) return wlText(c.direct.w,c.direct.g)+" ("+c.direct.g+")";
@@ -784,7 +785,7 @@
     // Meetings
     document.getElementById("wr-meetings").innerHTML='<h2>Direct meetings between the rosters</h2>'+(w.meetings.length
       ?'<p class="muted">Newest first · dates in '+esc(WR_TZ)+'.</p><div class="table-wrap"><table><thead><tr><th>Date</th><th>Our player</th><th>Opponent</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'
-        +w.meetings.slice(0,60).map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(playerRef(g.our))+'</td><td>'+esc(playerRef(g.opp))+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>'
+        +w.meetings.slice(0,60).map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(playerRef(g.our))+'</td><td>'+esc(playerRef(g.opp))+'</td><td>'+esc(g.result)+'</td><td>'+esc(wrHistoricalSLText(g.own_sl)+" / "+wrHistoricalSLText(g.opp_sl))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>'
         +(w.meetings.length>60?'<p class="muted">Showing the newest 60 of '+w.meetings.length+'; Player vs Player lists every meeting.</p>':'')
       :'<p class="muted">No recorded direct meetings between these rosters in '+esc(fmtLabel(fmt))+'.</p>');
   }
@@ -799,7 +800,7 @@
     var games=w.meetings.filter(function(g){return String(g.our.id)===String(m.id)&&String(g.opp.id)===String(o.id);});
     return '<div class="pair cat-border-'+row.category+'"><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
       +'<p>'+wrChip(row.category)+' <b>'+esc(WR_CAT_LABELS[row.category])+'</b> · rank '+esc(row.rank)+' of '+block.rows.length+' vs this opponent · '+esc(row.explanation)+'</p>'
-      +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc((wrKnown(g.own_sl)?g.own_sl:"—")+" / "+(wrKnown(g.opp_sl)?g.opp_sl:"—"))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No verified direct meetings in this snapshot.</p>')
+      +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc(wrHistoricalSLText(g.own_sl)+" / "+wrHistoricalSLText(g.opp_sl))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No verified direct meetings in this snapshot.</p>')
       +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(playerRef(m))+' vs them</th><th>'+esc(playerRef(o))+' vs them</th></tr></thead><tbody>'
         +shared.slice(0,25).map(function(k){return '<tr><td>'+esc(PLAYERS[k]?playerRef(PLAYERS[k]):k)+'</td><td>'+esc(wlText(mm[k].w,mm[k].g)+" ("+plural(mm[k].g,"game")+")")+'</td><td>'+esc(wlText(om[k].w,om[k].g)+" ("+plural(om[k].g,"game")+")")+'</td></tr>';}).join("")+'</tbody></table></div>'
         +(shared.length>25?'<p class="muted">Showing 25 of '+shared.length+' (largest combined samples).</p>':''):'<p class="muted">No shared opponents.</p>')
