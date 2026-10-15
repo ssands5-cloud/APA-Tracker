@@ -1,5 +1,8 @@
 # CURRENT PRIORITIES
 
+**Latest source daf5eb7; current real-data preview remains b29c130, unchanged.** Claude’s reference-budget wording finding is corrected in the Python helper/docstring; captured-SL arithmetic and legacy return keys are preserved. Call-site review found no production consumer of that helper in analytics/ui/scripts; the workbook already labels its totals as reference-only. Do not rebuild/relabel b29c130 for this unused-helper prose/test delta. Latest source audit is pending while GPT continues useful bounded work.
+
+
 **Latest handoff and current private review build: b29c130 — source and changed real artifacts builder-verified; Claude audit pending.** Historical-SL normalization is implemented without reranking/raw-evidence changes. `tmp/uat/build-b29c130/ultimate_coach.html` and `Ultimate_Coach_REVIEW.xlsx` are a new full export from the same frozen snapshot, not relabeled older files. Native recalculation/save and final hashes verified; zero formula errors on six captain-facing sheets; no “Meeting opponent SL 0” in the recommendation Reason column. Real-data 390px browser checks passed for controls, notes, reference-budget scope, preserved order and overflow. Old build-0ba99e6 remains preserved and superseded. Audit proceeds in parallel; no release approval.
 
 
@@ -62,6 +65,9 @@ Before applicable UI/workflow/dashboard/workbook/automation/report changes, revi
 Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
 
 # COMPLETED
+
+**daf5eb7 — reference-budget helper scope aligned.** Complete and incomplete Python notes explicitly say reference comparison / supplied slot count / required sends and format unverified, with no “cannot field a legal lineup” claim. Two new caption assertions failed before correction; seven focused budget unit cases passed after it. Two browser checks passed: existing HTML budget scope and the Coach Observation touch link after marking that opponent Played. Played styling does not hide/disable the editor; no note-flow code change was required. No ranking/arithmetic change or current-artifact rebuild.
+
 
 **b29c130 current artifact result and long-save watch item.** New full frozen-data HTML/workbook exports completed; native Excel recalculated/saved, final hashes match, six-sheet formula scan clean, eight Quick Read rows sized (minimum 56.5pt), recommendation reasons contain no captured-SL0 context. Native Next Send and diagnostic scouting samples inspected; packet pages 1–3 exported, unchanged packet layout not newly visually re-audited. Real 390px touch browser passed without page errors/whole-page horizontal overflow; 44px controls, note focus/clear, reference-budget disclosure and candidate order preserved. Separate synthetic eight-player/eight-opponent native stress: all eight choices and seven save warnings including counts/small samples were visible through the last line at 406.25pt card height. This closes the tested body-clipping watch item, not every possible name/roster size; extreme long selected-opponent text still truncates in its input field.
 
@@ -151,6 +157,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+**Claude 6183750656 reviewed, receiving-code-review applied.** Auditor reports 163 suite passes at 0ba99e6 and an earlier 203 at af99699 including general browser tests; real device/native/screenshots were not reverified by Claude. Its Python wording concern was reproduced and fixed. The claimed workbook consumer was not found by production call-site search; Excel text already says not a lineup-legality check, so no fictitious cross-screen failure or redundant workbook patch is recorded. Captain-decision-review focused on the distinction between entered-budget arithmetic and actual match legality; systematic-debugging plus verification-before-completion/validator supplied red/green and played-note evidence. Boundary/common-directory/origin verified, normal hooks used, builder left clean/pushed. No global builder, integration branch or frozen input changed.
+
 
 **b29c130 output execution bounds.** The native stress fixture initially included trailing spaces in generated names, so viewer auto-selection failed and no save warnings rendered; normalized those synthetic names, reran, then verified the intended eight-choice/seven-warning case and rendered body. An intermediate console-print attempt failed under CP1252; no verification pass was inferred. Current real artifacts use a fresh full build, not runtime/style replacement. Two inapplicable flags inherited in the copied browser-result script were removed before handoff; recorded browser metadata now contains only actually executed checks, and native verification/hash binding is separate. No new native rerun by Claude claimed, no all-pages printing/physical-phone/release acceptance. Skills stayed focused on captain certainty, exact failure reproduction and executed verification.
 
