@@ -1230,3 +1230,13 @@ def test_next_send_selected_opponent_wraps_without_hiding_the_name(tmp_path):
     book.set("Command Center", "C6", name)
     assert book.value("Engine", book.name("wr_NsJ").ref) == 1
     assert _next_send(book)[1].startswith("1. Ann Archer")
+
+def test_lineup_selected_context_wraps_and_keeps_the_fixture_visible(built):
+    from ui.excel_war_room import _longest_plan_key, _longest_team_label, _worst_height
+    ws = built[LL]
+    for row in (5, 6, 9):
+        cell = ws.cell(row, 3)
+        assert cell.alignment.wrap_text, "planning context must not clip inside the yellow cell"
+        text = _longest_plan_key(built) if row == 9 else _longest_team_label(built)
+        need = _worst_height(text, ws.column_dimensions['C'].width, cell.font.sz, 30)
+        assert ws.row_dimensions[row].height >= need

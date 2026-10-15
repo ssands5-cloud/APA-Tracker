@@ -1436,6 +1436,16 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
     ws.row_dimensions[9].height = _worst_height(
         f"⚠ Match Day’s fixture is {_longest_plan_key(wb)} — availability, lineup and played are "
         "NOT applied. Notes still are.", status_width, 11, 30)
+    # Planning selections must remain identifiable beside the status text. Excel
+    # does not auto-fit these rows, and the input occupies only narrow column C.
+    for r in (5, 6, 9):
+        cell = ws.cell(row=r, column=3)
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+        context = _longest_plan_key(wb) if r == 9 else _longest_team_label(wb)
+        context = max((context, str(cell.value or "")), key=len)
+        ws.row_dimensions[r].height = _worst_height(
+            context, ws.column_dimensions["C"].width, cell.font.sz,
+            ws.row_dimensions[r].height or 30)
     base._section(ws, 10, "Our roster — availability and lineup (blank availability = Unknown)", last_col=6)
     base._subheader(ws, 11, [(1, "#"), (2, "Player"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])
     our_first = 12
