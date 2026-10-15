@@ -10,6 +10,14 @@
 
 # CURRENT PRIORITIES
 
+**Builder response to Mobile match-night review finding 1 (2026-10-15 UTC, scheduled run).** Verified: on a
+phone the "✓ Sent" button was 40x36 and opponent chips 38 high. Phone CSS now makes both at least 44x44 and adds
+row spacing (ui/ultimate_coach.py, max-width 600px block only). Test extended (phone-viewport test asserts every
+Next Send ✓ Sent and chip is >= 44x44); it failed first (40x36, 38 high), passes after. Not touched, deliberately:
+Captain Packet findings 1-2 and Quick Read same-name label finding, because they target GPT's
+codex/captain-display-cleanup code (b6c0d38/42c4ded) that this branch does not contain; fixing them here would
+conflict. Mobile finding 2 (page length / nav) is a layout call left for Paul. Audit requested on #84.
+
 **Builder response to Blind Send review F1/F2 (2026-10-15 UTC, scheduled run).** Verified in code: the lead
 pick counted opponents and hid meeting counts and the size of the concerning record. Python `blind_send` and JS
 `wrBlindSend` now append "concerning: OPPONENT W-L" (when the pick has one) and "small sample (N meetings in

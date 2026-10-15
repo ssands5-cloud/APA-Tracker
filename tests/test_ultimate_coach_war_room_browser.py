@@ -586,6 +586,11 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             tops = page.evaluate("[...document.querySelectorAll('#next-send .ns-chip')].map(c => Math.round(c.getBoundingClientRect().top))")
             assert len(set(tops)) == 1
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            # Mid-match thumb taps: "✓ Sent" and the opponent chips must be at least 44x44 (audit: 40x36 / 38 high).
+            sizes = page.evaluate("""[...document.querySelectorAll('#next-send .ns-send, #next-send .ns-chip')]
+                .map(e => { const r = e.getBoundingClientRect(); return [e.className, Math.round(r.width), Math.round(r.height)]; })""")
+            assert any("ns-send" in s[0] for s in sizes)
+            assert [s for s in sizes if s[1] < 44 or s[2] < 44] == []
         finally:
             browser.close()
 
