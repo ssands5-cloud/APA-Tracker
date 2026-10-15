@@ -1,5 +1,8 @@
 # CURRENT PRIORITIES
 
+**Paul's HANDSHAKE WINDOW / SNOWBALL directive supersedes serial audit waiting (2026-10-14 Mountain).** GPT builds; Claude audits. Once implementation and builder verification of A finish, hand A to Claude and begin B while its audit runs. Builder incorporates findings at the next logical checkpoint, promptly if they invalidate current work, recommendation integrity or captain trust. Never idle for review or Paul's availability. Order: Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix. Measure captain decisions answered. Preserve ranking policy and release/privacy gates. Latest handoff is **d8d18b9**, including summary-caution fix **42c4ded**; next builder priority is the open Threat Panel concern while Claude audits that delta. No new skills or review frameworks.
+
+
 **Current audit target / private review build: b6c0d38 on `codex/captain-display-cleanup`.** GPT is the sole builder; Claude audits that commit in the existing canonical-linked `.worktrees/codex-candidate-validation` without editing/switching it. Preserve Claude's unfinished edits; no competing builder or automatic merge of overlapping wording. Post sanitized recommendations on issue #84. The authoritative report is this audit-branch version, not either builder branch's report. `tmp/uat/build-b6c0d38/ultimate_coach.html` and `Ultimate_Coach_REVIEW.xlsx` are now rebuilt and bounded-output verified; the older 9f0d790 preview does not include these corrections. Independent Claude execution/audit of this handoff remains pending.
 
 
@@ -12,7 +15,7 @@
 
 Paul extended the work block through **Sunday October 18, 2026 at 8 AM Mountain (14:00 UTC)**. This supersedes all earlier deadlines; roles, foundation freeze, feature order and approval/privacy gates remain unchanged. Preserve Blind Send, Next Send and Threat Panel closures; The ordered feature sequence is technically complete in the recorded implementation scope, including bounded Mobile Match-Night. Preserve all closures; current-artifact readiness and separate release approvals remain.
 
-**One major feature at a time:** complete Blind Send / We Put Up First (HTML and packet), then Next Send, Threat Panel, Quick Read Scouting Cards, Coach Notes Integration and Captain Matrix. BUILD -> TEST -> AUDIT -> FIX any findings -> MARK COMPLETE -> MOVE TO NEXT. Do not leave unfinished feature work or branch into new ideas before the current feature is production-ready. Related corrections/testing needed to finish the current feature are part of that feature. Technical completion is delegated; merge/release/publication approval remains separate.
+**Implementation order and parallel audit:** Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix. Finish and verify a useful implementation before handoff, then continue the next priority while Claude audits. Fix trust/integrity findings promptly; incorporate other findings at the next logical checkpoint. This supersedes the earlier serial BUILD/WAIT/AUDIT rule. Technical completion is delegated; merge/release/publication approval remains separate.
 
 Before accepting a feature ask: If I were standing in a tournament right now, would this help me make a better decision? If no, do not build it; if yes, prioritize it within the stated order. Keep only this report. Morning deliverable: what was completed, what was audited, what still needs owner review, and which captain decision can now be answered that could not be answered before. No process recap in place of results.
 
@@ -53,6 +56,9 @@ Before applicable UI/workflow/dashboard/workbook/automation/report changes, revi
 Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
 
 # COMPLETED
+
+- **Summary caution / Quick Read visibility handoff d8d18b9 — GPT verified; bounded Claude re-audit requested while work continues.** 42c4ded retains the existing 1-2-meeting caution in Quick Read's historical answer and Avoid entries and the folded HTML Avoid summary. A newly reproduced merged-cell height defect hid wrapped Quick Read text in Excel; d8d18b9 reserves height from all precomputed Quick Read text using the existing wrapping estimator. No ranking or category change. Private candidate `tmp/uat/build-d8d18b9` contains the completed 42c4ded content build plus the committed row-sizing helper applied in native Excel; base-build/native-layout provenance and final hashes are explicit in its local binding. This is an incremental native layout correction, not a claim of a fresh full d8d18b9 data rebuild.
+
 
 - **Review corrections b6c0d38 — GPT implementation / bounded output verification complete; Claude audit pending.** Restores captured-SL cues where they distinguish same-name roster members; stable ordinal fallback remains when no distinguishing captured cue exists, with exact IDs retained internally. Direct reasons with 1-2 meetings now say small sample, using the existing Quick Read definition, without changing ordering. Roster-wide meeting volume no longer carries a green checkmark. Shared budget incompleteness appears once per card; candidate-specific over-budget warnings remain at the pick. Actual new HTML and native-saved Excel hashes match local `private_binding.json` in `tmp/uat/build-b6c0d38`. No data refresh, ranking change, merge or release.
 
@@ -112,6 +118,16 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+**Claude audit reception / corrections, b6c0d38 -> 42c4ded -> d8d18b9.** Claude reported executing 138 unit/workbook and 48 browser checks at b6c0d38; GPT did not independently observe those executions, so they remain attributed auditor evidence. Claude's displayed-ID fallback finding was disputed with a fresh synthetic same-name/same-SL Chromium run: two distinct ordinal captions, no displayed ID suffix, separate exact send identities. Claude subsequently withdrew that finding after reading the actual renderer; no identity fix was needed. The two real sample-caution omissions were reproduced and corrected rather than accepting or merging all review suggestions blindly.
+
+- **Captain decision:** judge a named historical answer or a folded Avoid warning without missing the fact that it rests on only one/two meetings.
+- **Trust / contradictions:** Quick Read and folded Avoid now retain the same marker already shown by Next Send; 1-0 still ranks above 8-2, and the larger record stays unmarked. Same existing threshold; no new confidence/prediction model.
+- **Missing information:** historical-SL context, future-opponent save strategy, one-game Threat wording and phone-notes questions remain bounded follow-up items, not closed by these changes. No measured five-second or winning-advantage claim.
+- **Executed checks:** new one-game Quick Read test failed before the fix; 103 engine/formula checks passed with one obsolete exact-caption assertion failing, then that corrected caption test passed. Three focused browser/phone checks passed, plus exact HTML/Python War Room parity. New Excel row-height assertion failed on the 15pt/default merged row, then 68 formula/export checks passed after the sizing fix.
+- **Actual output:** native synthetic render exposed the 15pt row; fresh owned native Excel applied the exact committed height helper to a new preserved copy of the completed content build. Eight Quick Read rows sized to 56.4pt for this dataset. Zero formula errors on six checked screens including Scouting Cards. Native scouting page reviewed: sampled answer/cautions visible with no clipping. Native source helper, base build and final output hashes are bound privately. HTML desktop/390px phone checks passed with no page errors/overflow; source/unit/browser evidence covers the folded summary. Original data hash unchanged. Prior packet layout is preserved; no new release.
+- **Recommendation:** Claude audits only the bounded delta and reports concrete findings on #84. GPT begins the next captain decision while that review runs, per Paul's new handshake model. Use existing skills as evaluation tools; no approval gate or repeat unchanged full suite.
+
 
 **Owner-relayed Claude review of 9f0d790, addressed in b6c0d38.** Claude explicitly read code without executing GPT's tests/native checks. Preserve that distinction: his review identifies valid concerns, not independent runtime acceptance. Receiving-code-review was applied by reproducing each implemented correction; no blanket acceptance or merge of Claude's parallel wording edits.
 
@@ -2639,6 +2655,9 @@ This table retains the existing acceptance IDs and the precise boundaries of ver
 </details>
 
 # CLAUDE RESPONSES
+
+**Owner-relayed Claude correction:** finding 1 from the b6c0d38 audit is withdrawn after checking `playerRef -> playerLabel -> DISPLAY_LABELS`; it was an incorrect diff-only inference. Claude identifies its correction as code reading, and GPT's synthetic Chromium run as executed evidence. Findings 2/3 were accepted; their source corrections are now 42c4ded, with related Excel visibility correction d8d18b9. Audit waiting does not block the next builder feature.
+
 
 Claude reports PRINT-01 estimates and a PARITY-01 record oracle in 35f6ff8, and documents skill use in integration report df98ef1. Current design 574edaa addresses choosing first without a known opponent; engine/UI implementation is progressing locally. Those are builder claims, not independent closure. Integration report current sections must point here rather than maintain another living status list; builder responses and assumptions belong in this report. Preserve named verified samples and continue decision-support work.
 
