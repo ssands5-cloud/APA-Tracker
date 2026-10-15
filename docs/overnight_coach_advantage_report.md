@@ -10,7 +10,14 @@
 
 # CURRENT PRIORITIES
 
-**SEND-LAYOUT-01 and NAME-DISPLAY-01 (issue #84, Paul's request): implemented for Python + HTML Next Send; workbook Next Send NOT yet done.**
+**New repository skill `.github/skills/captain-decision-review/SKILL.md` (Paul's request).** Captain, Trust,
+Consistency and Match-Night tests plus a fixed audit output. Use it on every review of Next Send, Blind Send,
+Threat Panel, Scouting Cards, Coach Notes, Captain Matrix, War Room and Captain Packet. Written to the
+writing-skills structure but not pressure-tested with subagents. Auditor findings still open for GPT:
+shared sample-size definition across screens, cap legality at the Next Send pick, fragility of low-sample
+"favorable", "Best-supported response"/"Avoid" wording at 1 meeting, rank-number consistency.
+
+**SEND-LAYOUT-01 and NAME-DISPLAY-01 (issue #84, Paul's request): implemented for Python, HTML and workbook Next Send (details and known gaps below).**
 Ranking rule untouched. (1) Every ranked direct candidate now gets its own line (medal for the first three
 ranks, plain rank number after) — the old "+N more below the top three" collapse is gone. Shared-only stays
 "≈ not ordered", Avoid and Unknown stay separate. (2) Next Send text no longer shows "(APA record ID n)";
