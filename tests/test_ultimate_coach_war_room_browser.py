@@ -536,7 +536,7 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
             text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
-            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2 (2 meetings))"
+            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2 (2 meetings), small sample)"
             card.locator(".ns-more summary").click()
             assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning · small sample" in card.inner_text()
             # Chips: tap Eve -> shared-only, never medalled.
@@ -2128,6 +2128,24 @@ def test_incomplete_budget_is_disclosed_once_for_shared_missing_skill(tmp_path: 
             assert page.locator('#next-send .ns-budget-scope').count()==1
             assert page.locator('#next-send .ns-budget').count()==0
             assert page.locator('#next-send [data-send-our]').evaluate_all('(els)=>els.map(e=>e.dataset.sendOur)')==before
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors==[]
+        finally:browser.close()
+
+
+def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page,errors=_page(tmp_path,browser)
+            text=page.locator('#scouting-cards .quick-read').first.inner_text()
+            assert 'Historical top record: Ann Archer (2-0, small sample)' in text
+            assert 'Avoid: Bea Baker (0-2, small sample)' in text
+            summary=page.locator('#next-send .ns-more summary')
+            assert 'small sample' in summary.inner_text()
+            assert not page.locator('#next-send .ns-more').evaluate('(el)=>el.open')
+            page.set_viewport_size({'width':390,'height':844})
+            assert 'small sample' in summary.inner_text()
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
             assert errors==[]
         finally:browser.close()

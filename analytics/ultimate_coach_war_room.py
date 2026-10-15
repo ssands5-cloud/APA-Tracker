@@ -402,7 +402,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
         if group:
             top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
             rec = record_text(*top[0]["direct"])
-            parts.append(f"{label}: {names(top)} ({rec}{', tied' if len(top) > 1 else ''})")
+            parts.append(f"{label}: {names(top)} ({rec}{', small sample' if top[0]['direct'][1] < 3 else ''}{', tied' if len(top) > 1 else ''})")
             break
     else:
         shared = [r for r in rows if r["category"] == "I"]
@@ -410,7 +410,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
                      if shared else "No evidence-backed answer on our roster")
     avoid = [r for r in rows if r["category"] == "R"]
     if avoid:
-        parts.append("Avoid: " + ", ".join(f"{r['member']['name']} ({record_text(*r['direct'])})" for r in reversed(avoid)))
+        parts.append("Avoid: " + ", ".join(f"{r['member']['name']} ({record_text(*r['direct'])}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
     if card["winning_sl"] not in ("—", "None recorded"):
         parts.append(f"Winning records vs {card['winning_sl']}")
     if card["losing_sl"] not in ("—", "None recorded"):

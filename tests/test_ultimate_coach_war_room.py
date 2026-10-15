@@ -784,3 +784,15 @@ def test_next_send_one_game_leader_discloses_small_sample_without_reranking():
     assert [r['member']['id'] for r in ns['ranked']]==[1,2]
     assert 'small sample' in ns['ranked'][0]['reason']
     assert 'small sample' not in ns['ranked'][1]['reason']
+
+
+def test_quick_read_keeps_pair_sample_caution_for_answer_and_avoid():
+    ours=[_m(1,"Ann"),_m(2,"Bea"),_m(3,"Jo")];theirs=[_m(50,"Opponent")]
+    index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10),(3,50,0,1),(50,3,1,1)))
+    wr=war_room_pair(ours,theirs,index,"EIGHT")
+    text=wr['cards'][0]['quick_read']
+    assert 'Historical top record: Ann (1-0, small sample)' in text
+    assert 'Avoid: Jo (0-1, small sample)' in text
+    large=war_room_pair([ours[1]],theirs,index,"EIGHT")['cards'][0]['quick_read']
+    assert 'Historical top record: Bea (8-2)' in large
+    assert 'small sample' not in large

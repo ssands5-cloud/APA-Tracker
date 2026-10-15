@@ -378,8 +378,8 @@ def test_inspect_views_rank_candidates_and_show_one_players_evidence_vs_all(book
 
 def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(book, built):
     card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 19)}
-    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Historical top record: Ann Archer (2-0) · "
-                                  "Avoid: Bea Baker (0-2)")
+    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Historical top record: Ann Archer (2-0, small sample) · "
+                                  "Avoid: Bea Baker (0-2, small sample)")
     assert card["Team record"] == "7-1 (this team, Fall 2026)"
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
     assert card["Meetings with our players"] == f"vs {ANN}: 0-2 · vs {BEA}: 2-0 · vs {DEE}: 1-1"

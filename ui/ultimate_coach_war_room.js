@@ -98,11 +98,11 @@
     [["G","Historical top record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
-      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top.length>1?", tied":"")+")");done=true;});
+      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");done=true;});
     if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
       parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
     var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
-    if(av.length) parts.push("Avoid: "+av.map(function(r){return r.member.name+" ("+wlText(r.c.direct.w,r.c.direct.g)+")";}).join(", "));
+    if(av.length) parts.push("Avoid: "+av.map(function(r){return r.member.name+" ("+wlText(r.c.direct.w,r.c.direct.g)+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
     if(c.winning_sl!=="—"&&c.winning_sl!=="None recorded") parts.push("Winning records vs "+c.winning_sl);
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
     return parts.join(" · ");
@@ -592,7 +592,7 @@
         if(!ns.ranked.length) return unord+rest+'</ul>';
         if(!unord&&!rest) return '</ul>';
         var sum=[];
-        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.display+" ("+a.reason.split(" — ")[0].replace(" direct record","")+")";}).join(", "));
+        if(ns.avoid.length) sum.push("⚠ Avoid: "+ns.avoid.map(function(a){return a.display+" ("+a.reason.split(" — ")[0].replace(" direct record","")+(a.reason.indexOf(" · small sample")!==-1?", small sample":"")+")";}).join(", "));
         if(ns.unordered.length) sum.push("≈ "+ns.unordered.length+" not ordered");
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
