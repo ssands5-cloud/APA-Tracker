@@ -93,7 +93,7 @@
   function wrQuickRead(c,b){
     var tw=c.their_wins,tg=c.their_games,parts=[];
     if(!tg) parts.push("Unknown vs our roster — no meetings (not weak)");
-    else parts.push((tw>tg-tw?"Threat":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+")");
+    else parts.push((tw>tg-tw?"Threat":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+(tg<3?", small sample":"")+")");
     var names=function(g){return g.map(function(r){return r.member.name;}).join(", ");},done=false;
     [["G","Historical top record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
@@ -138,7 +138,7 @@
     var threats=cards.filter(function(c){return c.their_games&&c.their_wins>c.their_games-c.their_wins;});
     threats.sort(function(x,y){var a=2*x.their_wins-x.their_games,b=2*y.their_wins-y.their_games;if(a!==b) return b-a;
       if(x.their_wins!==y.their_wins) return y.their_wins-x.their_wins;if(x.their_games!==y.their_games) return y.their_games-x.their_games;return memberOrder(x.opponent,y.opponent);});
-    threats.forEach(function(c){c.threat_text=c.label+" · SL "+c.sl+" · "+wlText(c.their_wins,c.their_games)+" vs our roster ("+plural(c.their_games,"meeting")+", "+c.players_met+" of our players)";});
+    threats.forEach(function(c){c.threat_text=c.label+" · SL "+c.sl+" · "+wlText(c.their_wins,c.their_games)+" vs our roster ("+plural(c.their_games,"meeting")+", "+c.players_met+" of our players)"+(c.their_games<3?" · small sample":"");});
     var meetings=[];
     ours.forEach(function(m){theirs.forEach(function(o){
       var games=rowsFor(m.id,fmt).filter(function(r){return String(val(r,"opponent_id"))===String(o.id);}).map(function(r){
@@ -500,12 +500,12 @@
         // Full detail for the War Room risk panel, which has room; a compact line for Tonight,
         // which does not -- a longer version of this exact text pushed Open risks off a 390x844
         // Safari screen (the fourth time an addition here has done that).
-        text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)",
-        short:b.opponent.name+" — "+wlText(lw,lg)+" vs our roster still in play"});
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)"+(lg<3?" · small sample":""),
+        short:b.opponent.name+" — "+wlText(lw,lg)+(lg<3?" ("+plural(lg,"meeting")+", small sample)":" vs our roster still in play")});
       else if(unknownOnly) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,unknown:true,
         wins:gw,games:gg,playersMet:gone.length,
-        text:b.opponent_label+" · SL "+slText(b.opponent)+" · historically "+wlText(gw,gg)+" vs our roster, but that record is only against player(s) not in tonight's remaining lineup — unknown vs who is left, not cleared",
-        short:b.opponent.name+" — unknown vs our remaining roster (historically "+wlText(gw,gg)+")"});
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · historically "+wlText(gw,gg)+" vs our roster, but that record is only against player(s) not in tonight's remaining lineup — unknown vs who is left, not cleared"+(gg<3?" · small historical sample":""),
+        short:b.opponent.name+" — unknown vs our remaining roster (historically "+wlText(gw,gg)+(gg<3?", small sample":"")+")"});
     });
     out.sort(function(a,b2){
       if(a.unknown!==b2.unknown) return a.unknown?1:-1;
@@ -641,7 +641,7 @@
       +wrNextSendCard(w,plan,ta)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Best sends now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous opponents</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous vs remaining roster</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'

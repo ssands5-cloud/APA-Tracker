@@ -326,7 +326,8 @@ def war_room_pair(
                                 member_order_key(c["opponent"])))
     for c in threats:
         c["threat_text"] = (f"{c['label']} · SL {c['sl']} · {record_text(c['their_wins'], c['their_games'])} vs our "
-                            f"roster ({plural(c['their_games'], 'meeting')}, {c['players_met']} of our players)")
+                            f"roster ({plural(c['their_games'], 'meeting')}, {c['players_met']} of our players)"
+                            + (" · small sample" if c["their_games"] < 3 else ""))
 
     meeting_rows = []
     for member in ours:
@@ -393,7 +394,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
         parts = ["Unknown vs our roster — no meetings (not weak)"]
     else:
         word = "Threat" if tw > tg - tw else "Even" if 2 * tw == tg else "Vs our roster"
-        parts = [f"{word}: {record_text(tw, tg)} vs our roster ({plural(tg, 'meeting')})"]
+        parts = [f"{word}: {record_text(tw, tg)} vs our roster ({plural(tg, 'meeting')}{', small sample' if tg < 3 else ''})"]
     rows = block["rows"]
     def names(group):
         return ", ".join(r["member"]["name"] for r in group)
@@ -736,9 +737,10 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
                 "wins": live_wins, "games": live_games, "players_met": len(live),
                 "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
                         f"{record_text(live_wins, live_games)} vs our roster still in play "
-                        f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)",
-                "short": f"{opp['name']} — {record_text(live_wins, live_games)} vs our roster "
-                        "still in play",
+                        f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)"
+                        + (" · small sample" if live_games < 3 else ""),
+                "short": (f"{opp['name']} — {record_text(live_wins, live_games)} ({plural(live_games, 'meeting')}, small sample)"
+                          if live_games < 3 else f"{opp['name']} — {record_text(live_wins, live_games)} vs our roster still in play"),
             })
         elif dangerous_on_departed_evidence_only:
             out.append({
@@ -747,9 +749,9 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
                 "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
                         f"historically {record_text(gone_wins, gone_games)} vs our roster, but that "
                         "record is only against player(s) not in tonight's remaining lineup — "
-                        "unknown vs who is left, not cleared",
+                        "unknown vs who is left, not cleared" + (" · small historical sample" if gone_games < 3 else ""),
                 "short": f"{opp['name']} — unknown vs our remaining roster (historically "
-                        f"{record_text(gone_wins, gone_games)})",
+                        f"{record_text(gone_wins, gone_games)}{', small sample' if gone_games < 3 else ''})",
             })
     out.sort(key=lambda c: (c["unknown"], -(2 * c["wins"] - c["games"]) if c["games"] else 0,
                             member_order_key(c["opponent"])))

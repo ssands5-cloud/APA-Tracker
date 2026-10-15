@@ -282,7 +282,7 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
                 assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text
                 # Superseded wording: see the Threat Panel gap fix (live_threats).
-                assert "Eve Ellis — 2-0 vs our roster still in play" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
+                assert "Eve Ellis — 2-0 (2 meetings, small sample)" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
                 assert "vs Eve Ellis: Ann Archer — ≈ shared-opponent only (the only shared-opponent candidate)" in text
                 assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
                 assert errors == []
@@ -577,7 +577,7 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             reads = page.locator("#scouting-cards .quick-read")
             assert [reads.nth(i).inner_text().replace("QUICK READ", "Quick read").split(" ", 2)[2]
                     for i in range(reads.count())] == [c["quick_read"] for c in py["cards"]]
-            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings) · No direct answer")
+            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings, small sample) · No direct answer")
             clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
                 .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
             assert clipped == 0
@@ -1639,7 +1639,7 @@ def test_dangerous_opponents_reflects_who_is_actually_left_tonight(tmp_path: Pat
         try:
             page, errors = _page(tmp_path, browser)
             before = page.locator("#tonight .decide-threats").inner_text()
-            assert "Eve" in before and "still in play" in before.lower(), before
+            assert "Eve" in before and "remaining roster" in before.lower(), before
 
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="3"]', "Unavailable")
             after = page.locator("#tonight .decide-threats").inner_text()
@@ -2148,4 +2148,25 @@ def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path
             assert 'small sample' in summary.inner_text()
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
             assert errors==[]
+        finally:browser.close()
+
+
+def test_one_meeting_threat_stays_flagged_with_visible_sample_and_unknown_scope(tmp_path: Path):
+    payload=_payload()
+    payload['evidence']=[r for r in payload['evidence'] if {r['player_id'],r['opponent_id']}!={3,11}]+_games(3,11,'L')
+    path=tmp_path/'thin-threat.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={'width':390,'height':844});page.goto(path.as_uri())
+            panel=page.locator('#tonight .decide-threats')
+            assert 'remaining roster' in panel.inner_text().lower()
+            assert 'Eve Ellis — 1-0 (1 meeting, small sample)' in panel.inner_text()
+            assert 'small sample' in page.locator('#scouting-cards .quick-read').nth(1).inner_text()
+            assert 'small sample' in page.locator('#wr-risks').inner_text()
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="3"]','Unavailable')
+            assert 'unknown vs our remaining roster' in panel.inner_text()
+            assert 'small sample' in panel.inner_text()
+            assert 'not cleared' in page.locator('#wr-risks').inner_text()
         finally:browser.close()

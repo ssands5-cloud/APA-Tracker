@@ -796,3 +796,13 @@ def test_quick_read_keeps_pair_sample_caution_for_answer_and_avoid():
     large=war_room_pair([ours[1]],theirs,index,"EIGHT")['cards'][0]['quick_read']
     assert 'Historical top record: Bea (8-2)' in large
     assert 'small sample' not in large
+
+
+def test_one_meeting_threat_discloses_thin_history_without_clearing_the_flag():
+    wr=war_room_pair([_m(1,'Ann')],[_m(50,'Opponent')],build_pair_index(_pairs((1,50,0,1),(50,1,1,1))),'EIGHT')
+    row=live_threats(wr)[0]
+    assert row['live'] is True and row['wins']==1 and row['games']==1
+    assert 'small sample' in row['text'] and 'small sample' in row['short']
+    assert '1 meeting' in row['short']
+    assert 'small sample' in wr['threats'][0]['threat_text']
+    assert 'small sample' in wr['cards'][0]['quick_read']
