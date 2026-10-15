@@ -928,6 +928,12 @@ def _blank_if(ref: str, expr: str) -> str:
 # Match Day (control panel)
 # ---------------------------------------------------------------------------
 
+def _meeting_sl_display(row: str, column: str) -> str:
+    """Keep uncaptured historical SL out of the captain-facing numeric scale."""
+    value = f"INDEX(Meetings_Table[{column}],{row})"
+    return f'IFERROR(IF(1*{value}>0,1*{value},"?"),"?")'
+
+
 def build_match_day(wb, *, slots: dict[str, int], viewer_label: str | None, viewer_key: str | None,
                     card_number: str | None, default_team: str | None, stats: dict[str, Any],
                     format_options_source: str) -> None:
@@ -1274,10 +1280,10 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         _span(ws, r, 2, 4, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row}))', font=SMALL, wrap=False)
         _span(ws, r, 5, 8, f'=IF({cond},"",INDEX(Meetings_Table[Opponent],{row}))', font=SMALL, wrap=False)
         ws.cell(row=r, column=9, value=f'=IF({cond},"",INDEX(Meetings_Table[Result],{row}))').font = SMALL
-        ws.cell(row=r, column=10, value=f'=IF({cond},"",INDEX(Meetings_Table[Our SL],{row})&" / "&INDEX(Meetings_Table[Their SL],{row}))').font = SMALL
+        ws.cell(row=r, column=10, value=f'=IF({cond},"",{_meeting_sl_display(row, "Our SL")}&" / "&{_meeting_sl_display(row, "Their SL")})').font = SMALL
         _span(ws, r, 11, 12, f'=IF({cond},"",INDEX(Meetings_Table[Session],{row}))', font=SMALL, wrap=False)
     _span(ws, top + 2 + MEETING_SLOTS, 1, 12,
-          f'=IF(AND(wr_HasEvidence,ISNUMBER(MATCH(wr_PairKey&"|{MEETING_SLOTS + 1}",Meetings_Table[Key],0))),"More meetings exist — '
+          f'="? = SL not captured. "&IF(AND(wr_HasEvidence,ISNUMBER(MATCH(wr_PairKey&"|{MEETING_SLOTS + 1}",Meetings_Table[Key],0))),"More meetings exist — '
           f'filter the Meetings sheet by this pairing.",IF(AND(wr_HasEvidence,NOT(ISNUMBER(MATCH(wr_PairKey&"|1",Meetings_Table[Key],0)))),'
           f'"No recorded direct meetings between these rosters.",""))', font=base.MUTED_FONT)
 
@@ -1824,7 +1830,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     total = 'IF(wr_PairKey="",0,COUNTIF(Meetings_Table[Pair Key],wr_PairKey))'
     _span(ws, p5 + 1, 1, 12, f'=IF({total}=0,"No recorded direct meetings between these rosters in this format.",'
                              f'"Showing "&MIN({total},{MEETING_SLOTS})&" of "&{total}&" recorded meeting(s)"&IF({total}>{MEETING_SLOTS},'
-                             f'" — the older "&({total}-{MEETING_SLOTS})&" are listed on the Meetings sheet.","."))',
+                             f'" — the older "&({total}-{MEETING_SLOTS})&" are listed on the Meetings sheet.","."))&" · ? = SL not captured"',
           font=font(10.5, bold=True, color=base.FELT_DEEP), wrap=False)
     h(p5 + 1, 16)
     hdr = p5 + 2
@@ -1845,7 +1851,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
             cond = f'OR(NOT(wr_HasEvidence),{row}="")'
             f12 = font(10.5)
             _span(ws, r, c0, cd, f'=IF({cond},"","{k}. "&INDEX(Meetings_Table[Date],{row})&CHAR(10)&INDEX(Meetings_Table[Result],{row})&'
-                                 f'" · SL "&INDEX(Meetings_Table[Our SL],{row})&"/"&INDEX(Meetings_Table[Their SL],{row}))', font=f12)
+                                 f'" · SL "&{_meeting_sl_display(row, "Our SL")}&"/"&{_meeting_sl_display(row, "Their SL")})', font=f12)
             _span(ws, r, cn, c9, f'=IF({cond},"",INDEX(Meetings_Table[Our Player],{row})&CHAR(10)&"vs "&'
                                  f'INDEX(Meetings_Table[Opponent],{row}))', font=f12)
         h(r, 29)

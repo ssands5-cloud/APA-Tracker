@@ -1240,3 +1240,22 @@ def test_lineup_selected_context_wraps_and_keeps_the_fixture_visible(built):
         text = _longest_plan_key(built) if row == 9 else _longest_team_label(built)
         need = _worst_height(text, ws.column_dimensions['C'].width, cell.font.sz, 30)
         assert ws.row_dimensions[row].height >= need
+
+@pytest.mark.parametrize('captured,display', [(0, '?'), (None, '?'), (-1, '?'), ('missing', '?'), ('4', '4')])
+def test_meeting_history_marks_missing_sl_without_changing_raw_record(tmp_path, captured, display):
+    path = write_workbook(_payload(), tmp_path / 'meeting-sl.xlsx', built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001')
+    wb = load_workbook(path)
+    meetings = wb['Meetings']
+    columns = [c.value for c in meetings[1]]
+    ours, theirs = columns.index('Our SL') + 1, columns.index('Their SL') + 1
+    for row in range(2, meetings.max_row + 1):
+        meetings.cell(row, ours).value = 5
+        meetings.cell(row, theirs).value = captured
+    book = Workbook(wb)
+    header = _row(wb, WR, 'Direct meetings between the rosters (newest first)')
+    assert '5 / ' + display in [book.display(WR, f'J{r}') for r in range(header + 2, header + 42)]
+    printed = '\n'.join(str(book.display(CP, cell.coordinate)) for row in wb[CP] for cell in row if 'Meetings_Table[Our SL]' in str(cell.value))
+    assert 'SL 5/' + display in printed
+    assert '? = SL not captured' in '\n'.join(str(book.display(CP, cell.coordinate)) for row in wb[CP] for cell in row if 'Showing ' in str(cell.value))
+
+    assert all(meetings.cell(row, theirs).value == captured for row in range(2, meetings.max_row + 1))
