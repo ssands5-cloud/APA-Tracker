@@ -1199,3 +1199,14 @@ def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_ide
     assert book.value("Engine", book.name("uc_ViewerKey").ref) == "1004"
     assert wb["Players"]["C2"].value == "1001"
     assert wb["Team Rosters"].column_dimensions["J"].hidden
+
+
+def test_invalid_meeting_sl_exports_as_unknown_in_answer_and_quick_read(tmp_path):
+    payload=_payload()
+    games=[r for r in payload["evidence"] if r["player_id"]==1 and r["opponent_id"]==10]
+    games[0]["opponent_skill_level"]=0;games[1]["opponent_skill_level"]="4"
+    path=write_workbook(payload,tmp_path/"unknown-sl.xlsx",built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001")
+    book=Workbook(load_workbook(path));book.set("Command Center","C6",CAM)
+    assert "Meeting opponent SL not captured" in "\n".join(_next_send(book))
+    assert "Meeting opponent SL not captured" in book.display(SC,"C7")
+    assert _next_send(book)[1].startswith("1. Ann Archer")

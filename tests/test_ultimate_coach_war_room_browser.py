@@ -10,6 +10,7 @@ import difflib
 from collections import defaultdict
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import sync_playwright
 
 from analytics.ultimate_coach_excel_payload import build_team_rosters
@@ -2267,5 +2268,30 @@ def test_phone_matrix_note_flag_opens_the_actual_coach_observation(tmp_path: Pat
             assert note.evaluate("e=>e===document.activeElement")
             assert note.input_value()=="Patient safeties; coach opinion."
             assert page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")==before
+            assert errors==[]
+        finally:browser.close()
+
+
+@pytest.mark.parametrize("levels, expected", [
+    ((0, "4"), "Meeting opponent SL not captured"),
+    (("4", 6), "Meeting opponent SL 6; roster capture SL 6; some meeting SLs not captured"),
+])
+def test_invalid_historical_sl_is_unknown_at_the_pick_without_changing_rank(tmp_path: Path, levels, expected):
+    payload=_payload()
+    games=[r for r in payload["evidence"] if r["player_id"]==1 and r["opponent_id"]==10]
+    games[0]["opponent_skill_level"],games[1]["opponent_skill_level"]=levels
+    path=tmp_path/"invalid-meeting-sl.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":390,"height":844});errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            first=page.locator("#next-send .ns-medal").first
+            assert first.locator("[data-send-our]").get_attribute("data-send-our")=="1"
+            assert expected in first.inner_text()
+            assert "Meeting opponent SL 0" not in first.inner_text()
+            assert expected in page.locator("#scouting-cards .quick-read").first.inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
             assert errors==[]
         finally:browser.close()

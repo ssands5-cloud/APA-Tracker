@@ -840,3 +840,17 @@ def test_tied_quick_read_does_not_assign_one_players_meeting_sl_to_the_other():
     assert "check each pairing's detail" in wr["cards"][0]["quick_read"]
     assert "roster capture SL 6" in next_send(wr,0)["ranked"][0]["reason"]
     assert "roster capture SL" not in next_send(wr,0)["ranked"][1]["reason"]
+
+
+def test_meeting_sl_context_treats_nonpositive_and_nonnumeric_levels_as_unknown():
+    from analytics.ultimate_coach_war_room import meeting_sl_context
+    for sl in (0, -1, "4", "", True, float("inf"), float("nan")):
+        assert meeting_sl_context([{"opp_sl": sl}], 6) == "Meeting opponent SL not captured"
+    assert meeting_sl_context([{"opp_sl": 4}], 0) == "Meeting opponent SL 4; roster capture SL not captured"
+
+
+def test_meeting_sl_context_handles_mixed_types_and_normalizes_numeric_display():
+    from analytics.ultimate_coach_war_room import meeting_sl_context
+    assert meeting_sl_context([{"opp_sl": "4"}, {"opp_sl": 6}], 6) == (
+        "Meeting opponent SL 6; roster capture SL 6; some meeting SLs not captured")
+    assert meeting_sl_context([{"opp_sl": 4.0}], 6.0) == "Meeting opponent SL 4; roster capture SL 6"

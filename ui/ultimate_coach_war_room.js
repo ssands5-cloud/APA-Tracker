@@ -111,7 +111,9 @@
   }
   function wrMeetingSLContext(games,rosterSL){
     if(!games.length) return "";
-    var seen={},missing=false;games.forEach(function(g){if(!wrKnown(g.opp_sl)) missing=true;else seen[g.opp_sl]=true;});
+    var capturedLevel=function(x){return typeof x==="number"&&isFinite(x)&&x>0?x:null;};
+    rosterSL=capturedLevel(rosterSL);
+    var seen={},missing=false;games.forEach(function(g){var sl=capturedLevel(g.opp_sl);if(sl===null) missing=true;else seen[sl]=true;});
     var levels=Object.keys(seen).map(Number).sort(function(a,b){return a-b;});
     if(!levels.length) return "Meeting opponent SL not captured";
     if(wrKnown(rosterSL)&&levels.every(function(sl){return sl===rosterSL;})&&!missing) return "";

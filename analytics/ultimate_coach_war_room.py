@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timezone
+from math import isfinite
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
@@ -234,10 +235,22 @@ def meeting_sl_context(games, roster_sl) -> str:
     """Factual meeting-versus-roster scope; never re-score the recorded result."""
     if not games:
         return ""
-    levels = sorted({g.get("opp_sl") for g in games if g.get("opp_sl") is not None})
+    def captured_level(value):
+        # Disclosure follows the numeric-positive SL bucket scope; never guess from text.
+        if type(value) not in (int, float) or value <= 0:
+            return None
+        if isinstance(value, float):
+            if not isfinite(value):
+                return None
+            return int(value) if value.is_integer() else value
+        return value
+
+    captured = [captured_level(g.get("opp_sl")) for g in games]
+    roster_sl = captured_level(roster_sl)
+    levels = sorted({sl for sl in captured if sl is not None})
     if not levels:
         return "Meeting opponent SL not captured"
-    missing = any(g.get("opp_sl") is None for g in games)
+    missing = any(sl is None for sl in captured)
     if roster_sl is not None and all(sl == roster_sl for sl in levels) and not missing:
         return ""
     note = "Meeting opponent SL " + ", ".join(str(sl) for sl in levels)
