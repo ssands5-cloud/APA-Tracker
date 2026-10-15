@@ -1210,3 +1210,23 @@ def test_invalid_meeting_sl_exports_as_unknown_in_answer_and_quick_read(tmp_path
     assert "Meeting opponent SL not captured" in "\n".join(_next_send(book))
     assert "Meeting opponent SL not captured" in book.display(SC,"C7")
     assert _next_send(book)[1].startswith("1. Ann Archer")
+
+
+def test_next_send_selected_opponent_wraps_without_hiding_the_name(tmp_path):
+    payload = _payload()
+    name = "Opponent " + "Longname " * 12 + "Finalsurname"
+    next(p for p in payload["players"] if p["id"] == 10)["name"] = name
+    path = write_workbook(payload, tmp_path / "long-selected.xlsx",
+                          built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001")
+    wb = load_workbook(path)
+    ws = wb["Command Center"]
+    cell = ws["C6"]
+    assert cell.alignment.wrap_text, "the selected opponent must wrap instead of clipping"
+    from openpyxl.utils import get_column_letter
+    width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 9))
+    need = _wrapped_lines(name, width, cell.font.sz) * cell.font.sz * 1.2
+    assert ws.row_dimensions[6].height >= need
+    book = Workbook(wb)
+    book.set("Command Center", "C6", name)
+    assert book.value("Engine", book.name("wr_NsJ").ref) == 1
+    assert _next_send(book)[1].startswith("1. Ann Archer")

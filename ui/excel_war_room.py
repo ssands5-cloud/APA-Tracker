@@ -2171,6 +2171,11 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _dv(ws, "C6", "wr_OppLabels", "Pick the opponent player they just put up.")
     _span(ws, 6, 10, 11, '=IF(wr_OppLabel="","","Mark sends Played on Lineup Lab — they drop out here.")',
           font=Font(size=10, color="5B6A61"), height=22)
+    # Excel does not auto-fit merged inputs. Keep the selected opponent readable
+    # at its existing font size, reserving space for any player label in the file.
+    ws["C6"].alignment = Alignment(wrap_text=True, vertical="center")
+    input_width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 9))
+    ws.row_dimensions[6].height = _worst_height(_longest_label(wb), input_width, 12, 22)
     # The whole answer is ONE wrapped cell (wr_NsCard: headline, every ranked line, then the lists), so it reads top
     # to bottom with no empty medal rows in between. Each remaining player appears at most once in it, so size the
     # cell for the worst mix -- k medal lines plus the other R-k names in the lists -- with this workbook's
