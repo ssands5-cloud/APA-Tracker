@@ -639,8 +639,12 @@
       var s=plan.sends[j];
       if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",pid:b.opponent.id});return;}
       var r=s[0],direct=r.category!=="I";
-      var tied=direct&&s.length>1&&s[1].rank===r.rank;
-      sends.push({text:"vs "+b.opponent.name+": "+r.member.name+" — "+(direct?r.cell+" direct"+(r.c.direct.g<3?" ("+plural(r.c.direct.g,"meeting")+", small sample)":"")+(tied?" (tied with "+s[1].member.name+")":""):(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length))+(direct&&r.sl_context?" · "+r.sl_context:""),pid:b.opponent.id});
+      var tied=direct?s.filter(function(x){return x.category!=="I"&&wrGroupKey(x)===wrGroupKey(r);}):[];
+      var tieText=tied.length>1?" (tied with "+(tied.length-1)+" other"+(tied.length>2?"s":"")+"; see Next Send)":"";
+      var record=direct?r.cell+" direct"+(r.c.direct.g<3?" ("+plural(r.c.direct.g,"meeting")+", small sample)":"")+tieText
+        :(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length);
+      sends.push({text:"vs "+wrDisplayName(b.opponent,w.theirs)+": "+wrDisplayName(r.member,w.ours)+" — "+record
+        +(direct&&r.sl_context?" · "+r.sl_context:""),pid:b.opponent.id});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});

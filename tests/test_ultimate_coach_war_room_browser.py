@@ -281,10 +281,10 @@ def test_first_screen_shows_tonight_before_setup(tmp_path: Path):
                 assert box and box["y"] < vp["height"] * 0.6, (vp, box)
                 text = page.inner_text("#tonight")
                 assert "Sun Oct 11, 2026 · 11:00 AM MDT" in text and "Sharks" in text and "Falcons" in text
-                assert "vs Cam Cole: Ann Archer — 2-0 (2) direct" in text
+                assert f"vs Cam Cole: {ANN} — 2-0 (2) direct" in text
                 # Superseded wording: see the Threat Panel gap fix (live_threats).
                 assert "Eve Ellis — 2-0 (2 meetings, small sample)" in text  # Tonight is compact; full detail (SL, meeting count) is in the War Room panel
-                assert "vs Eve Ellis: Ann Archer — ≈ shared-opponent only (the only shared-opponent candidate)" in text
+                assert f"vs Eve Ellis: {ANN} — ≈ shared-opponent only (the only shared-opponent candidate)" in text
                 assert page.evaluate("document.documentElement.scrollWidth") <= vp["width"]
                 assert errors == []
                 page.close()
@@ -2328,5 +2328,44 @@ def test_tonight_send_summary_keeps_the_pick_sample_and_sl_cautions(tmp_path: Pa
                 assert page.locator("#next-send [data-send-our]").first.get_attribute("data-send-our") == "1"
                 assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_tonight_summary_uses_the_same_duplicate_player_cue_as_next_send(tmp_path: Path):
+    path = tmp_path / "summary-duplicate.html"
+    path.write_text(render(_payload(crowded=True), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(path.as_uri())
+            summary = page.locator("#tonight .decide-sends > span").first.inner_text()
+            assert "Ann Archer (SL 5)" in summary
+            assert "Ann Archer (SL 5)" in page.locator('#next-send [data-send-our="1"]').locator('..').inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+        finally:
+            browser.close()
+
+
+def test_tonight_summary_counts_all_tied_first_choices(tmp_path: Path):
+    from tests.test_excel_war_room_formulas import _tied_payload, _player, _hist
+    payload = _tied_payload()
+    payload["players"].append(_player(6, "1006", "Gia Green", [_hist("sharks-a", "d1", "EIGHT", 4)]))
+    payload["evidence"] += _games(6, 10, "WW")
+    path = tmp_path / "summary-ties.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page.goto(path.as_uri())
+            summary = page.locator("#tonight .decide-sends > span").first.inner_text()
+            assert "tied with 2 others" in summary
+            assert "see Next Send" in summary
+            assert page.locator('#next-send [data-send-our="1"]').count() == 1
+            assert page.locator('#next-send [data-send-our="5"]').count() == 1
+            assert page.locator('#next-send [data-send-our="6"]').count() == 1
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
         finally:
             browser.close()
