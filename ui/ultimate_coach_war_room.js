@@ -464,11 +464,11 @@
     var b=wrLineupBudget(w,plan,ta,sending);
     if(!b||!b.slots) return "";
     var bits=[],cls="ok";
-    if(b.feasible===false){cls="bad";bits.push("Cannot field a legal lineup: the cheapest "+b.slots+" left total "+b.cheapest+", "+(b.cheapest-b.left)+" over your remaining "+b.left);}
+    if(b.unknown){bits.push("Budget check incomplete — "+b.unknown+" without a captured SL; no lineup cleared");}
+    else if(b.feasible===false){cls="bad";bits.push("Cannot field a legal lineup: the cheapest "+b.slots+" left total "+b.cheapest+", "+(b.cheapest-b.left)+" over your remaining "+b.left);}
     else if(b.feasible===null) bits.push(b.left+" left for "+b.slots+" more — not enough captured skill levels to check");
     else bits.push(b.left+" of "+b.cap+" left for "+b.slots+" more (cheapest "+b.cheapest+")");
-    if(b.sendingKeepsLegal===false){cls="bad";bits.push("sending this player would leave you unable to field a legal lineup");}
-    if(b.unknown) bits.push(b.unknown+" without a captured SL — incomplete");
+    if(!b.unknown&&b.sendingKeepsLegal===false){cls="bad";bits.push("sending this player would leave you unable to field a legal lineup");}
     return '<div class="lineup-budget '+cls+'"><span class="lb-label">Skill cap '+b.cap+' (yours)</span><span>'+esc(bits.join(" · "))+'</span></div>';
   }
 
@@ -483,7 +483,7 @@
     var av=wrAvail(plan.ck,b.member.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';
     return '<div class="blind-send'+(b.weak?" weak":"")+'">'
       +'<span class="bs-label">If we put up first</span>'
-      +'<b class="bs-name">'+esc(playerRef(b.member))+'</b>'
+      +'<b class="bs-name">'+esc(wrDisplayName(b.member,w.ours))+'</b>'+wrCandidateBudget(w,plan,ta,b.member)
       +'<span class="bs-why">'+esc(b.why)+av+'</span></div>'
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
@@ -560,8 +560,7 @@
     var text="",bad=false;
     if(b.sendingKeepsLegal===false){
       bad=true;
-      text="Skill cap: this choice exceeds your entered skill budget for the remaining lineup";
-      if(b.unknown) text+=" using captured SLs; "+b.unknown+" SL unknown — check manually";
+      text=b.unknown?"Captured-SL comparison exceeds entered budget; check incomplete":"Skill cap: this choice exceeds your entered skill budget for the remaining lineup";
     }
     return text?'<span class="ns-budget'+(bad?' bad':'')+'">'+esc(text)+'</span>':"";
   }
@@ -569,7 +568,7 @@
   function wrNextSendCard(w,plan,ta){
     var budget=wrLineupBudget(w,plan,ta,null);
     var budgetScope=budget&&budget.slots&&(budget.unknown||budget.feasible===null)
-      ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete for these choices — missing skill levels or remaining players. Check manually.</p>':"";
+      ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.</p>':"";
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];

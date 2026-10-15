@@ -1524,12 +1524,12 @@ def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(t
             assert budget.count() == 1, "a cap the captain entered must be used, not just stored"
             assert "23" in budget.inner_text(), budget.inner_text()
 
-            # A cap too small for the cheapest remaining players must say so, in the captain's terms.
+            # The fixture has an unknown SL: a low captured subtotal comparison is not a proof of illegality.
             page.fill("#ll-cap", "2")
             page.dispatch_event("#ll-cap", "change")
             txt = page.locator("#tonight .lineup-budget").inner_text()
-            assert "cannot field a legal lineup" in txt.lower(), txt
-            assert "bad" in page.locator("#tonight .lineup-budget").get_attribute("class")
+            assert "incomplete" in txt.lower() and "no lineup cleared" in txt.lower(), txt
+            assert "cannot field a legal lineup" not in txt.lower()
             assert errors == []
         finally:
             browser.close()
@@ -2184,5 +2184,59 @@ def test_next_send_distinguishes_meeting_sl_from_captured_roster_sl(tmp_path: Pa
             assert first.locator('[data-send-our]').get_attribute('data-send-our')=='1'
             page.set_viewport_size({'width':390,'height':844})
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors==[]
+        finally:browser.close()
+
+
+def test_entered_budget_counts_unknown_availability_and_does_not_clear_unknown_sl(tmp_path: Path):
+    from tests.test_excel_war_room_formulas import _payload as crowded_payload
+    path=tmp_path/"budget-trust.html"
+    path.write_text(render(crowded_payload(crowded=True),built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":390,"height":844});page.goto(path.as_uri())
+            before=page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")
+            page.fill("#ll-cap","7");page.locator("#ll-cap").dispatch_event("change")
+            # Current implementation already counts Unknown as remaining: challenge stale audit.
+            assert page.locator("#tonight .lineup-budget").count()==1
+            assert page.locator("#next-send .ns-budget-scope").count()==1
+            # An uncaptured SL could be cheaper: captured subtotal is not a proof of illegality.
+            assert "Cannot field a legal lineup" not in page.locator("#tonight .lineup-budget").inner_text()
+            assert "No choice is cleared" in page.locator("#next-send .ns-budget-scope").inner_text()
+            assert page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")==before
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
+        finally:browser.close()
+
+
+def test_blind_pick_shares_next_send_label_and_carries_candidate_budget_warning(tmp_path: Path):
+    from tests.test_excel_war_room_formulas import _payload as crowded_payload
+    payload=crowded_payload(crowded=True)
+    payload["players"][2]["team_history"][0]["skill_level"]=3
+    path=tmp_path/"blind-budget.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":390,"height":844});page.goto(path.as_uri())
+            page.fill("#ll-cap","5");page.locator("#ll-cap").dispatch_event("change")
+            lead=page.locator("#tonight .blind-send")
+            assert lead.locator(".bs-name").inner_text()=="Ann Archer (SL 5)"
+            assert "exceeds your entered skill budget" in lead.locator(".ns-budget").inner_text()
+            assert "Cannot field a legal lineup" in page.locator("#tonight .lineup-budget").inner_text()
+            assert page.locator("#next-send .ns-medal").first.locator("b").first.inner_text()==lead.locator(".bs-name").inner_text()
+        finally:browser.close()
+
+
+def test_missing_sl_does_not_turn_known_subtotal_into_proven_lineup_failure(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page,errors=_page(tmp_path,browser)
+            page.fill("#ll-cap","7");page.locator("#ll-cap").dispatch_event("change")
+            text=page.locator("#tonight .lineup-budget").inner_text()
+            assert "Cannot field a legal lineup" not in text
+            assert "unable to field a legal lineup" not in text
+            assert "incomplete" in text
             assert errors==[]
         finally:browser.close()
