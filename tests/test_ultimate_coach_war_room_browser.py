@@ -2227,7 +2227,10 @@ def test_blind_pick_shares_next_send_label_and_carries_candidate_budget_warning(
             lead=page.locator("#tonight .blind-send")
             assert lead.locator(".bs-name").inner_text()=="Ann Archer (SL 5)"
             assert "exceeds your entered skill budget" in lead.locator(".ns-budget").inner_text()
-            assert "Cannot field a legal lineup" in page.locator("#tonight .lineup-budget").inner_text()
+            budget_text=page.locator("#tonight .lineup-budget").inner_text()
+            assert "unplayed roster opponents" in budget_text
+            assert "not a match-legality check" in budget_text
+            assert "Cannot field a legal lineup" not in budget_text
             assert page.locator("#next-send .ns-medal").first.locator("b").first.inner_text()==lead.locator(".bs-name").inner_text()
         finally:browser.close()
 

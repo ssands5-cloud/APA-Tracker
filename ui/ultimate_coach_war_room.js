@@ -428,10 +428,9 @@
   }
 
   // ---- Lineup budget (mirrors analytics.lineup_budget) ----
-  // APA caps the total skill level of the players you put up. Spend the low numbers early and you
-  // can be left unable to field a legal lineup -- a match lost to arithmetic. The cap is NEVER
-  // assumed: with nothing entered in Lineup Lab this renders nothing at all. An uncaptured SL
-  // makes the answer incomplete rather than guessed.
+  // Optional reference comparison: one slot per unplayed roster opponent. Required match sends
+  // and format constraints are not configured here, so this cannot establish match legality.
+  // No cap is assumed; missing captured SL makes the comparison incomplete.
   function wrLineupBudget(w,plan,ta,sending){
     var cap=parseInt(WR_PLAN.cap[ta.key],10);
     if(!(cap>0)) return null;
@@ -464,13 +463,12 @@
   function wrBudgetLine(w,plan,ta,sending){
     var b=wrLineupBudget(w,plan,ta,sending);
     if(!b||!b.slots) return "";
-    var bits=[],cls="ok";
+    var bits=["Reference: "+b.slots+" unplayed roster opponents, not verified required sends — not a match-legality check"],cls="ok";
     if(b.unknown){bits.push("Budget check incomplete — "+b.unknown+" without a captured SL; no lineup cleared");}
-    else if(b.feasible===false){cls="bad";bits.push("Cannot field a legal lineup: the cheapest "+b.slots+" left total "+b.cheapest+", "+(b.cheapest-b.left)+" over your remaining "+b.left);}
+    else if(b.feasible===false){cls="bad";bits.push("Captured-SL comparison exceeds entered budget: the cheapest "+b.slots+" left total "+b.cheapest+", "+(b.cheapest-b.left)+" over your remaining "+b.left);}
     else if(b.feasible===null) bits.push(b.left+" left for "+b.slots+" more — not enough captured skill levels to check");
     else bits.push(b.left+" of "+b.cap+" left for "+b.slots+" more (cheapest "+b.cheapest+")");
-    if(!b.unknown&&b.sendingKeepsLegal===false){cls="bad";bits.push("sending this player would leave you unable to field a legal lineup");}
-    return '<div class="lineup-budget '+cls+'"><span class="lb-label">Skill cap '+b.cap+' (yours)</span><span>'+esc(bits.join(" · "))+'</span></div>';
+    return '<div class="lineup-budget '+cls+'"><span class="lb-label">Reference budget '+b.cap+' (yours)</span><span>'+esc(bits.join(" · "))+'</span></div>';
   }
 
   function wrBlindSendCard(w,plan,ta){
@@ -561,7 +559,7 @@
     var text="",bad=false;
     if(b.sendingKeepsLegal===false){
       bad=true;
-      text=b.unknown?"Captured-SL comparison exceeds entered budget; check incomplete":"Skill cap: this choice exceeds your entered skill budget for the remaining lineup";
+      text=b.unknown?"Captured-SL comparison exceeds entered budget; check incomplete":"Reference comparison: this choice exceeds your entered skill budget";
     }
     return text?'<span class="ns-budget'+(bad?' bad':'')+'">'+esc(text)+'</span>':"";
   }
