@@ -224,7 +224,7 @@
   function wrNoteFlagHtml(pid,kind,label){
     var n=wrCoachSummary(pid);
     if(!n) return "";
-    if(kind==="icon") return '<span class="note-flag" title="'+esc(n+" (your opinion, not APA facts)")+'">📝</span>';
+    if(kind==="icon") return '<a class="note-flag" href="#coach-note-'+esc(pid)+'" aria-label="Read Coach Observation" style="display:inline-flex;min-width:44px;min-height:44px;align-items:center;justify-content:center" title="'+esc(n+" (your opinion, not APA facts)")+'">📝</a>';
     if(kind==="preview-space") return ' <span>'+wrNotePreview(n,label)+'</span>';
     if(kind==="dot") return ' · 📝 '+esc(n)+' (your opinion, not APA facts)';
     if(kind==="card") return '📝 '+esc(n+" (your opinion, not APA facts)");
@@ -774,7 +774,7 @@
           +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
-          +'<textarea class="plan" data-plan="note" data-pid="'+pid+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'
+          +'<textarea id="coach-note-'+pid+'" class="plan" data-plan="note" data-pid="'+pid+'" aria-label="Coach Observation for '+esc(c.label)+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'
           +'<div class="coach-summary">'+esc(wrCoachSummary(c.opponent.id))+'</div>'+wrArchiveHtml(c.opponent.id)+'</dd></dl></div>';
       }).join("")+'</div>';
     // Meetings

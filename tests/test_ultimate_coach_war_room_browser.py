@@ -39,7 +39,7 @@ _NOTE_BADGE_SENTINEL = "T|SPAN|❓ No coach observations"
 # evidence it could corrupt -- so up to one occurrence per of those two icon-style locations may
 # appear or disappear, matched by the exact literal glyph text, same bar as the sentinel above,
 # not a tag-shaped exemption.
-_NOTE_FLAG_GLYPH_LINE = "T|SPAN|📝"
+_NOTE_FLAG_GLYPH_LINE = "T|A|📝"
 _NOTE_FLAG_GLYPH_LOCATIONS = 2
 
 
@@ -2239,5 +2239,27 @@ def test_missing_sl_does_not_turn_known_subtotal_into_proven_lineup_failure(tmp_
             assert "Cannot field a legal lineup" not in text
             assert "unable to field a legal lineup" not in text
             assert "incomplete" in text
+            assert errors==[]
+        finally:browser.close()
+
+
+def test_phone_matrix_note_flag_opens_the_actual_coach_observation(tmp_path: Path):
+    path=tmp_path/"phone-note.html"
+    path.write_text(render(_payload(),built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":390,"height":844},has_touch=True,is_mobile=True)
+            errors=[];page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            before=page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")
+            note=page.locator('textarea[data-plan="note"][data-pid="10"]')
+            note.fill("Patient safeties; coach opinion.");note.dispatch_event("change")
+            flag=page.locator(".matrix thead th .note-flag")
+            assert flag.get_attribute("href")=="#coach-note-10"
+            box=flag.bounding_box();assert box["width"]>=44 and box["height"]>=44
+            flag.tap()
+            assert note.evaluate("e=>e===document.activeElement")
+            assert note.input_value()=="Patient safeties; coach opinion."
+            assert page.locator("#next-send [data-send-our]").evaluate_all("els=>els.map(e=>e.dataset.sendOur)")==before
             assert errors==[]
         finally:browser.close()
