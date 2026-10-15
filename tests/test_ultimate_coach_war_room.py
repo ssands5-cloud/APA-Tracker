@@ -242,7 +242,7 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
         # who has not played. Sending her off this unordered list used to cost that silently.
         "≈ Bea — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
         "opponent (no verified direct meetings in this snapshot) · consider saving — our only favorable "
-        "direct option vs Opal",
+        "direct option vs Opal (2-1 in 3 meetings)",
         "❓ Unknown (no verified evidence, not weak): Ann"]
     quin = next_send(wr, 2)
     assert quin["ranked"] == [] and quin["headline"] == "No evidence-backed option left among our remaining players"
@@ -270,7 +270,7 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     assert [(m["medal"], m["rank"], m["display"]) for m in ns["ranked"]] == [
         ("🥇", "1=", "Ann"), ("🥇", "1=", "Bo"), ("🥈", "3", "Di"), ("🥉", "4", "Fay"), ("", "5", "Cy")]
     assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
-    assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul"
+    assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul (1-0 in 1 meeting, small sample)"
     assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
     assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played
@@ -487,7 +487,7 @@ def test_lineup_budget_subtracts_who_has_already_played():
 def test_lineup_budget_reports_that_a_legal_lineup_is_no_longer_possible():
     """The trap this exists to catch: the cheapest remaining players still blow the cap."""
     wr = _war_room()
-    out = lineup_budget(wr, cap=6, slots=2, played={})           # Ann 5 + Bea 4 = 9 > 6
+    out = lineup_budget(wr, cap=6, slots=2, played={}, remaining={1, 2})           # Ann 5 + Bea 4 = 9 > 6
     assert out["feasible"] is False
     assert "cannot" in out["note"].lower() or "no legal" in out["note"].lower(), out["note"]
 
@@ -499,6 +499,8 @@ def test_lineup_budget_will_not_guess_a_missing_skill_level():
     assert out["unknown_sl"] == 1
     assert out["complete"] is False
     assert "without a captured" in out["note"].lower(), out["note"]
+    missing = lineup_budget(wr, cap=6, slots=2, played={})
+    assert "cannot field" not in missing["note"] and "no lineup cleared" in missing["note"]
 
 
 def test_lineup_budget_is_inert_until_the_captain_supplies_the_cap():

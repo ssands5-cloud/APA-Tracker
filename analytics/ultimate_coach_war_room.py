@@ -486,6 +486,14 @@ def best_send_text(rows: list[dict[str, Any]]) -> str:
 MEDALS = ("🥇", "🥈", "🥉")
 
 
+def save_record_text(row: dict[str, Any]) -> str:
+    """Recorded scope beside a save warning, never a strategic strength estimate."""
+    if not row["direct"]:
+        return ""
+    w, games = row["direct"]
+    return f"{record_text(w, games)} in {games} meeting{'s' if games != 1 else ''}" + (", small sample" if games < 3 else "")
+
+
 def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = None,
               unplayed: list[bool] | None = None) -> dict[str, Any]:
     """Responses to opponent j among our remaining players, from the War Room ranking only.
@@ -515,7 +523,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
             continue
         greens = [r for r in other["rows"] if r["category"] == "G" and r["member"]["id"] in remaining]
         if len(greens) == 1:
-            only_green.setdefault(greens[0]["member"]["id"], []).append(other["opponent"]["name"])
+            only_green.setdefault(greens[0]["member"]["id"], []).append(f"{other['opponent']['name']} ({save_record_text(greens[0])})")
 
     groups: list[list[dict[str, Any]]] = []
     for r in rows:
@@ -609,15 +617,15 @@ def lineup_budget(war_room: dict[str, Any], *, cap: int | None, slots: int,
             out["sending_keeps_legal"] = (None if after is None
                                           else int(sl) + after + used <= cap)
     bits = []
-    if out["feasible"] is False:
+    if unknown:
+        bits.append(f"{unknown} player(s) without a captured skill level — this check is incomplete; no lineup cleared")
+    elif out["feasible"] is False:
         bits.append(f"cannot field a legal lineup: the cheapest {slots_left} left total {need}, "
                     f"{need - left} over your remaining {left}")
     elif need is None and slots_left:
         bits.append(f"not enough players with a captured skill level to check {slots_left} more slots")
     elif out["feasible"]:
         bits.append(f"{left} left for {slots_left} more")
-    if unknown:
-        bits.append(f"{unknown} player(s) without a captured skill level — this check is incomplete")
     out["note"] = " · ".join(bits)
     return out
 

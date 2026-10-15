@@ -1619,6 +1619,7 @@ def test_a_recommended_send_says_when_it_costs_coverage_elsewhere(tmp_path: Path
                 assert banned not in text, (banned, text)
             # And the save flag is the thing that names who is given up.
             assert "eve" in page.locator("#next-send .ns-save").first.inner_text().lower()
+            assert "2-0 in 2 meetings, small sample" in page.locator("#next-send .ns-save").first.inner_text()
             assert errors == []
         finally:
             browser.close()

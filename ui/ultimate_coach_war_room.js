@@ -280,7 +280,7 @@
     w.ours.forEach(function(m,i){
       if(!rem[String(m.id)]) return;
       var js=[];w.blocks.forEach(function(b,j){if(unplayed[j]&&green[j]===1&&w.matrix[i].cells[j].category==="G") js.push(j);});
-      if(js.length) unique.push(playerRef(m)+" — only favorable direct option vs "+w.blocks[js[0]].opponent_label+(js.length>1?" (and "+(js.length-1)+" more)":""));
+      if(js.length) unique.push(playerRef(m)+" — only favorable direct option vs "+js.map(function(j){return w.blocks[j].opponent_label+" ("+wrSaveRecord(w.matrix[i].cells[j])+")";}).join(", "));
     });
     var remN=0,unk=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
     w.ours.forEach(function(m){
@@ -341,6 +341,7 @@
       return member.name+" (SL "+member.skill_level+")";
     return playerRef(member);
   }
+  function wrSaveRecord(r){var d=r.c.direct;return d?wlText(d.w,d.g)+" in "+plural(d.g,"meeting")+(d.g<3?", small sample":""):"";}
   function wrNextSend(w,j,rem,unplayed){
     var b=w.blocks[j],roster=w.ours;
     if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",ranked:[],unordered:[],avoid:[],unknown:[]};
@@ -348,7 +349,7 @@
     var onlyGreen={};
     w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
       var g=o.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];});
-      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(o.opponent.name);}});
+      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(o.opponent.name+" ("+wrSaveRecord(g[0])+")");}});
     var groups=[];
     rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var last=groups[groups.length-1];
       if(last&&String(last[0].rank).replace("=","")===String(r.rank).replace("=","")) last.push(r); else groups.push([r]);});

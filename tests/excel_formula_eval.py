@@ -552,6 +552,11 @@ class _Parser:
             return " ".join(_to_text(self.scalar(args[0])).split())
         if name == "LEFT":
             return _to_text(self.scalar(args[0]))[:int(_to_number(self.scalar(args[1])))]
+        if name == "MID":
+            start, count = (int(_to_number(self.scalar(a))) for a in args[1:3])
+            if start < 1 or count < 0:
+                raise ExcelError("#VALUE!")
+            return _to_text(self.scalar(args[0]))[start - 1:start - 1 + count]
         if name == "FIND":
             at = _to_text(self.scalar(args[1])).find(_to_text(self.scalar(args[0])))
             if at < 0:

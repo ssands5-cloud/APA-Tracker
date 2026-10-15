@@ -63,6 +63,7 @@ from analytics.ultimate_coach_war_room import (
     stale_warning,
     suggested_date,
     war_room_pair,
+    save_record_text,
     COACH_TAGS,
     MATCH_NIGHT_GUIDE,
     ONBOARDING_LIMITS,
@@ -70,7 +71,7 @@ from analytics.ultimate_coach_war_room import (
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
-              "Player ID", "Category", "Cell", "Reason", "Captain Cell", "Rank Group"]
+              "Player ID", "Category", "Cell", "Reason", "Captain Cell", "Rank Group", "Save Record"]
 TC_COLUMNS = [
     "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
     "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
@@ -152,13 +153,13 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], base._sl_display(block["opponent"]),
                             block["opponent_sample"], "—", block["note"], len(block["rows"]),
-                            block["opponent"]["id"], "—", "—", "—", "—", "—"])
+                            block["opponent"]["id"], "—", "—", "—", "—", "—", "—"])
             for row in block["rows"]:
                 me_rows.append([None, row["rank"], row["player"], base._sl_display(row["member"]), row["direct_text"],
                                 row["shared_text"], row["basis"], row["position"], row["member"]["id"],
                                 row["category"], row["cell"], row["reason"], row["captain"],
                                 # Next Send medals: players with the same evidence share a rank group (and a medal).
-                                int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—"])
+                                int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—", save_record_text(row)])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -730,6 +731,20 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
     e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
+    def _save_targets(k: int, exclude_selected: bool) -> str:
+        pieces = []
+        for j in range(1, R + 1):
+            flag = f"Engine!${get_column_letter(1 + j)}${u_first + k - 1}"
+            cond = f"AND({flag},wr_NsJ<>{j})" if exclude_selected else flag
+            row = f"INDEX(wr_OppStart,{j})+{grid[(k, j)][2]}"
+            pieces.append(f'IF({cond}," · vs "&INDEX(wr_OppLabels,{j})&" ("&INDEX({ME}[Save Record],{row})&")","")')
+        joined = "&".join(pieces)
+        return f'=IFERROR(MID({joined},7,32767),"")'
+
+    e.block("Save evidence for remaining opponents", R, [
+        ("wr_UniqueDetails", lambda k, r: _save_targets(k, False)),
+        ("wr_NsSaveDetails", lambda k, r: _save_targets(k, True)),
+    ])
     medal = 'H{r}&"."'
 
     def _nm(expr: str, slot: str) -> str:
@@ -758,10 +773,11 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})", f"C{r}")}&" — "&INDEX({ME}[Reason],B{r})'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
-            f'" · consider saving — our only favorable direct option vs another unplayed opponent","")'
+            f'" · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}),"")'
             f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),"")')),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
         ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}")
+                                              + f'&IF(INDEX(wr_NsSaveDetails,C{r})="",""," · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}))'
                                               + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
         ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}"))),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
@@ -1140,10 +1156,11 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     _span(ws, u_top, 1, 12, "Unique favorable options — consider saving (the only remaining favorable direct option vs an unplayed opponent)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for n in range(1, R + 1):
-        _span(ws, u_top + n, 1, 12, (f'=IFERROR(INDEX(wr_OurLabels,MATCH({n},wr_UniqueRun,0))&" — only favorable direct option vs "&'
-                                     f'INDEX(wr_OppLabels,INDEX(wr_UniqueFirst,MATCH({n},wr_UniqueRun,0)))&IF(INDEX(wr_UniqueCount,'
-                                     f'MATCH({n},wr_UniqueRun,0))>1," (and "&(INDEX(wr_UniqueCount,MATCH({n},wr_UniqueRun,0))-1)&" more)",""),'
-                                     f'IF({n}=1,IF(wr_HasEvidence,"None right now.",""),""))'), font=SMALL)
+        _span(ws, u_top + n, 1, 12,
+              f'=IFERROR(INDEX(wr_OurLabels,MATCH({n},wr_UniqueRun,0))&" — only favorable direct option vs "&'
+              f'INDEX(wr_UniqueDetails,MATCH({n},wr_UniqueRun,0)),IF({n}=1,IF(wr_HasEvidence,"None right now.",""),""))',
+              font=SMALL)
+
 
     top = u_top + R + 2
     base._section(ws, top, "Matchup matrix — our players (rows) vs their players (columns)", last_col=12)

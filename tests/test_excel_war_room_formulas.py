@@ -227,7 +227,7 @@ def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
     assert risks == [f"{EVE} — only even or indirect evidence left"]
     unique = _list_after(book, built, "Unique favorable options — consider saving (the only remaining favorable direct option vs an unplayed opponent)", 8)
-    assert unique == [f"{ANN} — only favorable direct option vs {CAM}"]
+    assert unique == [f"{ANN} — only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample)"]
 
 
 def test_lineup_marks_change_candidates_but_never_the_evidence(book, built):
@@ -556,7 +556,7 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
     assert _next_send(book) == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN_N} (availability unknown)",
+        f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
         f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings)",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
