@@ -1488,7 +1488,12 @@ CARD_FIELDS = [("Quick read", "Quick Read"), ("Team record", "Team Record"), ("L
                ("Winning records vs", "Winning SL"), ("Losing records vs", "Losing SL"), ("Missing information", "Missing")]
 
 
-def _card_block(ws, top: int, k: int, *, compact: bool = False) -> int:
+def scouting_quick_read_height(texts, width: float, size: float = 9) -> float:
+    """Reserve room for any precomputed answer; merged formula cells never auto-fit."""
+    return max((_worst_height(str(text or ""), width, size, 18) for text in texts), default=18)
+
+
+def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: float | None = None) -> int:
     card = f"INDEX(wr_OppCard,{k})"
     _span(ws, top, 1, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
                           f'IF(INDEX(wr_OppPlayed,{k})="Played"," · already played",""))',
@@ -1498,7 +1503,7 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False) -> int:
         r = top + n
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","{label}")', font=base.LABEL_FONT)
         _span(ws, r, 3, 12, f'=IF(OR(INDEX(wr_OppLabels,{k})="",{card}=""),IF(INDEX(wr_OppLabels,{k})="","","Not precomputed for this pairing"),'
-                            f'INDEX(Scouting_Table[{col}],{card}))', font=SMALL)
+                            f'INDEX(Scouting_Table[{col}],{card}))', font=SMALL, height=quick_height if col == "Quick Read" else None)
     r = top + len(fields) + 1
     _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","Coach observations")', font=base.LABEL_FONT)
     _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",INDEX(wr_OppNotes,{k})))',
@@ -1514,9 +1519,14 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
     _head(ws, "Opponent Scouting Cards", "One card per opponent player — recorded facts, sample sizes, what's missing, "
                                          "and your notes.", last=12, current="Scouting Cards")
     _span(ws, 4, 1, 12, "=wr_Status", font=Font(bold=True, color=base.FELT_DEEP))
+    lookup = wb["Scouting"]
+    col = SCOUTING_COLUMNS.index("Quick Read") + 1
+    texts = (row[0] for row in lookup.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True))
+    width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 13))
+    quick_height = scouting_quick_read_height(texts, width, SMALL.sz)
     top = 6
     for k in range(1, R + 1):
-        top = _card_block(ws, top, k) + 1
+        top = _card_block(ws, top, k, quick_height=quick_height) + 1
     _span(ws, top, 1, 12, "“Winning/losing records vs SLx” only state the direction of recorded results against opponents "
                           "of that skill level, with the record shown — never a prediction. No meetings with our roster means "
                           "unknown, not weak.", font=base.MUTED_FONT, height=30)
