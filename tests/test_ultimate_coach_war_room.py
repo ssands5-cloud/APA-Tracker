@@ -806,3 +806,18 @@ def test_quick_read_flags_missing_coach_observations_but_only_when_actually_miss
     card, block = _badge_card([_badge_row("G", direct=(3, 4))])
     assert "❓ No coach observations" in quick_read_badges(card, block, has_note=False)
     assert "❓ No coach observations" not in quick_read_badges(card, block, has_note=True)
+
+
+def test_blind_send_discloses_thin_evidence_and_names_the_concerning_record():
+    """Audit Blind Send F1/F2: the lead pick shows how few meetings back it and how big the worry is."""
+    wr = _war_room()
+    for b in wr["blocks"]:
+        for r in b["rows"]:
+            if r.get("direct"):
+                r["direct"] = (min(r["direct"][0], 1), 1)
+    out = blind_send(wr)
+    assert out["member"] is not None, out
+    assert "small sample" in out["why"], out["why"]
+    assert "meeting" in out["why"], out["why"]
+    # Ordering stays as before the disclosure.
+    assert out["member"]["name"] == "Bea", out

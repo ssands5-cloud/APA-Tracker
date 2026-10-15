@@ -398,11 +398,15 @@
     for(i=0;i<w.blocks.length;i++) if(plan.unplayed[i]) live.push(w.blocks[i]);
     if(!live.length) return null;
     var stats={},order=0,any=false;
-    w.ours.forEach(function(m){ if(plan.rem[String(m.id)]){ stats[m.id]={member:m,order:order++,concerning:0,favorable:0,even:0}; any=true; } });
+    w.ours.forEach(function(m){ if(plan.rem[String(m.id)]){ stats[m.id]={member:m,order:order++,concerning:0,favorable:0,even:0,meetings:0,thin:false,worry:[]}; any=true; } });
     if(!any) return null;
     live.forEach(function(b){ b.rows.forEach(function(r){
       var st=stats[r.member.id]; if(!st) return;
-      if(r.category==="R") st.concerning++; else if(r.category==="G") st.favorable++; else if(r.category==="E") st.even++;
+      if(r.category==="R") st.concerning++; else if(r.category==="G") st.favorable++; else if(r.category==="E") st.even++; else return;
+      // Audit (Blind Send F1/F2): disclose the evidence size and the concerning record; order unchanged.
+      var d=r.c&&r.c.direct;
+      if(d){ st.meetings+=d.g; if(d.g<3) st.thin=true;
+        if(r.category==="R") st.worry.push(b.opponent_label+" "+wlText(d.w,d.g)); }
     });});
     var ranked=Object.keys(stats).map(function(k){return stats[k];});
     ranked.forEach(function(x){x.coverage=x.concerning+x.favorable+x.even;x.gap=live.length-x.coverage;});
@@ -428,6 +432,8 @@
         : t.favorable+" favorable, "+t.concerning+" concerning of "+n+gap;
     else if(t.favorable) why="favorable vs "+t.favorable+" of "+n+gap;
     else why="even vs "+t.even+" of "+n+gap;
+    if(t.worry.length) why+=" · concerning: "+t.worry.join("; ");
+    if(t.thin) why+=" · small sample ("+t.meetings+" meeting"+(t.meetings===1?"":"s")+" in all)";
     return {member:t.member,why:why,unranked:false,weak:t.favorable===0&&t.even===0};
   }
 

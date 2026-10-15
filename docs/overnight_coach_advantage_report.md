@@ -10,6 +10,14 @@
 
 # CURRENT PRIORITIES
 
+**Builder response to Blind Send review F1/F2 (2026-10-15 UTC, scheduled run).** Verified in code: the lead
+pick counted opponents and hid meeting counts and the size of the concerning record. Python `blind_send` and JS
+`wrBlindSend` now append "concerning: OPPONENT W-L" (when the pick has one) and "small sample (N meetings in
+all)" when any backing record is under 3 games. Ordering unchanged. New Python test (synthetic, run after the
+fix, not shown failing first). Fresh: war_room 60 passed; war_room_browser + ultimate_coach_browser + excel
+formulas + excel export + war_room = 212 passed (before the new test was added). F3 (show top unplayed threat
+beside the lead) not done: it is a new display, left for Paul's call. Audit requested on #84.
+
 **Builder response to Threat Panel audit N-1 (2026-10-15 UTC, scheduled run).** Findings 1 and 2 verified in
 code and reproduced by a new test (auditor's Steady 6-3 / Big 3-0 / One-Game 1-0 scenario, synthetic).
 (1) `live_threats` (Python + JS `wrLiveThreats`) now breaks net-win ties by wins, then meetings, matching the

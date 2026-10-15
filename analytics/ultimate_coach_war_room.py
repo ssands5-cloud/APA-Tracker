@@ -642,7 +642,8 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     for order, m in enumerate(war_room["ours"]):
         if m["id"] in remaining:
             by_member[m["id"]] = {"member": m, "order": order, "concerning": 0,
-                                  "favorable": 0, "even": 0}
+                                  "favorable": 0, "even": 0, "meetings": 0, "thin": False,
+                                  "worry": []}
     for block in live:
         for r in block["rows"]:
             stat = by_member.get(r["member"]["id"])
@@ -654,6 +655,17 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
                 stat["favorable"] += 1
             elif r["category"] == "E":
                 stat["even"] += 1
+            else:
+                continue
+            # Audit (Blind Send F1/F2): disclose how much evidence sits behind each count and
+            # how big the concerning record is. Ordering is NOT changed by either.
+            direct = r.get("direct")
+            if direct:
+                stat["meetings"] += direct[1]
+                if direct[1] < 3:
+                    stat["thin"] = True
+                if r["category"] == "R":
+                    stat["worry"].append(f'{block["opponent_label"]} {record_text(*direct)}')
     if not by_member:
         return empty
     for stat in by_member.values():
@@ -692,6 +704,10 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
         why = f"favorable vs {top['favorable']} of {n}{gap}"
     else:
         why = f"even vs {top['even']} of {n}{gap}"
+    if top["worry"]:
+        why += " · concerning: " + "; ".join(top["worry"])
+    if top["thin"]:
+        why += f" · small sample ({top['meetings']} meeting{'' if top['meetings'] == 1 else 's'} in all)"
     return {"member": top["member"], "why": why, "concerning": top["concerning"],
             "favorable": top["favorable"], "even": top["even"],
             "direct_coverage": top["direct_coverage"], "no_record": top["no_record"],
