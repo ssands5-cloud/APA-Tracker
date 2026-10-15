@@ -1,5 +1,8 @@
 # CURRENT PRIORITIES
 
+**Threat disclosure handoff 4cd2e68 is ready for bounded audit; builder continues TRUST-07 context.** A one-meeting winning opponent stays flagged, now with meeting count/small-sample caution on Tonight, full threat text and Quick Read. Historical-only unknown flags retain unknown/not-cleared wording and disclose thin history. Tonight's heading explicitly scopes the compact records to the remaining roster. Category thresholds, data, threat ordering and recommendation ranking are unchanged. Prior source d8d18b9 remains the completed summary/height handoff while Claude reviews it.
+
+
 **Paul's HANDSHAKE WINDOW / SNOWBALL directive supersedes serial audit waiting (2026-10-14 Mountain).** GPT builds; Claude audits. Once implementation and builder verification of A finish, hand A to Claude and begin B while its audit runs. Builder incorporates findings at the next logical checkpoint, promptly if they invalidate current work, recommendation integrity or captain trust. Never idle for review or Paul's availability. Order: Next Send, Threat Panel, Quick Read, Coach Notes, Captain Matrix. Measure captain decisions answered. Preserve ranking policy and release/privacy gates. Latest handoff is **d8d18b9**, including summary-caution fix **42c4ded**; next builder priority is the open Threat Panel concern while Claude audits that delta. No new skills or review frameworks.
 
 
@@ -56,6 +59,9 @@ Before applicable UI/workflow/dashboard/workbook/automation/report changes, revi
 Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:00 UTC). Keep draft PRs and separate explicit approval gates for merge, real-data publication, automatic refresh installation and destructive cleanup. Keep real identities, screenshots, credentials and raw/private oracles off public GitHub. Sanitized issue #84 coordination remains authorized; it does not itself wake Claude's session.
 
 # COMPLETED
+
+- **Threat thin-record disclosure — builder verified, 4cd2e68; audit proceeds in parallel.** 60 engine checks passed. Affected browser run covered 47 passing cases plus three intentional caption changes whose focused reruns passed; 50 distinct cases covered, including first-screen phone workflow and one-game/live-to-historical-unknown transition. Workbook formula run: 43 passed plus two caption updates with focused reruns passing. Real frozen-data HTML phone panel shows the caution without overflow; fresh synthetic native Excel has no formula errors on War Room/Scouting Cards/packet, and the printed one-game packet warning is visible. No outcome, speed or whole-lineup legality claim.
+
 
 - **Summary caution / Quick Read visibility handoff d8d18b9 — GPT verified; bounded Claude re-audit requested while work continues.** 42c4ded retains the existing 1-2-meeting caution in Quick Read's historical answer and Avoid entries and the folded HTML Avoid summary. A newly reproduced merged-cell height defect hid wrapped Quick Read text in Excel; d8d18b9 reserves height from all precomputed Quick Read text using the existing wrapping estimator. No ranking or category change. Private candidate `tmp/uat/build-d8d18b9` contains the completed 42c4ded content build plus the committed row-sizing helper applied in native Excel; base-build/native-layout provenance and final hashes are explicit in its local binding. This is an incremental native layout correction, not a claim of a fresh full d8d18b9 data rebuild.
 
@@ -118,6 +124,9 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+**4cd2e68 captain review:** decision = which flagged opponent warrants attention, and how thin is that history? Reproduced a 1-0 flag whose compact text omitted both count and caution. Smallest correction retains the flag and factual direction, adds the existing under-three disclosure and names remaining-roster scope; it does not declare the opponent safe or infer strength. Source/browser evidence verifies unchanged 1-game flag and unknown history after its only witness is marked unavailable. Real preview `tmp/uat/build-4cd2e68/ultimate_coach.html` uses an exact committed-JS rebind of the preserved d8d18b9 HTML. UI template unchanged; synthetic render equality proves that substitution equals rendering the same payload, and private binding records base/data/runtime hashes. This is a runtime-only update, not a new data build. The real workbook remains the prior d8d18b9 candidate; changed Threat workbook/packet captions are verified on synthetic native output, with a final consolidated real-workbook rebuild still required. A separately generated synthetic artifact must not be shown as Paul's actual data.
+
 
 **Claude audit reception / corrections, b6c0d38 -> 42c4ded -> d8d18b9.** Claude reported executing 138 unit/workbook and 48 browser checks at b6c0d38; GPT did not independently observe those executions, so they remain attributed auditor evidence. Claude's displayed-ID fallback finding was disputed with a fresh synthetic same-name/same-SL Chromium run: two distinct ordinal captions, no displayed ID suffix, separate exact send identities. Claude subsequently withdrew that finding after reading the actual renderer; no identity fix was needed. The two real sample-caution omissions were reproduced and corrected rather than accepting or merging all review suggestions blindly.
 
