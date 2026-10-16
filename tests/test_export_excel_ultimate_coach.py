@@ -295,6 +295,18 @@ def test_every_column_match_day_reads_through_index_is_fully_populated(tmp_path)
         values = [r for r in ws[ref]]
         header = [c.value for c in values[0]]
         idx = header.index(column)
+        if (table_name, column) == ("MatchupEvidence_Table", "Save Record"):
+            # Save warnings read this only behind the unique-favorable-direct guard.
+            # Indirect/unknown pairings have no direct record to disclose.
+            category = header.index("Category")
+            for row in values[1:]:
+                if row[category].value in ("G", "E", "R"):
+                    assert row[idx].value not in (None, ""), "direct save evidence must never become Excel zero"
+                elif row[category].value in ("I", "X"):
+                    assert row[idx].value in (None, ""), "indirect evidence must not invent a direct save record"
+                else:
+                    assert row[idx].value == "—", "opponent summary rows retain the explicit non-record sentinel"
+            continue
         blanks = [c.coordinate for c in (r[idx] for r in values[1:]) if c.value is None or c.value == ""]
         assert blanks == [], f"{table_name}[{column}] has blank cells {blanks}"
 

@@ -508,7 +508,7 @@ def test_packet_meeting_page_shows_every_record_two_across_with_dividers(book, b
     dropped, and black row dividers / light shading only on rows that hold a meeting."""
     ws = built[CP]
     top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Meeting history"))
-    assert book.display(CP, f"A{top + 1}") == "Showing 8 of 8 recorded meeting(s)."
+    assert book.display(CP, f"A{top + 1}") == "Showing 8 of 8 recorded meeting(s). · ? = SL not captured"
     first = top + 3
     one, two, three = book.display(CP, f"A{first}"), book.display(CP, f"G{first}"), book.display(CP, f"A{first + 1}")
     assert one.startswith("1. Sun Sep 20, 2026\n") and two.startswith("2. ") and three.startswith("3. ")
