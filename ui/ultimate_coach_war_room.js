@@ -199,9 +199,9 @@
   // are deliberately not migrated: they cannot be attributed to a fixture.
   // Coach notes (tags + observation) describe a PLAYER: kept per player id in plan.coach and shown on every
   // fixture's card. Notes written by the earlier per-team version (plan.notes[team][player].n) are carried over.
-  var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false;
+  var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false,WR_PLAN_CHANGED_ELSEWHERE=false,WR_PLAN_SAVED=null;
   var WR_PLAN=(function(){
-    var o=null;try{o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
+    var o=null;try{WR_PLAN_SAVED=window.localStorage.getItem("ultimate-coach:plan-v2");o=JSON.parse(WR_PLAN_SAVED||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
     var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{}};
     // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
     // different one (another team scope, or a note that already exists) is archived with its scope. The archive
@@ -292,6 +292,7 @@
   function wrSetCoach(pid,field,value){var c=WR_PLAN.coach[String(pid)]||(WR_PLAN.coach[String(pid)]={});if(value) c[field]=value; else delete c[field];wrSave();}
   function wrStorageMessage(){
     if(WR_PLAN_READ_FAILED) return "Previously saved marks and notes could not be read. Changes last only while this page is open; earlier saved data has not been replaced. Copy any notes before closing, then reopen the page to try again.";
+    if(WR_PLAN_CHANGED_ELSEWHERE) return "The saved plan changed elsewhere. Changes here are not saved. Copy any new notes before reloading this page to load the saved plan. Earlier saved data has not been replaced.";
     if(WR_PLAN_SAVE_FAILED) return "Planning changes are not saved. They last only while this page is open. Copy any notes before closing; saving will be tried again on your next edit.";
     return "";
   }
@@ -315,8 +316,19 @@
       show(el.parentNode,el,"wr-storage-note-"+el.getAttribute("data-pid"),false);});
   }
   function wrSave(){
-    // A failed read is not an empty saved plan: never overwrite data we could not load.
-    if(!WR_PLAN_READ_FAILED){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));WR_PLAN_SAVE_FAILED=false;}catch(e){WR_PLAN_SAVE_FAILED=true;}}
+    // Protect the saved plan if another page changed the snapshot this page loaded.
+    // This is a freshness guard, not a merge or an atomic multi-tab transaction.
+    if(!WR_PLAN_READ_FAILED){
+      var saved;
+      try{saved=window.localStorage.getItem("ultimate-coach:plan-v2");}catch(e){WR_PLAN_READ_FAILED=true;}
+      if(!WR_PLAN_READ_FAILED){
+        if(saved!==WR_PLAN_SAVED) WR_PLAN_CHANGED_ELSEWHERE=true;
+        else try{
+          var next=JSON.stringify(WR_PLAN);window.localStorage.setItem("ultimate-coach:plan-v2",next);
+          WR_PLAN_SAVED=next;WR_PLAN_SAVE_FAILED=false;WR_PLAN_CHANGED_ELSEWHERE=false;
+        }catch(e){WR_PLAN_SAVE_FAILED=true;}
+      }
+    }
     wrPatchStorageStatus();
   }
   function wrCtx(ta,tb){

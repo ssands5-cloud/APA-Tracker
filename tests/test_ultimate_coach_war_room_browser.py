@@ -2989,3 +2989,89 @@ def test_evidence_badges_fit_when_many_scouting_cards_share_the_screen(tmp_path,
             assert badges.evaluate_all("es=>es.every(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right+1)"), 'recorded-loss and small-sample badges must fit inside every card column'
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("edit", ['note', 'availability', 'sent', 'clear'])
+def test_stale_tab_cannot_replace_newer_saved_plan_and_can_recover_after_reload(tmp_path, width, edit):
+    path = tmp_path / 'two-tabs.html'
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(viewport={"width": width, "height": 844})
+            first = context.new_page()
+            errors = []
+            first.on('pageerror', lambda exc: errors.append(str(exc)))
+            first.goto(path.as_uri())
+            first.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
+            stale = context.new_page()
+            stale.set_viewport_size({"width": width, "height": 844})
+            stale.on('pageerror', lambda exc: errors.append(str(exc)))
+            stale.goto(first.url)
+            evidence = stale.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            first.locator('textarea.plan').first.fill('SYNTHETIC saved in first tab')
+            saved = first.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
+            if edit == 'note':
+                box = stale.locator('textarea.plan').nth(1)
+                box.focus()
+                box.fill('SYNTHETIC unsaved in stale tab')
+                assert box.evaluate('e=>e===document.activeElement')
+                assert box.input_value() == 'SYNTHETIC unsaved in stale tab'
+            elif edit == 'availability':
+                stale.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            elif edit == 'sent':
+                stale.locator('#next-send [data-send-our]').first.click()
+            else:
+                stale.locator('#ll-clear').click()
+            assert stale.evaluate("localStorage.getItem('ultimate-coach:plan-v2')") == saved, 'a stale whole-plan save must preserve newer notes and marks'
+            for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
+                warning = stale.locator(section + ' .wr-storage-warning').first
+                assert warning.is_visible()
+                assert 'saved plan changed elsewhere' in warning.inner_text().lower()
+                assert 'Copy any new notes before reloading' in warning.inner_text()
+            assert 'Saved in this browser' not in stale.locator('#ll-context').inner_text()
+            stale.locator('textarea.plan').nth(1).fill('SYNTHETIC still unsaved until reload')
+            assert stale.evaluate("localStorage.getItem('ultimate-coach:plan-v2')") == saved
+            assert stale.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert not stale.evaluate('document.documentElement.scrollWidth > innerWidth')
+            # Reload takes the saved plan; a copied edit can then save alongside it.
+            stale.reload()
+            assert stale.locator('textarea.plan').first.input_value() == 'SYNTHETIC saved in first tab'
+            assert stale.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Available'
+            assert stale.locator('.wr-storage-warning').count() == 0
+            stale.locator('textarea.plan').nth(1).fill('SYNTHETIC copied back after reload')
+            first.reload()
+            assert first.locator('textarea.plan').first.input_value() == 'SYNTHETIC saved in first tab'
+            assert first.locator('textarea.plan').nth(1).input_value() == 'SYNTHETIC copied back after reload'
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_a_failed_freshness_read_cannot_overwrite_the_last_saved_plan(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            box = page.locator('textarea.plan').first
+            box.fill('SYNTHETIC earlier saved observation')
+            saved = page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
+            page.evaluate("""() => {
+                const read = Storage.prototype.getItem;
+                window.__readStoredPlan = () => read.call(localStorage,'ultimate-coach:plan-v2');
+                Storage.prototype.getItem = function(key) {
+                    if (key === 'ultimate-coach:plan-v2') throw new DOMException('SYNTHETIC read blocked after load','SecurityError');
+                    return read.call(this,key);
+                };
+            }""")
+            box.fill('SYNTHETIC current-page observation')
+            assert box.input_value() == 'SYNTHETIC current-page observation'
+            assert page.evaluate('window.__readStoredPlan()') == saved, 'do not overwrite a plan whose current value cannot be checked'
+            assert 'Previously saved marks and notes could not be read' in page.locator('#tonight .wr-storage-warning').inner_text()
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
