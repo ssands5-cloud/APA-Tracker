@@ -1259,3 +1259,15 @@ def test_meeting_history_marks_missing_sl_without_changing_raw_record(tmp_path, 
     assert '? = SL not captured' in '\n'.join(str(book.display(CP, cell.coordinate)) for row in wb[CP] for cell in row if 'Showing ' in str(cell.value))
 
     assert all(meetings.cell(row, theirs).value == captured for row in range(2, meetings.max_row + 1))
+
+def test_scouting_print_keeps_complete_cards_on_separate_pages(built):
+    ws = built[SC]
+    tops = [cell.row for row in ws for cell in row if cell.column == 1 and 'already played' in str(cell.value)]
+    assert len(tops) > 1
+    assert ws.page_setup.orientation == 'landscape'
+    assert str(ws.print_title_rows) == '$1:$4'
+    assert not ws.sheet_properties.pageSetUpPr.fitToPage
+    assert 10 <= ws.page_setup.scale <= 100
+    assert [br.id for br in ws.row_breaks.brk] == [row - 1 for row in tops[1:]]
+    assert str(ws.print_area).endswith(str(ws.max_row))
+    assert ws['C7'].font.sz == 11

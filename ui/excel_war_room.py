@@ -1536,11 +1536,11 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: fl
         r = top + n
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","{label}")', font=base.LABEL_FONT)
         _span(ws, r, 3, 12, f'=IF(OR(INDEX(wr_OppLabels,{k})="",{card}=""),IF(INDEX(wr_OppLabels,{k})="","","Not precomputed for this pairing"),'
-                            f'INDEX(Scouting_Table[{col}],{card}))', font=SMALL, height=quick_height if col == "Quick Read" else None)
+                            f'INDEX(Scouting_Table[{col}],{card}))', font=Font(size=11), height=quick_height if col == "Quick Read" else None)
     r = top + len(fields) + 1
     _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","Coach observations")', font=base.LABEL_FONT)
     _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",INDEX(wr_OppNotes,{k})))',
-          font=SMALL)
+          font=Font(size=11))
     return r + 1
 
 
@@ -1556,14 +1556,35 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
     col = SCOUTING_COLUMNS.index("Quick Read") + 1
     texts = (row[0] for row in lookup.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True))
     width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 13))
-    quick_height = scouting_quick_read_height(texts, width, SMALL.sz)
+    quick_height = scouting_quick_read_height(texts, width, 11)
     top = 6
+    card_tops = []
     for k in range(1, R + 1):
+        card_tops.append(top)
+        if k > 1:
+            ws.row_breaks.append(Break(id=top - 1))
         top = _card_block(ws, top, k, quick_height=quick_height) + 1
     _span(ws, top, 1, 12, "“Winning/losing records vs SLx” only state the direction of recorded results against opponents "
                           "of that skill level, with the record shown — never a prediction. No meetings with our roster means "
                           "unknown, not weak.", font=base.MUTED_FONT, height=30)
     ws.freeze_panes = "A5"
+    # Fixed scale respects manual card boundaries; Fit-to-page can ignore them.
+    title_height = sum(ws.row_dimensions[r].height or 15 for r in range(1, 5))
+    ends = card_tops[1:] + [top + 1]
+    tallest = max(sum(ws.row_dimensions[r].height or 15 for r in range(start, end))
+                  for start, end in zip(card_tops, ends)) + title_height
+    page_width = sum(_width_pt(ws.column_dimensions[get_column_letter(c)].width) for c in range(1, 13))
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    # Reserve width for Excel/printer column rounding; the mathematical edge
+    # produced a separate sliver page in native Excel despite fitting nominally.
+    ws.page_setup.scale = max(10, int(min(1, 0.9 * PACKET_PRINTABLE[0] / page_width,
+                                        PACKET_PRINTABLE[1] / tallest) * 100))
+    ws.print_area = f"A1:L{top}"
+    ws.print_title_rows = "1:4"
+    ws.page_margins.left = ws.page_margins.right = 0.35
+    ws.page_margins.top = ws.page_margins.bottom = 0.45
 
 
 # ---------------------------------------------------------------------------
