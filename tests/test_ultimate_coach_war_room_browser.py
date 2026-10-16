@@ -2805,3 +2805,44 @@ def test_coach_tags_update_all_opinion_summaries_immediately_without_changing_ev
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_matrix_names_explain_unavailable_and_played_marks_without_changing_history(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            original = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('Played')
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="10"]').check()
+            for view in ('captain', 'evidence'):
+                page.locator('#wr-matrix [data-view="'+view+'"]').click()
+                rows = page.locator('#wr-matrix tbody tr')
+                heads = page.locator('#wr-matrix thead th')
+                assert rows.nth(0).locator('th .matrix-status').inner_text() == 'Unavailable'
+                assert rows.nth(1).locator('th .matrix-status').inner_text() == 'Played'
+                assert rows.nth(2).locator('th .matrix-status').count() == 0
+                assert heads.nth(1).locator('.matrix-status').inner_text() == 'Played'
+                assert heads.nth(2).locator('.matrix-status').count() == 0
+                assert 'records and counts remain visible for reference' in page.locator('.matrix-status-legend').inner_text()
+                assert [rows.nth(i).locator('th .green-count').inner_text() for i in range(3)] == [chr(128994)+'\u00d70']*3
+                assert [heads.nth(i).locator('.green-count').inner_text() for i in (1,2)] == [chr(128994)+'\u00d70']*2
+                assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == original
+                assert page.locator('#wr-matrix .mcell[data-our="1"][data-opp="10"]').get_attribute('class').find('cat-G') >= 0
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('Played')
+            assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Unavailable '+chr(183)+' Played'
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Played'
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('')
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('')
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="10"]').uncheck()
+            assert page.locator('#wr-matrix .matrix-status').count() == 0
+            assert page.locator('#wr-matrix tbody tr').first.locator('th .green-count').inner_text() == chr(128994)+'\u00d71'
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == original
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()

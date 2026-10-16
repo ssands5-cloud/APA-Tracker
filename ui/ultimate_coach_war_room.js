@@ -780,13 +780,15 @@
       return w.matrix.reduce(function(n,row){return n+(plan.rem[String(row.member.id)]&&row.cells[j].category==="G"?1:0);},0);
     });
     var head='<tr><th class="corner">Our player ↓ / opponent →</th>'+w.theirs.map(function(o,j){
-      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(playerRef(o))+'</a>'+wrNoteFlagSlot(o.id,"icon")+'<span class="id-line">SL '+esc(slText(o))+'</span>'
+      return '<th class="'+(plan.unplayed[j]?'':'out')+'"><a href="#rank-block-'+j+'">'+esc(playerRef(o))+'</a>'+wrNoteFlagSlot(o.id,"icon")+(plan.unplayed[j]?'':'<span class="id-line matrix-status">Played</span>')+'<span class="id-line">SL '+esc(slText(o))+'</span>'
         +'<span class="green-count" title="Favorable direct options among our remaining players">🟢×'+colGreen[j]+'</span></th>';
     }).join("")+'</tr>';
     var body=w.matrix.map(function(row,i){
-      var m=row.member,out=!plan.rem[String(m.id)];
+      var m=row.member,out=!plan.rem[String(m.id)],status=[];
+      if(wrAvail(plan.ck,m.id)==="Unavailable") status.push("Unavailable");
+      if(wrLineup(plan.ck,m.id)==="Played") status.push("Played");
       var rowGreen=row.cells.filter(function(c,j){return plan.unplayed[j]&&c.category==="G";}).length;
-      return '<tr class="'+(out?'out':'')+'"><th>'+esc(playerRef(m))+'<span class="id-line">SL '+esc(slText(m))+'</span>'
+      return '<tr class="'+(out?'out':'')+'"><th>'+esc(playerRef(m))+(status.length?'<span class="id-line matrix-status">'+esc(status.join(" · "))+'</span>':'')+'<span class="id-line">SL '+esc(slText(m))+'</span>'
         +'<span class="green-count" title="Favorable direct options among unplayed opponents">🟢×'+rowGreen+'</span></th>'
         +row.cells.map(function(c,j){
           var on=pair&&pair.our===String(m.id)&&pair.opp===String(w.theirs[j].id);
@@ -801,6 +803,7 @@
       // GPT audit (issue #84, MATRIX-01): a hover title explains nothing on a phone, which has
       // no hover. 🟢×N needs a visible explanation, worded so a 0 is never read as "hardest" or
       // "safe" -- it can just as easily mean even, shared-only or no verified evidence at all.
+      +'<p class="legend matrix-status-legend">Faded rows or columns are unavailable or already played. Their records and counts remain visible for reference.</p>'
       +'<p class="legend matrix-count-legend">🟢×N next to a player = favorable direct options left among unplayed opponents. 🟢×N next to an opponent = how many of your remaining players have a favorable direct record against them. 0 does not mean hardest or safe — it can mean even, shared-opponent-only or no verified evidence; check the row or column for which.</p>'
       +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
       +'<div id="wr-pair">'+pairHtml+'</div>';
