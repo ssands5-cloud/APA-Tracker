@@ -95,7 +95,8 @@
     var tw=c.their_wins,tg=c.their_games,parts=[];
     if(!tg) parts.push("Unknown vs our roster — no meetings (not weak)");
     else parts.push((tw>tg-tw?"Threat":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+(tg<3?", small sample":"")+")");
-    var names=function(g){return g.map(function(r){return r.member.name;}).join(", ");},done=false;
+    var roster=b.rows.map(function(r){return r.member;});
+    var names=function(g){return g.map(function(r){return wrDisplayName(r.member,roster);}).join(", ");},done=false;
     [["G","Historical top record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
@@ -105,7 +106,7 @@
     if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
       parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
     var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
-    if(av.length) parts.push("Avoid: "+av.map(function(r){return r.member.name+" ("+wlText(r.c.direct.w,r.c.direct.g)+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
+    if(av.length) parts.push("Avoid: "+av.map(function(r){return wrDisplayName(r.member,roster)+" ("+wlText(r.c.direct.w,r.c.direct.g)+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
     if(c.winning_sl!=="—"&&c.winning_sl!=="None recorded") parts.push("Winning records vs "+c.winning_sl);
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
     return parts.join(" · ");

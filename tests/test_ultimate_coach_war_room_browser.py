@@ -2144,7 +2144,7 @@ def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path
         try:
             page,errors=_page(tmp_path,browser)
             text=page.locator('#scouting-cards .quick-read').first.inner_text()
-            assert 'Historical top record: Ann Archer (2-0, small sample)' in text
+            assert f'Historical top record: {ANN} (2-0, small sample)' in text
             assert 'Avoid: Bea Baker (0-2, small sample)' in text
             summary=page.locator('#next-send .ns-more summary')
             assert 'small sample' in summary.inner_text()
@@ -2551,3 +2551,40 @@ def test_compact_threat_and_open_risks_distinguish_same_named_opponents(tmp_path
             assert label in risk.inner_text() and other_label in risk.inner_text()
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth") and not errors
         finally:browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("level_case", ["different", "same", "missing"])
+def test_quick_read_distinguishes_same_named_answer_and_avoid(tmp_path, width, level_case):
+    payload = _payload(crowded=True)
+    level = {"different": 4, "same": 5, "missing": None}[level_case]
+    if level_case == "missing":
+        payload["players"][0]["team_history"][0]["skill_level"] = None
+    next(p for p in payload["players"] if p["id"] == 4)["team_history"][0]["skill_level"] = level
+    payload["evidence"] = [r for r in payload["evidence"]
+                           if {r["player_id"], r["opponent_id"]} != {4, 10}]
+    payload["evidence"] += _games(4, 10, "L")
+    answer = "Ann Archer (SL 5)" if level_case == "different" else "Ann Archer (player 1 of 2)"
+    avoid = "Ann Archer (SL 4)" if level_case == "different" else "Ann Archer (player 2 of 2)"
+    py = _python_war_room_for(payload)
+    expected = py["cards"][0]["quick_read"]
+    assert "Historical top record: " + answer + " (2-0" in expected
+    assert avoid + " (0-1" in expected
+    path = tmp_path / "same-name-quick-read.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 844})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            text = page.locator("#scouting-cards .quick-read").first.inner_text()
+            assert text == "QUICK READ " + expected
+            assert answer in page.locator('#next-send .ns-medal').first.inner_text()
+            assert avoid in page.locator('#next-send .ns-more summary').inner_text()
+            assert "1001" not in text and "1004" not in text
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()

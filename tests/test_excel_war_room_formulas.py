@@ -380,7 +380,7 @@ def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(b
     card = {book.display(SC, f"A{r}"): book.display(SC, f"C{r}") for r in range(7, 19)}
     assert built["Scouting Cards"].row_dimensions[7].height is not None
     assert built["Scouting Cards"].row_dimensions[7].height > 15
-    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Historical top record: Ann Archer (2-0, small sample) · Meeting opponent SL 4; roster capture SL 6 · "
+    assert card["Quick read"] == ("Even: 3-3 vs our roster (6 meetings) · Historical top record: Ann Archer (player 1 of 2) (2-0, small sample) · Meeting opponent SL 4; roster capture SL 6 · "
                                   "Avoid: Bea Baker (0-2, small sample)")
     assert card["Team record"] == "7-1 (this team, Fall 2026)"
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"

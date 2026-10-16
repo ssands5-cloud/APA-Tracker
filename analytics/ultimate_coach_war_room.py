@@ -439,8 +439,9 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
         word = "Threat" if tw > tg - tw else "Even" if 2 * tw == tg else "Vs our roster"
         parts = [f"{word}: {record_text(tw, tg)} vs our roster ({plural(tg, 'meeting')}{', small sample' if tg < 3 else ''})"]
     rows = block["rows"]
+    roster = [r["member"] for r in rows]
     def names(group):
-        return ", ".join(r["member"]["name"] for r in group)
+        return ", ".join(display_name(r["member"], roster) for r in group)
     for cat, label in (("G", "Historical top record"), ("E", "Even option on record")):
         group = [r for r in rows if r["category"] == cat]
         if group:
@@ -457,7 +458,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
                      if shared else "No evidence-backed answer on our roster")
     avoid = [r for r in rows if r["category"] == "R"]
     if avoid:
-        parts.append("Avoid: " + ", ".join(f"{r['member']['name']} ({record_text(*r['direct'])}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
+        parts.append("Avoid: " + ", ".join(f"{display_name(r['member'], roster)} ({record_text(*r['direct'])}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
     if card["winning_sl"] not in ("—", "None recorded"):
         parts.append(f"Winning records vs {card['winning_sl']}")
     if card["losing_sl"] not in ("—", "None recorded"):
