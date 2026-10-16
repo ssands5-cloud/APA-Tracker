@@ -1552,6 +1552,8 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
     _head(ws, "Opponent Scouting Cards", "One card per opponent player — recorded facts, sample sizes, what's missing, "
                                          "and your notes.", last=12, current="Scouting Cards")
     _span(ws, 4, 1, 12, "=wr_Status", font=Font(bold=True, color=base.FELT_DEEP))
+    _span(ws, 5, 1, 12, "Recorded results only — not predictions. Missing history is unknown, not weak.",
+          font=Font(size=10, color="5B6A61"), height=24)
     lookup = wb["Scouting"]
     col = SCOUTING_COLUMNS.index("Quick Read") + 1
     texts = (row[0] for row in lookup.iter_rows(min_row=2, min_col=col, max_col=col, values_only=True))
@@ -1569,7 +1571,7 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
                           "unknown, not weak.", font=base.MUTED_FONT, height=30)
     ws.freeze_panes = "A5"
     # Fixed scale respects manual card boundaries; Fit-to-page can ignore them.
-    title_height = sum(ws.row_dimensions[r].height or 15 for r in range(1, 5))
+    title_height = sum(ws.row_dimensions[r].height or 15 for r in range(1, 6))
     ends = card_tops[1:] + [top + 1]
     tallest = max(sum(ws.row_dimensions[r].height or 15 for r in range(start, end))
                   for start, end in zip(card_tops, ends)) + title_height
@@ -1581,8 +1583,13 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
     # produced a separate sliver page in native Excel despite fitting nominally.
     ws.page_setup.scale = max(10, int(min(1, 0.9 * PACKET_PRINTABLE[0] / page_width,
                                         PACKET_PRINTABLE[1] / tallest) * 100))
-    ws.print_area = f"A1:L{top}"
-    ws.print_title_rows = "1:4"
+    # Excel resolves this local built-in name again when Match Day changes.
+    # Keep one context page when there is no opponent; never print unused slots.
+    stride = len(CARD_FIELDS) + 3
+    area = (f"'{ws.title}'!$A$1:INDEX('{ws.title}'!$L:$L,"
+            f'{card_tops[0] - 1}+{stride}*MAX(1,COUNTIF(md_OppLabels,"?*")))')
+    ws.defined_names.add(DefinedName("_xlnm.Print_Area", attr_text=area))
+    ws.print_title_rows = "1:5"
     ws.page_margins.left = ws.page_margins.right = 0.35
     ws.page_margins.top = ws.page_margins.bottom = 0.45
 

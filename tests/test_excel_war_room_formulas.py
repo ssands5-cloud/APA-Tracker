@@ -1265,9 +1265,21 @@ def test_scouting_print_keeps_complete_cards_on_separate_pages(built):
     tops = [cell.row for row in ws for cell in row if cell.column == 1 and 'already played' in str(cell.value)]
     assert len(tops) > 1
     assert ws.page_setup.orientation == 'landscape'
-    assert str(ws.print_title_rows) == '$1:$4'
+    assert str(ws.print_title_rows) == '$1:$5'
     assert not ws.sheet_properties.pageSetUpPr.fitToPage
     assert 10 <= ws.page_setup.scale <= 100
     assert [br.id for br in ws.row_breaks.brk] == [row - 1 for row in tops[1:]]
-    assert str(ws.print_area).endswith(str(ws.max_row))
+    assert "unknown, not weak" in ws["A5"].value
     assert ws['C7'].font.sz == 11
+
+def test_scouting_print_area_tracks_the_active_match_day_roster(tmp_path):
+    from zipfile import ZipFile
+    from xml.etree import ElementTree as ET
+    path = write_workbook(_payload(), tmp_path / 'dynamic-print.xlsx', built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001')
+    with ZipFile(path) as archive:
+        root = ET.fromstring(archive.read('xl/workbook.xml'))
+    areas = [n.text for n in root.findall('.//{*}definedName')
+             if n.attrib.get('name') == '_xlnm.Print_Area' and 'Scouting Cards' in (n.text or '')]
+    assert len(areas) == 1
+    assert 'COUNTIF(md_OppLabels,"?*")' in areas[0]
+    assert '5+14*MAX(1,' in areas[0]
