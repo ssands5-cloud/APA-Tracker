@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from analytics.ultimate_coach_matchup_evidence import build_pair_index
 from analytics.ultimate_coach_war_room import (
     blind_send,
@@ -891,3 +893,33 @@ def test_direct_reason_shows_pair_recency_with_unknown_dates_kept_explicit():
     unknown = war_room_pair(ours,theirs,index,"EIGHT",meetings=meetings_index(rows[-1:],{1,50},"America/Denver"))
     assert "Meeting dates not captured" in unknown["blocks"][0]["rows"][0]["reason"]
     assert wr["blocks"][0]["rows"][0]["rank"] == unknown["blocks"][0]["rows"][0]["rank"]
+
+
+def _same_named_save_war_room(levels=(3,4)):
+    ours=[_m(1,"Ann",5),_m(2,"Bea",4)]
+    theirs=[_m(10,"Target",6),_m(11,"Alex",levels[0]),_m(12,"Alex",levels[1])]
+    return war_room_pair(ours,theirs,build_pair_index(_pairs((1,10,2,2),(1,11,2,2),(2,12,2,2))),"EIGHT")
+
+
+@pytest.mark.parametrize("levels,label",[((3,4),"Alex (SL 3)"),((3,3),"Alex (1 of 2 by this name)"),((None,None),"Alex (1 of 2 by this name)")])
+def test_same_named_opponents_do_not_hide_lost_coverage(levels,label):
+    wr=_same_named_save_war_room(levels);j=next(i for i,b in enumerate(wr["blocks"]) if b["opponent"]["id"]==10)
+    cost=send_cost(wr,j,1)
+    assert cost["covered_before"]==2 and cost["covered_after"]==1
+    assert cost["lost"]==[label]
+
+
+@pytest.mark.parametrize("levels,label",[((3,4),"Alex (SL 3)"),((3,3),"Alex (1 of 2 by this name)"),((None,None),"Alex (1 of 2 by this name)")])
+def test_save_warning_distinguishes_same_named_target(levels,label):
+    wr=_same_named_save_war_room(levels);j=next(i for i,b in enumerate(wr["blocks"]) if b["opponent"]["id"]==10)
+    ann=next(r for r in next_send(wr,j)["ranked"] if r["member"]["id"]==1)
+    assert label+" (2-0 in 2 meetings, small sample)" in ann["save"]
+    assert "Alex (SL 4)" not in ann["save"]
+
+
+def test_compact_threat_identifies_which_same_named_opponent_is_flagged():
+    wr=war_room_pair([_m(1,"Ann",5)],[_m(11,"Alex",3),_m(12,"Alex",3)],
+                     build_pair_index(_pairs((1,11,0,2))),"EIGHT")
+    flags=live_threats(wr)
+    assert len(flags)==1 and flags[0]["opponent"]["id"]==11
+    assert "Alex (1 of 2 by this name)" in flags[0]["short"]

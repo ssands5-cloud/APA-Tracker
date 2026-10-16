@@ -367,7 +367,7 @@
     var onlyGreen={};
     w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
       var g=o.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];});
-      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(o.opponent.name+" ("+wrSaveRecord(g[0])+")");}});
+      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(wrDisplayName(o.opponent,w.theirs)+" ("+wrSaveRecord(g[0])+")");}});
     var groups=[];
     rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var last=groups[groups.length-1];
       if(last&&String(last[0].rank).replace("=","")===String(r.rank).replace("=","")) last.push(r); else groups.push([r]);});
@@ -530,11 +530,11 @@
         // which does not -- a longer version of this exact text pushed Open risks off a 390x844
         // Safari screen (the fourth time an addition here has done that).
         text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)"+(lg<3?" · small sample":""),
-        short:b.opponent.name+" — "+wlText(lw,lg)+(lg<3?" ("+plural(lg,"meeting")+", small sample)":" vs our roster still in play")});
+        short:wrDisplayName(b.opponent,w.theirs)+" — "+wlText(lw,lg)+(lg<3?" ("+plural(lg,"meeting")+", small sample)":" vs our roster still in play")});
       else if(unknownOnly) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,unknown:true,
         wins:gw,games:gg,playersMet:gone.length,
         text:b.opponent_label+" · SL "+slText(b.opponent)+" · historically "+wlText(gw,gg)+" vs our roster, but that record is only against player(s) not in tonight's remaining lineup — unknown vs who is left, not cleared"+(gg<3?" · small historical sample":""),
-        short:b.opponent.name+" — unknown vs our remaining roster (historically "+wlText(gw,gg)+(gg<3?", small sample":"")+")"});
+        short:wrDisplayName(b.opponent,w.theirs)+" — unknown vs our remaining roster (historically "+wlText(gw,gg)+(gg<3?", small sample":"")+")"});
     });
     out.sort(function(a,b2){
       if(a.unknown!==b2.unknown) return a.unknown?1:-1;
@@ -555,10 +555,10 @@
       return others.filter(function(b){
         return b.rows.some(function(r){
           return r.category==="G"&&rem[String(r.member.id)]&&String(r.member.id)!==String(skip);});
-      }).map(function(b){return b.opponent.name;});
+      }).map(function(b){return b.opponent;});
     }
     var before=covered(null),still=covered(memberId),
-        lost=before.filter(function(n){return still.indexOf(n)===-1;});
+        lost=before.filter(function(o){return !still.some(function(s){return String(s.id)===String(o.id);});}).map(function(o){return wrDisplayName(o,w.theirs);});
     return {others:others.length,before:before.length,after:still.length,lost:lost};
   }
 
@@ -602,17 +602,17 @@
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
     return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
-        +esc(opp.name)+'. Tap who they actually put up.</p>')
+        +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
-      +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
+      +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
         +(i===0?' <span class="ns-order-note muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</span>':'')
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
-        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
+        +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(wrDisplayName(opp,w.theirs))+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
         // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
         var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
@@ -666,7 +666,7 @@
         +(direct&&r.sl_context?" · "+r.sl_context:"")+(direct&&r.date_context?" \u00b7 "+r.date_context:""),pid:b.opponent.id});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
-      .map(function(o){return o.name;});
+      .map(function(o){return wrDisplayName(o,w.theirs);});
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
@@ -707,7 +707,7 @@
     // Best sends (ranking order, sendable + remaining, unplayed opponents)
     opEl.innerHTML='<h2>Best sends — top opportunities per opponent</h2>'
       +'<p class="muted">Favorable direct records first, then even direct (numbered by evidence; "1=" = tied, same evidence), then indirect-only evidence ("≈", not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
-      +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Best-supported sends among our remaining players</th></tr></thead><tbody>'
+      +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Recorded options among our remaining players</th></tr></thead><tbody>'
       +w.blocks.map(function(b,j){
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
           :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>');})(wrSendLabels(plan.sends[j]))

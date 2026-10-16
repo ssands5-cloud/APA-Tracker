@@ -2414,6 +2414,7 @@ def test_rank_order_explanation_is_visible_without_claiming_confidence(tmp_path,
             assert "1-0 record can appear before 8-2" in text
             assert card.locator("[data-send-our]").evaluate_all("els=>els.slice(0,2).map(e=>e.dataset.sendOur)")==["1","2"]
             assert "best-supported" not in page.locator("#lineup-lab").inner_text()
+            assert "recorded options among our remaining players" in page.locator("#wr-opportunities thead").inner_text().lower()
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
             assert errors==[]
         finally:
@@ -2484,4 +2485,67 @@ def test_all_flagged_opponents_remain_reachable_beyond_top_three(tmp_path,width)
             assert "View all 5 flagged opponents (2 more)" == link.inner_text()
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
             assert errors==[]
+        finally:browser.close()
+
+
+@pytest.mark.parametrize("width",[390,1280])
+@pytest.mark.parametrize("level_case",["different","same","missing"])
+def test_same_named_opponents_keep_coverage_warning_and_specific_save_target(tmp_path,width,level_case):
+    from tests.test_excel_war_room_formulas import _player,_hist
+    payload=_payload()
+    other_sl={"different":4,"same":3,"missing":None}[level_case]
+    if level_case=="missing":
+        next(p for p in payload["players"] if p["id"]==11)["team_history"][0]["skill_level"]=None
+    payload["players"].append(_player(20,"2020","Eve Ellis",[_hist("falcons-a","d1","EIGHT",other_sl)]))
+    label="Eve Ellis (SL 3)" if level_case=="different" else "Eve Ellis (player 1 of 2)"
+    payload["evidence"]+=_games(1,11,"WW")+_games(2,20,"WW")
+    path=tmp_path/"same-name-cost.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":width,"height":844});errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            ann=page.locator("#next-send .ns-medal").filter(has=page.locator('[data-send-our="1"]'))
+            assert label in page.locator('#next-send .ns-chip[data-next="11"]').inner_text()
+            assert page.locator('#next-send .ns-chip[data-next="11"]').inner_text()!=page.locator('#next-send .ns-chip[data-next="20"]').inner_text()
+            assert ann.locator(".ns-cost").count()==1
+            assert ann.locator(".ns-cost").inner_text()=="leaves 1 of 2 with a favorable direct option"
+            assert label+" (2-0 in 2 meetings, small sample)" in ann.locator(".ns-save").inner_text()
+            assert "Eve Ellis (SL 4)" not in ann.locator(".ns-save").inner_text()
+            assert "2020" not in ann.inner_text() and "2002" not in ann.inner_text()
+            page.locator('#next-send .ns-chip[data-next="11"]').click()
+            button=ann.locator('[data-send-our="1"]')
+            assert button.get_attribute("data-send-opp")=="11"
+            assert label in button.get_attribute("aria-label")
+            page.locator('#next-send .ns-chip[data-next="10"]').click()
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="11"]').check()
+            assert ann.locator(".ns-cost").count()==0 and ann.locator(".ns-save").count()==0
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
+            assert errors==[]
+        finally:browser.close()
+
+
+@pytest.mark.parametrize("width",[390,1280])
+@pytest.mark.parametrize("level_case",["different","same","missing"])
+def test_compact_threat_and_open_risks_distinguish_same_named_opponents(tmp_path,width,level_case):
+    from tests.test_excel_war_room_formulas import _player,_hist
+    payload=_payload();other_sl={"different":4,"same":3,"missing":None}[level_case]
+    if level_case=="missing":
+        next(p for p in payload["players"] if p["id"]==11)["team_history"][0]["skill_level"]=None
+    payload["players"].append(_player(20,"2020","Eve Ellis",[_hist("falcons-a","d1","EIGHT",other_sl)]))
+    label="Eve Ellis (SL 3)" if level_case=="different" else "Eve Ellis (player 1 of 2)"
+    other_label="Eve Ellis (SL 4)" if level_case=="different" else "Eve Ellis (player 2 of 2)"
+    path=tmp_path/"same-name-risks.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":width,"height":844});errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            flags=page.locator("#tonight .decide-threats").inner_text()
+            assert label in flags and other_label not in flags
+            risk=page.locator("#tonight .decide-risks");risk.locator("summary").click()
+            assert label in risk.inner_text() and other_label in risk.inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth") and not errors
         finally:browser.close()

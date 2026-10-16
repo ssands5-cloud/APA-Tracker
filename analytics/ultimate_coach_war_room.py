@@ -550,7 +550,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
             continue
         greens = [r for r in other["rows"] if r["category"] == "G" and r["member"]["id"] in remaining]
         if len(greens) == 1:
-            only_green.setdefault(greens[0]["member"]["id"], []).append(f"{other['opponent']['name']} ({save_record_text(greens[0])})")
+            only_green.setdefault(greens[0]["member"]["id"], []).append(f"{display_name(other['opponent'], war_room['theirs'])} ({save_record_text(greens[0])})")
 
     groups: list[list[dict[str, Any]]] = []
     for r in rows:
@@ -788,8 +788,8 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
                         f"{record_text(live_wins, live_games)} vs our roster still in play "
                         f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)"
                         + (" · small sample" if live_games < 3 else ""),
-                "short": (f"{opp['name']} — {record_text(live_wins, live_games)} ({plural(live_games, 'meeting')}, small sample)"
-                          if live_games < 3 else f"{opp['name']} — {record_text(live_wins, live_games)} vs our roster still in play"),
+                "short": (f"{display_name(opp, war_room['theirs'])} — {record_text(live_wins, live_games)} ({plural(live_games, 'meeting')}, small sample)"
+                          if live_games < 3 else f"{display_name(opp, war_room['theirs'])} — {record_text(live_wins, live_games)} vs our roster still in play"),
             })
         elif dangerous_on_departed_evidence_only:
             out.append({
@@ -799,7 +799,7 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
                         f"historically {record_text(gone_wins, gone_games)} vs our roster, but that "
                         "record is only against player(s) not in tonight's remaining lineup — "
                         "unknown vs who is left, not cleared" + (" · small historical sample" if gone_games < 3 else ""),
-                "short": f"{opp['name']} — unknown vs our remaining roster (historically "
+                "short": f"{display_name(opp, war_room['theirs'])} — unknown vs our remaining roster (historically "
                         f"{record_text(gone_wins, gone_games)}{', small sample' if gone_games < 3 else ''})",
             })
     out.sort(key=lambda c: (c["unknown"], -(2 * c["wins"] - c["games"]) if c["games"] else 0,
@@ -827,12 +827,14 @@ def send_cost(war_room: dict[str, Any], j: int, member_id: Any, *,
     after = remaining - {member_id}
     others = [b for k, b in enumerate(blocks) if k != j and unplayed[k]]
 
-    def covered(pool: set[Any]) -> list[str]:
-        return [b["opponent"]["name"] for b in others
+    def covered(pool: set[Any]) -> list[dict[str, Any]]:
+        return [b["opponent"] for b in others
                 if any(r["category"] == "G" and r["member"]["id"] in pool for r in b["rows"])]
 
     before, still = covered(remaining), covered(after)
-    lost = [n for n in before if n not in still]
+    still_ids = {opponent["id"] for opponent in still}
+    lost = [display_name(opponent, war_room["theirs"]) for opponent in before
+            if opponent["id"] not in still_ids]
     return {"others": len(others), "covered_before": len(before), "covered_after": len(still),
             "lost": lost}
 
