@@ -1324,3 +1324,22 @@ def test_recency_context_has_room_in_dynamic_remaining_send_summaries(built):
         top = next(c.row for row in ws.iter_rows(min_col=col,max_col=col) for c in row if isinstance(c.value,str) and c.value.startswith(prefix))
         width = sum(ws.column_dimensions[c].width for c in columns)
         assert ws.row_dimensions[top+1].height >= _worst_height(_best_send_worst(built,8),width,size,30)
+
+
+def _many_threats_payload():
+    payload=_payload()
+    for i,label in enumerate(("Threat A","Threat B","Threat C","Threat D")):
+        pid=20+i
+        payload["players"].append(_player(pid,str(3000+i),label,[_hist("falcons-a","d1","EIGHT",4)]))
+        payload["evidence"] += _games(1,pid,"L"*(i+1))
+    payload["counts"] = {"players":len(payload["players"]),"head_to_head_rows":len(payload["evidence"])}
+    return payload
+
+
+def test_war_room_does_not_silently_drop_flags_after_third_opponent(tmp_path):
+    wb=load_workbook(write_workbook(_many_threats_payload(),tmp_path/"threats.xlsx",built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"))
+    book=Workbook(wb)
+    top=_row(wb,WR,"Opponents with winning records against our roster (by recorded direct results; unplayed only)")
+    text="\n".join(str(book.display(WR,f"A{r}")) for r in range(top+1,top+9))
+    for label in ("Threat A","Threat B","Threat C","Threat D"):
+        assert label+" \u00b7 SL" in text

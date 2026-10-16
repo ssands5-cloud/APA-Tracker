@@ -2446,3 +2446,42 @@ def test_pair_recency_is_visible_and_matches_python_without_reranking(tmp_path,d
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
             assert not errors
         finally:browser.close()
+
+
+@pytest.mark.parametrize("width", [390,1280])
+def test_all_flagged_opponents_remain_reachable_beyond_top_three(tmp_path,width):
+    from tests.test_excel_war_room_formulas import _many_threats_payload
+    payload=_many_threats_payload()
+    labels=["Threat A","Threat B","Threat C","Threat D"]
+    path=tmp_path/"all-threats.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":width,"height":844});errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            detail=page.locator("#wr-risks .risk-grid > div").first
+            for label in labels:assert label in detail.inner_text()
+            preview=page.locator("#tonight .decide-threats")
+            link=preview.locator('a[href="#wr-risks"]')
+            assert "View all 5 flagged opponents (2 more)" == link.inner_text()
+            assert "wins minus losses, not confidence" in detail.inner_text()
+            assert link.bounding_box()["height"]>=44
+            link.click()
+            assert page.evaluate("location.hash")=="#wr-risks"
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="20"]').check()
+            assert "Threat A" not in detail.inner_text()
+            assert "View all 4 flagged opponents (1 more)" == link.inner_text()
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option("Unavailable")
+            assert "unknown vs who is left, not cleared" in detail.inner_text()
+            assert "historically" in detail.inner_text()
+            assert "Threat A" not in detail.inner_text()
+            # Removing Ann also changes Cam's remaining-roster record to winning.
+            items=detail.locator("li").all_text_contents()
+            assert len(items)==5
+            assert "Cam Cole" in items[0] and "still in play" in items[0]
+            assert "historically" not in items[1] and all("historically" in t for t in items[2:])
+            assert "View all 5 flagged opponents (2 more)" == link.inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
+            assert errors==[]
+        finally:browser.close()

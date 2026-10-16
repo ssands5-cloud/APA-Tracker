@@ -1120,14 +1120,14 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
     base._section(ws, top, "Top risks", last_col=12)
     _span(ws, top + 1, 1, 12, "Opponents with winning records against our roster (by recorded direct results; unplayed only)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
-    for n in range(1, 4):
+    for n in range(1, R + 1):
         row = f"INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))"
         note = f"INDEX(wr_OppNotes,MATCH(INDEX(Threats_Table[Opp Player ID],{row}),wr_OppPids,0))"
         _span(ws, top + 1 + n, 1, 12, f'=IFERROR(INDEX(Threats_Table[Threat],{row})&IFERROR(IF({note}="",""," · 📝 "&{note}&'
                                       f'" (your opinion, not APA facts)"),""),'
                                       f'IF({n}=1,IF(wr_HasEvidence,"No unplayed opponent has a winning recorded record against our roster.",""),""))',
               font=SMALL)
-    t2 = top + 5
+    t2 = top + R + 2
     _span(ws, t2, 1, 12, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for n in range(1, 6):

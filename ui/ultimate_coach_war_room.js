@@ -310,7 +310,7 @@
     var greenOpps=0,sendOpps=0;w.theirs.forEach(function(o,j){if(!unplayed[j]) return;if(green[j]>0) greenOpps++;if(sends[j].length>0) sendOpps++;});
     var n=w.ours.length;
     return {ck:ck,rem:rem,unplayed:unplayed,sends:sends,risks:risks,unique:unique,
-      threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}).slice(0,3),
+      threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}),
       concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}).slice(0,5),
       metrics:[
         ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
@@ -674,7 +674,7 @@
       +wrNextSendCard(w,plan,ta)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Dangerous vs remaining roster</b>'+(plan.threats.length?plan.threats.map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+'</div>'
+      +'<div class="decide-threats"><b>Dangerous vs remaining roster</b>'+(plan.threats.length?plan.threats.slice(0,3).map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+(plan.threats.length>3?'<a href="#wr-risks" style="display:inline-flex;align-items:center;min-height:44px">View all '+plan.threats.length+' flagged opponents ('+(plan.threats.length-3)+' more)</a>':'')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
@@ -715,7 +715,7 @@
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+wrNoteFlagSlot(b.opponent.id,"icon")+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
-      +'<div><h3>Dangerous opponents</h3><p class="muted">Winning recorded direct records against players remaining in the lineup tonight (unplayed opponents only).</p>'+(function(){
+      +'<div><h3>Dangerous opponents</h3><p class="muted">Live winning records against our remaining players appear first; historical-only flags below are unknown against who is left. Within each group, order follows recorded wins minus losses, not confidence. Unplayed opponents only.</p>'+(function(){
         var items=plan.threats.map(function(c){return '<li>'+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("No unplayed opponent has a live winning record against our remaining roster.")+'</li>')+'</ul>';
       })()+'</div>'
