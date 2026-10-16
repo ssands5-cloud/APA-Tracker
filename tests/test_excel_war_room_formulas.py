@@ -635,6 +635,22 @@ def test_scouting_long_observation_is_readable_and_preview_is_explicit(book, bui
     assert book.display(SC, "C18") == "Coach: Watch the opening safety. Confirm the score. Ask about the final rack."
 
 
+
+def test_packet_long_coach_observation_has_visible_full_note_pointer(book, built):
+    from ui.excel_war_room import _worst_height
+    note = "Watch the opening safety and confirm the score. " * 10
+    book.set("Coach Notes", "A5", CAM)
+    book.set("Coach Notes", "D5", note)
+    top = _row(built, CP, "Scouting cards \u2014 the full cards are on the Scouting Cards sheet")
+    row = top + 5
+    text = book.display(CP, f"B{row}")
+    assert text.endswith(("Coach: " + note)[:160] + " ... (preview; full note on Coach Notes / Lineup Lab)")
+    assert book.display("Coach Notes", "D5") == note
+    width = sum(built[CP].column_dimensions[c].width for c in "BCDE")
+    assert built[CP].row_dimensions[row].height >= _worst_height(text, width, 9.5, 24)
+    book.set("Coach Notes", "D5", "Keep the score.")
+    assert book.display(CP, f"B{row}").endswith("Notes: Coach: Keep the score.")
+
 def test_start_here_example_and_tour_are_true_to_the_build(built):
     ws = built["START HERE"]
     text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)

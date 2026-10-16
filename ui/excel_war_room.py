@@ -1526,6 +1526,15 @@ def scouting_quick_read_height(texts, width: float, size: float = 9) -> float:
     return max((_worst_height(str(text or ""), width, size, 18) for text in texts), default=18)
 
 
+COACH_NOTE_PREVIEW_SUFFIX = " ... (preview; full note on Coach Notes / Lineup Lab)"
+
+
+def _coach_note_preview(k: int, limit: int) -> str:
+    """Bound only the printed observation; preserve the complete input and its Coach label."""
+    notes = f'SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(INDEX(wr_OppNotes,{k}),CHAR(13)," "),CHAR(10)," "),CHAR(9)," ")'
+    return f'IF(LEN({notes})>{limit},LEFT({notes},{limit})&"{COACH_NOTE_PREVIEW_SUFFIX}",{notes})'
+
+
 def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: float | None = None) -> int:
     card = f"INDEX(wr_OppCard,{k})"
     _span(ws, top, 1, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
@@ -1541,11 +1550,9 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: fl
     _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","Coach observations")', font=base.LABEL_FONT)
     # Merged formula rows cannot auto-fit when a captain adds notes later.
     # Flatten line breaks for this bounded print preview; keep the stored note intact.
-    notes = f'SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(INDEX(wr_OppNotes,{k}),CHAR(13)," "),CHAR(10)," "),CHAR(9)," ")'
-    suffix = " ... (preview; full note on Coach Notes / Lineup Lab)"
-    preview = f'IF(LEN({notes})>500,LEFT({notes},500)&"{suffix}",{notes})'
+    preview = _coach_note_preview(k, 500)
     width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 13))
-    height = _worst_height("W " * ((500 + len(suffix) + 1) // 2), width, 11, 18)
+    height = _worst_height("W " * ((500 + len(COACH_NOTE_PREVIEW_SUFFIX) + 1) // 2), width, 11, 18)
     _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",{preview}))',
           font=Font(size=11), height=height)
     return r + 1
@@ -1748,8 +1755,17 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     base._section(ws, p2, "Scouting cards — the full cards are on the Scouting Cards sheet", last_col=12)
     h(p2, 18)
     r = p2
+    # Reserve the compact preview even when notes are entered after export.
+    # Use the narrower side and preserve the complete precomputed missing-data warning.
+    missing_col = SCOUTING_COLUMNS.index("Missing") + 1
+    missing_texts = [str(row[0] or "") for row in wb["Scouting"].iter_rows(
+        min_row=2, min_col=missing_col, max_col=missing_col, values_only=True)]
+    note_worst = "W " * ((160 + len(COACH_NOTE_PREVIEW_SUFFIX) + 1) // 2)
+    note_height = max((_worst_height(text + " \u00b7 Notes: " + note_worst,
+                                    min(sum(PACKET_WIDTHS[1:5]), sum(PACKET_WIDTHS[8:12])), 9.5, 24)
+                       for text in missing_texts), default=24)
     card_fields = [("Vs our roster", "Vs Our Roster", 24), ("Met", "Met List", 36), ("By opponent SL", "By SL", 24),
-                   ("Missing · notes", None, 24)]
+                   ("Missing · notes", None, note_height)]
     sides = ((1, 1, 2, 5), (7, 8, 9, 12))            # (header from, label from, value from, to)
     header_rows = []
     bands = (R + 1) // 2
@@ -1780,7 +1796,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                 lbl, card = f"INDEX(wr_OppLabels,{k})", f"INDEX(wr_OppCard,{k})"
                 _span(ws, rr, cl, cv - 1, f'=IF({lbl}="","","{label}")', font=font(9, bold=True, color="5B6A61"))
                 value = (f'INDEX(Scouting_Table[{col}],{card})' if col else
-                         f'INDEX(Scouting_Table[Missing],{card})&IF(INDEX(wr_OppNotes,{k})="",""," · Notes: "&INDEX(wr_OppNotes,{k}))')
+                         f'INDEX(Scouting_Table[Missing],{card})&IF(INDEX(wr_OppNotes,{k})="",""," · Notes: "&{_coach_note_preview(k, 160)})')
                 _span(ws, rr, cv, c9, f'=IF(OR({lbl}="",{card}=""),IF({lbl}="","","Not precomputed for this pairing"),{value})',
                       font=font(9.5))
         r += len(card_fields)
