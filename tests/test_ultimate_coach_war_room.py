@@ -238,7 +238,7 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
     assert next_send_lines(pip) == [
         "First by recorded direct results: Cal",
         "Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
-        "1. Cal — 1-1 direct record (2 meetings) — even · small sample",
+        "1. Cal — 1-1 direct record (2 meetings) — even · small sample · Meeting dates not captured",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
         # who has not played. Sending her off this unordered list used to cost that silently.
         "≈ Bea — shared-opponent results only: ours 1-0 vs theirs 1-1 across 1 shared "
@@ -273,7 +273,7 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
     assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul (1-0 in 1 meeting, small sample)"
     assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
-    assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample" in next_send_lines(ns)
+    assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample · Meeting dates not captured" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played
     assert next_send(wr, 0, remaining={1, 3, 4, 5})["ranked"][0]["tied_with"] == []
 
@@ -876,3 +876,18 @@ def test_next_send_explains_why_one_win_precedes_larger_record():
     assert "win percentage before meeting count, not confidence" in text
     assert "1-0 record can appear before 8-2" in text
     assert [r["member"]["id"] for r in ns["ranked"]] == [1,2]
+
+
+def test_direct_reason_shows_pair_recency_with_unknown_dates_kept_explicit():
+    ours, theirs = [_m(1,"Ann")], [_m(50,"Opponent")]
+    index = build_pair_index(_pairs((1,50,1,2),(50,1,1,2)))
+    rows = [{"player_id":1,"opponent_id":50,"format":"EIGHT","result":"W","match_date":d}
+            for d in ("2020-01-01T01:30:00Z","2026-09-21T01:30:00Z",None)]
+    meetings = meetings_index(rows,{1,50},"America/Denver")
+    wr = war_room_pair(ours,theirs,index,"EIGHT",meetings=meetings)
+    reason = wr["blocks"][0]["rows"][0]["reason"]
+    assert "Latest dated meeting: Sun Sep 20, 2026" in reason
+    assert "some meeting dates not captured" in reason
+    unknown = war_room_pair(ours,theirs,index,"EIGHT",meetings=meetings_index(rows[-1:],{1,50},"America/Denver"))
+    assert "Meeting dates not captured" in unknown["blocks"][0]["rows"][0]["reason"]
+    assert wr["blocks"][0]["rows"][0]["rank"] == unknown["blocks"][0]["rows"][0]["rank"]

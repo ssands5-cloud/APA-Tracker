@@ -120,10 +120,25 @@
     if(wrKnown(rosterSL)&&levels.every(function(sl){return sl===rosterSL;})&&!missing) return "";
     return "Meeting opponent SL "+levels.join(", ")+"; roster capture SL "+(wrKnown(rosterSL)?rosterSL:"not captured")+(missing?"; some meeting SLs not captured":"");
   }
+  function wrMeetingDateContext(games){
+    var times=games.map(function(g){return wrInstant(val(g,"match_date"));});
+    var known=times.filter(function(t){return t!==null;});
+    if(!known.length) return "Meeting dates not captured";
+    var label=wrDayLabel(known.reduce(function(latest,t){return t>latest?t:latest;},known[0]));
+    if(label==="No data") return "Meeting dates not captured";
+    return "Latest dated meeting: "+label+(known.length!==times.length?"; some meeting dates not captured":"");
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
-    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);r.sl_context=r.c.direct?wrMeetingSLContext(rowsFor(r.member.id,fmt).filter(function(g){return String(val(g,"opponent_id"))===String(b.opponent.id);}).map(function(g){return {opp_sl:val(g,"opponent_skill_level")};}),b.opponent.skill_level):"";r.reason=wrReason(r.c)+(r.sl_context?" · "+r.sl_context:"");r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;});});
+    blocks.forEach(function(b){b.byMember={};b.rows.forEach(function(r,i){
+      r.category=wrCategory(r.c);r.cell=wrCell(r.c);r.explanation=wrExplain(r.c);
+      var games=r.c.direct?rowsFor(r.member.id,fmt).filter(function(g){return String(val(g,"opponent_id"))===String(b.opponent.id);}):[];
+      r.sl_context=r.c.direct?wrMeetingSLContext(games.map(function(g){return {opp_sl:val(g,"opponent_skill_level")};}),b.opponent.skill_level):"";
+      r.date_context=r.c.direct?wrMeetingDateContext(games):"";
+      r.reason=wrReason(r.c)+(r.sl_context?" \u00b7 "+r.sl_context:"")+(r.date_context?" \u00b7 "+r.date_context:"");
+      r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;
+    });});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
     blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
@@ -648,7 +663,7 @@
       var record=direct?r.cell+" direct"+(r.c.direct.g<3?" ("+plural(r.c.direct.g,"meeting")+", small sample)":"")+tieText
         :(function(n){return n===1?"≈ shared-opponent only (the only shared-opponent candidate)":"≈ shared-opponent only (one of "+n+" unordered candidates)";})(s.filter(function(x){return x.category==="I";}).length);
       sends.push({text:"vs "+wrDisplayName(b.opponent,w.theirs)+": "+wrDisplayName(r.member,w.ours)+" — "+record
-        +(direct&&r.sl_context?" · "+r.sl_context:""),pid:b.opponent.id});
+        +(direct&&r.sl_context?" · "+r.sl_context:"")+(direct&&r.date_context?" \u00b7 "+r.date_context:""),pid:b.opponent.id});
     });
     var riskNames=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return o.name;});

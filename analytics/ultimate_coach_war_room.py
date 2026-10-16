@@ -231,6 +231,16 @@ def _career_text(player: dict[str, Any] | None, fmt: str) -> str:
 # ---- the War Room for one directed pairing ----
 
 
+
+def meeting_date_context(games) -> str:
+    """Latest captured calendar date, not a recency score or claim about undated meetings."""
+    dated = [g for g in games if g.get("sort") and g.get("date") not in (None, "No data")]
+    if not dated:
+        return "Meeting dates not captured"
+    latest = max(dated, key=lambda g: g["sort"])
+    return "Latest dated meeting: " + latest["date"] + (
+        "; some meeting dates not captured" if len(dated) != len(games) else "")
+
 def meeting_sl_context(games, roster_sl) -> str:
     """Factual meeting-versus-roster scope; never re-score the recorded result."""
     if not games:
@@ -284,7 +294,9 @@ def war_room_pair(
             row["explanation"] = explanation(row)
             row["sl_context"] = (meeting_sl_context(meetings.get((row["member"]["id"], block["opponent"]["id"], fmt), []), block["opponent"].get("skill_level"))
                                  if row["direct"] else "")
-            row["reason"] = reason(row) + (" · " + row["sl_context"] if row["sl_context"] else "")
+            row["date_context"] = (meeting_date_context(meetings.get((row["member"]["id"], block["opponent"]["id"], fmt), []))
+                                   if row["direct"] else "")
+            row["reason"] = reason(row) + (" · " + row["sl_context"] if row["sl_context"] else "") + (" \u00b7 " + row["date_context"] if row["date_context"] else "")
             row["captain"] = captain_cell(row)
             row["position"] = position
 

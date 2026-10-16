@@ -549,8 +549,8 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
         "Ranked direct records among our remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
-        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · availability unknown",
-        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · availability unknown",
+        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
+        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
         f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
     ]
     book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
@@ -562,10 +562,10 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     ]
     book.set("Command Center", "C6", CAM)
     book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · availability unknown",
+    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
                                     f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)"]
     book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
-    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6"
+    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026"
     book.set(LL, "C23", "Played")                # Cam already played
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 
@@ -595,10 +595,10 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
     assert "Insufficient verified evidence in this snapshot: 1" in text
-    assert f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6" in text
+    assert f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026" in text
     book.set(LL, "C12", "Unavailable")
     after = "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ")
-    assert "Unavailable: 1" in after and f"vs {CAM}: first by recorded direct results: {DEE} — reason: 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6" in after
+    assert "Unavailable: 1" in after and f"vs {CAM}: first by recorded direct results: {DEE} — reason: 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026" in after
     book.set(WR, "C6", OWLS)          # a War Room override never changes the Command Center
     assert "\n".join(str(book.display(cc, f"{c}{r}")) for r in range(1, 40) for c in "BFJ") == after
 
@@ -667,7 +667,7 @@ def test_lineup_lab_best_sends_state_their_reason(book, built):
     top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Recorded option per unplayed opponent"))
     lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
     assert lines[:2] == [
-        f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6",
+        f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026",
         f"vs {EVE}: shared-opponent candidate, not ordered (the only one): {ANN} — reason: shared-opponent results only: "
         "ours 1-0 vs theirs 0-1 across "
         "1 shared opponent (no verified direct meetings in this snapshot)",
@@ -987,7 +987,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     rows = [[r for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
     assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2) · 1= {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
     assert best_send_text(rows[0]) == (f"first by recorded direct results (tied with 1 other, same evidence): {ANN} — reason: "
-                                       "2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6")
+                                       "2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026")
     # War Room top opportunities
     assert [x[1] for x in _opportunities(book, wb)] == [send_list_text(rows[0]), send_list_text(rows[1])]
     # Command Center
@@ -1003,7 +1003,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
     assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
-    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6"
+    assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026"
 
 
 def test_lineup_lab_fixture_mismatch_warning_cannot_clip_its_operative_clause(built):
@@ -1314,3 +1314,13 @@ def test_scouting_print_area_tracks_the_active_match_day_roster(tmp_path):
     assert len(areas) == 1
     assert 'COUNTIF(md_OppLabels,"?*")' in areas[0]
     assert '5+14*MAX(1,' in areas[0]
+
+
+def test_recency_context_has_room_in_dynamic_remaining_send_summaries(built):
+    from ui.excel_war_room import _best_send_worst, _worst_height
+    for sheet, prefix, col, columns, size in ((LL,"Recorded option per unplayed opponent",1,"ABCDEF",9),
+                                              ("Command Center","RECORDED OPTION PER UNPLAYED OPPONENT",2,"BCDEFGHIJK",10.5)):
+        ws = built[sheet]
+        top = next(c.row for row in ws.iter_rows(min_col=col,max_col=col) for c in row if isinstance(c.value,str) and c.value.startswith(prefix))
+        width = sum(ws.column_dimensions[c].width for c in columns)
+        assert ws.row_dimensions[top+1].height >= _worst_height(_best_send_worst(built,8),width,size,30)

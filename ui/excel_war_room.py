@@ -1311,7 +1311,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         "Ranking rule (reviewed, unchanged): players with direct meetings first (by observed direct record, then more meetings), "
         "then shared-opponent results only (by our record against opponents both players faced, then more shared opponents, "
         "then more games); no verified evidence = listed last, not ranked. Ties are shown as “2=” and named.",
-        "Best-supported sends keep that order and drop only concerning (losing direct) and no-evidence pairings. A direct "
+        "Recorded sends keep that order and drop only concerning (losing direct) and no-evidence pairings. A direct "
         "record ranks ahead of indirect evidence even when it is small — read the records and sample sizes.",
         "No recorded meetings with our roster does not mean a weak opponent — it means unknown.",
         "Nothing here is a win probability (none is calibrated), a confidence claim or a guaranteed lineup.",
@@ -1505,10 +1505,12 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
     bs = res + len(lines) + 1
     _span(ws, bs, 1, 6, "Recorded option per unplayed opponent — and why (listed by results, not confidence)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
+    best_height = _worst_height(_best_send_worst(wb, R),
+                                sum(ws.column_dimensions[c].width for c in "ABCDEF"), 9, 30)
     for k in range(1, R + 1):
         _span(ws, bs + k, 1, 6, f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
                                 f'IF(INDEX(wr_BestText,{k})="","no evidence-backed option left among our remaining players",'
-                                f'INDEX(wr_BestText,{k})))', font=SMALL, height=30)
+                                f'INDEX(wr_BestText,{k})))', font=SMALL, height=best_height)
     ws.freeze_panes = "A4"
 
 
@@ -2038,7 +2040,7 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
     headline = "Ranked direct records among our remaining players (same evidence = same rank). " + DIRECT_ORDER_NOTE
     medal = (f"1. {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
-             "our only favorable direct option vs another unplayed opponent · Meeting opponent SL 1, 2, 3, 4, 5, 6, 7, 8, 9; roster capture SL 9; some meeting SLs not captured · availability unknown")
+             "our only favorable direct option vs another unplayed opponent · Meeting opponent SL 1, 2, 3, 4, 5, 6, 7, 8, 9; roster capture SL 9; some meeting SLs not captured · Latest dated meeting: Wed Sep 30, 2026; some meeting dates not captured · availability unknown")
     rest = max(roster - medals, 0)
     lines = [headline] + [medal] * medals
     if rest:
@@ -2047,6 +2049,15 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
         lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {label}"]
     return "\n".join(lines)
 
+
+
+def _best_send_worst(wb, roster: int) -> str:
+    label = _longest_label(wb)
+    prefix = f"vs {label}: first by recorded direct results (tied with {max(1, roster - 1)} others, same evidence): {label} \u2014 reason: "
+    column = ME_COLUMNS.index("Reason") + 1
+    texts = (str(row[0] or "") for row in wb["Matchup Evidence"].iter_rows(
+        min_row=2, min_col=column, max_col=column, values_only=True))
+    return prefix + max(texts, key=len, default="no evidence-backed option left among our remaining players")
 
 def _longest_label(wb) -> str:
     """The longest player label in this workbook (Players sheet), or a long generic one when there is none."""
@@ -2285,9 +2296,9 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     r = max(opp_end + 2, top + len(summary) + 2) + 1
     send_lines = []
     for k in range(1, R + 1):
-        send_lines.append(f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
-                          f'IF(INDEX(wr_BestText,{k})="","no evidence-backed option left",INDEX(wr_BestText,{k})))')
-    _card(ws, r, 2, 11, "BEST-SUPPORTED REMAINING SEND PER UNPLAYED OPPONENT — and the recorded evidence behind it",
+        send_lines.append((f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
+                          f'IF(INDEX(wr_BestText,{k})="","no evidence-backed option left",INDEX(wr_BestText,{k})))', _best_send_worst(wb, R)))
+    _card(ws, r, 2, 11, "RECORDED OPTION PER UNPLAYED OPPONENT — and its evidence",
           send_lines, size=10.5, line_height=30)
     ws.freeze_panes = "A7"
     ws.page_setup.orientation = "landscape"

@@ -2418,3 +2418,31 @@ def test_rank_order_explanation_is_visible_without_claiming_confidence(tmp_path,
             assert errors==[]
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("dates,expected", [
+    (["2019-01-01T01:30:00Z","2019-01-01T01:30:00Z"],"Latest dated meeting: Mon Dec 31, 2018"),
+    ([None,"2026-09-21T01:30:00Z"],"Latest dated meeting: Sun Sep 20, 2026; some meeting dates not captured"),
+    ([None,"2026-09-21T01:30:00"],"Meeting dates not captured"),
+])
+def test_pair_recency_is_visible_and_matches_python_without_reranking(tmp_path,dates,expected):
+    payload=_payload()
+    for a,b in ((1,10),(10,1)):
+        rows=[r for r in payload["evidence"] if r["player_id"]==a and r["opponent_id"]==b]
+        assert len(rows)==2
+        for row,day in zip(rows,dates):row["match_date"]=day
+    py=_python_war_room_for(payload)
+    path=tmp_path/"recency.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={"width":390,"height":844});errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
+            js=page.evaluate(f"window.__ucWarRoomPair({OURS!r},{THEIRS!r},'EIGHT')")
+            assert js["matrix"][0][0][3]==py["matrix"][0]["cells"][0]["reason"]
+            assert expected in page.locator("#next-send .ns-medal").first.inner_text()
+            assert page.locator("#next-send [data-send-our]").first.get_attribute("data-send-our")=="1"
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
+            assert not errors
+        finally:browser.close()
