@@ -2884,3 +2884,44 @@ def test_detailed_rankings_disclose_full_roster_scope_and_return_without_changin
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("route", ['later_fixture', 'no_fixture_return'])
+def test_put_up_selection_does_not_claim_an_opponent_in_a_new_fixture(tmp_path, width, route):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            page.locator('#next-send .ns-chip[data-next="11"]').click()
+            assert page.locator('#next-send .ns-hypothetical').count() == 0
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            if route == 'later_fixture':
+                page.fill('#md-date', '2026-10-25')
+                cards = page.locator('#md-fixtures .fixture')
+                index = next(i for i in range(cards.count()) if 'Falcons' in cards.nth(i).inner_text())
+                page.click('#md-compare-'+str(index))
+                assert 'Oct 25, 2026' in page.locator('#ll-context').inner_text()
+                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unknown'
+            else:
+                page.fill('#md-date', '2026-10-18')
+                assert page.locator('#next-send').count() == 0
+                page.fill('#md-date', '2026-10-11')
+                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unavailable'
+            assert page.locator('#next-send .ns-hypothetical').count() == 1, 'an earlier fixture cannot name who they actually put up here'
+            assert 'If they put up:' in page.locator('#next-send .ns-ask').inner_text()
+            assert 'Nobody put up yet' in page.locator('#next-send .ns-hypothetical').inner_text()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            # Same-context updates must still preserve the captain's explicit selection.
+            page.locator('#next-send .ns-chip[data-next="11"]').click()
+            page.locator('textarea.plan').first.fill('SYNTHETIC same-fixture opinion')
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('Planned')
+            page.locator('#wr-matrix [data-view="captain"]').click()
+            assert page.locator('#next-send .ns-hypothetical').count() == 0
+            assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == '11'
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()

@@ -630,6 +630,9 @@
   }
 
   function wrNextSendCard(w,plan,ta){
+    // An explicit put-up belongs to this fixture/format, not the next view of the same roster.
+    var selectionScope=plan.ck+"||"+w.format;
+    if(WR_STATE.nextScope!==selectionScope){WR_STATE.next=null;WR_STATE.nextScope=selectionScope;}
     var budget=wrLineupBudget(w,plan,ta,null);
     var budgetScope=budget&&budget.slots&&(budget.unknown||budget.feasible===null)
       ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.</p>':"";
@@ -733,7 +736,7 @@
     if(on){var row=on.parentNode,left=on.offsetLeft-row.offsetLeft,right=left+on.offsetWidth;
       if(left<row.scrollLeft) row.scrollLeft=left; else if(right>row.scrollLeft+row.clientWidth) row.scrollLeft=right-row.clientWidth;}
   }
-  function wrClear(){var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
+  function wrClear(){WR_STATE.next=null;WR_STATE.nextScope=null;var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
       +(WR_TONIGHT_NOTE.when?'<div class="when">'+esc(WR_TONIGHT_NOTE.when)+'</div>':'')+'<div class="vs">'+esc(WR_TONIGHT_NOTE.text)+'</div>'
       +'<p class="muted">Following Match Day — nothing to plan until it names one fixture with an opponent roster.</p>'
       +'<div class="tonight-links"><a href="#match-day-card">Change matchup</a></div>':"";["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
