@@ -2925,3 +2925,38 @@ def test_put_up_selection_does_not_claim_an_opponent_in_a_new_fixture(tmp_path, 
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [320, 340])
+def test_narrow_phone_keeps_scouting_cards_and_snapshot_values_inside_the_page(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 568})
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth'), 'the phone page must not pan sideways'
+            cards = page.locator('#scouting-cards .scout')
+            assert cards.count() > 0
+            assert cards.evaluate_all("es=>es.every(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right+1)"), 'cards must fit inside their own panel'
+            facts = page.locator('#lineup-lab .matchup-facts')
+            assert facts.evaluate('e=>e.scrollWidth<=e.clientWidth'), 'snapshot values must stay inside the definition list'
+            # Opponent chips intentionally scroll; each choice must still be reachable.
+            for i in range(page.locator('#next-send .ns-chip').count()):
+                page.locator('#next-send .ns-chip').nth(i).click()
+                r = page.locator('#next-send .ns-chip.on').bounding_box()
+                assert r['x'] >= 0 and r['x'] + r['width'] <= width + 1
+                assert r['height'] >= 44
+            chosen = page.locator('#next-send .ns-chip.on').get_attribute('data-next')
+            order = page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>e.dataset.sendOur)')
+            note = page.locator('textarea.plan').first
+            note.fill('SYNTHETIC narrow-phone observation')
+            assert note.input_value() == 'SYNTHETIC narrow-phone observation'
+            assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == chosen
+            assert page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>e.dataset.sendOur)') == order
+            page.locator('#wr-matrix [data-view="evidence"]').click()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
