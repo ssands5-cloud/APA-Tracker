@@ -1829,7 +1829,7 @@ def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tm
         browser = pw.chromium.launch(headless=True)
         try:
             page, errors = _page(tmp_path, browser)
-            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
+            best = page.locator("#lineup-lab").locator("text=Recorded options now").locator("xpath=following-sibling::ul[1]")
             assert "Cam Cole" in best.inner_text() and "Eve Ellis" in best.inner_text()
             assert "📝" not in best.inner_text(), "no note yet written, so no line should carry one"
 
@@ -1849,7 +1849,7 @@ def test_lineup_lab_best_remaining_sends_flags_the_opponent_with_a_coach_note(tm
             page.reload()
             page.wait_for_load_state("load")
             page.wait_for_timeout(300)
-            best = page.locator("#lineup-lab").locator("text=Best remaining sends").locator("xpath=following-sibling::ul[1]")
+            best = page.locator("#lineup-lab").locator("text=Recorded options now").locator("xpath=following-sibling::ul[1]")
             assert "📝 Coach: Shaky on the break (your opinion, not APA facts)" in best.inner_text()
             assert errors == [], errors
         finally:
@@ -2390,5 +2390,31 @@ def test_meeting_tables_disclose_uncaptured_sl_in_overview_and_pair(tmp_path: Pa
             assert display + ' / ' + display in page.locator('#wr-pair').inner_text()
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_rank_order_explanation_is_visible_without_claiming_confidence(tmp_path, width):
+    payload = _payload()
+    payload["evidence"] = [r for r in payload["evidence"] if {r["player_id"],r["opponent_id"]} not in ({1,10},{2,10})]
+    payload["evidence"] += _games(1,10,"W") + _games(2,10,"WWWWWWWWLL")
+    path = tmp_path / "order-trust.html"
+    path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width":width,"height":844})
+            errors=[]
+            page.on("pageerror",lambda e:errors.append(str(e)))
+            page.goto(path.as_uri())
+            card=page.locator("#next-send")
+            text=card.inner_text()
+            assert "win percentage before meeting count, not confidence" in text
+            assert "1-0 record can appear before 8-2" in text
+            assert card.locator("[data-send-our]").evaluate_all("els=>els.slice(0,2).map(e=>e.dataset.sendOur)")==["1","2"]
+            assert "best-supported" not in page.locator("#lineup-lab").inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth>innerWidth")
+            assert errors==[]
         finally:
             browser.close()

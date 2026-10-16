@@ -496,6 +496,8 @@ def best_send_text(rows: list[dict[str, Any]]) -> str:
 
 # ---- Next Send: "they put up this player -- who do I send?" ----
 
+DIRECT_ORDER_NOTE = 'Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.'
+
 MEDALS = ("🥇", "🥈", "🥉")
 
 
@@ -829,6 +831,8 @@ def next_send_lines(ns: dict[str, Any]) -> list[str]:
     Every ranked candidate gets its own numbered line (SEND-LAYOUT-01); tied candidates
     retain equal numbers, and nothing below the top three is hidden."""
     lines = [ns["headline"]]
+    if ns["ranked"]:
+        lines.append(DIRECT_ORDER_NOTE)
     for m in ns["ranked"]:
         prefix = f"{m['choice_number']}."
         lines.append(f"{prefix} {m['display']} — {m['reason']}"

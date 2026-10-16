@@ -52,6 +52,7 @@ from analytics.ultimate_coach_matchup_evidence import (
 )
 from analytics.ultimate_coach_war_room import (
     CATEGORY_LABELS,
+    DIRECT_ORDER_NOTE,
     build_local_date,
     date_label,
     default_matchup,
@@ -789,7 +790,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
         'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ranked direct records among our '
-        'remaining players (same evidence = same rank). Recorded results only — not odds.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
+        'remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
     # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
     # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
@@ -1502,7 +1503,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         _span(ws, res + k, 1, 2, label, font=base.LABEL_FONT)
         _span(ws, res + k, 3, 6, formula, font=SMALL)
     bs = res + len(lines) + 1
-    _span(ws, bs, 1, 6, "Best remaining send per unplayed opponent — and why (the recorded evidence, with its sample size)",
+    _span(ws, bs, 1, 6, "Recorded option per unplayed opponent — and why (listed by results, not confidence)",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
     for k in range(1, R + 1):
         _span(ws, bs + k, 1, 6, f'=IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"","vs "&INDEX(wr_OppLabels,{k})&": "&'
@@ -2035,8 +2036,7 @@ def _worst_height(text: str, width_units: float, size: float, minimum: float) ->
 
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
-    headline = ("Ranked direct records among our remaining players (same evidence = same rank). Recorded "
-                "results only — not odds.")
+    headline = "Ranked direct records among our remaining players (same evidence = same rank). " + DIRECT_ORDER_NOTE
     medal = (f"1. {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · Meeting opponent SL 1, 2, 3, 4, 5, 6, 7, 8, 9; roster capture SL 9; some meeting SLs not captured · availability unknown")
     rest = max(roster - medals, 0)

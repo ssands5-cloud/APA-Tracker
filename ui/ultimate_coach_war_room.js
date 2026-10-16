@@ -374,8 +374,10 @@
       :"No evidence-backed option left among our remaining players";
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
+  var WR_DIRECT_ORDER_NOTE='Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.';
   function wrNextSendLines(ns){
     var lines=[ns.headline];
+    if(ns.ranked.length) lines.push(WR_DIRECT_ORDER_NOTE);
     ns.ranked.forEach(function(m){var prefix=m.choice_number+".";
       lines.push(prefix+" "+m.display+" — "+m.reason+(m.tied_with.length?" · tied with "+m.tied_with.join(", "):"")+(m.save?" · "+m.save:""));});
     ns.unordered.forEach(function(u){lines.push("≈ "+u.display+" — "+u.reason+(u.save?" · "+u.save:""));});
@@ -590,9 +592,10 @@
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(o.name+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
-      +ns.ranked.map(function(m){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
+      +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
+        +(i===0?' <span class="ns-order-note muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</span>':'')
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(opp.name)+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
@@ -633,7 +636,7 @@
     w.ours.forEach(function(m){av[wrAvail(plan.ck,m.id)]++;var l=wrLineup(plan.ck,m.id);if(l==="Played") used++;else if(l==="Planned") planned++;});
     var cat={G:0,R:0,E:0,I:0,X:0};w.matrix.forEach(function(row){row.cells.forEach(function(c){cat[c.category]++;});});
     var noSL=w.theirs.filter(function(o){return !wrKnown(o.skill_level);}).length,unplayedN=plan.unplayed.filter(Boolean).length;
-    // One line per unplayed opponent (up to 3): our best-supported remaining player and WHY. A shared-only
+    // One line per unplayed opponent (up to 3): our first-listed remaining option and WHY. A shared-only
     // pick is labelled as one unordered candidate, never "best" (GPT audit #84 P2).
     var sends=[];w.blocks.forEach(function(b,j){
       if(!plan.unplayed[j]||sends.length>=3) return;
@@ -756,7 +759,7 @@
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
-      +'<h3>Best remaining sends — and why</h3><p class="muted">For each unplayed opponent: our best-supported remaining player and the recorded evidence behind it. Not odds.</p>'
+      +'<h3>Recorded options now — and why</h3><p class="muted">For each unplayed opponent: our first-listed option by recorded results, with its meeting count. Listed order is not confidence or a prediction.</p>'
       +(function(){
         var items=w.blocks.map(function(b,j){if(!plan.unplayed[j]) return null;
           var text="vs "+b.opponent_label+": "+(plan.sends[j].length?wrBestSendText(plan.sends[j]):"no evidence-backed option left among our remaining players");

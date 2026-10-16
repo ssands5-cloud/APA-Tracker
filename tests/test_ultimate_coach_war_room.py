@@ -237,6 +237,7 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
     assert [u["display"] for u in pip["unordered"]] == ["Bea"]
     assert next_send_lines(pip) == [
         "First by recorded direct results: Cal",
+        "Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
         "1. Cal — 1-1 direct record (2 meetings) — even · small sample",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
         # who has not played. Sending her off this unordered list used to cost that silently.
@@ -864,3 +865,14 @@ def test_lineup_budget_note_is_reference_only_for_complete_and_incomplete_inputs
         note=lineup_budget(wr,cap=cap,slots=2,remaining=remaining)["note"]
         assert "Reference" in note and "not a match-legality check" in note
         assert "cannot field a legal lineup" not in note and "unable to field a legal lineup" not in note
+
+
+def test_next_send_explains_why_one_win_precedes_larger_record():
+    ours = [_m(1, "One meeting"), _m(2, "Ten meetings")]
+    theirs = [_m(50, "Opponent")]
+    index = build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10)))
+    ns = next_send(war_room_pair(ours,theirs,index,"EIGHT"),0)
+    text = "\n".join(next_send_lines(ns))
+    assert "win percentage before meeting count, not confidence" in text
+    assert "1-0 record can appear before 8-2" in text
+    assert [r["member"]["id"] for r in ns["ranked"]] == [1,2]

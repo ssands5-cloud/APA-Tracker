@@ -548,7 +548,7 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert _next_send(book) == ["Pick the opponent player they put up (cell C6)."]
     book.set("Command Center", "C6", CAM)
     assert _next_send(book) == [
-        "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds.",
+        "Ranked direct records among our remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
         f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · availability unknown",
         f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · availability unknown",
         f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
@@ -664,7 +664,7 @@ def test_start_here_example_and_tour_are_true_to_the_build(built):
 
 def test_lineup_lab_best_sends_state_their_reason(book, built):
     ws = built[LL]
-    top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
+    top = next(c.row for c in ws["A"] if isinstance(c.value, str) and c.value.startswith("Recorded option per unplayed opponent"))
     lines = [book.display(LL, f"A{r}") for r in range(top + 1, top + 4)]
     assert lines[:2] == [
         f"vs {CAM}: first by recorded direct results: {ANN} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6",
@@ -746,7 +746,7 @@ def test_formula_rows_fit_their_worst_case_text(built):
     assert not any("_NsMedalText" in str(cc.cell(row=r, column=2).value) for r in range(8, 30))
     medal = (f"1. {name} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · availability unknown")
-    headline = "Ranked direct records among our remaining players (same evidence = same rank). Recorded results only — not odds."
+    headline = "Ranked direct records among our remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes."
     for k in range(0, roster + 1):
         parts = [headline] + [medal] * k
         if roster - k:
@@ -995,7 +995,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     assert f"vs {CAM}: {best_send_text(rows[0])}" in cc
     assert f"vs {EVE}: {best_send_text(rows[1])}" in cc and "shared-opponent candidate, not ordered (the only one)" in cc
     # Lineup Lab
-    top = next(c.row for c in wb[LL]["A"] if isinstance(c.value, str) and c.value.startswith("Best remaining send per unplayed opponent"))
+    top = next(c.row for c in wb[LL]["A"] if isinstance(c.value, str) and c.value.startswith("Recorded option per unplayed opponent"))
     assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: {best_send_text(rows[0])}"
     # Captain Packet page 1 (two sends)
     sends = _row(wb, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
