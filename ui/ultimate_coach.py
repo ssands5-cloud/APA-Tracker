@@ -267,6 +267,7 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 @media screen and (max-width:360px) {
   .scout-grid,.matchup-facts { grid-template-columns:minmax(0,1fr); }
   .matchup-facts dt { margin-top:6px; }
+  .quick-read-badges span { white-space:normal; }
 }
 """
 

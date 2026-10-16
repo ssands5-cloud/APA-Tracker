@@ -2939,6 +2939,8 @@ def test_narrow_phone_keeps_scouting_cards_and_snapshot_values_inside_the_page(t
             cards = page.locator('#scouting-cards .scout')
             assert cards.count() > 0
             assert cards.evaluate_all("es=>es.every(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right+1)"), 'cards must fit inside their own panel'
+            badges = page.locator('#scouting-cards .quick-read-badges span')
+            assert badges.evaluate_all("es=>es.every(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right+1)"), 'evidence and small-sample badges must fit without clipped words'
             facts = page.locator('#lineup-lab .matchup-facts')
             assert facts.evaluate('e=>e.scrollWidth<=e.clientWidth'), 'snapshot values must stay inside the definition list'
             # Opponent chips intentionally scroll; each choice must still be reachable.
