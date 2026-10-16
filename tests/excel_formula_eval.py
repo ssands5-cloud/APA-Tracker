@@ -548,6 +548,19 @@ class _Parser:
             return float(math.floor(_to_number(self.scalar(args[0]))))
         if name == "LEN":
             return float(len(_to_text(self.scalar(args[0]))))
+        if name == "SUBSTITUTE":
+            text, old, new = (_to_text(self.scalar(a)) for a in args[:3])
+            if len(args) == 3:
+                return text.replace(old, new) if old else text
+            occurrence = int(_to_number(self.scalar(args[3])))
+            if occurrence < 1:
+                raise ExcelError("#VALUE!")
+            if not old:
+                return text
+            parts = text.split(old)
+            if occurrence >= len(parts):
+                return text
+            return old.join(parts[:occurrence]) + new + old.join(parts[occurrence:])
         if name == "TRIM":
             return " ".join(_to_text(self.scalar(args[0])).split())
         if name == "LEFT":

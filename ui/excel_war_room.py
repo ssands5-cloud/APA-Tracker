@@ -1539,8 +1539,15 @@ def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: fl
                             f'INDEX(Scouting_Table[{col}],{card}))', font=Font(size=11), height=quick_height if col == "Quick Read" else None)
     r = top + len(fields) + 1
     _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","Coach observations")', font=base.LABEL_FONT)
-    _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",INDEX(wr_OppNotes,{k})))',
-          font=Font(size=11))
+    # Merged formula rows cannot auto-fit when a captain adds notes later.
+    # Flatten line breaks for this bounded print preview; keep the stored note intact.
+    notes = f'SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(INDEX(wr_OppNotes,{k}),CHAR(13)," "),CHAR(10)," "),CHAR(9)," ")'
+    suffix = " ... (preview; full note on Coach Notes / Lineup Lab)"
+    preview = f'IF(LEN({notes})>500,LEFT({notes},500)&"{suffix}",{notes})'
+    width = sum(ws.column_dimensions[get_column_letter(c)].width for c in range(3, 13))
+    height = _worst_height("W " * ((500 + len(suffix) + 1) // 2), width, 11, 18)
+    _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(INDEX(wr_OppNotes,{k})="","(add notes on Coach Notes or Lineup Lab)",{preview}))',
+          font=Font(size=11), height=height)
     return r + 1
 
 

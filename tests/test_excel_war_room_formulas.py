@@ -620,6 +620,21 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
                        "(your opinion, not APA facts)"]
 
 
+def test_scouting_long_observation_is_readable_and_preview_is_explicit(book, built):
+    from ui.excel_war_room import _worst_height
+    note = "Keep the cue ball away from the side pocket. " * 15
+    book.set("Coach Notes", "A5", CAM)
+    book.set("Coach Notes", "D5", note)
+    full = "Coach: " + note
+    expected = full[:500] + " ... (preview; full note on Coach Notes / Lineup Lab)"
+    assert book.display(SC, "C18") == expected
+    assert book.display("Coach Notes", "D5") == note
+    width = sum(built[SC].column_dimensions[c].width for c in "CDEFGHIJKL")
+    assert built[SC].row_dimensions[18].height >= _worst_height(expected, width, 11, 18)
+    book.set("Coach Notes", "D5", "Watch the opening safety.\nConfirm the score.\tAsk about the final rack.")
+    assert book.display(SC, "C18") == "Coach: Watch the opening safety. Confirm the score. Ask about the final rack."
+
+
 def test_start_here_example_and_tour_are_true_to_the_build(built):
     ws = built["START HERE"]
     text = "\n".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
