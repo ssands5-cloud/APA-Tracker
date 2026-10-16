@@ -1685,7 +1685,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
           font=font(12, bold=True, color=base.FELT_DEEP))
     h(r, 30)
     r += 1
-    base._section(ws, r, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)",
+    base._section(ws, r, "Recorded options preview — direct order: win percentage, then meetings; not confidence",
                   last_col=12)
     h(r, 18)
     for k in range(1, R + 1):

@@ -832,8 +832,7 @@ def test_captain_packet_best_sends_row_fits_its_worst_case_send_text(built):
     rendering remains the only thing that can judge readability.
     """
     cp = built[CP]
-    first = _row(built, CP, "Best sends — top opportunities per opponent "
-                            "(favorable direct first, then even, then indirect)") + 1
+    first = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence") + 1
 
     cell = cp.cell(row=first, column=3)
     assert cell.alignment.wrap_text, "best-sends text wraps; the risk is height, not width"
@@ -895,7 +894,7 @@ def test_a_stale_snapshot_is_a_visible_warning_not_small_print(built, tmp_path):
 
 
 def test_captain_packet_page_one_is_decision_first(book, built):
-    sends = _row(built, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
+    sends = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
     risks = _row(built, CP, "Top risks — Danger flags use full roster history")
     roster = _row(built, CP, "OUR TEAM")
     assert sends < risks < roster
@@ -998,7 +997,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     top = next(c.row for c in wb[LL]["A"] if isinstance(c.value, str) and c.value.startswith("Recorded option per unplayed opponent"))
     assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: {best_send_text(rows[0])}"
     # Captain Packet page 1 (two sends)
-    sends = _row(wb, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
+    sends = _row(wb, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
     assert book.display(CP, f"C{sends + 1}") == send_list_text(rows[0], limit=2)
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
@@ -1169,8 +1168,7 @@ def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built,
     """
     cp = built[CP]
     label = _row(built, CP, "IF WE PUT UP FIRST")
-    sends = _row(built, CP, "Best sends — top opportunities per opponent "
-                            "(favorable direct first, then even, then indirect)")
+    sends = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
     assert label < sends, "the lead answer must print above the per-opponent sends"
 
     text = str(book.display(CP, f"C{label}"))
@@ -1360,3 +1358,17 @@ def test_packet_risk_heading_discloses_full_roster_history(built):
     caption=next(c.value for row in built[CP].iter_rows(min_col=1,max_col=1) for c in row
                  if isinstance(c.value,str) and c.value.startswith("Top risks"))
     assert "Danger flags use full roster history" in caption
+
+
+def test_packet_explains_direct_order_without_implying_confidence(tmp_path):
+    payload=_payload()
+    payload["evidence"]=[r for r in payload["evidence"] if {r["player_id"],r["opponent_id"]} not in ({1,10},{2,10})]
+    payload["evidence"]+=_games(1,10,"W")+_games(2,10,"WWWWWWWWLL")
+    wb=load_workbook(write_workbook(payload,tmp_path/"packet-order.xlsx",built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"))
+    book=Workbook(wb);head=next(c for row in wb[CP].iter_rows(min_col=1,max_col=1) for c in row
+                              if isinstance(c.value,str) and (c.value.startswith("Best sends") or c.value.startswith("Recorded options")))
+    assert "direct order: win percentage, then meetings; not confidence" in head.value
+    assert "preview" in head.value.lower()
+    text=str(book.display(CP,f"C{head.row+1}"))
+    assert "1-0 (1)" in text and "8-2 (10)" in text
+    assert text.index(ANN)<text.index(BEA)
