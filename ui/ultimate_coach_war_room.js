@@ -199,8 +199,9 @@
   // are deliberately not migrated: they cannot be attributed to a fixture.
   // Coach notes (tags + observation) describe a PLAYER: kept per player id in plan.coach and shown on every
   // fixture's card. Notes written by the earlier per-team version (plan.notes[team][player].n) are carried over.
+  var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false;
   var WR_PLAN=(function(){
-    var o=null;try{o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");}catch(e){o=null;}
+    var o=null;try{o=JSON.parse(window.localStorage.getItem("ultimate-coach:plan-v2")||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
     var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{}};
     // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
     // different one (another team scope, or a note that already exists) is archived with its scope. The archive
@@ -274,7 +275,35 @@
       +a.map(function(x){var t=TEAM_INDEX[x.scope];return '<div>'+esc(x.n)+' <span class="muted">(noted under '+esc(t?t.name:x.scope)+')</span></div>';}).join("")+'</div>';
   }
   function wrSetCoach(pid,field,value){var c=WR_PLAN.coach[String(pid)]||(WR_PLAN.coach[String(pid)]={});if(value) c[field]=value; else delete c[field];wrSave();}
-  function wrSave(){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));}catch(e){}}
+  function wrStorageMessage(){
+    if(WR_PLAN_READ_FAILED) return "Previously saved marks and notes could not be read. Changes last only while this page is open; earlier saved data has not been replaced. Copy any notes before closing, then reopen the page to try again.";
+    if(WR_PLAN_SAVE_FAILED) return "Planning changes are not saved. They last only while this page is open. Copy any notes before closing; saving will be tried again on your next edit.";
+    return "";
+  }
+  function wrStorageScope(){return wrStorageMessage()?"Changes last only while this page is open.":"Saved in this browser.";}
+  function wrPatchStorageStatus(){
+    var message=wrStorageMessage();
+    document.querySelectorAll(".wr-save-scope").forEach(function(el){el.textContent=wrStorageScope();});
+    if(!message){document.querySelectorAll(".wr-storage-warning").forEach(function(el){el.remove();});return;}
+    function show(parent,before,id,announce){
+      if(!parent) return;
+      var el=document.getElementById(id);
+      if(!el){el=document.createElement("p");el.id=id;el.className="wr-storage-warning";
+        el.style.cssText="padding:10px;border:1px solid #c58c24;border-radius:6px;background:#fff4d6;color:#5d3d00;overflow-wrap:anywhere";
+        if(announce){el.setAttribute("role","status");el.setAttribute("aria-live","polite");}
+        parent.insertBefore(el,before||null);}
+      if(el.textContent!==message) el.textContent=message;
+    }
+    ["tonight","lineup-lab"].forEach(function(id){var el=document.getElementById(id);
+      if(el&&el.firstChild) show(el,el.firstChild.nextSibling,"wr-storage-"+id,id==="tonight");});
+    document.querySelectorAll('textarea[data-plan="note"]').forEach(function(el){
+      show(el.parentNode,el,"wr-storage-note-"+el.getAttribute("data-pid"),false);});
+  }
+  function wrSave(){
+    // A failed read is not an empty saved plan: never overwrite data we could not load.
+    if(!WR_PLAN_READ_FAILED){try{window.localStorage.setItem("ultimate-coach:plan-v2",JSON.stringify(WR_PLAN));WR_PLAN_SAVE_FAILED=false;}catch(e){WR_PLAN_SAVE_FAILED=true;}}
+    wrPatchStorageStatus();
+  }
   function wrCtx(ta,tb){
     var c=MATCHUP_CONTEXT,fixture="manual";
     if(c&&tb&&c.ourKey===ta.key&&c.oppKey===tb.key&&c.fixture) fixture="fixture:"+String(c.fixture.match_id!==undefined&&c.fixture.match_id!==null?c.fixture.match_id:c.fixture.match_external_id);
@@ -772,7 +801,7 @@
     }).join("");
     var cap=WR_PLAN.cap[ta.key];
     document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for this fixture</button></div>'
-      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
+      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
       +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
@@ -809,10 +838,11 @@
         +w.meetings.slice(0,60).map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(playerRef(g.our))+'</td><td>'+esc(playerRef(g.opp))+'</td><td>'+esc(g.result)+'</td><td>'+esc(wrHistoricalSLText(g.own_sl)+" / "+wrHistoricalSLText(g.opp_sl))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>'
         +(w.meetings.length>60?'<p class="muted">Showing the newest 60 of '+w.meetings.length+'; Player vs Player lists every meeting.</p>':'')
       :'<p class="muted">No recorded direct meetings between these rosters in '+esc(fmtLabel(fmt))+'.</p>');
+    wrPatchStorageStatus();
   }
   function wrCtxLabel(ta,tb){
     var c=MATCHUP_CONTEXT;
-    if(c&&c.ourKey===ta.key&&c.oppKey===tb.key&&c.fixture) return "Marks for this fixture only ("+(c.fixture.local_display||"undated fixture")+"), saved in this browser.";
+    if(c&&c.ourKey===ta.key&&c.oppKey===tb.key&&c.fixture) return "Marks for this fixture only ("+(c.fixture.local_display||"undated fixture")+").";
     return "Teams picked by hand — not a Match Day fixture. Marks here are kept apart from every fixture's marks.";
   }
   function wrPairDetail(w,row,block,fmt){

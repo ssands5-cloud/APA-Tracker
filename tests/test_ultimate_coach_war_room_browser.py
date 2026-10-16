@@ -2661,3 +2661,91 @@ def test_recorded_options_preview_discloses_all_choices_without_choosing_target(
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_unsaved_planning_changes_are_visible_and_recover_without_changing_evidence(tmp_path, width):
+    """A rejected save must not let a captain mistake current-page edits for durable marks/notes."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            box = page.locator('textarea.plan').first
+            box.fill("SYNTHETIC saved observation")
+            saved = page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
+            page.evaluate("""() => {
+                const original = Storage.prototype.setItem;
+                window.__rejectPlanWrites = true;
+                Storage.prototype.setItem = function(k,v) {
+                    if (k === 'ultimate-coach:plan-v2' && window.__rejectPlanWrites)
+                        throw new DOMException('SYNTHETIC quota reached', 'QuotaExceededError');
+                    return original.call(this,k,v);
+                };
+            }""")
+            box.fill("SYNTHETIC unsaved observation")
+            assert page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')") == saved
+            for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
+                warning = page.locator(section + ' .wr-storage-warning').first
+                assert warning.is_visible(), "failed save must be disclosed beside decisions and edits"
+                assert 'Planning changes are not saved' in warning.inner_text()
+                assert 'Copy any notes before closing' in warning.inner_text()
+            assert 'saved in this browser' not in page.locator('#ll-context').inner_text().lower()
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unavailable'
+            assert page.locator('#tonight .wr-storage-warning').is_visible()
+            assert page.locator('#scouting-cards .wr-storage-warning').count() == page.locator('textarea.plan').count()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            # A later successful edit saves the whole current plan, including the previously failed mark.
+            page.evaluate('window.__rejectPlanWrites = false')
+            page.locator('textarea.plan').first.fill("SYNTHETIC recovered observation")
+            assert page.locator('.wr-storage-warning').count() == 0
+            page.reload()
+            assert page.locator('textarea.plan').first.input_value() == "SYNTHETIC recovered observation"
+            assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unavailable'
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("failure", ['blocked', 'malformed'])
+def test_unreadable_saved_plan_is_disclosed_and_never_overwritten(tmp_path, width, failure):
+    path = tmp_path / 'unreadable-plan.html'
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 844})
+            errors = []
+            page.on('pageerror', lambda e: errors.append(str(e)))
+            page.add_init_script("""(() => {
+                const key = 'ultimate-coach:plan-v2';
+                const original = Storage.prototype.getItem;
+                const prior = MODE === 'malformed' ? '{SYNTHETIC incomplete' : JSON.stringify({coach:{10:{n:'SYNTHETIC earlier note'}}});
+                Storage.prototype.setItem.call(localStorage,key,prior);
+                window.__readOriginalPlan = () => original.call(localStorage,key);
+                if (MODE === 'blocked') Storage.prototype.getItem = function(k) {
+                    if (k === key) throw new DOMException('SYNTHETIC blocked read', 'SecurityError');
+                    return original.call(this,k);
+                };
+            })();""".replace('MODE', repr(failure)))
+            page.goto(path.as_uri())
+            prior = page.evaluate('window.__readOriginalPlan()')
+            for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
+                warning = page.locator(section + ' .wr-storage-warning').first
+                assert warning.is_visible(), 'unreadable saved plan must not look like a fresh empty plan'
+                assert 'Previously saved marks and notes could not be read' in warning.inner_text()
+            page.locator('textarea.plan').first.fill('SYNTHETIC current-page observation')
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC current-page observation'
+            assert page.evaluate('window.__readOriginalPlan()') == prior, 'do not replace unreadable saved data with an empty plan'
+            assert page.locator('#tonight .wr-storage-warning').is_visible()
+            assert 'saved in this browser' not in page.locator('#ll-context').inner_text().lower()
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()
