@@ -264,10 +264,12 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.print-matchup .send { margin:0; }
   body.print-matchup #team-rosters,body.print-matchup #wr-opportunities,body.print-matchup #wr-risks { line-height:1.25; }
 }
+@media screen {
+  .quick-read-badges span { white-space:normal; }
+}
 @media screen and (max-width:360px) {
   .scout-grid,.matchup-facts { grid-template-columns:minmax(0,1fr); }
   .matchup-facts dt { margin-top:6px; }
-  .quick-read-badges span { white-space:normal; }
 }
 """
 

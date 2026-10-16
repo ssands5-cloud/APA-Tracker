@@ -2927,7 +2927,7 @@ def test_put_up_selection_does_not_claim_an_opponent_in_a_new_fixture(tmp_path, 
             browser.close()
 
 
-@pytest.mark.parametrize("width", [320, 340])
+@pytest.mark.parametrize("width", [320, 340, 390, 768, 1280])
 def test_narrow_phone_keeps_scouting_cards_and_snapshot_values_inside_the_page(tmp_path, width):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -2948,7 +2948,8 @@ def test_narrow_phone_keeps_scouting_cards_and_snapshot_values_inside_the_page(t
                 page.locator('#next-send .ns-chip').nth(i).click()
                 r = page.locator('#next-send .ns-chip.on').bounding_box()
                 assert r['x'] >= 0 and r['x'] + r['width'] <= width + 1
-                assert r['height'] >= 44
+                if width <= 600:
+                    assert r['height'] >= 44
             chosen = page.locator('#next-send .ns-chip.on').get_attribute('data-next')
             order = page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>e.dataset.sendOur)')
             note = page.locator('textarea.plan').first
@@ -2960,5 +2961,31 @@ def test_narrow_phone_keeps_scouting_cards_and_snapshot_values_inside_the_page(t
             assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 768, 1280])
+def test_evidence_badges_fit_when_many_scouting_cards_share_the_screen(tmp_path, width):
+    from tests.test_excel_war_room_formulas import _many_threats_payload
+    payload = _many_threats_payload()
+    # Existing historical-SL evidence can legitimately make this badge long.
+    for sl in range(2, 8):
+        games = _games(10, 12, "L", date=f"2026-09-{10 + sl}T19:00:00-06:00")
+        games[0]["opponent_skill_level"] = sl
+        games[1]["own_skill_level"] = sl
+        payload["evidence"] += games
+    payload["counts"]["head_to_head_rows"] = len(payload["evidence"])
+    path = tmp_path / "badge-columns.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC",
+                           viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 844})
+            page.goto(path.as_uri())
+            badges = page.locator('#scouting-cards .quick-read-badges span')
+            assert badges.filter(has_text='Recorded losses vs SL2').count() > 0
+            assert badges.evaluate_all("es=>es.every(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right+1)"), 'recorded-loss and small-sample badges must fit inside every card column'
         finally:
             browser.close()
