@@ -2749,3 +2749,59 @@ def test_unreadable_saved_plan_is_disclosed_and_never_overwritten(tmp_path, widt
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_coach_tags_update_all_opinion_summaries_immediately_without_changing_evidence(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            page.locator('#next-send .ns-chip[data-next="10"]').click()
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            ids = page.locator('#next-send [data-send-our]').evaluate_all('els => els.map(e => e.dataset.sendOur)')
+            card = page.locator('#scouting-cards .scout').first
+            badges = lambda: [t for t in card.locator('.quick-read-badges span').all_text_contents()
+                              if t != chr(10067) + ' No coach observations']
+            original_badges = badges()
+            slots = page.locator('.note-flag-slot[data-note-pid="10"]')
+            assert slots.count() >= 5
+            note = card.locator('textarea[data-plan="note"]')
+            def check(summary):
+                assert card.locator('.coach-summary').inner_text() == summary
+                assert ('No coach observations' in card.locator('.quick-read-badges').inner_text()) == (not summary)
+                for i in range(slots.count()):
+                    slot = slots.nth(i)
+                    if summary:
+                        assert slot.get_attribute('style') != 'display:none'
+                        assert summary in slot.evaluate('e => e.textContent + " " + Array.from(e.querySelectorAll("[title]")).map(n => n.title).join(" ")')
+                    else:
+                        assert slot.get_attribute('style') == 'display: none;'
+                assert badges() == original_badges
+                assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+                assert page.locator('#next-send [data-send-our]').evaluate_all('els => els.map(e => e.dataset.sendOur)') == ids
+            card.locator('select[data-plan="tag1"]').focus()
+            card.locator('select[data-plan="tag1"]').select_option('Slow shooter')
+            check('Coach: Slow shooter')
+            assert page.evaluate('document.activeElement.dataset.plan') == 'tag1'
+            card.locator('select[data-plan="tag1"]').select_option('Fast shooter')
+            check('Coach: Fast shooter')
+            card.locator('select[data-plan="tag2"]').select_option('Strong safety player')
+            check('Coach: Fast shooter' + chr(32) + chr(183) + ' Strong safety player')
+            card.locator('select[data-plan="tag1"]').select_option('')
+            check('Coach: Strong safety player')
+            note.fill('SYNTHETIC coach observation')
+            check('Coach: Strong safety player: SYNTHETIC coach observation')
+            card.locator('select[data-plan="tag2"]').select_option('')
+            check('Coach: SYNTHETIC coach observation')
+            note.fill('')
+            check('')
+            card.locator('select[data-plan="tag2"]').select_option('Strong safety player')
+            page.reload()
+            card = page.locator('#scouting-cards .scout').first
+            check('Coach: Strong safety player')
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()

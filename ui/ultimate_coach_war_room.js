@@ -268,6 +268,21 @@
       }
     });
   }
+  // Tags and free text are both Coach Observation. Patch their opinion metadata only;
+  // evidence badges, records, categories and candidate ordering stay untouched.
+  function wrPatchCoachObservation(pid){
+    var summary=wrCoachSummary(pid),editor=document.getElementById("coach-note-"+pid);
+    var scout=editor&&editor.closest?editor.closest(".scout"):null;
+    var box=scout?scout.querySelector(".coach-summary"):null;if(box) box.textContent=summary;
+    var row=scout?scout.querySelector(".quick-read-badges"):null;
+    if(row){
+      var spans=row.querySelectorAll("span"),found=null;
+      for(var i=0;i<spans.length;i++) if(spans[i].textContent==="\u2753 No coach observations") found=spans[i];
+      if(summary&&found) found.remove();
+      else if(!summary&&!found){var sp=document.createElement("span");sp.textContent="\u2753 No coach observations";row.appendChild(sp);}
+    }
+    wrPatchNoteFlags(pid);
+  }
   function wrArchiveHtml(pid){
     var a=WR_PLAN.archive[String(pid)]||[];
     if(!a.length) return "";
@@ -822,7 +837,7 @@
         var tagSel=function(field){return '<select class="plan" data-plan="'+field+'" data-pid="'+pid+'" aria-label="Coach tag"><option value="">—</option>'
           +WR_COACH_TAGS.map(function(t){return '<option'+(cc[field==="tag1"?"t1":"t2"]===t?' selected':'')+'>'+esc(t)+'</option>';}).join("")+'</select>';};
         var f=[["Team record",c.team_record],["League lifetime",c.lifetime],["Recorded games",c.sample],["Vs our roster",c.vs_ours],["Meetings with our players",c.met_list],["Shared-opponent evidence",c.shared_summary],["Record by opponent SL",c.by_sl],["Winning records vs",c.winning_sl],["Losing records vs",c.losing_sl],["Missing information",c.missing]];
-        var hasNote=!!(cc.n&&cc.n.trim());
+        var hasNote=!!wrCoachSummary(c.opponent.id);
         var badges=wrQuickReadBadges(c,w.blocks[j],hasNote);
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
           +'<p class="quick-read-badges">'+badges.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</p>'
@@ -866,7 +881,7 @@
       if(t&&t.id==="ll-cap"&&cur.ta){var v=parseFloat(t.value);if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];wrSave();renderTeamMatchups();return;}
       if((k==="tag1"||k==="tag2")&&t.getAttribute("data-pid")){
         wrSetCoach(t.getAttribute("data-pid"),k==="tag1"?"t1":"t2",t.value);
-        var sbox=t.parentNode.querySelector(".coach-summary");if(sbox) sbox.textContent=wrCoachSummary(t.getAttribute("data-pid"));
+        wrPatchCoachObservation(t.getAttribute("data-pid"));
         return;
       }
       if(!k||!cur.ta||!cur.tb) return;
@@ -883,25 +898,8 @@
       if(!t||!t.getAttribute||t.getAttribute("data-plan")!=="note"||!cur.tb) return;
       var npid=t.getAttribute("data-pid");
       wrSetCoach(npid,"n",t.value);
-      var box=t.parentNode.querySelector(".coach-summary");if(box) box.textContent=wrCoachSummary(npid);
-      // GPT audit (d3203ee/349815e): a visible note next to "No coach observations" is a worse,
-      // actively misleading state than a narrow live update -- the opinion/evidence isolation
-      // guard protects EVIDENCE (the matrix, ranks, recommendations, numeric records) from being
-      // moved by a captain's opinion; whether a note EXISTS is metadata about the opinion itself,
-      // not evidence the opinion could corrupt. Only this one boolean icon is patched in place;
-      // everything else on the card -- evidence strength, weak-SL -- stays exactly as computed at
-      // last render, same as before. The isolation-guard tests carry a matching narrow, exact-text
-      // exemption for only this sentinel string, not a tag- or selector-shaped one.
-      var scout=t.closest?t.closest(".scout"):null,row=scout?scout.querySelector(".quick-read-badges"):null;
-      if(row){
-        var has=!!t.value.trim(),spans=row.querySelectorAll("span"),found=null,i;
-        for(i=0;i<spans.length;i++) if(spans[i].textContent==="\u2753 No coach observations") found=spans[i];
-        if(has&&found) found.remove();
-        else if(!has&&!found){var sp=document.createElement("span");sp.textContent="\u2753 No coach observations";row.appendChild(sp);}
-      }
-      // GPT audit (issue #84, NOTES-01): the note-flag occurrences below are the same kind of
-      // live metadata as the badge above, not evidence -- see wrPatchNoteFlags.
-      wrPatchNoteFlags(npid);
+      // The exact no-observation sentinel and note slots are opinion metadata only.
+      wrPatchCoachObservation(npid);
     });
     root.addEventListener("click",function(ev){
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
