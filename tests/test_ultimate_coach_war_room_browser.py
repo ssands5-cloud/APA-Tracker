@@ -3075,3 +3075,53 @@ def test_a_failed_freshness_read_cannot_overwrite_the_last_saved_plan(tmp_path, 
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_sent_pair_is_not_partly_saved_when_only_one_mark_fits(tmp_path, width):
+    """Quota must preserve the prior plan, not persist half of one Sent action."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
+            page.locator('textarea.plan').first.fill('SYNTHETIC retained observation')
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            send = page.locator('#next-send [data-send-our]').first
+            own, opponent = send.get_attribute('data-send-our'), send.get_attribute('data-send-opp')
+            saved = page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
+            page.evaluate("""({own, opponent}) => {
+                const key = 'ultimate-coach:plan-v2', write = Storage.prototype.setItem;
+                const partial = JSON.parse(localStorage.getItem(key)), scope = Object.keys(partial.our)[0];
+                partial.our[scope][own] = {...partial.our[scope][own], l:'Played'};
+                const limit = JSON.stringify(partial).length;
+                const full = JSON.parse(JSON.stringify(partial));
+                full.opp[scope] = {...full.opp[scope], [opponent]:{p:true}};
+                if (JSON.stringify(full).length <= limit) throw Error('invalid synthetic quota boundary');
+                window.__rejectOversizePlan = true;
+                Storage.prototype.setItem = function(k,v) {
+                    if (k === key && window.__rejectOversizePlan && v.length > limit)
+                        throw new DOMException('SYNTHETIC full plan exceeds quota', 'QuotaExceededError');
+                    return write.call(this,k,v);
+                };
+            }""", {'own': own, 'opponent': opponent})
+            send.click()
+            assert page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')") == saved, 'one failed Sent action must not save only our player as Played'
+            assert page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').input_value() == 'Played'
+            assert page.locator(f'#lineup-lab input[data-plan="played"][data-pid="{opponent}"]').is_checked()
+            assert 'Planning changes are not saved' in page.locator('#tonight .wr-storage-warning').inner_text()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            # With room restored, the next edit saves the complete local pairing and notes.
+            page.evaluate('window.__rejectOversizePlan = false')
+            page.locator('textarea.plan').first.fill('SYNTHETIC recovered observation')
+            assert page.locator('.wr-storage-warning').count() == 0
+            page.reload()
+            assert page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').input_value() == 'Played'
+            assert page.locator(f'#lineup-lab input[data-plan="played"][data-pid="{opponent}"]').is_checked()
+            assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC recovered observation'
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert errors == []
+        finally:
+            browser.close()

@@ -337,7 +337,7 @@
     return ta.key+"||"+(tb?tb.key:"")+"||"+fixture;
   }
   function wrMark(kind,scope,pid){var s=WR_PLAN[kind][scope];return (s&&s[String(pid)])||{};}
-  function wrSetMark(kind,scope,pid,field,value){var s=WR_PLAN[kind][scope]||(WR_PLAN[kind][scope]={});var m=s[String(pid)]||(s[String(pid)]={});if(value) m[field]=value; else delete m[field];wrSave();}
+  function wrSetMark(kind,scope,pid,field,value,deferSave){var s=WR_PLAN[kind][scope]||(WR_PLAN[kind][scope]={});var m=s[String(pid)]||(s[String(pid)]={});if(value) m[field]=value; else delete m[field];if(!deferSave) wrSave();}
   function wrAvail(scope,pid){var a=wrMark("our",scope,pid).a;return a==="Available"||a==="Unavailable"?a:"Unknown";}
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
@@ -957,7 +957,8 @@
       if(t.hasAttribute("data-next")){WR_STATE.next=t.getAttribute("data-next");renderTeamMatchups();
         var again=el.querySelector('.ns-chip.on');if(again) again.focus();return;}
       if(t.hasAttribute("data-send-our")&&ta&&tb){var ck=wrCtx(ta,tb);
-        wrSetMark("our",ck,t.getAttribute("data-send-our"),"l","Played");wrSetMark("opp",ck,t.getAttribute("data-send-opp"),"p",true);
+        // One Sent action saves both marks together; a rejected write must not leave half a pairing.
+        wrSetMark("our",ck,t.getAttribute("data-send-our"),"l","Played",true);wrSetMark("opp",ck,t.getAttribute("data-send-opp"),"p",true);
         WR_STATE.next=null;renderTeamMatchups();}
     });
   })();
