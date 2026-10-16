@@ -2623,3 +2623,41 @@ def test_avoid_panel_does_not_silently_drop_pairings_after_fifth(tmp_path, width
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_recorded_options_preview_discloses_all_choices_without_choosing_target(tmp_path, width):
+    payload = _payload(crowded=True)
+    path = tmp_path / "preview-scope.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 844})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            row = page.locator("#wr-opportunities tbody tr").first
+            assert row.locator(".send").count() == 3
+            link = row.locator('a[href="#next-send"]')
+            assert link.count() == 1
+            assert "first 3 of 5" in link.inner_text() and "Choose Cam Cole" in link.inner_text()
+            assert link.bounding_box()["height"] >= 44
+            assert page.locator("#wr-opportunities h2").inner_text() == "Recorded options preview per opponent"
+            assert "win percentage before meeting count, not confidence" in page.locator("#wr-opportunities").inner_text()
+            page.locator('#next-send .ns-chip[data-next="11"]').click()
+            link.click()
+            assert page.evaluate("location.hash") == "#next-send"
+            assert page.locator('#next-send .ns-chip[data-next="11"]').get_attribute("aria-pressed") == "true"
+            page.locator('#next-send .ns-chip[data-next="10"]').click()
+            assert page.locator("#next-send .ns-medal").count() == 5
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option("Unavailable")
+            assert "first 3 of 4" in link.inner_text()
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="4"]').select_option("Unavailable")
+            assert row.locator(".send").count() == 3 and link.count() == 0
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="10"]').check()
+            assert "Already played." in row.inner_text() and row.locator(".send").count() == 0
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()

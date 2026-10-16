@@ -700,18 +700,20 @@
     if(!ta){wrClear();return;}
     if(!tb||!ta.players.length||!tb.players.length){
       wrClear();
-      opEl.innerHTML='<h2>Best sends</h2><p class="muted">'+(!tb?'No opponent roster for the selected fixture — choose a fixture with a rostered opponent on Match Day, or pick an opponent team above.':'One of these rosters has no current players captured.')+'</p>';
+      opEl.innerHTML='<h2>Recorded options</h2><p class="muted">'+(!tb?'No opponent roster for the selected fixture — choose a fixture with a rostered opponent on Match Day, or pick an opponent team above.':'One of these rosters has no current players captured.')+'</p>';
       return;
     }
     var w=warRoomPair(ta,tb,fmt),plan=wrPlan(w,ta,tb);
     wrTonight(w,plan,ta,tb);
     // Best sends (ranking order, sendable + remaining, unplayed opponents)
-    opEl.innerHTML='<h2>Best sends — top opportunities per opponent</h2>'
+    opEl.innerHTML='<h2>Recorded options preview per opponent</h2>'
       +'<p class="muted">Favorable direct records first, then even direct (numbered by evidence; "1=" = tied, same evidence), then indirect-only evidence ("≈", not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
+      +'<p class="muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</p>'
       +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Recorded options among our remaining players</th></tr></thead><tbody>'
       +w.blocks.map(function(b,j){
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
-          :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>');})(wrSendLabels(plan.sends[j]))
+          :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>')
+            +(plan.sends[j].length>3?'<br><a class="send-more" href="#next-send" style="display:inline-flex;align-items:center;min-height:44px">Showing first 3 of '+plan.sends[j].length+'. Choose '+esc(wrDisplayName(b.opponent,w.theirs))+' in Next Send for all options.</a>':'');})(wrSendLabels(plan.sends[j]))
           :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+wrNoteFlagSlot(b.opponent.id,"icon")+'</td><td>'+cell+'</td></tr>';
       }).join("")+'</tbody></table></div>';
