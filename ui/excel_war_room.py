@@ -1118,8 +1118,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         ws.row_dimensions[r].height = 28
     top = top + R + 2
     base._section(ws, top, "Top risks", last_col=12)
-    _span(ws, top + 1, 1, 12, "Opponents with winning records against our roster (by recorded direct results; unplayed only)",
-          font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
+    _span(ws, top + 1, 1, 12, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)",
+          font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL, height=30)
     for n in range(1, R + 1):
         row = f"INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))"
         note = f"INDEX(wr_OppNotes,MATCH(INDEX(Threats_Table[Opp Player ID],{row}),wr_OppPids,0))"
@@ -1697,7 +1697,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
               font=font(10))
         h(r, 27)
     r += 1
-    base._section(ws, r, "Top risks", last_col=12)
+    base._section(ws, r, "Top risks — Danger flags use full roster history", last_col=12)
     h(r, 18)
     risk_lines = [f'=IFERROR("Dangerous: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")'
                   for n in range(1, 4)]

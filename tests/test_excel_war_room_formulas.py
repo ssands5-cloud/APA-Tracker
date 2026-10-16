@@ -220,7 +220,7 @@ def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built
         (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"),
         (f"vs {EVE} · SL 3", f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),      # shared-only: never numbered
     ]
-    threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
+    threats = _list_after(book, built, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)", 3)
     assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · small sample"]
     concerning = _list_after(book, built, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)", 5)
     assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings)", f"{DEE} vs {EVE}: 0-2 direct (2 meetings)"]
@@ -615,7 +615,7 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
     book.set("Coach Notes", "A6", EVE)           # a threat's note is shown with the threat, labelled as opinion
     book.set("Coach Notes", "D6", "Runs out from anywhere")
-    threats = _list_after(book, built, "Opponents with winning records against our roster (by recorded direct results; unplayed only)", 3)
+    threats = _list_after(book, built, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)", 3)
     assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · small sample · 📝 Coach: Runs out from anywhere "
                        "(your opinion, not APA facts)"]
 
@@ -896,7 +896,7 @@ def test_a_stale_snapshot_is_a_visible_warning_not_small_print(built, tmp_path):
 
 def test_captain_packet_page_one_is_decision_first(book, built):
     sends = _row(built, CP, "Best sends — top opportunities per opponent (favorable direct first, then even, then indirect)")
-    risks = _row(built, CP, "Top risks")
+    risks = _row(built, CP, "Top risks — Danger flags use full roster history")
     roster = _row(built, CP, "OUR TEAM")
     assert sends < risks < roster
     assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
@@ -1339,7 +1339,24 @@ def _many_threats_payload():
 def test_war_room_does_not_silently_drop_flags_after_third_opponent(tmp_path):
     wb=load_workbook(write_workbook(_many_threats_payload(),tmp_path/"threats.xlsx",built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"))
     book=Workbook(wb)
-    top=_row(wb,WR,"Opponents with winning records against our roster (by recorded direct results; unplayed only)")
+    top=_row(wb,WR,"Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)")
     text="\n".join(str(book.display(WR,f"A{r}")) for r in range(top+1,top+9))
     for label in ("Threat A","Threat B","Threat C","Threat D"):
         assert label+" \u00b7 SL" in text
+
+
+def test_historical_threat_heading_explains_departed_teammates(book,built):
+    risks=_row(built,WR,"Top risks")
+    caption=str(book.display(WR,f"A{risks+1}"))
+    assert "includes unavailable/played teammates" in caption
+    before=[str(book.display(WR,f"A{r}")) for r in range(risks+2,risks+10)]
+    book.set(LL,"C14","Unavailable")
+    after=[str(book.display(WR,f"A{r}")) for r in range(risks+2,risks+10)]
+    assert any(EVE in t for t in before) and after==before
+    assert built[WR].row_dimensions[risks+1].height>=30
+
+
+def test_packet_risk_heading_discloses_full_roster_history(built):
+    caption=next(c.value for row in built[CP].iter_rows(min_col=1,max_col=1) for c in row
+                 if isinstance(c.value,str) and c.value.startswith("Top risks"))
+    assert "Danger flags use full roster history" in caption
