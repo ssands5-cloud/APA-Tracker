@@ -2588,3 +2588,38 @@ def test_quick_read_distinguishes_same_named_answer_and_avoid(tmp_path, width, l
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_avoid_panel_does_not_silently_drop_pairings_after_fifth(tmp_path, width):
+    payload = _payload(crowded=True)
+    ours = {1, 2, 3, 4, 5, 6}
+    theirs = {10, 11}
+    payload["evidence"] = [r for r in payload["evidence"]
+                           if not ({r["player_id"], r["opponent_id"]} & ours
+                                   and {r["player_id"], r["opponent_id"]} & theirs)]
+    for pid in sorted(ours):
+        for opp in sorted(theirs):
+            payload["evidence"] += _games(pid, opp, "L" * (1 + pid % 3))
+    expected = _python_war_room_for(payload)["concerning"]
+    assert len(expected) == 12
+    path = tmp_path / "all-avoid.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 844})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            lines = page.locator("#wr-risks .risk-grid > div").nth(1).locator("li")
+            assert lines.all_text_contents() == [r["text"] for r in expected]
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option("Unavailable")
+            assert lines.all_text_contents() == [r["text"] for r in expected if r["our"]["id"] != 1]
+            page.locator('#lineup-lab input[data-plan="played"][data-pid="11"]').check()
+            assert lines.all_text_contents() == [r["text"] for r in expected
+                                                  if r["our"]["id"] != 1 and r["opp"]["id"] != 11]
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()

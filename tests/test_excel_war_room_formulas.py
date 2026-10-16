@@ -222,7 +222,7 @@ def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built
     ]
     threats = _list_after(book, built, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)", 3)
     assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · small sample"]
-    concerning = _list_after(book, built, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)", 5)
+    concerning = _list_after(book, built, "Concerning pairings — first 5 remaining pairings; all in Captain Matrix below", 5)
     assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings)", f"{DEE} vs {EVE}: 0-2 direct (2 meetings)"]
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
     assert risks == [f"{EVE} — only even or indirect evidence left"]
@@ -1372,3 +1372,33 @@ def test_packet_explains_direct_order_without_implying_confidence(tmp_path):
     text=str(book.display(CP,f"C{head.row+1}"))
     assert "1-0 (1)" in text and "8-2 (10)" in text
     assert text.index(ANN)<text.index(BEA)
+
+
+def test_concerning_lookup_keeps_pairings_beyond_twentieth_after_marks(tmp_path):
+    payload = _payload(crowded=True)
+    for pid in (20, 21):
+        payload["players"].append(_player(pid, str(2000 + pid), "Other " + str(pid),
+                                           [_hist("falcons-a", "d1", "EIGHT", 4)]))
+    ours, theirs = {1, 2, 3, 4, 5, 6}, {10, 11, 20, 21}
+    payload["evidence"] = [r for r in payload["evidence"]
+                           if not ({r["player_id"], r["opponent_id"]} & ours
+                                   and {r["player_id"], r["opponent_id"]} & theirs)]
+    for pid in sorted(ours):
+        for opp in sorted(theirs):
+            payload["evidence"] += _games(pid, opp, "L")
+    path = write_workbook(payload, tmp_path / "all-concerning.xlsx",
+                          built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001")
+    wb = load_workbook(path)
+    book = Workbook(wb)
+    assert max(book.value(sh, ref) for sh, ref in book.name("wr_ConcernRun")) == 24
+    for pid in ours - {3}:
+        row = 12 + next(i for i, (sh, ref) in enumerate(book.name("wr_OurPids"))
+                        if book.value(sh, ref) == pid)
+        book.set(LL, f"C{row}", "Unavailable")
+    assert max(book.value(sh, ref) for sh, ref in book.name("wr_ConcernRun")) == 4
+    head = next(c.row for c in wb[WR]["A"] if isinstance(c.value, str)
+                and c.value.startswith("Concerning pairings"))
+    assert "first 5" in wb[WR].cell(head, 1).value and "Captain Matrix" in wb[WR].cell(head, 1).value
+    lines = [str(book.display(WR, f"A{head + i}")) for i in range(1, 6)]
+    assert len([line for line in lines if DEE in line]) == 4
+    assert not any("No concerning" in line for line in lines)

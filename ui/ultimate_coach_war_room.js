@@ -312,7 +312,7 @@
     var n=w.ours.length;
     return {ck:ck,rem:rem,unplayed:unplayed,sends:sends,risks:risks,unique:unique,
       threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}),
-      concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}).slice(0,5),
+      concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}),
       metrics:[
         ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
         ["Remaining skill total",!n?"—":(remMiss===0?remSL+" (all remaining players have a captured SL)":remSL+" known subtotal · "+remMiss+" remaining player(s) without a captured SL — not a complete total")],

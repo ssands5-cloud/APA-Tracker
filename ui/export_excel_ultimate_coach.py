@@ -838,7 +838,7 @@ def build_workbook(
     )
 
     roster_slots = max(8, min(max_roster, 16))
-    slots = {"roster": roster_slots, "teams": max(4, max_teams), "dates": max(10, min(stats["max_dates"], 40)),
+    slots = {"roster": roster_slots, "concerning": max(1, stats["max_concerning"]), "teams": max(4, max_teams), "dates": max(10, min(stats["max_dates"], 40)),
              "fixtures": fixture_slots, "ll_our_first": 12, "ll_opp_first": 15 + roster_slots}
     viewer = viewer_player(players, viewer_member_external_id)
     viewer_label = _player_label(viewer["name"], viewer["external_id"], payload.get("players") or []) if viewer else None

@@ -90,7 +90,6 @@ SUGGESTED_COLUMNS = ["Group Key", "Serial", "Date Display"]
 ALL_PLAYERS_CHOICE = "All players…"
 AVAILABILITY_CHOICES = ["Available", "Unavailable", "Unknown"]
 LINEUP_CHOICES = ["Planned", "Played"]
-CONCERNING_SLOTS = 20
 MEETING_SLOTS = 40
 
 def _cf_fill(rgb: str) -> PatternFill:
@@ -164,9 +163,9 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
-        for k, item in enumerate(wr["concerning"][:CONCERNING_SLOTS], start=1):
+        for k, item in enumerate(wr["concerning"], start=1):
             concern_rows.append([f"{key}|{k}", item["our"]["id"], item["opp"]["id"], item["text"]])
-        max_concern = max(max_concern, min(len(wr["concerning"]), CONCERNING_SLOTS))
+        max_concern = max(max_concern, len(wr["concerning"]))
         for k, game in enumerate(wr["meetings"], start=1):
             meeting_rows.append([f"{key}|{k}", game["date"], labels.get(str(game["our"]["external_id"]), game["our"]["name"]),
                                  labels.get(str(game["opp"]["external_id"]), game["opp"]["name"]),
@@ -697,7 +696,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_ThreatOk", lambda k, r: f'=IF(B{r}="",FALSE,IFERROR(INDEX(wr_OppUnplayed,MATCH(INDEX(Threats_Table[Opp Player ID],B{r}),wr_OppPids,0)),FALSE))'),
         ("wr_ThreatRun", lambda k, r: (f'=IF(C{r},1,0)' if k == 1 else f'=D{r - 1}+IF(C{r},1,0)')),
     ])
-    e.block("Concerning row", CONCERNING_SLOTS, [
+    e.block("Concerning row", slots["concerning"], [
         ("wr_ConcernRow", lambda k, r: f'=IF(NOT(wr_HasEvidence),"",IFERROR(MATCH(wr_PairKey&"|{k}",Concerning_Table[Key],0),""))'),
         ("wr_ConcernOk", lambda k, r: (
             f'=IF(B{r}="",FALSE,AND(IFERROR(INDEX(wr_OurRemaining,MATCH(INDEX(Concerning_Table[Our Player ID],B{r}),wr_OurPids,0)),FALSE),'
@@ -1128,8 +1127,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
                                       f'IF({n}=1,IF(wr_HasEvidence,"No unplayed opponent has a winning recorded record against our roster.",""),""))',
               font=SMALL)
     t2 = top + R + 2
-    _span(ws, t2, 1, 12, "Concerning pairings — more direct losses than wins (remaining players vs unplayed opponents)",
-          font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL)
+    _span(ws, t2, 1, 12, "Concerning pairings — first 5 remaining pairings; all in Captain Matrix below",
+          font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL, height=30)
     for n in range(1, 6):
         _span(ws, t2 + n, 1, 12, f'=IFERROR(INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),'
                                  f'IF({n}=1,IF(wr_HasEvidence,"No concerning direct records among remaining pairings.",""),""))',
