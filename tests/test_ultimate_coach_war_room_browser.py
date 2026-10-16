@@ -2846,3 +2846,41 @@ def test_matrix_names_explain_unavailable_and_played_marks_without_changing_hist
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_detailed_rankings_disclose_full_roster_scope_and_return_without_changing_target(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({"width": width, "height": 844})
+            original = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            history = page.locator('#team-matchups .rank-table tbody').all_text_contents()
+            page.locator('#next-send .ns-chip[data-next="11"]').click()
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="3"]').select_option('Played')
+            assert page.locator('#team-matchups .rank-table tbody').all_text_contents() == history
+            scopes = page.locator('#team-matchups .wr-history-scope')
+            assert scopes.count() == page.locator('#team-matchups .rank-block').count() + 1
+            page.locator('#wr-matrix thead a[href="#rank-block-0"]').click()
+            assert page.evaluate('location.hash') == '#rank-block-0'
+            scope = page.locator('#rank-block-0 .wr-history-scope')
+            assert scope.is_visible()
+            text = scope.inner_text()
+            assert 'Full-roster history' in text and 'unavailable' in text and 'already-played' in text
+            assert 'planning marks' in text
+            link = scope.locator('a[href="#next-send"]')
+            assert link.bounding_box()['height'] >= 44
+            link.click()
+            assert page.evaluate('location.hash') == '#next-send'
+            assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == '11'
+            assert page.locator('#next-send [data-send-our="1"]').count() == 0
+            assert page.locator('#next-send [data-send-our="3"]').count() == 0
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == original
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            assert scopes.count() == page.locator('#team-matchups .rank-block').count() + 1
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()

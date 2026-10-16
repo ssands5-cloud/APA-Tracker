@@ -749,6 +749,17 @@
     }
     var w=warRoomPair(ta,tb,fmt),plan=wrPlan(w,ta,tb);
     wrTonight(w,plan,ta,tb);
+    // The detailed ranking is full-roster history, including players no longer in play.
+    // Repeat the scope at each matrix-linked entry point, not only above the first table.
+    var history=document.getElementById("team-matchups");
+    if(history) history.querySelectorAll("h2,.rank-block h3").forEach(function(title){
+      if(title.nextElementSibling&&title.nextElementSibling.classList.contains("wr-history-scope")) return;
+      var scope=document.createElement("p");scope.className="muted wr-history-scope";
+      scope.textContent="Full-roster history, including unavailable and already-played players. These rows ignore tonight's planning marks. ";
+      var link=document.createElement("a");link.href="#next-send";link.textContent="Use Next Send for current remaining choices.";
+      link.style.cssText="display:inline-flex;align-items:center;min-height:44px";
+      scope.appendChild(link);title.insertAdjacentElement("afterend",scope);
+    });
     // Best sends (ranking order, sendable + remaining, unplayed opponents)
     opEl.innerHTML='<h2>Recorded options preview per opponent</h2>'
       +'<p class="muted">Favorable direct records first, then even direct (numbered by evidence; "1=" = tied, same evidence), then indirect-only evidence ("≈", not ordered among themselves). Our remaining players only (your Lineup Lab marks). Colors describe recorded results — not odds.</p>'
