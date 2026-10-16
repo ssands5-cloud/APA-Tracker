@@ -656,7 +656,7 @@
     var sends=[];w.blocks.forEach(function(b,j){
       if(!plan.unplayed[j]||sends.length>=3) return;
       var s=plan.sends[j];
-      if(!s.length){sends.push({text:"vs "+b.opponent.name+": no evidence-backed option left",pid:b.opponent.id});return;}
+      if(!s.length){sends.push({text:"vs "+wrDisplayName(b.opponent,w.theirs)+": no evidence-backed option left",pid:b.opponent.id});return;}
       var r=s[0],direct=r.category!=="I";
       var tied=direct?s.filter(function(x){return x.category!=="I"&&wrGroupKey(x)===wrGroupKey(r);}):[];
       var tieText=tied.length>1?" (tied with "+(tied.length-1)+" other"+(tied.length>2?"s":"")+"; see Next Send)":"";

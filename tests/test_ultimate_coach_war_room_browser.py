@@ -2545,6 +2545,8 @@ def test_compact_threat_and_open_risks_distinguish_same_named_opponents(tmp_path
             page.on("pageerror",lambda e:errors.append(str(e)));page.goto(path.as_uri())
             flags=page.locator("#tonight .decide-threats").inner_text()
             assert label in flags and other_label not in flags
+            sends=page.locator("#tonight .decide-sends").inner_text()
+            assert label in sends and other_label+": no evidence-backed option left" in sends
             risk=page.locator("#tonight .decide-risks");risk.locator("summary").click()
             assert label in risk.inner_text() and other_label in risk.inner_text()
             assert not page.evaluate("document.documentElement.scrollWidth>innerWidth") and not errors
