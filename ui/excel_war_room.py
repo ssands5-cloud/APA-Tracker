@@ -849,6 +849,30 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.block("Packet loss cautions by opponent", R, [
         ("wr_PacketCautions",lambda k,r:'='+packet_cautions[k]),
     ])
+    e.block("First direct record by opponent",R,[
+        ("wr_FirstDirectRow",lambda k,r:f'=IFERROR(INDEX(wr_OppStart,{k})+MATCH(1,{send_rng[k]["run"]},0),"")'),
+        ("wr_FirstDirectMeetings",lambda k,r:f'=IFERROR(IF(OR(INDEX({ME}[Category],B{r})="G",INDEX({ME}[Category],B{r})="E"),INDEX({ME}[Direct Games],B{r}),0),0)'),
+    ])
+    deeper_records={}
+    for j in range(1,R+1):
+        e.section(f"Deeper direct record context vs opponent slot {j}")
+        first=e.row+1
+        for k in range(1,R+1):
+            r=first+k-1
+            e.ws.cell(row=r,column=2,value=f'=IF(OR(INDEX(wr_OppStart,{j})="",{k}>INDEX(wr_OppCount,{j})),"",INDEX(wr_OppStart,{j})+{k})')
+            e.ws.cell(row=r,column=3,value=(f'=IF(B{r}="",FALSE,AND(INDEX(wr_OppUnplayed,{j}),INDEX(wr_FirstDirectMeetings,{j})>0,'
+                f'INDEX(wr_FirstDirectMeetings,{j})<3,INDEX({ME}[Direct Games],B{r})>INDEX(wr_FirstDirectMeetings,{j}),'
+                f'IFERROR(INDEX(wr_OurRemaining,MATCH(INDEX({ME}[Player ID],B{r}),wr_OurPids,0)),FALSE)))'))
+            cat=f'INDEX({ME}[Category],B{r})'
+            e.ws.cell(row=r,column=4,value=(f'=IF(C{r},INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Direct Record],B{r})&'
+                f'" · "&IF({cat}="G","favorable direct",IF({cat}="E","even direct","recorded loss"))&'
+                f'IF(INDEX({ME}[Direct Games],B{r})<3," · SMALL SAMPLE",""),"")'))
+            e.ws.cell(row=r,column=5,value=f'=D{r}' if k==1 else f'=E{r-1}&IF(AND(E{r-1}<>"",D{r}<>""),CHAR(10),"")&D{r}')
+        deeper_records[j]=f'Engine!$E${r}'
+        e.row=r+2
+    e.block("Deeper records by opponent",R,[
+        ("wr_DeeperRecords",lambda k,r:'='+deeper_records[k]),
+    ])
     medal = '"Direct-record order "&H{r}'
 
     def _nm(expr: str, slot: str) -> str:
@@ -916,6 +940,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsMethod", "Next Send ordering boundary", '="Not an overall player ranking. Favorable/even direct records use recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Loss cautions use most net losses first, then meetings. Shared-only comparisons are not ordered."')
     e.cell("wr_NsCard", "Next Send answer (one line each)", '=IF(wr_NsOpen,wr_NsMethod&CHAR(10),"")&wr_NsHeadline' + "".join(
         f'&IF({x}="","",CHAR(10)&{x})' for x in [f"wr_NsMedal{n}" for n in range(1, R + 1)] + ["wr_NsLists"]))
+    e.cell("wr_NsDeeper","Selected opponent deeper-record context",
+           '=IF(NOT(wr_NsOpen),"",IF(INDEX(wr_DeeperRecords,wr_NsJ)="","",'
+           '"Deeper direct records — more meetings, not a new order:"&CHAR(10)&INDEX(wr_DeeperRecords,wr_NsJ)))')
 
     # Broader records are context only: never referenced by ranking or eligibility formulas.
     broader = ('="Not used in this ordering"&CHAR(10)&"Captured team/session records — not a lifetime record."'
@@ -1813,10 +1840,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                             f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
                             f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k}))))'
                             f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k}))'
-                            f'&IF(INDEX(wr_PacketCautions,{k})="","",CHAR(10)&"Loss cautions — recorded losses, not exclusions:"&CHAR(10)&INDEX(wr_PacketCautions,{k})))',
+                            f'&IF(INDEX(wr_PacketCautions,{k})="","",CHAR(10)&"Loss cautions — recorded losses, not exclusions:"&CHAR(10)&INDEX(wr_PacketCautions,{k}))'
+                            f'&IF(INDEX(wr_DeeperRecords,{k})="","",CHAR(10)&"Deeper direct records — more meetings, not a new order:"&CHAR(10)&INDEX(wr_DeeperRecords,{k})))',
               font=font(10))
         save_worst = _packet_save_worst(wb, sum(PACKET_WIDTHS[2:]))
-        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst+'\n'+_packet_caution_worst(wb), sum(PACKET_WIDTHS[2:]), 10, 27))
+        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst+'\n'+_packet_caution_worst(wb)+'\n'+_deeper_records_worst(wb), sum(PACKET_WIDTHS[2:]), 10, 27))
     r += 1
     base._section(ws, r, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown", last_col=12)
     h(r, 18)
@@ -2220,6 +2248,16 @@ def _packet_caution_worst(wb) -> str:
     return 'Loss cautions — recorded losses, not exclusions:\n'+max(('\n'.join(b) for b in blocks),key=len)
 
 
+def _deeper_records_worst(wb) -> str:
+    blocks=[[]]
+    for row in wb['Matchup Evidence'].iter_rows(min_row=2,values_only=True):
+        rec=dict(zip(ME_COLUMNS,row))
+        if rec['Rank']=='vs':blocks.append([])
+        elif rec['Direct Games'] and rec['Direct Games']>1:
+            blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+' · recorded loss · SMALL SAMPLE')
+    return 'Deeper direct records — more meetings, not a new order:\n'+max(('\n'.join(b) for b in blocks),key=len)
+
+
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
     headline = "Not an overall player ranking. Direct-record order uses recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Shared-only comparisons are not ordered.\nOrdered direct records among remaining players; equal evidence stays tied."
@@ -2449,6 +2487,8 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
     ]
     top = _card(ws, 7, 2, 11, "NEXT SEND - RECORDED MATCHUP OPTIONS", ns_lines, size=11, line_height=30) + 2
+    top = _card(ws,top,2,11,"DEEPER RECORD CONTEXT — WHEN THE FIRST RECORD HAS 1–2 MEETINGS",
+                [("=wr_NsDeeper",_deeper_records_worst(wb))],size=11,line_height=30)+2
     broad_worst = ("Not used in this ordering\nCaptured team/session records — not a lifetime record.\nOur roster: "
                    + _longest_team_label(wb) + "\n" + "\n".join([_longest_label(wb)+": 100-100"] * R)
                    + "\nOpponent roster: " + _longest_team_label(wb) + "\n" + _longest_label(wb)+": 100-100\n"

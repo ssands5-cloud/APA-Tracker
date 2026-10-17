@@ -84,6 +84,21 @@ def test_packet_opponent_caution_survives_other_opponents_higher_global_losses(t
     wb.close()
 
 
+def test_paper_surfaces_expose_deeper_records_when_a_thin_leader_hides_them(tmp_path):
+    payload=_payload();payload['evidence']=_games(1,10,'W')+_games(3,10,'WWWWWWWWWL')+_games(2,10,'WWWWWWWWLL')
+    wb=load_workbook(write_workbook(payload,tmp_path/'deeper.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb);book.set('Command Center','C6','Cam Cole')
+    head=next(c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str) and c.value.startswith('Recorded options preview'))
+    packet=book.display('Captain Packet',f'C{head+1}')
+    assert 'Deeper direct records' in packet and '8-2 (10 meetings)' in packet
+    visible='\n'.join(str(book.display('Command Center',c.coordinate) or '') for row in wb['Command Center'] for c in row if c.column==2)
+    assert 'Deeper direct records' in visible and '8-2 (10 meetings)' in visible
+    assert packet.index('1-0 (1 meeting)')<packet.index('9-1 (10 meetings)')<packet.index('8-2 (10 meetings)')
+    book.set('Lineup Lab','C13','Unavailable')
+    assert '8-2 (10 meetings)' not in book.display('Captain Packet',f'C{head+1}')
+    wb.close()
+
+
 @pytest.mark.parametrize('state',['initial','unavailable','played','opponent_played','none_left','live_not_winning'])
 def test_workbook_live_flags_match_the_phone_engine_for_the_same_marks(tmp_path,state):
     payload=_payload()
