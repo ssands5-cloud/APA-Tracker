@@ -330,7 +330,7 @@ def _assert_oct11(page):
     tonight = page.inner_text("#tonight")
     assert "Sun Oct 11, 2026 · 11:00 AM MDT" in tonight and "Falcons" in tonight
     assert page.input_value("#team-a") == OURS and page.input_value("#team-b") == THEIRS
-    assert f"1. {ANN} — 2-0 (2)" in page.inner_text("#wr-opportunities")
+    assert f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE" in page.inner_text("#wr-opportunities")
 
 
 def test_match_day_change_without_an_applicable_fixture_clears_the_followed_matchup(tmp_path: Path):
@@ -2771,7 +2771,12 @@ def test_avoid_panel_does_not_silently_drop_pairings_after_fifth(tmp_path, width
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(path.as_uri())
-            lines = page.locator("#wr-risks .risk-grid > div").nth(1).locator("li")
+            # Each item is the shared caution text followed by a separate meeting badge; compare the text.
+            items = page.locator("#wr-risks .risk-grid > div").nth(1).locator("li")
+            class _Lines:
+                def all_text_contents(self):
+                    return items.evaluate_all("es => es.map(e => e.firstChild.textContent.trim())")
+            lines = _Lines()
             assert lines.all_text_contents() == [r["text"] for r in expected]
             page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option("Unavailable")
             assert lines.all_text_contents() == [r["text"] for r in expected if r["our"]["id"] != 1]

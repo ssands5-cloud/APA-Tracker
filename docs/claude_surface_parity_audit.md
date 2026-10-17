@@ -9,6 +9,64 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Claude implementation of T1, T2, T4 and final audit (2026-10-17) — SURFACE PARITY PASS
+
+GPT became unavailable, so Claude implemented the last three required trust fixes in `ui/excel_war_room.py`.
+No ranking, category, eligibility, save or budget logic changed.
+
+- **T1.** The workbook Next Send avoid line reads "⚠ Avoid records — recorded losses, not exclusions:". A
+  single-meeting loss adds "· Lost once · Only 1 meeting". This matches the phone ("Avoid records — recorded
+  losses" and "Lost once") and the Packet ("recorded losses, not exclusions").
+- **T2.** The Packet evidence-page Basis column prints the direction, then the caution, for example
+  "Favorable direct · SMALL SAMPLE" or "Concerning direct · SMALL SAMPLE". A thin 1-0 and a thin 0-1 no
+  longer print alike.
+- **T4.** The Packet Blind Send line carries the phone's exact evidence text: "N direct meetings total
+  across P opponents · K small-sample pairings". The new `wr_OurLiveSmall` counts direct pairings of 1–2
+  meetings against unplayed opponents, the same rule as the phone's `bs-evidence`.
+
+Each fix has a new test in `tests/test_cross_surface_trust.py`. The tests read displayed workbook and
+Packet text, and the T4 test also reads the rendered phone page. All three failed on 54898fb and pass after
+the change.
+
+Four browser tests were already failing on 54898fb. All four were stale expectations left by earlier
+builder wording changes, not product regressions, so they were repaired without product changes:
+- **Two tests** expected the old War Room send-list text "2-0 (2)". The HTML now prints "2-0 (2 meetings) ·
+  SMALL SAMPLE", the same as the workbook and Packet.
+- **Two avoid-panel cases (390 and 1280 px)** compared whole list items. Those items now also contain the
+  meeting badge. They now compare each item's caution text, which keeps the check that no pairing is
+  dropped and that the order is unchanged.
+- **Two workbook formula tests** pinned the old wording: the Basis column printing only "SMALL SAMPLE" (the
+  T2 defect) and the "Avoid:" label (T1). Both were updated to the fixed text.
+
+**Tests:** one combined run of `tests/test_cross_surface_trust.py`, `tests/test_next_send_boundaries.py`,
+`tests/test_excel_war_room_formulas.py`, `tests/test_ultimate_coach_war_room.py` and
+`tests/test_ultimate_coach_war_room_browser.py`: 346 passed in 401.97s. Formula results come from the
+repository's formula evaluator. Native Excel and physical-device checks were not run in this pass.
+
+**Final sweep: no decision-changing differences remain** across phone, HTML, workbook and Packet for:
+- Next Send order and ties;
+- save-for-later;
+- per-opponent loss cautions;
+- deeper records;
+- reference-budget warnings;
+- live threat scope;
+- Blind Send pick, ties and evidence strength;
+- Quick Read and Scouting scope (full-roster history, disclosed on every surface).
+
+**Cosmetic or wording-only items (do not change a decision):**
+- Phone Next Send says "Direct-record order #1". The HTML Lineup Lab and workbook best-send lines say
+  "first by recorded direct results". The pick and its visible sample are the same.
+- For a losing deeper record, the phone says "concerning" and the Packet and workbook say "recorded loss".
+- The phone uses badges where the Packet and workbook print uppercase "SMALL SAMPLE" and "MEETINGS".
+- The workbook and Packet always print the reference-budget scope line when a cap is entered. The phone
+  shows it only when the check is incomplete. The candidate warnings themselves are identical.
+- The workbook best-send and War Room list lines also carry the budget warning. The HTML shows it in Next
+  Send and the Blind Send card on the same page, but not repeated in its Lineup Lab and War Room lists.
+- HTML Top risks loss cautions say the sample twice. The shared text ends "· SMALL SAMPLE · Lost once" and
+  the badge beside it repeats "Lost once · 1 meeting · small sample".
+- Preview lengths differ by design: the Packet shows 2 options and 3 flags, and the War Room shows 5 loss
+  cautions. Each opponent's own cautions, save warnings and deeper records are on its Packet line.
+
 ## Audit of 54898fb (2026-10-17) — NOT A PASS
 
 The parity, Next Send and workbook formula suites passed 106 of 106 on a clean detached checkout of 54898fb.

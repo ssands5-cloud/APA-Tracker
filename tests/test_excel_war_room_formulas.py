@@ -488,10 +488,10 @@ def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built
     first = next(c.row for c in ws["A"] if c.value == "Opponent") + 1
     lines = [[book.display(CP, f"{c}{r}") for c in "ACDHK"] for r in range(first, first + 8)]
     assert lines[:6] == [
-        [f"vs {CAM}", "1", ANN, "2-0 (2 meetings)", "SMALL SAMPLE"],
-        [f"vs {CAM}", "2", DEE, "1-1 (2 meetings)", "SMALL SAMPLE"],
-        [f"vs {CAM}", "3", BEA, "0-2 (2 meetings)", "SMALL SAMPLE"],
-        [f"vs {EVE}", "1", DEE, "0-2 (2 meetings)", "SMALL SAMPLE"],
+        [f"vs {CAM}", "1", ANN, "2-0 (2 meetings)", "Favorable direct · SMALL SAMPLE"],
+        [f"vs {CAM}", "2", DEE, "1-1 (2 meetings)", "Even direct · SMALL SAMPLE"],
+        [f"vs {CAM}", "3", BEA, "0-2 (2 meetings)", "Concerning direct · SMALL SAMPLE"],
+        [f"vs {EVE}", "1", DEE, "0-2 (2 meetings)", "Concerning direct · SMALL SAMPLE"],
         [f"vs {EVE}", "≈", ANN, "≈ 1-0 vs 0-1 (1 shared)", "Indirect only"],
         [f"vs {EVE}", "—", BEA, "No verified evidence", "No verified evidence"],
     ]
@@ -553,14 +553,14 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert lines[2:] == [
         f"Direct-record order 1 {ANN_N} — 2-0 direct record (2 MEETINGS) — favorable · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
         f"Direct-record order 2 {DEE_N} — 1-1 direct record (2 MEETINGS) — even · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
-        f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings) · SMALL SAMPLE",
+        f"⚠ Avoid records — recorded losses, not exclusions: {BEA_N} — 0-2 (2 meetings) · SMALL SAMPLE",
     ]
     book.set("Command Center", "C6", EVE)
     assert _next_send(book)[0]==lines[0]
     assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
         f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
-        f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
+        f"⚠ Avoid records — recorded losses, not exclusions: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
     book.set("Command Center", "C6", CAM)
@@ -756,7 +756,7 @@ def test_formula_rows_fit_their_worst_case_text(built):
         if roster - k:
             parts.append("≈ Not ordered (shared-opponent results only): "
                          + "; ".join([f"{name} (availability unknown)"] * max(roster - k - 2, 1)))
-            parts += [f"⚠ Avoid: {name} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {name}"]
+            parts += [f"⚠ Avoid records — recorded losses, not exclusions: {name} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {name}"]
         need = _wrapped_lines("\n".join(parts), width(cc, 2, 11), 11) * 11 * 1.2
         assert cc.row_dimensions[8].height >= need, (k, cc.row_dimensions[8].height, need)
     # Printing fits the width only: a one-page squeeze made the sheet unreadable on paper (native print preview).
@@ -1243,7 +1243,7 @@ def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_ide
     lines = _next_send(book)
     assert any("Not ordered" in line and "Ann Archer (SL 5)" in line for line in lines)
     assert "Ann Archer (SL 4) (availability unknown)" in lines
-    assert any("Avoid:" in line and "Dee Diaz" in line for line in lines)
+    assert any("Avoid records — recorded losses, not exclusions:" in line and "Dee Diaz" in line for line in lines)
     assert any("Fay Fox" in line and "0-1 (1 meeting)" in line for line in lines)
     assert any("Dee Diaz — 0-2 (2 meetings) · SMALL SAMPLE" in line for line in lines)
     assert "Gil Gray" in lines  # a second unknown, separately visible

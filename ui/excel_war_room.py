@@ -786,11 +786,21 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.block("Meetings behind blind-send pairing counts", R, [
         ("wr_OurLiveMeetings", lambda i,r: '='+ '+'.join(
             f'IF(INDEX(wr_OppUnplayed,{j}),{direct_count(i,j,"Direct Games")},0)' for j in range(1,R+1))),
+        # Direct pairings with 1-2 meetings vs unplayed opponents: the phone's "small-sample pairing" count.
+        ("wr_OurLiveSmall", lambda i,r: '='+ '+'.join(
+            f'IF(AND(INDEX(wr_OppUnplayed,{j}),{direct_count(i,j,"Direct Games")}>0,{direct_count(i,j,"Direct Games")}<3),1,0)'
+            for j in range(1,R+1))),
     ])
     e.cell("wr_BlindMeetings", "Blind-send direct meeting total",
            '=IF(wr_BlindIdx="",0,INDEX(wr_OurLiveMeetings,wr_BlindIdx))')
+    e.cell("wr_BlindSmall", "Blind-send small-sample pairings",
+           '=IF(wr_BlindIdx="",0,INDEX(wr_OurLiveSmall,wr_BlindIdx))')
+    # Same wording as the phone's Blind Send evidence line.
     e.cell("wr_BlindMeetingNote", "Blind-send evidence-strength disclosure",
-           '=IF(OR(wr_BlindUnranked,wr_BlindName=""),""," · "&wr_BlindMeetings&IF(wr_BlindMeetings=1," direct meeting total"," direct meetings total")&" — pairing counts select first shown, not confidence")')
+           '=IF(OR(wr_BlindUnranked,wr_BlindName=""),""," · "&wr_BlindMeetings&IF(wr_BlindMeetings=1," direct meeting total"," direct meetings total")'
+           '&" across "&INDEX(wr_BlindCov,wr_BlindIdx)&IF(INDEX(wr_BlindCov,wr_BlindIdx)=1," opponent"," opponents")'
+           '&IF(wr_BlindSmall>0," · "&wr_BlindSmall&IF(wr_BlindSmall=1," small-sample pairing"," small-sample pairings"),"")'
+           '&" — pairing counts select first shown, not confidence")')
     e.block("Concerning row", slots["concerning"], [
         ("wr_ConcernRow", lambda k, r: f'=IF(NOT(wr_HasEvidence),"",IFERROR(MATCH(wr_PairKey&"|{k}",Concerning_Table[Key],0),""))'),
         ("wr_ConcernOk", lambda k, r: (
@@ -944,7 +954,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_NsAvoidOk", lambda k, r: (f'=IF(O{r}="",FALSE,AND(INDEX({ME}[Category],O{r})="R",IFERROR(INDEX(wr_OurRemaining,'
                                         f'MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)),FALSE)))')),
         ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "Q", f'P{r}',
-                                              f'{_nm(f"INDEX({ME}[Player],O{r})", f"MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)")}&" — "&INDEX({ME}[Direct Record],O{r})&IF(INDEX({ME}[Direct Games],O{r})<3," · SMALL SAMPLE","")')),
+                                              f'{_nm(f"INDEX({ME}[Player],O{r})", f"MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)")}&" — "&INDEX({ME}[Direct Record],O{r})&IF(INDEX({ME}[Direct Games],O{r})<3," · SMALL SAMPLE","")'
+                                              f'&IF(INDEX({ME}[Direct Games],O{r})=1," · Lost once · Only 1 meeting","")')),
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
@@ -958,7 +969,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     # (real-Excel UAT 2a67d78 showed a 2-line row hiding the last "≈" candidate).
     e.cell("wr_NsUnordLine", "Next Send not-ordered line",
            f'=IF(INDEX(wr_NsUnordJoin,{R})="","","≈ Not ordered (shared-opponent results only): "&INDEX(wr_NsUnordJoin,{R}))')
-    e.cell("wr_NsAvoidLine", "Next Send avoid line", f'=IF(INDEX(wr_NsAvoidJoin,{R})="","","⚠ Avoid: "&INDEX(wr_NsAvoidJoin,{R}))')
+    e.cell("wr_NsAvoidLine", "Next Send avoid line", f'=IF(INDEX(wr_NsAvoidJoin,{R})="","","⚠ Avoid records — recorded losses, not exclusions: "&INDEX(wr_NsAvoidJoin,{R}))')
     e.cell("wr_NsUnkLine", "Next Send unknown line",
            f'=IF(INDEX(wr_NsUnkJoin,{R})="","","❓ Unknown (no verified evidence, not weak): "&INDEX(wr_NsUnkJoin,{R}))')
     e.cell("wr_NsLists", "Next Send lists (one line each)",
@@ -1861,7 +1872,8 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
           font=font(12, bold=True, color=base.FELT_DEEP))
     blind_worst = (_longest_label(wb) + f" — {R} concerning of {R} — best available, not good · no direct record vs {R}"
                    + f" · {R} tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix."
-                   + " · 999999 direct meetings total — pairing counts select first shown, not confidence · availability unknown"
+                   + f" · 999999 direct meetings total across {R} opponents · {R} small-sample pairings"
+                   + " — pairing counts select first shown, not confidence · availability unknown"
                    + " · Reference comparison: this choice exceeds your entered skill budget\n"+_budget_scope_worst())
     h(r, _worst_height(blind_worst, sum(PACKET_WIDTHS[2:]), 12, 30))
     r += 1
@@ -2050,8 +2062,10 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         games = f'INDEX(MatchupEvidence_Table[Direct Games],R{r})'
         _span(ws, r, 8, 10, f'=IF(P{r}="","",IF({games}>0,INDEX(MatchupEvidence_Table[Direct Record],R{r}),INDEX(MatchupEvidence_Table[Cell],R{r})))', font=f10, wrap=False, shrink=True)
         cat = f'INDEX(MatchupEvidence_Table[Category],R{r})'
-        _span(ws, r, 11, 12, f'=IF(P{r}="","",IF(AND({games}>0,{games}<3),"SMALL SAMPLE",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
-                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence"))))))', font=f10, wrap=False)
+        # Direction first, then the sample caution: a thin 1-0 and a thin 0-1 must not print alike.
+        _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
+                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence"))))'
+                             f'&IF(AND({games}>0,{games}<3)," · SMALL SAMPLE",""))', font=f10, wrap=False, shrink=True)
         h(r, 14.5)
     last_ev = r
     ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
@@ -2309,7 +2323,7 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
     if rest:
         lines.append("≈ Not ordered (shared-opponent results only): "
                      + "\n".join([f"{label} (availability unknown)"] * max(rest - 2, 1)))
-        lines += [f"⚠ Avoid: {label} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {label}"]
+        lines += [f"⚠ Avoid records — recorded losses, not exclusions: {label} — 0-12 (12 meetings)", f"❓ Unknown (no verified evidence, not weak): {label}"]
     return "\n".join(lines)
 
 

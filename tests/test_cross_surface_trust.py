@@ -198,3 +198,42 @@ def test_html_loss_lists_follow_top_risks_and_keep_positive_order(tmp_path,width
                 assert text.index('1-8')<text.index('0-6')<text.index('2-3')<text.index('0-1')
             assert not errors and not page.evaluate('document.documentElement.scrollWidth>innerWidth')
         finally:browser.close()
+
+
+def test_workbook_single_loss_caution_uses_the_phone_and_packet_wording(tmp_path):
+    wb=load_workbook(write_workbook(loss_payload(),tmp_path/'avoid-words.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb);book.set('Command Center','C6','Cam Cole')
+    line=book.value('Engine',book.name('wr_NsAvoidLine').ref)
+    assert line.startswith('⚠ Avoid records — recorded losses, not exclusions: ')
+    assert '0-1 (1 meeting) · SMALL SAMPLE · Lost once · Only 1 meeting' in line
+    assert '⚠ Avoid: ' not in line and line.count('Lost once')==1
+    wb.close()
+
+
+def test_packet_evidence_basis_keeps_direction_beside_small_sample(tmp_path):
+    wb=load_workbook(write_workbook(loss_payload(),tmp_path/'basis.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb);ws=wb['Captain Packet']
+    basis=[book.display('Captain Packet',f'K{c.row}') for c in ws['K']
+           if isinstance(c.value,str) and 'Concerning direct' in c.value and 'SMALL SAMPLE' in c.value]
+    shown=[b for b in basis if b]
+    assert 'Favorable direct · SMALL SAMPLE' in shown and 'Concerning direct · SMALL SAMPLE' in shown
+    assert 'Concerning direct' in shown and 'SMALL SAMPLE' not in shown
+    wb.close()
+
+
+def test_packet_blind_send_shows_the_phone_small_sample_pairing_line(tmp_path):
+    payload=_payload()
+    payload['evidence']=_games(1,10,'W')+_games(1,11,'WW')+_games(2,10,'L')
+    expected='3 direct meetings total across 2 opponents · 2 small-sample pairings'
+    path=tmp_path/'blind.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':390,'height':900});page.goto(path.as_uri())
+            assert expected in page.locator('.blind-send .bs-evidence').inner_text()
+        finally:browser.close()
+    wb=load_workbook(write_workbook(payload,tmp_path/'blind.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    row=next(c.row for c in wb['Captain Packet']['A'] if c.value=='IF WE PUT UP FIRST')
+    assert expected in book.display('Captain Packet',f'C{row}')
+    wb.close()
