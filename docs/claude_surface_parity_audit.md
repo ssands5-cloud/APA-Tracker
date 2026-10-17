@@ -9,6 +9,20 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Audit of a009e83 (2026-10-17) — NOT A PASS
+
+The parity, Next Send and workbook formula suites passed 93 of 93 on a clean detached checkout of a009e83.
+
+- **P1 closed.** Each Packet "vs <opponent>" options line now carries "<player> — consider saving for
+  <opponent> (record · Only 1 meeting)". It is computed per printed opponent from the same
+  unique-favorable flags as the Command Center, for the same G/E/I candidates the phone flags. The new
+  test reads the displayed Packet text and checks that marking the protected pairing Played clears it.
+  The phone save record also gains "· Only 1 meeting", so the wording now matches.
+- **Still open, unchanged at a009e83:** P2 per-opponent loss caution, P3 deeper record, P4 skill-cap
+  warning, and T1–T4. Fixtures and fixes are in the b00eb79 entry below.
+- **Next in priority: P2.** The Packet options line that now carries the save warning is the natural
+  place for that opponent's own loss cautions.
+
 ## Audit of b00eb79 (2026-10-17) — NOT A PASS
 
 The builder's parity, Next Send and workbook formula suites (`tests/test_cross_surface_trust.py`,
