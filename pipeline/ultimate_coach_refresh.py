@@ -15,8 +15,10 @@ from pathlib import Path
 import shutil
 import sqlite3
 import sys
+import threading
 import uuid
 
+from pipeline.refresh_progress import progress_span
 from pipeline.refresh_sources import ResponseFixtures, acquire_current_sources, digest, encoded, sha256
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -85,7 +87,7 @@ def previous_bundle(root: Path, check):
     return previous
 
 
-def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path):
+def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path, *, progress=None):
     from sqlalchemy.orm import Session
     from auth.graphql_client import use_fixture_provider
     from database.engine import create_db_engine
@@ -103,9 +105,13 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
     catalog.write_bytes(encoded(scope["catalog"]))
     try:
         with use_fixture_provider(ResponseFixtures(fixtures, replay=True)), Session(engine) as db:
-            for team_id in scope["team_ids"]:
+            for team_number, team_id in enumerate(scope["team_ids"], 1):
+                if progress:
+                    progress(f"INGEST TEAM {team_number}/{len(scope['team_ids'])}")
                 sync.ingest_team_data(db, api.fetch_team_data(run_config, team_id))
-            for division in scope["divisions"]:
+            for division_number, division in enumerate(scope["divisions"], 1):
+                if progress:
+                    progress(f"INGEST DIVISION {division_number}/{len(scope['divisions'])}")
                 did, fmt, session = division["division_id"], division["format"], division["session_name"]
                 # Division standings are a separate APA response, not part of
                 # fetch_team_data. Persist them explicitly after team fallback
@@ -118,7 +124,11 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                                                 roster_is_current=True, identity_current_only=True)
                 counts.append(totals)
                 gaps.extend(sync.reconcile_division_wide_coverage(totals))
-                for match in api.division_schedule_rows(api.fetch_division_schedule(run_config, did)):
+                matches = [m for m in api.division_schedule_rows(api.fetch_division_schedule(run_config, did))
+                           if m["is_scored"] and not m["is_bye"]]
+                for match_number, match in enumerate(matches, 1):
+                    if progress:
+                        progress(f"RECONCILE SCORESHEET {match_number}/{len(matches)} in current division")
                     if match["is_scored"] and not match["is_bye"]:
                         result = reconcile_match(run_config, db, match["match_id"], session)
                         reconciled.append(result)
@@ -126,6 +136,8 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                             gaps.append("authoritative match missing after fixture ingestion")
                         elif problem := _match_gap(result):
                             gaps.append(problem)
+            if progress:
+                progress("INGEST CAREER STATS from captured responses")
             enrichment = enrich_all_players(run_config, db, catalog=scope["catalog"], catalog_path=catalog,
                                             staging_db=database, report_path=directory / "career_refresh.json")
             db.commit()
@@ -207,23 +219,27 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
     step = "1 CONFIGURATION"
     directory = root / ("run-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8])
 
+    status_lock = threading.RLock()
     def status(message, *, required=True):
-        print(message, flush=True)
-        try:
-            with status_path.open("a", encoding="utf-8") as stream:
-                stream.write(message + "\n")
-        except OSError:
-            if required:
-                raise
-            print("Completed bundle is current; status log could not be updated.", flush=True)
+        with status_lock:
+            print(message, flush=True)
+            try:
+                with status_path.open("a", encoding="utf-8") as stream:
+                    stream.write(message + "\n")
+            except OSError:
+                if required:
+                    raise
+                print("Completed bundle is current; status log could not be updated.", flush=True)
 
     with run_lock(root):
         check(directory)
         directory.mkdir()
         status_path.write_text(f"{mode.upper()} REFRESH {directory.name}\n", encoding="utf-8")
         try:
+            status("STEP 1/8 - configuration and validator prerequisites")
             if need_preflight:
-                preflight()
+                with progress_span(status, "validator prerequisite check"):
+                    preflight()
             config = load_config(str(config_path))
             if mode not in ("full", "quick"):
                 raise RefreshFailed("refresh mode must be full or quick")
@@ -253,30 +269,34 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                 seed = candidate
             source_sha = sha256(seed) if seed else None
             step = "2 SCRAPE APA SOURCES"
+            status("STEP 2/8 - authenticate, then capture APA sources; requests are logged below")
             fixtures = directory / "fixtures"
             if fixture_source:
                 # Explicit offline verification input. End-user launchers never
                 # supply this option or advertise an offline run as live.
                 source = Path(fixture_source).absolute()
                 check(source)
-                shutil.copytree(source, fixtures)
-                store = ResponseFixtures(fixtures, replay=True)
-                scope = json.loads((fixtures / "scope.json").read_text(encoding="utf-8"))
+                with progress_span(status, "load and verify offline source fixtures"):
+                    shutil.copytree(source, fixtures)
+                    store = ResponseFixtures(fixtures, replay=True)
+                    scope = json.loads((fixtures / "scope.json").read_text(encoding="utf-8"))
                 live = False
             else:
                 from scraper.graphql_scraper import AccessTokenExpired, AccessTokenMissing
                 if token_loader is None:
                     from tools.run_ultimate_coach_browser import capture_access_token
-                    token_loader = capture_access_token
-                store = ResponseFixtures(fixtures)
+                    token_loader = lambda: capture_access_token(progress=status)
+                store = ResponseFixtures(fixtures, progress=status)
                 for attempt in range(4):
                     token = os.environ.get("APA_ACCESS_TOKEN") if attempt == 0 else None
                     token = token or token_loader()
                     if not token:
                         raise RefreshFailed("APA login did not supply an authenticated session")
+                    status("[AUTH] Authorization available in memory; starting authenticated APA API queries")
                     config["apa"]["access_token"] = token
                     try:
-                        scope = acquire(config, seed, store)
+                        with progress_span(status, "capture APA source fixtures"):
+                            scope = acquire(config, seed, store)
                         break
                     except (AccessTokenExpired, AccessTokenMissing):
                         if attempt == 3:
@@ -296,8 +316,10 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                                 "trends_builder": sha256(ROOT / "scripts/build_player_trends.py"), "base": base_sha})
             data_same = bool(mode == "quick" and previous and previous.get("input_sha256") == input_key and seed != base)
             step = "3 DATABASE INGESTION"
+            status("STEP 3/8 - database fixture ingestion and reconciliation")
             database = directory / "ultimate_coach_staging.db"
-            copy_database(seed, database)
+            with progress_span(status, "copy source database into private candidate"):
+                copy_database(seed, database)
             if data_same:
                 prior_report = root / previous["run"] / "refresh_report.json"
                 if sha256(prior_report) != previous["report_sha256"]:
@@ -306,7 +328,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                 (directory / "refresh_report.json").write_bytes(encoded(report))
                 status("DATABASE UP TO DATE - unchanged source content")
             else:
-                report = replay_ingest(config, fixtures, scope, database, directory)
+                with progress_span(status, "database ingestion and scoresheet reconciliation"):
+                    report = replay_ingest(config, fixtures, scope, database, directory, progress=status)
                 status("DATABASE UPDATED")
             status("SOURCE SCOPE: current dashboard divisions; existing older games retained, not recrawled")
             career = report["career_counts"]
@@ -316,6 +339,7 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             settings_key = {"timezone": settings.timezone, "viewer": settings.viewer_member_external_id,
                             "card": settings.viewer_card_number}
             step = "4 MATCHUPS AND TRENDS"
+            status("STEP 4/8 - matchups and trends")
             if data_same:
                 derived = previous["derived"]
                 # Keep the exact already-verified generation when fresh API
@@ -327,11 +351,14 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                 status("MATCHUPS UP TO DATE - unchanged source content")
                 status("TRENDS UP TO DATE - unchanged source content")
             else:
-                derived = rebuild_database(config, database)
+                with progress_span(status, "rebuild matchups and trends"):
+                    derived = rebuild_database(config, database)
                 status("MATCHUPS REBUILT")
                 status("TRENDS REBUILT")
             step = "5 RECOMMENDATIONS"
-            payload = build_payload(database, settings)
+            status("STEP 5/8 - verified recommendation payload")
+            with progress_span(status, "build verified recommendations"):
+                payload = build_payload(database, settings)
             payload_key = digest(payload)
             status("RECOMMENDATIONS UPDATED")
             built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -344,6 +371,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             validations, reused = {}, []
             for name, key in keys.items():
                 step = "6 WORKBOOK" if name.endswith("xlsx") else "7 HTML"
+                status("STEP 6/8 - workbook generation and native Excel validation" if name.endswith("xlsx")
+                       else "STEP 7/8 - HTML generation and browser validation")
                 target = directory / name
                 old = root / previous["run"] / name if previous else None
                 if old:
@@ -356,38 +385,46 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                     validations[name] = previous["validations"][name]
                     status(("WORKBOOK" if name.endswith("xlsx") else "HTML") + " UP TO DATE - verified bytes reused")
                 elif name.endswith("xlsx"):
-                    write_workbook(payload, target, built_at=built_at, source_db=database.name,
-                                   viewer_member_external_id=settings.viewer_member_external_id,
-                                   viewer_card_number=settings.viewer_card_number)
-                    validations[name] = workbook_validator(target)
+                    with progress_span(status, "generate Ultimate Coach workbook"):
+                        write_workbook(payload, target, built_at=built_at, source_db=database.name,
+                                       viewer_member_external_id=settings.viewer_member_external_id,
+                                       viewer_card_number=settings.viewer_card_number)
+                    with progress_span(status, "native Excel recalculation and workbook validation"):
+                        validations[name] = workbook_validator(target)
                     status("WORKBOOK REBUILT")
                 else:
                     # Workbook consumes/derives its data first; HTML may release
                     # evidence memory only after the shared payload is used.
-                    target.write_text(render(payload, built_at=built_at, consume_evidence=False,
-                        viewer_member_external_id=settings.viewer_member_external_id,
-                        viewer_card_number=settings.viewer_card_number), encoding="utf-8")
-                    validations[name] = html_validator(target)
+                    with progress_span(status, "generate Ultimate Coach HTML"):
+                        target.write_text(render(payload, built_at=built_at, consume_evidence=False,
+                            viewer_member_external_id=settings.viewer_member_external_id,
+                            viewer_card_number=settings.viewer_card_number), encoding="utf-8")
+                    with progress_span(status, "Chromium HTML validation"):
+                        validations[name] = html_validator(target)
                     status("HTML REBUILT")
             step = "8 VALIDATION AND COMPLETION"
-            check_database(database)
-            if seed and sha256(seed) != source_sha:
-                raise RefreshFailed("source database changed during the refresh")
-            if base and sha256(base) != base_sha:
-                raise RefreshFailed("configured base database changed during the refresh")
-            artifacts = {name: sha256(directory / name) for name in (*keys, "ultimate_coach_staging.db")}
-            manifest = {"schema": SCHEMA, "run": directory.name, "mode": mode, "live_sources_checked": live,
-                        "checked_at": datetime.now(timezone.utc).isoformat(), "base_sha256": base_sha,
-                        "input_sha256": input_key, "payload_sha256": payload_key, "source_sha256": store.content_sha256,
-                        "dependencies": keys, "artifacts": artifacts, "validations": validations,
-                        "derived": derived, "reused": reused, "scope": report["scope"],
-                        "coverage": report["coverage"], "career_counts": report["career_counts"],
-                        "report_sha256": sha256(directory / "refresh_report.json"),
-                        "historical_scope": report["historical_scope"], "production_database_promoted": False}
-            atomic_json(directory / "manifest.json", manifest)
-            atomic_json(directory / "READY", {"manifest_sha256": sha256(directory / "manifest.json")})
+            status("STEP 8/8 - database integrity, source preservation and completion bindings")
+            with progress_span(status, "database integrity and foreign-key validation"):
+                check_database(database)
+            with progress_span(status, "verify source and artifact bindings; prepare completed bundle"):
+                if seed and sha256(seed) != source_sha:
+                    raise RefreshFailed("source database changed during the refresh")
+                if base and sha256(base) != base_sha:
+                    raise RefreshFailed("configured base database changed during the refresh")
+                artifacts = {name: sha256(directory / name) for name in (*keys, "ultimate_coach_staging.db")}
+                manifest = {"schema": SCHEMA, "run": directory.name, "mode": mode, "live_sources_checked": live,
+                            "checked_at": datetime.now(timezone.utc).isoformat(), "base_sha256": base_sha,
+                            "input_sha256": input_key, "payload_sha256": payload_key, "source_sha256": store.content_sha256,
+                            "dependencies": keys, "artifacts": artifacts, "validations": validations,
+                            "derived": derived, "reused": reused, "scope": report["scope"],
+                            "coverage": report["coverage"], "career_counts": report["career_counts"],
+                            "report_sha256": sha256(directory / "refresh_report.json"),
+                            "historical_scope": report["historical_scope"], "production_database_promoted": False}
+                atomic_json(directory / "manifest.json", manifest)
+                atomic_json(directory / "READY", {"manifest_sha256": sha256(directory / "manifest.json")})
+            # Finish required progress writes before committing the pointer.
+            # A later unavailable status log must not turn success into failure.
             # One pointer commits the DB/workbook/HTML generation together.
-            # No prior artifact is overwritten and no half-pair becomes current.
             atomic_json(pointer, manifest)
             status("ALL REFRESH TASKS COMPLETE" + (" (OFFLINE VALIDATION)" if not live else ""), required=False)
             status("Workbook: " + str(directory / "Ultimate_Coach.xlsx"), required=False)

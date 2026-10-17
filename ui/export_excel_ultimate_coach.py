@@ -314,7 +314,7 @@ def _build_info_sheet(wb: Workbook, payload: dict[str, Any], *, built_at: str, s
     rows = [
         ("Built", built_at or "unknown"),
         ("Source database", source_db),
-        ("Refresh APA data", "Use FULL_APA_REFRESH.bat to refresh and rebuild both files, or QUICK_REFRESH.bat to check APA and rebuild only stale outputs. The completed bundle and REFRESH_STATUS.txt are in ultimate-coach-runs/refresh."),
+        ("Refresh APA data", "Run FULL_APA_REFRESH.bat or QUICK_REFRESH.bat. After APA login, press Enter in the console. Watch STEP 1/8 through STEP 8/8; wait for ALL REFRESH TASKS COMPLETE. Outputs/status: ultimate-coach-runs/refresh."),
         ("Schema", payload.get("schema", "")),
         ("Probability publication", payload.get("probability_publication")),
         ("Matchup probability", payload.get("matchup_probability")),

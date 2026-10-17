@@ -4,6 +4,14 @@ Double-click **FULL_APA_REFRESH.bat** for a complete rebuild, or **QUICK_REFRESH
 
 Both launchers open the completed workbook and HTML after validation. Use the paths printed at completion. Previous generations stay available; an already open older file does not update itself.
 
+## Visible progress after login
+
+After Member Services loads, return to the console and press Enter. The console immediately prints `ENTER RECEIVED`, reports login-browser closure, then starts authenticated API requests. Authentication is confirmed only when APA accepts the dashboard query. After Enter, there is no URL, page-element or network-idle wait; the browser closes and serial GraphQL HTTP requests capture the source fixtures.
+
+Each request and blocking build/validation phase prints START, DONE (with elapsed time), or FAILED. Phases exceeding five seconds print STILL RUNNING every five seconds. STEP 1/8 through STEP 8/8 identify the current phase. The launcher prints its working folder and runs Python unbuffered. The same progress is written to REFRESH_STATUS.txt. Wait for ALL REFRESH TASKS COMPLETE before using the new outputs; browser closure alone is not completion.
+
+The original login prompt could remain the last visible line during acquisition even though responses were being saved. A real diagnostic login now verified Enter receipt, browser closure and three accepted API requests, including standings. This live handoff check did not rebuild a real database; full/quick/output/recovery acceptance uses isolated synthetic fixtures.
+
 ## Current and replacement workflows
 
 The old local `run_apa_full_scrape.bat` runs only `scraper/full_auto_scrape.py`. Its `main()` attaches response capture, logs in, visits team/division/match routes, prints SCRAPE COMPLETE, then closes Chromium. `capture_graphql()` writes raw responses beneath `scraper/sanitized_fixtures/`. There is no database ingestion or output build in that script. `scrape_all()` visits at most 12 teams, 12 divisions and 40 discovered matches. The batch file also prints Finished without testing the exit code.

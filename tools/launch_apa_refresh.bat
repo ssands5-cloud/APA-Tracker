@@ -2,6 +2,7 @@
 setlocal
 cd /d "%~dp0.."
 echo APA Ultimate Coach Refresh
+echo Working folder: "%CD%"
 echo Log in only on the real APA website when the browser opens.
 echo Both outputs and their database are delivered together after validation.
 if exist "venv\Scripts\python.exe" (
@@ -16,13 +17,13 @@ echo FAILED AT STEP 1 INTERPRETER: Python 3.12 or 3.13 is required.
 set "RC=2"
 goto finished
 :venv
-"venv\Scripts\python.exe" -m pipeline.ultimate_coach_refresh --open %*
+"venv\Scripts\python.exe" -u -m pipeline.ultimate_coach_refresh --open %*
 goto result
 :py312
-py -3.12 -m pipeline.ultimate_coach_refresh --open %*
+py -3.12 -u -m pipeline.ultimate_coach_refresh --open %*
 goto result
 :py313
-py -3.13 -m pipeline.ultimate_coach_refresh --open %*
+py -3.13 -u -m pipeline.ultimate_coach_refresh --open %*
 :result
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" echo Refresh did not complete. See the failed step above and REFRESH_STATUS.txt in ultimate-coach-runs\refresh.

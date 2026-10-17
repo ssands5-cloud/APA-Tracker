@@ -11,6 +11,8 @@ import json
 import re
 from pathlib import Path
 
+from pipeline.refresh_progress import progress_span
+
 SCHEMA = "apa-refresh-fixtures-v1"
 
 
@@ -35,9 +37,10 @@ class FixtureError(RuntimeError):
 
 
 class ResponseFixtures:
-    def __init__(self, root: Path, *, replay: bool = False):
+    def __init__(self, root: Path, *, replay: bool = False, progress=None):
         self.root = Path(root)
         self.replay = replay
+        self.progress = progress
         self.entries = {}
         if replay:
             document = json.loads((self.root / "sources.json").read_text(encoding="utf-8"))
@@ -71,7 +74,8 @@ class ResponseFixtures:
         if key not in self.entries:
             if self.replay:
                 raise FixtureError(f"required source fixture missing: {operation}")
-            data = fetch()
+            with progress_span(self.progress, f"APA REQUEST {len(self.entries)+1}: {operation}"):
+                data = fetch()
             if not isinstance(data, dict) or not data:
                 raise FixtureError(f"empty or invalid source response: {operation}")
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,6 +122,8 @@ def acquire_current_sources(config, seed_database: Path | None, fixtures: Respon
         viewer = api.fetch_dashboard_teams(config)
         if not viewer.get("id"):
             raise FixtureError("APA did not return an authenticated viewer")
+        if fixtures.progress:
+            fixtures.progress("AUTHENTICATION COMPLETE - APA accepted the authenticated dashboard query")
         teams = api.dashboard_teams_rows(viewer)
         divisions = {}
         for team in teams:
@@ -131,6 +137,8 @@ def acquire_current_sources(config, seed_database: Path | None, fixtures: Respon
             divisions[key] = scope
         if not divisions:
             raise FixtureError("APA returned no current divisions; nothing can be called refreshed")
+        if fixtures.progress:
+            fixtures.progress(f"SOURCE SCOPE: {len(divisions)} current divisions; discovering league/session context")
         catalog = build_historical_catalog(config, int(viewer["id"]))
         # Dashboard is itself authoritative for current division/session/league
         # ownership. Retain that exact context even if historical discovery has
@@ -146,7 +154,9 @@ def acquire_current_sources(config, seed_database: Path | None, fixtures: Respon
                                              "context_source": "dashboardTeams"})
         # Fetch all source objects used by the existing division sync/reconcile.
         members, team_ids = {}, set()
-        for scope in divisions.values():
+        for division_number, scope in enumerate(divisions.values(), 1):
+            if fixtures.progress:
+                fixtures.progress(f"CAPTURE DIVISION {division_number}/{len(divisions)} - rosters, schedule, standings, teams and scored sheets")
             did = scope["division_id"]
             rosters = api.fetch_division_rosters(config, did)
             roster_teams = api.division_roster_team_rows(rosters)
@@ -181,7 +191,11 @@ def acquire_current_sources(config, seed_database: Path | None, fixtures: Respon
                             members.setdefault(str(player.external_id), set()).update(k[0] for k in contexts[player.id])
             finally:
                 engine.dispose()
-        for member_id in sorted(members):
+        if fixtures.progress:
+            fixtures.progress(f"CAPTURE CAREER STATS - {len(members)} source members to check")
+        for member_number, member_id in enumerate(sorted(members), 1):
+            if fixtures.progress:
+                fixtures.progress(f"CAREER MEMBER {member_number}/{len(members)}")
             if not member_id.isdigit():
                 continue
             member = api.fetch_formats_by_member_id(config, int(member_id))
