@@ -55,6 +55,34 @@ def test_packet_preserves_the_same_future_save_warning_and_single_meeting_cautio
     wb.close()
 
 
+def test_packet_shows_every_loss_caution_beside_its_opponent_not_only_global_top_three(tmp_path):
+    wb=load_workbook(write_workbook(loss_payload(),tmp_path/'cautions.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    head=next(c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str) and c.value.startswith('Recorded options preview'))
+    text=book.display('Captain Packet',f'C{head+1}')
+    assert 'Loss cautions' in text
+    assert text.index('1-8')<text.index('0-6')<text.index('2-3')<text.index('0-1')
+    assert 'Only 1 meeting' in text
+    # A later opponent block must not leak through the unused roster slots.
+    second=book.display('Captain Packet',f'C{head+2}')
+    assert '1-8' not in second and '0-6' not in second
+    book.set('Lineup Lab','C12','Unavailable')
+    text=book.display('Captain Packet',f'C{head+1}')
+    assert '0-1 (1 meeting)' not in text
+    wb.close()
+
+
+def test_packet_opponent_caution_survives_other_opponents_higher_global_losses(tmp_path):
+    payload=_payload(crowded=True)
+    payload['evidence']=_games(1,10,'LLLLL')+_games(2,10,'LLLL')+_games(3,10,'LLL')+_games(4,11,'LL')
+    wb=load_workbook(write_workbook(payload,tmp_path/'local-caution.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    head=next(c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str) and c.value.startswith('Recorded options preview'))
+    line=book.display('Captain Packet',f'C{head+2}')
+    assert '0-2 (2 meetings)' in line and 'SMALL SAMPLE' in line
+    assert all(record not in line for record in ('0-5','0-4','0-3'))
+    wb.close()
+
 
 @pytest.mark.parametrize('state',['initial','unavailable','played','opponent_played','none_left','live_not_winning'])
 def test_workbook_live_flags_match_the_phone_engine_for_the_same_marks(tmp_path,state):

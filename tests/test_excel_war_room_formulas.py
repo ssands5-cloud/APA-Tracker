@@ -902,7 +902,7 @@ def test_captain_packet_page_one_is_decision_first(book, built):
     risks = _row(built, CP, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown")
     roster = _row(built, CP, "OUR TEAM")
     assert sends < risks < roster
-    assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"
+    assert book.display(CP, f"C{sends + 1}").splitlines()[0] == f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"
 
 
 FAY = "Fay Fox"
@@ -1002,7 +1002,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: {best_send_text(rows[0])}"
     # Captain Packet page 1 (two sends)
     sends = _row(wb, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
-    assert book.display(CP, f"C{sends + 1}") == send_list_text(rows[0], limit=2)
+    assert book.display(CP, f"C{sends + 1}").splitlines()[0] == send_list_text(rows[0], limit=2)
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
     assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"

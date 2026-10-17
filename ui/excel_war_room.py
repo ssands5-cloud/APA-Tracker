@@ -830,6 +830,25 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.block("Packet future-save warning by opponent", R, [
         ("wr_PacketSave", lambda k,r: '='+packet_saves[k]),
     ])
+    packet_cautions = {}
+    for j in range(1, R + 1):
+        e.section(f"Packet loss cautions vs opponent slot {j}")
+        first = e.row + 1
+        for k in range(1, R + 1):
+            r = first + k - 1
+            e.ws.cell(row=r, column=2, value=f'=IF(OR(INDEX(wr_OppStart,{j})="",{k}>INDEX(wr_OppCount,{j})),"",INDEX(wr_OppStart,{j})+{k})')
+            e.ws.cell(row=r, column=3, value=(f'=IF(B{r}="",FALSE,AND(INDEX(wr_OppUnplayed,{j}),'
+                f'INDEX({ME}[Category],B{r})="R",IFERROR(INDEX(wr_OurRemaining,MATCH(INDEX({ME}[Player ID],B{r}),wr_OurPids,0)),FALSE)))'))
+            e.ws.cell(row=r, column=4, value=(f'=IF(C{r},INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Direct Record],B{r})&'
+                f'IF(INDEX({ME}[Direct Games],B{r})<3," · SMALL SAMPLE","")&'
+                f'IF(INDEX({ME}[Direct Games],B{r})=1," · Lost once · Only 1 meeting",""),"")'))
+            e.ws.cell(row=r, column=5, value=(f'=D{r}' if k==1 else
+                f'=E{r-1}&IF(AND(E{r-1}<>"",D{r}<>""),CHAR(10),"")&D{r}'))
+        packet_cautions[j]=f'Engine!$E${r}'
+        e.row=r+2
+    e.block("Packet loss cautions by opponent", R, [
+        ("wr_PacketCautions",lambda k,r:'='+packet_cautions[k]),
+    ])
     medal = '"Direct-record order "&H{r}'
 
     def _nm(expr: str, slot: str) -> str:
@@ -1793,10 +1812,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
                             f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
                             f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k}))))'
-                            f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k})))',
+                            f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k}))'
+                            f'&IF(INDEX(wr_PacketCautions,{k})="","",CHAR(10)&"Loss cautions — recorded losses, not exclusions:"&CHAR(10)&INDEX(wr_PacketCautions,{k})))',
               font=font(10))
         save_worst = _packet_save_worst(wb, sum(PACKET_WIDTHS[2:]))
-        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst, sum(PACKET_WIDTHS[2:]), 10, 27))
+        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst+'\n'+_packet_caution_worst(wb), sum(PACKET_WIDTHS[2:]), 10, 27))
     r += 1
     base._section(ws, r, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown", last_col=12)
     h(r, 18)
@@ -2185,6 +2205,19 @@ def _packet_save_worst(wb, width: float) -> str:
                 if owners:lines.append(max(owners,key=len))
             possibilities.append('\n'.join(lines))
     return max(possibilities,key=lambda text:_worst_height(text,width,10,0))
+
+
+def _packet_caution_worst(wb) -> str:
+    """Printed cautions can shrink with marks, but cannot exceed the captured loss rows."""
+    blocks=[[]]
+    for row in wb['Matchup Evidence'].iter_rows(min_row=2,values_only=True):
+        rec=dict(zip(ME_COLUMNS,row))
+        if rec['Rank']=='vs':blocks.append([])
+        elif rec['Category']=='R':
+            blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+
+                (' · SMALL SAMPLE' if rec['Direct Games']<3 else '')+
+                (' · Lost once · Only 1 meeting' if rec['Direct Games']==1 else ''))
+    return 'Loss cautions — recorded losses, not exclusions:\n'+max(('\n'.join(b) for b in blocks),key=len)
 
 
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
