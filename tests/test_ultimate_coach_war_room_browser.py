@@ -1666,6 +1666,77 @@ def test_blind_card_never_calls_an_unknown_lead_an_even_record(tmp_path: Path):
             browser.close()
 
 
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("current_basis", ["direct", "shared"])
+def test_save_warning_opens_exact_future_meetings_without_changing_put_up(tmp_path, width, current_basis):
+    """Inspect each named future pairing directly, including same-name opponents, then return.
+
+    This is navigation through the existing matrix inspector, never a put-up choice or a save.
+    """
+    from tests.test_excel_war_room_formulas import _player, _hist
+    payload = _payload()
+    payload["players"].append(_player(20, "2020", "Eve Ellis", [_hist("falcons-a", "d1", "EIGHT", 3)]))
+    payload["evidence"] += _games(1, 11, "WW") + _games(1, 20, "W", date="2025-08-01T19:00:00-06:00")
+    if current_basis == "shared":
+        payload["evidence"] = [r for r in payload["evidence"]
+                               if {r["player_id"], r["opponent_id"]} != {1, 10}]
+        payload["evidence"] += _games(10, 12, "W")
+    path = tmp_path / "save-evidence.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(viewport={"width": width, "height": 844}, has_touch=width == 390)
+            page = context.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            page.locator('#next-send [data-next="10"]').click()
+            page.locator('[data-plan="note"][data-pid="11"]').fill("Keep this observation")
+            saved = page.evaluate('localStorage.getItem("ultimate-coach:plan-v2")')
+            assert saved and "Keep this observation" in saved
+            cells = page.locator('#wr-matrix .mcell').all_text_contents()
+            sends = page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>[e.dataset.sendOur,e.dataset.sendOpp])')
+            for opponent, meetings, cue in [(11, 2, "player 1 of 2"), (20, 1, "player 2 of 2")]:
+                more = page.locator('#next-send details.ns-more')
+                if current_basis == "shared" and not more.get_attribute("open"):
+                    more.locator('summary').click()
+                target = page.locator(f'#next-send [data-inspect-our="1"][data-inspect-opp="{opponent}"]')
+                assert target.count() == 1, "the warning must offer the exact future pairing's meetings"
+                assert cue in target.inner_text()
+                assert "meetings" in target.inner_text().lower()
+                assert target.bounding_box()["height"] >= 44
+                if width == 390:
+                    target.tap()
+                else:
+                    target.focus()
+                    target.press("Enter")
+                assert "Ann Archer" in page.locator('#wr-pair h3').inner_text()
+                assert cue in page.locator('#wr-pair h3').inner_text()
+                assert page.locator('#wr-pair tbody tr').first.locator('td').count() == 4
+                assert page.locator('#wr-pair table').first.locator('tbody tr').count() == meetings
+                assert page.locator('#wr-pair').evaluate('e=>e===document.activeElement')
+                assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == "10"
+                assert page.locator('#wr-matrix .mcell').all_text_contents() == cells
+                assert page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>[e.dataset.sendOur,e.dataset.sendOpp])') == sends
+                assert page.evaluate('localStorage.getItem("ultimate-coach:plan-v2")') == saved
+                back = page.locator('#wr-pair a[href="#next-send"]')
+                assert back.bounding_box()["height"] >= 44
+                back.click()
+                assert page.locator('#next-send').evaluate('e=>e===document.activeElement')
+                assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == "10"
+            page.locator('#lineup-lab [data-plan="played"][data-pid="20"]').check()
+            assert page.locator('#next-send [data-inspect-opp="20"]').count() == 0
+            page.locator('#lineup-lab [data-plan="avail"][data-pid="1"]').select_option("Unavailable")
+            assert page.locator('#next-send [data-inspect-our="1"]').count() == 0
+            page.reload()
+            assert page.locator('[data-plan="note"][data-pid="11"]').first.input_value() == "Keep this observation"
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
+
+
 def test_a_recommended_send_says_when_it_costs_coverage_elsewhere(tmp_path: Path):
     """Next Send answers one pairing at a time; the captain could not see what it costs later.
 

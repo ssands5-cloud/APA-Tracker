@@ -424,7 +424,9 @@
     var onlyGreen={};
     w.blocks.forEach(function(o,k){if(k===j||!unplayed[k]) return;
       var g=o.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];});
-      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push(wrDisplayName(o.opponent,w.theirs)+" ("+wrSaveRecord(g[0])+")");}});
+      if(g.length===1){var id=String(g[0].member.id);(onlyGreen[id]||(onlyGreen[id]=[])).push({opponent:o.opponent,
+        label:wrDisplayName(o.opponent,w.theirs)+" ("+wrSaveRecord(g[0])+")"});}});
+    var saveText=function(targets){return targets?"consider saving — our only favorable direct option vs "+targets.map(function(t){return t.label;}).join(", "):"";};
     var groups=[];
     rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var last=groups[groups.length-1];
       if(last&&String(last[0].rank).replace("=","")===String(r.rank).replace("=","")) last.push(r); else groups.push([r]);});
@@ -434,11 +436,11 @@
       group.forEach(function(r){var save=onlyGreen[String(r.member.id)];
         ranked.push({rank:r.rank,choice_number:g+1,medal:medal,member:r.member,display:wrDisplayName(r.member,roster),category:r.category,reason:r.reason,
           tied_with:group.filter(function(o){return o!==r;}).map(function(o){return wrDisplayName(o.member,roster);}),
-          save:save?"consider saving — our only favorable direct option vs "+save.join(", "):""});});
+          save:saveText(save),save_targets:save||[]});});
     });
     var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){var sv=onlyGreen[String(r.member.id)];
       return {member:r.member,display:wrDisplayName(r.member,roster),reason:r.reason,
-              save:sv?"consider saving — our only favorable direct option vs "+sv.join(", "):""};};
+              save:saveText(sv),save_targets:sv||[]};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return wrDisplayName(r.member,roster);});
     var headline=ranked.length?"First by recorded direct results: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
@@ -447,6 +449,13 @@
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
   var WR_DIRECT_ORDER_NOTE='Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.';
+  function wrSaveWarning(candidate){
+    if(!candidate.save_targets.length) return "";
+    return ' <span class="ns-save">· consider saving — our only favorable direct option vs '
+      +candidate.save_targets.map(function(t){return '<button type="button" class="ns-save-target" data-inspect-our="'+esc(candidate.member.id)
+        +'" data-inspect-opp="'+esc(t.opponent.id)+'" aria-label="View meetings: '+esc(candidate.display)+' vs '+esc(t.label)+'">'
+        +esc(t.label)+' — view meetings</button>';}).join(", ")+'</span>';
+  }
   function wrNextSendLines(ns){
     var lines=[ns.headline];
     if(ns.ranked.length) lines.push(WR_DIRECT_ORDER_NOTE);
@@ -694,7 +703,7 @@
     // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
     var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
-    return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3>'
+    return '<div id="next-send" class="next-send" tabindex="-1"><h3>Who should I send next?</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
@@ -703,13 +712,13 @@
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+(m.save?' <span class="ns-save">· '+esc(m.save)+'</span>':'')+avail(m.member)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m)+avail(m.member)
         +(i===0?' <span class="ns-order-note muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</span>':'')
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(wrDisplayName(opp,w.theirs))+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
         // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+(u.save?' <span class="ns-save">· '+esc(u.save)+'</span>':'')+avail(u.member));}).join("");
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+wrSaveWarning(u)+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid <b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
           +ns.unknown.map(function(name){return li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(name));}).join("");
         if(!ns.ranked.length) return unord+rest+'</ul>';
@@ -866,7 +875,7 @@
       +'<p class="legend matrix-status-legend">Faded rows or columns are unavailable or already played. Their records and counts remain visible for reference.</p>'
       +'<p class="legend matrix-count-legend">🟢×N next to a player = favorable direct options left among unplayed opponents. 🟢×N next to an opponent = how many of your remaining players have a favorable direct record against them. 0 does not mean hardest or safe — it can mean even, shared-opponent-only or no verified evidence; check the row or column for which.</p>'
       +'<div class="table-wrap"><table class="matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
-      +'<div id="wr-pair">'+pairHtml+'</div>';
+      +'<div id="wr-pair" tabindex="-1">'+pairHtml+'</div>';
     // Lineup Lab
     var ourRows=w.ours.map(function(m){
       var a=wrAvail(plan.ck,m.id),l=wrLineup(plan.ck,m.id),pid=esc(m.id);
@@ -927,7 +936,7 @@
     var m=row.member,o=block.opponent,mm=oppMap(m.id,fmt),om=oppMap(o.id,fmt);
     var shared=Object.keys(mm).filter(function(k){return !!om[k];}).sort(function(a,b){var d=(mm[b].g+om[b].g)-(mm[a].g+om[a].g);if(d) return d;var na=PLAYERS[a]?PLAYERS[a].name:a,nb=PLAYERS[b]?PLAYERS[b].name:b;return na<nb?-1:(na>nb?1:0);});
     var games=w.meetings.filter(function(g){return String(g.our.id)===String(m.id)&&String(g.opp.id)===String(o.id);});
-    return '<div class="pair cat-border-'+row.category+'"><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
+    return '<div class="pair cat-border-'+row.category+'"><a class="pair-return" href="#next-send">Back to Next Send</a><h3>'+esc(playerRef(m))+' vs '+esc(playerRef(o))+'</h3>'
       +'<p>'+wrChip(row.category)+' <b>'+esc(WR_CAT_LABELS[row.category])+'</b> · rank '+esc(row.rank)+' of '+block.rows.length+' vs this opponent · '+esc(row.explanation)+'</p>'
       +(games.length?'<h4>Direct meetings</h4><div class="table-wrap"><table><thead><tr><th>Date</th><th>Result (ours)</th><th>SL ours/theirs</th><th>Session</th></tr></thead><tbody>'+games.map(function(g){return '<tr><td>'+esc(g.date)+'</td><td>'+esc(g.result)+'</td><td>'+esc(wrHistoricalSLText(g.own_sl)+" / "+wrHistoricalSLText(g.opp_sl))+'</td><td>'+esc(g.session)+'</td></tr>';}).join("")+'</tbody></table></div>':'<p class="muted">No verified direct meetings in this snapshot.</p>')
       +(shared.length?'<h4>Shared opponents ('+shared.length+')</h4><div class="table-wrap"><table><thead><tr><th>Shared opponent</th><th>'+esc(playerRef(m))+' vs them</th><th>'+esc(playerRef(o))+' vs them</th></tr></thead><tbody>'
@@ -997,6 +1006,13 @@
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
       if(!t) return;
       var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value];
+      if(t.hasAttribute("data-inspect-our")){
+        // Inspect the existing evidence without selecting a future opponent as the actual put-up.
+        WR_STATE.pair={our:t.getAttribute("data-inspect-our"),opp:t.getAttribute("data-inspect-opp")};
+        renderTeamMatchups();
+        var detail=document.getElementById("wr-pair");if(detail){detail.focus({preventScroll:true});detail.scrollIntoView({block:"start"});}
+        return;
+      }
       if(t.hasAttribute("data-next")){WR_STATE.next=t.getAttribute("data-next");renderTeamMatchups();
         var again=el.querySelector('.ns-chip.on');if(again) again.focus();return;}
       if(t.hasAttribute("data-send-our")&&ta&&tb){var ck=wrCtx(ta,tb);

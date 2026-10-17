@@ -168,9 +168,13 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-list { list-style:none; margin:0; padding:0; font-size:13px; }
 .ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
 .ns-m { font-size:16px; }
-.ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; }
+.ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; min-width:0; }
 .ns-avail { color:#6b4d00; font-style:italic; }
 .ns-save { color:#7a4b00; font-weight:700; }
+.ns-save-target { display:inline-flex; align-items:center; min-height:44px; max-width:100%; padding:5px 7px; box-sizing:border-box;
+  font:inherit; color:inherit; background:#fff8e8; border:1px solid #bfa46e; text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.pair-return { display:inline-flex; align-items:center; min-height:44px; }
+@media print { .ns-save-target { display:inline !important; padding:0; border:0; background:none; } .pair-return { display:none; } }
 .ns-budget { display:block; color:#7a4b00; font-weight:600; margin-top:3px; }
 .ns-budget.bad { color:#8f251b; }
 .ns-more summary { cursor:pointer; font-size:13px; padding:3px 6px; background:#fdecec; border-left:4px solid #b42318; border-radius:4px; }
