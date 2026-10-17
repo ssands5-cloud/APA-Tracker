@@ -60,7 +60,7 @@ SESSION_PROFILE_DIR = _REPO_ROOT / ".session_cache" / "apa_chromium"
 PERSISTENT_AUTH_TIMEOUT_S = 300
 
 
-def capture_access_token() -> str | None:
+def capture_access_token(*, progress=None) -> str | None:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -70,11 +70,15 @@ def capture_access_token() -> str | None:
             "  python -m playwright install chromium"
         )
 
+    from pipeline.refresh_progress import progress_span
+    report = progress or (lambda message: print(message, flush=True))
+    report("[AUTH] Opening APA login browser")
     token_holder: dict[str, str] = {}
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+        with progress_span(report, "[AUTH] Launch login browser"):
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
 
         def on_response(response) -> None:
             if GRAPHQL_HOST not in response.url:
@@ -82,6 +86,8 @@ def capture_access_token() -> str | None:
             request = response.request
             auth = request.headers.get("authorization")
             if auth:
+                if not token_holder:
+                    report("[AUTH] Authorization header observed on an APA GraphQL response; API validation follows login")
                 token_holder["token"] = auth
 
         context.on("response", on_response)
@@ -92,13 +98,21 @@ def capture_access_token() -> str | None:
         print("  3. Wait until Member Services is fully loaded.")
         print("  4. Return here and press Enter.")
         print("=" * 72)
-        page.goto(LEAGUE_URL)
+        with progress_span(report, "[AUTH] Load APA login page"):
+            page.goto(LEAGUE_URL)
+        report("[AUTH] Waiting for console Enter. No URL, page-element or network-idle condition is being awaited.")
         try:
             input("\nPress Enter after Member Services is fully loaded... ")
         except (EOFError, KeyboardInterrupt):
-            pass
-        browser.close()
+            report("[AUTH] Console input ended without a completed Enter read")
+        else:
+            report("[AUTH] ENTER RECEIVED - leaving the console prompt")
+        with progress_span(report, "[AUTH] Closing login browser"):
+            browser.close()
+        report("[AUTH] Login browser closed")
 
+    report("[AUTH] Browser automation stopped; returning the in-memory authorization for APA API validation"
+           if token_holder else "[AUTH] No authorization was observed; refresh cannot start")
     return token_holder.get("token")
 
 
