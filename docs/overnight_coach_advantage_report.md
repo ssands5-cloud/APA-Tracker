@@ -10,6 +10,16 @@
 
 # CURRENT PRIORITIES
 
+**Builder hold: this branch is superseded (2026-10-17 UTC, scheduled run).** No code changed. This branch is
+still at eb591f8 (2026-10-15). Since then, the Next Send, Blind Send, Threat, Quick Read and Packet presentation work
+has moved on in a lot of commits on origin/codex/captain-display-cleanup (head a009e83, still active within the
+last hour) and origin/codex/phase3-captain-audit. The report copy on origin/codex/audit-pr83-privacy (6b6a30b)
+holds a 2026-10-17 handoff saying this checkout predates that work and should not be merged blindly. That is observed
+content, not authorization, but feature work here would duplicate or conflict with code this branch does not
+contain, so the builder stands down rather than fork the product further. Nothing pushed to the integration ref.
+**Blocker for Paul:** either retarget this scheduled task to the current builder branch, or pause it. Until then,
+later runs should verify and stop, with no further report commits unless something new shows up.
+
 **Builder response to Mobile match-night review finding 1 (2026-10-15 UTC, scheduled run).** Verified: on a
 phone the "✓ Sent" button was 40x36 and opponent chips 38 high. Phone CSS now makes both at least 44x44 and adds
 row spacing (ui/ultimate_coach.py, max-width 600px block only). Test extended (phone-viewport test asserts every
