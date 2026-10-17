@@ -36,6 +36,30 @@ def test_next_send_boundaries_before_list_and_scoped_context(tmp_path,width):
         finally:browser.close()
 
 
+@pytest.mark.parametrize('width',[390,1280])
+def test_one_win_and_eight_wins_keep_order_and_show_the_evidence_difference(tmp_path,width):
+    from ui.ultimate_coach import render
+    from tests.test_excel_war_room_formulas import _games
+    payload=_payload()
+    payload['evidence']=[r for r in payload['evidence'] if {r['player_id'],r['opponent_id']} not in ({1,10},{2,10})]
+    payload['evidence']+=_games(1,10,'W')+_games(2,10,'WWWWWWWWLL')
+    path=tmp_path/'one-vs-ten.html'
+    path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':width,'height':900});page.goto(path.as_uri())
+            rows=page.locator('#next-send .ns-medal')
+            assert rows.nth(0).locator('[data-send-our]').get_attribute('data-send-our')=='1'
+            assert rows.nth(1).locator('[data-send-our]').get_attribute('data-send-our')=='2'
+            assert '1-0' in rows.nth(0).inner_text() and '1 meeting · small sample' in rows.nth(0).inner_text()
+            assert '8-2' in rows.nth(1).inner_text() and '10 meetings' in rows.nth(1).inner_text()
+            assert 'small sample' not in rows.nth(1).inner_text()
+            assert 'does not mean better supported' in page.locator('.ns-method').inner_text()
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+        finally:browser.close()
+
+
 def test_workbook_neutral_order_and_broader_context(tmp_path):
     path=write_workbook(_payload(),tmp_path/'uc.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001')
     wb=load_workbook(path);book=Workbook(wb);book.set('Command Center','C6',CAM)
@@ -102,4 +126,35 @@ def test_one_direct_win_stays_first_while_unranked_broader_record_is_visible(tmp
             b=broader.locator('li').filter(has_text='Bea Baker')
             assert '50-15' in b.inner_text() and 'no verified direct meetings' in b.inner_text()
             assert b.is_visible() and 'Not used in this ordering' in broader.inner_text()
+        finally:browser.close()
+
+
+@pytest.mark.parametrize('width',[320,390,1280])
+def test_decision_labels_explain_samples_without_claiming_a_practical_best(tmp_path,width):
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page,errors=_page(tmp_path,browser)
+            page.set_viewport_size({'width':width,'height':900})
+            assert 'does not mean better supported' in page.locator('.ns-method').inner_text()
+            sample=page.locator('.blind-send .bs-evidence')
+            assert '2 direct meetings across 1 opponent' in sample.inner_text()
+            assert '1 small-sample pairing' in sample.inner_text()
+            assert 'Pairing counts select the first shown' in page.locator('.blind-send').inner_text()
+            risks=page.locator('#wr-risks')
+            assert 'Threats — winning direct records' in risks.inner_text()
+            assert 'Avoid records — more losses than wins' in risks.inner_text()
+            assert 'A single loss is a caution, not an instruction to rule out a player' in risks.inner_text()
+            assert 'A single win is not an established threat' in risks.inner_text()
+            assert 'recorded losses' in page.locator('#next-send .ns-more summary').inner_text()
+            before=page.evaluate(f"window.__ucWarRoomPair({OURS!r},{THEIRS!r},'EIGHT')")
+            page.locator('#ll-cap').fill('1')
+            warnings=page.locator('#next-send .ns-budget.bad')
+            assert warnings.count()>0
+            assert warnings.first.evaluate('e=>parseFloat(getComputedStyle(e).borderLeftWidth)>=3')
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r},{THEIRS!r},'EIGHT')")==before
+            page.locator('#ll-cap').fill('')
+            assert page.locator('#next-send .ns-budget.bad').count()==0
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+            assert errors==[]
         finally:browser.close()

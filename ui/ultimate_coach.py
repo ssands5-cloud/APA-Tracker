@@ -102,6 +102,7 @@ button.secondary:hover { background:var(--felt-soft); }
 .blind-send .bs-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); width:100%; }
 .blind-send .bs-name { font-size:21px; line-height:1.15; color:var(--felt-deep,#1d4b35); }
 .blind-send .bs-why { font-size:13px; color:#3f4a43; }
+.blind-send .bs-evidence { width:100%; font-size:12px; overflow-wrap:anywhere; }
 .blind-send .bs-ties { width:100%; font-size:12px; overflow-wrap:anywhere; }
 .blind-send .bs-ties summary { cursor:pointer; min-height:44px; padding:12px 0; box-sizing:border-box; }
 .blind-send .bs-ties p,.blind-send .bs-ties ul { margin:4px 0; }
@@ -183,7 +184,7 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-with-save .ns-send { align-self:flex-start; }
 .pair-return { display:inline-flex; align-items:center; min-height:44px; }
 @media print { .ns-save-target { display:inline !important; padding:0; border:0; background:none; } .pair-return { display:none; } }
-.ns-budget { display:block; color:#7a4b00; font-weight:600; margin-top:3px; }
+.ns-budget { display:block; color:#7a4b00; font-weight:700; margin-top:5px; padding:5px 7px; border-left:4px solid currentColor; background:#fff8e8; }
 .ns-budget.bad { color:#8f251b; }
 .ns-more summary { cursor:pointer; font-size:13px; padding:3px 6px; background:#fdecec; border-left:4px solid #b42318; border-radius:4px; }
 .ns-avoid { background:#fdecec; border-left-color:#b42318 !important; }

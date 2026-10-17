@@ -540,9 +540,9 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
             text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
-            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid: Bea Baker (0-2 (2 meetings), small sample)"
+            assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid records — recorded losses: Bea Baker (0-2 (2 meetings), small sample)"
             card.locator(".ns-more summary").click()
-            assert "⚠ Avoid Bea Baker — 0-2 direct record (2 meetings) — concerning · small sample" in card.inner_text()
+            assert "⚠ Avoid record — recorded losses: Bea Baker — 0-2 direct record (2 meetings) — concerning · small sample" in card.inner_text()
             # Chips: tap Eve -> shared-only, never medalled.
             page.click("#next-send .ns-chip:has-text('Eve Ellis')")
             text = page.locator("#next-send").inner_text()
@@ -581,7 +581,7 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             reads = page.locator("#scouting-cards .quick-read")
             assert [reads.nth(i).inner_text().replace("QUICK READ", "Quick read").split(" ", 2)[2]
                     for i in range(reads.count())] == [c["quick_read"] for c in py["cards"]]
-            assert py["cards"][1]["quick_read"].startswith("Threat: 2-0 vs our roster (2 meetings, small sample) · No direct answer")
+            assert py["cards"][1]["quick_read"].startswith("Winning direct record: 2-0 vs our roster (2 meetings, small sample) · No direct answer")
             clipped = page.evaluate("""[...document.querySelectorAll('#scouting-cards .scout')]
                 .filter(c => [...c.querySelectorAll('dd')].some(d => d.getBoundingClientRect().right > c.getBoundingClientRect().right + 0.5)).length""")
             assert clipped == 0
@@ -2303,8 +2303,8 @@ def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path
         try:
             page,errors=_page(tmp_path,browser)
             text=page.locator('#scouting-cards .quick-read').first.inner_text()
-            assert f'Historical top record: {ANN} (2-0, small sample)' in text
-            assert 'Avoid: Bea Baker (0-2, small sample)' in text
+            assert f'First by direct record: {ANN} (2-0, small sample)' in text
+            assert 'Losing direct records: Bea Baker (0-2, small sample)' in text
             summary=page.locator('#next-send .ns-more summary')
             assert 'small sample' in summary.inner_text()
             assert not page.locator('#next-send .ns-more').evaluate('(el)=>el.open')
@@ -2727,7 +2727,7 @@ def test_quick_read_distinguishes_same_named_answer_and_avoid(tmp_path, width, l
     avoid = "Ann Archer (SL 4)" if level_case == "different" else "Ann Archer (player 2 of 2)"
     py = _python_war_room_for(payload)
     expected = py["cards"][0]["quick_read"]
-    assert "Historical top record: " + answer + " (2-0" in expected
+    assert "First by direct record: " + answer + " (2-0" in expected
     assert avoid + " (0-1" in expected
     path = tmp_path / "same-name-quick-read.html"
     path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")

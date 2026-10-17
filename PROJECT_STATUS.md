@@ -2,7 +2,31 @@
 
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
-## Current presentation boundary update (2026-10-17)
+## Current recommendation trust presentation (2026-10-17)
+
+Ranking and evidence engines remain unchanged. HTML explicitly says first in direct-record order
+does not mean better supported or the better practical send. Blind Send now shows the meetings
+behind its existing pairing counts and identifies small-sample pairings. Threat/Avoid headings describe
+winning/losing direct records; single-result cautions and sample badges distinguish history from advice.
+Candidate budget warnings have stronger borders and weight, with existing reference-only limitations.
+Quick Read uses First by direct record, Winning direct record and Losing direct records in both HTML
+and generated workbook data. Broader records remain separately labeled Not used in this ordering.
+Private synthetic browser/native acceptance and exact scope are recorded in the ONE report.
+This is candidate presentation work; no production publication or successful live refresh is implied.
+
+## Separate live validation blocker (2026-10-17)
+
+Real primary APA full-refresh validation stopped at identity reconciliation before workbook/HTML builds.
+A reproduced multi-division standings defect
+was found: separate capture timestamps left only the final division in latest_standings(), despite all
+rows being stored. The bounded correction groups explicit division standings under one timestamp after
+team fallback snapshots and rejects completion unless the latest snapshot contains all captured rows.
+The correction is still separate candidate work. Replay verified all 40 standings rows from four divisions;
+17 scoresheets still have unresolved identities. No original database or completed bundle was replaced.
+No recommendation, ranking, model, schema or architecture change is involved. Exact live outcomes and
+source/artifact bindings belong in the ONE report; do not infer completion from source capture alone.
+
+## Previous presentation boundary update (2026-10-17)
 
 Paul subsequently authorized implementing presentation transparency, while preserving all ranking logic.
 Next Send now identifies recorded matchup options and explains ordering before the list, uses neutral
