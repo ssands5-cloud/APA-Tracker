@@ -9,6 +9,20 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Audit of e328d37 (2026-10-17) — NOT A PASS
+
+The parity, Next Send and workbook formula suites passed 95 of 95 on a clean detached checkout of e328d37.
+
+- **P2 closed.** Each Packet options line now lists that opponent's own losing records under "Loss cautions —
+  recorded losses, not exclusions". They follow the shared net-losses order, are filtered to remaining
+  players, and carry SMALL SAMPLE and "Lost once · Only 1 meeting" tags. This is the same rule as the
+  phone's Next Send avoid list.
+- `test_packet_opponent_caution_survives_other_opponents_higher_global_losses` is my P2 fixture: 0-5, 0-4
+  and 0-3 against one opponent, and 0-2 against the other. It reads the displayed Packet line. Another
+  test checks that an Unavailable mark removes the caution and that it does not leak across opponents.
+- **Still open:** P3 deeper record, P4 skill-cap warning, and T1–T4. See the b00eb79 entry. **Next in
+  priority: P3.**
+
 ## Audit of a009e83 (2026-10-17) — NOT A PASS
 
 The parity, Next Send and workbook formula suites passed 93 of 93 on a clean detached checkout of a009e83.
