@@ -273,7 +273,7 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     assert [(m["medal"], m["rank"], m["display"]) for m in ns["ranked"]] == [
         ("🥇", "1=", "Ann"), ("🥇", "1=", "Bo"), ("🥈", "3", "Di"), ("🥉", "4", "Fay"), ("", "5", "Cy")]
     assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
-    assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul (1-0 in 1 meeting, small sample)"
+    assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul (1-0 in 1 meeting, small sample · Only 1 meeting)"
     assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
     assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample · Meeting dates not captured" in next_send_lines(ns)
     assert next_send(wr, 0, unplayed=[True, False])["ranked"][0]["save"] == ""   # Yul already played

@@ -521,7 +521,7 @@ def save_record_text(row: dict[str, Any]) -> str:
     if not row["direct"]:
         return ""
     w, games = row["direct"]
-    return f"{record_text(w, games)} in {games} meeting{'s' if games != 1 else ''}" + (", small sample" if games < 3 else "")
+    return f"{record_text(w, games)} in {games} meeting{'s' if games != 1 else ''}" + (", small sample" if games < 3 else "") + (" · Only 1 meeting" if games == 1 else "")
 
 
 def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = None,

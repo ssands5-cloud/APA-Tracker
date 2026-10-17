@@ -795,11 +795,11 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
     e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
-    def _save_targets(k: int, exclude_selected: bool) -> str:
+    def _save_targets(k: int, exclude_selected: bool, selected: int | None = None) -> str:
         pieces = []
         for j in range(1, R + 1):
             flag = f"Engine!${get_column_letter(1 + j)}${u_first + k - 1}"
-            cond = f"AND({flag},wr_NsJ<>{j})" if exclude_selected else flag
+            cond = f"AND({flag},{selected if selected is not None else 'wr_NsJ'}<>{j})" if exclude_selected else flag
             row = f"INDEX(wr_OppStart,{j})+{grid[(k, j)][2]}"
             pieces.append(f'IF({cond}," · vs "&INDEX(wr_OppLabels,{j})&" ("&INDEX({ME}[Save Record],{row})&")","")')
         joined = "&".join(pieces)
@@ -808,6 +808,27 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.block("Save evidence for remaining opponents", R, [
         ("wr_UniqueDetails", lambda k, r: _save_targets(k, False)),
         ("wr_NsSaveDetails", lambda k, r: _save_targets(k, True)),
+    ])
+    # Reuse the same unique-option flags for each printed opponent, rather than
+    # relying on whichever opponent happens to be selected in Command Center.
+    packet_saves = {}
+    for j in range(1, R + 1):
+        e.section(f"Packet future-save warning vs opponent slot {j}")
+        first = e.row + 1
+        for i in range(1, R + 1):
+            r = first + i - 1
+            e.ws.cell(row=r, column=2, value=_save_targets(i, True, j))
+            cat = grid[(i,j)][0]
+            e.ws.cell(row=r, column=3, value=(
+                f'=IF(AND(INDEX(wr_OurRemaining,{i}),INDEX(wr_OppUnplayed,{j}),'
+                f'OR({cat}="G",{cat}="E",{cat}="I"),B{r}<>""),'
+                f'INDEX(wr_OurLabels,{i})&" — consider saving for "&B{r},"")'))
+            e.ws.cell(row=r, column=4, value=(f'=C{r}' if i==1 else
+                f'=D{r-1}&IF(AND(D{r-1}<>"",C{r}<>""),CHAR(10),"")&C{r}'))
+        packet_saves[j] = f'Engine!$D${r}'
+        e.row = r + 2
+    e.block("Packet future-save warning by opponent", R, [
+        ("wr_PacketSave", lambda k,r: '='+packet_saves[k]),
     ])
     medal = '"Direct-record order "&H{r}'
 
@@ -1771,9 +1792,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
         _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
                             f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
-                            f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k})))))',
+                            f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k}))))'
+                            f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k})))',
               font=font(10))
-        h(r, 27)
+        save_worst = _packet_save_worst(wb, sum(PACKET_WIDTHS[2:]))
+        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst, sum(PACKET_WIDTHS[2:]), 10, 27))
     r += 1
     base._section(ws, r, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown", last_col=12)
     h(r, 18)
@@ -2021,9 +2044,18 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # Split the overview before rosters only when it exceeds the width-fit budget.
     width_scale = min(1.0, PACKET_PRINTABLE[0] / width_pt)
     if page_heights[0] * width_scale > PACKET_PRINTABLE[1]:
-        ws.row_breaks.append(Break(id=overview_break))
-        budget[0] = max(sum(heights.get(x,15) for x in range(1,overview_break+1)),
-                        title_pt+sum(heights.get(x,15) for x in range(overview_break+1,pages[0][1]+1)))
+        # Break only between whole rows; one opponent's warning stays with its preview.
+        used = 0
+        overview_pages = []
+        for rr in range(1,pages[0][1]+1):
+            height = heights.get(rr,15)
+            if used + height > PACKET_PRINTABLE[1] / width_scale and rr>3:
+                ws.row_breaks.append(Break(id=rr-1))
+                overview_pages.append(used)
+                used = title_pt
+            used += height
+        overview_pages.append(used)
+        budget[0] = max(overview_pages)
     ws.row_breaks.brk.sort(key=lambda b: b.id)
     scale = min(1.0, PACKET_PRINTABLE[0] / width_pt, *(PACKET_PRINTABLE[1] / b for b in budget))
     ws.page_setup.orientation = "landscape"
@@ -2123,6 +2155,36 @@ def _worst_height(text: str, width_units: float, size: float, minimum: float) ->
             else:
                 used += (1 if used else 0) + len(word)
     return max(minimum, round(lines * size * 1.4 + 6, 1))
+
+
+def _packet_save_worst(wb, width: float) -> str:
+    """Size existing warnings from captured records, including any later availability marks.
+
+    Each future opponent can have at most one sole favorable option. Reserve its
+    longest possible owner, rather than an eight-by-eight band of impossible warnings.
+    This only sizes printed rows; formulas still decide which warnings apply.
+    """
+    pairs: dict[str, list[dict[str, Any]]] = {}
+    block = None
+    for row in wb['Matchup Evidence'].iter_rows(min_row=2, values_only=True):
+        rec = dict(zip(ME_COLUMNS, row))
+        if rec['Rank']=='vs':
+            block={'label':rec['Player'],'rows':[]}
+            pairs.setdefault(rec['Key'].rsplit('|',1)[0],[]).append(block)
+        elif block is not None and rec['Player ID'] is not None:
+            block['rows'].append(rec)
+    possibilities = ['']
+    for blocks in pairs.values():
+        for target in blocks:
+            candidates={r['Player ID'] for r in target['rows'] if r['Category'] in ('G','E','I')}
+            lines=[]
+            for future in blocks:
+                if future is target:continue
+                owners=[r['Player']+' — consider saving for '+future['label']+' ('+r['Save Record']+')'
+                        for r in future['rows'] if r['Category']=='G' and r['Player ID'] in candidates]
+                if owners:lines.append(max(owners,key=len))
+            possibilities.append('\n'.join(lines))
+    return max(possibilities,key=lambda text:_worst_height(text,width,10,0))
 
 
 def _next_send_worst(label: str, roster: int, medals: int) -> str:

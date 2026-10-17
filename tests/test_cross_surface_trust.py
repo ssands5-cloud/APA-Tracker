@@ -40,6 +40,22 @@ def named_values(book,name):
     return [book.value(sheet,cell) for sheet,cell in book.name(name)]
 
 
+def test_packet_preserves_the_same_future_save_warning_and_single_meeting_caution(tmp_path):
+    payload=_payload()
+    payload['evidence']=[r for r in payload['evidence'] if {r['player_id'],r['opponent_id']}!={1,10}]+_games(1,10,'W')
+    wb=load_workbook(write_workbook(payload,tmp_path/'save.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    text='\n'.join(str(book.display('Captain Packet',c.coordinate) or '') for row in wb['Captain Packet'] for c in row if c.column==3)
+    assert 'consider saving' in text and 'Cam Cole' in text and 'Only 1 meeting' in text
+    assert '1-0 in 1 meeting' in text
+    # Spending or retiring the protected pairing removes its warning.
+    book.set('Lineup Lab','C23','Played')
+    text='\n'.join(str(book.display('Captain Packet',c.coordinate) or '') for row in wb['Captain Packet'] for c in row if c.column==3)
+    assert 'consider saving' not in text
+    wb.close()
+
+
+
 @pytest.mark.parametrize('state',['initial','unavailable','played','opponent_played','none_left','live_not_winning'])
 def test_workbook_live_flags_match_the_phone_engine_for_the_same_marks(tmp_path,state):
     payload=_payload()

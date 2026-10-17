@@ -417,7 +417,7 @@
       return member.name+" (SL "+member.skill_level+")";
     return playerRef(member);
   }
-  function wrSaveRecord(r){var d=r.c.direct;return d?wlText(d.w,d.g)+" in "+plural(d.g,"meeting")+(d.g<3?", small sample":""):"";}
+  function wrSaveRecord(r){var d=r.c.direct;return d?wlText(d.w,d.g)+" in "+plural(d.g,"meeting")+(d.g<3?", small sample":"")+(d.g===1?" · Only 1 meeting":""):"";}
   function wrNextSend(w,j,rem,unplayed){
     var b=w.blocks[j],roster=w.ours;
     if(!unplayed[j]) return {opponent:b.opponent,label:b.opponent_label,headline:b.opponent.name+" has already played.",ranked:[],unordered:[],avoid:[],unknown:[]};
@@ -458,7 +458,7 @@
         var single=row&&row.c.direct&&row.c.direct.g===1;
         return '<button type="button" class="ns-save-target" data-inspect-our="'+esc(candidate.member.id)
         +'" data-inspect-opp="'+esc(t.opponent.id)+'" aria-label="View meetings: '+esc(candidate.display)+' vs '+esc(t.label)+'">'
-        +esc(t.label)+(single?' <strong class="ns-sample">⚠ Only 1 meeting</strong>':'')+' — view meetings</button>';}).join(", ")+'</span>';
+        +esc(t.label.replace(" · Only 1 meeting",""))+(single?' <strong class="ns-sample">⚠ Only 1 meeting</strong>':'')+' — view meetings</button>';}).join(", ")+'</span>';
   }
   function wrNextSendLines(ns){
     var lines=[ns.headline];
