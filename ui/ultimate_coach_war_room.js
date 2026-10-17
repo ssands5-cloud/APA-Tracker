@@ -711,7 +711,7 @@
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
-        return li("ns-medal cat-border-"+m.category,'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
+        return li("ns-medal cat-border-"+m.category+(m.save?" ns-with-save":""),'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m)+avail(m.member)
         +(i===0?' <span class="ns-order-note muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</span>':'')
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'

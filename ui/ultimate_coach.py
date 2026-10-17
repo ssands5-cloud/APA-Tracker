@@ -173,6 +173,8 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-save { color:#7a4b00; font-weight:700; }
 .ns-save-target { display:inline-flex; align-items:center; min-height:44px; max-width:100%; padding:5px 7px; box-sizing:border-box;
   font:inherit; color:inherit; background:#fff8e8; border:1px solid #bfa46e; text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.ns-save-target:hover,.ns-save-target:focus-visible { color:#5d3a00; background:#fff0c9; }
+.ns-with-save .ns-send { align-self:flex-start; }
 .pair-return { display:inline-flex; align-items:center; min-height:44px; }
 @media print { .ns-save-target { display:inline !important; padding:0; border:0; background:none; } .pair-return { display:none; } }
 .ns-budget { display:block; color:#7a4b00; font-weight:600; margin-top:3px; }

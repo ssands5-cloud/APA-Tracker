@@ -1706,6 +1706,15 @@ def test_save_warning_opens_exact_future_meetings_without_changing_put_up(tmp_pa
                 assert cue in target.inner_text()
                 assert "meetings" in target.inner_text().lower()
                 assert target.bounding_box()["height"] >= 44
+                target.hover()
+                contrast = target.evaluate("""e=>{
+                  const lum=c=>{const v=c.match(/[0-9.]+/g).slice(0,3).map(x=>{x=Number(x)/255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4});return .2126*v[0]+.7152*v[1]+.0722*v[2]};
+                  const s=getComputedStyle(e),a=lum(s.color),b=lum(s.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+                }""")
+                assert contrast >= 4.5, "the warning must remain readable while hovered or focused"
+                if current_basis == "direct":
+                    row = target.locator('xpath=ancestor::li')
+                    assert row.locator('[data-send-our]').bounding_box()["y"] - row.bounding_box()["y"] <= 12
                 if width == 390:
                     target.tap()
                 else:
