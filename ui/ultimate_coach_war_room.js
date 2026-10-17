@@ -53,7 +53,7 @@
     rowsFor(pid,fmt).forEach(function(r){var sl=val(r,"opponent_skill_level");var ok=typeof sl==="number"&&sl>0;var k=ok?String(sl):"";var e=b[k]||(b[k]={sl:ok?sl:null,w:0,g:0});e.g+=1;if(val(r,"result")==="W") e.w+=1;});
     var known=Object.keys(b).filter(function(k){return k!=="";}).map(function(k){return b[k];}).sort(function(x,y){return x.sl-y.sl;});
     if(!known.length) return ["No opponent skill levels recorded","—","—"];
-    function lab(e){return "SL"+Math.trunc(e.sl)+" ("+wlText(e.w,e.g)+")";}
+    function lab(e){return "SL"+Math.trunc(e.sl)+" ("+wlText(e.w,e.g)+", "+plural(e.g,"meeting")+(e.g<3?", small sample":"")+")";}
     return [known.map(function(e){return "vs SL"+Math.trunc(e.sl)+" "+wlText(e.w,e.g);}).join(" · "),
       known.filter(function(e){return e.w>e.g-e.w;}).map(lab).join(", ")||"None recorded",
       known.filter(function(e){return e.w<e.g-e.w;}).map(lab).join(", ")||"None recorded"];
@@ -100,13 +100,13 @@
     [["G","First by direct record"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
-      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");
+      parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+", "+plural(top[0].c.direct.g,"meeting")+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");
       var contexts=top.map(function(r){return r.sl_context;}).filter(function(x,i,a){return x&&a.indexOf(x)===i;}).sort();
       if(contexts.length) parts.push(top.length===1?contexts[0]:"Meeting SLs differ or are missing; check each pairing's detail");done=true;});
     if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
       parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
     var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
-    if(av.length) parts.push("Losing direct records: "+av.map(function(r){return wrDisplayName(r.member,roster)+" ("+wlText(r.c.direct.w,r.c.direct.g)+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
+    if(av.length) parts.push("Losing direct records: "+av.map(function(r){return wrDisplayName(r.member,roster)+" ("+wlText(r.c.direct.w,r.c.direct.g)+", "+plural(r.c.direct.g,"meeting")+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
     if(c.winning_sl!=="—"&&c.winning_sl!=="None recorded") parts.push("Winning records vs "+c.winning_sl);
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
     return parts.join(" · ");
@@ -449,12 +449,15 @@
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
   var WR_DIRECT_ORDER_NOTE='Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.';
-  function wrSaveWarning(candidate){
+  function wrSaveWarning(candidate,w){
     if(!candidate.save_targets.length) return "";
     return ' <span class="ns-save">· consider saving — our only favorable direct option vs '
-      +candidate.save_targets.map(function(t){return '<button type="button" class="ns-save-target" data-inspect-our="'+esc(candidate.member.id)
+      +candidate.save_targets.map(function(t){var row=null;
+        w.blocks.forEach(function(b){if(b.opponent.id===t.opponent.id) row=b.byMember[String(candidate.member.id)];});
+        var single=row&&row.c.direct&&row.c.direct.g===1;
+        return '<button type="button" class="ns-save-target" data-inspect-our="'+esc(candidate.member.id)
         +'" data-inspect-opp="'+esc(t.opponent.id)+'" aria-label="View meetings: '+esc(candidate.display)+' vs '+esc(t.label)+'">'
-        +esc(t.label)+' — view meetings</button>';}).join(", ")+'</span>';
+        +esc(t.label)+(single?' <strong class="ns-sample">⚠ Only 1 meeting</strong>':'')+' — view meetings</button>';}).join(", ")+'</span>';
   }
   function wrNextSendLines(ns){
     var lines=[ns.headline];
@@ -577,7 +580,7 @@
       +'<span class="bs-label">If we put up first</span>'
       +'<b class="bs-name">'+esc(wrDisplayName(b.member,w.ours))+'</b>'+wrCandidateBudget(w,plan,ta,b.member)
       +'<span class="bs-why">'+esc(b.why)+av+'</span>'
-      +'<span class="bs-evidence"><strong>'+esc(plural(meetings,"direct meeting")+" across "+plural(pairings,"opponent")
+      +'<span class="bs-evidence"><strong>'+esc(plural(meetings,"direct meeting")+" total across "+plural(pairings,"opponent")
         +(small?" · "+plural(small,"small-sample pairing"):""))+'</strong><br>Pairing counts select the first shown, not meeting totals or confidence. Opponents without a direct record remain unknown.</span>'
       +(b.ties.length>1?'<details class="bs-ties"><summary>'+b.ties.length+' tied by matchup counts</summary>'
         +'<p>Same counts of concerning, favorable and even direct pairings. First shown follows roster order. Individual records and meeting totals can differ.</p><ul>'
@@ -703,6 +706,19 @@
       +'<p>Meeting age, changes in skill level and Coach Observations do not adjust this order. Availability filters the list; skill-budget warnings are separate reference checks.</p></section>';
   }
 
+  // Evidence-strength presentation only: existing row order and categories are untouched.
+  function wrNextSendEvidence(w,plan,ns,sel){
+    if(!ns.ranked.length) return "";
+    var lead=ns.ranked[0],record=w.blocks[sel].byMember[String(lead.member.id)].c.direct;
+    var names=[lead.display].concat(lead.tied_with).join(" / ");
+    var head='<div class="ns-evidence-head"><b>Direct-record order #1'+(lead.tied_with.length?' (tied)':'')+'</b><br>'
+      +esc(names+" — "+wlText(record.w,record.g)+" direct record · "+plural(record.g,"meeting"))
+      +(record.g<3?'<br><strong class="ns-sample">⚠ Small sample</strong>':'')+'</div>';
+    var deeper=record.g<3?w.blocks[sel].rows.filter(function(r){return plan.rem[String(r.member.id)]&&r.c.direct&&r.c.direct.g>record.g;}):[];
+    return head+(deeper.length?'<div class="ns-deeper"><b>Deeper direct records</b> — more meetings, not a new order<ul>'
+      +deeper.map(function(r){return '<li>'+esc(wrDisplayName(r.member,w.ours)+" — "+wlText(r.c.direct.w,r.c.direct.g)+" in "+plural(r.c.direct.g,"meeting")+" · "+WR_CAT_WORD[r.category]+(r.c.direct.g<3?" · ⚠ small sample":""))+'</li>';}).join("")+'</ul></div>':'');
+  }
+
   function wrNextSendCard(w,plan,ta,tb){
     // An explicit put-up belongs to this fixture/format, not the next view of the same roster.
     var selectionScope=plan.ck+"||"+w.format;
@@ -723,6 +739,7 @@
     return '<div id="next-send" class="next-send" tabindex="-1"><h3>Next Send — options against '+esc(wrDisplayName(opp,w.theirs))+'</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
+      +wrNextSendEvidence(w,plan,ns,sel)
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
@@ -731,18 +748,20 @@
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
         return li("ns-medal cat-border-"+m.category+(m.save?" ns-with-save":""),'<span class="ns-why"><span class="ns-m">'+esc("Direct-record order "+m.choice_number)+'</span> <b>'+esc(m.display)+'</b> <strong class="ns-sample">'+esc(plural(evidence.g,"meeting")+(evidence.g<3?" · small sample":""))+'</strong> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m)+avail(m.member)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m,w)+avail(m.member)
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(wrDisplayName(opp,w.theirs))+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
         // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+wrSaveWarning(u)+avail(u.member));}).join("");
-        var rest=ns.avoid.map(function(a){return li("ns-avoid",'⚠ Avoid record — recorded losses: <b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+wrSaveWarning(u,w)+avail(u.member));}).join("");
+        var rest=ns.avoid.map(function(a){var direct=w.blocks[sel].byMember[String(a.member.id)].c.direct;
+          return li("ns-avoid",(direct.g===1?'<strong class="ns-sample">Lost once · 1 meeting</strong> Recorded loss: ':'⚠ Avoid record — recorded losses: ')+'<b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
           +ns.unknown.map(function(name){return li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(name));}).join("");
         if(!ns.ranked.length) return unord+rest+'</ul>';
         if(!unord&&!rest) return '</ul>';
         var sum=[];
-        if(ns.avoid.length) sum.push("⚠ Avoid records — recorded losses: "+ns.avoid.map(function(a){return a.display+" ("+a.reason.split(" — ")[0].replace(" direct record","")+(a.reason.indexOf(" · small sample")!==-1?", small sample":"")+")";}).join(", "));
+        if(ns.avoid.length) sum.push("⚠ Avoid records — recorded losses: "+ns.avoid.map(function(a){var direct=w.blocks[sel].byMember[String(a.member.id)].c.direct;
+          return direct.g===1?a.display+" (Lost once · ⚠ Only 1 meeting)":a.display+" ("+a.reason.split(" — ")[0].replace(" direct record","")+(a.reason.indexOf(" · small sample")!==-1?", small sample":"")+")";}).join(", "));
         if(ns.unordered.length) sum.push("≈ "+ns.unordered.length+" not ordered");
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
@@ -796,7 +815,7 @@
       +wrNextSendCard(w,plan,ta,tb)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
-      +'<div class="decide-threats"><b>Threat records vs remaining roster</b>'+(plan.threats.length?plan.threats.slice(0,3).map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+(plan.threats.length>3?'<a href="#wr-risks" style="display:inline-flex;align-items:center;min-height:44px">View all '+plan.threats.length+' flagged opponents ('+(plan.threats.length-3)+' more)</a>':'')+'</div>'
+      +'<div class="decide-threats"><b>Threat records vs remaining roster</b>'+(plan.threats.length?plan.threats.slice(0,3).map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+(t.live&&t.games===1?'<strong>Beat us once (1 meeting)</strong> — ':'')+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+(plan.threats.length>3?'<a href="#wr-risks" style="display:inline-flex;align-items:center;min-height:44px">View all '+plan.threats.length+' flagged opponents ('+(plan.threats.length-3)+' more)</a>':'')+'</div>'
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
@@ -851,10 +870,10 @@
       }).join("")+'</tbody></table></div>';
     document.getElementById("wr-risks").innerHTML='<h2>Top risks</h2><div class="risk-grid">'
       +'<div><h3>Threats — winning direct records</h3><p class="muted">A single win is not an established threat. Live winning records against our remaining players appear first; historical-only flags below are unknown against who is left. Within each group, order follows recorded wins minus losses, not confidence. Unplayed opponents only.</p>'+(function(){
-        var items=plan.threats.map(function(c){return '<li>'+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
+        var items=plan.threats.map(function(c){return '<li>'+(c.live&&c.games===1?'<strong class="ns-sample">Beat us once (1 meeting)</strong> ':'')+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("No unplayed opponent has a live winning record against our remaining roster.")+'</li>')+'</ul>';
       })()+'</div>'
-      +'<div><h3>Avoid records — more losses than wins</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text)+' <strong class="ns-sample">'+esc(plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
+      +'<div><h3>Avoid records — more losses than wins</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text)+' <strong class="ns-sample">'+esc((c.g===1?"Lost once · ":"")+plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
@@ -932,7 +951,7 @@
         var badges=wrQuickReadBadges(c,w.blocks[j],hasNote);
         return '<div class="scout'+(played?' out':'')+'"><div class="scout-head">'+esc(c.label)+' · SL '+esc(c.sl)+(played?' · already played':'')+'</div>'
           +'<p class="quick-read-badges">'+badges.map(function(x){return '<span>'+esc(x)+'</span>';}).join('')+'</p>'
-          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read)+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
+          +'<p class="quick-read"><b>Quick read</b> '+esc(c.quick_read).replace(/\b\d+ meetings?(?:, small sample)?\b/g,function(x){return '<strong>'+x+'</strong>';})+'</p>'+wrNoteFlagSlot(c.opponent.id,"card",null,"p","ns-coach")+'<dl>'
           +f.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")
           +'<dt>Coach observations</dt><dd><span class="muted">Your opinion, not APA facts.</span> '+tagSel("tag1")+' '+tagSel("tag2")
           +'<textarea id="coach-note-'+pid+'" class="plan" data-plan="note" data-pid="'+pid+'" aria-label="Coach Observation for '+esc(c.label)+'" rows="2" placeholder="What you saw">'+esc(cc.n||"")+'</textarea>'

@@ -124,7 +124,7 @@ def test_scouting_card_shows_records_by_opponent_skill_level_without_judgement()
     opal = _war_room()["cards"][0]
     assert opal["team_record"] == "7-2 (this team, Fall 2026)"
     assert opal["by_sl"] == "vs SL4 0-1 · vs SL5 1-0"
-    assert opal["winning_sl"] == "SL5 (1-0)" and opal["losing_sl"] == "SL4 (0-1)"
+    assert opal["winning_sl"] == "SL5 (1-0, 1 meeting, small sample)" and opal["losing_sl"] == "SL4 (0-1, 1 meeting, small sample)"
     assert opal["lifetime"] == "No career stats captured"
 
 
@@ -825,10 +825,10 @@ def test_quick_read_keeps_pair_sample_caution_for_answer_and_avoid():
     index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10),(3,50,0,1),(50,3,1,1)))
     wr=war_room_pair(ours,theirs,index,"EIGHT")
     text=wr['cards'][0]['quick_read']
-    assert 'First by direct record: Ann (1-0, small sample)' in text
-    assert 'Losing direct records: Jo (0-1, small sample)' in text
+    assert 'First by direct record: Ann (1-0, 1 meeting, small sample)' in text
+    assert 'Losing direct records: Jo (0-1, 1 meeting, small sample)' in text
     large=war_room_pair([ours[1]],theirs,index,"EIGHT")['cards'][0]['quick_read']
-    assert 'First by direct record: Bea (8-2)' in large
+    assert 'First by direct record: Bea (8-2, 10 meetings)' in large
     assert 'small sample' not in large
 
 

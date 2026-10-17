@@ -20,8 +20,8 @@ def test_next_send_boundaries_before_list_and_scoped_context(tmp_path,width):
             assert 'Not an overall player ranking' in method.inner_text()
             assert method.evaluate('(e)=>!!(e.compareDocumentPosition(document.querySelector("#next-send .ns-list")) & Node.DOCUMENT_POSITION_FOLLOWING)')
             assert 'Direct-record order 1' in page.locator('#next-send .ns-m').first.inner_text()
-            assert '2 meetings' in page.locator('#next-send .ns-sample').first.inner_text()
-            assert 'small sample' in page.locator('#next-send .ns-sample').first.inner_text()
+            assert '2 meetings' in page.locator('#next-send .ns-list .ns-sample').first.inner_text()
+            assert 'small sample' in page.locator('#next-send .ns-list .ns-sample').first.inner_text()
             context=page.locator('#next-send .ns-broader')
             assert 'Not used in this ordering' in context.inner_text()
             assert 'Fall 2026' in context.inner_text() and '8-Ball' in context.inner_text()
@@ -48,7 +48,7 @@ def test_one_win_and_eight_wins_keep_order_and_show_the_evidence_difference(tmp_
     with sync_playwright() as pw:
         browser=pw.chromium.launch()
         try:
-            page=browser.new_page(viewport={'width':width,'height':900});page.goto(path.as_uri())
+            page=browser.new_page(viewport={'width':width,'height':900});page.set_default_timeout(2500);page.goto(path.as_uri())
             rows=page.locator('#next-send .ns-medal')
             assert rows.nth(0).locator('[data-send-our]').get_attribute('data-send-our')=='1'
             assert rows.nth(1).locator('[data-send-our]').get_attribute('data-send-our')=='2'
@@ -120,7 +120,7 @@ def test_one_direct_win_stays_first_while_unranked_broader_record_is_visible(tmp
         try:
             page=browser.new_page(viewport={'width':390,'height':900});page.goto(path.as_uri())
             assert page.locator('#next-send [data-send-our]').first.get_attribute('data-send-our')=='1'
-            assert page.locator('.ns-sample').first.inner_text()=='1 meeting · small sample'
+            assert page.locator('#next-send .ns-list .ns-sample').first.inner_text()=='1 meeting · small sample'
             broader=page.locator('.ns-broader')
             assert '3-4' in broader.inner_text() and '8-0' in broader.inner_text()
             b=broader.locator('li').filter(has_text='Bea Baker')
@@ -138,7 +138,7 @@ def test_decision_labels_explain_samples_without_claiming_a_practical_best(tmp_p
             page.set_viewport_size({'width':width,'height':900})
             assert 'does not mean better supported' in page.locator('.ns-method').inner_text()
             sample=page.locator('.blind-send .bs-evidence')
-            assert '2 direct meetings across 1 opponent' in sample.inner_text()
+            assert '2 direct meetings total across 1 opponent' in sample.inner_text()
             assert '1 small-sample pairing' in sample.inner_text()
             assert 'Pairing counts select the first shown' in page.locator('.blind-send').inner_text()
             risks=page.locator('#wr-risks')
@@ -157,4 +157,75 @@ def test_decision_labels_explain_samples_without_claiming_a_practical_best(tmp_p
             assert page.locator('#next-send .ns-budget.bad').count()==0
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
             assert errors==[]
+        finally:browser.close()
+
+
+@pytest.mark.parametrize('width',[390,1280])
+def test_thin_leader_headline_and_deeper_record_are_visible_without_reordering(tmp_path,width):
+    from ui.ultimate_coach import render
+    from tests.test_excel_war_room_formulas import _games
+    payload=_payload()
+    payload['evidence']=[r for r in payload['evidence'] if {r['player_id'],r['opponent_id']} not in ({1,10},{2,10})]
+    payload['evidence']+=_games(1,10,'W')+_games(2,10,'WWWWWWWWLL')
+    path=tmp_path/'thin-lead.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':width,'height':900});page.set_default_timeout(2500);page.goto(path.as_uri())
+            head=page.locator('#next-send .ns-evidence-head')
+            assert 'Direct-record order #1' in head.inner_text()
+            assert '1-0' in head.inner_text() and '1 meeting' in head.inner_text()
+            assert '⚠ Small sample' in head.inner_text()
+            deeper=page.locator('#next-send .ns-deeper')
+            assert 'Bea Baker' in deeper.inner_text() and '8-2 in 10 meetings' in deeper.inner_text()
+            assert deeper.is_visible() and 'not a new order' in deeper.inner_text()
+            assert page.locator('#next-send [data-send-our]').first.get_attribute('data-send-our')=='1'
+            assert '1 meeting, small sample' in page.locator('#scouting-cards .quick-read').first.inner_text()
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+        finally:browser.close()
+
+
+@pytest.mark.parametrize('width',[390,1280])
+@pytest.mark.parametrize('record,total',[('W',3),('WWWWWW',18)])
+def test_blind_send_discloses_different_meeting_totals_for_same_pairing_counts(tmp_path,width,record,total):
+    from ui.ultimate_coach import render
+    from tests.test_excel_war_room_formulas import _games,_player,_hist
+    payload=_payload()
+    payload['players'] += [_player(i,str(2000+i),'Fixture Opponent '+str(i),[_hist('falcons-a','d1','EIGHT',3)]) for i in (20,21)]
+    payload['evidence']=sum((_games(1,i,record) for i in (10,11,20)),[])
+    path=tmp_path/'blind-total.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':width,'height':900});page.set_default_timeout(2500);page.goto(path.as_uri())
+            blind=page.locator('.blind-send')
+            assert 'favorable vs 3 of 4' in blind.inner_text()
+            assert str(total)+' direct meetings total' in blind.locator('.bs-evidence').inner_text()
+            assert ('3 small-sample pairings' in blind.inner_text())==(total==3)
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
+        finally:browser.close()
+
+
+@pytest.mark.parametrize('width',[390,1280])
+def test_single_meeting_cautions_and_future_save_are_explicit(tmp_path,width):
+    from ui.ultimate_coach import render
+    from tests.test_excel_war_room_formulas import _games
+    payload=_payload()
+    payload['evidence']=[r for r in payload['evidence'] if {r['player_id'],r['opponent_id']} not in ({2,10},{3,11})]
+    payload['evidence']+=_games(2,10,'L')+_games(3,11,'L')+_games(1,11,'W')
+    path=tmp_path/'single-save.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':width,'height':900});page.set_default_timeout(2500);page.goto(path.as_uri())
+            target=page.locator('#next-send [data-inspect-our="1"][data-inspect-opp="11"]')
+            assert '⚠ Only 1 meeting' in target.locator('strong').inner_text()
+            assert 'Lost once' in page.locator('#wr-risks').inner_text()
+            # Exclude our favorable Eve meeting to leave one live opponent win.
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]','Unavailable')
+            assert 'Beat us once' in page.locator('#tonight .decide-threats').inner_text()
+            assert '1 meeting' in page.locator('#tonight .decide-threats').inner_text()
+            quick=page.locator('#scouting-cards .quick-read').all_text_contents()
+            assert any('Losing direct records: Dee Diaz (0-1, 1 meeting, small sample)' in q for q in quick)
+            assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
         finally:browser.close()

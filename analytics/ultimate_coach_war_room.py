@@ -200,8 +200,8 @@ def _bucket_summary(buckets: dict[Any, list[int]]) -> tuple[str, str, str]:
     if not known:
         return "No opponent skill levels recorded", "—", "—"
     by_sl = " · ".join(f"vs SL{int(sl)} {record_text(w, g)}" for sl, (w, g) in known)
-    winning = [f"SL{int(sl)} ({record_text(w, g)})" for sl, (w, g) in known if w > g - w]
-    losing = [f"SL{int(sl)} ({record_text(w, g)})" for sl, (w, g) in known if w < g - w]
+    winning = [f"SL{int(sl)} ({record_text(w, g)}, {plural(g, 'meeting')}{', small sample' if g < 3 else ''})" for sl, (w, g) in known if w > g - w]
+    losing = [f"SL{int(sl)} ({record_text(w, g)}, {plural(g, 'meeting')}{', small sample' if g < 3 else ''})" for sl, (w, g) in known if w < g - w]
     return by_sl, ", ".join(winning) or "None recorded", ", ".join(losing) or "None recorded"
 
 
@@ -447,7 +447,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
         if group:
             top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
             rec = record_text(*top[0]["direct"])
-            parts.append(f"{label}: {names(top)} ({rec}{', small sample' if top[0]['direct'][1] < 3 else ''}{', tied' if len(top) > 1 else ''})")
+            parts.append(f"{label}: {names(top)} ({rec}, {plural(top[0]['direct'][1], 'meeting')}{', small sample' if top[0]['direct'][1] < 3 else ''}{', tied' if len(top) > 1 else ''})")
             contexts = sorted({r.get("sl_context", "") for r in top if r.get("sl_context")})
             if contexts:
                 parts.append(contexts[0] if len(top) == 1 else "Meeting SLs differ or are missing; check each pairing's detail")
@@ -458,7 +458,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
                      if shared else "No evidence-backed answer on our roster")
     avoid = [r for r in rows if r["category"] == "R"]
     if avoid:
-        parts.append("Losing direct records: " + ", ".join(f"{display_name(r['member'], roster)} ({record_text(*r['direct'])}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
+        parts.append("Losing direct records: " + ", ".join(f"{display_name(r['member'], roster)} ({record_text(*r['direct'])}, {plural(r['direct'][1], 'meeting')}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
     if card["winning_sl"] not in ("—", "None recorded"):
         parts.append(f"Winning records vs {card['winning_sl']}")
     if card["losing_sl"] not in ("—", "None recorded"):

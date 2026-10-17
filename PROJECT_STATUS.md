@@ -2,7 +2,19 @@
 
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
-## Current recommendation trust presentation (2026-10-17)
+## Current evidence-strength presentation sprint (2026-10-17)
+
+The HTML Next Send headline now names the existing first direct-record group with record, meeting
+count and a prominent small-sample warning. When that group has one or two meetings, deeper remaining
+direct records appear separately with their actual outcomes and counts; this is not a second ranking.
+Blind Send explicitly labels total meetings. One-meeting threats/losses and future-save warnings state
+Beat us once, Lost once and Only 1 meeting at the decision. Existing colors and sample threshold remain.
+Quick Read's first/even/losing direct records and winning/losing skill-level buckets have explicit counts;
+HTML emphasizes those counts and generated workbook data receives the same textual disclosures.
+Engine functions, ranking/order, eligibility, evidence counts and storage are unchanged. No probabilities
+or predictive model were added. This remains candidate work; source-bound checks are in the ONE report.
+
+## Previous recommendation trust presentation (2026-10-17)
 
 Ranking and evidence engines remain unchanged. HTML explicitly says first in direct-record order
 does not mean better supported or the better practical send. Blind Send now shows the meetings

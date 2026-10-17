@@ -2303,8 +2303,8 @@ def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path
         try:
             page,errors=_page(tmp_path,browser)
             text=page.locator('#scouting-cards .quick-read').first.inner_text()
-            assert f'First by direct record: {ANN} (2-0, small sample)' in text
-            assert 'Losing direct records: Bea Baker (0-2, small sample)' in text
+            assert f'First by direct record: {ANN} (2-0, 2 meetings, small sample)' in text
+            assert 'Losing direct records: Bea Baker (0-2, 2 meetings, small sample)' in text
             summary=page.locator('#next-send .ns-more summary')
             assert 'small sample' in summary.inner_text()
             assert not page.locator('#next-send .ns-more').evaluate('(el)=>el.open')

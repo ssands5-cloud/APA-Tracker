@@ -166,6 +166,9 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-chip { min-height:40px; padding:6px 10px; border-radius:20px; border:1px solid #c9b88f; background:#fff; color:#3b2f17; font-size:13px; }
 .ns-chip.on { background:#5d4413; color:#fff; border-color:#5d4413; font-weight:700; }
 .ns-head { margin:2px 0; font-size:15px; }
+.ns-evidence-head { margin:8px 0; padding:8px; border-left:4px solid #88733d; background:#fff8e8; overflow-wrap:anywhere; }
+.ns-deeper { margin:8px 0; padding:8px; border:1px solid #758478; font-size:13px; overflow-wrap:anywhere; }
+.ns-deeper ul { margin:5px 0; padding-left:20px; }
 .ns-list { list-style:none; margin:0; padding:0; font-size:13px; }
 .ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
 .ns-m { display:block; font-size:12px; font-weight:600; }
@@ -178,7 +181,7 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; min-width:0; }
 .ns-avail { color:#6b4d00; font-style:italic; }
 .ns-save { color:#7a4b00; font-weight:700; }
-.ns-save-target { display:inline-flex; align-items:center; min-height:44px; max-width:100%; padding:5px 7px; box-sizing:border-box;
+.ns-save-target { display:inline-block; min-height:44px; max-width:100%; padding:5px 7px; box-sizing:border-box;
   font:inherit; color:inherit; background:#fff8e8; border:1px solid #bfa46e; text-align:left; white-space:normal; overflow-wrap:anywhere; }
 .ns-save-target:hover,.ns-save-target:focus-visible { color:#5d3a00; background:#fff0c9; }
 .ns-with-save .ns-send { align-self:flex-start; }
