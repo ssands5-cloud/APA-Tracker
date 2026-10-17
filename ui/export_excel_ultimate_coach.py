@@ -314,6 +314,7 @@ def _build_info_sheet(wb: Workbook, payload: dict[str, Any], *, built_at: str, s
     rows = [
         ("Built", built_at or "unknown"),
         ("Source database", source_db),
+        ("Refresh APA data", "Use FULL_APA_REFRESH.bat to refresh and rebuild both files, or QUICK_REFRESH.bat to check APA and rebuild only stale outputs. The completed bundle and REFRESH_STATUS.txt are in ultimate-coach-runs/refresh."),
         ("Schema", payload.get("schema", "")),
         ("Probability publication", payload.get("probability_publication")),
         ("Matchup probability", payload.get("matchup_probability")),
@@ -337,6 +338,9 @@ def _build_info_sheet(wb: Workbook, payload: dict[str, Any], *, built_at: str, s
         cell.fill = HEADER_FILL
     for label, value in rows:
         sheet.append([label, value])
+        if label == "Refresh APA data":
+            sheet.cell(sheet.max_row, 2).alignment = WRAP_TOP
+            sheet.row_dimensions[sheet.max_row].height = 48
     for row in sheet.iter_rows(min_row=2, max_col=1):
         row[0].font = LABEL_FONT
     sheet.freeze_panes = "A2"

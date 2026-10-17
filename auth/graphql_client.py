@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Optional
 
 import requests
@@ -19,6 +21,20 @@ import requests
 from parser.apa_graphql import GRAPHQL_ENDPOINT
 
 logger = logging.getLogger(__name__)
+
+# Opt-in acquisition/replay boundary. The provider receives query, variables and
+# a zero-argument HTTP callable, never a token/header argument. All ordinary
+# callers retain the original transport and error behavior.
+_FIXTURE_PROVIDER = ContextVar("apa_fixture_provider", default=None)
+
+
+@contextmanager
+def use_fixture_provider(provider):
+    reset = _FIXTURE_PROVIDER.set(provider)
+    try:
+        yield
+    finally:
+        _FIXTURE_PROVIDER.reset(reset)
 
 _AUTH_STATUS_CODES = {401, 403}
 _AUTH_EXTENSION_CODES = {"UNAUTHENTICATED", "FORBIDDEN"}
@@ -86,6 +102,18 @@ class GraphQLTransportError(RuntimeError):
 
 
 def execute(
+    query: str,
+    variables: Optional[dict[str, Any]] = None,
+    access_token: Optional[str] = None,
+    timeout: float = 15,
+    max_retries: int = 0,
+) -> dict[str, Any]:
+    provider = _FIXTURE_PROVIDER.get()
+    request = lambda: _execute_http(query, variables, access_token, timeout, max_retries)
+    return provider(query, variables or {}, request) if provider is not None else request()
+
+
+def _execute_http(
     query: str,
     variables: Optional[dict[str, Any]] = None,
     access_token: Optional[str] = None,

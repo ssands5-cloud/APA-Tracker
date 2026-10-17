@@ -9,6 +9,16 @@ This file is required by `.github/prompts/build.md`: update it whenever build, p
 - **Real Match Night publication:** waiting for GPT to close the publisher P1 (junction/reparse-path guard, fixed in `989aecf`). Only a synthetic DEMO package is live.
 
 ## What it is
+The refresh changes remain in the candidate worktree; installation, production promotion and legacy
+launcher renames/removals are not authorized. The end-user refresh entry points are `FULL_APA_REFRESH.bat` and `QUICK_REFRESH.bat`, both using
+`pipeline.ultimate_coach_refresh`. The workflow captures current authenticated APA division sources into
+private fixtures, replays existing ingestion and scoresheet reconciliation, rebuilds derived data, and
+validates the Ultimate Coach workbook/HTML from one payload before moving a single local current pointer.
+Quick mode still checks live content; it reuses only matching dependency and artifact checksums. Outputs,
+database, coverage, source limitations and `REFRESH_STATUS.txt` live under ignored `ultimate-coach-runs/refresh`.
+This does not install a release, promote the production database, publish real data, or refresh every
+historical APA season. Historical games in the configured seed are retained; current scope is explicit.
+
 One fixture-focused coaching tool, built from the verified staging SQLite snapshot, in two forms:
 - **HTML cockpit** (`ui/ultimate_coach.py`, `ui/ultimate_coach_war_room.js`). Its sections:
   - Tonight, with "Who should I send next?", threats and risks;
