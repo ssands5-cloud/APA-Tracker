@@ -513,6 +513,33 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     our_pid_col, our_first = ours["wr_OurPids"][0], ours["wr_OurPids"][1]
     opp_start_col, opp_count_col, opp_first = theirs["wr_OppStart"][0], theirs["wr_OppCount"][0], theirs["wr_OppStart"][1]
 
+    # Mirror the existing phone reference arithmetic. Slots are unplayed roster
+    # opponents, never a claim about required sends or tournament legality.
+    budget_first=e.row+1
+    e.block("Reference budget remaining captured skill levels",R,[
+        ("wr_BudgetSL",lambda k,r:f'=IF(AND(INDEX(wr_OurRemaining,{k}),ISNUMBER(INDEX(wr_OurSLNum,{k}))),INDEX(wr_OurSLNum,{k}),"")'),
+        ("wr_BudgetKnown",lambda k,r:f'=ISNUMBER(B{r})'),
+        ("wr_BudgetOrder",lambda k,r:f'=IF(C{r},COUNTIFS(wr_BudgetKnown,TRUE,wr_BudgetSL,"<"&B{r})+COUNTIF(Engine!$B${budget_first}:B{r},B{r}),"")'),
+    ])
+    e.cell("wr_BudgetCap","Entered integer reference cap",'=IF(IFERROR(INT(ll_Cap),0)>0,INT(ll_Cap),"")')
+    e.cell("wr_BudgetUsed","Captured SL already played",'=SUMIFS(wr_OurSLNum,wr_OurLineup,"Played")')
+    e.cell("wr_BudgetUnknown","Unknown captured SL in played or remaining",'=COUNTIFS(wr_OurRows,">0",wr_OurSLNum,"",wr_OurLineup,"Played")+COUNTIFS(wr_OurRemaining,TRUE,wr_OurSLNum,"")')
+    e.cell("wr_BudgetScope","Reference cap scope and incomplete warning",
+           '=IF(OR(wr_BudgetCap="",wr_UnplayedCount=0),"","Reference budget "&wr_BudgetCap&" · "&wr_UnplayedCount&'
+           '" unplayed roster opponents, not verified required sends — not a match-legality check."&'
+           'IF(OR(wr_BudgetUnknown>0,COUNTIF(wr_BudgetKnown,TRUE)<wr_UnplayedCount),'
+           '" Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.",""))')
+    def candidate_budget(k,r):
+        need='MAX(0,wr_UnplayedCount-1)'
+        rest='+'.join(f'IF(INDEX(wr_BudgetKnown,{j}),IF(INDEX(wr_BudgetOrder,{j})-'
+                      f'IF(INDEX(wr_BudgetOrder,{k})<INDEX(wr_BudgetOrder,{j}),1,0)<={need},INDEX(wr_BudgetSL,{j}),0),0)'
+                      for j in range(1,R+1) if j!=k) or '0'
+        return (f'=IF(OR(wr_BudgetCap="",wr_UnplayedCount=0,NOT(INDEX(wr_OurRemaining,{k})),NOT(INDEX(wr_BudgetKnown,{k}))),"",'
+                f'IF(COUNTIF(wr_BudgetKnown,TRUE)-1<{need},"",IF(INDEX(wr_BudgetSL,{k})+({rest})+wr_BudgetUsed>wr_BudgetCap,'
+                'IF(wr_BudgetUnknown>0,"Captured-SL comparison exceeds entered budget; check incomplete",'
+                '"Reference comparison: this choice exceeds your entered skill budget"),"")))')
+    e.block("Reference budget warning by player",R,[("wr_CandidateBudget",candidate_budget)])
+
     # Lineup Lab display rosters (the planning team named on Lineup Lab).
     e.block("Planning our slot", R, [
         ("ll_OurLabels", lambda k, r: f'=IF(ll_OurScope="","",IFERROR(INDEX(TeamRosters_Table[Player Label],'
@@ -680,7 +707,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX({rng["lbl"]},{m})&" "&'
                 f'INDEX(MatchupEvidence_Table[Player],{row})&" — "&IF(INDEX(MatchupEvidence_Table[Direct Games],{row})>0,'
                 f'INDEX(MatchupEvidence_Table[Direct Record],{row})&IF(INDEX(MatchupEvidence_Table[Direct Games],{row})<3," · SMALL SAMPLE",""),'
-                f'INDEX(MatchupEvidence_Table[Cell],{row})),""))')
+                f'INDEX(MatchupEvidence_Table[Cell],{row}))&IF(INDEX(MatchupEvidence_Table[Category],{row})="I","",'
+                f'IF(INDEX(wr_CandidateBudget,MATCH(INDEX(MatchupEvidence_Table[Player ID],{row}),wr_OurPids,0))="",""," · "&'
+                f'INDEX(wr_CandidateBudget,MATCH(INDEX(MatchupEvidence_Table[Player ID],{row}),wr_OurPids,0)))),""))')
 
     def best_text(k: int) -> str:
         rng, m = send_rng[k], f"MATCH(1,{send_rng[k]['run']},0)"
@@ -691,7 +720,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
                f'"one of "&{n_i})&"): ",IF({tie}>1,"first by recorded direct results (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
                f'", same evidence): ","first by recorded direct results: "))')
         return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR({tag}&'
-                f'INDEX(MatchupEvidence_Table[Player],{row})&" — reason: "&INDEX(MatchupEvidence_Table[Reason],{row}),""))')
+                f'INDEX(MatchupEvidence_Table[Player],{row})&" — reason: "&INDEX(MatchupEvidence_Table[Reason],{row})&'
+                f'IF(INDEX(MatchupEvidence_Table[Category],{row})="I","",IF(INDEX(wr_CandidateBudget,MATCH(INDEX(MatchupEvidence_Table[Player ID],{row}),wr_OurPids,0))="",""," · "&'
+                f'INDEX(wr_CandidateBudget,MATCH(INDEX(MatchupEvidence_Table[Player ID],{row}),wr_OurPids,0)))),""))')
 
     e.block("Best send", R, [
         (f"wr_Send{n}", (lambda n: lambda k, r: send_text(n, k))(n)) for n in (1, 2, 3)
@@ -902,7 +933,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
             f'" · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}),"")'
-            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown",""),"")')),
+            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown","")'
+            f'&IF(INDEX(wr_CandidateBudget,C{r})="",""," · "&INDEX(wr_CandidateBudget,C{r})),"")')),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
         ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}")
                                               + f'&IF(INDEX(wr_NsSaveDetails,C{r})="",""," · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}))'
@@ -938,7 +970,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     for n in range(1, R + 1):
         e.cell(f"wr_NsMedal{n}", f"Next Send medal line {n}", f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
     e.cell("wr_NsMethod", "Next Send ordering boundary", '="Not an overall player ranking. Favorable/even direct records use recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Loss cautions use most net losses first, then meetings. Shared-only comparisons are not ordered."')
-    e.cell("wr_NsCard", "Next Send answer (one line each)", '=IF(wr_NsOpen,wr_NsMethod&CHAR(10),"")&wr_NsHeadline' + "".join(
+    e.cell("wr_NsCard", "Next Send answer (one line each)", '=IF(wr_NsOpen,wr_NsMethod&IF(wr_BudgetScope="","",CHAR(10)&wr_BudgetScope)&CHAR(10),"")&wr_NsHeadline' + "".join(
         f'&IF({x}="","",CHAR(10)&{x})' for x in [f"wr_NsMedal{n}" for n in range(1, R + 1)] + ["wr_NsLists"]))
     e.cell("wr_NsDeeper","Selected opponent deeper-record context",
            '=IF(NOT(wr_NsOpen),"",IF(INDEX(wr_DeeperRecords,wr_NsJ)="","",'
@@ -1823,11 +1855,14 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
           '=IF(wr_UnplayedCount=0,"Every opponent has already played.",'
           'IF(wr_BlindName="","No evidence-backed pick — "&wr_BlindWhy,'
           'wr_BlindName&" — "&wr_BlindWhy&wr_BlindTieNote&wr_BlindMeetingNote&'
-          'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")))',
+          'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")&'
+          'IF(INDEX(wr_CandidateBudget,wr_BlindIdx)="",""," · "&INDEX(wr_CandidateBudget,wr_BlindIdx))))&'
+          'IF(wr_BudgetScope="","",CHAR(10)&wr_BudgetScope)',
           font=font(12, bold=True, color=base.FELT_DEEP))
     blind_worst = (_longest_label(wb) + f" — {R} concerning of {R} — best available, not good · no direct record vs {R}"
                    + f" · {R} tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix."
-                   + " · 999999 direct meetings total — pairing counts select first shown, not confidence · availability unknown")
+                   + " · 999999 direct meetings total — pairing counts select first shown, not confidence · availability unknown"
+                   + " · Reference comparison: this choice exceeds your entered skill budget\n"+_budget_scope_worst())
     h(r, _worst_height(blind_worst, sum(PACKET_WIDTHS[2:]), 12, 30))
     r += 1
     base._section(ws, r, "Recorded options preview — direct order: win percentage, then meetings; not confidence",
@@ -1841,10 +1876,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                             f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k}))))'
                             f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k}))'
                             f'&IF(INDEX(wr_PacketCautions,{k})="","",CHAR(10)&"Loss cautions — recorded losses, not exclusions:"&CHAR(10)&INDEX(wr_PacketCautions,{k}))'
-                            f'&IF(INDEX(wr_DeeperRecords,{k})="","",CHAR(10)&"Deeper direct records — more meetings, not a new order:"&CHAR(10)&INDEX(wr_DeeperRecords,{k})))',
+                            f'&IF(INDEX(wr_DeeperRecords,{k})="","",CHAR(10)&"Deeper direct records — more meetings, not a new order:"&CHAR(10)&INDEX(wr_DeeperRecords,{k}))'
+                            f'&IF(OR(INDEX(wr_OppLabels,{k})="",NOT(INDEX(wr_OppUnplayed,{k})),wr_BudgetScope=""),"",CHAR(10)&wr_BudgetScope))',
               font=font(10))
         save_worst = _packet_save_worst(wb, sum(PACKET_WIDTHS[2:]))
-        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE\n"+save_worst+'\n'+_packet_caution_worst(wb)+'\n'+_deeper_records_worst(wb), sum(PACKET_WIDTHS[2:]), 10, 27))
+        h(r, _worst_height(_longest_label(wb)*2+" — 999-999 (1998 meetings) · SMALL SAMPLE · Reference comparison: this choice exceeds your entered skill budget\n"+save_worst+'\n'+_packet_caution_worst(wb)+'\n'+_deeper_records_worst(wb)+'\n'+_budget_scope_worst(), sum(PACKET_WIDTHS[2:]), 10, 27))
     r += 1
     base._section(ws, r, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown", last_col=12)
     h(r, 18)
@@ -2258,6 +2294,11 @@ def _deeper_records_worst(wb) -> str:
     return 'Deeper direct records — more meetings, not a new order:\n'+max(('\n'.join(b) for b in blocks),key=len)
 
 
+def _budget_scope_worst() -> str:
+    return ('Reference budget 999 · 99 unplayed roster opponents, not verified required sends — not a match-legality check. '
+            'Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.')
+
+
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
     headline = "Not an overall player ranking. Direct-record order uses recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Shared-only comparisons are not ordered.\nOrdered direct records among remaining players; equal evidence stays tied."
@@ -2482,6 +2523,7 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # longest label, or Excel hides the last names.
     worst = max((_next_send_worst(_longest_label(wb), R, k) for k in range(0, R + 1)),
                 key=lambda t: _worst_height(t, 166, 11, 0))
+    worst += '\n'+_budget_scope_worst()+'\n'+'\n'.join(['Reference comparison: this choice exceeds your entered skill budget']*R)
     ns_lines = [
         ("=wr_NsCard", worst),
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',

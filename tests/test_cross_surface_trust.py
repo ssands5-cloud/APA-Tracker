@@ -3,7 +3,7 @@ import re
 import pytest
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright
-from analytics.ultimate_coach_war_room import next_send,live_threats
+from analytics.ultimate_coach_war_room import next_send,live_threats,lineup_budget
 from tests.test_excel_war_room_formulas import _payload,_games,SHARKS,FALCONS
 from tests.test_ultimate_coach_war_room_browser import _python_war_room_for
 from tests.excel_formula_eval import Workbook
@@ -96,6 +96,61 @@ def test_paper_surfaces_expose_deeper_records_when_a_thin_leader_hides_them(tmp_
     assert packet.index('1-0 (1 meeting)')<packet.index('9-1 (10 meetings)')<packet.index('8-2 (10 meetings)')
     book.set('Lineup Lab','C13','Unavailable')
     assert '8-2 (10 meetings)' not in book.display('Captain Packet',f'C{head+1}')
+    wb.close()
+
+
+def test_paper_skill_cap_reference_warns_at_the_same_named_candidate_without_reranking(tmp_path):
+    payload=_payload()
+    for p in payload['players']:
+        if p['id']==3:
+            for history in p['team_history']:history['skill_level']=3
+    wb=load_workbook(write_workbook(payload,tmp_path/'budget.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb);book.set('Command Center','C6','Cam Cole')
+    book.set('Lineup Lab','C7',7)
+    cc=book.value('Engine',book.name('wr_NsCard').ref)
+    assert 'Reference comparison: this choice exceeds your entered skill budget' in cc
+    head=next(c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str) and c.value.startswith('Recorded options preview'))
+    packet=book.display('Captain Packet',f'C{head+1}')
+    assert 'Reference comparison: this choice exceeds your entered skill budget' in packet
+    assert 'not a match-legality check' in packet
+    book.set('Lineup Lab','C7',23)
+    assert 'this choice exceeds' not in book.value('Engine',book.name('wr_NsCard').ref)
+    book.set('Lineup Lab','C7','')
+    assert 'Reference budget' not in book.display('Captain Packet',f'C{head+1}')
+    wb.close()
+
+
+@pytest.mark.parametrize('state',['known','higher','missing','played','unavailable','no_players','no_opponents','unknown_played','equal_skills'])
+def test_workbook_candidate_budget_uses_the_existing_phone_reference_arithmetic(tmp_path,state):
+    payload=_payload()
+    for p in payload['players']:
+        if p['id']==3 and state not in ('missing','unknown_played'):
+            for h in p['team_history']:h['skill_level']=3
+        if p['id'] in (1,2,3) and state=='equal_skills':
+            for h in p['team_history']:h['skill_level']=4
+    wb=load_workbook(write_workbook(payload,tmp_path/'arithmetic.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb);cap=23 if state=='higher' else 7;book.set('Lineup Lab','C7',cap)
+    remaining={1,2,3};played={};slots=2
+    if state in ('played','unknown_played'):
+        remaining.remove(3);book.set('Lineup Lab','D14','Played');book.set('Lineup Lab','C24','Played');slots=1;played={3:0 if state=='unknown_played' else 3}
+    if state=='unavailable':remaining.remove(2);book.set('Lineup Lab','C13','Unavailable')
+    if state=='no_players':
+        remaining=set()
+        for r in (12,13,14):book.set('Lineup Lab',f'C{r}','Unavailable')
+    if state=='no_opponents':
+        slots=0
+        for r in (23,24):book.set('Lineup Lab',f'C{r}','Played')
+    war=_python_war_room_for(payload)
+    actual=named_values(book,'wr_CandidateBudget')[:3]
+    unknown=(1 if state in ('missing','unknown_played') else 0)
+    for i,pid in enumerate((1,2,3)):
+        b=lineup_budget(war,cap=cap,slots=slots+len(played),played=played,remaining=remaining,sending=pid)
+        expected=pid in remaining and slots>0 and b['sending_keeps_legal'] is False
+        assert bool(actual[i])==expected,(state,pid,actual,b)
+        if expected:assert ('incomplete' in actual[i])==bool(unknown)
+    scope=book.value('Engine',book.name('wr_BudgetScope').ref)
+    if state in ('missing','unknown_played','no_players'):assert 'No choice is cleared' in scope
+    if not slots:assert scope==''
     wb.close()
 
 
