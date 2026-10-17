@@ -580,7 +580,7 @@
   // needs no flag at all; "unknown" is reserved for zero live games, where "only against
   // player(s) not in tonight's remaining lineup" is a true statement rather than an overclaim.
   function wrLiveThreats(w,rem){
-    var out=[];
+    var out=[],remainingCount=w.ours.filter(function(m){return rem[String(m.id)];}).length;
     if(!Object.keys(rem).some(function(k){return rem[k];})) return out;
     w.blocks.forEach(function(b,j){
       var live=b.rows.filter(function(r){return r.c.direct&&rem[String(r.member.id)];});
@@ -593,7 +593,8 @@
         // Full detail for the War Room risk panel, which has room; a compact line for Tonight,
         // which does not -- a longer version of this exact text pushed Open risks off a 390x844
         // Safari screen (the fourth time an addition here has done that).
-        text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of our remaining players)"+(lg<3?" · small sample":""),
+        text:b.opponent_label+" · SL "+slText(b.opponent)+" · "+wlText(lw,lg)+" vs our roster still in play ("+plural(lg,"meeting")+", "+live.length+" of "+plural(remainingCount,"remaining player")+")"
+          +(remainingCount>live.length?" · no direct record vs "+plural(remainingCount-live.length,"remaining player"):"")+(lg<3?" · small sample":""),
         short:wrDisplayName(b.opponent,w.theirs)+" — "+wlText(lw,lg)+(lg<3?" ("+plural(lg,"meeting")+", small sample)":" vs our roster still in play")});
       else if(unknownOnly) out.push({j:j,opponent:b.opponent,label:b.opponent_label,live:false,unknown:true,
         wins:gw,games:gg,playersMet:gone.length,

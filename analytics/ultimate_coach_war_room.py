@@ -770,6 +770,7 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
     remaining = ours_ids if remaining is None else remaining
     if not remaining:
         return []
+    remaining_count = len(ours_ids & remaining)
     out: list[dict[str, Any]] = []
     for block in war_room["blocks"]:
         opp = block["opponent"]
@@ -790,7 +791,9 @@ def live_threats(war_room: dict[str, Any], *, remaining: set[Any] | None = None)
                 "wins": live_wins, "games": live_games, "players_met": len(live),
                 "text": f"{block['opponent_label']} · SL {_sl_text(opp.get('skill_level'))} · "
                         f"{record_text(live_wins, live_games)} vs our roster still in play "
-                        f"({plural(live_games, 'meeting')}, {len(live)} of our remaining players)"
+                        f"({plural(live_games, 'meeting')}, {len(live)} of {plural(remaining_count, 'remaining player')})"
+                        + (f" · no direct record vs {plural(remaining_count - len(live), 'remaining player')}"
+                           if remaining_count > len(live) else "")
                         + (" · small sample" if live_games < 3 else ""),
                 "short": (f"{display_name(opp, war_room['theirs'])} — {record_text(live_wins, live_games)} ({plural(live_games, 'meeting')}, small sample)"
                           if live_games < 3 else f"{display_name(opp, war_room['theirs'])} — {record_text(live_wins, live_games)} vs our roster still in play"),

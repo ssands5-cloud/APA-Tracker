@@ -723,6 +723,19 @@ def test_live_threats_keeps_a_danger_that_is_still_live():
     assert opal["wins"] == 4 and opal["games"] == 6, opal
 
 
+@pytest.mark.parametrize('remaining,met,total', [(None, 2, 3), ({1, 3}, 1, 2), ({1, 2}, 2, 2), ({1, 3, 9999}, 1, 2)])
+def test_live_threats_states_remaining_roster_coverage_and_missing_direct_records(remaining, met, total):
+    row = live_threats(_war_room(), remaining=remaining)[0]
+    assert f'{met} of {total} remaining players' in row['text']
+    missing = total - met
+    if missing:
+        label = 'player' if missing == 1 else 'players'
+        assert f'no direct record vs {missing} remaining {label}' in row['text']
+    else:
+        assert 'no direct record vs' not in row['text']
+    assert row['players_met'] == met and row['live'] and not row['unknown']
+
+
 def test_live_threats_is_empty_when_nothing_is_dangerous_either_way():
     wr = _war_room()
     out = live_threats(wr, remaining=set())

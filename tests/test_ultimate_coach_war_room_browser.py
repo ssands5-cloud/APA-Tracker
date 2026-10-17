@@ -131,7 +131,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             risks = page.inner_text("#wr-risks")
             # Superseded wording: see the Threat Panel gap fix (live_threats) -- scoped to
             # players still in tonight's lineup rather than our whole roster's history.
-            assert f"{EVE} · SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of our remaining players)" in risks
+            assert f"{EVE} · SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of 3 remaining players)" in risks
             assert f"{BEA} vs {CAM}: 0-2 direct (2 meetings)" in risks
             cells = page.locator("#wr-matrix .mcell")
             assert [cells.nth(i).inner_text() for i in range(6)] == [
@@ -1556,6 +1556,30 @@ def test_blind_send_names_coverage_ties_and_links_to_existing_records(tmp_path, 
             assert card.locator('.bs-name').inner_text() == ANN
             page.reload()
             assert card.locator('.bs-ties').count() == 0
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize('width', [390, 1280])
+def test_live_threat_panel_states_covered_and_unmet_remaining_players(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({'width': width, 'height': 844})
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            panel = page.locator('#wr-risks .risk-grid > div').first
+            assert '1 of 3 remaining players' in panel.inner_text()
+            assert 'no direct record vs 2 remaining players' in panel.inner_text()
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
+            assert '1 of 2 remaining players' in panel.inner_text()
+            assert 'no direct record vs 1 remaining player' in panel.inner_text()
+            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('Played')
+            assert '1 of 1 remaining player' in panel.inner_text()
+            assert 'no direct record vs' not in panel.inner_text()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
         finally:
