@@ -15,7 +15,7 @@ The end-user refresh entry points are `FULL_APA_REFRESH.bat` and `QUICK_REFRESH.
 `pipeline.ultimate_coach_refresh`. The workflow captures current authenticated APA division sources into
 private fixtures, replays existing ingestion and scoresheet reconciliation, rebuilds derived data, and
 validates the Ultimate Coach workbook/HTML from one payload before moving a single local current pointer.
-The console confirms Enter receipt and browser closure, validates authentication with APA, and logs every API request and blocking build/validation phase. Long phases print activity every five seconds; STEP 1/8 through STEP 8/8 and REFRESH_STATUS.txt expose progress. Python runs unbuffered.
+The console confirms Enter receipt and browser closure, validates authentication with APA, and logs every API request and blocking build/validation phase. Long phases print activity every five seconds; STEP 1/8 through STEP 8/8 and REFRESH_STATUS.txt expose progress. Python runs unbuffered. A final completion block reports captured fixture counts, unique current-roster teams/players processed, rebuild versus reuse results, output folder and total elapsed time; quick reuse is not described as new database updates.
 Quick mode still checks live content; it reuses only matching dependency and artifact checksums. Outputs,
 database, coverage, source limitations and `REFRESH_STATUS.txt` live under ignored `ultimate-coach-runs/refresh`.
 This does not install a release, promote the production database, publish real data, or refresh every

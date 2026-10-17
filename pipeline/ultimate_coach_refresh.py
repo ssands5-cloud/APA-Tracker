@@ -16,6 +16,7 @@ import shutil
 import sqlite3
 import sys
 import threading
+import time
 import uuid
 
 from pipeline.refresh_progress import progress_span
@@ -198,6 +199,8 @@ def check_database(path):
 def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=None,
                 acquire=acquire_current_sources, workbook_validator=None, html_validator=None,
                 boundary=None, token_loader=None):
+    started = time.monotonic()
+    from pipeline.refresh_summary import completion_counts, completion_summary
     from analytics.ultimate_coach_match_day import load_match_day_settings
     from scheduler.graphql_sync import load_config
     from scripts.repo_boundary import check_output_root
@@ -411,6 +414,7 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                     raise RefreshFailed("source database changed during the refresh")
                 if base and sha256(base) != base_sha:
                     raise RefreshFailed("configured base database changed during the refresh")
+                summary_counts = completion_counts(store, scope)
                 artifacts = {name: sha256(directory / name) for name in (*keys, "ultimate_coach_staging.db")}
                 manifest = {"schema": SCHEMA, "run": directory.name, "mode": mode, "live_sources_checked": live,
                             "checked_at": datetime.now(timezone.utc).isoformat(), "base_sha256": base_sha,
@@ -429,6 +433,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             status("ALL REFRESH TASKS COMPLETE" + (" (OFFLINE VALIDATION)" if not live else ""), required=False)
             status("Workbook: " + str(directory / "Ultimate_Coach.xlsx"), required=False)
             status("HTML: " + str(directory / "ultimate_coach.html"), required=False)
+            status(completion_summary(summary_counts, live=live, data_reused=data_same, reused=reused,
+                                      directory=directory, elapsed=time.monotonic()-started), required=False)
             return manifest
         except BaseException as exc:
             from scripts.refresh_ultimate_coach_current_session import _scrub

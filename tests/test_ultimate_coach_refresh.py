@@ -105,9 +105,14 @@ def test_full_refresh_reaches_database_matchups_trends_workbook_html_and_status(
     text=capsys.readouterr().out
     for message in ('SCRAPE COMPLETE','DATABASE UPDATED','MATCHUPS REBUILT','WORKBOOK REBUILT','HTML REBUILT','ALL REFRESH TASKS COMPLETE'):
         assert message in text
+    assert 'APA REFRESH COMPLETE (OFFLINE VALIDATION)' in text
+    assert 'Fixtures Loaded: 12' in text
+    assert 'Teams Updated: 2' in text and 'Players Updated: 2' in text
+    assert 'Matchups Rebuilt: Yes' in text and 'Workbook Built: Yes' in text and 'HTML Built: Yes' in text
+    assert str(directory) in text and 'Total Time:' in text
 
 
-def test_quick_unchanged_sources_reuse_both_outputs_and_derived_generation(setup,monkeypatch):
+def test_quick_unchanged_sources_reuse_both_outputs_and_derived_generation(setup,monkeypatch,capsys):
     run,root,sources,calls,seed=setup
     first=run();calls.clear()
     monkeypatch.setattr(refresh,'rebuild_database',lambda *a:pytest.fail('unchanged derived data rebuilt'))
@@ -116,6 +121,12 @@ def test_quick_unchanged_sources_reuse_both_outputs_and_derived_generation(setup
     assert calls==[]
     assert set(second['reused'])=={'Ultimate_Coach.xlsx','ultimate_coach.html'}
     assert second['artifacts']==first['artifacts']
+    summary=(root/'REFRESH_STATUS.txt').read_text()
+    assert 'Teams Updated: 0 (2 checked; database reused)' in summary
+    assert 'Players Updated: 0 (2 checked; database reused)' in summary
+    assert 'Matchups Rebuilt: No (up to date; reused)' in summary
+    assert 'Workbook Built: No (up to date; reused)' in summary
+    assert 'HTML Built: No (up to date; reused)' in summary
 
 
 def test_quick_detects_corrected_player_result_when_team_totals_are_unchanged(setup):
@@ -166,6 +177,7 @@ def test_failure_never_replaces_current_complete_bundle(setup,monkeypatch,stage)
     assert (root/'CURRENT.json').read_bytes()==prior
     assert original=={p.name:sha256(p) for p in (root/first['run']).iterdir() if p.is_file()}
     assert 'FAILED AT STEP' in (root/'REFRESH_STATUS.txt').read_text()
+    assert 'APA REFRESH COMPLETE' not in (root/'REFRESH_STATUS.txt').read_text()
     assert not (root/'REFRESH.lock').exists()
 
 

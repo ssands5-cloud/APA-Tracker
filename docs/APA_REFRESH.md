@@ -12,6 +12,8 @@ Each request and blocking build/validation phase prints START, DONE (with elapse
 
 The original login prompt could remain the last visible line during acquisition even though responses were being saved. A real diagnostic login now verified Enter receipt, browser closure and three accepted API requests, including standings. This live handoff check did not rebuild a real database; full/quick/output/recovery acceptance uses isolated synthetic fixtures.
 
+The final APA REFRESH COMPLETE block lists the number of indexed response fixtures, unique current-roster teams and players processed, matchup/workbook/HTML rebuild or reuse results, validation, the exact output folder and total elapsed time (including login). These are processed counts, not a claim that every row changed. Quick mode reports zero teams/players updated when ingestion is skipped and states how many were checked; existing validated outputs are explicitly marked reused. Offline checks say OFFLINE VALIDATION and Fixtures Loaded. The summary appears only after the completed bundle becomes current and is also saved in REFRESH_STATUS.txt.
+
 ## Current and replacement workflows
 
 The old local `run_apa_full_scrape.bat` runs only `scraper/full_auto_scrape.py`. Its `main()` attaches response capture, logs in, visits team/division/match routes, prints SCRAPE COMPLETE, then closes Chromium. `capture_graphql()` writes raw responses beneath `scraper/sanitized_fixtures/`. There is no database ingestion or output build in that script. `scrape_all()` visits at most 12 teams, 12 divisions and 40 discovered matches. The batch file also prints Finished without testing the exit code.
