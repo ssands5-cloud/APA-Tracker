@@ -2,7 +2,19 @@
 
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
-## Status (2026-10-08)
+## Current handoff (2026-10-17)
+
+Paul requested transfer to Claude because GPT usage is nearly exhausted. Start from the primary
+`codex/phase3-captain-audit` tree or current `codex/captain-display-cleanup` builder, with refresh source
+`41a31f0d4d858d4f20fcfbbc3b69163aed6a896d` or its later documentation-only handoff commit.
+The older Claude worktree predates the refresh and has not been overwritten or blindly merged.
+Read CURRENT PRIORITIES / Claude handoff in `docs/overnight_coach_advantage_report.md` for the complete
+source chain, private evidence pointers, test boundaries, remaining live operator verification and gates.
+The local refresh/progress/summary work is delivered. A complete live-data source-to-output run remains
+unclaimed; synthetic end-to-end and actual live login/API checks are distinct. No additional general
+audit or recurring automation is requested. Legacy BAT files and local data remain preserved.
+
+## Historical status (2026-10-08)
 - **PR #83** (`integration/ultimate-coach-pr81-pr82-reconciliation`) is a **DRAFT, not merged, not accepted.**
 - Claude builds. GPT audits: issue #84 is the production readiness sprint, and draft PR #85 holds the audit report.
 - **Visual, native-Excel, print and physical-device acceptance: PENDING PAUL REVIEW.**
