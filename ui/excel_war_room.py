@@ -632,7 +632,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_PkTotal", "Packet evidence lines", "=SUM(wr_OppCount)")
 
     # ---- first by recorded direct results per opponent (ranking order, sendable + remaining) ----
-    e.section("Best-supported sends (per opponent: candidate rows in ranking order)")
+    e.section("Recorded matchup options (per opponent: direct-record order)")
     # Per opponent j, one row per ranked candidate: pid, category, remaining, sendable (ok), running count of
     # sendable rows, evidence group key (MatchupEvidence_Table[Rank Group]), direct (G/E and ok), group number
     # among remaining direct candidates, last group key, and the display label: "1." / "1=" (tied) / "≈"
@@ -752,7 +752,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_UniqueDetails", lambda k, r: _save_targets(k, False)),
         ("wr_NsSaveDetails", lambda k, r: _save_targets(k, True)),
     ])
-    medal = 'H{r}&"."'
+    medal = '"Direct-record order "&H{r}'
 
     def _nm(expr: str, slot: str) -> str:
         # Lookup labels are already unique display names; identity columns are unchanged.
@@ -777,7 +777,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_NsLastKey", lambda k, r: (f'=IF(G{r},F{r},"")' if k == 1 else f'=IF(G{r},F{r},I{r - 1})')),
         ("wr_NsMedalRun", lambda k, r: (f'=IF(G{r},1,0)' if k == 1 else f'=J{r - 1}+IF(G{r},1,0)')),
         ("wr_NsMedalText", lambda k, r: (
-            f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})", f"C{r}")}&" — "&INDEX({ME}[Reason],B{r})'
+            f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})", f"C{r}")}&" — "&SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(INDEX({ME}[Reason],B{r}),"meetings)","MEETINGS)"),"meeting)","MEETING)"),"small sample","SMALL SAMPLE")'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
             f'" · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}),"")'
@@ -795,8 +795,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
-        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ranked direct records among our '
-        'remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
+        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ordered direct records among remaining players; equal evidence stays tied.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
     # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
     # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
@@ -814,8 +813,18 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     # on screen and on paper (real-Excel UAT 0c2e474); one cell keeps the answer contiguous and is sized once.
     for n in range(1, R + 1):
         e.cell(f"wr_NsMedal{n}", f"Next Send medal line {n}", f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
-    e.cell("wr_NsCard", "Next Send answer (one line each)", "=wr_NsHeadline" + "".join(
+    e.cell("wr_NsMethod", "Next Send ordering boundary", '="Not an overall player ranking. Direct-record order uses recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Shared-only comparisons are not ordered."')
+    e.cell("wr_NsCard", "Next Send answer (one line each)", '=IF(wr_NsOpen,wr_NsMethod&CHAR(10),"")&wr_NsHeadline' + "".join(
         f'&IF({x}="","",CHAR(10)&{x})' for x in [f"wr_NsMedal{n}" for n in range(1, R + 1)] + ["wr_NsLists"]))
+
+    # Broader records are context only: never referenced by ranking or eligibility formulas.
+    broader = ('="Not used in this ordering"&CHAR(10)&"Captured team/session records — not a lifetime record."'
+               '&CHAR(10)&"Our roster: "&wr_OurLabel')
+    for k in range(1, R + 1):
+        broader += (f'&IF(INDEX(wr_OurRemaining,{k}),CHAR(10)&INDEX(wr_OurLabels,{k})&": "&INDEX(wr_OurWL,{k}),"")')
+    broader += ('&CHAR(10)&"Opponent roster: "&wr_OppLabel&CHAR(10)&IF(wr_NsJ="","Choose the opponent above.",'
+                'wr_NsInput&": "&INDEX(wr_OppWL,wr_NsJ))&CHAR(10)&"Meeting age, changes in skill level and Coach Observations do not adjust this order. Availability filters candidates; skill-budget checks are separate references. No verified direct/shared comparison means unknown, not weak."')
+    e.cell("wr_NsBroader", "Next Send broader context", broader)
 
     # ---- Lineup Lab metrics ----
     e.section("Lineup Lab metrics")
@@ -2047,8 +2056,8 @@ def _worst_height(text: str, width_units: float, size: float, minimum: float) ->
 
 def _next_send_worst(label: str, roster: int, medals: int) -> str:
     """The longest Next Send answer with `medals` medal lines and the remaining players in the lists."""
-    headline = "Ranked direct records among our remaining players (same evidence = same rank). " + DIRECT_ORDER_NOTE
-    medal = (f"1. {label} — 12-0 direct record (12 meetings) — favorable · tied (same evidence) · consider saving — "
+    headline = "Not an overall player ranking. Direct-record order uses recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Shared-only comparisons are not ordered.\nOrdered direct records among remaining players; equal evidence stays tied."
+    medal = (f"Direct-record order 1 {label} — 12-0 direct record (12 MEETINGS) — favorable · tied (same evidence) · consider saving — "
              "our only favorable direct option vs another unplayed opponent · Meeting opponent SL 1, 2, 3, 4, 5, 6, 7, 8, 9; roster capture SL 9; some meeting SLs not captured · Latest dated meeting: Wed Sep 30, 2026; some meeting dates not captured · availability unknown")
     rest = max(roster - medals, 0)
     lines = [headline] + [medal] * medals
@@ -2273,7 +2282,12 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         ("=wr_NsCard", worst),
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
     ]
-    top = _card(ws, 7, 2, 11, "WHO SHOULD I SEND NEXT?", ns_lines, size=11, line_height=30) + 2
+    top = _card(ws, 7, 2, 11, "NEXT SEND - RECORDED MATCHUP OPTIONS", ns_lines, size=11, line_height=30) + 2
+    broad_worst = ("Not used in this ordering\nCaptured team/session records — not a lifetime record.\nOur roster: "
+                   + _longest_team_label(wb) + "\n" + "\n".join([_longest_label(wb)+": 100-100"] * R)
+                   + "\nOpponent roster: " + _longest_team_label(wb) + "\n" + _longest_label(wb)+": 100-100\n"
+                   + "Meeting age, changes in skill level and Coach Observations do not adjust this order. Availability filters candidates; skill-budget checks are separate references. No verified direct/shared comparison means unknown, not weak.")
+    top = _card(ws, top, 2, 11, "BROADER RECORDS - NOT USED IN THIS ORDERING", [("=wr_NsBroader", broad_worst)], size=11) + 2
     cnt = lambda v: f'COUNTIF(wr_OurAvail,"{v}")'
     _card(ws, top, 2, 4, "MY TEAM", [
         '=IF(wr_OurLabel="","Choose your team on Match Day.",wr_OurLabel)',

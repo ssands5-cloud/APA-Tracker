@@ -2,7 +2,19 @@
 
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
-## Current handoff (2026-10-17)
+## Current presentation boundary update (2026-10-17)
+
+Paul subsequently authorized implementing presentation transparency, while preserving all ranking logic.
+Next Send now identifies recorded matchup options and explains ordering before the list, uses neutral
+Direct-record order labels, emphasizes meeting/sample counts, and shows a separate Not used in this
+ordering section with captured team/session records (not mislabeled lifetime or universal overall records).
+Missing records remain explicit. HTML and Command Center share these boundaries; onboarding copy matches.
+Rank keys, evidence categories, ties, eligibility, availability, shared-only grouping, budget and save rules
+are unchanged. See the ONE report's latest entry for actual browser, formula, table-parity and native checks.
+Use the normal primary QUICK_REFRESH launcher to generate updated files; older generations remain frozen.
+No live recrawl, release publication, legacy cleanup or unrelated audit is implied by this bounded task.
+
+## Previous handoff (2026-10-17)
 
 Paul requested transfer to Claude because GPT usage is nearly exhausted. Start from the primary
 `codex/phase3-captain-audit` tree or current `codex/captain-display-cleanup` builder, with refresh source

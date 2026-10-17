@@ -54,6 +54,10 @@ FULL_APA_REFRESH.bat / QUICK_REFRESH.bat
 
 These are function calls in one coordinator, not scripts the user must remember. The recommendation rules remain the existing engine; recommendations are recomputed in the shared payload and workbook/HTML views, not a separate invented recommendation table.
 
+## Reading Next Send
+
+Next Send presents recorded matchup options, not an overall player ranking. Its explanation appears before the direct-record list. Neutral Direct-record order labels retain the existing order and ties; exact meeting counts and small-sample labels are emphasized. Captured current team/session records appear separately under **Not used in this ordering**, with format/team/session scope and explicit missing-data labels. Those records are not automatically lifetime records. Meeting age, skill-level changes and Coach Observations do not adjust the ordering; availability filters candidates and budget warnings remain separate reference checks. The recommendation algorithm is unchanged. Run the usual refresh to build files with this presentation; an older open generation retains its original presentation.
+
 ## Precisely what is refreshed
 
 Source scope is the signed-in viewer's current dashboard league/tournament divisions: all roster teams, team pages/current statistics, division standings, complete returned schedules (including future matches/byes), and **every scored non-bye scoresheet**. There is no first-N cap and no assumption that unchanged team totals mean unchanged player results. Historical catalog queries establish league context; resolvable numeric members receive the existing league-specific lifetime-stat query. Captured responses are replayed through the existing normalizers and reconciliation.

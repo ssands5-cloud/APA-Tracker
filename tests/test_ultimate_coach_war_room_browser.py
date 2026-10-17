@@ -528,8 +528,11 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             card = page.locator("#tonight #next-send")
             text = card.inner_text()
             # "If they put up:" until the captain taps the opponent they actually sent (BLIND-01 #4).
-            assert "WHO SHOULD I SEND NEXT?" in text.upper() and "they put up:" in text.lower()
-            assert "1. Ann Archer (player 1 of 2) — 2-0 direct record (2 meetings)" in text   # the medal line is the answer
+            assert "NEXT SEND — OPTIONS AGAINST" in text.upper() and "they put up:" in text.lower()
+            first=card.locator(".ns-medal").first
+            assert first.locator(".ns-m").inner_text()=="Direct-record order 1"
+            assert first.locator(".ns-sample").inner_text()=="2 meetings · small sample"
+            assert "Ann Archer (player 1 of 2)" in first.inner_text() and "2-0 direct record (2 meetings)" in first.inner_text()
             assert text.count("availability unknown") == 2                     # said at the action, still eligible
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
             assert page.locator("#next-send .ns-medal").nth(0).inner_text().count("availability unknown") == 0

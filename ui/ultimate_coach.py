@@ -167,7 +167,13 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-head { margin:2px 0; font-size:15px; }
 .ns-list { list-style:none; margin:0; padding:0; font-size:13px; }
 .ns-list li { padding:3px 6px; border-left:4px solid transparent; margin:2px 0; }
-.ns-m { font-size:16px; }
+.ns-m { display:block; font-size:12px; font-weight:600; }
+.ns-method { padding:10px; margin:8px 0; border:1px solid #6c7b70; background:#f3f6f2; color:#24372b; font-size:13px; }
+.ns-sample { display:inline-block; padding:3px 6px; margin:4px 0; border:1px solid #88733d; background:#fff8e8; color:#513c13; }
+.ns-broader { border-top:1px solid #758478; margin-top:12px; padding-top:8px; font-size:13px; }
+.ns-broader h4 { font-size:14px; margin:4px 0; }
+.ns-broader p { margin:6px 0; }
+.ns-broader ul { padding-left:20px; }
 .ns-list li.ns-medal { display:flex; align-items:center; gap:6px; } .ns-why { flex:1; min-width:0; }
 .ns-avail { color:#6b4d00; font-style:italic; }
 .ns-save { color:#7a4b00; font-weight:700; }

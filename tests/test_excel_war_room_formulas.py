@@ -542,31 +542,35 @@ def _next_send(book):
 
 
 def test_command_center_next_send_answers_the_player_they_put_up(book, built):
-    # NAME-DISPLAY-01: Next Send names carry no APA record ID.
     ANN_N, BEA_N, DEE_N = (x.split(" (APA record ID")[0] for x in (ANN, BEA, DEE))
-    assert book.display("Command Center", "B6") == "They put up:" and book.display("Command Center", "B7") == "WHO SHOULD I SEND NEXT?"
+    assert book.display("Command Center", "B6") == "They put up:"
+    assert book.display("Command Center", "B7") == "NEXT SEND - RECORDED MATCHUP OPTIONS"
     assert _next_send(book) == ["Pick the opponent player they put up (cell C6)."]
     book.set("Command Center", "C6", CAM)
-    assert _next_send(book) == [
-        "Ranked direct records among our remaining players (same evidence = same rank). Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
-        f"1. {ANN_N} — 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
-        f"2. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
+    lines=_next_send(book)
+    assert lines[0].startswith("Not an overall player ranking.")
+    assert lines[1] == "Ordered direct records among remaining players; equal evidence stays tied."
+    assert lines[2:] == [
+        f"Direct-record order 1 {ANN_N} — 2-0 direct record (2 MEETINGS) — favorable · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
+        f"Direct-record order 2 {DEE_N} — 1-1 direct record (2 MEETINGS) — even · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
         f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
     ]
-    book.set("Command Center", "C6", EVE)        # shared-opponent only: never medalled
-    assert _next_send(book) == [
+    book.set("Command Center", "C6", EVE)
+    assert _next_send(book)[0]==lines[0]
+    assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
         f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
         f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings)",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
     book.set("Command Center", "C6", CAM)
-    book.set(LL, "C12", "Unavailable")           # Ann out: Dee is the only medal left
-    assert _next_send(book)[1:] == [f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
-                                    f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)"]
-    book.set(LL, "C14", "Available")             # Dee marked Available: the caveat goes, nothing else changes
-    assert _next_send(book)[1] == f"1. {DEE_N} — 1-1 direct record (2 meetings) — even · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026"
-    book.set(LL, "C23", "Played")                # Cam already played
+    book.set(LL, "C12", "Unavailable")
+    ranked=[x for x in _next_send(book) if x.startswith('Direct-record order')]
+    assert len(ranked)==1 and ranked[0].startswith(f'Direct-record order 1 {DEE_N}')
+    assert 'Ann Archer' not in book.value('Engine',book.name('wr_NsBroader').ref)
+    book.set(LL, "C14", "Available")
+    assert 'availability unknown' not in [x for x in _next_send(book) if x.startswith('Direct-record order')][0]
+    book.set(LL, "C23", "Played")
     assert _next_send(book) == [f"{CAM} has already played (Lineup Lab)."]
 
 
@@ -579,8 +583,8 @@ def test_next_send_lists_every_rank_and_tells_same_name_teammates_apart_without_
     lines = _next_send(crowd)
     text = "\n".join(lines)
     assert "APA record ID" not in text.split("⚠")[0]
-    ranked = [x for x in lines if x[:2] in ("1.", "2.", "3.", "4.")]
-    heads = [x.split(" — ")[0] for x in ranked]
+    ranked = [x for x in lines if x.startswith("Direct-record order ")]
+    heads = [x.split(" — ")[0].replace("Direct-record order ", "", 1).replace(" ", ". ", 1) for x in ranked]
     assert heads[:3] == ["1. Ann Archer (SL 5)", "2. Ann Archer (SL 4)", "3. Gil Gray"], heads
     assert sorted(heads[3:]) == ["4. Dee Diaz", "4. Fay Fox"], heads      # tied fourth group, past the medals
 
@@ -1258,7 +1262,7 @@ def test_invalid_meeting_sl_exports_as_unknown_in_answer_and_quick_read(tmp_path
     book=Workbook(load_workbook(path));book.set("Command Center","C6",CAM)
     assert "Meeting opponent SL not captured" in "\n".join(_next_send(book))
     assert "Meeting opponent SL not captured" in book.display(SC,"C7")
-    assert _next_send(book)[1].startswith("1. Ann Archer")
+    assert [x for x in _next_send(book) if x.startswith("Direct-record order")][0].startswith("Direct-record order 1 Ann Archer")
 
 
 def test_next_send_selected_opponent_wraps_without_hiding_the_name(tmp_path):
@@ -1278,7 +1282,7 @@ def test_next_send_selected_opponent_wraps_without_hiding_the_name(tmp_path):
     book = Workbook(wb)
     book.set("Command Center", "C6", name)
     assert book.value("Engine", book.name("wr_NsJ").ref) == 1
-    assert _next_send(book)[1].startswith("1. Ann Archer")
+    assert [x for x in _next_send(book) if x.startswith("Direct-record order")][0].startswith("Direct-record order 1 Ann Archer")
 
 def test_lineup_selected_context_wraps_and_keeps_the_fixture_visible(built):
     from ui.excel_war_room import _longest_plan_key, _longest_team_label, _worst_height

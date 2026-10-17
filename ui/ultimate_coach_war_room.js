@@ -686,13 +686,23 @@
     if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
   }
 
-  function wrNextSendCard(w,plan,ta){
+  function wrBroaderRecords(w,plan,ta,tb,opp){
+    var record=function(m){return wrKnown(m.matches_won)&&wrKnown(m.matches_played)?wlText(m.matches_won,m.matches_played):"Not captured";};
+    var scope=function(t){return t?t.name+" · "+(t.session_name||"session not captured")+" · "+fmtLabel(w.format):"Roster scope not captured · "+fmtLabel(w.format);};
+    return '<section class="ns-broader"><h4>Broader records — Not used in this ordering</h4>'
+      +'<p>Captured team/session record — not a lifetime record. These records do not adjust the direct-record order.</p>'
+      +'<p><b>Our roster:</b> '+esc(scope(ta))+'</p><ul>'+w.ours.filter(function(m){return plan.rem[String(m.id)];}).map(function(m){var row=w.blocks.filter(function(b){return b.opponent.id===opp.id;})[0].rows.filter(function(r){return r.member.id===m.id;})[0];return '<li>'+esc(wrDisplayName(m,w.ours))+': <b>'+esc(record(m))+'</b>'+(row.c.direct?'':' · no verified direct meetings')+'</li>';}).join("")+'</ul>'
+      +'<p><b>Selected opponent:</b> '+esc(scope(tb))+'</p><p>'+esc(wrDisplayName(opp,w.theirs))+': <b>'+esc(record(opp))+'</b></p>'
+      +'<p>Meeting age, changes in skill level and Coach Observations do not adjust this order. Availability filters the list; skill-budget warnings are separate reference checks.</p></section>';
+  }
+
+  function wrNextSendCard(w,plan,ta,tb){
     // An explicit put-up belongs to this fixture/format, not the next view of the same roster.
     var selectionScope=plan.ck+"||"+w.format;
     if(WR_STATE.nextScope!==selectionScope){WR_STATE.next=null;WR_STATE.nextScope=selectionScope;}
     var budgetScope=wrBudgetScope(w,plan,ta);
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
-    if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
+    if(!open.length) return '<div id="next-send" class="next-send"><h3>Next Send — recorded matchup options</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
     // Nobody has been put up yet: the panel still has to show something, but it must not read as
     // though they HAVE sent this player. Say it is a possibility until the captain taps a chip
@@ -703,17 +713,18 @@
     // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
     var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
-    return '<div id="next-send" class="next-send" tabindex="-1"><h3>Who should I send next?</h3>'
+    return '<div id="next-send" class="next-send" tabindex="-1"><h3>Next Send — options against '+esc(wrDisplayName(opp,w.theirs))+'</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
+      +'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. Small samples do not reduce position. Equal evidence stays tied.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
-        return li("ns-medal cat-border-"+m.category+(m.save?" ns-with-save":""),'<span class="ns-why"><span class="ns-m">'+esc(m.choice_number+".")+'</span> <b>'+esc(m.display)+'</b> — '+esc(m.reason)
+        var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
+        return li("ns-medal cat-border-"+m.category+(m.save?" ns-with-save":""),'<span class="ns-why"><span class="ns-m">'+esc("Direct-record order "+m.choice_number)+'</span> <b>'+esc(m.display)+'</b> <strong class="ns-sample">'+esc(plural(evidence.g,"meeting")+(evidence.g<3?" · small sample":""))+'</strong> — '+esc(m.reason)
         +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m)+avail(m.member)
-        +(i===0?' <span class="ns-order-note muted">'+esc(WR_DIRECT_ORDER_NOTE)+'</span>':'')
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(wrDisplayName(opp,w.theirs))+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
@@ -729,6 +740,7 @@
         if(ns.unknown.length) sum.push("❓ "+ns.unknown.length+" unknown");
         return '</ul><details class="ns-more"><summary>'+esc(sum.join(" · "))+'</summary><ul class="ns-list">'+unord+rest+'</ul></details>';
       })()
+      +wrBroaderRecords(w,plan,ta,tb,opp)
       +wrNoteFlagSlot(opp.id,"preview","your opinion, not APA facts","div","ns-coach")
       +'</div>';
   }
@@ -774,7 +786,7 @@
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
       +wrBlindSendCard(w,plan,ta)
-      +wrNextSendCard(w,plan,ta)
+      +wrNextSendCard(w,plan,ta,tb)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
       +'<div class="decide-threats"><b>Dangerous vs remaining roster</b>'+(plan.threats.length?plan.threats.slice(0,3).map(function(t){return '<span'+(t.unknown?' class="unknown"':'')+'>'+esc(t.short)+'</span>'+wrNoteFlagSlot(t.opponent.id,"preview","opinion");}).join(''):'<span>None with a winning recorded record vs us</span>')+(plan.threats.length>3?'<a href="#wr-risks" style="display:inline-flex;align-items:center;min-height:44px">View all '+plan.threats.length+' flagged opponents ('+(plan.threats.length-3)+' more)</a>':'')+'</div>'
