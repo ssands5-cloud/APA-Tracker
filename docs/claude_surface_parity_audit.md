@@ -9,6 +9,22 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Audit of cc10c66 (2026-10-17) — NOT A PASS
+
+The parity, Next Send and workbook formula suites passed 96 of 96 on a clean detached checkout of cc10c66.
+
+- **P3 closed.** The workbook Command Center has a "Deeper record context" card, and each Packet options
+  line has "Deeper direct records — more meetings, not a new order". Both use the phone's
+  `wrNextSendEvidence` rule:
+  - it fires only when the first favorable or even direct option has 1–2 meetings;
+  - it lists remaining players with more direct meetings, in existing order;
+  - the opponent must be unplayed.
+- The test reads the displayed Packet and Command Center text for 1-0 against 9-1 and 8-2, and checks
+  that an Unavailable mark removes the deeper row.
+- Cosmetic only: for a losing deeper record the phone says "concerning" and the Packet and workbook say
+  "recorded loss".
+- **Still open:** P4 skill-cap warning, and T1–T4. See the b00eb79 entry. **Next in priority: P4.**
+
 ## Audit of e328d37 (2026-10-17) — NOT A PASS
 
 The parity, Next Send and workbook formula suites passed 95 of 95 on a clean detached checkout of e328d37.
