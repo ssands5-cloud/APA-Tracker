@@ -3125,3 +3125,140 @@ def test_sent_pair_is_not_partly_saved_when_only_one_mark_fits(tmp_path, width):
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width,gesture", [(390, 'click'), (1280, 'click'), (390, 'tap')])
+@pytest.mark.parametrize("action", ['choose', 'sent'])
+def test_first_action_after_cap_edit_is_not_swallowed(tmp_path, width, gesture, action):
+    path = tmp_path / 'cap-first-action.html'
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width': width, 'height': 844}, has_touch=gesture == 'tap')
+            errors = []
+            page.on('pageerror', lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            cap = page.locator('#ll-cap')
+            cap.fill('23')
+            assert cap.evaluate('e=>e===document.activeElement')
+            target = (page.locator('#next-send .ns-chip').nth(1) if action == 'choose'
+                      else page.locator('#next-send [data-send-our]').first)
+            own = target.get_attribute('data-send-our')
+            opponent = target.get_attribute('data-next' if action == 'choose' else 'data-send-opp')
+            target.scroll_into_view_if_needed()
+            box = target.bounding_box()
+            x, y = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
+            if gesture == 'tap':
+                page.touchscreen.tap(x, y)
+            else:
+                page.mouse.click(x, y)
+            if action == 'choose':
+                assert page.locator('#next-send .ns-ask').inner_text() == 'They put up:', "the cap blur must not swallow the captain's opponent choice"
+                assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == opponent
+            else:
+                assert page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').input_value() == 'Played', 'the first Sent action must register after cap blur'
+                assert page.locator(f'#lineup-lab input[data-plan="played"][data-pid="{opponent}"]').is_checked()
+            assert page.locator('#ll-cap').input_value() == '23'
+            assert 'Reference budget 23' in page.locator('.lineup-budget').text_content()
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            page.reload()
+            assert page.locator('#ll-cap').input_value() == '23'
+            if action == 'sent':
+                assert page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').input_value() == 'Played'
+                assert page.locator(f'#lineup-lab input[data-plan="played"][data-pid="{opponent}"]').is_checked()
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_cap_updates_live_without_resetting_controls_and_matches_full_render(tmp_path, width):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({'width': width, 'height': 844})
+            chip = page.locator('#next-send .ns-chip').nth(1)
+            opponent = chip.get_attribute('data-next')
+            chip.click()
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            order = page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>e.dataset.sendOur)')
+            snapshot = """() => ({line:Array.from(document.querySelectorAll('.lineup-budget')).map(e=>e.textContent), blind:Array.from(document.querySelectorAll('.blind-send .ns-budget')).map(e=>e.textContent), choices:Array.from(document.querySelectorAll('#next-send .ns-medal')).map(e=>Array.from(e.querySelectorAll('.ns-budget')).map(x=>x.textContent)), scope:Array.from(document.querySelectorAll('#next-send .ns-budget-scope')).map(e=>e.textContent), facts:document.querySelector('#lineup-lab .matchup-facts').textContent})"""
+            for value in ('1', '23', ''):
+                cap = page.locator('#ll-cap')
+                page.evaluate("window.__capControls = Array.from(document.querySelectorAll('#ll-cap, #next-send button'))")
+                cap.fill(value)
+                assert cap.evaluate('e=>e===document.activeElement'), 'editing the cap must retain typing focus'
+                assert page.evaluate('window.__capControls.every(e=>e.isConnected)'), 'cap edits must retain existing input and action controls'
+                if value:
+                    assert 'Reference budget ' + value in page.locator('.lineup-budget').text_content(), 'budget displays must update while typing, before a blur can swallow a click'
+                else:
+                    assert page.locator('.lineup-budget, .ns-budget, .ns-budget-scope').count() == 0
+                assert page.locator('#next-send .ns-ask').inner_text() == 'They put up:'
+                assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == opponent
+                assert page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>e.dataset.sendOur)') == order
+                immediate = page.evaluate(snapshot)
+                page.reload()
+                page.locator(f'#next-send .ns-chip[data-next="{opponent}"]').click()
+                assert page.evaluate(snapshot) == immediate, 'live cap patch must match a complete render from the saved plan'
+                assert page.locator('#ll-cap').input_value() == value
+                assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+                assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("failure", ['quota', 'stale', 'read'])
+def test_live_cap_edit_preserves_saved_plan_when_saving_is_blocked(tmp_path, width, failure):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            page.set_viewport_size({'width': width, 'height': 844})
+            page.locator('textarea.plan').first.fill('SYNTHETIC retained observation')
+            saved = page.evaluate("""failure => {
+                const key='ultimate-coach:plan-v2', read=Storage.prototype.getItem, write=Storage.prototype.setItem;
+                window.__readCapPlan=()=>read.call(localStorage,key);
+                if(failure==='stale') {
+                    const newer=JSON.parse(read.call(localStorage,key));
+                    newer.coach['11']={n:'SYNTHETIC newer observation'};
+                    write.call(localStorage,key,JSON.stringify(newer));
+                } else if(failure==='quota') {
+                    Storage.prototype.setItem=function(k,v) {
+                        if(k===key) throw new DOMException('SYNTHETIC quota','QuotaExceededError');
+                        return write.call(this,k,v);
+                    };
+                } else {
+                    Storage.prototype.getItem=function(k) {
+                        if(k===key) throw new DOMException('SYNTHETIC read failure','SecurityError');
+                        return read.call(this,k);
+                    };
+                }
+                return window.__readCapPlan();
+            }""", failure)
+            page.locator('#ll-cap').fill('23')
+            assert page.locator('#ll-cap').evaluate('e=>e===document.activeElement')
+            assert 'Reference budget 23' in page.locator('.lineup-budget').text_content()
+            assert page.evaluate('window.__readCapPlan()') == saved
+            for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
+                assert page.locator(section + ' .wr-storage-warning').first.is_visible()
+            assert page.locator('#scouting-cards .wr-storage-warning').count() == page.locator('textarea.plan').count()
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            page.reload()
+            assert page.locator('#ll-cap').input_value() == ''
+            assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC retained observation'
+            if failure == 'stale':
+                assert page.locator('textarea.plan[data-pid="11"]').input_value() == 'SYNTHETIC newer observation'
+            page.locator('#ll-cap').fill('24')
+            assert page.locator('.wr-storage-warning').count() == 0
+            page.reload()
+            assert page.locator('#ll-cap').input_value() == '24'
+            assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC retained observation'
+            assert errors == []
+        finally:
+            browser.close()

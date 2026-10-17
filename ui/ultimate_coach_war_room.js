@@ -641,13 +641,39 @@
     return text?'<span class="ns-budget'+(bad?' bad':'')+'">'+esc(text)+'</span>':"";
   }
 
+  function wrBudgetScope(w,plan,ta){
+    var budget=wrLineupBudget(w,plan,ta,null);
+    return budget&&budget.slots&&(budget.unknown||budget.feasible===null)
+      ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.</p>':"";
+  }
+
+  // Update cap-dependent text while typing, without replacing the focused input or action buttons.
+  function wrPatchBudget(w,plan,ta){
+    var tonight=document.getElementById("tonight"),lab=document.getElementById("lineup-lab");
+    if(tonight){
+      Array.prototype.forEach.call(tonight.querySelectorAll(".lineup-budget,.ns-budget,.ns-budget-scope"),function(el){el.remove();});
+      var blind=tonight.querySelector(".blind-send"),pick=wrBlindSend(w,plan);
+      if(blind&&pick){
+        blind.insertAdjacentHTML("afterend",wrBudgetLine(w,plan,ta,pick.member?pick.member.id:null));
+        if(pick.member) blind.querySelector(".bs-name").insertAdjacentHTML("afterend",wrCandidateBudget(w,plan,ta,pick.member));
+      }
+      var list=tonight.querySelector("#next-send .ns-list");
+      if(list) list.insertAdjacentHTML("beforebegin",wrBudgetScope(w,plan,ta));
+      Array.prototype.forEach.call(tonight.querySelectorAll("#next-send .ns-medal"),function(row){
+        var send=row.querySelector("[data-send-our]"),why=row.querySelector(".ns-why");
+        if(!send||!why) return;
+        w.ours.forEach(function(m){if(String(m.id)===send.getAttribute("data-send-our")) why.insertAdjacentHTML("beforeend",wrCandidateBudget(w,plan,ta,m));});
+      });
+    }
+    var facts=lab&&lab.querySelector(".matchup-facts");
+    if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
+  }
+
   function wrNextSendCard(w,plan,ta){
     // An explicit put-up belongs to this fixture/format, not the next view of the same roster.
     var selectionScope=plan.ck+"||"+w.format;
     if(WR_STATE.nextScope!==selectionScope){WR_STATE.next=null;WR_STATE.nextScope=selectionScope;}
-    var budget=wrLineupBudget(w,plan,ta,null);
-    var budgetScope=budget&&budget.slots&&(budget.unknown||budget.feasible===null)
-      ?'<p class="ns-budget-scope muted">Entered skill-budget check incomplete — missing skill levels or remaining players. No choice is cleared; check manually.</p>':"";
+    var budgetScope=wrBudgetScope(w,plan,ta);
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     if(!open.length) return '<div id="next-send" class="next-send"><h3>Who should I send next?</h3><p class="muted">Every opponent has played.</p></div>';
     var sel=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0];
@@ -907,7 +933,6 @@
     function current(){return {ta:TEAM_INDEX[TA.value],tb:TEAM_INDEX[TB.value]};}
     root.addEventListener("change",function(ev){
       var t=ev.target,k=t&&t.getAttribute&&t.getAttribute("data-plan"),cur=current();
-      if(t&&t.id==="ll-cap"&&cur.ta){var v=parseFloat(t.value);if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];wrSave();renderTeamMatchups();return;}
       if((k==="tag1"||k==="tag2")&&t.getAttribute("data-pid")){
         wrSetCoach(t.getAttribute("data-pid"),k==="tag1"?"t1":"t2",t.value);
         wrPatchCoachObservation(t.getAttribute("data-pid"));
@@ -924,6 +949,16 @@
     });
     root.addEventListener("input",function(ev){
       var t=ev.target,cur=current();
+      if(t&&t.id==="ll-cap"&&cur.ta){
+        var v=parseFloat(t.value);
+        if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];
+        wrSave();
+        if(cur.tb&&cur.ta.players.length&&cur.tb.players.length){
+          var w=warRoomPair(cur.ta,cur.tb,TF.value);
+          wrPatchBudget(w,wrPlan(w,cur.ta,cur.tb),cur.ta);
+        }
+        return;
+      }
       if(!t||!t.getAttribute||t.getAttribute("data-plan")!=="note"||!cur.tb) return;
       var npid=t.getAttribute("data-pid");
       wrSetCoach(npid,"n",t.value);
