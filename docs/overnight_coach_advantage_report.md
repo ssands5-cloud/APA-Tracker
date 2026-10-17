@@ -1,5 +1,11 @@
 # CURRENT PRIORITIES
 
+**OWNER PROJECT COMPLETION TASK - unified Ultimate Coach refresh, implementation in progress.** Source investigation confirms that the local scraper launcher ends at JSON fixtures, the generic pipeline builds older exports, and the existing game-night launcher builds Coach Cockpit rather than the Ultimate Coach workbook/HTML pair. The reviewed Ultimate Coach current-session reconcile refresh, Excel builder and HTML builder are separate commands. The read-only production candidate and final-UAT helper do not acquire fresh data. No currently verified command connects all required stages.
+
+**Current workflow:** capture -> stop; or database refresh -> stop; or build existing DB -> outputs. **Proposed workflow:** FULL_APA_REFRESH.bat / QUICK_REFRESH.bat -> shared interpreter launcher -> pipeline/ultimate_coach_refresh.py -> authenticated APA GraphQL capture into private fixtures -> existing division/identity/scoresheet ingestion and authoritative reconciliation from those fixtures -> existing matchup/trend rebuilds -> one verified payload -> Ultimate Coach workbook and HTML -> workbook/browser/data validations -> one immutable local bundle and current-status pointer. Quick mode still checks live source content, then uses content/settings/code/output checksums to avoid unaffected derived rebuilds. It must not infer unchanged scoresheets from unchanged team totals. No ranking/identity/eligibility/model change, outside-repository paths, unapproved production promotion, public data publication or automatic legacy deletion. Current data scope and retained historical coverage must be explicit; complete execution is not universal APA data completeness.
+
+**Exact planned files:** FULL_APA_REFRESH.bat, QUICK_REFRESH.bat, tools/launch_apa_refresh.bat, pipeline/ultimate_coach_refresh.py, pipeline/refresh_sources.py, pipeline/refresh_workbook.py, and focused refresh tests. An opt-in fixture provider at the existing auth/graphql_client.py transport boundary will allow the existing ingestion path to consume saved responses without network on replay; its default behavior stays unchanged. The shared source data and recommendation engines remain authoritative. Outputs and private status/checkpoint/source evidence stay in ignored local run directories; the ONE report remains the sole prose project report.
+
 **Latest source b18972f - inspect the meetings behind a future-save warning without changing the put-up.** Continued Next Send refinement found that the preservation warning named a future opponent and record, but a captain had to separately locate that pairing in the matrix to inspect its dates and meeting skill levels. A future matchup is not tonight's selected put-up, so using the opponent-choice chip to investigate can also change the active response question.
 
 Each existing future target in a ranked or shared-evidence candidate's warning now opens that exact pairing in the existing matrix evidence inspector. The control retains the existing distinguishing name, record, meeting count and small-sample caution. A touch-sized return takes the captain back to Next Send. Inspection moves focus to the evidence; return moves focus back to the decision panel. Neither action chooses a put-up, records a send, writes planning storage or changes evidence. Unknown availability, unavailable/Played filtering, count rules, candidate IDs/order, strategic warnings, budgets, notes, keys and schemas are unchanged. Plain Next Send lines still agree with the existing Python output; no ranking/probability/confidence model or policy change.
@@ -435,6 +441,8 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Rebound XLSX/HTML hashes independently match recorded bindings. Source privacy closures and unchanged verified cases remain preserved.
 
 # OPEN ISSUES
+
+- Owner-requested unified full/quick refresh implementation is active. Do not mark it complete from the existence of launchers alone: prove live-source change detection, fixture ingestion, corrections/removals, one-source workbook/HTML parity, negative stages, no-op quick runs and preservation of the previous successful bundle. Live end-to-end acceptance must be distinguished from mocked acquisition and offline/native/browser execution.
 
 - Active solo refinement: storage 85ece1b, coach-tag 0a1b665, matrix-status c712de3, history-scope ad51884, put-up-context 470862e, scouting-layout 33c1027, stale-save f6df057, Sent-pair a72b1fb, cap-edit interaction 911db06, Blind Send count-tie be6e964, live-threat coverage 7df9d6a and future-save inspection b18972f refinements have no known failed check in their bounded scopes. Continue meaningful unanswered captain questions and fresh failures in the authorized feature order. Prior recency, threat access/scope, save identity, Quick Read and preview closures remain verified. No Claude dependency or universal project stopping-condition claim.
 
@@ -3115,6 +3123,18 @@ This table retains the existing acceptance IDs and the precise boundaries of ver
 Claude reports PRINT-01 estimates and a PARITY-01 record oracle in 35f6ff8, and documents skill use in integration report df98ef1. Current design 574edaa addresses choosing first without a known opponent; engine/UI implementation is progressing locally. Those are builder claims, not independent closure. Integration report current sections must point here rather than maintain another living status list; builder responses and assumptions belong in this report. Preserve named verified samples and continue decision-support work.
 
 # PENDING PAUL REVIEW
+
+**Legacy launcher review - documented before implementation; no files deleted or renamed.** Inventory covered the canonical root and tracked review checkout (excluding generated environments/test output). Recommendations:
+
+| Existing launcher | Recommendation | Source evidence / purpose |
+|---|---|---|
+| run_apa_full_scrape.bat (machine-local) | RENAME to CAPTURE_APA_FIXTURES_ONLY.bat after the replacement is accepted | Its only Python call is scraper/full_auto_scrape.py; the Finished message does not check its exit status. It is not a complete refresh. Preserve the current local file. |
+| Refresh_APA_Cockpit.bat | KEEP as the explicitly named older Coach Cockpit launcher; distinguish it from Ultimate Coach | Calls tools/capture_apa_graphql.py --game-night -> scripts/run_game_night.py; different exports and production-promotion behavior. |
+| run_demo.bat (machine-local) | RENAME to BUILD_DEMO_ONLY.bat if retained | Builds synthetic demo DB/HTML and opens exports/demo_dashboard.html; does not fetch APA. Contains a machine-specific repository path. |
+| run_full_demo.bat (machine-local) | REMOVE only after owner review / equivalent demo replacement | Duplicates run_demo.bat and adds a bare build_data_coverage.py invocation despite that builder requiring a matchup scope. Its own banner says No Scrape. Preserve until separately authorized. |
+| fullscrape.bat | No action - not found in the inspected repository inventory | Do not invent a launcher or infer a separate desktop file's behavior. |
+
+The two new requested launchers are the intended end-user refresh entry points. This review is a recommendation, not authorization to delete or modify the protected local launcher files. Source evidence: run_apa_full_scrape.bat; Refresh_APA_Cockpit.bat; the local demo launchers; pipeline_run_all.py; pipeline/exports.py; tools/capture_apa_graphql.py; scripts/refresh_ultimate_coach_current_session.py; scripts/build_ultimate_coach_excel.py; scripts/build_ultimate_coach_html.py; tools/build_ultimate_coach_final_uat.ps1.
 
 - Optional display preference: storage failures use an amber warning beside decisions and note editors. Executed phone/desktop renders are readable; preference does not block technical continuation. Solo creator/auditor work is authorized while Paul is away.
 
