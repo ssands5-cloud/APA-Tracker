@@ -123,7 +123,7 @@ def test_concerning_pairings_and_threats_are_factual_and_unknown_is_not_weak():
 def test_scouting_card_shows_records_by_opponent_skill_level_without_judgement():
     opal = _war_room()["cards"][0]
     assert opal["team_record"] == "7-2 (this team, Fall 2026)"
-    assert opal["by_sl"] == "vs SL4 0-1 · vs SL5 1-0"
+    assert opal["by_sl"] == "vs SL4 0-1 (1 meeting, small sample) · vs SL5 1-0 (1 meeting, small sample)"
     assert opal["winning_sl"] == "SL5 (1-0, 1 meeting, small sample)" and opal["losing_sl"] == "SL4 (0-1, 1 meeting, small sample)"
     assert opal["lifetime"] == "No career stats captured"
 
@@ -292,7 +292,7 @@ def test_send_labels_number_by_evidence_group_and_never_number_shared_only():
     wr = war_room_pair(ours, theirs, index, "EIGHT")
     xan = [r for r in wr["blocks"][0]["rows"] if r["category"] in ("G", "E", "I")]
     assert send_labels(xan) == ["1=", "1=", "2.", "3.", "4."]
-    assert send_list_text(xan).startswith("1= Ann — 2-0 (2) · 1= Bo — 2-0 (2) · 2. Di")
+    assert send_list_text(xan).startswith("1= Ann — 2-0 (2 meetings) · SMALL SAMPLE · 1= Bo — 2-0 (2 meetings) · SMALL SAMPLE · 2. Di")
     assert best_send_text(xan).startswith("first by recorded direct results (tied with 1 other, same evidence): Ann")
     assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("first by recorded direct results: Ann")
     yul = [r for r in wr["blocks"][1]["rows"] if r["category"] in ("G", "E", "I")]

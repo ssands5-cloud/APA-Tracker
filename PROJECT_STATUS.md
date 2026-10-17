@@ -2,6 +2,16 @@
 
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
+## Cross-surface parity in progress (2026-10-17)
+
+Loss cautions now share the existing Top Risks net-loss/meeting order across outputs; favorable,
+even and shared-only sends retain their order. Workbook/Packet live threat flags follow the phone's
+remaining-player and unplayed-opponent scope. Historical-only evidence is explicitly unknown, not
+cleared. Full-roster Scouting/Quick Read are labeled historical; Packet preview limits and separate
+phone/workbook marks are disclosed. Native Excel and focused browser/formula evidence is recorded
+in the ONE report. Other owner-listed paper-warning findings remain in progress; no final auditor
+clearance, primary installation or release is implied.
+
 ## Current evidence-strength presentation sprint (2026-10-17)
 
 The HTML Next Send headline now names the existing first direct-record group with record, meeting

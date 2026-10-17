@@ -72,7 +72,8 @@ from analytics.ultimate_coach_war_room import (
 )
 
 ME_COLUMNS = ["Key", "Rank", "Player", "SL", "Direct Record", "Shared-Opponent Evidence", "Basis", "Rows",
-              "Player ID", "Category", "Cell", "Reason", "Captain Cell", "Rank Group", "Save Record"]
+              "Player ID", "Category", "Cell", "Reason", "Captain Cell", "Rank Group", "Save Record",
+              "Direct Wins", "Direct Games"]
 TC_COLUMNS = [
     "Pair Key", "Format", "Our Team", "Opponent Team", "Our Rostered", "Opp Rostered", "Our Captured SL",
     "Opp Captured SL", "Our SL Total", "Opp SL Total", "Our Games", "Opp Games", "Our No-Game Players",
@@ -153,13 +154,14 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             me_rows.append([f"{key}|{j}", "vs", block["opponent_label"], base._sl_display(block["opponent"]),
                             block["opponent_sample"], "—", block["note"], len(block["rows"]),
-                            block["opponent"]["id"], "—", "—", "—", "—", "—", "—"])
+                            block["opponent"]["id"], "—", "—", "—", "—", "—", "—", 0, 0])
             for row in block["rows"]:
                 me_rows.append([None, row["rank"], row["player"], base._sl_display(row["member"]), row["direct_text"],
                                 row["shared_text"], row["basis"], row["position"], row["member"]["id"],
                                 row["category"], row["cell"], row["reason"], row["captain"],
                                 # Next Send medals: players with the same evidence share a rank group (and a medal).
-                                int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—", save_record_text(row)])
+                                int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—", save_record_text(row),
+                                row["direct"][0] if row["direct"] else 0, row["direct"][1] if row["direct"] else 0])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -676,7 +678,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         rng, m = send_rng[k], f"MATCH({n},{send_rng[k]['run']},0)"
         row = f"INDEX(wr_OppStart,{k})+{m}"
         return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR(INDEX({rng["lbl"]},{m})&" "&'
-                f'INDEX(MatchupEvidence_Table[Player],{row})&" — "&INDEX(MatchupEvidence_Table[Cell],{row}),""))')
+                f'INDEX(MatchupEvidence_Table[Player],{row})&" — "&IF(INDEX(MatchupEvidence_Table[Direct Games],{row})>0,'
+                f'INDEX(MatchupEvidence_Table[Direct Record],{row})&IF(INDEX(MatchupEvidence_Table[Direct Games],{row})<3," · SMALL SAMPLE",""),'
+                f'INDEX(MatchupEvidence_Table[Cell],{row})),""))')
 
     def best_text(k: int) -> str:
         rng, m = send_rng[k], f"MATCH(1,{send_rng[k]['run']},0)"
@@ -703,6 +707,59 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ("wr_ThreatOk", lambda k, r: f'=IF(B{r}="",FALSE,IFERROR(INDEX(wr_OppUnplayed,MATCH(INDEX(Threats_Table[Opp Player ID],B{r}),wr_OppPids,0)),FALSE))'),
         ("wr_ThreatRun", lambda k, r: (f'=IF(C{r},1,0)' if k == 1 else f'=D{r - 1}+IF(C{r},1,0)')),
     ])
+    # Mirror live_threats: exact direct records against remaining players, not
+    # static full-roster danger labels. No new evidence or predictive score.
+    def direct_count(i, j, field):
+        pos = grid[(i, j)][2]
+        return f'IF({pos}="",0,INDEX(MatchupEvidence_Table[{field}],INDEX(wr_OppStart,{j})+{pos}))'
+
+    def live_sum(j, field, remaining_only):
+        terms = []
+        for i in range(1, R + 1):
+            value = direct_count(i, j, field)
+            terms.append(f'IF(INDEX(wr_OurRemaining,{i}),{value},0)' if remaining_only else value)
+        return '+'.join(terms)
+
+    def live_met(j):
+        return '+'.join(f'IF(AND(INDEX(wr_OurRemaining,{i}),{direct_count(i,j,"Direct Games")}>0),1,0)'
+                        for i in range(1, R + 1))
+
+    def live_text(k, r):
+        label = f'INDEX(wr_OppLabels,{k})&" · Captured SL "&INDEX(wr_OppSL,{k})'
+        remaining = 'COUNTIF(wr_OurRemaining,TRUE)'
+        live = (f'{label}&" · "&B{r}&"-"&(C{r}-B{r})&" vs our roster still in play ("&C{r}&'
+                f'IF(C{r}=1," meeting, "," meetings, ")&D{r}&" of "&{remaining}&" remaining players)"&'
+                f'IF({remaining}>D{r}," · no direct record vs "&({remaining}-D{r})&" remaining players","")&'
+                f'IF(C{r}<3," · SMALL SAMPLE","")&IF(C{r}=1," · Beat us once","")')
+        historical = (f'{label}&" · historically "&E{r}&"-"&(F{r}-E{r})&" in "&F{r}&'
+                      f'IF(F{r}=1," meeting"," meetings")&"; only vs players not in tonight\'s remaining lineup — "&'
+                      f'"unknown vs who is left, not cleared"&IF(F{r}<3," · SMALL HISTORICAL SAMPLE","")')
+        return f'=IF(G{r},{live},IF(H{r},{historical},""))'
+
+    e.block("Live threat by opponent", R, [
+        ("wr_LiveThreatWins", lambda k,r: f'={live_sum(k,"Direct Games",True)}-({live_sum(k,"Direct Wins",True)})'),
+        ("wr_LiveThreatGames", lambda k,r: '='+live_sum(k,"Direct Games",True)),
+        ("wr_LiveThreatMet", lambda k,r: '='+live_met(k)),
+        ("wr_GoneThreatWins", lambda k,r: f'=({live_sum(k,"Direct Games",False)})-({live_sum(k,"Direct Wins",False)})-B{r}'),
+        ("wr_GoneThreatGames", lambda k,r: f'=({live_sum(k,"Direct Games",False)})-C{r}'),
+        ("wr_LiveThreatFlag", lambda k,r: f'=AND(INDEX(wr_OppUnplayed,{k}),C{r}>0,2*B{r}>C{r})'),
+        ("wr_LiveThreatUnknown", lambda k,r: f'=AND(INDEX(wr_OppUnplayed,{k}),COUNTIF(wr_OurRemaining,TRUE)>0,C{r}=0,F{r}>0,2*E{r}>F{r})'),
+        ("wr_LiveThreatNet", lambda k,r: f'=IF(G{r},2*B{r}-C{r},IF(H{r},2*E{r}-F{r},0))'),
+        ("wr_LiveThreatOrder", lambda k,r:
+            f'=IF(G{r},COUNTIFS(wr_LiveThreatFlag,TRUE,wr_LiveThreatNet,">"&I{r})+'
+            f'COUNTIFS(INDEX(wr_LiveThreatFlag,1):INDEX(wr_LiveThreatFlag,{k}),TRUE,INDEX(wr_LiveThreatNet,1):INDEX(wr_LiveThreatNet,{k}),I{r}),'
+            f'IF(H{r},COUNTIF(wr_LiveThreatFlag,TRUE)+COUNTIFS(wr_LiveThreatUnknown,TRUE,wr_LiveThreatNet,">"&I{r})+'
+            f'COUNTIFS(INDEX(wr_LiveThreatUnknown,1):INDEX(wr_LiveThreatUnknown,{k}),TRUE,INDEX(wr_LiveThreatNet,1):INDEX(wr_LiveThreatNet,{k}),I{r}),""))'),
+        ("wr_LiveThreatText", live_text),
+    ])
+    e.block("Meetings behind blind-send pairing counts", R, [
+        ("wr_OurLiveMeetings", lambda i,r: '='+ '+'.join(
+            f'IF(INDEX(wr_OppUnplayed,{j}),{direct_count(i,j,"Direct Games")},0)' for j in range(1,R+1))),
+    ])
+    e.cell("wr_BlindMeetings", "Blind-send direct meeting total",
+           '=IF(wr_BlindIdx="",0,INDEX(wr_OurLiveMeetings,wr_BlindIdx))')
+    e.cell("wr_BlindMeetingNote", "Blind-send evidence-strength disclosure",
+           '=IF(OR(wr_BlindUnranked,wr_BlindName=""),""," · "&wr_BlindMeetings&IF(wr_BlindMeetings=1," direct meeting total"," direct meetings total")&" — pairing counts select first shown, not confidence")')
     e.block("Concerning row", slots["concerning"], [
         ("wr_ConcernRow", lambda k, r: f'=IF(NOT(wr_HasEvidence),"",IFERROR(MATCH(wr_PairKey&"|{k}",Concerning_Table[Key],0),""))'),
         ("wr_ConcernOk", lambda k, r: (
@@ -787,15 +844,18 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
                                               + f'&IF(INDEX(wr_NsSaveDetails,C{r})="",""," · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}))'
                                               + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
         ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}"))),
-        ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+wr_NsCount+1-{k})'),
+        ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+{k})'),
         ("wr_NsAvoidOk", lambda k, r: (f'=IF(O{r}="",FALSE,AND(INDEX({ME}[Category],O{r})="R",IFERROR(INDEX(wr_OurRemaining,'
                                         f'MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)),FALSE)))')),
         ("wr_NsAvoidJoin", lambda k, r: _join(k, r, "Q", f'P{r}',
-                                              f'{_nm(f"INDEX({ME}[Player],O{r})", f"MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)")}&" — "&INDEX({ME}[Direct Record],O{r})')),
+                                              f'{_nm(f"INDEX({ME}[Player],O{r})", f"MATCH(INDEX({ME}[Player ID],O{r}),wr_OurPids,0)")}&" — "&INDEX({ME}[Direct Record],O{r})&IF(INDEX({ME}[Direct Games],O{r})<3," · SMALL SAMPLE","")')),
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
-        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"Ordered direct records among remaining players; equal evidence stays tied.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
+        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"First direct-record group: "&'
+        'INDEX(MatchupEvidence_Table[Direct Record],INDEX(wr_NsRow,MATCH(1,wr_NsMedalRun,0)))&'
+        'IF(INDEX(MatchupEvidence_Table[Direct Games],INDEX(wr_NsRow,MATCH(1,wr_NsMedalRun,0)))<3," · SMALL SAMPLE","")&'
+        '"; equal evidence stays tied.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
         'shared-opponent candidates only (≈, not ordered)","No evidence-backed option left among our remaining players")))))'))
     # Each remaining player is in at most one of these lists, so together they name at most R players. One wrapped
     # cell (a line per list) can therefore be sized once for R names; three rows would each need room for all R
@@ -813,7 +873,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     # on screen and on paper (real-Excel UAT 0c2e474); one cell keeps the answer contiguous and is sized once.
     for n in range(1, R + 1):
         e.cell(f"wr_NsMedal{n}", f"Next Send medal line {n}", f'=IFERROR(INDEX(wr_NsMedalText,MATCH({n},wr_NsMedalRun,0)),"")')
-    e.cell("wr_NsMethod", "Next Send ordering boundary", '="Not an overall player ranking. Direct-record order uses recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Shared-only comparisons are not ordered."')
+    e.cell("wr_NsMethod", "Next Send ordering boundary", '="Not an overall player ranking. Favorable/even direct records use recorded win percentage, then meeting count. A 1-0 record can appear before 8-2; small samples do not reduce position. Loss cautions use most net losses first, then meetings. Shared-only comparisons are not ordered."')
     e.cell("wr_NsCard", "Next Send answer (one line each)", '=IF(wr_NsOpen,wr_NsMethod&CHAR(10),"")&wr_NsHeadline' + "".join(
         f'&IF({x}="","",CHAR(10)&{x})' for x in [f"wr_NsMedal{n}" for n in range(1, R + 1)] + ["wr_NsLists"]))
 
@@ -1133,17 +1193,17 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         ws.row_dimensions[r].height = 28
     top = top + R + 2
     base._section(ws, top, "Top risks", last_col=12)
-    _span(ws, top + 1, 1, 12, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)",
+    _span(ws, top + 1, 1, 12, "Tonight's flags — remaining players vs unplayed opponents; historical-only flags are unknown, not cleared",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL, height=30)
     for n in range(1, R + 1):
-        row = f"INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))"
-        note = f"INDEX(wr_OppNotes,MATCH(INDEX(Threats_Table[Opp Player ID],{row}),wr_OppPids,0))"
-        _span(ws, top + 1 + n, 1, 12, f'=IFERROR(INDEX(Threats_Table[Threat],{row})&IFERROR(IF({note}="",""," · 📝 "&{note}&'
+        row = f"MATCH({n},wr_LiveThreatOrder,0)"
+        note = f"INDEX(wr_OppNotes,{row})"
+        _span(ws, top + 1 + n, 1, 12, f'=IFERROR(INDEX(wr_LiveThreatText,{row})&IFERROR(IF({note}="",""," · 📝 "&{note}&'
                                       f'" (your opinion, not APA facts)"),""),'
-                                      f'IF({n}=1,IF(wr_HasEvidence,"No unplayed opponent has a winning recorded record against our roster.",""),""))',
-              font=SMALL)
+                                      f'IF({n}=1,IF(wr_HasEvidence,IF(COUNTIF(wr_OurRemaining,TRUE)=0,"No remaining players — no live comparison.","No winning-record flag vs remaining players; missing records are unknown."),""),""))',
+              font=SMALL, height=45)
     t2 = top + R + 2
-    _span(ws, t2, 1, 12, "Concerning pairings — first 5 remaining pairings; all in Captain Matrix below",
+    _span(ws, t2, 1, 12, "Recorded loss cautions — first 5 remaining pairings; most net losses first, then meetings; all in Captain Matrix",
           font=base.SUBHEAD_FONT, fill=base.SUBHEAD_FILL, height=30)
     for n in range(1, 6):
         _span(ws, t2 + n, 1, 12, f'=IFERROR(INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),'
@@ -1584,7 +1644,7 @@ def build_scouting_cards(wb, *, slots: dict[str, int]) -> None:
     _head(ws, "Opponent Scouting Cards", "One card per opponent player — recorded facts, sample sizes, what's missing, "
                                          "and your notes.", last=12, current="Scouting Cards")
     _span(ws, 4, 1, 12, "=wr_Status", font=Font(bold=True, color=base.FELT_DEEP))
-    _span(ws, 5, 1, 12, "Recorded results only — not predictions. Missing history is unknown, not weak.",
+    _span(ws, 5, 1, 12, "Full-roster history; ignores tonight's marks. Recorded results only — not predictions. Missing history is unknown, not weak.",
           font=Font(size=10, color="5B6A61"), height=24)
     lookup = wb["Scouting"]
     col = SCOUTING_COLUMNS.index("Quick Read") + 1
@@ -1695,12 +1755,12 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _span(ws, r, 3, 12,
           '=IF(wr_UnplayedCount=0,"Every opponent has already played.",'
           'IF(wr_BlindName="","No evidence-backed pick — "&wr_BlindWhy,'
-          'wr_BlindName&" — "&wr_BlindWhy&wr_BlindTieNote&'
+          'wr_BlindName&" — "&wr_BlindWhy&wr_BlindTieNote&wr_BlindMeetingNote&'
           'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")))',
           font=font(12, bold=True, color=base.FELT_DEEP))
     blind_worst = (_longest_label(wb) + f" — {R} concerning of {R} — best available, not good · no direct record vs {R}"
                    + f" · {R} tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix."
-                   + " · availability unknown")
+                   + " · 999999 direct meetings total — pairing counts select first shown, not confidence · availability unknown")
     h(r, _worst_height(blind_worst, sum(PACKET_WIDTHS[2:]), 12, 30))
     r += 1
     base._section(ws, r, "Recorded options preview — direct order: win percentage, then meetings; not confidence",
@@ -1715,19 +1775,20 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
               font=font(10))
         h(r, 27)
     r += 1
-    base._section(ws, r, "Top risks — Danger flags use full roster history", last_col=12)
+    base._section(ws, r, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown", last_col=12)
     h(r, 18)
-    risk_lines = [f'=IFERROR("Dangerous: "&INDEX(Threats_Table[Threat],INDEX(wr_ThreatRow,MATCH({n},wr_ThreatRun,0))),"")'
+    risk_lines = [f'=IFERROR(INDEX(wr_LiveThreatText,MATCH({n},wr_LiveThreatOrder,0)),"")'
                   for n in range(1, 4)]
-    risk_lines += [f'=IFERROR("Avoid: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")'
+    risk_lines += [f'=IFERROR("Recorded loss: "&INDEX(Concerning_Table[Pairing],INDEX(wr_ConcernRow,MATCH({n},wr_ConcernRun,0))),"")'
                    for n in range(1, 4)]
     risk_lines.append('=IF(wr_UnplayedCount=0,"","Open risks: "&wr_RiskCount&" unplayed opponent(s) with no favorable '
                       'direct option left among our remaining players.")')
     for formula in risk_lines:
         r += 1
-        _span(ws, r, 1, 12, formula, font=font(10.5), wrap=False)
-        h(r, 15)
+        _span(ws, r, 1, 12, formula, font=font(10.5))
+        h(r, _worst_height(_longest_label(wb)+" · Captured SL No data · historically 999999-999999 in 1999998 meetings; only vs players not in tonight's remaining lineup — unknown vs who is left, not cleared · SMALL HISTORICAL SAMPLE", sum(PACKET_WIDTHS), 10.5, 30))
     r += 1
+    overview_break = r - 1
     for c1, c2, text, sub, fill in ((1, 1, "OUR TEAM", "=wr_OurLabel", base.SECTION_FILL),
                                     (7, 7, "OPPONENT", "=wr_OppLabel", base.OPPONENT_FILL)):
         ws.cell(row=r, column=c1, value=text).font = font(10.5, bold=True, color=white)
@@ -1766,14 +1827,15 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     fresh = stats["freshness"]
     _span(ws, r, 1, 12, f"Built {fresh['build_date']} · offline snapshot (latest recorded result {fresh['latest_result']}) · "
                         f"times {stats['tz']} · rosters = current captured rosters · SL = team-scope, format-specific · "
-                        "colors/ranks = recorded evidence only, NOT CALIBRATED odds.", font=font(9, color="5B6A61"))
-    h(r, 24)
+                        "colors/ranks = recorded evidence only, NOT CALIBRATED odds. "
+                        "Workbook marks and phone marks are separate. Reprint after changing Lineup Lab marks.", font=font(9, color="5B6A61"))
+    h(r, 36)
     pages = [(1, r)]
 
     # ---------------- page 2: scouting cards, two across ----------------
     p2 = r + 1
     ws.row_breaks.append(Break(id=p2 - 1))
-    base._section(ws, p2, "Scouting cards — the full cards are on the Scouting Cards sheet", last_col=12)
+    base._section(ws, p2, "Scouting cards — full-roster history (ignores marks) — the full cards are on the Scouting Cards sheet", last_col=12)
     h(p2, 18)
     r = p2
     # Reserve the compact preview even when notes are entered after export.
@@ -1833,7 +1895,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     ws.row_breaks.append(Break(id=p3 - 1))
     base._section(ws, p3, "Evidence by opponent — every line names the opponent", last_col=12)
     h(p3, 18)
-    _span(ws, p3 + 1, 1, 12, "Rank: direct meetings first (by record, then more meetings) · “≈” = shared-opponent evidence "
+    _span(ws, p3 + 1, 1, 12, "Direct evidence first; favorable/even by win percentage then meetings; loss cautions by net losses then meetings · “≈” = shared-opponent evidence "
                              "only, NOT ordered among themselves · “—” = no verified evidence · “2=” = tied (every row with the same "
                              "“n=” under one opponent is tied). Evidence: W-L (meetings) = direct record; ≈ ours vs theirs "
                              "(n shared) = records against shared opponents. Basis = the evidence category.",
@@ -1878,10 +1940,11 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         _span(ws, r, 1, 2, f'=IF(P{r}="","","vs "&INDEX(wr_OppLabels,P{r}))', font=f10, wrap=False, shrink=True)
         ws.cell(row=r, column=3, value=f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Rank],R{r}))').font = f10
         _span(ws, r, 4, 7, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Player],R{r}))', font=f10, wrap=False, shrink=True)
-        _span(ws, r, 8, 10, f'=IF(P{r}="","",INDEX(MatchupEvidence_Table[Cell],R{r}))', font=f10, wrap=False, shrink=True)
+        games = f'INDEX(MatchupEvidence_Table[Direct Games],R{r})'
+        _span(ws, r, 8, 10, f'=IF(P{r}="","",IF({games}>0,INDEX(MatchupEvidence_Table[Direct Record],R{r}),INDEX(MatchupEvidence_Table[Cell],R{r})))', font=f10, wrap=False, shrink=True)
         cat = f'INDEX(MatchupEvidence_Table[Category],R{r})'
-        _span(ws, r, 11, 12, f'=IF(P{r}="","",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
-                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence")))))', font=f10, wrap=False)
+        _span(ws, r, 11, 12, f'=IF(P{r}="","",IF(AND({games}>0,{games}<3),"SMALL SAMPLE",IF({cat}="G","Favorable direct",IF({cat}="R","Concerning direct",'
+                             f'IF({cat}="E","Even direct",IF({cat}="I","Indirect only","No verified evidence"))))))', font=f10, wrap=False)
         h(r, 14.5)
     last_ev = r
     ws.conditional_formatting.add(f"A{ev_first}:L{last_ev}",
@@ -1954,6 +2017,14 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # Evidence (pages 3-4) is one section spread over two printed pages.
     section_pages = (1, CARD_PAGES, EVIDENCE_PAGES, 1)
     budget = [ph / section_pages[i] for i, ph in enumerate(page_heights)]
+    # Do not shrink every packet page because fuller risk explanations need room.
+    # Split the overview before rosters only when it exceeds the width-fit budget.
+    width_scale = min(1.0, PACKET_PRINTABLE[0] / width_pt)
+    if page_heights[0] * width_scale > PACKET_PRINTABLE[1]:
+        ws.row_breaks.append(Break(id=overview_break))
+        budget[0] = max(sum(heights.get(x,15) for x in range(1,overview_break+1)),
+                        title_pt+sum(heights.get(x,15) for x in range(overview_break+1,pages[0][1]+1)))
+    ws.row_breaks.brk.sort(key=lambda b: b.id)
     scale = min(1.0, PACKET_PRINTABLE[0] / width_pt, *(PACKET_PRINTABLE[1] / b for b in budget))
     ws.page_setup.orientation = "landscape"
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER

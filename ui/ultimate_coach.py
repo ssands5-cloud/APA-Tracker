@@ -1236,6 +1236,10 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   }}
   function rankKeyCmp(a,b){{
     if(a.tier!==b.tier) return b.tier-a.tier;
+    if(a.direct&&b.direct&&2*a.direct.w<a.direct.g&&2*b.direct.w<b.direct.g){{
+      var loss=(b.direct.g-2*b.direct.w)-(a.direct.g-2*a.direct.w);
+      return loss!==0?loss:b.direct.g-a.direct.g;
+    }}
     var f=b.rw*a.rg-a.rw*b.rg;
     if(f!==0) return f;
     if(a.n!==b.n) return b.n-a.n;
@@ -1409,7 +1413,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
         +'</tbody></table></div></div>';
     }}).join("");
     out.innerHTML='<h2>Evidence ranking vs each opponent</h2>'
-      +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
+      +'<p class="note warn-note">Captain assistance only — this orders our players by recorded evidence. It is not a win probability (none is calibrated or published; probability_publication stays FORBIDDEN) and not a guaranteed or optimal lineup. Small samples are noisy. Losing direct cautions use most net losses first, then meetings. A direct record ranks ahead of shared-opponent results even when it is small or a loss — read the records and sample sizes, not just the rank.</p>'
       +'<p class="muted">Order: direct meetings first (by observed direct record, then more meetings); then shared-opponent results (shown together without ranking); players with no verified evidence are listed last and not ranked (—). “2=” marks a tie the evidence can\\'t separate — the Basis column names who is tied.</p>'
       +'<h3>At a glance</h3><div class="table-wrap"><table class="glance-table"><thead><tr><th>Opponent player</th><th>First in the evidence ranking (and why)</th></tr></thead><tbody>'+glance+'</tbody></table></div>'
       +'<div class="rank-blocks">'+detail+'</div>';

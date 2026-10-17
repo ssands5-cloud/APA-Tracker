@@ -217,13 +217,13 @@ def test_matrix_captain_view_switches_text_not_evidence(book, built):
 
 def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built):
     assert _opportunities(book, built) == [
-        (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"),
+        (f"vs {CAM} · SL 6", f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"),
         (f"vs {EVE} · SL 3", f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)"),      # shared-only: never numbered
     ]
-    threats = _list_after(book, built, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)", 3)
-    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · small sample"]
-    concerning = _list_after(book, built, "Concerning pairings — first 5 remaining pairings; all in Captain Matrix below", 5)
-    assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings)", f"{DEE} vs {EVE}: 0-2 direct (2 meetings)"]
+    threats = _list_after(book, built, "Tonight's flags — remaining players vs unplayed opponents; historical-only flags are unknown, not cleared", 3)
+    assert threats == [f"{EVE} · Captured SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of 3 remaining players) · no direct record vs 2 remaining players · SMALL SAMPLE"]
+    concerning = _list_after(book, built, "Recorded loss cautions — first 5 remaining pairings; most net losses first, then meetings; all in Captain Matrix", 5)
+    assert concerning == [f"{BEA} vs {CAM}: 0-2 direct (2 meetings) · SMALL SAMPLE", f"{DEE} vs {EVE}: 0-2 direct (2 meetings) · SMALL SAMPLE"]
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
     assert risks == [f"{EVE} — only even or indirect evidence left"]
     unique = _list_after(book, built, "Unique favorable options — consider saving (the only remaining favorable direct option vs an unplayed opponent)", 8)
@@ -235,7 +235,7 @@ def test_lineup_marks_change_candidates_but_never_the_evidence(book, built):
     ours, _ = _roster(book, WR, 15)
     assert ours[0] == (ANN, "5", "6-2", "Unavailable · —") and ours[1][3] == "Unknown · —"
     assert _opportunities(book, built) == [
-        (f"vs {CAM} · SL 6", f"1. {DEE} — 1-1 (2)"),
+        (f"vs {CAM} · SL 6", f"1. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"),
         (f"vs {EVE} · SL 3", "No favorable, even or indirect evidence among our remaining players."),
     ]
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
@@ -385,7 +385,7 @@ def test_scouting_card_and_meetings_show_facts_samples_and_missing_information(b
     assert card["Team record"] == "7-1 (this team, Fall 2026)"
     assert card["Vs our roster"] == "3-3 in 6 meetings with 3 of our 3 players"
     assert card["Meetings with our players"] == f"vs {ANN}: 0-2 · vs {BEA}: 2-0 · vs {DEE}: 1-1"
-    assert card["Record by opponent SL"] == "vs SL5 3-3"
+    assert card["Record by opponent SL"] == "vs SL5 3-3 (6 meetings)"
     assert card["Coach observations"] == "(add notes on Coach Notes or Lineup Lab)"
     book.set(LL, "D23", "Breaks hard; slow safeties")
     assert book.display(SC, "C18") == "Breaks hard; slow safeties"
@@ -488,10 +488,10 @@ def test_packet_evidence_is_packed_and_every_line_names_its_opponent(book, built
     first = next(c.row for c in ws["A"] if c.value == "Opponent") + 1
     lines = [[book.display(CP, f"{c}{r}") for c in "ACDHK"] for r in range(first, first + 8)]
     assert lines[:6] == [
-        [f"vs {CAM}", "1", ANN, "2-0 (2)", "Favorable direct"],
-        [f"vs {CAM}", "2", DEE, "1-1 (2)", "Even direct"],
-        [f"vs {CAM}", "3", BEA, "0-2 (2)", "Concerning direct"],
-        [f"vs {EVE}", "1", DEE, "0-2 (2)", "Concerning direct"],
+        [f"vs {CAM}", "1", ANN, "2-0 (2 meetings)", "SMALL SAMPLE"],
+        [f"vs {CAM}", "2", DEE, "1-1 (2 meetings)", "SMALL SAMPLE"],
+        [f"vs {CAM}", "3", BEA, "0-2 (2 meetings)", "SMALL SAMPLE"],
+        [f"vs {EVE}", "1", DEE, "0-2 (2 meetings)", "SMALL SAMPLE"],
         [f"vs {EVE}", "≈", ANN, "≈ 1-0 vs 0-1 (1 shared)", "Indirect only"],
         [f"vs {EVE}", "—", BEA, "No verified evidence", "No verified evidence"],
     ]
@@ -549,18 +549,18 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     book.set("Command Center", "C6", CAM)
     lines=_next_send(book)
     assert lines[0].startswith("Not an overall player ranking.")
-    assert lines[1] == "Ordered direct records among remaining players; equal evidence stays tied."
+    assert lines[1] == "First direct-record group: 2-0 (2 meetings) · SMALL SAMPLE; equal evidence stays tied."
     assert lines[2:] == [
         f"Direct-record order 1 {ANN_N} — 2-0 direct record (2 MEETINGS) — favorable · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
         f"Direct-record order 2 {DEE_N} — 1-1 direct record (2 MEETINGS) — even · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
-        f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings)",
+        f"⚠ Avoid: {BEA_N} — 0-2 (2 meetings) · SMALL SAMPLE",
     ]
     book.set("Command Center", "C6", EVE)
     assert _next_send(book)[0]==lines[0]
     assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
         f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
-        f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings)",
+        f"⚠ Avoid: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
     book.set("Command Center", "C6", CAM)
@@ -619,8 +619,8 @@ def test_coach_notes_reach_the_card_marked_as_opinion(book, built):
     assert book.display(SC, "C18") == "Coach: Slow shooter · Strong safety player: Plays the long game · Breaks hard"
     book.set("Coach Notes", "A6", EVE)           # a threat's note is shown with the threat, labelled as opinion
     book.set("Coach Notes", "D6", "Runs out from anywhere")
-    threats = _list_after(book, built, "Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)", 3)
-    assert threats == [f"{EVE} · SL 3 · 2-0 vs our roster (2 meetings, 1 of our players) · small sample · 📝 Coach: Runs out from anywhere "
+    threats = _list_after(book, built, "Tonight's flags — remaining players vs unplayed opponents; historical-only flags are unknown, not cleared", 3)
+    assert threats == [f"{EVE} · Captured SL 3 · 2-0 vs our roster still in play (2 meetings, 1 of 3 remaining players) · no direct record vs 2 remaining players · SMALL SAMPLE · 📝 Coach: Runs out from anywhere "
                        "(your opinion, not APA facts)"]
 
 
@@ -645,7 +645,7 @@ def test_packet_long_coach_observation_has_visible_full_note_pointer(book, built
     note = "Watch the opening safety and confirm the score. " * 10
     book.set("Coach Notes", "A5", CAM)
     book.set("Coach Notes", "D5", note)
-    top = _row(built, CP, "Scouting cards \u2014 the full cards are on the Scouting Cards sheet")
+    top = _row(built, CP, "Scouting cards — full-roster history (ignores marks) — the full cards are on the Scouting Cards sheet")
     row = top + 5
     text = book.display(CP, f"B{row}")
     assert text.endswith(("Coach: " + note)[:160] + " ... (preview; full note on Coach Notes / Lineup Lab)")
@@ -899,10 +899,10 @@ def test_a_stale_snapshot_is_a_visible_warning_not_small_print(built, tmp_path):
 
 def test_captain_packet_page_one_is_decision_first(book, built):
     sends = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
-    risks = _row(built, CP, "Top risks — Danger flags use full roster history")
+    risks = _row(built, CP, "Top risks — first 3 flags / 3 loss cautions; tonight's remaining roster; historical-only = unknown")
     roster = _row(built, CP, "OUR TEAM")
     assert sends < risks < roster
-    assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+    assert book.display(CP, f"C{sends + 1}") == f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"
 
 
 FAY = "Fay Fox"
@@ -988,7 +988,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     book = Workbook(wb)
     py = _python_war_room_for(payload)
     rows = [[r for r in b["rows"] if r["category"] in SENDABLE] for b in py["blocks"]]
-    assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2) · 1= {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+    assert send_list_text(rows[0]) == f"1= {ANN} — 2-0 (2 meetings) · SMALL SAMPLE · 1= {FAY} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"
     assert best_send_text(rows[0]) == (f"first by recorded direct results (tied with 1 other, same evidence): {ANN} — reason: "
                                        "2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026")
     # War Room top opportunities
@@ -1005,7 +1005,7 @@ def test_tied_and_shared_only_sends_are_never_ranked_apart_in_excel(tmp_path):
     assert book.display(CP, f"C{sends + 1}") == send_list_text(rows[0], limit=2)
     # Ann unavailable: Fay alone in the top group -> numbered "1." again, no tie wording.
     book.set(LL, "C12", "Unavailable")
-    assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2) · 2. {DEE} — 1-1 (2)"
+    assert _opportunities(book, wb)[0][1] == f"1. {FAY} — 2-0 (2 meetings) · SMALL SAMPLE · 2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"
     assert book.display(LL, f"A{top + 1}") == f"vs {CAM}: first by recorded direct results: {FAY} — reason: 2-0 direct record (2 meetings) — favorable · small sample · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026"
 
 
@@ -1243,8 +1243,9 @@ def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_ide
     lines = _next_send(book)
     assert any("Not ordered" in line and "Ann Archer (SL 5)" in line for line in lines)
     assert "Ann Archer (SL 4) (availability unknown)" in lines
-    assert any("Avoid:" in line and "Fay Fox" in line for line in lines)
-    assert "Dee Diaz — 0-2 (2 meetings)" in lines
+    assert any("Avoid:" in line and "Dee Diaz" in line for line in lines)
+    assert any("Fay Fox" in line and "0-1 (1 meeting)" in line for line in lines)
+    assert any("Dee Diaz — 0-2 (2 meetings) · SMALL SAMPLE" in line for line in lines)
     assert "Gil Gray" in lines  # a second unknown, separately visible
     assert "APA record ID" not in "\n".join(lines)
     # Friendly labels resolve to exact stored IDs, including same-name teammates.
@@ -1361,27 +1362,28 @@ def _many_threats_payload():
 def test_war_room_does_not_silently_drop_flags_after_third_opponent(tmp_path):
     wb=load_workbook(write_workbook(_many_threats_payload(),tmp_path/"threats.xlsx",built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"))
     book=Workbook(wb)
-    top=_row(wb,WR,"Historical flags — winning direct records vs our captured roster (unplayed opponents; includes unavailable/played teammates)")
+    top=_row(wb,WR,"Tonight's flags — remaining players vs unplayed opponents; historical-only flags are unknown, not cleared")
     text="\n".join(str(book.display(WR,f"A{r}")) for r in range(top+1,top+9))
     for label in ("Threat A","Threat B","Threat C","Threat D"):
-        assert label+" \u00b7 SL" in text
+        assert label+" \u00b7 Captured SL" in text
 
 
-def test_historical_threat_heading_explains_departed_teammates(book,built):
+def test_live_threat_heading_explains_departed_teammates(book,built):
     risks=_row(built,WR,"Top risks")
     caption=str(book.display(WR,f"A{risks+1}"))
-    assert "includes unavailable/played teammates" in caption
+    assert "remaining players" in caption and "historical-only" in caption
     before=[str(book.display(WR,f"A{r}")) for r in range(risks+2,risks+10)]
     book.set(LL,"C14","Unavailable")
     after=[str(book.display(WR,f"A{r}")) for r in range(risks+2,risks+10)]
-    assert any(EVE in t for t in before) and after==before
+    assert any(EVE in t for t in before) and after!=before
+    assert any("unknown vs who is left, not cleared" in t for t in after)
     assert built[WR].row_dimensions[risks+1].height>=30
 
 
-def test_packet_risk_heading_discloses_full_roster_history(built):
+def test_packet_risk_heading_discloses_live_and_unknown_history(built):
     caption=next(c.value for row in built[CP].iter_rows(min_col=1,max_col=1) for c in row
                  if isinstance(c.value,str) and c.value.startswith("Top risks"))
-    assert "Danger flags use full roster history" in caption
+    assert "tonight's remaining roster" in caption and "historical-only = unknown" in caption
 
 
 def test_packet_explains_direct_order_without_implying_confidence(tmp_path):
@@ -1394,7 +1396,7 @@ def test_packet_explains_direct_order_without_implying_confidence(tmp_path):
     assert "direct order: win percentage, then meetings; not confidence" in head.value
     assert "preview" in head.value.lower()
     text=str(book.display(CP,f"C{head.row+1}"))
-    assert "1-0 (1)" in text and "8-2 (10)" in text
+    assert "1-0 (1 meeting) · SMALL SAMPLE" in text and "8-2 (10 meetings)" in text
     assert text.index(ANN)<text.index(BEA)
 
 
@@ -1421,7 +1423,7 @@ def test_concerning_lookup_keeps_pairings_beyond_twentieth_after_marks(tmp_path)
         book.set(LL, f"C{row}", "Unavailable")
     assert max(book.value(sh, ref) for sh, ref in book.name("wr_ConcernRun")) == 4
     head = next(c.row for c in wb[WR]["A"] if isinstance(c.value, str)
-                and c.value.startswith("Concerning pairings"))
+                and c.value.startswith("Recorded loss cautions"))
     assert "first 5" in wb[WR].cell(head, 1).value and "Captain Matrix" in wb[WR].cell(head, 1).value
     lines = [str(book.display(WR, f"A{head + i}")) for i in range(1, 6)]
     assert len([line for line in lines if DEE in line]) == 4

@@ -199,7 +199,7 @@ def _bucket_summary(buckets: dict[Any, list[int]]) -> tuple[str, str, str]:
     known = sorted((sl, rec) for sl, rec in buckets.items() if sl is not None)
     if not known:
         return "No opponent skill levels recorded", "—", "—"
-    by_sl = " · ".join(f"vs SL{int(sl)} {record_text(w, g)}" for sl, (w, g) in known)
+    by_sl = " · ".join(f"vs SL{int(sl)} {record_text(w, g)} ({plural(g, 'meeting')}{', small sample' if g < 3 else ''})" for sl, (w, g) in known)
     winning = [f"SL{int(sl)} ({record_text(w, g)}, {plural(g, 'meeting')}{', small sample' if g < 3 else ''})" for sl, (w, g) in known if w > g - w]
     losing = [f"SL{int(sl)} ({record_text(w, g)}, {plural(g, 'meeting')}{', small sample' if g < 3 else ''})" for sl, (w, g) in known if w < g - w]
     return by_sl, ", ".join(winning) or "None recorded", ", ".join(losing) or "None recorded"
@@ -319,7 +319,7 @@ def war_room_pair(
                 wins, games = row["direct"]
                 concerning.append({"our": row["member"], "opp": block["opponent"], "direct": row["direct"],
                                    "text": f"{row['player']} vs {block['opponent_label']}: {record_text(wins, games)} "
-                                           f"direct ({plural(games, 'meeting')})",
+                                           f"direct ({plural(games, 'meeting')})" + (" · SMALL SAMPLE" if games < 3 else "") + (" · Lost once" if games == 1 else ""),
                                    "_key": (-(games - 2 * wins), -games, member_order_key(row["member"]), j)})
     concerning.sort(key=lambda c: c["_key"])
 
@@ -458,7 +458,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
                      if shared else "No evidence-backed answer on our roster")
     avoid = [r for r in rows if r["category"] == "R"]
     if avoid:
-        parts.append("Losing direct records: " + ", ".join(f"{display_name(r['member'], roster)} ({record_text(*r['direct'])}, {plural(r['direct'][1], 'meeting')}{', small sample' if r['direct'][1] < 3 else ''})" for r in reversed(avoid)))
+        parts.append("Losing direct records: " + ", ".join(f"{display_name(r['member'], roster)} ({record_text(*r['direct'])}, {plural(r['direct'][1], 'meeting')}{', small sample' if r['direct'][1] < 3 else ''})" for r in avoid))
     if card["winning_sl"] not in ("—", "None recorded"):
         parts.append(f"Winning records vs {card['winning_sl']}")
     if card["losing_sl"] not in ("—", "None recorded"):
@@ -489,7 +489,9 @@ def send_labels(rows: list[dict[str, Any]]) -> list[str]:
 
 def send_list_text(rows: list[dict[str, Any]], limit: int = 3) -> str:
     labels = send_labels(rows)
-    return " · ".join(f"{labels[i]} {r['player']} — {r['cell']}" for i, r in enumerate(rows[:limit]))
+    def record(r: dict[str, Any]) -> str:
+        return r["direct_text"] + (" · SMALL SAMPLE" if r["direct"][1] < 3 else "") if r["direct"] else r["cell"]
+    return " · ".join(f"{labels[i]} {r['player']} — {record(r)}" for i, r in enumerate(rows[:limit]))
 
 
 def best_send_text(rows: list[dict[str, Any]]) -> str:
@@ -583,9 +585,9 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
     unordered = [{"member": r["member"], "display": display_name(r["member"], roster), "reason": r["reason"],
                   "save": _save_for(r["member"]["id"])}
                  for r in rows if r["category"] == "I"]
-    # Worst recorded direct record first: the reverse of the ranking order.
+    # Same recorded-loss order as Top Risks: net losses, then meeting count.
     avoid = [{"member": r["member"], "display": display_name(r["member"], roster), "reason": r["reason"]}
-             for r in reversed(rows) if r["category"] == "R"]
+             for r in rows if r["category"] == "R"]
     unknown = [display_name(r["member"], roster) for r in rows if r["category"] == "X"]
     if ranked:
         headline = f"First by recorded direct results: {ranked[0]['display']}" + (

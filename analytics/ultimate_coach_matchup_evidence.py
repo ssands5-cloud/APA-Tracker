@@ -147,7 +147,14 @@ def rank_vs_opponent(
             "direct": direct if direct and direct[1] > 0 else None,
             "shared_count": len(shared), "ours": (ow, og), "theirs": (tw, tg),
         })
-    candidates.sort(key=lambda c: (-c["tier"], -c["rate"], -c["n"], -c["extra"], member_order_key(c["member"])))
+    def order(c):
+        if c["direct"] and 2 * c["direct"][0] < c["direct"][1]:
+            w, g = c["direct"]
+            # Losing-record cautions share Top Risks' order on every surface.
+            # Favorable/even direct and shared-only ordering is unchanged.
+            return (-c["tier"], Fraction(1), -(g - 2 * w), -g, member_order_key(c["member"]))
+        return (-c["tier"], -c["rate"], -c["n"], -c["extra"], member_order_key(c["member"]))
+    candidates.sort(key=order)
 
     rows = []
     position = 0

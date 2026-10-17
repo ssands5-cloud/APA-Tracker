@@ -54,7 +54,7 @@
     var known=Object.keys(b).filter(function(k){return k!=="";}).map(function(k){return b[k];}).sort(function(x,y){return x.sl-y.sl;});
     if(!known.length) return ["No opponent skill levels recorded","—","—"];
     function lab(e){return "SL"+Math.trunc(e.sl)+" ("+wlText(e.w,e.g)+", "+plural(e.g,"meeting")+(e.g<3?", small sample":"")+")";}
-    return [known.map(function(e){return "vs SL"+Math.trunc(e.sl)+" "+wlText(e.w,e.g);}).join(" · "),
+    return [known.map(function(e){return "vs SL"+Math.trunc(e.sl)+" "+wlText(e.w,e.g)+" ("+plural(e.g,"meeting")+(e.g<3?", small sample":"")+")";}).join(" · "),
       known.filter(function(e){return e.w>e.g-e.w;}).map(lab).join(", ")||"None recorded",
       known.filter(function(e){return e.w<e.g-e.w;}).map(lab).join(", ")||"None recorded"];
   }
@@ -105,7 +105,7 @@
       if(contexts.length) parts.push(top.length===1?contexts[0]:"Meeting SLs differ or are missing; check each pairing's detail");done=true;});
     if(!done){var sh=b.rows.filter(function(r){return r.category==="I";}).length;
       parts.push(sh?"No direct answer — "+plural(sh,"shared-opponent candidate")+" (≈, not ordered)":"No evidence-backed answer on our roster");}
-    var av=b.rows.filter(function(r){return r.category==="R";}).reverse();
+    var av=b.rows.filter(function(r){return r.category==="R";});
     if(av.length) parts.push("Losing direct records: "+av.map(function(r){return wrDisplayName(r.member,roster)+" ("+wlText(r.c.direct.w,r.c.direct.g)+", "+plural(r.c.direct.g,"meeting")+(r.c.direct.g<3?", small sample":"")+")";}).join(", "));
     if(c.winning_sl!=="—"&&c.winning_sl!=="None recorded") parts.push("Winning records vs "+c.winning_sl);
     if(c.losing_sl!=="—"&&c.losing_sl!=="None recorded") parts.push("Losing records vs "+c.losing_sl);
@@ -143,7 +143,7 @@
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
     blocks.forEach(function(b,j){b.rows.forEach(function(r){if(r.category!=="R") return;var w=r.c.direct.w,g=r.c.direct.g;
-      concerning.push({our:r.member,opp:b.opponent,j:j,w:w,g:g,text:r.player+" vs "+b.opponent_label+": "+wlText(w,g)+" direct ("+plural(g,"meeting")+")"});});});
+      concerning.push({our:r.member,opp:b.opponent,j:j,w:w,g:g,text:r.player+" vs "+b.opponent_label+": "+wlText(w,g)+" direct ("+plural(g,"meeting")+")"+(g<3?" · SMALL SAMPLE":"")+(g===1?" · Lost once":"")});});});
     concerning.sort(function(x,y){var a=x.g-2*x.w,b=y.g-2*y.w;if(a!==b) return b-a;if(x.g!==y.g) return y.g-x.g;var mo=memberOrder(x.our,y.our);return mo!==0?mo:x.j-y.j;});
     var cards=blocks.map(function(b,j){
       var opp=b.opponent;
@@ -384,7 +384,8 @@
     rows.forEach(function(r){if(r.category!=="G"&&r.category!=="E") return;var k=wrGroupKey(r);if(!(k in order)) order[k]=++n;count[k]=(count[k]||0)+1;});
     return rows.map(function(r){if(r.category!=="G"&&r.category!=="E") return "≈";var k=wrGroupKey(r);return order[k]+(count[k]>1?"=":".");});
   }
-  function wrSendListText(rows,limit){var l=wrSendLabels(rows);return rows.slice(0,limit||3).map(function(r,i){return l[i]+" "+r.player+" — "+r.cell;}).join(" · ");}
+  function wrSendRecord(r){return r.c.direct?wlText(r.c.direct.w,r.c.direct.g)+" ("+plural(r.c.direct.g,"meeting")+")"+(r.c.direct.g<3?" · SMALL SAMPLE":""):r.cell;}
+  function wrSendListText(rows,limit){var l=wrSendLabels(rows);return rows.slice(0,limit||3).map(function(r,i){return l[i]+" "+r.player+" — "+wrSendRecord(r);}).join(" · ");}
   function wrBestSendText(rows){
     if(!rows.length) return "";
     var f=rows[0],tag;
@@ -441,7 +442,7 @@
     var pick=function(cat){return function(r){return r.category===cat;};},brief=function(r){var sv=onlyGreen[String(r.member.id)];
       return {member:r.member,display:wrDisplayName(r.member,roster),reason:r.reason,
               save:saveText(sv),save_targets:sv||[]};};
-    var unordered=rows.filter(pick("I")).map(brief),avoid=rows.slice().reverse().filter(pick("R")).map(brief);
+    var unordered=rows.filter(pick("I")).map(brief),avoid=rows.filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return wrDisplayName(r.member,roster);});
     var headline=ranked.length?"First by recorded direct results: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
       :unordered.length?"No favorable/even direct option — shared-opponent candidates only (≈, not ordered)"
@@ -743,7 +744,7 @@
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
+      +'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied. Losing-record cautions use most net losses first, then meeting count.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
@@ -863,7 +864,7 @@
       +'<div class="table-wrap"><table class="send-table"><thead><tr><th>Opponent</th><th>Recorded options among our remaining players</th></tr></thead><tbody>'
       +w.blocks.map(function(b,j){
         var cell=!plan.unplayed[j]?'<span class="muted">Already played.</span>'
-          :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+r.cell)+'</span>';}).join('<span class="sep"> · </span>')
+          :(plan.sends[j].length?(function(labels){return plan.sends[j].slice(0,3).map(function(r,k){return '<span class="send">'+wrChip(r.category)+esc(labels[k]+" "+r.player+" — "+wrSendRecord(r))+'</span>';}).join('<span class="sep"> · </span>')
             +(plan.sends[j].length>3?'<br><a class="send-more" href="#next-send" style="display:inline-flex;align-items:center;min-height:44px">Showing first 3 of '+plan.sends[j].length+'. Choose '+esc(wrDisplayName(b.opponent,w.theirs))+' in Next Send for all options.</a>':'');})(wrSendLabels(plan.sends[j]))
           :'<span class="muted">No favorable, even or indirect evidence among our remaining players.</span>');
         return '<tr'+(plan.unplayed[j]?'':' class="out"')+'><td>'+esc("vs "+b.opponent_label+" · SL "+slText(b.opponent))+wrNoteFlagSlot(b.opponent.id,"icon")+'</td><td>'+cell+'</td></tr>';

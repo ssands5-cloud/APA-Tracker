@@ -126,7 +126,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert "Suggested: the earliest scheduled date on or after the build date." in page.inner_text("#md-status")
             assert page.input_value("#team-a") == OURS and page.input_value("#team-b") == THEIRS
             sends = page.inner_text("#wr-opportunities")
-            assert f"1. {ANN} — 2-0 (2)" in sends and f"2. {DEE} — 1-1 (2)" in sends
+            assert f"1. {ANN} — 2-0 (2 meetings) · SMALL SAMPLE" in sends and f"2. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE" in sends
             assert f"≈ {ANN} — ≈ 1-0 vs 0-1 (1 shared)" in sends and f"1. {ANN} — ≈" not in sends
             risks = page.inner_text("#wr-risks")
             # Superseded wording: see the Threat Panel gap fix (live_threats) -- scoped to
@@ -142,7 +142,7 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             # Ann unavailable: she leaves the candidates, Dee becomes the send vs Cam, Eve becomes an open risk.
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
             sends = page.inner_text("#wr-opportunities")
-            assert f"1. {DEE} — 1-1 (2)" in sends and ANN not in sends
+            assert f"1. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE" in sends and ANN not in sends
             assert "No favorable, even or indirect evidence among our remaining players." in sends
             assert f"{EVE} — no evidence-backed option left" in page.inner_text("#wr-risks")
             lab = page.inner_text("#lineup-lab")
