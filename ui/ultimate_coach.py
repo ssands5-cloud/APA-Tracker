@@ -102,6 +102,10 @@ button.secondary:hover { background:var(--felt-soft); }
 .blind-send .bs-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); width:100%; }
 .blind-send .bs-name { font-size:21px; line-height:1.15; color:var(--felt-deep,#1d4b35); }
 .blind-send .bs-why { font-size:13px; color:#3f4a43; }
+.blind-send .bs-ties { width:100%; font-size:12px; overflow-wrap:anywhere; }
+.blind-send .bs-ties summary { cursor:pointer; min-height:44px; padding:12px 0; box-sizing:border-box; }
+.blind-send .bs-ties p,.blind-send .bs-ties ul { margin:4px 0; }
+.blind-send .bs-ties a { display:inline-flex; align-items:center; min-height:44px; }
 .blind-send.weak { border-color:#b9b2a2; border-left-color:#b9b2a2; background:#f7f5ef; }
 .blind-send.weak .bs-name { color:#3f4a43; }
 @media (max-width:620px){ .blind-send { margin:6px 0 8px; padding:8px 10px; }

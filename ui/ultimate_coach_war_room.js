@@ -501,7 +501,9 @@
         : t.favorable+" favorable, "+t.concerning+" concerning of "+n+gap;
     else if(t.favorable) why="favorable vs "+t.favorable+" of "+n+gap;
     else why="even vs "+t.even+" of "+n+gap;
-    return {member:t.member,why:why,unranked:false,weak:t.favorable===0&&t.even===0};
+    var ties=ranked.filter(function(x){return x.concerning===t.concerning&&x.favorable===t.favorable&&x.even===t.even;})
+      .map(function(x){return x.member;});
+    return {member:t.member,why:why,ties:ties,unranked:false,weak:t.favorable===0&&t.even===0};
   }
 
   // ---- Lineup budget (mirrors analytics.lineup_budget) ----
@@ -560,7 +562,12 @@
     return '<div class="blind-send'+(b.weak?" weak":"")+'">'
       +'<span class="bs-label">If we put up first</span>'
       +'<b class="bs-name">'+esc(wrDisplayName(b.member,w.ours))+'</b>'+wrCandidateBudget(w,plan,ta,b.member)
-      +'<span class="bs-why">'+esc(b.why)+av+'</span></div>'
+      +'<span class="bs-why">'+esc(b.why)+av+'</span>'
+      +(b.ties.length>1?'<details class="bs-ties"><summary>'+b.ties.length+' tied by matchup counts</summary>'
+        +'<p>Same counts of concerning, favorable and even direct pairings. First shown follows roster order. Individual records and meeting totals can differ.</p><ul>'
+        +b.ties.map(function(m){return '<li><b>'+esc(wrDisplayName(m,w.ours))+'</b>'
+          +(wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':"")+'</li>';}).join("")+'</ul>'
+        +'<a href="#wr-matrix">Compare records in Captain Matrix</a></details>':"")+'</div>'
       +wrBudgetLine(w,plan,ta,b.member.id);
   }
 

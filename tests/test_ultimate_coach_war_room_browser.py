@@ -1510,6 +1510,58 @@ def test_blind_send_answers_before_the_captain_picks_an_opponent(tmp_path: Path)
             browser.close()
 
 
+@pytest.mark.parametrize('width', [390, 1280])
+def test_blind_send_names_coverage_ties_and_links_to_existing_records(tmp_path, width):
+    payload = _payload()
+    payload['evidence'] = [r for r in payload['evidence'] if {r['player_id'], r['opponent_id']} not in ({1, 10}, {2, 10})]
+    payload['evidence'] += _games(1, 10, 'W') + _games(2, 10, 'WWWWWWWWLL')
+    path = tmp_path / 'blind-count-tie.html'
+    path.write_text(render(payload, built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001'), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width': width, 'height': 844})
+            errors = []
+            page.on('pageerror', lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.locator('#next-send .ns-chip').nth(1).click()
+            target = page.locator('#next-send .ns-chip.on').get_attribute('data-next')
+            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
+            card = page.locator('#tonight .blind-send')
+            assert card.locator('.bs-name').inner_text() == ANN
+            disclosure = card.locator('.bs-ties')
+            assert disclosure.count() == 1, 'a roster-order choice must disclose alternatives with the same selection counts'
+            assert not disclosure.evaluate('e=>e.open')
+            summary = disclosure.locator('summary')
+            assert '2 tied by matchup counts' in summary.inner_text()
+            assert summary.bounding_box()['height'] >= 44
+            summary.click()
+            assert disclosure.locator('li b').all_text_contents() == [ANN, BEA]
+            assert disclosure.locator('li .ns-avail').count() == 2
+            assert 'roster order' in disclosure.inner_text()
+            assert 'meeting totals can differ' in disclosure.inner_text()
+            link = disclosure.locator('a')
+            assert link.get_attribute('href') == '#wr-matrix'
+            assert link.bounding_box()['height'] >= 44
+            link.click()
+            assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == target
+            assert page.locator('#next-send .ns-ask').inner_text() == 'They put up:'
+            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            page.locator('#ll-cap').fill('23')
+            assert disclosure.evaluate('e=>e.open'), 'live budget updates must retain the opened explanation'
+            assert page.locator('#ll-cap').evaluate('e=>e===document.activeElement')
+            assert disclosure.locator('li b').all_text_contents() == [ANN, BEA]
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="2"]').select_option('Unavailable')
+            assert card.locator('.bs-ties').count() == 0
+            assert card.locator('.bs-name').inner_text() == ANN
+            page.reload()
+            assert card.locator('.bs-ties').count() == 0
+            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+            assert errors == []
+        finally:
+            browser.close()
+
+
 def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(tmp_path: Path):
     """APA caps the total skill level you put up; spend the low numbers early and you are stuck.
 

@@ -1189,6 +1189,26 @@ def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built,
     assert moved != text, moved
 
 
+def test_packet_discloses_blind_count_tie_and_clears_it_when_a_candidate_is_unavailable(tmp_path):
+    payload = _payload()
+    payload['evidence'] = [r for r in payload['evidence'] if {r['player_id'], r['opponent_id']} not in ({1, 10}, {2, 10})]
+    payload['evidence'] += _games(1, 10, 'W') + _games(2, 10, 'WWWWWWWWLL')
+    path = write_workbook(payload, tmp_path / 'blind-count-tie.xlsx', built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001')
+    wb = load_workbook(path)
+    book = Workbook(wb)
+    row = _row(wb, CP, 'IF WE PUT UP FIRST')
+    text = str(book.display(CP, f'C{row}'))
+    assert '2 tied by matchup counts' in text, 'the printed lead must disclose the count tie too'
+    assert 'first shown by roster order' in text and 'Captain Matrix' in text
+    assert text.startswith(ANN + ' — ')
+    book.set(LL, 'C13', 'Unavailable')
+    text = str(book.display(CP, f'C{row}'))
+    assert text.startswith(ANN + ' — ') and 'tied by matchup counts' not in text
+    for r in (12, 14):
+        book.set(LL, f'C{r}', 'Unavailable')
+    assert 'tied by matchup counts' not in str(book.display(CP, f'C{row}'))
+
+
 def test_packet_never_prints_an_unknown_lead_as_an_even_record(built, book):
     """BLIND-01 boundary, printed side: "even vs 0 of 2" is not evidence, it is no evidence.
 

@@ -680,7 +680,7 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
     live = [b for b, open_ in zip(blocks, unplayed) if open_]
     empty = {"member": None, "why": "", "concerning": 0, "favorable": 0, "even": 0,
              "direct_coverage": 0, "no_record": len(live), "unranked": True,
-             "weak": True, "ranked": [], "opponents_left": len(live)}
+             "weak": True, "ranked": [], "ties": [], "opponents_left": len(live)}
     if not live or not remaining:
         return empty
 
@@ -738,7 +738,10 @@ def blind_send(war_room: dict[str, Any], *, remaining: set[Any] | None = None,
         why = f"favorable vs {top['favorable']} of {n}{gap}"
     else:
         why = f"even vs {top['even']} of {n}{gap}"
-    return {"member": top["member"], "why": why, "concerning": top["concerning"],
+    # Count ties are not equal records: the existing final fallback is roster order.
+    ties = [s["member"] for s in ranked
+            if all(s[key] == top[key] for key in ("concerning", "favorable", "even"))]
+    return {"member": top["member"], "why": why, "ties": ties, "concerning": top["concerning"],
             "favorable": top["favorable"], "even": top["even"],
             "direct_coverage": top["direct_coverage"], "no_record": top["no_record"],
             "unranked": False, "weak": top["favorable"] == 0 and top["even"] == 0,

@@ -617,6 +617,13 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     # Naming the first player in roster order implies an edge that does not exist (BLIND-01).
     e.cell("wr_BlindName", "Blind send player",
            '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),"",INDEX(wr_OurLabels,wr_BlindIdx))')
+    # Expose the existing roster-order fallback without claiming equal meeting records.
+    e.cell("wr_BlindTieCount", "Blind send count ties",
+           '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),0,COUNTIFS(wr_OurRemaining,TRUE,'
+           'wr_BlindR,INDEX(wr_BlindR,wr_BlindIdx),wr_BlindG,INDEX(wr_BlindG,wr_BlindIdx),'
+           'wr_BlindE,INDEX(wr_BlindE,wr_BlindIdx)))')
+    e.cell("wr_BlindTieNote", "Blind send tie disclosure",
+           '=IF(wr_BlindTieCount>1," · "&wr_BlindTieCount&" tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix.","")')
     e.cell("wr_BlindWhy", "Blind send reason", '=IF(wr_BlindIdx="","",IF(wr_BlindUnranked,IF(wr_BlindKnown=0,"nothing recorded either way vs any of "&wr_UnplayedCount&" — your read decides","no record either way for our best-placed option — unknown, not safer"&IF(wr_BlindBad>0," · "&wr_BlindBad&" of your remaining have a concerning record","")&" · unranked, your read decides"),IF(INDEX(wr_BlindR,wr_BlindIdx)>0,IF(INDEX(wr_BlindG,wr_BlindIdx)=0,INDEX(wr_BlindR,wr_BlindIdx)&" concerning of "&wr_UnplayedCount&" — best available, not good"&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),""),INDEX(wr_BlindG,wr_BlindIdx)&" favorable, "&INDEX(wr_BlindR,wr_BlindIdx)&" concerning of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),"")),IF(INDEX(wr_BlindG,wr_BlindIdx)>0,"favorable vs "&INDEX(wr_BlindG,wr_BlindIdx)&" of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),""),"even vs "&INDEX(wr_BlindE,wr_BlindIdx)&" of "&wr_UnplayedCount&IF(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)>0," · no direct record vs "&(wr_UnplayedCount-INDEX(wr_BlindCov,wr_BlindIdx)),"")))))')
     # Captain Packet evidence list: where each opponent's rows start in one continuous, packed list.
     e.block("Packet evidence start", R, [
@@ -1679,10 +1686,13 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     _span(ws, r, 3, 12,
           '=IF(wr_UnplayedCount=0,"Every opponent has already played.",'
           'IF(wr_BlindName="","No evidence-backed pick — "&wr_BlindWhy,'
-          'wr_BlindName&" — "&wr_BlindWhy&'
+          'wr_BlindName&" — "&wr_BlindWhy&wr_BlindTieNote&'
           'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")))',
           font=font(12, bold=True, color=base.FELT_DEEP))
-    h(r, 30)
+    blind_worst = (_longest_label(wb) + f" — {R} concerning of {R} — best available, not good · no direct record vs {R}"
+                   + f" · {R} tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix."
+                   + " · availability unknown")
+    h(r, _worst_height(blind_worst, sum(PACKET_WIDTHS[2:]), 12, 30))
     r += 1
     base._section(ws, r, "Recorded options preview — direct order: win percentage, then meetings; not confidence",
                   last_col=12)

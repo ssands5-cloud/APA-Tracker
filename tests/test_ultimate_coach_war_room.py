@@ -464,6 +464,20 @@ def test_blind_send_returns_nothing_to_recommend_when_no_one_is_left():
     assert blind_send(wr, unplayed=[False, False, False])["member"] is None
 
 
+@pytest.mark.parametrize("first,second", [((1, 1), (8, 10)), ((1, 2), (4, 8)), ((0, 1), (1, 3))])
+def test_blind_send_exposes_count_ties_without_changing_the_chosen_player(first, second):
+    ours, theirs = [_m(1, 'Ann'), _m(2, 'Bea')], [_m(50, 'Opal')]
+    wr = war_room_pair(ours, theirs, build_pair_index(_pairs(
+        (1, 50, *first), (2, 50, *second))), 'EIGHT')
+    out = blind_send(wr)
+    assert out['member']['id'] == 1, 'the existing roster-order fallback stays unchanged'
+    assert [m['id'] for m in out['ties']] == [1, 2]
+    assert [r['member']['id'] for r in out['ranked']] == [1, 2]
+    assert blind_send(wr, remaining={1})['ties'] == [ours[0]]
+    unknown = blind_send(war_room_pair(ours, theirs, build_pair_index([]), 'EIGHT'))
+    assert unknown['member'] is None and unknown['ties'] == []
+
+
 # ---------------------------------------------------------------------------
 # Lineup budget: APA caps the five players you put up at a total skill level
 # (23 in standard 8-Ball). Burn the low numbers early and you can be left unable
