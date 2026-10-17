@@ -9,6 +9,37 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Audit of 54898fb (2026-10-17) — NOT A PASS
+
+The parity, Next Send and workbook formula suites passed 106 of 106 on a clean detached checkout of 54898fb.
+
+- **P4 closed.** `wr_CandidateBudget` mirrors the phone's `wrLineupBudget`:
+  - integer cap greater than 0;
+  - slots = unplayed opponents;
+  - played known SL summed, and unknown played or remaining SL counted as incomplete;
+  - cheapest remaining (slots − 1) after this send;
+  - no warning when too few captured SLs.
+
+  The same text ("Reference comparison: this choice exceeds your entered skill budget", or "…check
+  incomplete") appears beside the same named candidates on the Command Center, Next Send, Packet options
+  lines and the Packet Blind Send pick. As on the phone, it is not attached to shared-only (≈) candidates.
+  The test cross-checks nine mark states against the reference arithmetic.
+- **All decision-changing gaps (P1–P4) are closed.**
+- **Remaining trust findings required for the pass:**
+  - **T1:** workbook `wr_NsAvoidLine` still says "⚠ Avoid:" for a single loss. The phone and Packet say
+    "Lost once · 1 meeting — Recorded loss" and "recorded losses, not exclusions". A captain could exclude
+    a player on the workbook who the phone treats as a caution.
+  - **T2:** the Packet evidence-page Basis column still prints only "SMALL SAMPLE" for rows under 3
+    meetings, dropping favorable or concerning. On black-and-white print, a 1-0 and a 0-1 read alike apart
+    from the record digits.
+  - **T4:** the Packet Blind Send line still lacks "· K small-sample pairings". The phone shows that count
+    beside the first-up pick, so thin first-up evidence looks stronger on paper.
+
+  Fixes are as in the b00eb79 entry.
+- **Reclassified to wording-only (does not block the pass):** T3, workbook "first by recorded direct
+  results" versus phone "Direct-record order #1". It names the same pick, and the workbook reason already
+  carries the meeting count and small-sample tag.
+
 ## Audit of cc10c66 (2026-10-17) — NOT A PASS
 
 The parity, Next Send and workbook formula suites passed 96 of 96 on a clean detached checkout of cc10c66.
