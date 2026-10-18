@@ -93,6 +93,8 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
     from auth.graphql_client import use_fixture_provider
     from database.engine import create_db_engine
     from database.ingest import ingest_standings
+    from database.models import StandingsSnapshot
+    from sqlalchemy import func
     from scheduler import graphql_sync as sync
     from scraper import graphql_scraper as api
     from scraper.player_enrichment import enrich_all_players
@@ -110,6 +112,11 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                 if progress:
                     progress(f"INGEST TEAM {team_number}/{len(scope['team_ids'])}")
                 sync.ingest_team_data(db, api.fetch_team_data(run_config, team_id))
+            # One refresh is one standings snapshot across ALL current divisions.
+            # Timestamp it after team fallback snapshots, so latest_standings sees
+            # every division rather than only the final per-division write.
+            standings_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            standings_expected = 0
             for division_number, division in enumerate(scope["divisions"], 1):
                 if progress:
                     progress(f"INGEST DIVISION {division_number}/{len(scope['divisions'])}")
@@ -120,7 +127,7 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                 standings = api.division_standings_rows(api.fetch_division_standings(run_config, did))
                 if not standings:
                     raise RefreshFailed("current division standings are unreadable; previous bundle retained")
-                ingest_standings(db, standings)
+                standings_expected += ingest_standings(db, standings, captured_at=standings_at)
                 totals = sync.sync_division_wide(run_config, db, did, fmt, session, resume=False,
                                                 roster_is_current=True, identity_current_only=True)
                 counts.append(totals)
@@ -137,6 +144,12 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                             gaps.append("authoritative match missing after fixture ingestion")
                         elif problem := _match_gap(result):
                             gaps.append(problem)
+            latest_at = db.query(func.max(StandingsSnapshot.captured_at)).scalar()
+            latest_count = db.query(StandingsSnapshot).filter(StandingsSnapshot.captured_at == latest_at).count()
+            if latest_at != standings_at or latest_count != standings_expected:
+                raise RefreshFailed("latest standings snapshot does not contain all captured division rows")
+            if progress:
+                progress(f"STANDINGS VERIFIED - {len(scope['divisions'])} divisions in one latest snapshot")
             if progress:
                 progress("INGEST CAREER STATS from captured responses")
             enrichment = enrich_all_players(run_config, db, catalog=scope["catalog"], catalog_path=catalog,
@@ -150,7 +163,13 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
               "historical_scope": "Existing historical games retained; current listed divisions and resolvable career contexts rechecked."}
     (directory / "refresh_report.json").write_bytes(encoded(report))
     if gaps:
-        raise RefreshFailed(f"source coverage incomplete ({len(gaps)} gaps); previous bundle retained")
+        if progress:
+            unresolved = [r for r in reconciled if r.get("status") == "unresolved_identity_partial"]
+            if unresolved:
+                identities = sum(r.get("unresolved_identities", 0) for r in unresolved)
+                progress(f"SOURCE REVIEW REQUIRED - {len(unresolved)} scoresheets contain {identities} unresolved row identities; no identity was guessed")
+            progress("Coverage details: " + str(directory / "refresh_report.json"))
+        raise RefreshFailed(f"source coverage incomplete ({len(gaps)} gaps); no new workbook or HTML built; previous bundle retained")
     return report
 
 

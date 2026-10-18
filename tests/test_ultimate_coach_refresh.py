@@ -79,7 +79,7 @@ def setup(tmp_path, monkeypatch):
         return {**validate_structure(path),'portable_structure_checked':True}
     def html(path):
         calls.append('html')
-        assert 'Who should I send next?' in path.read_text(encoding='utf-8')
+        assert 'Next Send — options against' in path.read_text(encoding='utf-8')
         return {'portable_html_checked':True}
     monkeypatch.setattr('auth.graphql_client._post_with_retries',lambda *a,**k:pytest.fail('offline replay attempted HTTP'))
     def run(**kw):
@@ -352,3 +352,64 @@ def test_post_commit_status_log_error_does_not_falsely_report_refresh_failure(se
     result=run()
     assert json.loads((root/'CURRENT.json').read_text())==result
     assert not (root/result['run']/'FAILED.json').exists()
+
+
+def test_all_current_divisions_share_one_latest_standings_snapshot(setup):
+    """Rows from earlier divisions must not disappear from latest_standings()."""
+    from collections import Counter
+    run,root,sources,_,_=setup
+    store=ResponseFixtures(sources)
+    store.entries=json.loads((sources/'sources.json').read_text())['entries']
+    cases=[
+        (queries.DIVISION_ROSTERS_QUERY,{'id':400},{'division':{'id':400,'teams':[{'id':401,'name':'Fixture Others','roster':[]}]}}),
+        (queries.DIVISION_SCHEDULE_QUERY,{'id':400},{'division':{'id':400,'schedule':[]}}),
+        (queries.DIVISION_STANDINGS_QUERY,{'id':400},{'division':{'id':400,'teams':[{'id':401,'name':'Fixture Others','standing':1,'sessionTotalPoints':29}]}}),
+        (queries.TEAM_PAGE_QUERY,{'id':401},{'team':{'id':401,'name':'Fixture Others','division':{'id':400,'name':'Second fixture division','format':'EIGHT'},'session':{'id':26,'name':SESSION_NAME},'league':{'id':1,'slug':'fixture'}}}),
+        (queries.TEAM_ROSTER_QUERY,{'id':401},{'team':{'roster':[]}}),
+        (queries.TEAM_SCHEDULE_QUERY,{'id':401},{'team':{'matches':[]}}),
+    ]
+    for query,variables,data in cases:store(query,variables,lambda data=data:data)
+    store.save_index()
+    scope=json.loads((sources/'scope.json').read_text());scope['team_ids'].append('401')
+    scope['divisions'].append({'division_id':'400','format':'EIGHT','session_name':SESSION_NAME})
+    scope['catalog']['divisions'].append({'division_id':'400','catalog_session_name':SESSION_NAME,'league_id':'1','league_slug':'fixture'})
+    (sources/'scope.json').write_bytes(encoded(scope))
+    result=run()
+    with sqlite3.connect(root/result['run']/'ultimate_coach_staging.db') as db:
+        latest=db.execute('SELECT team_name,rank,points FROM standings_snapshots WHERE captured_at=(SELECT MAX(captured_at) FROM standings_snapshots)').fetchall()
+    assert Counter(latest)==Counter([('Fixture Sharks',1,71),('Fixture Renegades',2,63),('Fixture Others',1,29)])
+
+
+def test_incomplete_latest_standings_snapshot_cannot_replace_complete_bundle(setup,monkeypatch):
+    from database import ingest
+    run,root,*_=setup
+    first=run();prior=(root/'CURRENT.json').read_bytes()
+    hashes={p.name:sha256(p) for p in (root/first['run']).iterdir() if p.is_file()}
+    original=ingest.ingest_standings
+    def incomplete(db,rows,captured_at=None):
+        original(db,rows[:-1],captured_at=captured_at)
+        return len(rows)
+    monkeypatch.setattr(ingest,'ingest_standings',incomplete)
+    with pytest.raises(refresh.RefreshFailed,match='latest standings snapshot'):
+        run()
+    assert (root/'CURRENT.json').read_bytes()==prior
+    assert hashes=={p.name:sha256(p) for p in (root/first['run']).iterdir() if p.is_file()}
+    assert 'APA REFRESH COMPLETE' not in (root/'REFRESH_STATUS.txt').read_text()
+
+
+def test_unresolved_identity_failure_explains_scope_and_report_without_success(setup,capsys):
+    run,root,sources,*_=setup
+    first=run();prior=(root/'CURRENT.json').read_bytes();capsys.readouterr()
+    detail=copy.deepcopy(MATCH_DETAIL_PAYLOAD)
+    detail['results'][0]['scores'][0]['player']['id']=19999
+    detail['results'][0]['scores'][0]['player']['displayName']='Fixture Unresolved Participant'
+    store=ResponseFixtures(sources);store.entries=json.loads((sources/'sources.json').read_text())['entries']
+    key=store.key(queries.MATCH_DETAIL_QUERY,{'id':90401});store.entries.pop(key)
+    store(queries.MATCH_DETAIL_QUERY,{'id':90401},lambda:{'match':detail});store.save_index()
+    with pytest.raises(refresh.RefreshFailed,match='no new workbook or HTML built'):
+        run()
+    text=capsys.readouterr().out
+    assert 'SOURCE REVIEW REQUIRED' in text and 'unresolved row identities' in text
+    assert 'refresh_report.json' in text and 'no identity was guessed' in text
+    assert 'APA REFRESH COMPLETE' not in text
+    assert (root/'CURRENT.json').read_bytes()==prior

@@ -40,6 +40,17 @@ and generated workbook data. Broader records remain separately labeled Not used 
 Private synthetic browser/native acceptance and exact scope are recorded in the ONE report.
 This is candidate presentation work; no production publication or successful live refresh is implied.
 
+## Refresh standings correction verified (2026-10-18)
+
+The refresh coordinator now passes one timestamp to all explicit current-division standings
+writes after team fallback snapshots, and refuses completion if the latest snapshot is incomplete.
+The preserved real capture replays to all 40 standings rows across four divisions. The same
+17 unresolved scoresheets still block completion; no identity guard was relaxed. Failure output
+states that no new workbook/HTML was built and points to the private coverage report.
+Current-source verification: 29 refresh tests plus isolated full/quick/corrected-result/failure/retry
+BAT checks using native Excel and Chromium. Source and private evidence bindings are in the ONE
+report. Candidate only; no primary installation, real live-refresh completion or release is implied.
+
 ## Separate live validation blocker (2026-10-17)
 
 Real primary APA full-refresh validation stopped at identity reconciliation before workbook/HTML builds.
