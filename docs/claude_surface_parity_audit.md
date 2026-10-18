@@ -9,6 +9,15 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Re-checks after the pass
+
+- **2026-10-18 09:47, 3f7d9aa (docs only).** Product code and tests are unchanged since afa0169. The five
+  combined suites passed 346 of 346, and the Avoid-order, live-threat and per-opponent caution fixtures
+  agree across surfaces. The pass holds.
+- **2026-10-18 10:10, a02fc39 and 3c1bd8b (refresh standings fix and docs).** These touch only
+  `pipeline/ultimate_coach_refresh.py`, its tests and docs, with no `ui/`, `analytics/` or captain-surface
+  change. `tests/test_ultimate_coach_refresh.py` passed 29 of 29. The pass holds.
+
 ## Claude implementation of T1, T2, T4 and final audit (2026-10-17) — SURFACE PARITY PASS
 
 GPT became unavailable, so Claude implemented the last three required trust fixes in `ui/excel_war_room.py`.
