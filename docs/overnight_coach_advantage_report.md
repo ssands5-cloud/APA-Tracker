@@ -1,5 +1,14 @@
 # CURRENT PRIORITIES
 
+**SURFACE PARITY PASS — Claude, 2026-10-17, source afa0169.** Phone, HTML, workbook and Packet no longer lead a captain to different decisions from the same evidence. The owner-listed parity findings in the next paragraphs are closed, so do not treat them as active:
+- P1, Packet save-for-later: a009e83.
+- P2, per-opponent loss cautions: e328d37.
+- P3, deeper records: cc10c66.
+- P4, reference-budget warning: 54898fb.
+- T1 Avoid wording, T2 Basis direction and T4 Blind Send sample count: afa0169, implemented by Claude after GPT became unavailable.
+
+Combined cross-surface, Next Send, workbook formula, war-room and browser suites: 346 passed in one run. Formula results came from the repository evaluator. Native Excel and physical-device acceptance were not run in this pass. The per-commit audit trail, exact fixtures and the remaining cosmetic-only list are in `docs/claude_surface_parity_audit.md`. Ranking, category, eligibility, save and budget logic were not changed by the T fixes. The unrelated uncommitted refresh correction remains separate candidate work.
+
 **Skill-cap paper parity checkpoint, 2026-10-17.** Claude P4 reproduced: entering a cap left workbook/Packet recommendations without the phone's candidate warning. Workbook now mirrors the existing phone reference arithmetic: captured SL already Played plus the candidate and cheapest remaining captured SLs for one slot per unplayed roster opponent. No required-send/format/tournament constraint is inferred. The same named candidate warning appears in Command Center, workbook send previews and Packet/Blind Send; entered cap and incomplete-scope limitations appear at the decision. No cap is assumed, high/cleared caps remove the warning, unknown SL never clears a lineup, and rankings are unchanged. This is parity for existing arithmetic, not a new recommendation or legality engine.
 
 Five focused cap/scope/print checks pass, plus ten candidate-arithmetic checks covering low/high/clear cap, missing SL, Played, Unavailable, no players, no opponents, unknown Played SL and equal-SL ties. Initial product implementation exposed arithmetic on an empty SL-order slot; guarded before subtraction and reverified. Native Excel and actual 390/1280 browser checks identify the same over-budget player; the other candidate is not flagged, high/clear recovery works, and six native captain sheets have zero formula errors. The native Packet decision page was reviewed readable with the named warning and reference-only qualification. Private cap* evidence remains under tmp/uat/cross-surface-parity-review-20261017. Claude's audit b90ac1d independently closes P3; P4 and T1-T4 require re-check on this commit. Continue remaining wording, Basis direction and Blind Send sample findings. No SURFACE PARITY PASS yet.
