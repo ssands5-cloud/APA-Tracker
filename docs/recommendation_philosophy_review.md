@@ -1,5 +1,133 @@
 # Recommendation philosophy review: evidence ranking or captain decisions?
 
+## Current product assessment — GPT, 2026-10-18
+
+**Recommendation:** Ultimate Coach should serve captain decision-making, with its verified evidence engine
+as the foundation. Keep the current ranking unchanged unless Paul separately approves a decision policy
+and its validation. This is a recommendation about product purpose, not permission to implement a model,
+reorder players, or promise that a different send will win.
+
+The practical choice has three forms:
+
+| Philosophy | What it promises | Main benefit | Main limitation |
+| --- | --- | --- | --- |
+| Evidence ranking | Which recorded matchup evidence comes first under a disclosed rule | Transparent, reproducible facts and ordering | First in evidence order need not be the best practical send |
+| Prescriptive captain-decision system | Which available send best advances a defined match-night objective | Directly answers the captain's action question | Requires a defensible objective, tradeoff rules and effectiveness validation we do not yet have |
+| Captain decision support with an evidence foundation | What the evidence supports, where it conflicts, and which tradeoff the captain must make | Connects facts to the action without pretending the missing information is known | The captain still makes a judgment; the system cannot honestly claim an optimal send |
+
+The third is the appropriate product direction now. It does not mean adding more warnings indefinitely.
+Thin-versus-deep, current-versus-historical and now-versus-later conflicts are substantive selection-policy
+questions; cosmetic parity and complete disclosure cannot settle them.
+
+### 1. Evidence ranking: pros, cons and risks
+
+**Pros.** Direct meetings address the exact opponent. Results can be inspected, the comparator can be
+explained, and identical inputs reproduce the same order. Shared-only candidates are not assigned a
+made-up numerical strength; missing evidence stays unknown. This avoids arbitrary blending and makes
+identity, counts and source provenance auditable. It remains useful even without a trustworthy predictive
+rule: a captain can discover an otherwise overlooked matchup or loss caution.
+
+**Cons.** The current hierarchy treats evidence type as a priority before broader practical considerations.
+Within favorable/even direct records, observed win fraction precedes meeting count. Dates and SL changes
+annotate rather than alter that order. Captured broader records do not enter it. Consequently an honest,
+well-disclosed first row can still be an unpersuasive action recommendation. Blind Send and save warnings
+also embody preferences; they are not merely neutral lists of facts.
+
+**Risks.** Captains may follow the first player as the best send, or repeatedly override it and stop trusting
+the tool. A thin record can dominate a deeper one. Repeated historical meetings may describe an older race
+or a concentrated opponent/player relationship. The hierarchy's simplicity does not make its practical
+tradeoffs objectively correct. These risks persist even after all four surfaces agree.
+
+### 2. Captain-decision systems: pros, cons and risks
+
+**Pros.** They focus on the actual action: whom to send now, whether to preserve a counter, and which danger
+matters for players still available. They can distinguish the exact pairing from general player history,
+and expose conflicts instead of treating evidence type as a complete answer. An explicit decision policy
+can be judged against the captain's objective rather than against implementation consistency alone.
+
+**Cons.** The objective must be defined: winning the present individual matchup, maximizing team match
+points, or preserving later options are different tasks. Availability, changing skill levels, opposition
+selection and uncaptured player context complicate them. A broader record is not automatically a measure
+of ability: format, time period, opposition, handicap context and data coverage can differ. Captain
+preferences can conflict even when everyone reads the same facts.
+
+**Risks.** A decisive-looking answer can hide more assumptions than the current evidence list. Historical
+association can be mistaken for proof that choosing a different teammate improves outcomes. An unverified
+identity or incomplete archive can affect broad-record comparisons. Optimization can sacrifice a strong
+present opportunity for a later matchup that never happens. Suppressing published probabilities does not
+remove the predictive claim implicit in calling a player the best send.
+
+Decision support does not inherently require a new predictive model. Existing evidence can inform a
+captain's judgment. Claiming an automatically superior or optimal send, however, requires support beyond
+the current recorded-results comparator or a plausible captain story.
+
+### 3. Five requested examples
+
+| Example | Current behavior, reproduced from source | Evidence-ranking argument | Captain-decision argument and limit |
+| --- | --- | --- | --- |
+| 1-0 vs 8-2 against the same opponent | 1-0 is first: 100% observed wins precede 80%, with meeting count later | Both records are exact-pair facts; the rule is consistent | A captain can reasonably prefer ten meetings of favorable results to one. That does not prove 8-2 always wins or establish a new threshold/weight. |
+| 1-0 direct / 3-4 broader vs no direct / 50-15 broader; opponent 8-0 broader | The 1-0 candidate is ranked; the other is unknown/unranked without shared evidence. Broader totals do not change the comparator | The exact matchup has a result; broader records may involve different opponents and contexts | A captain can reasonably choose the 50-15 player after checking record scope. Neither 50-15 nor the opponent's 8-0 justifies an automatic override by itself. Captured team/session records must not be called universal lifetime strength. |
+| Save-for-later | A sole favorable direct option against another unplayed opponent triggers consider-saving for both 1-0 and 5-0; disclosed sample differs | The unique positive recorded pairing is a real option worth preserving | Protecting 5-0 may be more persuasive than protecting 1-0, but the value now and later matters. A 5-0 current opportunity can outweigh preserving a 1-0 future option; the future opponent may never be put up. The flag does not establish the optimal trade. |
+| Blind Send | Fewest concerning pairings, then most favorable, then most even, then roster order; category ties can have very different meeting totals | Avoiding a recorded counter is a defensible conservative preference when the opponent can choose a response | One loss can outweigh several deep favorable pairings, while an unknown pairing does not count as a recorded loss. A captain may prefer broader coverage. Without knowing the actual opposing choices and the objective, neither worst-case caution nor broader form is universally best. |
+| Threats | Winning aggregate against remaining players creates a live threat; one win can qualify. Availability recalculates it | It identifies recorded danger and correctly excludes evidence against unavailable players from the live calculation | A single win does not establish roster-wide superiority. An opponent 10-0 vs A but 0-2 vs B is a roster threat while B is a favorable counter. General opponent concern and danger for the actual send are different questions. Absence from this list is not proof of safety. |
+
+The strongest disagreements concern sample support, absolute evidence priority and strategic opportunity
+cost. None requires assuming that a higher-SL player automatically beats a lower-SL player. None proves
+that all experienced captains agree or that a synthetic alternative produces more wins.
+
+### 4. What the existing evidence does and does not establish
+
+The current behavior is verified by eleven synthetic fixture cases in
+`tests/test_recommendation_quality_risks.py` (11 passed in 0.21s). They execute actual product functions,
+not a substitute ranking: `rank_vs_opponent` through `war_room_pair`, then `next_send`, `blind_send` and
+`live_threats`. Availability recalculation, unknown-not-safer abstention and removal of a save warning when
+the protected opponent Played all work. These are not defects to reopen. Engine source was not changed.
+
+**Important limitation of the earlier exploratory review below:** its numerical replay claims have not
+been independently re-run or validated in this assessment. Source inspection of
+`scripts/replay_ordering_rules.py` shows that `auc` compares scores for historical winner and loser rows
+across a dataset. It does not measure the success rate of selecting A rather than B from the same available
+roster against a fixed put-up opponent. An AUC of 0.598 is not a demonstrated 59.8% send-win rate or an
+eight-point improvement over following Ultimate Coach. Actual outcomes for unplayed alternatives are
+unobserved, and different cohorts cannot establish which player would have won the same matchup.
+
+Strictly earlier-date history is a useful protection against future-result leakage. It is insufficient
+for a captain-selection effectiveness claim. The replay uses simplified proxy comparators rather than
+calling the product's complete decision path; its blind proxy omits the even-count key and accumulates
+historical team participants rather than reconstructing tonight's remaining roster and unplayed opponents.
+The archive is also broader than the identity-verified recommendation scope. Mirrored player rows are
+not independent matches. These limitations require caution, not dismissal of every historical signal.
+
+Consequently the older statements that captains will usually do better at about 60%/55%, that history
+proves the 50-15 send correct, or that a captain-decision system has a measured 58-60% practical accuracy
+must be treated as exploratory hypotheses, not accepted product conclusions or release evidence.
+No probabilities, fitted weights, new replay, model or ranking change was created for this report.
+
+### 5. Product recommendation and unresolved decisions
+
+**Choose captain decision support as the purpose; retain verified evidence as the foundation.** Do not
+promise an autonomous best send from the current ranking. Do not replace direct priority with overall
+win percentage on the strength of these examples or the exploratory AUC table. Decide separately whether
+any selection policy should change, how missing evidence should affect it, and which match-night objective
+it serves. Preserve the distinction between an evidence fact, a strategic caution and an action choice.
+
+Before any change, Paul would need to choose whether thin direct records may override deeper favorable
+records, how broadly scoped records may influence a direct matchup decision, and whether Blind Send is
+primarily counter-avoidance or a different explicitly stated objective. Save-for-later needs an agreed
+present-versus-future interpretation. Threats need to remain conditional on available counters. This report
+does not choose numerical weights, probabilities, thresholds or an implementation design.
+
+**Review verdict:** current evidence ranking is reproducible and useful but insufficient to establish
+winning recommendations. Captain decision support is the better product purpose. Superior automated
+selection remains unproven. Strong reasonable-disagreement cases remain, so recommendation-quality
+acceptance is not established. No engine, ranking, UI, database, refresh or publication behavior changed.
+
+---
+
+## Prior exploratory Claude review — preserved reference, not accepted effectiveness proof
+
+Read the methodological qualifications above before using the numerical claims or recommendations below.
+
 Claude, 2026-10-18. Review only: no ranking, code or display was changed. Ranking policy remains Paul's decision.
 
 ## The question
