@@ -1,5 +1,9 @@
 # CURRENT PRIORITIES
 
+**Autonomous captain-engine review, 2026-10-18 — genuine product-direction gate.** Continued beyond the initial register into one-game avoids, shared-only conflicts, allocation/hold collisions and M3 strategy. Final focused run: **24 passed in 0.41s** (13 actual-engine recommendation-quality fixtures plus 11 test-only design counterexamples). A real saved-source inventory verified 575 responses and examined 168 match fixtures / 1,680 score rows; these do not include explicit put-up/declaration sequence. M3 is not implementation-ready: ordinal confidence points do not define strategic utility, static safety is not opponent-response safety, unknown-as-zero can imply false safety, one scarce counter cannot satisfy two holds, and actual results do not reveal unplayed alternatives. Details and the refined state/action/continuation contract are in `docs/team_matchup_engine_design.md` and Captain Decision Review below. No production solver, ranking, model, probability, UI or refresh change was made. Stop reason is the owner's permitted product-direction gate: choose multiple nondominated conditional plans versus a unique automatic plan with an explicitly approved objective/utility/unknown policy. Tests cannot choose that policy; no quality PASS is claimed.
+
+**Recommendation philosophy report prepared, 2026-10-18 — no implementation.** The existing `docs/recommendation_philosophy_review.md` now begins with GPT's requested pros/cons/risks and five-scenario assessment, preserving Claude's earlier exploratory review below it. Recommended product purpose is captain decision support with verified evidence as its foundation; current ranking stays unchanged pending separate owner policy/validation. The eleven executed risk fixtures establish behavior, not improved winning effectiveness. Source inspection identifies an important qualification to the earlier numerical review: its historical-row AUC is not the success rate of selecting an alternative available teammate against the same opponent, and its blind proxy lacks the exact live-roster/unplayed/even-count semantics. Its claimed 52%-to-60% practical improvement is not accepted as demonstrated. No new study/model, engine, UI or ranking change was made. The report is a candidate review document; the owner has not authorized a selection-policy change.
+
 **Owner mission change, 2026-10-18 — recommendation quality; investigation only.** Surface parity is closed unless a new defect appears. The active question is whether a reasonable captain would choose differently from the engine, not whether surfaces agree. No ranking/engine/predictive/probability changes or fixes are authorized by this mission. The Recommendation Risk Register under GPT AUDIT NOTES records ten source-executed scenarios and two important non-failure boundaries. The new synthetic fixture file has **11 passing cases in 0.21s**. This proves current behavior, not winning effectiveness. Strong captain-disagreement examples remain, so no recommendation-quality PASS or stopping-condition claim is justified. Prioritize the actual decision-policy questions over more wording audits. Existing real-refresh two-identity gate stays protected but is no longer the primary review mission.
 
 **Exact captured identity chain verified, 2026-10-18 — candidate correction; real refresh still blocked.** Continued source investigation found a bridge the earlier alias-ID comparison missed: `FormatsByMemberId.member.id -> member.aliases[].id -> getEightBallStats(requested alias).players[].id`. The nested player ID matches the scoresheet player ID for five retained members / 17 of the 19 unresolved rows. Member and alias response IDs must match their exact requests; links are scoped by captured league, session ID and APA FormatType. Catalog `format` is a display label; its `type` is the actual EIGHT/NINE enum. Reconciliation additionally requires existing exact canonical-member/team/division/session membership, preserves historical/current flags, keeps collisions unresolved, and stops on conflict with a current-roster identity. No name-only historical fallback, inferred ID, new query, current-roster expansion, ranking, model or schema was added.
@@ -648,6 +652,60 @@ Continue through Sunday October 18, 2026 at 8 AM America/Denver (2026-10-18 14:0
 - Find the next genuinely unanswered captain decision in the stated priority order; do not recreate foundation acceptance work to fill the queue. Record it here only when identified.
 
 # GPT AUDIT NOTES
+
+## Match Night Engine Review / Captain Decision Review — 2026-10-18
+
+The M3 proposal was challenged with a second executable batch rather than treated as complete because a
+report existed. `tests/test_match_night_design_review.py` is a test-only two-player enumeration/arithmetic
+review, not a production engine. Together with the expanded recommendation cases: **24 passed in 0.41s**.
+The initial run had 22 passes and a fixture KeyError for an off-roster historical shared opponent; the
+helper now records its unknown SL instead of assuming current membership. The final 24 include that
+case and the additional shared-counter hold conflict; overlapping earlier runs are not added.
+
+**Risk Register additions:** RQ11 — an available player with a captured 50-15 broader record and one
+direct loss is excluded from ranked answers, alongside a 0-6 player; the engine's no-evidence-backed-option
+headline can reasonably conflict with a captain choosing the former. RQ12 — B's 8-2 vs a shared opponent
+and X's 0-5 vs that same opponent remain unordered behind A's 1-0 direct record. Shared results do not
+prove B beats X, but absolute direct priority can reasonably be challenged even when an actual two-sided
+indirect comparison exists. Smallest improvements to evaluate are the one-loss exclusion policy and
+absolute direct-priority policy, not more labels; no policy or ordering was changed.
+
+**M3 decision findings:**
+- Best-case and weakest-planned-pair boards can both depend on opposing cooperation; a two-by-two case
+  has a favorable diagonal board but either lead can be countered into both concerning crosses.
+- Local first-send A consumes a sole counter: A-X/B-Y is favorable/concerning, while B-X/A-Y is two
+  favorable records. A currently receives a save warning; the existing engine does not solve that trade.
+- Strong/Solid labels are ordinal. Different monotone numerical scales reverse board choices, and
+  neutral zero for Unknown can make unknown boards look safer under a weakest-link objective.
+- One player can be the sole favorable answer to two opponents but can fulfil only one of those holds.
+- Total versus weakest-link objectives select different concessions. Neither is implied by "must win".
+- Full eight-versus-eight choose-five assignment count is 376,320 before constraints, not 6,720; the
+  latter applies to a fixed set of five opponents. Exact M3 performance has not been benchmarked.
+- Existing budget helper correctly warns that partial SL data cannot clear a lineup even when its
+  feasible reference field is True. A future engine must not mistake that field for legal-plan proof.
+- Final pairings do not identify declaration order, and historical observed results cannot supply
+  the outcomes of alternative unplayed pairings.
+
+**Historical evidence boundary:** both captured fixture integrity and aggregate field inventory were
+checked read-only (575 responses, 168 MatchPage objects, 1,680 score rows). Explicit declaration actor/
+sequence was absent from those captured objects. No new APA requests or historical ranking/probability
+model were run, and no raw private identities were published. An actual put-up-policy replay therefore
+cannot be claimed from these inputs; alternative-outcome win comparisons remain unobserved.
+
+**Captain decision contract:** leading needs response robustness; answering needs reachable future
+options; protecting/holding needs scarce-counter allocation; conceding needs a defined objective;
+finishing needs feasible continuations plus complete format/rule scope. `docs/team_matchup_engine_design.md`
+now refines the proposed M3 state to include pending put-up, phase, next leader, both remaining rosters,
+locks, rounds, budget/unknowns and rule profile. Actual match score is needed if score drives the objective.
+No result is inferred from a confidence level. Those are design requirements only, not a new system.
+
+**Validation verdict:** fixture reproduction PASS, practical winning effectiveness NOT ESTABLISHED,
+M3 implementation readiness BLOCKED on a genuine product-direction decision. Recommended direction is
+multiple conditional nondominated evidence profiles with captain choice. A unique best-plan answer needs
+an approved objective and cardinal utility/unknown policy. The original proposal's Strong=+2 etc. does
+not obtain that approval merely because its formula is readable. This is the explicit permitted stop
+condition requiring Paul, not a request for manual validation that automation could perform. Existing
+substantial disagreement cases remain; no Recommendation Quality Review PASS is declared.
 
 ## Recommendation Risk Register — source-executed captain review, 2026-10-18
 

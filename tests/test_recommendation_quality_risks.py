@@ -26,8 +26,8 @@ def room(records, *, ours=None, theirs=None, dates=None, meeting_sl=None):
         for i, result in enumerate(results):
             evidence.append({'player_id': pid, 'opponent_id': oid, 'format': 'EIGHT', 'result': result,
                 'match_date': (dates or {}).get((pid, oid), ['2026-10-01']*games)[i] + 'T19:00:00-06:00',
-                'own_skill_level': players[pid]['skill_level'],
-                'opponent_skill_level': (meeting_sl or {}).get((pid, oid), players[oid]['skill_level'])})
+                'own_skill_level': players.get(pid, {}).get('skill_level'),
+                'opponent_skill_level': (meeting_sl or {}).get((pid, oid), players.get(oid, {}).get('skill_level'))})
     return war_room_pair(ours, theirs, build_pair_index(pairs), 'EIGHT',
         meetings=meetings_index(evidence, set(players), 'America/Denver'), session_name='Synthetic session')
 
@@ -128,3 +128,22 @@ def test_control_blind_unknown_is_not_recommended_as_safer():
     result = blind_send(room([(2, 10, 'L')]))
     assert result['member'] is None and result['unranked']
     assert 'unknown, not safer' in result['why']
+
+
+def test_rq11_one_loss_excludes_a_strong_broader_record_from_ranked_answers():
+    w = room([(1, 10, 'L'), (2, 10, 'LLLLLL')],
+             ours=[member(1, 'Player A', won=50, played=65), member(2, 'Player B', won=3, played=7)])
+    result = next_send(w, 0)
+    assert result['ranked'] == []
+    assert {r['member']['id'] for r in result['avoid']} == {1, 2}
+    assert 'No evidence-backed option' in result['headline']
+
+
+def test_rq12_strong_shared_comparison_stays_below_one_direct_win():
+    # Opponent 90 is a common historical opponent, not a current roster slot.
+    w = room([(1, 10, 'W'), (2, 90, 'WWWWWWWWLL'), (10, 90, 'LLLLL')])
+    result = next_send(w, 0)
+    assert first(w) == 1
+    assert [r['member']['id'] for r in result['unordered']] == [2]
+    shared = next(r for r in w['blocks'][0]['rows'] if r['member']['id'] == 2)
+    assert shared['ours'] == (8, 10) and shared['theirs'] == (0, 5)
