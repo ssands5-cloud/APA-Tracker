@@ -115,3 +115,32 @@ def test_m311_one_player_cannot_fulfil_two_simultaneous_hold_back_promises():
     attainable = max(sum(chosen[i] in greens[opp] for i, opp in enumerate((11, 12)))
                      for chosen in permutations((1, 2, 3), 2))
     assert attainable == 1
+
+
+def test_m312_implemented_plan_can_choose_differently_when_opponent_budget_is_known():
+    from analytics.match_night_engine import match_plan
+    from tests.test_match_night_engine import night
+    grid = [['Caution', 'Caution', 'Thin'],
+            ['Thin', 'Solid', 'Strong'],
+            ['Solid', 'Strong', 'Unknown']]
+    ours, theirs, values = night([('A', 4), ('B', 4), ('C', 4)],
+                                [('X', 7), ('Y', 7), ('Z', 2)], grid)
+    plan = match_plan(ours, theirs, values, games_left=2, cap=8)
+    v = [[values[(o['id'], t['id'])]['points'] for t in theirs] for o in ours]
+
+    def lead_values(enforce_opponent_budget):
+        # Explicit two-round sequence: our lead, their response, their lead,
+        # our best remaining response. Only the opponent's known 9-SL budget
+        # differs. Values are existing implementation utility, not predicted wins.
+        return [min(v[i][j] + min(max(v[h][k] for h in range(3) if h != i)
+                    for k in range(3) if k != j and
+                    (not enforce_opponent_budget or theirs[j]['sl'] + theirs[k]['sl'] <= 9))
+                    for j in range(3)) for i in range(3)]
+
+    unrestricted = lead_values(False)
+    constrained = lead_values(True)
+    assert unrestricted == [0, 2, 1]
+    assert constrained == [3, 2, 1]
+    assert plan['lead']['our'] == 'B' and plan['total_if_we_lead'] == 2
+    assert constrained.index(max(constrained)) == 0  # A under known opponent budget.
+    assert theirs[0]['sl'] + theirs[1]['sl'] > 9

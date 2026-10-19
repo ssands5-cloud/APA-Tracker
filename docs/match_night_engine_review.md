@@ -1,5 +1,49 @@
 # Match Night Engine (M3): review, Captain Decision Review and risk register status
 
+## GPT read-only review of implemented M3 — 2026-10-18, source 5101bc9
+
+**M312 — known opponent budget is absent from the response model; decision-changing limitation.**
+The implementation and existing tests below are acknowledged. A new source-executed case shows a
+remaining gap in the claim that the engine protects against the opposing captain's most damaging reply.
+The response set is unconstrained by their remaining skill budget. No engine fix is made in this review.
+
+Synthetic scenario: two matches remain. Our A/B/C are SL4 with a supplied remaining budget of eight.
+Their X/Y/Z are SL7/SL7/SL2 with a known remaining budget of nine. This is an explicit arithmetic
+constraint, not a claim that a particular league/tournament rule profile is completely verified.
+X and Y cannot both play; either can play alongside Z.
+
+| Existing confidence utility | X (7) | Y (7) | Z (2) |
+| --- | --- | --- | --- |
+| A (4) | Caution (-3) | Caution (-3) | Thin (1) |
+| B (4) | Thin (1) | Solid (3) | Strong (6) |
+| C (4) | Solid (3) | Strong (6) | Unknown (0) |
+
+An explicit two-round enumeration follows our lead / their response / their lead / our best remaining
+response. Without their budget, lead values are A=0, B=2, C=1 and actual `match_plan` selects B.
+Restricting opposing continuations to the known budget gives A=3, B=2, C=1: A is preferred under
+the implementation's *unchanged* utility. These are utility totals, not match points, expected wins or
+probabilities. The difference arises from treating their X+Y continuation as possible despite its
+SL total of 14 exceeding nine. This can spend a better counter unnecessarily against an impossible reply.
+
+**Source cause:** `analytics/match_night_engine.py::_Night.solve` filters our moves through `legal`;
+the opposing candidates are all remaining roster bits. `match_plan` accepts our `cap` and `used` only.
+There is no place to pass the known opposing remaining budget. Python/phone agreement and optimality
+against a reference search with the same relaxed opposing action set do not test this missing constraint.
+
+**Smallest improvement to evaluate:** accept/filter an explicitly known opposing remaining budget and
+needed completion when building their response set; when that scope is unknown, identify the plan as
+conservative under an unconstrained-opponent assumption. Do not guess their cap or report a legal-game
+optimum from our budget alone. This is a proposed correction, not permission to implement one.
+
+**Validation:** `test_m312_implemented_plan_can_choose_differently_when_opponent_budget_is_known` in
+`tests/test_match_night_design_review.py` checks the actual implemented lead and both exhaustive
+two-round evaluations. All twelve design-review cases passed in 0.29s. Initial exploration of a two-by-two
+case found no distinct lead reversal; the three-player/two-round case above establishes the actual
+decision difference. No unchanged 764-case suite was rerun. Earlier reported verification remains scoped
+to its tested rules; this finding prevents a blanket recommendation-quality acceptance claim.
+
+---
+
 Claude, 2026-10-18. M3 is built on branch `claude/confidence-levels`. No probabilities, odds or machine learning
 anywhere. Every recommendation names its evidence.
 

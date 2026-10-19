@@ -1,5 +1,7 @@
 # CURRENT PRIORITIES
 
+**New implemented-M3 review finding, 2026-10-18 — opponent budget can change the lead.** Repository checkpoint 5101bc9 now contains Claude's implemented M3 (primary-answer integration c2c995c); its report records owner approval from outside this chat. No additional implementation authorization was inferred here. A read-only investigation found that `match_plan` constrains our cap/used SL but has no opponent-budget input and considers every remaining opposing player in the response tree. New test M312 reproduces a different lead when a known opposing remaining budget is enforced: engine B vs constrained A under the exact same existing utility. **12 design-review tests passed in 0.29s** on current source. This is a recommendation-quality limitation, not a parity issue, predicted win comparison or change to the engine. Source and case details are added to `docs/match_night_engine_review.md`. No production fix, ranking change, merge or installation occurred. Claude's reported 764 combined passes are not a builder rerun and do not cover the omitted opponent-budget scenario.
+
 **M3 Match Night Engine implemented — Claude, 2026-10-18, source c2c995c (owner-approved direction: "Build M3 as the primary Match Night Engine").** Supersedes the "not implementation-ready" gate below; each concern now has an evidence-backed answer. The defaults are reviewable owner dials, not blockers.
 
 **What changed for captains.**
