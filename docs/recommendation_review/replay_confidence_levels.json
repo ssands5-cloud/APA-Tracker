@@ -1,0 +1,102 @@
+{
+ "levels": {
+  "EIGHT Caution": {
+   "n": 159963,
+   "won_next": 0.4234
+  },
+  "EIGHT Conflicted": {
+   "n": 20682,
+   "won_next": 0.5
+  },
+  "EIGHT Solid": {
+   "n": 83802,
+   "won_next": 0.5773
+  },
+  "EIGHT Strong": {
+   "n": 17232,
+   "won_next": 0.6812
+  },
+  "EIGHT Thin": {
+   "n": 79427,
+   "won_next": 0.5333
+  },
+  "EIGHT Unknown": {
+   "n": 124874,
+   "won_next": 0.5
+  },
+  "NINE Caution": {
+   "n": 116520,
+   "won_next": 0.4602
+  },
+  "NINE Conflicted": {
+   "n": 15908,
+   "won_next": 0.5
+  },
+  "NINE Solid": {
+   "n": 61156,
+   "won_next": 0.5428
+  },
+  "NINE Strong": {
+   "n": 10182,
+   "won_next": 0.611
+  },
+  "NINE Thin": {
+   "n": 61782,
+   "won_next": 0.5144
+  },
+  "NINE Unknown": {
+   "n": 92052,
+   "won_next": 0.5
+  }
+ },
+ "shared_opponent_no_direct": {
+  "EIGHT level 1-2 shared": {
+   "n": 26116,
+   "won_next": 0.5
+  },
+  "EIGHT level 3+ shared": {
+   "n": 60598,
+   "won_next": 0.5
+  },
+  "EIGHT ours better 1-2 shared": {
+   "n": 24373,
+   "won_next": 0.5596
+  },
+  "EIGHT ours better 3+ shared": {
+   "n": 60810,
+   "won_next": 0.5907
+  },
+  "EIGHT theirs better 1-2 shared": {
+   "n": 24373,
+   "won_next": 0.4404
+  },
+  "EIGHT theirs better 3+ shared": {
+   "n": 60810,
+   "won_next": 0.4093
+  },
+  "NINE level 1-2 shared": {
+   "n": 18412,
+   "won_next": 0.5
+  },
+  "NINE level 3+ shared": {
+   "n": 48152,
+   "won_next": 0.5
+  },
+  "NINE ours better 1-2 shared": {
+   "n": 17695,
+   "won_next": 0.527
+  },
+  "NINE ours better 3+ shared": {
+   "n": 41987,
+   "won_next": 0.5443
+  },
+  "NINE theirs better 1-2 shared": {
+   "n": 17695,
+   "won_next": 0.473
+  },
+  "NINE theirs better 3+ shared": {
+   "n": 41987,
+   "won_next": 0.4557
+  }
+ }
+}
