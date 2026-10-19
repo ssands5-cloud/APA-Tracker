@@ -527,8 +527,9 @@
   var MN_LEVEL_ORDER=["Strong","Solid","Thin","Unknown","Conflicted","Caution"];
   function mnKnown(sl){return typeof sl==="number"&&isFinite(sl)&&sl>0;}
   function mnBits(m){var n=0;while(m){n+=m&1;m>>>=1;}return n;}
-  function MnNight(ours,theirs,value,gamesLeft,cap,used){
+  function MnNight(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed){
     this.ours=ours;this.theirs=theirs;this.value=value;this.gamesLeft=gamesLeft;this.cap=cap;this.used=used;
+    this.oppCap=(oppCap===undefined)?null:oppCap;this.oppUsed=oppUsed||0;this.theirMemo={};
     this.fullOurs=(1<<ours.length)-1;this.fullTheirs=(1<<theirs.length)-1;this.memo={};this.legalMemo={};
   }
   MnNight.prototype.spent=function(om){var s=0,self=this;this.ours.forEach(function(p,i){if(!(om>>i&1)&&mnKnown(p.sl)) s+=Math.trunc(p.sl);});return s;};
@@ -547,6 +548,26 @@
     var own=mnKnown(this.ours[i].sl)?Math.trunc(this.ours[i].sl):0;
     return this.used+this.spent(om)+own+sum<=this.cap;
   };
+  MnNight.prototype.theirLegal=function(om,tm,j){
+    if(this.oppCap===null) return true;
+    var after=this.gamesRemaining(om)-1,key=tm+"|"+j+"|"+after;
+    if(key in this.theirMemo) return this.theirMemo[key];
+    var spent=0,rest=[],unknown=0;
+    this.theirs.forEach(function(p,k){
+      if(!(tm>>k&1)){if(mnKnown(p.sl)) spent+=Math.trunc(p.sl);return;}
+      if(k===j) return;
+      if(mnKnown(p.sl)) rest.push(Math.trunc(p.sl)); else unknown++;
+    });
+    rest.sort(function(a,b){return a-b;});
+    var need=Math.min(Math.max(0,after-unknown),rest.length),sum=0;for(var q=0;q<need;q++) sum+=rest[q];
+    var own=mnKnown(this.theirs[j].sl)?Math.trunc(this.theirs[j].sl):0;
+    return (this.theirMemo[key]=this.oppUsed+spent+own+sum<=this.oppCap);
+  };
+  MnNight.prototype.legalTheirs=function(om,tm){
+    var out=[];if(this.gamesRemaining(om)<=0) return out;
+    for(var j=0;j<this.theirs.length;j++) if((tm>>j&1)&&this.theirLegal(om,tm,j)) out.push(j);
+    return out;
+  };
   MnNight.prototype.gamesRemaining=function(om){return this.gamesLeft-(mnBits(this.fullOurs)-mnBits(om));};
   MnNight.prototype.pair=function(i,j){return this.value[String(this.ours[i].id)+"|"+String(this.theirs[j].id)].points;};
   MnNight.prototype.legalOurs=function(om){
@@ -557,8 +578,7 @@
   MnNight.prototype.solve=function(om,tm,weLead){
     var key=om+"|"+tm+"|"+(weLead?1:0);
     if(key in this.memo) return this.memo[key];
-    var ours=this.legalOurs(om),theirs=[],j,i,v,best=null;
-    if(this.gamesRemaining(om)>0) for(j=0;j<this.theirs.length;j++) if(tm>>j&1) theirs.push(j);
+    var ours=this.legalOurs(om),theirs=this.legalTheirs(om,tm),j,i,v,best=null;
     if(!ours.length||!theirs.length){this.memo[key]=0;return 0;}
     if(weLead){
       for(var a=0;a<ours.length;a++){i=ours[a];var worst=null;
@@ -578,19 +598,19 @@
   };
   MnNight.prototype.lead=function(om,tm){
     var best=[null,null,null],L=this.legalOurs(om);
-    for(var a=0;a<L.length;a++){var i=L[a],reply=null,worst=null;
-      for(var j=0;j<this.theirs.length;j++){if(!(tm>>j&1)) continue;
+    for(var a=0;a<L.length;a++){var i=L[a],reply=null,worst=null,T=this.legalTheirs(om,tm);
+      for(var b=0;b<T.length;b++){var j=T[b];
         var v=this.pair(i,j)+this.solve(om&~(1<<i),tm&~(1<<j),false);if(worst===null||v<worst){reply=j;worst=v;}}
       if(reply!==null&&(best[2]===null||worst>best[2])) best=[i,reply,worst];}
     return [best[0],best[1],best[2]===null?0:best[2]];
   };
   MnNight.prototype.principalLine=function(om,tm,weLead){
     var line=[];
-    while(this.gamesRemaining(om)>0&&this.legalOurs(om).length&&tm){
+    while(this.gamesRemaining(om)>0&&this.legalOurs(om).length&&this.legalTheirs(om,tm).length){
       var i,j;
       if(weLead){var l=this.lead(om,tm);i=l[0];j=l[1];}
       else{var worst=null;j=null;
-        for(var jj=0;jj<this.theirs.length;jj++){if(!(tm>>jj&1)) continue;var v=this.bestAnswer(om,tm,jj)[1];if(worst===null||v<worst){j=jj;worst=v;}}
+        var T2=this.legalTheirs(om,tm);for(var t2=0;t2<T2.length;t2++){var jj=T2[t2],v=this.bestAnswer(om,tm,jj)[1];if(worst===null||v<worst){j=jj;worst=v;}}
         i=this.bestAnswer(om,tm,j)[0];}
       if(i===null||j===null) break;
       line.push({leader:weLead?"us":"them",our:i,their:j});
@@ -603,29 +623,31 @@
   // only a strictly better (total, worst pairing) replaces the current choice).
   function mnBestBoard(night,k,floor){
     var no=night.ours.length,nt=night.theirs.length,memo={},BIG=1000000000;
+    function theirSl(j){return mnKnown(night.theirs[j].sl)?Math.trunc(night.theirs[j].sl):0;}
     function capOk(mask){
       if(night.cap===null) return true;
       var s=0;night.ours.forEach(function(p,i){if((mask>>i&1)&&mnKnown(p.sl)) s+=Math.trunc(p.sl);});
       return night.used+s<=night.cap;
     }
-    function f(j,mask){
+    function f(j,mask,tsum){
       var count=mnBits(mask);
+      if(night.oppCap!==null&&night.oppUsed+tsum>night.oppCap) return null;
       if(count===k) return capOk(mask)?[[0,BIG],[]]:null;
       if(j===nt||nt-j<k-count) return null;
-      var key=j+"|"+mask;if(key in memo) return memo[key];
+      var key=j+"|"+mask+"|"+tsum;if(key in memo) return memo[key];
       var best=null;
       for(var i=0;i<no;i++){
         if(mask>>i&1) continue;
         var v=night.pair(i,j);if(floor!==null&&v<floor) continue;
-        var rest=f(j+1,mask|(1<<i));if(rest===null) continue;
+        var rest=f(j+1,mask|(1<<i),tsum+theirSl(j));if(rest===null) continue;
         var cand=[[v+rest[0][0],Math.min(v,rest[0][1])],[[i,j]].concat(rest[1])];
         if(best===null||mnKeyGreater(cand[0],best[0])) best=cand;
       }
-      var skip=f(j+1,mask);
+      var skip=f(j+1,mask,tsum);
       if(skip!==null&&(best===null||mnKeyGreater(skip[0],best[0]))) best=skip;
       memo[key]=best;return best;
     }
-    return f(0,0);
+    return f(0,0,0);
   }
   function mnBoard(night,k,safest){
     if(!safest){var found=mnBestBoard(night,k,null);return found?found[1]:[];}
@@ -641,25 +663,28 @@
     known.sort(function(a,b){return a-b;});var need=Math.min(night.gamesLeft,known.length),cheapest=0;for(var k=0;k<need;k++) cheapest+=known[k];
     return {cap:night.cap,used:night.used,cheapest_rest:cheapest,slack:night.cap-night.used-cheapest,incomplete:unknown>0};
   }
-  function mnMatchPlan(ours,theirs,value,gamesLeft,cap,used){
-    cap=(cap===undefined)?null:cap;used=used||0;
+  function mnMatchPlan(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed){
+    cap=(cap===undefined)?null:cap;used=used||0;oppCap=(oppCap===undefined)?null:oppCap;oppUsed=oppUsed||0;
     gamesLeft=Math.max(0,Math.min(gamesLeft,ours.length,theirs.length));
-    var night=new MnNight(ours,theirs,value,gamesLeft,cap,used),om=night.fullOurs,tm=night.fullTheirs;
+    var night=new MnNight(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed),om=night.fullOurs,tm=night.fullTheirs;
+    if(oppCap!==null&&gamesLeft&&!night.legalTheirs(om,tm).length){night=new MnNight(ours,theirs,value,gamesLeft,cap,used);oppCap=null;}
     function name(side,i){return (side==="our"?night.ours:night.theirs)[i].name;}
     function conf(i,j){return night.value[String(night.ours[i].id)+"|"+String(night.theirs[j].id)];}
     var incomplete=cap!==null&&ours.some(function(p){return !mnKnown(p.sl);});
-    var out={games_left:gamesLeft,cap_incomplete:incomplete};
+    var out={games_left:gamesLeft,cap_incomplete:incomplete,
+      opponent_budget:oppCap===null?null:{cap:oppCap,used:oppUsed,incomplete:theirs.some(function(p){return !mnKnown(p.sl);})}};
     if(!gamesLeft||!night.legalOurs(om).length){
       out.lead=null;out.responses=[];out.holds=[];out.sacrifices=[];out.plan_if_we_lead=[];out.plan_if_they_lead=[];
       out.best_board=[];out.safest_board=[];out.confidence={};out.fragility=null;out.cap=mnCapSafety(night,om);return out;
     }
     var l=night.lead(om,tm),li=l[0],lj=l[1],leadValue=l[2],equal=[],LO=night.legalOurs(om);
+    var LT=night.legalTheirs(om,tm);
     for(var q=0;q<LO.length;q++){var ii=LO[q];if(ii===li) continue;var ww=null;
-      for(var jq=0;jq<theirs.length;jq++){if(!(tm>>jq&1)) continue;var vv=night.pair(ii,jq)+night.solve(om&~(1<<ii),tm&~(1<<jq),false);if(ww===null||vv<ww) ww=vv;}
+      for(var tq=0;tq<LT.length;tq++){var jq=LT[tq],vv=night.pair(ii,jq)+night.solve(om&~(1<<ii),tm&~(1<<jq),false);if(ww===null||vv<ww) ww=vv;}
       if(ww===leadValue) equal.push(name("our",ii));}
     out.lead={our:name("our",li),our_id:ours[li].id,their_reply:name("their",lj),level:conf(li,lj).level,why:conf(li,lj).text,equally_good:equal};
     var totalThey=night.solve(om,tm,false),responses=[];
-    for(var j=0;j<theirs.length;j++){
+    for(var rj=0;rj<LT.length;rj++){var j=LT[rj];
       var ba=night.bestAnswer(om,tm,j),i=ba[0],v=ba[1];if(i===null) continue;
       var L=night.legalOurs(om),naive=L[0];for(var a=1;a<L.length;a++) if(night.pair(L[a],j)>night.pair(naive,j)) naive=L[a];
       var cost="";
@@ -673,7 +698,7 @@
     var base=night.solve(om,tm,true),drops=[];
     for(var x=0;x<ours.length;x++){
       if(!(om>>x&1)) continue;
-      var sub=new MnNight(ours.filter(function(p,k){return k!==x;}),theirs,value,Math.min(gamesLeft,ours.length-1,theirs.length),cap,used);
+      var sub=new MnNight(ours.filter(function(p,k){return k!==x;}),theirs,value,Math.min(gamesLeft,ours.length-1,theirs.length),cap,used,oppCap,oppUsed);
       drops.push([base-sub.solve(sub.fullOurs,sub.fullTheirs,true),x]);
     }
     var planLead=night.principalLine(om,tm,true),planThem=night.principalLine(om,tm,false);
@@ -727,13 +752,14 @@
   // The plan for this War Room as it stands (mirrors analytics.match_night_engine.plan_for_war_room).
   function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap){
     var ours=w.ours.filter(function(m){return rem[String(m.id)];}).map(function(m){return {id:m.id,name:wrDisplayName(m,w.ours),sl:m.skill_level===undefined?null:m.skill_level};});
-    var theirs=[],value={};
+    var theirs=[],value={},oppUsed=0;
+    w.blocks.forEach(function(b,j){if(!unplayed[j]&&mnKnown(b.opponent.skill_level)) oppUsed+=Math.trunc(b.opponent.skill_level);});
     w.blocks.forEach(function(b,j){
       if(!unplayed[j]) return;
       theirs.push({id:b.opponent.id,name:wrDisplayName(b.opponent,w.theirs),sl:b.opponent.skill_level===undefined?null:b.opponent.skill_level});
       b.rows.forEach(function(r){value[String(r.member.id)+"|"+String(b.opponent.id)]=r.confidence;});
     });
-    return mnMatchPlan(ours,theirs,value,5-playedCount,cap,playedSl);
+    return mnMatchPlan(ours,theirs,value,5-playedCount,cap,playedSl,cap,oppUsed);
   }
   window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
@@ -741,7 +767,7 @@
     return mnPlanFor(w,rem,unplayed||w.theirs.map(function(){return true;}),playedCount||0,playedSl||0,cap===undefined?null:cap);
   };
   // Test hook: the engine on explicit inputs (cross-checked with analytics.match_night_engine.match_plan).
-  window.__ucMatchPlan=function(ours,theirs,value,gamesLeft,cap,used){return mnMatchPlan(ours,theirs,value,gamesLeft,cap,used);};
+  window.__ucMatchPlan=function(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed){return mnMatchPlan(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed);};
   // Test hook: every pairing's confidence text, [opponent][our player] in roster order (cross-checked with Python).
   window.__ucConfidence=function(ourKey,oppKey,fmt){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
@@ -1082,7 +1108,8 @@
     var conf=MN_LEVEL_ORDER.filter(function(lv){return p.confidence[lv];}).map(function(lv){return p.confidence[lv]+" "+lv;}).join(" · ");
     var frag=p.fragility.rating+(p.fragility.player?" — leans most on "+p.fragility.player:"")
       +(p.fragility.thin_pairings.length?" · thin: "+p.fragility.thin_pairings.join(", "):"");
-    var capTxt=p.cap?(p.cap.incomplete?"Cap "+p.cap.cap+": check incomplete (missing skill levels)":"Cap "+p.cap.cap+": "+p.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
+    var capTxt=(p.cap?(p.cap.incomplete?"Cap "+p.cap.cap+": check incomplete (missing skill levels)":"Cap "+p.cap.cap+": "+p.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered")
+      +(p.opponent_budget?" · their replies limited to lineups they can field under the same cap":" · assumes any of their players can still be put up");
     var lvl=function(lv){return '<span class="mp-level mp-'+lv.toLowerCase()+'">'+esc(lv)+'</span>';};
     var li=function(html){return '<li>'+html+'</li>';};
     var line=function(rows){return '<ol class="mp-line">'+rows.map(function(g){return li(esc((g.leader==="us"?"We lead: ":"They lead: ")+g.our+" vs "+g.their+" ")+lvl(g.level));}).join("")+'</ol>';};

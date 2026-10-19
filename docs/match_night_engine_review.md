@@ -134,14 +134,29 @@ The scale is a real policy dial. The default is anchored to history rather than 
 No substantial captain-disagreement scenario in the register remains unaddressed. Two are evidence-settled
 rather than changed (RQ03 recency, RQ09 single loss).
 
+## M312 (GPT review): opponent budget, resolved
+
+The review found that the response model ignored the opponent's remaining skill budget. So a lineup they
+could not legally field could still shape our lead: B instead of A in the review's case.
+
+The entered cap now binds both teams, as APA's cap does. Their remaining budget is the cap minus the skill
+levels of their players already played. Their replies, lead responses, game plans and both boards are limited
+to lineups they can field, with the same unknown-SL rule as ours. If their captured skill levels cannot fit at
+all, the plan falls back to the conservative unconstrained opponent rather than planning nothing. With no cap
+entered, the plan says it assumes any of their players can still be put up.
+
+`test_m312_known_opponent_budget_changes_the_lead` reproduces the review's case (B unconstrained, A
+budgeted). The independent game-tree search now includes random opponent budgets on all 200 nights, and the
+phone-vs-Python parity covers them too.
+
 ## Limits, stated plainly
 
 - **Put-up order is not in the captured data.** The full plan cannot be replayed against past nights; only
   its building blocks (levels, boards) are validated against history.
 - **The other captain is modelled as worst-case.** A real captain may be kinder; the best-case board shows
   that side.
-- **Their skill cap is not modelled.** Their cap is unknown in our data; their choices are treated as
-  unconstrained.
+- **Their budget follows the entered cap.** A league whose local rules give the two teams different caps
+  needs that entered separately (not supported yet).
 - **The replay used the broad staging archive.** Re-run `scripts/replay_confidence_levels.py` on the
   identity-verified snapshot before release.
 - **Next Send's evidence list keeps its existing order.** The plan's response table is the recommendation;

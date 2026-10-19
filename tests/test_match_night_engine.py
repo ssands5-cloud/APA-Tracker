@@ -22,31 +22,34 @@ def night(our_specs, their_specs, grid):
     return ours, theirs, value
 
 
-def brute(ours, theirs, value, games, cap, used, we_lead):
+def brute(ours, theirs, value, games, cap, used, we_lead, opp_cap=None, opp_used=0):
     """Plain game-tree search with no memo and no shared code: the reference answer."""
-    def legal(rem_o, i, games_after, spent):
-        sl = ours[i]["sl"] if isinstance(ours[i]["sl"], int) else 0
-        if cap is None:
-            return True
-        rest = sorted(ours[k]["sl"] for k in rem_o if k != i and isinstance(ours[k]["sl"], int))
-        unknown = sum(1 for k in rem_o if k != i and not isinstance(ours[k]["sl"], int))
-        need = min(max(0, games_after - unknown), len(rest))
-        return used + spent + sl + sum(rest[:need]) <= cap
+    def sl_of(side, k):
+        return side[k]["sl"] if isinstance(side[k]["sl"], int) else 0
 
-    def go(rem_o, rem_t, g, spent, lead):
-        cand = [i for i in rem_o if legal(rem_o, i, g - 1, spent)] if g > 0 else []
-        if not cand or not rem_t:
+    def fits(side, rem, k, games_after, spent, limit, base):
+        if limit is None:
+            return True
+        rest = sorted(side[x]["sl"] for x in rem if x != k and isinstance(side[x]["sl"], int))
+        unknown = sum(1 for x in rem if x != k and not isinstance(side[x]["sl"], int))
+        need = min(max(0, games_after - unknown), len(rest))
+        return base + spent + sl_of(side, k) + sum(rest[:need]) <= limit
+
+    def go(rem_o, rem_t, g, spent, tspent, lead):
+        cand = [i for i in rem_o if fits(ours, rem_o, i, g - 1, spent, cap, used)] if g > 0 else []
+        reply = [j for j in rem_t if fits(theirs, rem_t, j, g - 1, tspent, opp_cap, opp_used)] if g > 0 else []
+        if not cand or not reply:
             return 0
         def after(i, j):
-            sl = ours[i]["sl"] if isinstance(ours[i]["sl"], int) else 0
             return value[(ours[i]["id"], theirs[j]["id"])]["points"] + go(
-                [k for k in rem_o if k != i], [k for k in rem_t if k != j], g - 1, spent + sl, not lead)
+                [k for k in rem_o if k != i], [k for k in rem_t if k != j], g - 1,
+                spent + sl_of(ours, i), tspent + sl_of(theirs, j), not lead)
         if lead:
-            return max(min(after(i, j) for j in rem_t) for i in cand)
-        return min(max(after(i, j) for i in cand) for j in rem_t)
+            return max(min(after(i, j) for j in reply) for i in cand)
+        return min(max(after(i, j) for i in cand) for j in reply)
 
     games = max(0, min(games, len(ours), len(theirs)))
-    return go(list(range(len(ours))), list(range(len(theirs))), games, 0, we_lead)
+    return go(list(range(len(ours))), list(range(len(theirs))), games, 0, 0, we_lead)
 
 
 @pytest.mark.parametrize("seed", range(200))
@@ -54,17 +57,23 @@ def test_plan_values_match_an_independent_game_tree_search(seed):
     rng = random.Random(seed)
     no, nt = rng.randint(2, 5), rng.randint(2, 5)
     our_specs = [(f"O{i}", rng.choice([2, 3, 4, 5, 6, 7, None])) for i in range(no)]
-    their_specs = [(f"T{j}", rng.choice([2, 3, 4, 5, 6])) for j in range(nt)]
+    their_specs = [(f"T{j}", rng.choice([2, 3, 4, 5, 6, 7, None])) for j in range(nt)]
     grid = [[rng.choice(LEVELS) for _ in range(nt)] for _ in range(no)]
     ours, theirs, value = night(our_specs, their_specs, grid)
     games = rng.randint(1, 4)
     cap = rng.choice([None, 12, 15, 23])
     used = rng.choice([0, 0, 3])
-    plan = match_plan(ours, theirs, value, games_left=games, cap=cap, used=used)
+    opp_cap = rng.choice([None, cap, 9, 12, 23])
+    opp_used = rng.choice([0, 0, 4])
+    plan = match_plan(ours, theirs, value, games_left=games, cap=cap, used=used, opp_cap=opp_cap, opp_used=opp_used)
     if plan.get("lead") is None:
         return
-    assert plan["total_if_we_lead"] == brute(ours, theirs, value, games, cap, used, True)
-    assert plan["total_if_they_lead"] == brute(ours, theirs, value, games, cap, used, False)
+    applied = plan["opponent_budget"]["cap"] if plan["opponent_budget"] else None   # infeasible data falls back
+    assert plan["total_if_we_lead"] == brute(ours, theirs, value, games, cap, used, True, applied, opp_used)
+    assert plan["total_if_they_lead"] == brute(ours, theirs, value, games, cap, used, False, applied, opp_used)
+    if applied is not None:
+        for line in (plan["plan_if_we_lead"], plan["plan_if_they_lead"]):
+            assert opp_used + sum(next(t["sl"] for t in theirs if t["name"] == p["their"]) or 0 for p in line) <= applied
     # The game plan is a legal night: nobody used twice, cap respected on known skill levels.
     for line in (plan["plan_if_we_lead"], plan["plan_if_they_lead"]):
         assert len({p["our"] for p in line}) == len(line) and len({p["their"] for p in line}) == len(line)
@@ -148,6 +157,18 @@ def test_cap_that_cannot_be_met_yields_no_plan_rather_than_an_illegal_one():
     assert night_obj.legal_ours(night_obj.full_ours) == []
 
 
+def test_m312_known_opponent_budget_changes_the_lead():
+    """GPT review M312: replies the opponent cannot legally field must not shape our lead."""
+    grid = [["Caution", "Caution", "Thin"], ["Thin", "Solid", "Strong"], ["Solid", "Strong", "Unknown"]]
+    ours, theirs, value = night([("A", 4), ("B", 4), ("C", 4)], [("X", 7), ("Y", 7), ("Z", 2)], grid)
+    assert match_plan(ours, theirs, value, games_left=2, cap=8)["lead"]["our"] == "B"       # conservative
+    budgeted = match_plan(ours, theirs, value, games_left=2, cap=8, opp_cap=9)
+    assert budgeted["lead"]["our"] == "A" and budgeted["opponent_budget"]["cap"] == 9
+    # X and Y cannot both play under 9: no response line pairs them in the same night.
+    for line in (budgeted["plan_if_we_lead"], budgeted["plan_if_they_lead"]):
+        assert {"X", "Y"} - {p["their"] for p in line}
+
+
 def _random_night(seed):
     rng = random.Random(seed)
     no, nt = rng.randint(2, 6), rng.randint(2, 6)
@@ -165,6 +186,7 @@ def test_phone_engine_produces_the_identical_plan(tmp_path):
     path = tmp_path / "engine.html"
     path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
     cases = [_random_night(seed) for seed in range(60)] + [captain_night() + (5, 23, 0)]
+    cases = [c + ((c[4], 2 * (n % 3)) if n % 2 else (None, 0)) for n, c in enumerate(cases)]   # opponent budgets too
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         try:
@@ -172,11 +194,12 @@ def test_phone_engine_produces_the_identical_plan(tmp_path):
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(path.as_uri())
-            for ours, theirs, value, games, cap, used in cases:
+            for ours, theirs, value, games, cap, used, opp_cap, opp_used in cases:
                 js_value = {f"{o}|{t}": v for (o, t), v in value.items()}
-                js = page.evaluate("a => window.__ucMatchPlan(a[0], a[1], a[2], a[3], a[4], a[5])",
-                                   [ours, theirs, js_value, games, cap, used])
-                assert js == match_plan(ours, theirs, value, games_left=games, cap=cap, used=used), (games, cap, used)
+                js = page.evaluate("a => window.__ucMatchPlan(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7])",
+                                   [ours, theirs, js_value, games, cap, used, opp_cap, opp_used])
+                assert js == match_plan(ours, theirs, value, games_left=games, cap=cap, used=used,
+                                        opp_cap=opp_cap, opp_used=opp_used), (games, cap, used, opp_cap)
             assert errors == []
         finally:
             browser.close()

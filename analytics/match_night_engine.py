@@ -31,9 +31,12 @@ def _known(sl: Any) -> bool:
 
 
 class _Night:
-    def __init__(self, ours, theirs, value, games_left, cap, used):
+    def __init__(self, ours, theirs, value, games_left, cap, used, opp_cap=None, opp_used=0):
         self.ours, self.theirs, self.value = ours, theirs, value
         self.games_left, self.cap, self.used = games_left, cap, used
+        # Their remaining skill budget, when known: the same team cap binds both sides in APA.
+        self.opp_cap, self.opp_used = opp_cap, opp_used
+        self.their_memo: dict[tuple[int, int, int], bool] = {}
         self.full_ours = (1 << len(ours)) - 1
         self.full_theirs = (1 << len(theirs)) - 1
         self.memo: dict[tuple[int, int, bool], int] = {}
@@ -67,6 +70,28 @@ class _Night:
         own = int(self.ours[i]["sl"]) if _known(self.ours[i]["sl"]) else 0
         return self.used + self.spent(om) + own + sum(rest[:need]) <= self.cap
 
+    def their_legal(self, om: int, tm: int, j: int) -> bool:
+        """Can they put up player j and still field the rest of the night under their known budget?
+
+        Same rule as ours: an uncaptured SL is unverifiable for that player, but the rest must still fit."""
+        if self.opp_cap is None:
+            return True
+        games_after = self.games_remaining(om) - 1
+        key = (tm, j, games_after)
+        if key not in self.their_memo:
+            spent = sum(int(p["sl"]) for k, p in enumerate(self.theirs) if not tm >> k & 1 and _known(p["sl"]))
+            rest = sorted(int(p["sl"]) for k, p in enumerate(self.theirs) if tm >> k & 1 and k != j and _known(p["sl"]))
+            unknown = sum(1 for k, p in enumerate(self.theirs) if tm >> k & 1 and k != j and not _known(p["sl"]))
+            need = min(max(0, games_after - unknown), len(rest))
+            own = int(self.theirs[j]["sl"]) if _known(self.theirs[j]["sl"]) else 0
+            self.their_memo[key] = self.opp_used + spent + own + sum(rest[:need]) <= self.opp_cap
+        return self.their_memo[key]
+
+    def legal_theirs(self, om: int, tm: int) -> list[int]:
+        if self.games_remaining(om) <= 0:
+            return []
+        return [j for j in range(len(self.theirs)) if tm >> j & 1 and self.their_legal(om, tm, j)]
+
     def games_remaining(self, om: int) -> int:
         played = bin(self.full_ours).count("1") - bin(om).count("1")
         return self.games_left - played
@@ -78,7 +103,7 @@ class _Night:
             return self.memo[key]
         g = self.games_remaining(om)
         ours = [i for i in range(len(self.ours)) if om >> i & 1 and self.legal(om, i, g - 1)] if g > 0 else []
-        theirs = [j for j in range(len(self.theirs)) if tm >> j & 1] if g > 0 else []
+        theirs = self.legal_theirs(om, tm)
         if not ours or not theirs:
             self.memo[key] = 0
             return 0
@@ -126,9 +151,7 @@ class _Night:
         best = (None, None, None)
         for i in self.legal_ours(om):
             reply, worst = None, None
-            for j in range(len(self.theirs)):
-                if not tm >> j & 1:
-                    continue
+            for j in self.legal_theirs(om, tm):
                 v = self.pair(i, j) + self.solve(om & ~(1 << i), tm & ~(1 << j), False)
                 if worst is None or v < worst:
                     reply, worst = j, v
@@ -139,14 +162,12 @@ class _Night:
     def principal_line(self, om: int, tm: int, we_lead: bool) -> list[dict[str, Any]]:
         """The game plan: both sides at their best from here, one entry per remaining game."""
         line = []
-        while self.games_remaining(om) > 0 and self.legal_ours(om) and tm:
+        while self.games_remaining(om) > 0 and self.legal_ours(om) and self.legal_theirs(om, tm):
             if we_lead:
                 i, j, _ = self.lead(om, tm)
             else:
                 j, worst = None, None
-                for jj in range(len(self.theirs)):
-                    if not tm >> jj & 1:
-                        continue
+                for jj in self.legal_theirs(om, tm):
                     _, v = self.best_answer(om, tm, jj)
                     if worst is None or v < worst:
                         j, worst = jj, v
@@ -166,8 +187,11 @@ def _best_board(night: _Night, k: int, floor: int | None) -> tuple[tuple[int, in
     order, then skip -- and only a strictly better key replaces the current one (the JS mirror does the same).
     """
     no, nt = len(night.ours), len(night.theirs)
-    memo: dict[tuple[int, int], Any] = {}
+    memo: dict[tuple[int, int, int], Any] = {}
     big = 10 ** 9
+
+    def their_sl(j: int) -> int:
+        return int(night.theirs[j]["sl"]) if _known(night.theirs[j]["sl"]) else 0
 
     def cap_ok(mask: int) -> bool:
         if night.cap is None:
@@ -175,13 +199,15 @@ def _best_board(night: _Night, k: int, floor: int | None) -> tuple[tuple[int, in
         return night.used + sum(int(p["sl"]) for i, p in enumerate(night.ours)
                                 if mask >> i & 1 and _known(p["sl"])) <= night.cap
 
-    def f(j: int, mask: int):
+    def f(j: int, mask: int, tsum: int):
         count = bin(mask).count("1")
+        if night.opp_cap is not None and night.opp_used + tsum > night.opp_cap:
+            return None
         if count == k:
             return ((0, big), []) if cap_ok(mask) else None
         if j == nt or nt - j < k - count:
             return None
-        key = (j, mask)
+        key = (j, mask, tsum)
         if key in memo:
             return memo[key]
         best = None
@@ -191,19 +217,19 @@ def _best_board(night: _Night, k: int, floor: int | None) -> tuple[tuple[int, in
             v = night.pair(i, j)
             if floor is not None and v < floor:
                 continue
-            rest = f(j + 1, mask | 1 << i)
+            rest = f(j + 1, mask | 1 << i, tsum + their_sl(j))
             if rest is None:
                 continue
             cand = ((v + rest[0][0], min(v, rest[0][1])), [(i, j)] + rest[1])
             if best is None or cand[0] > best[0]:
                 best = cand
-        rest = f(j + 1, mask)
+        rest = f(j + 1, mask, tsum)
         if rest is not None and (best is None or rest[0] > best[0]):
             best = rest
         memo[key] = best
         return best
 
-    return f(0, 0)
+    return f(0, 0, 0)
 
 
 def _board(night: _Night, k: int, safest: bool) -> list[tuple[int, int]]:
@@ -223,20 +249,31 @@ def _board(night: _Night, k: int, safest: bool) -> list[tuple[int, int]]:
 
 def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
                value: dict[tuple[Any, Any], dict[str, Any]], *, games_left: int,
-               cap: int | None = None, used: int = 0) -> dict[str, Any]:
+               cap: int | None = None, used: int = 0, opp_cap: int | None = None,
+               opp_used: int = 0) -> dict[str, Any]:
     """The captain's plan for the rest of the night.
 
     ours / theirs: remaining available players in roster order, each {"id", "name", "sl"}.
     value: (our id, their id) -> pair confidence ({"level", "points", "why", "text"}).
     games_left: games still to play tonight. cap / used: entered skill cap and SL already used (or None).
+    opp_cap / opp_used: their known budget and SL already used. With it, their replies are limited to lineups
+    they can legally field; without it the plan is conservative (any remaining opponent can be put up).
     """
     games_left = max(0, min(games_left, len(ours), len(theirs)))
-    night = _Night(ours, theirs, value, games_left, cap, used)
+    night = _Night(ours, theirs, value, games_left, cap, used, opp_cap, opp_used)
     om, tm = night.full_ours, night.full_theirs
+    if opp_cap is not None and games_left and not night.legal_theirs(om, tm):
+        # Their captured skill levels cannot fit their budget at all: the data, not the plan, is wrong.
+        # Fall back to the conservative unconstrained opponent rather than plan nothing.
+        night = _Night(ours, theirs, value, games_left, cap, used)
+        opp_cap = None
     name = lambda side, i: (night.ours if side == "our" else night.theirs)[i]["name"]   # noqa: E731
     conf = lambda i, j: night.value[(night.ours[i]["id"], night.theirs[j]["id"])]      # noqa: E731
     incomplete = cap is not None and any(not _known(p["sl"]) for p in ours)
-    out: dict[str, Any] = {"games_left": games_left, "cap_incomplete": incomplete}
+    out: dict[str, Any] = {"games_left": games_left, "cap_incomplete": incomplete,
+                           "opponent_budget": None if opp_cap is None else {
+                               "cap": opp_cap, "used": opp_used,
+                               "incomplete": any(not _known(p["sl"]) for p in theirs)}}
     if not games_left or not night.legal_ours(om):
         out.update(lead=None, responses=[], holds=[], sacrifices=[], plan_if_we_lead=[], plan_if_they_lead=[],
                    best_board=[], safest_board=[], confidence={}, fragility=None, cap=_cap_safety(night, om))
@@ -250,7 +287,7 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         if i == li:
             continue
         worst = min(night.pair(i, j) + night.solve(om & ~(1 << i), tm & ~(1 << j), False)
-                    for j in range(len(theirs)) if tm >> j & 1)
+                    for j in night.legal_theirs(om, tm))
         if worst == lead_value:
             equal.append(name("our", i))
     out["lead"] = {"our": name("our", li), "our_id": ours[li]["id"], "their_reply": name("their", lj), "level": conf(li, lj)["level"],
@@ -259,7 +296,7 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
     # 2. Response table (if they put up first), with what each answer costs later.
     total_if_they_lead = night.solve(om, tm, False)
     responses = []
-    for j in range(len(theirs)):
+    for j in night.legal_theirs(om, tm):      # only put-ups they can legally make
         i, v = night.best_answer(om, tm, j)
         if i is None:
             continue
@@ -281,7 +318,7 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         if not om >> i & 1:
             continue
         sub = _Night([p for k, p in enumerate(ours) if k != i], theirs, value, min(games_left, len(ours) - 1, len(theirs)),
-                     cap, used)
+                     cap, used, opp_cap, opp_used)
         sub_val = sub.solve(sub.full_ours, sub.full_theirs, True)
         drops.append((base - sub_val, i))
     plan_lead = night.principal_line(om, tm, True)
@@ -388,6 +425,8 @@ def plan_for_war_room(war_room: dict[str, Any], *, remaining: set[Any] | None = 
     ours = [{"id": m["id"], "name": _display(m, roster), "sl": m.get("skill_level")} for m in roster if m["id"] in remaining]
     value: dict[tuple[Any, Any], dict[str, Any]] = {}
     theirs = []
+    opp_used = sum(int(b["opponent"]["skill_level"]) for b, open_ in zip(war_room["blocks"], unplayed)
+                   if not open_ and _known(b["opponent"].get("skill_level")))
     for block, open_ in zip(war_room["blocks"], unplayed):
         if not open_:
             continue
@@ -395,7 +434,9 @@ def plan_for_war_room(war_room: dict[str, Any], *, remaining: set[Any] | None = 
         theirs.append({"id": opp["id"], "name": _display(opp, war_room["theirs"]), "sl": opp.get("skill_level")})
         for row in block["rows"]:
             value[(row["member"]["id"], opp["id"])] = row["confidence"]
-    return match_plan(ours, theirs, value, games_left=GAMES_PER_MATCH - played_count, cap=cap, used=played_sl)
+    # The entered cap is the team cap, and APA's cap binds both teams, so it limits their replies too.
+    return match_plan(ours, theirs, value, games_left=GAMES_PER_MATCH - played_count, cap=cap, used=played_sl,
+                      opp_cap=cap, opp_used=opp_used)
 
 
 def _display(member: dict[str, Any], roster: list[dict[str, Any]]) -> str:
@@ -432,7 +473,10 @@ def plan_text(plan: dict[str, Any]) -> dict[str, str]:
     cap_line = ("No skill cap entered" if cap is None else
                 f"Cap {cap['cap']}: check incomplete (missing skill levels)" if cap["incomplete"] else
                 f"Cap {cap['cap']}: {cap['slack']} to spare after the cheapest remaining lineup")
-    summary = (f"{plan['games_left']} games · Plan: {conf} · Fragility: {fragility} · {cap_line}. "
+    opp = plan.get("opponent_budget")
+    opp_line = ("their replies limited to lineups they can field under the same cap" if opp else
+                "assumes any of their players can still be put up (no cap entered)")
+    summary = (f"{plan['games_left']} games · Plan: {conf} · Fragility: {fragility} · {cap_line} · {opp_line}. "
                "Levels describe recorded evidence, not odds; the plan assumes their captain makes the choice that hurts us most.")
 
     def board(rows):
