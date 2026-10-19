@@ -146,3 +146,37 @@ def test_cap_that_cannot_be_met_yields_no_plan_rather_than_an_illegal_one():
     assert plan["lead"] is None
     night_obj = _Night(ours, theirs, value, 5, 10, 0)
     assert night_obj.legal_ours(night_obj.full_ours) == []
+
+
+def _random_night(seed):
+    rng = random.Random(seed)
+    no, nt = rng.randint(2, 6), rng.randint(2, 6)
+    our_specs = [(f"O{i}", rng.choice([2, 3, 4, 5, 6, 7, None])) for i in range(no)]
+    their_specs = [(f"T{j}", rng.choice([2, 3, 4, 5, 6])) for j in range(nt)]
+    grid = [[rng.choice(LEVELS) for _ in range(nt)] for _ in range(no)]
+    ours, theirs, value = night(our_specs, their_specs, grid)
+    return ours, theirs, value, rng.randint(0, 5), rng.choice([None, 12, 15, 23]), rng.choice([0, 0, 4])
+
+
+def test_phone_engine_produces_the_identical_plan(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from tests.test_excel_war_room_formulas import _payload
+    from ui.ultimate_coach import render
+    path = tmp_path / "engine.html"
+    path.write_text(render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    cases = [_random_night(seed) for seed in range(60)] + [captain_night() + (5, 23, 0)]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            for ours, theirs, value, games, cap, used in cases:
+                js_value = {f"{o}|{t}": v for (o, t), v in value.items()}
+                js = page.evaluate("a => window.__ucMatchPlan(a[0], a[1], a[2], a[3], a[4], a[5])",
+                                   [ours, theirs, js_value, games, cap, used])
+                assert js == match_plan(ours, theirs, value, games_left=games, cap=cap, used=used), (games, cap, used)
+            assert errors == []
+        finally:
+            browser.close()
