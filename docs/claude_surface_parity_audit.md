@@ -41,6 +41,20 @@ eligibility, save, budget or threat logic changed.
 and touches no captain surface. `tests/test_refresh_sources.py` and `tests/test_ultimate_coach_refresh.py`
 passed 47 of 47.
 
+Claude read-only review of bd3a75d, outside the parity scope because identity decides which results feed
+recommendations. No defect found. The resolver is conservative:
+- It supplements the base resolver only when there is one league/session context and exactly one captured
+  member link.
+- That member must have exactly one team-history row for the same team, division and session.
+- Ambiguous or missing chains drop the mapping. This leaves the alias unresolved, which already blocks row
+  removal in `reconcile_match`.
+- A captured member that contradicts the current roster raises `RefreshFailed` instead of choosing one.
+- Mapping values on both sides are APA external member IDs (`real_player.external_id` and
+  `str(member['id'])`), so the conflict check compares like with like.
+
+Unverified until a real refresh: that scoresheet `player_id` values equal the per-session player IDs the
+links are keyed on. Synthetic fixtures assume this; real captured data has not yet confirmed it.
+
 ## Re-checks after the pass
 
 - **2026-10-18 09:47, 3f7d9aa (docs only).** Product code and tests are unchanged since afa0169. The five
