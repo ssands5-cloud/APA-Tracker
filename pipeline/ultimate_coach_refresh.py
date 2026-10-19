@@ -88,6 +88,53 @@ def previous_bundle(root: Path, check):
     return previous
 
 
+def fixture_identity_resolver(store, catalog, division):
+    """Supplement current-roster resolution only with an exact captured ID chain.
+
+    Departed membership stays historical. Require the exact team, division and
+    session membership as well as career-source league/session/format ownership.
+    """
+    from database.models import Player, PlayerTeamHistory
+    from scheduler.graphql_sync import resolve_scoresheet_identities
+    links = store.exact_player_members()
+    contexts = {(str(d.get('league_id') or ''),
+                 str(d.get('catalog_session_id') or d.get('session_id') or ''))
+                for d in catalog.get('divisions') or []
+                if str(d.get('division_id')) == str(division['division_id'])
+                and (d.get('catalog_session_name') or d.get('session_name')) == division['session_name']
+                and (d.get('type') or d.get('format')) == division['format']}
+
+    def resolve(db, session_name, scores, *, current_only=True):
+        mapping, _, _ = resolve_scoresheet_identities(db, session_name, scores, current_only=current_only)
+        if len(contexts) == 1 and session_name == division['session_name']:
+            league, session = next(iter(contexts))
+            for row in scores:
+                alias = str(row.get('player_id') or '')
+                if not alias or not row.get('team_id'):
+                    continue
+                members = links.get((league, session, division['format'], alias))
+                if not members:
+                    continue
+                if len(members) != 1:
+                    mapping.pop(alias, None)
+                    continue
+                member = next(iter(members))
+                candidates = db.query(Player).join(PlayerTeamHistory).filter(
+                    Player.external_id == member,
+                    PlayerTeamHistory.team_external_id == str(row.get('team_id') or ''),
+                    PlayerTeamHistory.division_id == str(division['division_id']),
+                    PlayerTeamHistory.session_name == session_name).all()
+                if len(candidates) != 1:
+                    mapping.pop(alias, None)
+                elif alias in mapping and mapping[alias] != member:
+                    raise RefreshFailed('captured member identity conflicts with current roster identity')
+                else:
+                    mapping[alias] = member
+        identities = {str(row['player_id']) for row in scores if row.get('player_id')}
+        return mapping, len(identities & mapping.keys()), len(identities - mapping.keys())
+    return resolve
+
+
 def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path, *, progress=None):
     from sqlalchemy.orm import Session
     from auth.graphql_client import use_fixture_provider
@@ -107,7 +154,8 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
     catalog = directory / "catalog.json"
     catalog.write_bytes(encoded(scope["catalog"]))
     try:
-        with use_fixture_provider(ResponseFixtures(fixtures, replay=True)), Session(engine) as db:
+        store = ResponseFixtures(fixtures, replay=True)
+        with use_fixture_provider(store), Session(engine) as db:
             for team_number, team_id in enumerate(scope["team_ids"], 1):
                 if progress:
                     progress(f"INGEST TEAM {team_number}/{len(scope['team_ids'])}")
@@ -134,11 +182,12 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                 gaps.extend(sync.reconcile_division_wide_coverage(totals))
                 matches = [m for m in api.division_schedule_rows(api.fetch_division_schedule(run_config, did))
                            if m["is_scored"] and not m["is_bye"]]
+                resolve = fixture_identity_resolver(store, scope['catalog'], division)
                 for match_number, match in enumerate(matches, 1):
                     if progress:
                         progress(f"RECONCILE SCORESHEET {match_number}/{len(matches)} in current division")
                     if match["is_scored"] and not match["is_bye"]:
-                        result = reconcile_match(run_config, db, match["match_id"], session)
+                        result = reconcile_match(run_config, db, match["match_id"], session, resolve=resolve)
                         reconciled.append(result)
                         if result["status"] == "not_in_db":
                             gaps.append("authoritative match missing after fixture ingestion")

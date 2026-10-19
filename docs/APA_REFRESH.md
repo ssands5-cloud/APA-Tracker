@@ -115,6 +115,13 @@ ALL REFRESH TASKS COMPLETE
 
 Quick prints UP TO DATE for skipped components. Offline fixture verification is explicitly labeled OFFLINE VALIDATION and cannot replace an existing live current bundle. A failed step returns a nonzero exit code and does not advance CURRENT.json. If a prior process was interrupted, verify it is stopped before reviewing its REFRESH.lock; the launcher never guesses that another refresh is dead or deletes someone else's lock.
 
+Scoresheet identity reconciliation also checks captured career-player IDs through their exact
+league alias and member ID. These links require matching league, session ID, APA format type,
+and an existing exact team/division/session membership. Historical membership remains historical;
+this does not add someone to tonight's roster. Ambiguous links remain unresolved and a conflict
+with the current-roster identity stops the refresh. Missing links never license a name-only
+historical fallback. Any remaining unresolved scoresheet still prevents a new completed bundle.
+
 Developer verification from the repository root: `python -B -m pytest tests/test_refresh_sources.py tests/test_graphql_client_errors.py tests/test_ultimate_coach_refresh.py -q --basetemp=tmp/uat/<new-unique-folder>`. Portable tests run actual SQLite ingestion and exporters with synthetic responses; native Excel/browser launcher acceptance is a separate Windows check, not a live APA acceptance claim.
 
 ## Legacy batch review (recommendations only)

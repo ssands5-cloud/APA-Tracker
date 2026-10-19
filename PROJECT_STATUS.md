@@ -1,5 +1,18 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Exact captured identity correction (2026-10-18)
+
+Candidate refresh reconciliation now supplements the current-roster resolver with the captured
+scoresheet-player ID -> career league alias -> canonical member ID chain. It requires exact
+league/session ID/format type and existing team/division/session membership. Historical membership
+is never promoted to current, ambiguous links remain unresolved, and contradictory current identity
+stops the refresh. A fresh replay of the saved 575 responses reduces the blocker from 19 rows across
+17 sheets to two rows across two sheets. Seventeen canonical score rows and head-to-head on the
+15 complete affected sheets were checked; roster flags, all 40 latest standings rows and original
+DB remain unchanged. Final affected suite: 101 passed. Real-refresh completion is still blocked;
+no new real workbook/HTML or CURRENT bundle is promoted. Evidence and limitations are in the ONE
+report. Concurrent presentation work is separate from this refresh correction.
+
 This file is required by `.github/prompts/build.md`: update it whenever build, publish or pipeline behavior changes. Build-by-build provenance (commits, CI runs, artifact hashes, live deployments) is recorded in `docs/overnight_coach_advantage_report.md`, which is append-only. This file holds what stays true between builds.
 
 ## Surface parity pass (2026-10-18)

@@ -101,6 +101,47 @@ class ResponseFixtures:
     def content_sha256(self):
         return digest(self.entries)
 
+    def exact_player_members(self):
+        """Captured player -> alias -> member links, scoped by league/session/format.
+
+        Preserve collisions as sets. A scoresheet ID alone is never a member ID.
+        Read through the fixture verifier; this method never requests new data.
+        """
+        from collections import defaultdict
+        from parser.apa_graphql import FORMATS_BY_MEMBER_ID_QUERY, GET_EIGHT_BALL_STATS_QUERY
+        aliases, links = defaultdict(set), defaultdict(set)
+        documents = []
+        for key, entry in self.entries.items():
+            if entry['operation'] not in ('FormatsByMemberId', 'getEightBallStats'):
+                continue
+            body = json.loads((self.root / 'responses' / (key + '.json')).read_text(encoding='utf-8'))
+            query, variables = body['query'], body['variables']
+            if self.key(query, variables) != key:
+                raise FixtureError('source fixture request does not match its identity')
+            data = self(query, variables, lambda: None)
+            if query == FORMATS_BY_MEMBER_ID_QUERY:
+                member = data.get('member') or {}
+                if variables.get('withMember') is not True or str(member.get('id')) != str(variables.get('memberId')):
+                    raise FixtureError('career member identity does not match its request')
+                for alias in member.get('aliases') or []:
+                    league = str((alias.get('league') or {}).get('id') or '')
+                    if alias.get('id') and league:
+                        aliases[str(alias['id'])].add((str(member['id']), league))
+            elif query == GET_EIGHT_BALL_STATS_QUERY:
+                alias = data.get('alias') or {}
+                if str(alias.get('id')) != str(variables.get('id')):
+                    raise FixtureError('career alias identity does not match its request')
+                documents.append(alias)
+        for alias in documents:
+            for player in alias.get('players') or []:
+                fmt = {'EightBallPlayer': 'EIGHT', 'NineBallPlayer': 'NINE'}.get(player.get('__typename'))
+                session = str((player.get('session') or {}).get('id') or '')
+                if not fmt or not session or not player.get('id'):
+                    continue
+                for member, league in aliases[str(alias['id'])]:
+                    links[(league, session, fmt, str(player['id']))].add(member)
+        return dict(links)
+
 
 def acquire_current_sources(config, seed_database: Path | None, fixtures: ResponseFixtures):
     """Capture every team/roster/schedule and scored sheet in the viewer's current divisions.
