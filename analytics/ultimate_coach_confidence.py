@@ -17,8 +17,13 @@ from __future__ import annotations
 from typing import Any
 
 LEVELS = ("Strong", "Solid", "Thin", "Unknown", "Conflicted", "Caution")
-# Integer points used by the Match Night Engine; integers keep Python and JavaScript plans identical.
-LEVEL_POINTS = {"Strong": 4, "Solid": 2, "Thin": 1, "Unknown": 0, "Conflicted": 0, "Caution": -2}
+# Integer points used by the Match Night Engine, anchored to history rather than chosen by feel: in the
+# 15-year chronological replay each level won its next game this many points above or below even
+# (8-Ball / 9-Ball): Strong +18 / +11, Solid +8 / +4, Thin +3 / +1, Unknown 0, Caution -8 / -4. Scaled to
+# Thin = 1 and rounded, that is 6 / 3 / 1 / 0 / -3. Conflicted is 0 by construction (the two sides offset).
+# These are planning weights, never shown to captains and never a probability. Integers keep Python and
+# JavaScript plans identical.
+LEVEL_POINTS = {"Strong": 6, "Solid": 3, "Thin": 1, "Unknown": 0, "Conflicted": 0, "Caution": -3}
 
 FORM_MIN_GAMES = 20     # an overall record counts once both players have this many games
 FORM_SHRINK = 5         # pulled toward .500 by 5 wins and 5 losses so a new player is not extreme

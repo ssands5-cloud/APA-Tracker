@@ -130,7 +130,7 @@
     return "Latest dated meeting: "+label+(known.length!==times.length?"; some meeting dates not captured":"");
   }
   // ---- Captain confidence level (mirrors analytics/ultimate_coach_confidence.py exactly) ----
-  var WR_LEVEL_POINTS={Strong:4,Solid:2,Thin:1,Unknown:0,Conflicted:0,Caution:-2};
+  var WR_LEVEL_POINTS={Strong:6,Solid:3,Thin:1,Unknown:0,Conflicted:0,Caution:-3};
   function wrOverall(p,fmt){var c=careerComplete(((p&&p.career_stats)||[]).filter(function(r){return r.format===fmt;}));return [c.w,c.g];}
   function wrFormCmp(own,opp,edge){
     var num=(own[0]+5)*(opp[1]+10)-(opp[0]+5)*(own[1]+10),den=(own[1]+10)*(opp[1]+10),d=20*num-edge*den;
@@ -529,17 +529,23 @@
   function mnBits(m){var n=0;while(m){n+=m&1;m>>>=1;}return n;}
   function MnNight(ours,theirs,value,gamesLeft,cap,used){
     this.ours=ours;this.theirs=theirs;this.value=value;this.gamesLeft=gamesLeft;this.cap=cap;this.used=used;
-    this.fullOurs=(1<<ours.length)-1;this.fullTheirs=(1<<theirs.length)-1;this.memo={};
+    this.fullOurs=(1<<ours.length)-1;this.fullTheirs=(1<<theirs.length)-1;this.memo={};this.legalMemo={};
   }
   MnNight.prototype.spent=function(om){var s=0,self=this;this.ours.forEach(function(p,i){if(!(om>>i&1)&&mnKnown(p.sl)) s+=Math.trunc(p.sl);});return s;};
   MnNight.prototype.legal=function(om,i,gamesAfter){
-    if(this.cap===null||!mnKnown(this.ours[i].sl)) return true;
+    if(this.cap===null) return true;
+    var key=om+"|"+i;
+    if(!(key in this.legalMemo)) this.legalMemo[key]=this.legalNow(om,i,gamesAfter);
+    return this.legalMemo[key];
+  };
+  MnNight.prototype.legalNow=function(om,i,gamesAfter){
     var rest=[],unknown=0;
     this.ours.forEach(function(p,k){if((om>>k&1)&&k!==i){if(mnKnown(p.sl)) rest.push(Math.trunc(p.sl)); else unknown++;}});
     rest.sort(function(a,b){return a-b;});
     var need=Math.max(0,gamesAfter-unknown);if(need>rest.length) need=rest.length;
     var sum=0;for(var k=0;k<need;k++) sum+=rest[k];
-    return this.used+this.spent(om)+Math.trunc(this.ours[i].sl)+sum<=this.cap;
+    var own=mnKnown(this.ours[i].sl)?Math.trunc(this.ours[i].sl):0;
+    return this.used+this.spent(om)+own+sum<=this.cap;
   };
   MnNight.prototype.gamesRemaining=function(om){return this.gamesLeft-(mnBits(this.fullOurs)-mnBits(om));};
   MnNight.prototype.pair=function(i,j){return this.value[String(this.ours[i].id)+"|"+String(this.theirs[j].id)].points;};
@@ -592,18 +598,42 @@
     }
     return line;
   };
-  function mnCombinations(n,k){var out=[];(function rec(start,acc){if(acc.length===k){out.push(acc.slice());return;}for(var i=start;i<n;i++){acc.push(i);rec(i+1,acc);acc.pop();}})(0,[]);return out;}
-  function mnPermutations(n,k){var out=[],used=[];(function rec(acc){if(acc.length===k){out.push(acc.slice());return;}for(var i=0;i<n;i++){if(used[i]) continue;used[i]=true;acc.push(i);rec(acc);acc.pop();used[i]=false;}})([]);return out;}
   function mnKeyGreater(a,b){return b===null||a[0]>b[0]||(a[0]===b[0]&&a[1]>b[1]);}
+  // Exact best board by dynamic programming over their players (mirrors _best_board: same option order,
+  // only a strictly better (total, worst pairing) replaces the current choice).
+  function mnBestBoard(night,k,floor){
+    var no=night.ours.length,nt=night.theirs.length,memo={},BIG=1000000000;
+    function capOk(mask){
+      if(night.cap===null) return true;
+      var s=0;night.ours.forEach(function(p,i){if((mask>>i&1)&&mnKnown(p.sl)) s+=Math.trunc(p.sl);});
+      return night.used+s<=night.cap;
+    }
+    function f(j,mask){
+      var count=mnBits(mask);
+      if(count===k) return capOk(mask)?[[0,BIG],[]]:null;
+      if(j===nt||nt-j<k-count) return null;
+      var key=j+"|"+mask;if(key in memo) return memo[key];
+      var best=null;
+      for(var i=0;i<no;i++){
+        if(mask>>i&1) continue;
+        var v=night.pair(i,j);if(floor!==null&&v<floor) continue;
+        var rest=f(j+1,mask|(1<<i));if(rest===null) continue;
+        var cand=[[v+rest[0][0],Math.min(v,rest[0][1])],[[i,j]].concat(rest[1])];
+        if(best===null||mnKeyGreater(cand[0],best[0])) best=cand;
+      }
+      var skip=f(j+1,mask);
+      if(skip!==null&&(best===null||mnKeyGreater(skip[0],best[0]))) best=skip;
+      memo[key]=best;return best;
+    }
+    return f(0,0);
+  }
   function mnBoard(night,k,safest){
-    var bestKey=null,best=[],perms=mnPermutations(night.ours.length,k);
-    mnCombinations(night.theirs.length,k).forEach(function(ts){perms.forEach(function(os){
-      if(night.cap!==null){var s=0;os.forEach(function(i){if(mnKnown(night.ours[i].sl)) s+=Math.trunc(night.ours[i].sl);});if(night.used+s>night.cap) return;}
-      var vals=os.map(function(i,n){return night.pair(i,ts[n]);}),mn=Math.min.apply(null,vals),sm=vals.reduce(function(a,b){return a+b;},0);
-      var key=safest?[mn,sm]:[sm,mn];
-      if(mnKeyGreater(key,bestKey)){bestKey=key;best=os.map(function(i,n){return [i,ts[n]];});}
-    });});
-    return best;
+    if(!safest){var found=mnBestBoard(night,k,null);return found?found[1]:[];}
+    var seen={},values=[];
+    for(var i=0;i<night.ours.length;i++) for(var j=0;j<night.theirs.length;j++){var v=night.pair(i,j);if(!seen[v]){seen[v]=1;values.push(v);}}
+    values.sort(function(a,b){return b-a;});
+    for(var n=0;n<values.length;n++){var f2=mnBestBoard(night,k,values[n]);if(f2) return f2[1];}
+    return [];
   }
   function mnCapSafety(night,om){
     if(night.cap===null) return null;
@@ -682,10 +712,26 @@
     var thin=planLead.filter(function(p){var lv=conf(p.our,p.their).level;return lv==="Thin"||lv==="Conflicted";});
     out.fragility={player:wd>0?name("our",wi):null,player_drop:wd,
       thin_pairings:thin.map(function(p){return name("our",p.our)+" vs "+name("their",p.their)+" ("+conf(p.our,p.their).level+")";}),
-      rating:(wd>=4||thin.length>=2)?"High":(wd>=2||thin.length)?"Medium":"Low"};
+      rating:(wd>=6||thin.length>=2)?"High":(wd>=3||thin.length)?"Medium":"Low"};
     out.cap=mnCapSafety(night,om);out.total_if_we_lead=base;out.total_if_they_lead=totalThey;
     return out;
   }
+  // The plan for this War Room as it stands (mirrors analytics.match_night_engine.plan_for_war_room).
+  function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap){
+    var ours=w.ours.filter(function(m){return rem[String(m.id)];}).map(function(m){return {id:m.id,name:wrDisplayName(m,w.ours),sl:m.skill_level===undefined?null:m.skill_level};});
+    var theirs=[],value={};
+    w.blocks.forEach(function(b,j){
+      if(!unplayed[j]) return;
+      theirs.push({id:b.opponent.id,name:wrDisplayName(b.opponent,w.theirs),sl:b.opponent.skill_level===undefined?null:b.opponent.skill_level});
+      b.rows.forEach(function(r){value[String(r.member.id)+"|"+String(b.opponent.id)]=r.confidence;});
+    });
+    return mnMatchPlan(ours,theirs,value,5-playedCount,cap,playedSl);
+  }
+  window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
+    return mnPlanFor(w,rem,unplayed||w.theirs.map(function(){return true;}),playedCount||0,playedSl||0,cap===undefined?null:cap);
+  };
   // Test hook: the engine on explicit inputs (cross-checked with analytics.match_night_engine.match_plan).
   window.__ucMatchPlan=function(ours,theirs,value,gamesLeft,cap,used){return mnMatchPlan(ours,theirs,value,gamesLeft,cap,used);};
   // Test hook: every pairing's confidence text, [opponent][our player] in roster order (cross-checked with Python).
@@ -897,6 +943,10 @@
   function wrPatchBudget(w,plan,ta){
     var tonight=document.getElementById("tonight"),lab=document.getElementById("lineup-lab");
     if(tonight){
+      // The plan depends on the entered cap: re-plan it in place.
+      var mp=tonight.querySelector("#match-plan");
+      if(mp){var open=mp.querySelector("details.mp-more");open=open&&open.open;mp.outerHTML=wrMatchPlanCard(w,plan,ta);
+        if(open){var d=tonight.querySelector("#match-plan details.mp-more");if(d) d.open=true;}}
       Array.prototype.forEach.call(tonight.querySelectorAll(".lineup-budget,.ns-budget,.ns-budget-scope"),function(el){el.remove();});
       var blind=tonight.querySelector(".blind-send"),pick=wrBlindSend(w,plan);
       if(blind&&pick){
@@ -1000,6 +1050,42 @@
     return '<span>No favorable direct option left vs '+names.length+' of '+unplayedN+' unplayed opponents</span>'
       +'<details class="risk-more"><summary>All '+names.length+': '+esc(names.join(", "))+'</summary>'+esc(names.join(", "))+'</details>';
   }
+  // ---- Match Night Plan card: the M3 engine for who is left tonight; re-planned on every render ----
+  function mnInputs(w,plan,ta){
+    var playedN=0,playedSl=0;
+    w.ours.forEach(function(m){if(wrLineup(plan.ck,m.id)==="Played"){playedN++;if(wrKnown(m.skill_level)) playedSl+=Number(m.skill_level);}});
+    var capRaw=parseInt(WR_PLAN.cap[ta.key],10);
+    return {playedN:playedN,playedSl:playedSl,cap:capRaw>0?capRaw:null};
+  }
+  function wrMatchPlanCard(w,plan,ta){
+    var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);
+    var head='<h3>Match Night Plan</h3>';
+    if(!p.lead) return '<div id="match-plan" class="match-plan">'+head+'<p class="muted">'
+      +esc(p.games_left?"No legal send fits the entered skill cap — check the cap and remaining skill levels.":"No games left to plan tonight.")+'</p></div>';
+    var conf=MN_LEVEL_ORDER.filter(function(lv){return p.confidence[lv];}).map(function(lv){return p.confidence[lv]+" "+lv;}).join(" · ");
+    var frag=p.fragility.rating+(p.fragility.player?" — leans most on "+p.fragility.player:"")
+      +(p.fragility.thin_pairings.length?" · thin: "+p.fragility.thin_pairings.join(", "):"");
+    var capTxt=p.cap?(p.cap.incomplete?"Cap "+p.cap.cap+": check incomplete (missing skill levels)":"Cap "+p.cap.cap+": "+p.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
+    var lvl=function(lv){return '<span class="mp-level mp-'+lv.toLowerCase()+'">'+esc(lv)+'</span>';};
+    var li=function(html){return '<li>'+html+'</li>';};
+    var line=function(rows){return '<ol class="mp-line">'+rows.map(function(g){return li(esc((g.leader==="us"?"We lead: ":"They lead: ")+g.our+" vs "+g.their+" ")+lvl(g.level));}).join("")+'</ol>';};
+    var board=function(rows){return '<ul class="mp-board">'+rows.map(function(g){return li(esc(g.our+" → "+g.their+" ")+lvl(g.level));}).join("")+'</ul>';};
+    return '<div id="match-plan" class="match-plan">'+head
+      +'<p class="mp-sub">'+esc(p.games_left+(p.games_left===1?" game":" games")+" left · Plan: "+(conf||"no pairings")+" · Fragility: "+frag+" · "+capTxt)+'</p>'
+      +'<div class="mp-lead"><span class="mp-label">If we put up first</span><b class="mp-name">'+esc(p.lead.our)+'</b> '+lvl(p.lead.level)
+        +'<span class="mp-why">'+esc(p.lead.why_lead)+'</span></div>'
+      +'<div class="mp-resp"><span class="mp-label">If they put up</span><ul>'+p.responses.map(function(r){
+        return li(esc(r.their+" → ")+'<b>'+esc(r.our)+'</b> '+lvl(r.level)+' <span class="mp-why">'+esc(r.why.split(" — ").slice(1).join(" — "))+'</span>'
+          +(r.cost_later?'<span class="mp-cost">'+esc(r.cost_later)+'</span>':''));}).join("")+'</ul></div>'
+      +(p.holds.length?'<div class="mp-hold"><span class="mp-label">Hold back</span><ul>'+p.holds.map(function(h){return li('<b>'+esc(h.our)+'</b> — '+esc(h.why));}).join("")+'</ul></div>':'')
+      +(p.sacrifices.length?'<div class="mp-sac"><span class="mp-label">If we must absorb a bad matchup</span><ul>'+p.sacrifices.map(function(s){return li('<b>'+esc(s.our)+'</b> vs '+esc(s.their)+' '+lvl(s.level)+' — '+esc(s.why.split(" — ")[0]));}).join("")+'</ul></div>':'')
+      +'<details class="mp-more"><summary>Game plan and boards</summary>'
+        +'<p><b>If we win the toss and lead</b></p>'+line(p.plan_if_we_lead)
+        +'<p><b>If they lead</b></p>'+line(p.plan_if_they_lead)
+        +'<p><b>Best-case board</b> (if every ideal matchup occurs)</p>'+board(p.best_board)
+        +'<p><b>Safest board</b> (protects the worst pairing first)</p>'+board(p.safest_board)+'</details>'
+      +'<p class="muted mp-foot">Levels describe recorded evidence, not odds. The plan assumes their captain makes the choice that hurts us most, and re-plans after every ✓ Sent.</p></div>';
+  }
   // "Tonight" at the top of the page: the fixture and the decision overview first, setup below.
   function wrTonight(w,plan,ta,tb){
     var el=document.getElementById("tonight");
@@ -1030,7 +1116,7 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
-      +wrBlindSendCard(w,plan,ta)
+      +wrMatchPlanCard(w,plan,ta)
       +wrNextSendCard(w,plan,ta,tb)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'

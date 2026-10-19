@@ -25,8 +25,8 @@ def night(our_specs, their_specs, grid):
 def brute(ours, theirs, value, games, cap, used, we_lead):
     """Plain game-tree search with no memo and no shared code: the reference answer."""
     def legal(rem_o, i, games_after, spent):
-        sl = ours[i]["sl"]
-        if cap is None or not isinstance(sl, int):
+        sl = ours[i]["sl"] if isinstance(ours[i]["sl"], int) else 0
+        if cap is None:
             return True
         rest = sorted(ours[k]["sl"] for k in rem_o if k != i and isinstance(ours[k]["sl"], int))
         unknown = sum(1 for k in rem_o if k != i and not isinstance(ours[k]["sl"], int))
@@ -180,3 +180,72 @@ def test_phone_engine_produces_the_identical_plan(tmp_path):
             assert errors == []
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_match_night_plan_card_matches_python_and_replans_after_a_send(tmp_path, width):
+    from playwright.sync_api import sync_playwright
+    from analytics.match_night_engine import plan_for_war_room
+    from tests.test_confidence_levels import parity_payload
+    from tests.test_ultimate_coach_war_room_browser import OURS, THEIRS, _python_war_room_for
+    from ui.ultimate_coach import render
+    payload = parity_payload()
+    py = _python_war_room_for(payload)
+    path = tmp_path / "plan.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 900})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(path.as_uri())
+            ids = [m["id"] for m in py["ours"]]
+            for remaining, unplayed, played_n, played_sl, cap in ((None, None, 0, 0, None), (None, None, 0, 0, 23),
+                                                                 (ids[1:], [False, True], 1, 5, 23), (ids[:3], None, 2, 9, None)):
+                js = page.evaluate("a => window.__ucPlanFor(a[0], a[1], 'EIGHT', a[2], a[3], a[4], a[5], a[6])",
+                                   [OURS, THEIRS, remaining, unplayed, played_n, played_sl, cap])
+                assert js == plan_for_war_room(py, remaining=None if remaining is None else set(remaining),
+                                               unplayed=unplayed, played_count=played_n, played_sl=played_sl, cap=cap)
+            card = page.locator("#match-plan")
+            text = card.inner_text()
+            first = plan_for_war_room(py)
+            assert "if we put up first" in text.lower() and first["lead"]["our"] in text and "if they put up" in text.lower()
+            for r in first["responses"]:
+                assert f"{r['their']} → {r['our']}" in text
+            assert "not odds" in text and "%" not in text
+            before = first["games_left"]
+            page.locator("#next-send [data-send-our]").first.click()
+            after = page.locator("#match-plan .mp-sub").inner_text()
+            assert after.startswith(f"{before - 1} game") or "No games left" in page.locator("#match-plan").inner_text()
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("seed", range(120))
+def test_boards_are_optimal_against_brute_force(seed):
+    from itertools import combinations, permutations
+    ours, theirs, value, games, cap, used = _random_night(1000 + seed)
+    k = max(0, min(games, len(ours), len(theirs)))
+    plan = match_plan(ours, theirs, value, games_left=games, cap=cap, used=used)
+    if plan.get("lead") is None or k == 0:
+        return
+    pts = {(o["name"], t["name"]): value[(o["id"], t["id"])]["points"] for o in ours for t in theirs}
+    sl = {o["name"]: o["sl"] for o in ours}
+    best_total = best_safe = None
+    for ts in combinations(theirs, k):
+        for os_ in permutations(ours, k):
+            if cap is not None and used + sum(sl[o["name"]] or 0 for o in os_) > cap:
+                continue
+            vals = [pts[(o["name"], t["name"])] for o, t in zip(os_, ts)]
+            tot, worst = (sum(vals), min(vals)), (min(vals), sum(vals))
+            best_total = tot if best_total is None or tot > best_total else best_total
+            best_safe = worst if best_safe is None or worst > best_safe else best_safe
+
+    def key(board, safest):
+        vals = [pts[(p["our"], p["their"])] for p in board]
+        return (min(vals), sum(vals)) if safest else (sum(vals), min(vals))
+    assert key(plan["best_board"], False) == best_total
+    assert key(plan["safest_board"], True) == best_safe
