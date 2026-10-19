@@ -231,14 +231,14 @@ def test_next_send_ranks_ordered_direct_candidates_and_lists_avoid_and_unknown()
     wr = _war_room()
     opal = next_send(wr, 0)
     assert [(m["medal"], m["display"]) for m in opal["ranked"]] == [("🥇", "Bea")]
-    assert opal["headline"] == "First by recorded direct results: Bea"
+    assert opal["headline"] == "Direct-record order #1: Bea"
     # Names here never carry the APA record ID (NAME-DISPLAY-01) -- that's Players-tab-only text.
     assert [a["display"] for a in opal["avoid"]] == ["Ann"] and opal["unknown"] == ["Cal"]
     pip = next_send(wr, 1)                  # an even direct record is ranked; shared-only is never medalled
     assert [(m["medal"], m["display"], m["category"]) for m in pip["ranked"]] == [("🥇", "Cal", "E")]
     assert [u["display"] for u in pip["unordered"]] == ["Bea"]
     assert next_send_lines(pip) == [
-        "First by recorded direct results: Cal",
+        "Direct-record order #1: Cal",
         "Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.",
         "1. Cal — 1-1 direct record (2 meetings) — even · small sample · Meeting dates not captured",
         # Bea now carries the save warning here: she is our only favorable direct option vs Opal,
@@ -272,7 +272,7 @@ def test_next_send_ties_share_a_rank_flags_players_to_save_and_still_lists_the_r
     # numbered line (no medal past the top three) instead of a collapse.
     assert [(m["medal"], m["rank"], m["display"]) for m in ns["ranked"]] == [
         ("🥇", "1=", "Ann"), ("🥇", "1=", "Bo"), ("🥈", "3", "Di"), ("🥉", "4", "Fay"), ("", "5", "Cy")]
-    assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "First by recorded direct results: Ann or Bo (tied)"
+    assert ns["ranked"][0]["tied_with"] == ["Bo"] and ns["headline"] == "Direct-record order #1: Ann or Bo (tied)"
     assert ns["ranked"][0]["save"] == "consider saving — our only favorable direct option vs Yul (1-0 in 1 meeting, small sample · Only 1 meeting)"
     assert [m["choice_number"] for m in ns["ranked"]] == [1, 1, 2, 3, 4]
     assert "4. Cy — 1-1 direct record (2 meetings) — even · small sample · Meeting dates not captured" in next_send_lines(ns)
@@ -293,8 +293,8 @@ def test_send_labels_number_by_evidence_group_and_never_number_shared_only():
     xan = [r for r in wr["blocks"][0]["rows"] if r["category"] in ("G", "E", "I")]
     assert send_labels(xan) == ["1=", "1=", "2.", "3.", "4."]
     assert send_list_text(xan).startswith("1= Ann — 2-0 (2 meetings) · SMALL SAMPLE · 1= Bo — 2-0 (2 meetings) · SMALL SAMPLE · 2. Di")
-    assert best_send_text(xan).startswith("first by recorded direct results (tied with 1 other, same evidence): Ann")
-    assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("first by recorded direct results: Ann")
+    assert best_send_text(xan).startswith("direct-record order #1 (tied with 1 other, same evidence): Ann")
+    assert best_send_text([r for r in xan if r["member"]["id"] != 2]).startswith("direct-record order #1: Ann")
     yul = [r for r in wr["blocks"][1]["rows"] if r["category"] in ("G", "E", "I")]
     assert send_labels(yul) == ["≈", "≈"]
     assert best_send_text(yul).startswith("shared-opponent candidate, not ordered (one of 2): ")
@@ -825,10 +825,10 @@ def test_quick_read_keeps_pair_sample_caution_for_answer_and_avoid():
     index=build_pair_index(_pairs((1,50,1,1),(50,1,0,1),(2,50,8,10),(50,2,2,10),(3,50,0,1),(50,3,1,1)))
     wr=war_room_pair(ours,theirs,index,"EIGHT")
     text=wr['cards'][0]['quick_read']
-    assert 'First by direct record: Ann (1-0, 1 meeting, small sample)' in text
+    assert 'Direct-record order #1: Ann (1-0, 1 meeting, small sample)' in text
     assert 'Losing direct records: Jo (0-1, 1 meeting, small sample)' in text
     large=war_room_pair([ours[1]],theirs,index,"EIGHT")['cards'][0]['quick_read']
-    assert 'First by direct record: Bea (8-2, 10 meetings)' in large
+    assert 'Direct-record order #1: Bea (8-2, 10 meetings)' in large
     assert 'small sample' not in large
 
 

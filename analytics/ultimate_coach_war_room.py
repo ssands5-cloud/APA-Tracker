@@ -6,7 +6,7 @@ rule: direct meetings first, then shared-opponent results, ties shown) and
 adds, for one directed team pairing (our roster vs theirs, one format):
 
 * an evidence CATEGORY for every pairing of our player vs their player,
-* first by recorded direct results per opponent player,
+* direct-record order per opponent player,
 * concerning pairings, and opponents with winning records vs our roster,
 * an opponent scouting card per opponent player,
 * every recorded direct meeting between the two rosters.
@@ -442,7 +442,7 @@ def quick_read(card: dict[str, Any], block: dict[str, Any]) -> str:
     roster = [r["member"] for r in rows]
     def names(group):
         return ", ".join(display_name(r["member"], roster) for r in group)
-    for cat, label in (("G", "First by direct record"), ("E", "Even option on record")):
+    for cat, label in (("G", "Direct-record order #1"), ("E", "Even option on record")):
         group = [r for r in rows if r["category"] == cat]
         if group:
             top = [r for r in group if r["rank"].rstrip("=") == group[0]["rank"].rstrip("=")]
@@ -504,8 +504,8 @@ def best_send_text(rows: list[dict[str, Any]]) -> str:
         tag = f"shared-opponent candidate, not ordered ({'the only one' if n == 1 else f'one of {n}'}): "
     else:
         tied = sum(1 for r in rows if r["category"] in ("G", "E") and _group_key(r) == _group_key(first))
-        tag = ("first by recorded direct results: " if tied == 1 else
-               f"first by recorded direct results (tied with {tied - 1} other{'s' if tied > 2 else ''}, same evidence): ")
+        tag = ("direct-record order #1: " if tied == 1 else
+               f"direct-record order #1 (tied with {tied - 1} other{'s' if tied > 2 else ''}, same evidence): ")
     return f"{tag}{first['player']} — reason: {first['reason']}"
 
 
@@ -590,7 +590,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
              for r in rows if r["category"] == "R"]
     unknown = [display_name(r["member"], roster) for r in rows if r["category"] == "X"]
     if ranked:
-        headline = f"First by recorded direct results: {ranked[0]['display']}" + (
+        headline = f"Direct-record order #1: {ranked[0]['display']}" + (
             f" or {', '.join(ranked[0]['tied_with'])} (tied)" if ranked[0]["tied_with"] else "")
     elif unordered:
         headline = "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)"

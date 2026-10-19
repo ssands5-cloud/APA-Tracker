@@ -660,7 +660,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     ])
     e.cell("wr_PkTotal", "Packet evidence lines", "=SUM(wr_OppCount)")
 
-    # ---- first by recorded direct results per opponent (ranking order, sendable + remaining) ----
+    # ---- direct-record order per opponent (ranking order, sendable + remaining) ----
     e.section("Recorded matchup options (per opponent: direct-record order)")
     # Per opponent j, one row per ranked candidate: pid, category, remaining, sendable (ok), running count of
     # sendable rows, evidence group key (MatchupEvidence_Table[Rank Group]), direct (G/E and ok), group number
@@ -717,8 +717,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         n_i = f'COUNTIFS({rng["cat"]},"I",{rng["ok"]},TRUE)'
         tie = f'COUNTIFS({rng["grp"]},1,{rng["dir"]},TRUE)'
         tag = (f'IF(INDEX({rng["cat"]},{m})="I","shared-opponent candidate, not ordered ("&IF({n_i}=1,"the only one",'
-               f'"one of "&{n_i})&"): ",IF({tie}>1,"first by recorded direct results (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
-               f'", same evidence): ","first by recorded direct results: "))')
+               f'"one of "&{n_i})&"): ",IF({tie}>1,"direct-record order #1 (tied with "&({tie}-1)&" other"&IF({tie}>2,"s","")&'
+               f'", same evidence): ","direct-record order #1: "))')
         return (f'=IF(OR(INDEX(wr_OppStart,{k})="",NOT(INDEX(wr_OppUnplayed,{k}))),"",IFERROR({tag}&'
                 f'INDEX(MatchupEvidence_Table[Player],{row})&" — reason: "&INDEX(MatchupEvidence_Table[Reason],{row})&'
                 f'IF(INDEX(MatchupEvidence_Table[Category],{row})="I","",IF(INDEX(wr_CandidateBudget,MATCH(INDEX(MatchupEvidence_Table[Player ID],{row}),wr_OurPids,0))="",""," · "&'
@@ -906,7 +906,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
                 f'IFERROR(INDEX(wr_OurRemaining,MATCH(INDEX({ME}[Player ID],B{r}),wr_OurPids,0)),FALSE)))'))
             cat=f'INDEX({ME}[Category],B{r})'
             e.ws.cell(row=r,column=4,value=(f'=IF(C{r},INDEX({ME}[Player],B{r})&" — "&INDEX({ME}[Direct Record],B{r})&'
-                f'" · "&IF({cat}="G","favorable direct",IF({cat}="E","even direct","recorded loss"))&'
+                f'" · "&IF({cat}="G","favorable",IF({cat}="E","even","concerning"))&'
                 f'IF(INDEX({ME}[Direct Games],B{r})<3," · SMALL SAMPLE",""),"")'))
             e.ws.cell(row=r,column=5,value=f'=D{r}' if k==1 else f'=E{r-1}&IF(AND(E{r-1}<>"",D{r}<>""),CHAR(10),"")&D{r}')
         deeper_records[j]=f'Engine!$E${r}'
@@ -1291,7 +1291,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
           font=base.MUTED_FONT, height=30)
 
     top = end + 2
-    base._section(ws, top, "Top opportunities — first by recorded direct results (favorable direct first, then even, then indirect)",
+    base._section(ws, top, "Top opportunities — direct-record order (favorable direct first, then even, then indirect)",
                   last_col=12)
     for k in range(1, R + 1):
         r = top + k
@@ -2304,7 +2304,7 @@ def _deeper_records_worst(wb) -> str:
         rec=dict(zip(ME_COLUMNS,row))
         if rec['Rank']=='vs':blocks.append([])
         elif rec['Direct Games'] and rec['Direct Games']>1:
-            blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+' · recorded loss · SMALL SAMPLE')
+            blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+' · concerning · SMALL SAMPLE')
     return 'Deeper direct records — more meetings, not a new order:\n'+max(('\n'.join(b) for b in blocks),key=len)
 
 
@@ -2330,7 +2330,7 @@ def _next_send_worst(label: str, roster: int, medals: int) -> str:
 
 def _best_send_worst(wb, roster: int) -> str:
     label = _longest_label(wb)
-    prefix = f"vs {label}: first by recorded direct results (tied with {max(1, roster - 1)} others, same evidence): {label} \u2014 reason: "
+    prefix = f"vs {label}: direct-record order #1 (tied with {max(1, roster - 1)} others, same evidence): {label} \u2014 reason: "
     column = ME_COLUMNS.index("Reason") + 1
     texts = (str(row[0] or "") for row in wb["Matchup Evidence"].iter_rows(
         min_row=2, min_col=column, max_col=column, values_only=True))

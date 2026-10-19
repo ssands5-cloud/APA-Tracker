@@ -6,6 +6,8 @@ the evidence. Uses the all-categories fixture from the Excel formula tests."""
 
 from __future__ import annotations
 
+import re
+
 import difflib
 from collections import defaultdict
 from pathlib import Path
@@ -677,7 +679,7 @@ def test_send_lists_and_best_send_text_match_python_including_ties(tmp_path: Pat
                 assert js == expected, remaining
             assert js[0][0].startswith("1. ") and "1= " in page.evaluate(f"window.__ucSendTexts({OURS!r}, {THEIRS!r}, 'EIGHT', null)")[0][0]
             assert "1= Ann Archer" in page.inner_text("#wr-opportunities") and "1= Fay Fox" in page.inner_text("#wr-opportunities")
-            assert "first by recorded direct results (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
+            assert "direct-record order #1 (tied with 1 other, same evidence): Ann Archer" in page.inner_text("#lineup-lab")
         finally:
             browser.close()
 
@@ -2303,7 +2305,7 @@ def test_sample_caution_is_visible_in_quick_read_and_folded_avoid(tmp_path: Path
         try:
             page,errors=_page(tmp_path,browser)
             text=page.locator('#scouting-cards .quick-read').first.inner_text()
-            assert f'First by direct record: {ANN} (2-0, 2 meetings, small sample)' in text
+            assert f'Direct-record order #1: {ANN} (2-0, 2 meetings, small sample)' in text
             assert 'Losing direct records: Bea Baker (0-2, 2 meetings, small sample)' in text
             summary=page.locator('#next-send .ns-more summary')
             assert 'small sample' in summary.inner_text()
@@ -2727,7 +2729,7 @@ def test_quick_read_distinguishes_same_named_answer_and_avoid(tmp_path, width, l
     avoid = "Ann Archer (SL 4)" if level_case == "different" else "Ann Archer (player 2 of 2)"
     py = _python_war_room_for(payload)
     expected = py["cards"][0]["quick_read"]
-    assert "First by direct record: " + answer + " (2-0" in expected
+    assert "Direct-record order #1: " + answer + " (2-0" in expected
     assert avoid + " (0-1" in expected
     path = tmp_path / "same-name-quick-read.html"
     path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
@@ -2771,17 +2773,19 @@ def test_avoid_panel_does_not_silently_drop_pairings_after_fifth(tmp_path, width
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(path.as_uri())
-            # Each item is the shared caution text followed by a separate meeting badge; compare the text.
-            items = page.locator("#wr-risks .risk-grid > div").nth(1).locator("li")
-            class _Lines:
-                def all_text_contents(self):
-                    return items.evaluate_all("es => es.map(e => e.firstChild.textContent.trim())")
-            lines = _Lines()
-            assert lines.all_text_contents() == [r["text"] for r in expected]
+            # Each item is the caution followed by one meeting badge; the sample is stated exactly once.
+            def shown(r):
+                g = r["direct"][1]
+                base = re.sub(r" · SMALL SAMPLE( · Lost once)?$", "", r["text"])
+                badge = ("Lost once · " if g == 1 else "") + f"{g} meeting{'' if g == 1 else 's'}" + (" · small sample" if g < 3 else "")
+                return f"{base} {badge}"
+            lines = page.locator("#wr-risks .risk-grid > div").nth(1).locator("li")
+            assert lines.all_text_contents() == [shown(r) for r in expected]
+            assert all(t.lower().count("small sample") <= 1 and t.count("Lost once") <= 1 for t in lines.all_text_contents())
             page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option("Unavailable")
-            assert lines.all_text_contents() == [r["text"] for r in expected if r["our"]["id"] != 1]
+            assert lines.all_text_contents() == [shown(r) for r in expected if r["our"]["id"] != 1]
             page.locator('#lineup-lab input[data-plan="played"][data-pid="11"]').check()
-            assert lines.all_text_contents() == [r["text"] for r in expected
+            assert lines.all_text_contents() == [shown(r) for r in expected
                                                   if r["our"]["id"] != 1 and r["opp"]["id"] != 11]
             assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
             assert errors == []

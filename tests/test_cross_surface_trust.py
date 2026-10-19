@@ -237,3 +237,22 @@ def test_packet_blind_send_shows_the_phone_small_sample_pairing_line(tmp_path):
     row=next(c.row for c in wb['Captain Packet']['A'] if c.value=='IF WE PUT UP FIRST')
     assert expected in book.display('Captain Packet',f'C{row}')
     wb.close()
+
+
+def test_deeper_losing_record_uses_the_same_category_word_on_phone_and_paper(tmp_path):
+    payload=_payload();payload['evidence']=_games(1,10,'W')+_games(2,10,'WWLLLLLL')
+    path=tmp_path/'deeper-loss.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':390,'height':900});page.goto(path.as_uri())
+            page.locator('#next-send .ns-chip',has_text='Cam Cole').click()
+            phone=page.locator('#next-send .ns-deeper').inner_text()
+        finally:browser.close()
+    assert '2-6 in 8 meetings · concerning' in phone
+    wb=load_workbook(write_workbook(payload,tmp_path/'deeper-loss.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    head=next(c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str) and c.value.startswith('Recorded options preview'))
+    packet=book.display('Captain Packet',f'C{head+1}')
+    assert '2-6 (8 meetings) · concerning' in packet and 'recorded loss ·' not in packet
+    wb.close()

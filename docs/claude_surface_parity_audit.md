@@ -9,6 +9,38 @@ from the same evidence. When met, the audit entry here says `SURFACE PARITY PASS
 The phone needs no separate check: it renders through the same `ui.ultimate_coach` code and
 `ultimate_coach_war_room.js` as the HTML, so it can differ only by snapshot date and local marks.
 
+## Cosmetic wording polish (2026-10-18, owner-authorized) — SURFACE PARITY PASS retained
+
+Paul authorized working the cosmetic list while away. Wording and display only; no ranking, category,
+eligibility, save, budget or threat logic changed.
+
+- **C6.** HTML Top risks no longer states the sample twice. The caution reads, for example, "Ann vs Xavier:
+  0-1 direct (1 meeting)" followed by one badge, "Lost once · 1 meeting · small sample". The shared
+  Python/JS caution text, still used by the workbook and Packet, is unchanged.
+- **C2.** Deeper-record rows on the workbook and Packet use the phone's category words: favorable, even,
+  concerning. They previously said favorable direct, even direct and recorded loss.
+- **C1.** One label for the first direct option on every surface: "Direct-record order #1". It replaces
+  "first by recorded direct results" in the HTML Lineup Lab and War Room, the workbook best-send lines and
+  the plain-text headline, and Quick Read's "First by direct record". The workbook War Room heading now
+  reads "Top opportunities — direct-record order (…)".
+
+**Tests.**
+- New: `test_deeper_losing_record_uses_the_same_category_word_on_phone_and_paper`.
+- Tightened: the avoid-panel browser test now checks the full visible line, with the sample stated once.
+- Both failed on the previous code and pass now. Literal expectations for the C1 label were updated.
+- Combined cross-surface, Next Send, workbook formula, war-room and browser suites: 347 passed in 481.72s.
+
+**Intentional differences kept.** These are print-versus-screen design, not inconsistency:
+- The phone uses badges where print uses uppercase SMALL SAMPLE and MEETINGS.
+- Paper always prints the budget scope line when a cap is entered, because print cannot show it on demand.
+- The workbook repeats the budget warning in its summary lists.
+- Preview lengths differ: Packet 2 options and 3 flags, War Room 5 cautions. Each opponent's own
+  cautions, saves and deeper records are on its line.
+
+**Builder commit bd3a75d (19:59)** resolves scoresheet identities by captured career IDs. It is refresh-only
+and touches no captain surface. `tests/test_refresh_sources.py` and `tests/test_ultimate_coach_refresh.py`
+passed 47 of 47.
+
 ## Re-checks after the pass
 
 - **2026-10-18 09:47, 3f7d9aa (docs only).** Product code and tests are unchanged since afa0169. The five

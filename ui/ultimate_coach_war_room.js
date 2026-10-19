@@ -97,7 +97,7 @@
     else parts.push((tw>tg-tw?"Winning direct record":(2*tw===tg?"Even":"Vs our roster"))+": "+wlText(tw,tg)+" vs our roster ("+plural(tg,"meeting")+(tg<3?", small sample":"")+")");
     var roster=b.rows.map(function(r){return r.member;});
     var names=function(g){return g.map(function(r){return wrDisplayName(r.member,roster);}).join(", ");},done=false;
-    [["G","First by direct record"],["E","Even option on record"]].forEach(function(x){
+    [["G","Direct-record order #1"],["E","Even option on record"]].forEach(function(x){
       if(done) return;var g=b.rows.filter(function(r){return r.category===x[0];});if(!g.length) return;
       var top=g.filter(function(r){return String(r.rank).replace("=","")===String(g[0].rank).replace("=","");});
       parts.push(x[1]+": "+names(top)+" ("+wlText(top[0].c.direct.w,top[0].c.direct.g)+", "+plural(top[0].c.direct.g,"meeting")+(top[0].c.direct.g<3?", small sample":"")+(top.length>1?", tied":"")+")");
@@ -391,7 +391,7 @@
     var f=rows[0],tag;
     if(f.category==="I"){var n=rows.filter(function(r){return r.category==="I";}).length;tag="shared-opponent candidate, not ordered ("+(n===1?"the only one":"one of "+n)+"): ";}
     else{var t=rows.filter(function(r){return (r.category==="G"||r.category==="E")&&wrGroupKey(r)===wrGroupKey(f);}).length;
-      tag=t===1?"first by recorded direct results: ":"first by recorded direct results (tied with "+(t-1)+" other"+(t>2?"s":"")+", same evidence): ";}
+      tag=t===1?"direct-record order #1: ":"direct-record order #1 (tied with "+(t-1)+" other"+(t>2?"s":"")+", same evidence): ";}
     return tag+f.player+" — reason: "+f.reason;
   }
   window.__ucSendTexts=function(ourKey,oppKey,fmt,remainingIds){
@@ -444,7 +444,7 @@
               save:saveText(sv),save_targets:sv||[]};};
     var unordered=rows.filter(pick("I")).map(brief),avoid=rows.filter(pick("R")).map(brief);
     var unknown=rows.filter(pick("X")).map(function(r){return wrDisplayName(r.member,roster);});
-    var headline=ranked.length?"First by recorded direct results: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
+    var headline=ranked.length?"Direct-record order #1: "+ranked[0].display+(ranked[0].tied_with.length?" or "+ranked[0].tied_with.join(", ")+" (tied)":"")
       :unordered.length?"No favorable/even direct option — shared-opponent candidates only (≈, not ordered)"
       :"No evidence-backed option left among our remaining players";
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
@@ -874,7 +874,7 @@
         var items=plan.threats.map(function(c){return '<li>'+(c.live&&c.games===1?'<strong class="ns-sample">Beat us once (1 meeting)</strong> ':'')+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("No unplayed opponent has a live winning record against our remaining roster.")+'</li>')+'</ul>';
       })()+'</div>'
-      +'<div><h3>Avoid records — more losses than wins</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text)+' <strong class="ns-sample">'+esc((c.g===1?"Lost once · ":"")+plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
+      +'<div><h3>Avoid records — more losses than wins</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text.replace(/ · SMALL SAMPLE( · Lost once)?$/,""))+' <strong class="ns-sample">'+esc((c.g===1?"Lost once · ":"")+plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
