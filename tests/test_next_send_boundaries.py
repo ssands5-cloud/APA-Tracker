@@ -137,10 +137,10 @@ def test_decision_labels_explain_samples_without_claiming_a_practical_best(tmp_p
             page,errors=_page(tmp_path,browser)
             page.set_viewport_size({'width':width,'height':900})
             assert 'does not mean better supported' in page.locator('.ns-method').inner_text()
-            sample=page.locator('.blind-send .bs-evidence')
-            assert '2 direct meetings total across 1 opponent' in sample.inner_text()
-            assert '1 small-sample pairing' in sample.inner_text()
-            assert 'Pairing counts select the first shown' in page.locator('.blind-send').inner_text()
+            plan=page.locator('#match-plan')
+            # The lead pick carries its confidence level and states plainly that levels are evidence, not odds.
+            assert plan.locator('.mp-lead .mp-level').count()==1
+            assert 'not odds' in plan.inner_text() and '%' not in plan.inner_text()
             risks=page.locator('#wr-risks')
             assert 'Threats — winning direct records' in risks.inner_text()
             assert 'Avoid records — more losses than wins' in risks.inner_text()
@@ -186,8 +186,8 @@ def test_thin_leader_headline_and_deeper_record_are_visible_without_reordering(t
 
 
 @pytest.mark.parametrize('width',[390,1280])
-@pytest.mark.parametrize('record,total',[('W',3),('WWWWWW',18)])
-def test_blind_send_discloses_different_meeting_totals_for_same_pairing_counts(tmp_path,width,record,total):
+@pytest.mark.parametrize('record,level',[('W','Thin'),('WWWWWW','Solid')])   # 6-0, but Cam's SL changed since: one level down
+def test_match_plan_answers_carry_the_depth_of_their_evidence(tmp_path,width,record,level):
     from ui.ultimate_coach import render
     from tests.test_excel_war_room_formulas import _games,_player,_hist
     payload=_payload()
@@ -198,10 +198,11 @@ def test_blind_send_discloses_different_meeting_totals_for_same_pairing_counts(t
         browser=pw.chromium.launch()
         try:
             page=browser.new_page(viewport={'width':width,'height':900});page.set_default_timeout(2500);page.goto(path.as_uri())
-            blind=page.locator('.blind-send')
-            assert 'favorable vs 3 of 4' in blind.inner_text()
-            assert str(total)+' direct meetings total' in blind.locator('.bs-evidence').inner_text()
-            assert ('3 small-sample pairings' in blind.inner_text())==(total==3)
+            plan=page.locator('#match-plan')
+            # The same pairing counts, backed by 1 meeting or 6 each: the answer's level must show the difference.
+            answer=plan.locator('.mp-resp li',has_text='Cam Cole →')
+            assert 'Ann Archer' in answer.inner_text() and level in answer.locator('.mp-level').inner_text()
+            if record!='W': assert '6 meetings' in answer.inner_text() and 'skill levels changed' in answer.inner_text()
             assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
         finally:browser.close()
 

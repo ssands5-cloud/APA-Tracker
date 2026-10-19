@@ -221,21 +221,37 @@ def test_packet_evidence_basis_keeps_direction_beside_small_sample(tmp_path):
     wb.close()
 
 
-def test_packet_blind_send_shows_the_phone_small_sample_pairing_line(tmp_path):
+def test_packet_prints_the_phone_start_of_night_plan_and_retires_it_after_any_change(tmp_path):
+    from analytics.match_night_engine import STALE_PLAN, plan_for_war_room, plan_text
     payload=_payload()
-    payload['evidence']=_games(1,10,'W')+_games(1,11,'WW')+_games(2,10,'L')
-    expected='3 direct meetings total across 2 opponents · 2 small-sample pairings'
-    path=tmp_path/'blind.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    payload['evidence']=_games(1,10,'W')+_games(1,11,'WW')+_games(2,10,'L')+_games(3,11,'WWWWW')
+    text=plan_text(plan_for_war_room(_python_war_room_for(payload)))
+    path=tmp_path/'plan.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
     with sync_playwright() as pw:
         browser=pw.chromium.launch()
         try:
             page=browser.new_page(viewport={'width':390,'height':900});page.goto(path.as_uri())
-            assert expected in page.locator('.blind-send .bs-evidence').inner_text()
+            phone=page.locator('#match-plan')
+            lead=phone.locator('.mp-lead .mp-name').inner_text()
+            responses=[t.split(' (')[0] for t in text['responses'].split('\n')]
+            for line in responses:
+                assert line.replace(' → ',' → ') in phone.inner_text()
         finally:browser.close()
-    wb=load_workbook(write_workbook(payload,tmp_path/'blind.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    wb=load_workbook(write_workbook(payload,tmp_path/'plan.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
     book=Workbook(wb)
-    row=next(c.row for c in wb['Captain Packet']['A'] if c.value=='IF WE PUT UP FIRST')
-    assert expected in book.display('Captain Packet',f'C{row}')
+    col={c.value:c.row for c in wb['Captain Packet']['A'] if isinstance(c.value,str)}
+    show=lambda label: str(book.display('Captain Packet',f'C{col[label]}') or '')
+    assert show('IF WE PUT UP FIRST').startswith(lead+' (')
+    assert show('IF WE PUT UP FIRST').split('\n')[0]==text['lead']
+    assert show('IF THEY PUT UP')==text['responses'] and show('HOLD BACK')==text['holds']
+    assert show('IF WE MUST CONCEDE')==text['sacrifices'] and show("TONIGHT'S PLAN")==text['summary']
+    # Paper cannot re-plan: any send, availability change or entered cap retires the printed plan.
+    book.set('Lineup Lab','D12','Played')
+    assert show('IF WE PUT UP FIRST').startswith(STALE_PLAN) and show('IF THEY PUT UP')==''
+    book.set('Lineup Lab','D12','')
+    assert show('IF WE PUT UP FIRST').split('\n')[0]==text['lead']
+    book.set('Lineup Lab','C7',23)
+    assert show('IF WE PUT UP FIRST').startswith(STALE_PLAN)
     wb.close()
 
 

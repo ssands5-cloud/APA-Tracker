@@ -50,6 +50,7 @@ from analytics.ultimate_coach_matchup_evidence import (
     format_label,
     members_by_scope,
 )
+from analytics.match_night_engine import STALE_PLAN, plan_for_war_room, plan_text
 from analytics.ultimate_coach_war_room import (
     CATEGORY_LABELS,
     DIRECT_ORDER_NOTE,
@@ -80,6 +81,8 @@ TC_COLUMNS = [
     "Opp No-Game Players", "Direct Meetings", "Opponents Met", "Pairings",
 ]
 THREATS_COLUMNS = ["Key", "Opp Player ID", "Threat"]
+MATCH_PLAN_COLUMNS = ["Key", "Opponents", "Lead", "Responses", "Holds", "Sacrifices", "Summary", "Best Board",
+                      "Safest Board"]
 CONCERNING_COLUMNS = ["Key", "Our Player ID", "Opp Player ID", "Pairing"]
 MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points",
                     "Pair Key"]
@@ -134,6 +137,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
     me_rows: list[list[Any]] = []
     tc_rows: list[list[Any]] = []
     threat_rows: list[list[Any]] = []
+    plan_rows: list[list[Any]] = []
     concern_rows: list[list[Any]] = []
     meeting_rows: list[list[Any]] = []
     card_rows: list[list[Any]] = []
@@ -162,6 +166,11 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
                                 # Next Send medals: players with the same evidence share a rank group (and a medal).
                                 int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—", save_record_text(row),
                                 row["direct"][0] if row["direct"] else 0, row["direct"][1] if row["direct"] else 0])
+        # The Match Night Engine's start-of-night plan (no marks, no cap) -- the printed plan. Paper cannot
+        # re-plan; the workbook shows it only while nothing has changed, and points to the phone after that.
+        text = plan_text(plan_for_war_room(wr))
+        plan_rows.append([key, len(wr["theirs"]), text["lead"], text["responses"], text["holds"], text["sacrifices"],
+                          text["summary"], text["best_board"], text["safest_board"]])
         for k, threat in enumerate(wr["threats"], start=1):
             threat_rows.append([f"{key}|{k}", threat["opponent"]["id"], threat["threat_text"]])
         max_threats = max(max_threats, len(wr["threats"]))
@@ -194,6 +203,9 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
           {"Key": 44, "Rank": 6, "Player": 40, "SL": 8, "Direct Record": 20, "Shared-Opponent Evidence": 60,
            "Basis": 70, "Rows": 6, "Player ID": 10, "Category": 9, "Cell": 26, "Reason": 70})
     table("Threats_Table", "Threats", THREATS_COLUMNS, threat_rows, {"Key": 44, "Threat": 90})
+    table("MatchPlan_Table", "Match Plan", MATCH_PLAN_COLUMNS, plan_rows,
+          {"Key": 44, "Lead": 90, "Responses": 90, "Holds": 90, "Sacrifices": 70, "Summary": 90,
+           "Best Board": 90, "Safest Board": 90})
     table("Concerning_Table", "Concerning", CONCERNING_COLUMNS, concern_rows, {"Key": 44, "Pairing": 90})
     table("Meetings_Table", "Meetings", MEETINGS_COLUMNS, meeting_rows,
           {"Key": 44, "Date": 17, "Our Player": 38, "Opponent": 38})
@@ -644,6 +656,17 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_BlindKnown", "Candidates with any direct record", '=COUNTIF(wr_BlindCov,">0")')
     e.cell("wr_BlindBad", "Candidates with a concerning record", '=COUNTIF(wr_BlindR,">0")')
     # Naming the first player in roster order implies an edge that does not exist (BLIND-01).
+    # ---- Match Night Engine: the printed start-of-night plan, valid only while nothing has changed ----
+    e.cell("wr_PlanRow", "Match plan row", '=IF(wr_PairKey="","",IFERROR(MATCH(wr_PairKey,MatchPlan_Table[Key],0),""))')
+    e.cell("wr_PlanFresh", "Printed plan still applies",
+           '=AND(wr_PlanRow<>"",COUNTIF(wr_OurLineup,"Played")=0,COUNTIF(wr_OurAvail,"Unavailable")=0,'
+           'wr_UnplayedCount=INDEX(MatchPlan_Table[Opponents],wr_PlanRow),ll_Cap="")')
+    for col, cell in (("Lead", "wr_PlanLead"), ("Responses", "wr_PlanResponses"), ("Holds", "wr_PlanHolds"),
+                      ("Sacrifices", "wr_PlanSacrifices"), ("Summary", "wr_PlanSummary"),
+                      ("Best Board", "wr_PlanBest"), ("Safest Board", "wr_PlanSafest")):
+        stale = f'"{STALE_PLAN}"' if col == "Lead" else '""'
+        e.cell(cell, f"Match plan: {col}",
+               f'=IF(wr_PlanRow="","",IF(wr_PlanFresh,INDEX(MatchPlan_Table[{col}],wr_PlanRow),{stale}))')
     e.cell("wr_BlindName", "Blind send player",
            '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),"",INDEX(wr_OurLabels,wr_BlindIdx))')
     # Expose the existing roster-order fallback without claiming equal meeting records.
@@ -1862,20 +1885,26 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     # packet assumes we already know who they put up, and when WE lead there is nobody to look up.
     r += 1
     _span(ws, r, 1, 2, "IF WE PUT UP FIRST", font=font(9, bold=True, color="5B6A61"))
+    # The Match Night Engine's lead pick (the printed start-of-night plan; re-plan on the phone after any change).
     _span(ws, r, 3, 12,
-          '=IF(wr_UnplayedCount=0,"Every opponent has already played.",'
-          'IF(wr_BlindName="","No evidence-backed pick — "&wr_BlindWhy,'
-          'wr_BlindName&" — "&wr_BlindWhy&wr_BlindTieNote&wr_BlindMeetingNote&'
-          'IF(INDEX(wr_OurAvail,wr_BlindIdx)="Unknown"," · availability unknown","")&'
-          'IF(INDEX(wr_CandidateBudget,wr_BlindIdx)="",""," · "&INDEX(wr_CandidateBudget,wr_BlindIdx))))&'
-          'IF(wr_BudgetScope="","",CHAR(10)&wr_BudgetScope)',
+          '=IF(wr_UnplayedCount=0,"Every opponent has already played.",wr_PlanLead)'
+          '&IF(wr_BudgetScope="","",CHAR(10)&wr_BudgetScope)',
           font=font(12, bold=True, color=base.FELT_DEEP))
-    blind_worst = (_longest_label(wb) + f" — {R} concerning of {R} — best available, not good · no direct record vs {R}"
-                   + f" · {R} tied by matchup counts; first shown by roster order. Compare individual records in Captain Matrix."
-                   + f" · 999999 direct meetings total across {R} opponents · {R} small-sample pairings"
-                   + " — pairing counts select first shown, not confidence · availability unknown"
-                   + " · Reference comparison: this choice exceeds your entered skill budget\n"+_budget_scope_worst())
-    h(r, _worst_height(blind_worst, sum(PACKET_WIDTHS[2:]), 12, 30))
+    plans = [r_ for r_ in wb["Match Plan"].iter_rows(min_row=2, values_only=True)]
+    width = sum(PACKET_WIDTHS[2:])
+
+    def tallest(col, size, minimum, extra=""):
+        texts = [str(row[MATCH_PLAN_COLUMNS.index(col)] or "") for row in plans] + [STALE_PLAN]
+        return max(_worst_height(t + extra, width, size, minimum) for t in texts)
+    h(r, tallest("Lead", 12, 30, "\n" + _budget_scope_worst()))
+    for label, cell, col in (("IF THEY PUT UP", "wr_PlanResponses", "Responses"),
+                             ("HOLD BACK", "wr_PlanHolds", "Holds"),
+                             ("IF WE MUST CONCEDE", "wr_PlanSacrifices", "Sacrifices"),
+                             ("TONIGHT'S PLAN", "wr_PlanSummary", "Summary")):
+        r += 1
+        _span(ws, r, 1, 2, label, font=font(9, bold=True, color="5B6A61"))
+        _span(ws, r, 3, 12, f'=IF(wr_UnplayedCount=0,"",{cell})', font=font(10.5))
+        h(r, tallest(col, 10.5, 15))
     r += 1
     base._section(ws, r, "Recorded options preview — direct order: win percentage, then meetings; not confidence",
                   last_col=12)

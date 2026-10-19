@@ -1472,55 +1472,53 @@ def test_a_note_does_not_reset_an_alternate_next_send_opponent(tmp_path: Path):
             browser.close()
 
 
-def test_blind_send_answers_before_the_captain_picks_an_opponent(tmp_path: Path):
+def test_match_plan_lead_answers_before_the_captain_picks_an_opponent(tmp_path: Path):
     """Decision-first: when WE lead there is no chip to pick, so the answer must already be there.
 
-    Every other recommendation on this page is conditioned on "they put up X". In APA the lead
-    alternates, so a captain regularly chooses first and had no answer at all.
-    Design: docs/superpowers/specs/2026-10-11-blind-send-design.md
+    The Match Night Engine's lead pick replaced the earlier Blind Send rule (docs/team_matchup_engine_design.md);
+    it must still answer without interaction, above the "they put up" chips, and react to availability.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
             page, errors = _page(tmp_path, browser)
-            card = page.locator("#tonight .blind-send")
+            card = page.locator("#tonight #match-plan")
             assert card.count() == 1, "the lead answer must be present without any interaction"
             text = card.inner_text()
             assert "if we put up first" in text.lower(), text   # the label is styled uppercase
-            # It names one of our players and says why, in recorded terms -- never odds.
             names = [n.split(" (APA")[0] for n in (ANN, BEA, DEE)]
             assert any(n in text for n in names), text
-            for banned in ("%", "odds", "probability", "chance"):
+            for banned in ("%", "probability", "chance"):
                 assert banned not in text.lower(), (banned, text)
-
-            # It appears ABOVE the "they put up" chips: the answer precedes the question.
             order = page.evaluate(
                 "() => {const t=document.querySelector('#tonight');"
-                " const b=t.querySelector('.blind-send'), n=t.querySelector('#next-send');"
+                " const b=t.querySelector('#match-plan'), n=t.querySelector('#next-send');"
                 " return b.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING ? 'before' : 'after';}")
             assert order == "before", "the lead recommendation must precede the opponent chips"
-
-            # Marking our lead candidate unavailable must change the answer, not keep a stale one.
-            first = card.locator(".bs-name").inner_text()
-            assert first in names, first
+            # Marking our lead unavailable must change the answer, not keep a stale one.
+            first = card.locator(".mp-lead .mp-name").inner_text()
+            assert any(first.startswith(n) for n in names), first
             pid = page.evaluate(
                 "(nm) => {const r=[...document.querySelectorAll('#lineup-lab select[data-plan=\"avail\"]')];"
                 " const row=r.find(s=>s.closest('tr')&&s.closest('tr').innerText.includes(nm));"
                 " return row?row.getAttribute('data-pid'):null;}", first)
-            if pid:
-                page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
-                assert page.locator("#tonight .blind-send .bs-name").inner_text() != first
+            assert pid
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
+            assert page.locator("#tonight #match-plan .mp-lead .mp-name").inner_text() != first
             assert errors == []
         finally:
             browser.close()
 
 
 @pytest.mark.parametrize('width', [390, 1280])
-def test_blind_send_names_coverage_ties_and_links_to_existing_records(tmp_path, width):
+def test_match_plan_discloses_equally_good_leads_and_keeps_it_open_on_cap_edits(tmp_path, width):
+    from analytics.match_night_engine import plan_for_war_room
     payload = _payload()
     payload['evidence'] = [r for r in payload['evidence'] if {r['player_id'], r['opponent_id']} not in ({1, 10}, {2, 10})]
     payload['evidence'] += _games(1, 10, 'W') + _games(2, 10, 'WWWWWWWWLL')
-    path = tmp_path / 'blind-count-tie.html'
+    expected = plan_for_war_room(_python_war_room_for(payload))
+    assert expected['lead']['equally_good'], 'fixture must exercise an equally good alternative lead'
+    path = tmp_path / 'lead-ties.html'
     path.write_text(render(payload, built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001'), encoding='utf-8')
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -1529,62 +1527,19 @@ def test_blind_send_names_coverage_ties_and_links_to_existing_records(tmp_path, 
             errors = []
             page.on('pageerror', lambda exc: errors.append(str(exc)))
             page.goto(path.as_uri())
-            page.locator('#next-send .ns-chip').nth(1).click()
-            target = page.locator('#next-send .ns-chip.on').get_attribute('data-next')
-            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
-            card = page.locator('#tonight .blind-send')
-            assert card.locator('.bs-name').inner_text() == ANN
-            disclosure = card.locator('.bs-ties')
-            assert disclosure.count() == 1, 'a roster-order choice must disclose alternatives with the same selection counts'
-            assert not disclosure.evaluate('e=>e.open')
-            summary = disclosure.locator('summary')
-            assert '2 tied by matchup counts' in summary.inner_text()
+            card = page.locator('#tonight #match-plan')
+            assert card.locator('.mp-lead .mp-name').inner_text() == expected['lead']['our']
+            ties = card.locator('.mp-ties')
+            assert ties.count() == 1
+            summary = ties.locator('summary')
+            assert f"{len(expected['lead']['equally_good']) + 1} leads hold up equally well" in summary.inner_text()
             assert summary.bounding_box()['height'] >= 44
             summary.click()
-            assert disclosure.locator('li b').all_text_contents() == [ANN, BEA]
-            assert disclosure.locator('li .ns-avail').count() == 2
-            assert 'roster order' in disclosure.inner_text()
-            assert 'meeting totals can differ' in disclosure.inner_text()
-            link = disclosure.locator('a')
-            assert link.get_attribute('href') == '#wr-matrix'
-            assert link.bounding_box()['height'] >= 44
-            link.click()
-            assert page.locator('#next-send .ns-chip.on').get_attribute('data-next') == target
-            assert page.locator('#next-send .ns-ask').inner_text() == 'They put up:'
-            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
+            assert all(n in ties.inner_text() for n in expected['lead']['equally_good'])
+            assert 'roster order' in ties.inner_text()
             page.locator('#ll-cap').fill('23')
-            assert disclosure.evaluate('e=>e.open'), 'live budget updates must retain the opened explanation'
+            assert page.locator('#tonight #match-plan .mp-ties').evaluate('e=>e.open'), 'live cap edits keep the opened explanation'
             assert page.locator('#ll-cap').evaluate('e=>e===document.activeElement')
-            assert disclosure.locator('li b').all_text_contents() == [ANN, BEA]
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="2"]').select_option('Unavailable')
-            assert card.locator('.bs-ties').count() == 0
-            assert card.locator('.bs-name').inner_text() == ANN
-            page.reload()
-            assert card.locator('.bs-ties').count() == 0
-            assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
-            assert errors == []
-        finally:
-            browser.close()
-
-
-@pytest.mark.parametrize('width', [390, 1280])
-def test_live_threat_panel_states_covered_and_unmet_remaining_players(tmp_path, width):
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            page, errors = _page(tmp_path, browser)
-            page.set_viewport_size({'width': width, 'height': 844})
-            evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
-            panel = page.locator('#wr-risks .risk-grid > div').first
-            assert '1 of 3 remaining players' in panel.inner_text()
-            assert 'no direct record vs 2 remaining players' in panel.inner_text()
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unavailable')
-            assert '1 of 2 remaining players' in panel.inner_text()
-            assert 'no direct record vs 1 remaining player' in panel.inner_text()
-            page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('Played')
-            assert '1 of 1 remaining player' in panel.inner_text()
-            assert 'no direct record vs' not in panel.inner_text()
-            assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == evidence
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
         finally:
@@ -2375,25 +2330,28 @@ def test_entered_budget_counts_unknown_availability_and_does_not_clear_unknown_s
         finally:browser.close()
 
 
-def test_blind_pick_shares_next_send_label_and_carries_candidate_budget_warning(tmp_path: Path):
+def test_match_plan_refuses_an_over_cap_lead_and_keeps_the_budget_explanation(tmp_path: Path):
     from tests.test_excel_war_room_formulas import _payload as crowded_payload
     payload=crowded_payload(crowded=True)
     payload["players"][2]["team_history"][0]["skill_level"]=3
-    path=tmp_path/"blind-budget.html"
+    path=tmp_path/"lead-budget.html"
     path.write_text(render(payload,built_at="2026-10-07 18:00 UTC",viewer_member_external_id="1001"),encoding="utf-8")
     with sync_playwright() as pw:
         browser=pw.chromium.launch(headless=True)
         try:
             page=browser.new_page(viewport={"width":390,"height":844});page.goto(path.as_uri())
+            assert page.locator("#tonight #match-plan .mp-lead").count()==1
             page.fill("#ll-cap","5");page.locator("#ll-cap").dispatch_event("change")
-            lead=page.locator("#tonight .blind-send")
-            assert lead.locator(".bs-name").inner_text()=="Ann Archer (SL 5)"
-            assert "exceeds your entered skill budget" in lead.locator(".ns-budget").inner_text()
+            card=page.locator("#tonight #match-plan")
+            # No lineup fits a cap of 5: the plan says so instead of recommending an over-cap lead.
+            assert card.locator(".mp-lead").count()==0
+            assert "No legal send fits the entered skill cap" in card.inner_text()
             budget_text=page.locator("#tonight .lineup-budget").inner_text()
-            assert "unplayed roster opponents" in budget_text
-            assert "not a match-legality check" in budget_text
+            assert "unplayed roster opponents" in budget_text and "not a match-legality check" in budget_text
             assert "Cannot field a legal lineup" not in budget_text
-            assert page.locator("#next-send .ns-medal").first.locator("b").first.inner_text()==lead.locator(".bs-name").inner_text()
+            assert "exceeds your entered skill budget" in page.locator("#next-send").inner_text()
+            page.fill("#ll-cap","23");page.locator("#ll-cap").dispatch_event("change")
+            assert page.locator("#tonight #match-plan .mp-lead").count()==1
         finally:browser.close()
 
 

@@ -653,8 +653,11 @@
       out.lead=null;out.responses=[];out.holds=[];out.sacrifices=[];out.plan_if_we_lead=[];out.plan_if_they_lead=[];
       out.best_board=[];out.safest_board=[];out.confidence={};out.fragility=null;out.cap=mnCapSafety(night,om);return out;
     }
-    var l=night.lead(om,tm),li=l[0],lj=l[1];
-    out.lead={our:name("our",li),their_reply:name("their",lj),level:conf(li,lj).level,why:conf(li,lj).text};
+    var l=night.lead(om,tm),li=l[0],lj=l[1],leadValue=l[2],equal=[],LO=night.legalOurs(om);
+    for(var q=0;q<LO.length;q++){var ii=LO[q];if(ii===li) continue;var ww=null;
+      for(var jq=0;jq<theirs.length;jq++){if(!(tm>>jq&1)) continue;var vv=night.pair(ii,jq)+night.solve(om&~(1<<ii),tm&~(1<<jq),false);if(ww===null||vv<ww) ww=vv;}
+      if(ww===leadValue) equal.push(name("our",ii));}
+    out.lead={our:name("our",li),our_id:ours[li].id,their_reply:name("their",lj),level:conf(li,lj).level,why:conf(li,lj).text,equally_good:equal};
     var totalThey=night.solve(om,tm,false),responses=[];
     for(var j=0;j<theirs.length;j++){
       var ba=night.bestAnswer(om,tm,j),i=ba[0],v=ba[1];if(i===null) continue;
@@ -688,8 +691,13 @@
       var drop=d[0],i=d[1];if(drop<=0) return;
       var cov=covers(i),why;
       if(cov.length){var j=cov[0];why="our only "+conf(i,j).level+" answer to "+name("their",j)+" — "+conf(i,j).why;}
-      else{var bj=0;for(var jj=1;jj<theirs.length;jj++) if(conf(i,jj).points>conf(i,bj).points) bj=jj;
-        why=conf(i,bj).points>0?"best answer to "+name("their",bj)+" ("+conf(i,bj).level+"); the plan is weaker without them":"the plan is weaker without them";}
+      else{
+        var margin=function(x){var others=[];for(var k=0;k<ours.length;k++) if(k!==i&&(om>>k&1)) others.push(conf(k,x).points);
+          return conf(i,x).points-(others.length?Math.max.apply(null,others):conf(i,x).points);};
+        var bj=0;for(var jj=1;jj<theirs.length;jj++) if(margin(jj)>margin(bj)) bj=jj;
+        if(margin(bj)>0){var nxt=null;for(var k2=0;k2<ours.length;k2++){if(k2===i) continue;var c2=conf(k2,bj);if(nxt===null||c2.points>nxt.points) nxt=c2;}
+          why="our best answer to "+name("their",bj)+" ("+conf(i,bj).level+"); without them the next best is "+nxt.level;}
+        else why="the plan is weaker without them";}
       holds.push({our:name("our",i),why:why,covers:cov.map(function(j){return name("their",j);})});
     });
     out.holds=holds.filter(function(h){return h.our!==out.lead.our;}).slice(0,3);
@@ -945,14 +953,12 @@
     if(tonight){
       // The plan depends on the entered cap: re-plan it in place.
       var mp=tonight.querySelector("#match-plan");
-      if(mp){var open=mp.querySelector("details.mp-more");open=open&&open.open;mp.outerHTML=wrMatchPlanCard(w,plan,ta);
-        if(open){var d=tonight.querySelector("#match-plan details.mp-more");if(d) d.open=true;}}
+      if(mp){var opened=Array.prototype.filter.call(mp.querySelectorAll("details"),function(d){return d.open;}).map(function(d){return d.className;});
+        mp.outerHTML=wrMatchPlanCard(w,plan,ta);
+        opened.forEach(function(cls){var d=tonight.querySelector("#match-plan details."+cls.split(" ").join("."));if(d) d.open=true;});}
       Array.prototype.forEach.call(tonight.querySelectorAll(".lineup-budget,.ns-budget,.ns-budget-scope"),function(el){el.remove();});
-      var blind=tonight.querySelector(".blind-send"),pick=wrBlindSend(w,plan);
-      if(blind&&pick){
-        blind.insertAdjacentHTML("afterend",wrBudgetLine(w,plan,ta,pick.member?pick.member.id:null));
-        if(pick.member) blind.querySelector(".bs-name").insertAdjacentHTML("afterend",wrCandidateBudget(w,plan,ta,pick.member));
-      }
+      var card=tonight.querySelector("#match-plan");
+      if(card) card.insertAdjacentHTML("afterend",wrBudgetLine(w,plan,ta,mnLeadId(w,plan,ta)));
       var list=tonight.querySelector("#next-send .ns-list");
       if(list) list.insertAdjacentHTML("beforebegin",wrBudgetScope(w,plan,ta));
       Array.prototype.forEach.call(tonight.querySelectorAll("#next-send .ns-medal"),function(row){
@@ -1057,6 +1063,7 @@
     var capRaw=parseInt(WR_PLAN.cap[ta.key],10);
     return {playedN:playedN,playedSl:playedSl,cap:capRaw>0?capRaw:null};
   }
+  function mnLeadId(w,plan,ta){var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);return p.lead?p.lead.our_id:null;}
   function wrMatchPlanCard(w,plan,ta){
     var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);
     var head='<h3>Match Night Plan</h3>';
@@ -1073,7 +1080,10 @@
     return '<div id="match-plan" class="match-plan">'+head
       +'<p class="mp-sub">'+esc(p.games_left+(p.games_left===1?" game":" games")+" left · Plan: "+(conf||"no pairings")+" · Fragility: "+frag+" · "+capTxt)+'</p>'
       +'<div class="mp-lead"><span class="mp-label">If we put up first</span><b class="mp-name">'+esc(p.lead.our)+'</b> '+lvl(p.lead.level)
-        +'<span class="mp-why">'+esc(p.lead.why_lead)+'</span></div>'
+        +'<span class="mp-why">'+esc(p.lead.why_lead)+'</span>'
+        +(p.lead.equally_good.length?'<details class="mp-ties"><summary>'+esc((p.lead.equally_good.length+1)+" leads hold up equally well")+'</summary><p>'
+          +esc("The plan is just as strong leading with "+p.lead.equally_good.join(", ")+". The first is shown by roster order; your read decides.")+'</p></details>':'')
+        +'</div>'
       +'<div class="mp-resp"><span class="mp-label">If they put up</span><ul>'+p.responses.map(function(r){
         return li(esc(r.their+" → ")+'<b>'+esc(r.our)+'</b> '+lvl(r.level)+' <span class="mp-why">'+esc(r.why.split(" — ").slice(1).join(" — "))+'</span>'
           +(r.cost_later?'<span class="mp-cost">'+esc(r.cost_later)+'</span>':''));}).join("")+'</ul></div>'
@@ -1116,7 +1126,7 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
-      +wrMatchPlanCard(w,plan,ta)
+      +wrMatchPlanCard(w,plan,ta)+wrBudgetLine(w,plan,ta,mnLeadId(w,plan,ta))
       +wrNextSendCard(w,plan,ta,tb)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'

@@ -243,9 +243,18 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         return out
 
     # 1. Lead pick (if we put up first) and their most damaging reply.
-    li, lj, _ = night.lead(om, tm)
-    out["lead"] = {"our": name("our", li), "their_reply": name("their", lj), "level": conf(li, lj)["level"],
-                   "why": conf(li, lj)["text"]}
+    li, lj, lead_value = night.lead(om, tm)
+    # Other leads that hold up exactly as well: say so instead of silently taking the first in roster order.
+    equal = []
+    for i in night.legal_ours(om):
+        if i == li:
+            continue
+        worst = min(night.pair(i, j) + night.solve(om & ~(1 << i), tm & ~(1 << j), False)
+                    for j in range(len(theirs)) if tm >> j & 1)
+        if worst == lead_value:
+            equal.append(name("our", i))
+    out["lead"] = {"our": name("our", li), "our_id": ours[li]["id"], "their_reply": name("their", lj), "level": conf(li, lj)["level"],
+                   "why": conf(li, lj)["text"], "equally_good": equal}
 
     # 2. Response table (if they put up first), with what each answer costs later.
     total_if_they_lead = night.solve(om, tm, False)
@@ -294,9 +303,17 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
             j = cov[0]
             why = f"our only {conf(i, j)['level']} answer to {name('their', j)} — {conf(i, j)['why']}"
         else:
-            j = max(range(len(theirs)), key=lambda x: (conf(i, x)["points"], -x))
-            why = (f"best answer to {name('their', j)} ({conf(i, j)['level']}); the plan is weaker without them"
-                   if conf(i, j)["points"] > 0 else "the plan is weaker without them")
+            # Where does this player matter most? The opponent where they beat our next-best option by most.
+            def margin(x):
+                others = [conf(k, x)["points"] for k in range(len(ours)) if k != i and om >> k & 1]
+                return conf(i, x)["points"] - (max(others) if others else conf(i, x)["points"])
+            j = max(range(len(theirs)), key=lambda x: (margin(x), -x))
+            if margin(j) > 0:
+                nxt = max((conf(k, j) for k in range(len(ours)) if k != i), key=lambda c: c["points"])
+                why = (f"our best answer to {name('their', j)} ({conf(i, j)['level']}); "
+                       f"without them the next best is {nxt['level']}")
+            else:
+                why = "the plan is weaker without them"
         holds.append({"our": name("our", i), "why": why, "covers": [name("their", x) for x in cov]})
     out["holds"] = [h for h in holds if h["our"] != out["lead"]["our"]][:3]
     kept = [h["our"] for h in out["holds"] if h["covers"]]
@@ -384,3 +401,41 @@ def plan_for_war_room(war_room: dict[str, Any], *, remaining: set[Any] | None = 
 def _display(member: dict[str, Any], roster: list[dict[str, Any]]) -> str:
     from analytics.ultimate_coach_matchup_evidence import display_name
     return display_name(member, roster)
+
+
+STALE_PLAN = ("Printed plan is for the start of the night. After any send, availability change or entered cap, "
+              "re-plan on the phone (Match Night Plan).")
+
+
+def plan_text(plan: dict[str, Any]) -> dict[str, str]:
+    """The plan as plain printed lines for the workbook and Captain Packet (one source for paper wording)."""
+    if not plan.get("lead"):
+        msg = ("No legal send fits the entered skill cap — check the cap and remaining skill levels."
+               if plan.get("games_left") else "No games left to plan tonight.")
+        return {"lead": msg, "responses": "", "holds": "", "sacrifices": "", "summary": "", "best_board": "",
+                "safest_board": ""}
+    lead = plan["lead"]
+    lead_line = f"{lead['our']} ({lead['level']}) — {lead['why_lead']}"
+    if lead["equally_good"]:
+        lead_line += (f" · {len(lead['equally_good']) + 1} leads hold up equally well: also "
+                      f"{', '.join(lead['equally_good'])} (first by roster order; your read decides)")
+    responses = "\n".join(f"{r['their']} → {r['our']} ({r['level']})" + (f" · {r['cost_later']}" if r["cost_later"] else "")
+                          for r in plan["responses"])
+    holds = "\n".join(f"{h['our']} — {h['why']}" for h in plan["holds"]) or "No player needs holding back."
+    sacrifices = "\n".join(f"{s['our']} vs {s['their']} ({s['level']}) — lowest-cost concession" for s in plan["sacrifices"]) \
+        or "No concession planned."
+    conf = " · ".join(f"{n} {lv}" for lv, n in plan["confidence"].items()) or "no pairings"
+    frag = plan["fragility"]
+    fragility = frag["rating"] + (f" — leans most on {frag['player']}" if frag["player"] else "") \
+        + (f" · thin: {', '.join(frag['thin_pairings'])}" if frag["thin_pairings"] else "")
+    cap = plan["cap"]
+    cap_line = ("No skill cap entered" if cap is None else
+                f"Cap {cap['cap']}: check incomplete (missing skill levels)" if cap["incomplete"] else
+                f"Cap {cap['cap']}: {cap['slack']} to spare after the cheapest remaining lineup")
+    summary = (f"{plan['games_left']} games · Plan: {conf} · Fragility: {fragility} · {cap_line}. "
+               "Levels describe recorded evidence, not odds; the plan assumes their captain makes the choice that hurts us most.")
+
+    def board(rows):
+        return " · ".join(f"{b['our']} → {b['their']} ({b['level']})" for b in rows)
+    return {"lead": lead_line, "responses": responses, "holds": holds, "sacrifices": sacrifices, "summary": summary,
+            "best_board": board(plan["best_board"]), "safest_board": board(plan["safest_board"])}
