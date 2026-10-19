@@ -129,6 +129,51 @@
     if(label==="No data") return "Meeting dates not captured";
     return "Latest dated meeting: "+label+(known.length!==times.length?"; some meeting dates not captured":"");
   }
+  // ---- Captain confidence level (mirrors analytics/ultimate_coach_confidence.py exactly) ----
+  var WR_LEVEL_POINTS={Strong:4,Solid:2,Thin:1,Unknown:0,Conflicted:0,Caution:-2};
+  function wrOverall(p,fmt){var c=careerComplete(((p&&p.career_stats)||[]).filter(function(r){return r.format===fmt;}));return [c.w,c.g];}
+  function wrFormCmp(own,opp,edge){
+    var num=(own[0]+5)*(opp[1]+10)-(opp[0]+5)*(own[1]+10),den=(own[1]+10)*(opp[1]+10),d=20*num-edge*den;
+    return d>0?1:d<0?-1:0;
+  }
+  function wrMeetingWord(g){return plural(g,"meeting");}
+  function wrPairConfidence(direct,own,opp,shared,slChanged){
+    var known=own[1]>=20&&opp[1]>=20;
+    var fFor=known&&wrFormCmp(own,opp,1)>=0,fAgainst=known&&wrFormCmp(opp,own,1)>=0,fStrong=known&&wrFormCmp(own,opp,3)>=0;
+    var overall="overall "+wlText(own[0],own[1])+" vs "+wlText(opp[0],opp[1]);
+    function out(level,why){return {level:level,points:WR_LEVEL_POINTS[level],why:why,text:level+" — "+why};}
+    if(direct&&direct.g>0){
+      var w=direct.w,g=direct.g,rec=wlText(w,g)+" in "+wrMeetingWord(g),fav=w>g-w,unf=w<g-w,level,why;
+      if(fav&&fAgainst) return out("Conflicted",rec+", but a weaker "+overall);
+      if(unf&&fFor) return out("Conflicted",rec+", but a stronger "+overall);
+      if(unf) return out("Caution",rec+" direct");
+      if(!fav){level="Thin";why="even direct record, "+rec;}
+      else if(g>=5&&w/g>=0.7||g>=3&&fFor){level="Strong";why=rec+(fFor?" and a stronger "+overall:"");}
+      else if(g>=3||fFor){level="Solid";why=rec+(fFor?" and a stronger "+overall:"");}
+      else {level="Thin";why="only "+rec;}
+      if(slChanged&&(level==="Strong"||level==="Solid")){level=level==="Strong"?"Solid":"Thin";why+="; skill levels changed since they last met";}
+      return out(level,why);
+    }
+    if(fStrong) return out("Strong","no direct history; much stronger "+overall);
+    if(fFor) return out("Solid","no direct history; stronger "+overall);
+    if(fAgainst) return out("Caution","no direct history; weaker "+overall);
+    if(shared&&shared.og>0&&shared.tg>0){
+      var n=shared.n,cross=10*(shared.ow*shared.tg-shared.tw*shared.og),lim=shared.og*shared.tg;
+      var common=plural(n,"shared opponent")+": ours "+wlText(shared.ow,shared.og)+", theirs "+wlText(shared.tw,shared.tg);
+      if(cross>=lim) return out(n>=3?"Solid":"Thin",common);
+      if(cross<=-lim) return out("Caution",common);
+    }
+    return out("Unknown","no direct history and no clear overall or shared-opponent edge");
+  }
+  function wrSlChanged(games,ownSL,oppSL){
+    var known=function(x){return typeof x==="number"&&isFinite(x)&&x>0;};
+    var dated=games.filter(function(g){return wrInstant(val(g,"match_date"))!==null;});
+    if(!dated.length||!known(ownSL)||!known(oppSL)) return false;
+    var last=dated.reduce(function(a,b){return wrInstant(val(b,"match_date"))>wrInstant(val(a,"match_date"))?b:a;});
+    var ls=val(last,"own_skill_level"),lo=val(last,"opponent_skill_level");
+    if(!known(ls)||!known(lo)) return false;
+    return ls!==ownSL||lo!==oppSL;
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
@@ -139,6 +184,9 @@
       r.date_context=r.c.direct?wrMeetingDateContext(games):"";
       r.reason=wrReason(r.c)+(r.sl_context?" \u00b7 "+r.sl_context:"")+(r.date_context?" \u00b7 "+r.date_context:"");
       r.captain=wrCaptainCell(r);r.position=i+1;b.byMember[String(r.member.id)]=r;
+      r.confidence=wrPairConfidence(r.c.direct,wrOverall(PLAYERS[String(r.member.id)],fmt),wrOverall(PLAYERS[String(b.opponent.id)],fmt),
+        r.c.shared?{ow:r.c.ow,og:r.c.og,tw:r.c.tw,tg:r.c.tg,n:r.c.shared}:null,
+        r.c.direct?wrSlChanged(games,r.member.skill_level,b.opponent.skill_level):false);
     });});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
@@ -474,6 +522,11 @@
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
     w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
     return wrNextSendLines(wrNextSend(w,j,rem,unplayed||w.theirs.map(function(){return true;})));
+  };
+  // Test hook: every pairing's confidence text, [opponent][our player] in roster order (cross-checked with Python).
+  window.__ucConfidence=function(ourKey,oppKey,fmt){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
+    return w.blocks.map(function(b){return w.ours.map(function(m){return b.byMember[String(m.id)].confidence.text;});});
   };
   // ---- Blind send: WE lead and have not seen their player (mirrors analytics.blind_send) ----
   // Every other recommendation here answers "they put up X, who answers?". In APA the lead

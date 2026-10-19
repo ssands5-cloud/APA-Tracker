@@ -42,6 +42,7 @@ from math import isfinite
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
+from analytics.ultimate_coach_confidence import overall_record, pair_confidence, sl_changed_since_last_meeting
 from analytics.ultimate_coach_match_day import EIGHT_NINE_CATEGORIES, excel_date_serial, localize_match_date
 from analytics.ultimate_coach_matchup_evidence import (
     NO_VERIFIED_DIRECT,
@@ -298,6 +299,14 @@ def war_room_pair(
                                    if row["direct"] else "")
             row["reason"] = reason(row) + (" · " + row["sl_context"] if row["sl_context"] else "") + (" \u00b7 " + row["date_context"] if row["date_context"] else "")
             row["captain"] = captain_cell(row)
+            pair_games = meetings.get((row["member"]["id"], block["opponent"]["id"], fmt), [])
+            row["confidence"] = pair_confidence(
+                row["direct"],
+                own_overall=overall_record(players_by_id.get(row["member"]["id"]), fmt),
+                opp_overall=overall_record(players_by_id.get(block["opponent"]["id"]), fmt),
+                shared=(*row["ours"], *row["theirs"], row["shared_count"]) if row.get("shared_count") else None,
+                sl_changed=sl_changed_since_last_meeting(pair_games, row["member"].get("skill_level"),
+                                                         block["opponent"].get("skill_level")))
             row["position"] = position
 
     matrix = []
@@ -571,7 +580,7 @@ def next_send(war_room: dict[str, Any], j: int, *, remaining: set[Any] | None = 
             ranked.append({
                 "rank": r["rank"], "choice_number": g + 1, "medal": medal, "member": r["member"],
                 "display": display_name(r["member"], roster), "category": r["category"],
-                "reason": r["reason"], "tied_with": tied,
+                "reason": r["reason"], "tied_with": tied, "confidence": r["confidence"],
                 "save": f"consider saving — our only favorable direct option vs {', '.join(save)}" if save else "",
             })
     # The save warning belongs here too, not only on ranked candidates. With no direct record to
