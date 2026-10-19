@@ -1,5 +1,46 @@
 # CURRENT PRIORITIES
 
+**M3 Match Night Engine implemented — Claude, 2026-10-18, source c2c995c (owner-approved direction: "Build M3 as the primary Match Night Engine").** Supersedes the "not implementation-ready" gate below; each concern now has an evidence-backed answer. The defaults are reviewable owner dials, not blockers.
+
+**What changed for captains.**
+- The phone/HTML Tonight panel has a **Match Night Plan** that re-plans after every ✓ Sent, availability change and cap edit:
+  - lead pick, with why and equally good alternatives;
+  - response table, with what each answer costs later;
+  - hold-backs, naming the opponent each player covers;
+  - lowest-cost concessions;
+  - game plan both ways, best-case and safest boards;
+  - match confidence, fragility and cap safety.
+- Next Send opens with the plan's answer to the selected put-up; the evidence list stays below it.
+- The Captain Packet and workbook Command Center print the same start-of-night plan and retire it, with "re-plan on the phone", after any send, availability change or entered cap.
+- The plan's lead pick replaces the earlier Blind Send rule on every surface.
+
+**Answers to the gate concerns.**
+1. **Utility.** Pairing weights Strong 6 / Solid 3 / Thin 1 / Unknown 0 / Conflicted 0 / Caution −3 are anchored to how much more often each level won its next game in the 15-year replay (8-Ball +18 / +8 / +3 / 0 / −8 points). They are never shown and never a probability.
+2. **Response safety.** The plan is minimax over alternating put-ups: it holds against the other captain's most damaging reply. The static safest board is labelled as a board, not a plan.
+3. **Unknown as zero.** Unknown pairings won exactly 50.0% next in both formats, so 0 is evidence, not false safety. Caution is negative, and a missing SL is never counted as 0 for the cap.
+4. **One scarce counter, two holds.** The minimax allocates the counter globally. The holds list shows each player once and names every opponent they uniquely cover.
+5. **Unplayed alternatives.** Acknowledged limit. Put-up order is absent from captured data, so only the building blocks are replayed against history.
+
+**Evidence.**
+- Plan values are exact against an independent game-tree search (200 nights).
+- Boards are optimal against brute force (120 nights).
+- Phone and Python plans are identical (61 nights plus fixture states).
+- The levels order real outcomes in both formats.
+- RQ01–RQ12 run as executable cases: 10 resolved, while RQ03 (recency) and RQ09 (single loss) are settled by replay. Thin losses won 44.0% next vs 41.7% for deeper ones.
+- Scale sensitivity: a flatter scale changes the lead on a third of nights, which is why weights are history-anchored.
+- An 8v8 plan runs in under 0.8 s.
+- One combined run of all captain-surface, builder scenario and refresh suites: **764 passed**.
+
+**Details.** `docs/match_night_engine_review.md`, `tests/test_match_night_engine.py`, `tests/test_captain_decision_review.py`, `tests/test_confidence_levels.py`, `docs/recommendation_review/`.
+
+**Owner dials, with defaults in place:**
+- planning weights;
+- total vs safest headline;
+- assuming the standard 23 cap when none is entered;
+- Next Send evidence-list order.
+
+**Still unverified.** Physical-device use, a live league night, and a re-run of the level replay on the identity-verified snapshot.
+
 **Autonomous captain-engine review, 2026-10-18 — genuine product-direction gate.** Continued beyond the initial register into one-game avoids, shared-only conflicts, allocation/hold collisions and M3 strategy. Final focused run: **24 passed in 0.41s** (13 actual-engine recommendation-quality fixtures plus 11 test-only design counterexamples). A real saved-source inventory verified 575 responses and examined 168 match fixtures / 1,680 score rows; these do not include explicit put-up/declaration sequence. M3 is not implementation-ready: ordinal confidence points do not define strategic utility, static safety is not opponent-response safety, unknown-as-zero can imply false safety, one scarce counter cannot satisfy two holds, and actual results do not reveal unplayed alternatives. Details and the refined state/action/continuation contract are in `docs/team_matchup_engine_design.md` and Captain Decision Review below. No production solver, ranking, model, probability, UI or refresh change was made. Stop reason is the owner's permitted product-direction gate: choose multiple nondominated conditional plans versus a unique automatic plan with an explicitly approved objective/utility/unknown policy. Tests cannot choose that policy; no quality PASS is claimed.
 
 **Recommendation philosophy report prepared, 2026-10-18 — no implementation.** The existing `docs/recommendation_philosophy_review.md` now begins with GPT's requested pros/cons/risks and five-scenario assessment, preserving Claude's earlier exploratory review below it. Recommended product purpose is captain decision support with verified evidence as its foundation; current ranking stays unchanged pending separate owner policy/validation. The eleven executed risk fixtures establish behavior, not improved winning effectiveness. Source inspection identifies an important qualification to the earlier numerical review: its historical-row AUC is not the success rate of selecting an alternative available teammate against the same opponent, and its blind proxy lacks the exact live-roster/unplayed/even-count semantics. Its claimed 52%-to-60% practical improvement is not accepted as demonstrated. No new study/model, engine, UI or ranking change was made. The report is a candidate review document; the owner has not authorized a selection-policy change.
