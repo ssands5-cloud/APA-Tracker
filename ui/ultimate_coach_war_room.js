@@ -994,6 +994,16 @@
       +deeper.map(function(r){return '<li>'+esc(wrDisplayName(r.member,w.ours)+" — "+wlText(r.c.direct.w,r.c.direct.g)+" in "+plural(r.c.direct.g,"meeting")+" · "+WR_CAT_WORD[r.category]+(r.c.direct.g<3?" · ⚠ small sample":""))+'</li>';}).join("")+'</ul></div>':'');
   }
 
+  // The Match Night Plan's answer to the selected opponent, first: the evidence list below is the support.
+  function wrPlanAnswer(w,plan,ta,opp){
+    var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);
+    var who=wrDisplayName(opp,w.theirs),r=(p.responses||[]).filter(function(r){return r.their===who;})[0];
+    if(!r) return "";
+    return '<div class="ns-plan-answer"><span class="mp-label">Match Night Plan answer</span><b>'+esc(r.our)+'</b> '
+      +'<span class="mp-level mp-'+r.level.toLowerCase()+'">'+esc(r.level)+'</span> <span class="mp-why">'+esc(r.why.split(" — ").slice(1).join(" — "))+'</span>'
+      +(r.cost_later?'<span class="mp-cost">'+esc(r.cost_later)+'</span>':'')
+      +'<span class="muted">The list below is the recorded evidence, in direct-record order.</span></div>';
+  }
   function wrNextSendCard(w,plan,ta,tb){
     // An explicit put-up belongs to this fixture/format, not the next view of the same roster.
     var selectionScope=plan.ck+"||"+w.format;
@@ -1014,7 +1024,7 @@
     return '<div id="next-send" class="next-send" tabindex="-1"><h3>Next Send — options against '+esc(wrDisplayName(opp,w.theirs))+'</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
-      +wrNextSendEvidence(w,plan,ns,sel)
+      +wrPlanAnswer(w,plan,ta,opp)+wrNextSendEvidence(w,plan,ns,sel)
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'

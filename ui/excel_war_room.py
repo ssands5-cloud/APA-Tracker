@@ -51,6 +51,7 @@ from analytics.ultimate_coach_matchup_evidence import (
     members_by_scope,
 )
 from analytics.match_night_engine import STALE_PLAN, plan_for_war_room, plan_text
+from analytics.ultimate_coach_matchup_evidence import display_name
 from analytics.ultimate_coach_war_room import (
     CATEGORY_LABELS,
     DIRECT_ORDER_NOTE,
@@ -83,6 +84,7 @@ TC_COLUMNS = [
 THREATS_COLUMNS = ["Key", "Opp Player ID", "Threat"]
 MATCH_PLAN_COLUMNS = ["Key", "Opponents", "Lead", "Responses", "Holds", "Sacrifices", "Summary", "Best Board",
                       "Safest Board"]
+PLAN_ANSWER_COLUMNS = ["Key", "Answer"]
 CONCERNING_COLUMNS = ["Key", "Our Player ID", "Opp Player ID", "Pairing"]
 MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points",
                     "Pair Key"]
@@ -138,6 +140,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
     tc_rows: list[list[Any]] = []
     threat_rows: list[list[Any]] = []
     plan_rows: list[list[Any]] = []
+    answer_rows: list[list[Any]] = []
     concern_rows: list[list[Any]] = []
     meeting_rows: list[list[Any]] = []
     card_rows: list[list[Any]] = []
@@ -168,7 +171,14 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
                                 row["direct"][0] if row["direct"] else 0, row["direct"][1] if row["direct"] else 0])
         # The Match Night Engine's start-of-night plan (no marks, no cap) -- the printed plan. Paper cannot
         # re-plan; the workbook shows it only while nothing has changed, and points to the phone after that.
-        text = plan_text(plan_for_war_room(wr))
+        night_plan = plan_for_war_room(wr)
+        text = plan_text(night_plan)
+        by_opponent = {r["their"]: r for r in night_plan.get("responses") or []}
+        for j, block in enumerate(wr["blocks"], start=1):
+            r = by_opponent.get(display_name(block["opponent"], wr["theirs"]))
+            if r:
+                answer_rows.append([f"{key}|{j}", f"{r['our']} ({r['level']}) — {r['why'].split(' — ', 1)[-1]}"
+                                    + (f" · {r['cost_later']}" if r["cost_later"] else "")])
         plan_rows.append([key, len(wr["theirs"]), text["lead"], text["responses"], text["holds"], text["sacrifices"],
                           text["summary"], text["best_board"], text["safest_board"]])
         for k, threat in enumerate(wr["threats"], start=1):
@@ -203,6 +213,7 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
           {"Key": 44, "Rank": 6, "Player": 40, "SL": 8, "Direct Record": 20, "Shared-Opponent Evidence": 60,
            "Basis": 70, "Rows": 6, "Player ID": 10, "Category": 9, "Cell": 26, "Reason": 70})
     table("Threats_Table", "Threats", THREATS_COLUMNS, threat_rows, {"Key": 44, "Threat": 90})
+    table("PlanAnswers_Table", "Plan Answers", PLAN_ANSWER_COLUMNS, answer_rows, {"Key": 48, "Answer": 110})
     table("MatchPlan_Table", "Match Plan", MATCH_PLAN_COLUMNS, plan_rows,
           {"Key": 44, "Lead": 90, "Responses": 90, "Holds": 90, "Sacrifices": 70, "Summary": 90,
            "Best Board": 90, "Safest Board": 90})
@@ -667,6 +678,10 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         stale = f'"{STALE_PLAN}"' if col == "Lead" else '""'
         e.cell(cell, f"Match plan: {col}",
                f'=IF(wr_PlanRow="","",IF(wr_PlanFresh,INDEX(MatchPlan_Table[{col}],wr_PlanRow),{stale}))')
+    e.cell("wr_PlanAnswer", "Match plan answer to the selected put-up",
+           '=IF(OR(wr_PlanRow="",wr_NsJ=""),"",IF(wr_PlanFresh,IFERROR(INDEX(PlanAnswers_Table[Answer],'
+           'MATCH(wr_PairKey&"|"&wr_NsJ,PlanAnswers_Table[Key],0)),""),'
+           '"The printed plan is for the start of the night; re-plan on the phone (Match Night Plan) after any change."))')
     e.cell("wr_BlindName", "Blind send player",
            '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),"",INDEX(wr_OurLabels,wr_BlindIdx))')
     # Expose the existing roster-order fallback without claiming equal meeting records.
@@ -2572,6 +2587,10 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         '=IF(wr_NsJ="","",IF(INDEX(wr_OppNotes,wr_NsJ)="","","📝 "&INDEX(wr_OppNotes,wr_NsJ)&" (your opinion, not APA facts)"))',
     ]
     top = _card(ws, 7, 2, 11, "NEXT SEND - RECORDED MATCHUP OPTIONS", ns_lines, size=11, line_height=30) + 2
+    answers = [str(row[1] or "") for row in wb["Plan Answers"].iter_rows(min_row=2, values_only=True)]
+    answer_worst = max(answers + [STALE_PLAN], key=lambda t: _worst_height(t, 166, 11, 0))
+    top = _card(ws, top, 2, 11, "MATCH NIGHT PLAN ANSWER — START OF NIGHT", [("=wr_PlanAnswer", answer_worst)],
+                size=11, line_height=30) + 2
     top = _card(ws,top,2,11,"DEEPER RECORD CONTEXT — WHEN THE FIRST RECORD HAS 1–2 MEETINGS",
                 [("=wr_NsDeeper",_deeper_records_worst(wb))],size=11,line_height=30)+2
     broad_worst = ("Not used in this ordering\nCaptured team/session records — not a lifetime record.\nOur roster: "

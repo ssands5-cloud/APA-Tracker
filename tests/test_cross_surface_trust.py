@@ -272,3 +272,30 @@ def test_deeper_losing_record_uses_the_same_category_word_on_phone_and_paper(tmp
     packet=book.display('Captain Packet',f'C{head+1}')
     assert '2-6 (8 meetings) · concerning' in packet and 'recorded loss ·' not in packet
     wb.close()
+
+
+def test_command_center_and_phone_give_the_same_plan_answer_to_a_put_up(tmp_path):
+    from analytics.match_night_engine import STALE_PLAN
+    payload=_payload()
+    payload['evidence']=_games(1,10,'W')+_games(2,10,'WWWWWWWWLL')+_games(3,11,'WWW')+_games(1,11,'L')
+    path=tmp_path/'answer.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
+    phone={}
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch()
+        try:
+            page=browser.new_page(viewport={'width':390,'height':900});page.goto(path.as_uri())
+            for name in ('Cam Cole','Eve Ellis'):
+                page.locator('#next-send .ns-chip',has_text=name).click()
+                box=page.locator('#next-send .ns-plan-answer')
+                phone[name]=(box.locator('b').inner_text(),box.locator('.mp-level').inner_text())
+        finally:browser.close()
+    wb=load_workbook(write_workbook(payload,tmp_path/'answer.xlsx',built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'))
+    book=Workbook(wb)
+    for name,(who,level) in phone.items():
+        book.set('Command Center','C6',name)
+        paper=book.value('Engine',book.name('wr_PlanAnswer').ref)
+        assert paper.startswith(f"{who} ({level}) — "),(name,paper,who,level)
+    assert phone['Cam Cole'][0].startswith('Bea')         # the 8-2, not the 1-0
+    book.set('Lineup Lab','D12','Played')
+    assert book.value('Engine',book.name('wr_PlanAnswer').ref).startswith('The printed plan is for the start of the night')
+    wb.close()

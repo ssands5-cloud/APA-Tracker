@@ -119,6 +119,9 @@ button.secondary:hover { background:var(--felt-soft); }
 .match-plan li { margin:3px 0; }
 .match-plan details summary { cursor:pointer; min-height:44px; padding:12px 0; box-sizing:border-box; }
 .mp-level { display:inline-block; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:700; border:1px solid currentColor; }
+.ns-plan-answer { margin:8px 0; padding:8px; border-left:4px solid var(--felt-deep,#1d4b35); background:#f6faf6; overflow-wrap:anywhere; }
+.ns-plan-answer b { font-size:17px; } .ns-plan-answer .mp-label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.ns-plan-answer .mp-why,.ns-plan-answer .mp-cost,.ns-plan-answer .muted { display:block; font-size:12px; }
 .mp-strong { color:#1d5c34; } .mp-solid { color:#2f6f4a; } .mp-thin { color:#7a4b00; } .mp-unknown { color:#5b6a61; } .mp-conflicted { color:#6b4d00; } .mp-caution { color:#8f251b; }
 .blind-send.weak .bs-name { color:#3f4a43; }
 @media (max-width:620px){ .blind-send { margin:6px 0 8px; padding:8px 10px; }
