@@ -1,0 +1,54 @@
+{
+ "EIGHT all (n=485980)": {
+  "coach category (G>E/X>R)": 0.5216,
+  "coach order (win% then meetings)": 0.5219,
+  "smoothed direct (w+1)/(g+2)": 0.522,
+  "overall form gap": 0.5982,
+  "smoothed direct + form gap": 0.5854
+ },
+ "EIGHT blind (n=485980)": {
+  "coach blind (fewest R, most G)": 0.5207,
+  "own overall form": 0.5585,
+  "form + (G-R)/10": 0.5499
+ },
+ "EIGHT has direct (n=162096)": {
+  "coach category (G>E/X>R)": 0.5426,
+  "coach order (win% then meetings)": 0.5457,
+  "smoothed direct (w+1)/(g+2)": 0.5468,
+  "overall form gap": 0.6004,
+  "smoothed direct + form gap": 0.581
+ },
+ "EIGHT single meeting (n=89380)": {
+  "coach category (G>E/X>R)": 0.5373,
+  "coach order (win% then meetings)": 0.5373,
+  "smoothed direct (w+1)/(g+2)": 0.5373,
+  "overall form gap": 0.5983,
+  "smoothed direct + form gap": 0.5831
+ },
+ "NINE all (n=357600)": {
+  "coach category (G>E/X>R)": 0.5127,
+  "coach order (win% then meetings)": 0.5128,
+  "smoothed direct (w+1)/(g+2)": 0.513,
+  "overall form gap": 0.5554,
+  "smoothed direct + form gap": 0.5481
+ },
+ "NINE blind (n=357600)": {
+  "coach blind (fewest R, most G)": 0.5127,
+  "own overall form": 0.5362,
+  "form + (G-R)/10": 0.5298
+ },
+ "NINE has direct (n=124866)": {
+  "coach category (G>E/X>R)": 0.5242,
+  "coach order (win% then meetings)": 0.5257,
+  "smoothed direct (w+1)/(g+2)": 0.5271,
+  "overall form gap": 0.5538,
+  "smoothed direct + form gap": 0.5447
+ },
+ "NINE single meeting (n=66640)": {
+  "coach category (G>E/X>R)": 0.5212,
+  "coach order (win% then meetings)": 0.5212,
+  "smoothed direct (w+1)/(g+2)": 0.5212,
+  "overall form gap": 0.5521,
+  "smoothed direct + form gap": 0.5454
+ }
+}
