@@ -1166,51 +1166,45 @@ def test_the_quoted_team_label_is_bounded_so_it_cannot_push_out_the_clause(built
 def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built, book):
     """The printed packet must answer "we put up first" before the per-opponent sends.
 
-    Every other line in the packet assumes we already know who they put up. In APA the lead
-    alternates, so a captain regularly chooses first; this is the one line he can read before
-    the opponent has shown anybody. Mirrors analytics.blind_send.
+    Every other line in the packet assumes we already know who they put up. In APA the lead alternates, so a
+    captain regularly chooses first. The line is the Match Night Engine's start-of-night lead pick; paper
+    cannot re-plan, so any change on the night retires it and points to the phone.
     """
-    cp = built[CP]
+    from analytics.match_night_engine import STALE_PLAN
     label = _row(built, CP, "IF WE PUT UP FIRST")
     sends = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
     assert label < sends, "the lead answer must print above the per-opponent sends"
+    for row in ("IF THEY PUT UP", "HOLD BACK", "IF WE MUST CONCEDE", "TONIGHT'S PLAN"):
+        assert label < _row(built, CP, row) < sends, row
 
     text = str(book.display(CP, f"C{label}"))
-    assert " — " in text, text
-    name, why = text.split(" — ", 1)
-    assert name.strip() in (ANN, BEA, DEE), text          # one of ours, named outright
-    # BLIND-01: the reason must carry its own coverage, so silence about an opponent can never
-    # be read as safety, and must say availability at the decision rather than only below it.
-    assert " of " in why, why                             # how many of the field we have a record against
-    assert "no direct record vs" in why or "concerning" in why, why
-    assert "availability unknown" in why or "Unknown" not in why, why
+    name = text.split(" — ", 1)[0].rsplit(" (", 1)[0]    # "Name (Level) — Lead Name: ..."
+    assert name in (ANN, BEA, DEE), text                        # one of ours, named outright
+    assert "Lead " + name in text and "their most damaging reply" in text, text
     for banned in ("%", "odds", "probability", "chance"):
-        assert banned not in why.lower(), (banned, why)
+        assert banned not in text.lower(), (banned, text)
 
-    # Marking that player Unavailable must move the recommendation, not leave a stale name.
+    # Marking a player Unavailable retires the printed plan instead of leaving a stale name.
     book.set(LL, "C12", "Unavailable")
-    moved = str(book.display(CP, f"C{label}"))
-    assert moved != text, moved
+    assert str(book.display(CP, f"C{label}")).startswith(STALE_PLAN)
+    book.set(LL, "C12", "")
+    assert str(book.display(CP, f"C{label}")) == text
 
 
-def test_packet_discloses_blind_count_tie_and_clears_it_when_a_candidate_is_unavailable(tmp_path):
+def test_packet_discloses_equally_good_leads_and_retires_the_plan_when_a_candidate_is_unavailable(tmp_path):
+    from analytics.match_night_engine import STALE_PLAN
     payload = _payload()
     payload['evidence'] = [r for r in payload['evidence'] if {r['player_id'], r['opponent_id']} not in ({1, 10}, {2, 10})]
     payload['evidence'] += _games(1, 10, 'W') + _games(2, 10, 'WWWWWWWWLL')
-    path = write_workbook(payload, tmp_path / 'blind-count-tie.xlsx', built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001')
+    path = write_workbook(payload, tmp_path / 'lead-tie.xlsx', built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001')
     wb = load_workbook(path)
     book = Workbook(wb)
     row = _row(wb, CP, 'IF WE PUT UP FIRST')
     text = str(book.display(CP, f'C{row}'))
-    assert '2 tied by matchup counts' in text, 'the printed lead must disclose the count tie too'
-    assert 'first shown by roster order' in text and 'Captain Matrix' in text
-    assert text.startswith(ANN + ' — ')
+    assert 'leads hold up equally well' in text, 'the printed lead must disclose equally good alternatives'
+    assert 'roster order' in text and 'your read decides' in text
     book.set(LL, 'C13', 'Unavailable')
-    text = str(book.display(CP, f'C{row}'))
-    assert text.startswith(ANN + ' — ') and 'tied by matchup counts' not in text
-    for r in (12, 14):
-        book.set(LL, f'C{r}', 'Unavailable')
-    assert 'tied by matchup counts' not in str(book.display(CP, f'C{row}'))
+    assert str(book.display(CP, f'C{row}')).startswith(STALE_PLAN)
 
 
 def test_packet_never_prints_an_unknown_lead_as_an_even_record(built, book):

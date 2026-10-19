@@ -1,0 +1,23 @@
+{
+ "history 6/3/1/0/-3 (default)": {
+  "same_lead": 1.0,
+  "same_full_response_table": 1.0,
+  "nights": 259
+ },
+ "even steps 4/2/1/0/-2": {
+  "same_lead": 0.931,
+  "same_full_response_table": 0.768,
+  "nights": 259
+ },
+ "linear 3/2/1/0/-1": {
+  "same_lead": 0.668,
+  "same_full_response_table": 0.386,
+  "nights": 259
+ },
+ "loss-averse 6/3/1/0/-6": {
+  "same_lead": 0.784,
+  "same_full_response_table": 0.49,
+  "nights": 259
+ },
+ "slowest_full_plan_seconds_python": 0.711
+}
