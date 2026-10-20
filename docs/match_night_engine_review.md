@@ -2,6 +2,13 @@
 
 ## Implementation progress — GPT self-audited, 2026-10-20
 
+F2 is corrected: future evidence remains accessible, but the recommended player's note describes
+the opportunity spent instead of issuing a conflicting save instruction. Other players' warnings
+remain. Paper uses the fresh plan answer only; any mark/availability/cap change retires that context.
+Phone/desktop and paper desired cases failed before correction. Final four focused cases passed
+in16.44s; earlier eight affected browser cases passed before the paper addition (overlapping counts).
+No evidence or decision ordering changed. Native final artifact validation is still pending.
+
 F1 is corrected: Designated answers replaces Hold back on HTML/phone and Packet. Shared paper
 text and phone items say to send the designated player when that matchup is put up, with a
 one-player/one-matchup caution for competing coverage. Three focused cases passed in10.40s,

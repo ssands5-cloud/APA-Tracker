@@ -5,6 +5,7 @@ tests expose assumptions; passing does not validate match-winning performance.
 """
 from itertools import permutations
 from math import comb, factorial, perm
+import pytest
 
 from analytics.ultimate_coach_war_room import lineup_budget, next_send
 from tests.test_recommendation_quality_risks import member, room
@@ -203,8 +204,10 @@ def test_m313_phone_engine_excludes_budget_excluded_hold_reason(tmp_path):
 
 
 
-def test_f2_plan_answer_and_save_warning_contradict_in_rendered_next_send(tmp_path):
-    """Characterize Claude F2 in the rendered product; not recommendation acceptance."""
+@pytest.mark.parametrize('recommended,ann_record,bea_record', [
+    ('Ann Archer', 'WWWWW', 'LLL'), ('Bea Baker', 'W', 'WWWWWWWWLL')])
+def test_f2_future_opportunity_matches_the_plan_instruction(tmp_path, recommended, ann_record, bea_record):
+    """Keep future evidence, contextualize the chosen send, retain other save warnings."""
     from playwright.sync_api import sync_playwright
     from tests.test_excel_war_room_formulas import _games, _payload
     from ui.ultimate_coach import render
@@ -213,8 +216,8 @@ def test_f2_plan_answer_and_save_warning_contradict_in_rendered_next_send(tmp_pa
     for player in payload['players']:
         for history in player['team_history']:
             history['skill_level'] = 4
-    payload['evidence'] = (_games(1, 10, 'WWWWW') + _games(1, 11, 'WW')
-                           + _games(2, 10, 'LLL') + _games(2, 11, 'LLL'))
+    payload['evidence'] = (_games(1, 10, ann_record) + _games(1, 11, 'WW')
+                           + _games(2, 10, bea_record) + _games(2, 11, 'LLL'))
     for game in payload['evidence']:
         game['own_skill_level'] = game['opponent_skill_level'] = 4
     path = tmp_path / 'f2.html'
@@ -232,13 +235,18 @@ def test_f2_plan_answer_and_save_warning_contradict_in_rendered_next_send(tmp_pa
                 page.select_option('#team-b', 'falcons-a|d1|Fall 2026')
                 page.locator('#next-send [data-next="10"]').click()
                 answer = page.locator('#next-send .ns-plan-answer')
-                assert answer.locator('b').inner_text() == 'Ann Archer'
+                assert answer.locator('b').inner_text() == recommended
                 assert answer.locator('.mp-level').inner_text() == 'Strong'
                 row = page.locator('#next-send .ns-medal').filter(
                     has=page.locator('[data-send-our="1"]'))
                 assert row.count() == 1
                 warning = row.locator('.ns-save')
-                assert 'consider saving' in warning.inner_text()
+                if recommended == 'Ann Archer':
+                    assert 'consider saving' not in warning.inner_text()
+                    assert 'Sending now spends' in warning.inner_text()
+                    assert 'opportunity spent' in answer.inner_text()
+                else:
+                    assert 'consider saving' in warning.inner_text()
                 assert 'Eve Ellis' in warning.inner_text()
                 assert '2-0 in 2 meetings' in warning.inner_text()
                 assert errors == []
@@ -246,6 +254,39 @@ def test_f2_plan_answer_and_save_warning_contradict_in_rendered_next_send(tmp_pa
                 page.close()
         finally:
             browser.close()
+
+
+def test_f2_paper_future_opportunity_matches_the_fresh_plan(tmp_path):
+    from openpyxl import load_workbook
+    from tests.excel_formula_eval import Workbook
+    from tests.test_excel_war_room_formulas import _games, _payload
+    from ui.export_excel_ultimate_coach import write_workbook
+    payload = _payload()
+    payload['players'] = [p for p in payload['players'] if p['id'] in (1, 2, 10, 11)]
+    for player in payload['players']:
+        for history in player['team_history']:
+            history['skill_level'] = 4
+    payload['evidence'] = (_games(1, 10, 'WWWWW') + _games(1, 11, 'WW')
+                           + _games(2, 10, 'LLL') + _games(2, 11, 'LLL'))
+    for game in payload['evidence']:
+        game['own_skill_level'] = game['opponent_skill_level'] = 4
+    wb = load_workbook(write_workbook(payload, tmp_path / 'f2.xlsx',
+                                    built_at='2026-10-07 18:00 UTC', viewer_member_external_id='1001'))
+    book = Workbook(wb)
+    book.set('Command Center', 'C6', 'Cam Cole')
+    shown = book.value('Engine', book.name('wr_NsCard').ref)
+    assert 'Sending now spends' in shown and 'consider saving' not in shown
+    answer = book.value('Engine', book.name('wr_PlanAnswer').ref)
+    assert 'Ann Archer (Strong)' in answer and 'opportunity spent' in answer
+    top = next(c.row for c in wb['Captain Packet']['A']
+               if isinstance(c.value, str) and c.value.startswith('Recorded options preview'))
+    packet = book.display('Captain Packet', f'C{top+1}')
+    assert 'Sending now spends' in packet and 'consider saving' not in packet
+    assert 'Eve Ellis' in packet and '2-0 in 2 meetings' in packet
+    book.set('Lineup Lab', 'C7', 23)
+    assert 're-plan on the phone' in book.value('Engine', book.name('wr_PlanAnswer').ref)
+    assert 'consider saving' in book.value('Engine', book.name('wr_NsCard').ref)
+    wb.close()
 
 
 

@@ -498,9 +498,9 @@
     return {opponent:b.opponent,label:b.opponent_label,headline:headline,ranked:ranked,unordered:unordered,avoid:avoid,unknown:unknown};
   }
   var WR_DIRECT_ORDER_NOTE='Order uses recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2; compare sample sizes.';
-  function wrSaveWarning(candidate,w){
+  function wrSaveWarning(candidate,w,spending){
     if(!candidate.save_targets.length) return "";
-    return ' <span class="ns-save">· consider saving — our only favorable direct option vs '
+    return ' <span class="ns-save">'+(spending?'· Sending now spends our only favorable direct option vs ':'· consider saving — our only favorable direct option vs ')
       +candidate.save_targets.map(function(t){var row=null;
         w.blocks.forEach(function(b){if(b.opponent.id===t.opponent.id) row=b.byMember[String(candidate.member.id)];});
         var single=row&&row.c.direct&&row.c.direct.g===1;
@@ -1021,13 +1021,12 @@
   }
 
   // The Match Night Plan's answer to the selected opponent, first: the evidence list below is the support.
-  function wrPlanAnswer(w,plan,ta,opp){
-    var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);
-    var who=wrDisplayName(opp,w.theirs),r=(p.responses||[]).filter(function(r){return r.their===who;})[0];
+  function wrPlanAnswer(r,spending){
     if(!r) return "";
     return '<div class="ns-plan-answer"><span class="mp-label">Match Night Plan answer</span><b>'+esc(r.our)+'</b> '
       +'<span class="mp-level mp-'+r.level.toLowerCase()+'">'+esc(r.level)+'</span> <span class="mp-why">'+esc(r.why.split(" — ").slice(1).join(" — "))+'</span>'
       +(r.cost_later?'<span class="mp-cost">'+esc(r.cost_later)+'</span>':'')
+      +(spending?'<span class="mp-cost">Future records below show the opportunity spent by this send, not another instruction to hold.</span>':'')
       +'<span class="muted">The list below is the recorded evidence, in direct-record order.</span></div>';
   }
   function wrNextSendCard(w,plan,ta,tb){
@@ -1044,13 +1043,17 @@
     var chosen=sel!==undefined;
     if(!chosen) sel=open[0];
     var ns=wrNextSend(w,sel,plan.rem,plan.unplayed),opp=w.theirs[sel];
+    var x=mnInputs(w,plan,ta),matchPlan=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);
+    var who=wrDisplayName(opp,w.theirs),answer=(matchPlan.responses||[]).filter(function(r){return r.their===who;})[0];
+    var spending=function(candidate){return !!answer&&answer.our===candidate.display;};
+    var spends=ns.ranked.concat(ns.unordered).some(function(candidate){return spending(candidate)&&candidate.save_targets.length;});
     // Unknown availability stays eligible (never assumed Unavailable) but is said at the point of decision.
     var avail=function(m){return wrAvail(plan.ck,m.id)==="Unknown"?' <span class="ns-avail">· availability unknown</span>':'';};
     var li=function(cls,html){return '<li class="'+cls+'">'+html+'</li>';};
     return '<div id="next-send" class="next-send" tabindex="-1"><h3>Next Send — options against '+esc(wrDisplayName(opp,w.theirs))+'</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
-      +wrPlanAnswer(w,plan,ta,opp)+wrNextSendEvidence(w,plan,ns,sel)
+      +wrPlanAnswer(answer,spends)+wrNextSendEvidence(w,plan,ns,sel)
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
@@ -1059,12 +1062,12 @@
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
         return li("ns-medal cat-border-"+m.category+(m.save?" ns-with-save":""),'<span class="ns-why"><span class="ns-m">'+esc("Direct-record order "+m.choice_number)+'</span> <b>'+esc(m.display)+'</b> <strong class="ns-sample">'+esc(plural(evidence.g,"meeting")+(evidence.g<3?" · small sample":""))+'</strong> — '+esc(m.reason)
-        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m,w)+avail(m.member)
+        +(m.tied_with.length?' <span class="muted">· tied with '+esc(m.tied_with.join(", "))+'</span>':'')+wrSaveWarning(m,w,spending(m))+avail(m.member)
         +(cost?'<span class="ns-cost">'+esc(cost)+'</span>':'')+wrCandidateBudget(w,plan,ta,m.member)+'</span>'
         +'<button type="button" class="ns-send secondary" data-send-our="'+esc(m.member.id)+'" data-send-opp="'+esc(opp.id)+'" aria-label="Mark '+esc(m.display)+' sent vs '+esc(wrDisplayName(opp,w.theirs))+'">✓<span class="ns-sent-word"> Sent</span></button>');}).join("")
       +(function(){
         // With a ranked list, the rest folds into one line that still names every player; tap for the reasons.
-        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+wrSaveWarning(u,w)+avail(u.member));}).join("");
+        var unord=ns.unordered.map(function(u){return li("ns-unordered",'≈ '+esc(u.display)+' — '+esc(u.reason)+' <span class="muted">(not ordered)</span>'+wrSaveWarning(u,w,spending(u))+avail(u.member));}).join("");
         var rest=ns.avoid.map(function(a){var direct=w.blocks[sel].byMember[String(a.member.id)].c.direct;
           return li("ns-avoid",(direct.g===1?'<strong class="ns-sample">Lost once · 1 meeting</strong> Recorded loss: ':'⚠ Avoid record — recorded losses: ')+'<b>'+esc(a.display)+'</b> — '+esc(a.reason));}).join("")
           +ns.unknown.map(function(name){return li("ns-unknown",'❓ Unknown (no verified evidence, not weak): '+esc(name));}).join("");

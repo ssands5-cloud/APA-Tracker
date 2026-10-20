@@ -66,6 +66,7 @@ from analytics.ultimate_coach_war_room import (
     stale_warning,
     suggested_date,
     war_room_pair,
+    next_send,
     save_record_text,
     COACH_TAGS,
     MATCH_NIGHT_GUIDE,
@@ -84,7 +85,7 @@ TC_COLUMNS = [
 THREATS_COLUMNS = ["Key", "Opp Player ID", "Threat"]
 MATCH_PLAN_COLUMNS = ["Key", "Opponents", "Lead", "Responses", "Holds", "Sacrifices", "Summary", "Best Board",
                       "Safest Board"]
-PLAN_ANSWER_COLUMNS = ["Key", "Answer"]
+PLAN_ANSWER_COLUMNS = ["Key", "Answer", "Player"]
 CONCERNING_COLUMNS = ["Key", "Our Player ID", "Opp Player ID", "Pairing"]
 MEETINGS_COLUMNS = ["Key", "Date", "Our Player", "Opponent", "Result", "Our SL", "Their SL", "Session", "Points",
                     "Pair Key"]
@@ -177,8 +178,13 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         for j, block in enumerate(wr["blocks"], start=1):
             r = by_opponent.get(display_name(block["opponent"], wr["theirs"]))
             if r:
+                options = next_send(wr, j - 1)
+                spends = any(display_name(c['member'], wr['ours']) == r['our'] and c.get('save')
+                             for c in options['ranked'] + options['unordered'])
                 answer_rows.append([f"{key}|{j}", f"{r['our']} ({r['level']}) — {r['why'].split(' — ', 1)[-1]}"
-                                    + (f" · {r['cost_later']}" if r["cost_later"] else "")])
+                                    + (f" · {r['cost_later']}" if r["cost_later"] else "")
+                                    + (" · Future records show the opportunity spent by this send, not another instruction to hold." if spends else ""),
+                                    r['our']])
         plan_rows.append([key, len(wr["theirs"]), text["lead"], text["responses"], text["holds"], text["sacrifices"],
                           text["summary"], text["best_board"], text["safest_board"]])
         for k, threat in enumerate(wr["threats"], start=1):
@@ -682,6 +688,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '=IF(OR(wr_PlanRow="",wr_NsJ=""),"",IF(wr_PlanFresh,IFERROR(INDEX(PlanAnswers_Table[Answer],'
            'MATCH(wr_PairKey&"|"&wr_NsJ,PlanAnswers_Table[Key],0)),""),'
            '"The printed plan is for the start of the night; re-plan on the phone (Match Night Plan) after any change."))')
+    e.cell("wr_PlanAnswerName", "Fresh plan answer player",
+           '=IF(AND(wr_PlanFresh,wr_NsJ<>""),IFERROR(INDEX(PlanAnswers_Table[Player],'
+           'MATCH(wr_PairKey&"|"&wr_NsJ,PlanAnswers_Table[Key],0)),""),"")')
     e.cell("wr_BlindName", "Blind send player",
            '=IF(OR(wr_BlindIdx="",wr_BlindUnranked),"",INDEX(wr_OurLabels,wr_BlindIdx))')
     # Expose the existing roster-order fallback without claiming equal meeting records.
@@ -901,7 +910,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             e.ws.cell(row=r, column=3, value=(
                 f'=IF(AND(INDEX(wr_OurRemaining,{i}),INDEX(wr_OppUnplayed,{j}),'
                 f'OR({cat}="G",{cat}="E",{cat}="I"),B{r}<>""),'
-                f'INDEX(wr_OurLabels,{i})&" — consider saving for "&B{r},"")'))
+                f'INDEX(wr_OurLabels,{i})&IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,{i})='
+                f'IFERROR(INDEX(PlanAnswers_Table[Player],MATCH(wr_PairKey&"|{j}",PlanAnswers_Table[Key],0)),"")),'
+                f'" — Sending now spends our only favorable direct option vs "," — consider saving for ")&B{r},"")'))
             e.ws.cell(row=r, column=4, value=(f'=C{r}' if i==1 else
                 f'=D{r-1}&IF(AND(D{r-1}<>"",C{r}<>""),CHAR(10),"")&C{r}'))
         packet_saves[j] = f'Engine!$D${r}'
@@ -980,12 +991,13 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'=IF(G{r},{medal.format(r=r)}&" "&{_nm(f"INDEX({ME}[Player],B{r})", f"C{r}")}&" — "&SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(INDEX({ME}[Reason],B{r}),"meetings)","MEETINGS)"),"meeting)","MEETING)"),"small sample","SMALL SAMPLE")'
             f'&IF(COUNTIFS(wr_NsGrp,H{r},wr_NsElig,TRUE)>1," · tied (same evidence)","")'
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
-            f'" · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}),"")'
+            f'IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,C{r})=wr_PlanAnswerName)," · Sending now spends our only favorable direct option vs ",'
+            f'" · consider saving — our only favorable direct option vs ")&INDEX(wr_NsSaveDetails,C{r}),"")'
             f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown","")'
             f'&IF(INDEX(wr_CandidateBudget,C{r})="",""," · "&INDEX(wr_CandidateBudget,C{r})),"")')),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
         ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}")
-                                              + f'&IF(INDEX(wr_NsSaveDetails,C{r})="",""," · consider saving — our only favorable direct option vs "&INDEX(wr_NsSaveDetails,C{r}))'
+                                              + f'&IF(INDEX(wr_NsSaveDetails,C{r})="","",IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,C{r})=wr_PlanAnswerName)," · Sending now spends our only favorable direct option vs "," · consider saving — our only favorable direct option vs ")&INDEX(wr_NsSaveDetails,C{r}))'
                                               + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
         ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}"))),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+{k})'),
