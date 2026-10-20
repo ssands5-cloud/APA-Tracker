@@ -120,3 +120,65 @@ def test_rq12_two_sided_shared_evidence_is_used_when_there_is_no_direct_record()
     _, v1 = plan({"B": 4}, {"X": 4}, {}, shared={("B", "X"): (8, 10, 0, 5, 1)})
     _, v3 = plan({"B": 4}, {"X": 4}, {}, shared={("B", "X"): (8, 10, 0, 5, 3)})
     assert v1[("B", "X")]["level"] == "Thin" and v3[("B", "X")]["level"] == "Solid"
+
+
+# ── New findings from Oct-20 audit ─────────────────────────────────────────────
+
+def test_rq13_hold_back_and_response_table_name_the_same_player():
+    """F1: when the plan designates a player for specific opponents, that player appears
+    in both holds ('Hold back Alice') AND the response table ('If Xavier → Alice').
+    The two sections are complementary -- holds is the designation, responses is the
+    execution -- but the 'Hold back' label sounds like 'don't use tonight', contradicting
+    the response-table instruction.  This test documents the existing behavior so that
+    any UI relabelling change can be verified against it.
+    """
+    # Carol leads (neutral); Alice and Bob are kept as designated answers.
+    p, _ = plan(
+        {"Alice": 4, "Bob": 4, "Carol": 4},
+        {"Xavier": 5, "Yvonne": 4, "Zed": 4},
+        {("Alice", "Xavier"): (3, 3), ("Alice", "Yvonne"): (2, 2),
+         ("Bob", "Xavier"): (1, 1), ("Bob", "Zed"): (4, 5),
+         ("Bob", "Yvonne"): (0, 3)},
+        games=3,
+    )
+    holds_players = {h["our"] for h in p["holds"]}
+    response_players = {r["our"] for r in p["responses"]}
+    # Alice and Bob both appear in holds AND in the response table.
+    # The 'Hold back' label is therefore shown for players the plan actively uses.
+    assert holds_players & response_players, (
+        "Expected overlap between holds and responses (F1 scenario); "
+        f"holds={holds_players}, responses={response_players}"
+    )
+
+
+def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ():
+    """F3: cost_later fires only when the naive (best-tonight) choice differs in tonight-value
+    from the plan's choice.  When both players are equally good tonight but one is needed
+    more for a future opponent, the plan silently picks the one with the better future --
+    without saying why.  A captain who sees 'If Xavier → Alice (Solid)' and knows Bob is also
+    Solid vs Xavier gets no explanation of why Alice was chosen over Bob.
+    """
+    # Alice and Bob are both Solid (3) vs Xavier.
+    # Bob is Strong (6) vs Yvonne; Alice is Caution (-3) vs Yvonne.
+    # Plan: lead Alice, Bob answers Yvonne. If they lead with Xavier, plan sends Alice.
+    # cost_later on the Xavier response is '' even though sending Bob would cost the night.
+    p, _ = plan(
+        {"Alice": 4, "Bob": 4},
+        {"Xavier": 4, "Yvonne": 4},
+        {("Alice", "Xavier"): (5, 7),   # Solid: 5-2 with form
+         ("Alice", "Yvonne"): (0, 3),   # Caution
+         ("Bob",   "Xavier"): (4, 6),   # Solid: 4-2
+         ("Bob",   "Yvonne"): (6, 7)},  # Strong
+        games=2,
+    )
+    xavier_resp = answer(p, "Xavier")
+    assert xavier_resp["our"] == "Alice", (
+        "Plan should send Alice vs Xavier to preserve Bob for Yvonne; "
+        f"got {xavier_resp['our']!r}"
+    )
+    # Document the gap: no cost_later fires even though sending Bob vs Xavier
+    # would leave only Caution-level Alice for Yvonne.
+    assert xavier_resp["cost_later"] == "", (
+        "F3: cost_later is expected to be silent in the equal-tonight case; "
+        "this test documents the gap -- a future fix should add an explanation here"
+    )

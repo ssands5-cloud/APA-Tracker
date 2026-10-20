@@ -200,6 +200,102 @@ phone-vs-Python parity covers them too.
 - **Next Send's evidence list keeps its existing order.** The plan's response table is the recommendation;
   the list stays as the evidence view.
 
+## Oct-20 audit: three new recommendation-quality findings
+
+Audited by Claude, 2026-10-20. No probabilities, no policy changes. Executable test cases in
+`tests/test_captain_decision_review.py` (RQ13, RQ14). F2 requires a browser test; documented below.
+
+---
+
+### F1 — "Hold back" label contradicts the response table for the same player (HIGH)
+
+**Scenario.** Three games remain; the plan leads Carol (neutral) to keep Alice and Bob for their
+designated matchups. Plan output:
+
+- **Lead**: Carol
+- **Hold back**: Alice — our only Strong answer to Xavier and Yvonne
+- **Hold back**: Bob — our only Strong answer to Zed
+- **Response table**: If Xavier → Alice (Strong) · If Yvonne → Alice (Strong) · If Zed → Bob (Strong)
+
+**Actual recommendation.** "Hold back Alice" appears directly alongside "If Xavier → Alice." Both come
+from the same plan and are correct: holds designates Alice for Xavier/Yvonne; the response table is the
+execution instruction. But the two sections look contradictory.
+
+**Evidence.** `test_rq13_hold_back_and_response_table_name_the_same_player()` reproduces it.
+
+**Captain disagreement.** A captain reads "Hold back Alice" as "don't use Alice tonight," then sees the
+response table say "send Alice when Xavier shows up." They may suppress Alice from the Xavier response to
+honour the hold instruction, giving up a Strong pairing for an Unknown one.
+
+**Frequency.** Every night the plan leads a neutral player and reserves strong players for responses —
+the standard APA "hold your best for whoever they put up" strategy.
+
+**Smallest correction (presentation only, no engine change).** Relabel the "Hold back" section to
+"Designated answers — keep for these matchups" and change each item from "Alice — our only Strong answer
+to Xavier" to "Alice → Xavier / Yvonne (Strong)". The response table then reads as the execution of the
+designation, not a contradiction of it. The `plan_text()` output for paper/workbook uses the same data;
+update its holds line in the same change.
+
+---
+
+### F2 — Save warning fires on the plan-recommended player, contradicting the plan answer (MEDIUM)
+
+**Scenario.** Carol has led; Xavier is on the board. Captain opens Next Send, selects Xavier:
+
+- **Plan answer box** (top of Next Send): "Alice (Strong) — Match Night Plan answer"
+- **Evidence list** immediately below: "🥇 Alice — 3-0 direct · **consider saving Alice for Yvonne**
+  (2-0 in 2 meetings)"
+
+**Actual recommendation.** The plan says send Alice now. The save warning on the same player says hold
+her. Both come from the product; neither is wrong in isolation. The plan has already priced in that Alice
+won't be available for Yvonne.
+
+**Evidence.** Reproducible fixture: three games remaining, Alice is Strong vs both Xavier (3-0) and
+Yvonne (2-0); she is the only category-G (favorable direct) option vs Yvonne; Carol leads; plan response
+table shows Alice for Xavier. The Next Send `onlyGreen` check fires because exactly one of our remaining
+players has category-G vs Yvonne and that player is Alice.
+
+**Captain disagreement.** Captain sees plan say Alice, save warning say hold Alice. May override plan and
+send Bob (Thin/Solid) instead of Alice (Strong) to avoid "wasting" Alice on Xavier. Gets a weaker pairing
+for Xavier and still loses Alice to Yvonne in the next round with no improvement.
+
+**Frequency.** Any night a strong player has a good record vs two future opponents and the plan designates
+them for the first one. Common for players with multiple strong matchups.
+
+**Smallest correction (UI-only, no engine change).** In `wrPlanAnswer`, when the plan answer for the
+current opponent is player P, suppress the save warning for P in the evidence list rendered below it (the
+`wrNextSendEvidence` / `wrSaveWarning` call). Add a single line to the plan answer box: "Save warnings
+below do not apply to the plan recommendation — the cost has already been weighed." Alternatively, move
+the save warning into the plan answer itself: "Alice (Strong) — spending Alice here forgoes the save
+opportunity vs Yvonne; the plan judges this worthwhile."
+
+---
+
+### F3 — cost_later is silent when tonight-values are equal but futures differ (LOW-MEDIUM)
+
+**Scenario.** Alice and Bob are both Solid (3 points) vs Xavier. Bob is Strong (6) vs Yvonne; Alice is
+Caution (−3). Plan leads Alice (keeping Bob for Yvonne). If they put up Xavier first, the plan sends Alice
+— but `cost_later` is blank.
+
+**Actual recommendation.** Response table: "If Xavier → Alice (Solid)" — no cost_later text.
+
+**Evidence.** `test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ()`.
+The condition that fires cost_later is `naive != i and pair(naive, j) > pair(i, j)`. When Alice and Bob
+have identical pair-values vs Xavier (both Solid = 3), the `>` comparison is False and the text never
+generates, even though sending Bob tonight costs 9 planning points (6 + 3) for the rest of the night.
+
+**Captain disagreement.** Captain sees Alice and Bob are equal vs Xavier, sees no explanation, and may
+send Bob (roster familiarity, hunch) — giving up the Strong pairing vs Yvonne.
+
+**Smallest correction (engine change, needs Paul's approval).** Change the `cost_later` condition from
+`night.pair(naive, j) > night.pair(i, j)` to `night.pair(naive, j) >= night.pair(i, j)`. Also update
+the generated text from "B is the stronger answer tonight" to "B is an equally good answer tonight"
+when the values are equal. This lets the explanation fire: "Bob is an equally good answer tonight, but
+sending them now costs more later; keep Bob." A new assertion in `test_rq14` can verify the corrected
+behaviour once the fix is approved.
+
+---
+
 ## Decisions for Paul (defaults are in place; none blocks use)
 
 1. **Planning weights.** Keep the history-anchored 6/3/1/0/−3, or choose another scale. The sensitivity
@@ -208,3 +304,6 @@ phone-vs-Python parity covers them too.
 3. **Default cap.** Assume the standard 23 when none is entered, or keep "no cap assumed" (current).
 4. **Next Send list order.** Keep win-percentage-first as the evidence view, or order it by confidence level
    to match the plan.
+5. **F1 fix** (presentation): relabel "Hold back" → "Designated answers — keep for these matchups."
+6. **F2 fix** (UI): suppress save warning for the plan-recommended player in the Next Send evidence list.
+7. **F3 fix** (engine): extend cost_later to equal-tonight/different-future cases.
