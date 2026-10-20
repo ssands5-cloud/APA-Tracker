@@ -2,6 +2,15 @@
 
 ## Implementation progress — GPT self-audited, 2026-10-20
 
+F3 is corrected: rejected equal-or-stronger legal alternatives are compared with the selected
+continuation, even when the roster-first answer is already selected. Only a positive continuation
+cost emits guidance; a later matchup is named when present in that continuation. No choice or
+utility changes. Two desired cases failed first.324 affected tests passed in16.58s, including
+the reference search/optimal boards and Python/browser equivalence. Four final focused cases
+passed in6.91s, including no-cost/cap-excluded controls and actual390/1280 explanation rendering.
+M313 and F1/F2/F3 are technically corrected under GPT self-audit. Historical review and combined
+artifact validation follow; historical finding descriptions below are retained for traceability.
+
 F2 is corrected: future evidence remains accessible, but the recommended player's note describes
 the opportunity spent instead of issuing a conflicting save instruction. Other players' warnings
 remain. Paper uses the fresh plan answer only; any mark/availability/cap change retires that context.

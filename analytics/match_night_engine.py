@@ -300,13 +300,26 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         i, v = night.best_answer(om, tm, j)
         if i is None:
             continue
-        # The evidence-only answer: best pairing tonight with no look-ahead (ties in roster order).
-        naive = max(night.legal_ours(om), key=lambda x: (night.pair(x, j), -x))
+        # Explain a rejected equal-or-stronger alternative even when roster-first already picks i.
+        alternatives = []
+        for k in night.legal_ours(om):
+            if k == i or night.pair(k, j) < night.pair(i, j):
+                continue
+            loss = v - (night.pair(k, j) + night.solve(om & ~(1 << k), tm & ~(1 << j), True))
+            if loss > 0:
+                alternatives.append((loss, night.pair(k, j), -k, k))
         cost = ""
-        if naive != i and night.pair(naive, j) > night.pair(i, j):
-            later = v - (night.pair(naive, j) + night.solve(om & ~(1 << naive), tm & ~(1 << j), True))
-            cost = (f"{name('our', naive)} is the stronger answer tonight ({conf(naive, j)['level']}), but sending "
-                    f"them now costs more later; keep {name('our', naive)} for the rest of the night") if later > 0 else ""
+        if alternatives:
+            k = max(alternatives)[3]
+            comparison = ("an equally supported option here" if conf(k, j)['level'] == conf(i, j)['level'] else
+                          "a stronger recorded option here" if night.pair(k, j) > night.pair(i, j) else "another option here")
+            future = next((p for p in night.principal_line(om & ~(1 << i), tm & ~(1 << j), True)
+                           if p['our'] == k), None)
+            keep = f"keep {name('our', k)} available"
+            if future:
+                keep += f" for {name('their', future['their'])} ({conf(k, future['their'])['level']})"
+            cost = (f"{name('our', k)} is {comparison} ({conf(k, j)['level']}), but sending them now "
+                    f"leaves a weaker remaining plan; {keep}")
         responses.append({"their": name("their", j), "our": name("our", i), "level": conf(i, j)["level"],
                           "why": conf(i, j)["text"], "cost_later": cost})
     out["responses"] = responses

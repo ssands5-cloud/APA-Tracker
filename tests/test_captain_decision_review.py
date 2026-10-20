@@ -153,22 +153,12 @@ def test_rq13_hold_back_and_response_table_name_the_same_player():
     assert 'send when that matchup is put up' in plan_text(p)['holds']
 
 
-def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ():
-    """F3: cost_later fires only when the naive (best-tonight) choice differs in tonight-value
-    from the plan's choice.  When both players are equally good tonight but one is needed
-    more for a future opponent, the plan silently picks the one with the better future --
-    without saying why.  A captain who sees 'If Xavier → Alice (Solid)' and knows Bob is also
-    Solid vs Xavier gets no explanation of why Alice was chosen over Bob.
-
-    GPT qualification (ff72ef2): in the true equal case the roster-first naive answer IS the
-    plan's answer (both Alice), so the 'naive != i' guard is False and changing '>' to '>='
-    would still not fire cost_later.  A working fix must inspect equal-value alternatives
-    rejected by the plan, not just the single roster-first naive pick.
-    """
+def test_rq14_cost_later_explains_equal_tonight_values_with_different_futures():
+    """F3 regression: examine rejected equals even when naive already matches the plan."""
     # Both Alice and Bob are Solid (3) vs Xavier: 4-2 in 6 meetings each.
     # Bob is Strong (6) vs Yvonne; Alice is Caution (-3) vs Yvonne.
     # Plan: send Alice vs Xavier (saves Bob for Yvonne). Both are equal tonight (Solid=3).
-    # cost_later is '' even though choosing Bob vs Xavier would cost 9 planning points.
+    # Choosing Bob vs Xavier would cost 9 planning utility; explain without reordering.
     p, v = plan(
         {"Alice": 4, "Bob": 4},
         {"Xavier": 4, "Yvonne": 4},
@@ -186,9 +176,6 @@ def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_dif
         "Plan should send Alice vs Xavier to preserve Bob for Yvonne; "
         f"got {xavier_resp['our']!r}"
     )
-    # Document the gap: no cost_later fires even though sending Bob vs Xavier
-    # would leave only Caution-level Alice for Yvonne (delta = 9 planning points).
-    assert xavier_resp["cost_later"] == "", (
-        "F3: cost_later is expected to be silent in the equal-tonight case; "
-        "this test documents the gap -- a future fix should add an explanation here"
-    )
+    # Sending Bob vs Xavier leaves only Caution-level Alice for Yvonne.
+    assert 'Bob' in xavier_resp['cost_later'] and 'equally supported' in xavier_resp['cost_later']
+    assert 'keep Bob' in xavier_resp['cost_later']

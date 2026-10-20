@@ -686,11 +686,16 @@
     var totalThey=night.solve(om,tm,false),responses=[];
     for(var rj=0;rj<LT.length;rj++){var j=LT[rj];
       var ba=night.bestAnswer(om,tm,j),i=ba[0],v=ba[1];if(i===null) continue;
-      var L=night.legalOurs(om),naive=L[0];for(var a=1;a<L.length;a++) if(night.pair(L[a],j)>night.pair(naive,j)) naive=L[a];
+      var L=night.legalOurs(om),alternative=null,largestLoss=0;
+      for(var a=0;a<L.length;a++){var k=L[a];if(k===i||night.pair(k,j)<night.pair(i,j)) continue;
+        var loss=v-(night.pair(k,j)+night.solve(om&~(1<<k),tm&~(1<<j),true));
+        if(loss>largestLoss||(loss>0&&loss===largestLoss&&night.pair(k,j)>night.pair(alternative,j))){alternative=k;largestLoss=loss;}}
       var cost="";
-      if(naive!==i&&night.pair(naive,j)>night.pair(i,j)){
-        var later=v-(night.pair(naive,j)+night.solve(om&~(1<<naive),tm&~(1<<j),true));
-        cost=later>0?name("our",naive)+" is the stronger answer tonight ("+conf(naive,j).level+"), but sending them now costs more later; keep "+name("our",naive)+" for the rest of the night":"";
+      if(alternative!==null){
+        var k=alternative,comparison=conf(k,j).level===conf(i,j).level?"an equally supported option here":night.pair(k,j)>night.pair(i,j)?"a stronger recorded option here":"another option here";
+        var future=night.principalLine(om&~(1<<i),tm&~(1<<j),true).filter(function(p){return p.our===k;})[0];
+        var keep="keep "+name("our",k)+" available"+(future?" for "+name("their",future.their)+" ("+conf(k,future.their).level+")":"");
+        cost=name("our",k)+" is "+comparison+" ("+conf(k,j).level+"), but sending them now leaves a weaker remaining plan; "+keep;
       }
       responses.push({their:name("their",j),our:name("our",i),level:conf(i,j).level,why:conf(i,j).text,cost_later:cost});
     }

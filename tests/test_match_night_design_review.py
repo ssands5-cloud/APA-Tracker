@@ -290,15 +290,17 @@ def test_f2_paper_future_opportunity_matches_the_fresh_plan(tmp_path):
 
 
 
-def test_f3_equal_strength_alternative_is_hidden_even_when_naive_matches_plan():
-    """Qualify Claude F3 with an actual equal-level fixture and its proposed guard."""
+def test_f3_equal_strength_alternative_is_explained_even_when_naive_matches_plan():
+    """A roster-first selected answer must still explain rejected equal-value alternatives."""
     from tests.test_captain_decision_review import plan, answer
     p, values = plan({'Alice': 4, 'Bob': 4}, {'Xavier': 4, 'Yvonne': 4},
                      {('Alice', 'Xavier'): (4, 6), ('Alice', 'Yvonne'): (0, 3),
                       ('Bob', 'Xavier'): (4, 6), ('Bob', 'Yvonne'): (6, 7)}, games=2)
     assert values[('Alice', 'Xavier')]['level'] == values[('Bob', 'Xavier')]['level'] == 'Solid'
     response = answer(p, 'Xavier')
-    assert response['our'] == 'Alice' and response['cost_later'] == ''
+    assert response['our'] == 'Alice'
+    assert 'Bob' in response['cost_later'] and 'equally supported' in response['cost_later']
+    assert 'for Yvonne (Strong)' in response['cost_later']
     names = ['Alice', 'Bob']
     naive = max(names, key=lambda n: (values[(n, 'Xavier')]['points'], -names.index(n)))
     assert naive == response['our']  # >= alone never reaches the proposed explanation.
@@ -308,6 +310,51 @@ def test_f3_equal_strength_alternative_is_hidden_even_when_naive_matches_plan():
     chosen_total = values[('Alice', 'Xavier')]['points'] + values[('Bob', 'Yvonne')]['points']
     alternative_total = values[('Bob', 'Xavier')]['points'] + values[('Alice', 'Yvonne')]['points']
     assert chosen_total - alternative_total == 9  # Existing utility, never match points or win estimates.
+
+
+def test_f3_no_cost_note_for_interchangeable_answers_or_unusable_alternatives():
+    from tests.test_match_night_engine import night
+    from analytics.match_night_engine import match_plan
+    ours, theirs, values = night([('A', 4), ('B', 4), ('C', 7)], [('X', 4), ('Y', 4)],
+                                [['Solid', 'Strong'], ['Solid', 'Strong'], ['Strong', 'Strong']])
+    p = match_plan(ours, theirs, values, games_left=2, cap=8)
+    assert all(r['cost_later'] == '' for r in p['responses'])
+    assert all(r['our'] != 'C' for r in p['responses'])
+
+
+def test_f3_future_cost_is_visible_on_phone_and_desktop(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from tests.test_excel_war_room_formulas import _games, _payload
+    from ui.ultimate_coach import render
+    payload = _payload()
+    payload['players'] = [p for p in payload['players'] if p['id'] in (1, 2, 10, 11)]
+    for player in payload['players']:
+        for history in player['team_history']:
+            history['skill_level'] = 4
+    payload['evidence'] = (_games(1, 10, 'WWWWLL') + _games(1, 11, 'LLL')
+                           + _games(2, 10, 'WWWWLL') + _games(2, 11, 'WWWWWWL'))
+    for game in payload['evidence']:
+        game['own_skill_level'] = game['opponent_skill_level'] = 4
+    path = tmp_path / 'f3.html'
+    path.write_text(render(payload, built_at='2026-10-07 18:00 UTC',
+                           viewer_member_external_id='1001'), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            for width in (390, 1280):
+                page = browser.new_page(viewport={'width': width, 'height': 900})
+                page.goto(path.as_uri())
+                page.select_option('#team-a', 'sharks-a|d1|Fall 2026')
+                page.select_option('#team-b', 'falcons-a|d1|Fall 2026')
+                page.locator('#next-send [data-next="10"]').click()
+                answer = page.locator('#next-send .ns-plan-answer')
+                assert answer.locator('b').inner_text() == 'Ann Archer'
+                cost = answer.locator('.mp-cost').inner_text()
+                assert 'equally supported' in cost and 'keep Bea Baker available for Eve Ellis (Strong)' in cost
+                assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+                page.close()
+        finally:
+            browser.close()
 
 
 def test_f1_designated_answers_are_conditional_send_instructions(tmp_path):
