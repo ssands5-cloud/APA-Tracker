@@ -157,19 +157,27 @@ def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_dif
     more for a future opponent, the plan silently picks the one with the better future --
     without saying why.  A captain who sees 'If Xavier → Alice (Solid)' and knows Bob is also
     Solid vs Xavier gets no explanation of why Alice was chosen over Bob.
+
+    GPT qualification (ff72ef2): in the true equal case the roster-first naive answer IS the
+    plan's answer (both Alice), so the 'naive != i' guard is False and changing '>' to '>='
+    would still not fire cost_later.  A working fix must inspect equal-value alternatives
+    rejected by the plan, not just the single roster-first naive pick.
     """
-    # Alice and Bob are both Solid (3) vs Xavier.
+    # Both Alice and Bob are Solid (3) vs Xavier: 4-2 in 6 meetings each.
     # Bob is Strong (6) vs Yvonne; Alice is Caution (-3) vs Yvonne.
-    # Plan: lead Alice, Bob answers Yvonne. If they lead with Xavier, plan sends Alice.
-    # cost_later on the Xavier response is '' even though sending Bob would cost the night.
-    p, _ = plan(
+    # Plan: send Alice vs Xavier (saves Bob for Yvonne). Both are equal tonight (Solid=3).
+    # cost_later is '' even though choosing Bob vs Xavier would cost 9 planning points.
+    p, v = plan(
         {"Alice": 4, "Bob": 4},
         {"Xavier": 4, "Yvonne": 4},
-        {("Alice", "Xavier"): (5, 7),   # Solid: 5-2 with form
+        {("Alice", "Xavier"): (4, 6),   # Solid: 4-2 in 6 meetings
          ("Alice", "Yvonne"): (0, 3),   # Caution
-         ("Bob",   "Xavier"): (4, 6),   # Solid: 4-2
+         ("Bob",   "Xavier"): (4, 6),   # Solid: 4-2 in 6 meetings (exact tie)
          ("Bob",   "Yvonne"): (6, 7)},  # Strong
         games=2,
+    )
+    assert v[("Alice", "Xavier")]["level"] == v[("Bob", "Xavier")]["level"] == "Solid", (
+        "Fixture must produce equal Solid levels to characterise the true equal-tonight gap"
     )
     xavier_resp = answer(p, "Xavier")
     assert xavier_resp["our"] == "Alice", (
@@ -177,7 +185,7 @@ def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_dif
         f"got {xavier_resp['our']!r}"
     )
     # Document the gap: no cost_later fires even though sending Bob vs Xavier
-    # would leave only Caution-level Alice for Yvonne.
+    # would leave only Caution-level Alice for Yvonne (delta = 9 planning points).
     assert xavier_resp["cost_later"] == "", (
         "F3: cost_later is expected to be silent in the equal-tonight case; "
         "this test documents the gap -- a future fix should add an explanation here"

@@ -312,26 +312,31 @@ opportunity vs Yvonne; the plan judges this worthwhile."
 
 ### F3 — cost_later is silent when tonight-values are equal but futures differ (LOW-MEDIUM)
 
-**Scenario.** Alice and Bob are both Solid (3 points) vs Xavier. Bob is Strong (6) vs Yvonne; Alice is
-Caution (−3). Plan leads Alice (keeping Bob for Yvonne). If they put up Xavier first, the plan sends Alice
-— but `cost_later` is blank.
+**Scenario.** Alice and Bob are both Solid (3 points) vs Xavier: 4-2 in 6 meetings each. Bob is Strong
+(6) vs Yvonne; Alice is Caution (−3). Plan sends Alice vs Xavier (keeping Bob for Yvonne) — but
+`cost_later` is blank.
 
 **Actual recommendation.** Response table: "If Xavier → Alice (Solid)" — no cost_later text.
 
-**Evidence.** `test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ()`.
-The condition that fires cost_later is `naive != i and pair(naive, j) > pair(i, j)`. When Alice and Bob
-have identical pair-values vs Xavier (both Solid = 3), the `>` comparison is False and the text never
-generates, even though sending Bob tonight costs 9 planning points (6 + 3) for the rest of the night.
+**Evidence.** `test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ()`
+(fixture corrected from original; see GPT verification in ff72ef2).
 
-**Captain disagreement.** Captain sees Alice and Bob are equal vs Xavier, sees no explanation, and may
-send Bob (roster familiarity, hunch) — giving up the Strong pairing vs Yvonne.
+**Root cause (qualified by ff72ef2).** The cost_later condition is `naive != i and pair(naive, j) >
+pair(i, j)`. When Alice and Bob have identical Solid values vs Xavier, `naive` (roster-first) is Alice
+— the same player the plan chose (`i = Alice`). So `naive != i` is False; the check never reaches the
+`>` comparison at all. Changing `>` to `>=` alone is not sufficient. A working fix must enumerate all
+equal-or-better alternative senders and find the one the plan rejected for future reasons — the
+roster-first naive pick is not that player when the plan and naive agree.
 
-**Smallest correction (engine change, needs Paul's approval).** Change the `cost_later` condition from
-`night.pair(naive, j) > night.pair(i, j)` to `night.pair(naive, j) >= night.pair(i, j)`. Also update
-the generated text from "B is the stronger answer tonight" to "B is an equally good answer tonight"
-when the values are equal. This lets the explanation fire: "Bob is an equally good answer tonight, but
-sending them now costs more later; keep Bob." A new assertion in `test_rq14` can verify the corrected
-behaviour once the fix is approved.
+**Captain disagreement.** Captain sees Alice and Bob both listed as Solid vs Xavier with no explanation
+of why Alice was chosen. May send Bob instead (roster familiarity) — forfeiting the Strong pairing vs
+Yvonne. Delta: 9 planning points (these are planning utilities, not match points or win estimates).
+
+**Smallest correction (engine change, needs Paul's approval).** After picking the plan answer `i`, scan
+all legal senders k with `pair(k,j) == pair(i,j)` and `k != i`. For each such k, compute the cost of
+substituting k for i (same tonight-value, different future). If any substitution costs more, emit:
+"Bob is an equally good answer tonight but costs more later; keep Bob." No ranking change is implied;
+the plan answer does not change.
 
 ---
 
