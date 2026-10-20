@@ -10,6 +10,16 @@
 
 # CURRENT PRIORITIES
 
+**Builder hold confirmed — new findings on origin/codex/captain-display-cleanup (2026-10-20, scheduled run).** Step 0 (list_task_runs cross-checked against get_session self) found only this session `local_d5325cf4` running — no overlap, proceeded. Step 1 verified: toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`, per AGENTS.md. Current branch: `claude/unruffled-chatterjee-f4f65e`, HEAD `1157418` (unchanged), clean working tree. **Material new activity this pass:**
+
+- `origin/codex/captain-display-cleanup` has advanced from `a009e83` to `9fbabc4` (+10 commits; newest two from 2026-10-20 today, six from 2026-10-18). Most recent commit `9fbabc4` "Audit F1/F2/F3: three recommendation-quality findings with fixtures" documents three captain-decision-quality findings against the builder's own M3 Match Night Plan work: **F1 (HIGH)** 'Hold back' label contradicts the response table naming the same player — fix: relabel section to 'Designated answers — keep for these matchups'; **F2 (MEDIUM)** save warning fires on plan-recommended player already priced in — fix: suppress save warning when plan answer is visible or fold cost note into plan-answer box; **F3 (LOW-MEDIUM)** `cost_later` silent when two players are equally good tonight but one is costlier for a future opponent — condition `pair(naive,j) > pair(i,j)` should be `>=`. Tests RQ13 and RQ14 reproduce F1 and F3; F2 needs a browser test once fix direction is chosen. Findings are in `docs/match_night_engine_review.md` on that branch.
+- Issue #84 at 320 comments (was 274 in the last recorded check). Newest comments are all dated 2026-10-15 (the gap was pagination, not new postings). No new auditor pressure directed at this branch's code.
+- PR #83: still OPEN, draft, head `integration/ultimate-coach-pr81-pr82-reconciliation` at `83c91d2`, `updatedAt` `2026-10-14T09:11:54Z` — unchanged.
+- `origin/codex/audit-pr83-privacy` still at `6b6a30b` — unchanged.
+- `origin/codex/phase3-captain-audit` still at `26e8f31` ("Clarify Next Send evidence ordering", 2026-10-17) — unchanged.
+
+F1/F2/F3 are on the active builder branch (`captain-display-cleanup`), not this one. Builder hold on this branch remains in force — no code changed this pass. **Blocker for Paul unchanged:** retarget this scheduled task to the current builder branch, or pause it.
+
 **Builder hold: this branch is superseded (2026-10-17 UTC, scheduled run).** No code changed. This branch is
 still at eb591f8 (2026-10-15). Since then, the Next Send, Blind Send, Threat, Quick Read and Packet presentation work
 has moved on in a lot of commits on origin/codex/captain-display-cleanup (head a009e83, still active within the
