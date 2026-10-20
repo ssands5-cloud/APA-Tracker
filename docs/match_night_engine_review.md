@@ -1,5 +1,43 @@
 # Match Night Engine (M3): review, Captain Decision Review and risk register status
 
+## M313 — hold-back explanation can protect an opponent excluded by the known cap
+
+GPT source-executed review, 2026-10-20, checkpoint a33d951. **Open recommendation-context finding.**
+This is distinct from closed M312: the response search enforces the opponent budget correctly,
+but the hold explanation still examines all opposing roster entries.
+
+Two games remain. Our A/B/C are each SL4; our cap is 8. Their X/Y/Z are SL7/SL2/SL2;
+their supplied remaining budget is 8. X plus either remaining teammate costs 9, so X cannot leave a complete two-player lineup. These are synthetic arithmetic
+inputs, not an assertion about a particular format's valid SL range or tournament rules.
+
+| Existing evidence utility | X | Y | Z |
+| --- | --- | --- | --- |
+| A | Caution (-3) | Solid (3) | Unknown (0) |
+| B | Unknown (0) | Strong (6) | Solid (3) |
+| C | Solid (3) | Strong (6) | Thin (1) |
+
+Actual output: lead B (C equally good); responses only to Y and Z. Neither game plan nor board
+contains X. However, the hold section says **C — our only Solid answer to X** and its covers list
+is exactly X. Paper `plan_text` repeats this reason; the browser engine returns the identical plan
+at 390 and 1280 pixels. This is browser-engine execution, not a visual review of a rendered card.
+
+Why a captain may disagree: holding C to answer X cannot serve tonight's supplied budget. C may
+still be useful against Y or Z; the demonstrated error is the stated reason, not proof that C must
+be sent or that B is the wrong lead. The UI turns this into actionable hold-back guidance, so it
+is more than a vocabulary difference. `covers()` and its fallback margin explanation iterate all
+opponents instead of the feasible opposing put-ups used by the search. The same loop exists in
+Python and JavaScript. Printed hold text consumes the Python output directly.
+
+Smallest correction candidate for Claude: derive hold coverage and fallback reasons from feasible
+opponent continuations, preserve the solver/utility/rankings, and use a neutral plan-dependency
+reason if no feasible named coverage supports the hold. Verify the reason remains truthful when
+cap/availability changes, with feasible coverage retained. No production correction is made here.
+
+Validation: two new characterization cases passed in 3.88s (`-k m313`); 12 unchanged design cases
+were deselected. Passing means the open defect was reproduced, **not** recommendation acceptance.
+An initial SL10 stress case also reproduced the issue; the final case uses SL7/2/2. A sandboxed final-case browser run stalled after its Python case and was interrupted; authorized browser execution then completed both cases. No stalled run is counted as a pass.
+No existing suite, native export, real fixture, or winning-effectiveness validation is claimed.
+
 ## GPT read-only review of implemented M3 — 2026-10-18, source 5101bc9
 
 **M312 — known opponent budget is absent from the response model; decision-changing limitation.**

@@ -144,3 +144,57 @@ def test_m312_implemented_plan_can_choose_differently_when_opponent_budget_is_kn
     assert plan['lead']['our'] == 'B' and plan['total_if_we_lead'] == 2
     assert constrained.index(max(constrained)) == 0  # A under known opponent budget.
     assert theirs[0]['sl'] + theirs[1]['sl'] > 9
+
+
+def m313_budget_excluded_hold_case():
+    from tests.test_match_night_engine import night
+    return night([('A', 4), ('B', 4), ('C', 4)],
+                 [('X', 7), ('Y', 2), ('Z', 2)],
+                 [['Caution', 'Solid', 'Unknown'],
+                  ['Unknown', 'Strong', 'Solid'],
+                  ['Solid', 'Strong', 'Thin']])
+
+
+def test_m313_hold_reason_can_name_budget_excluded_opponent():
+    """Characterize the open finding, not acceptance of the hold recommendation."""
+    from analytics.match_night_engine import match_plan, plan_text
+    ours, theirs, values = m313_budget_excluded_hold_case()
+    plan = match_plan(ours, theirs, values, games_left=2, cap=8, opp_cap=8)
+    assert theirs[0]['sl'] + min(p['sl'] for p in theirs[1:]) > 8
+    assert {r['their'] for r in plan['responses']} == {'Y', 'Z'}
+    for field in ('plan_if_we_lead', 'plan_if_they_lead', 'best_board', 'safest_board'):
+        assert all(p['their'] != 'X' for p in plan[field])
+    assert plan['lead']['our'] == 'B'
+    assert plan['holds'] == [{'our': 'C', 'why': 'our only Solid answer to X — Solid evidence',
+                              'covers': ['X']}]
+    assert 'our only Solid answer to X' in plan_text(plan)['holds']
+
+
+def test_m313_phone_engine_repeats_budget_excluded_hold_reason(tmp_path):
+    """The same open decision-context error exists in the actual browser engine."""
+    from playwright.sync_api import sync_playwright
+    from analytics.match_night_engine import match_plan
+    from tests.test_excel_war_room_formulas import _payload
+    from ui.ultimate_coach import render
+    ours, theirs, values = m313_budget_excluded_hold_case()
+    expected = match_plan(ours, theirs, values, games_left=2, cap=8, opp_cap=8)
+    path = tmp_path / 'm313.html'
+    path.write_text(render(_payload(), built_at='2026-10-20 12:00 UTC',
+                           viewer_member_external_id='1001'), encoding='utf-8')
+    js_values = {f'{a}|{b}': v for (a, b), v in values.items()}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            for width in (390, 1280):
+                page = browser.new_page(viewport={'width': width, 'height': 850})
+                errors = []
+                page.on('pageerror', lambda e: errors.append(str(e)))
+                page.goto(path.as_uri())
+                actual = page.evaluate('a => window.__ucMatchPlan(...a)',
+                                       [ours, theirs, js_values, 2, 8, 0, 8, 0])
+                assert actual == expected
+                assert actual['holds'][0]['covers'] == ['X']
+                assert errors == []
+                page.close()
+        finally:
+            browser.close()
