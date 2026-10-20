@@ -2,6 +2,12 @@
 
 ## Implementation progress — GPT self-audited, 2026-10-20
 
+F1 is corrected: Designated answers replaces Hold back on HTML/phone and Packet. Shared paper
+text and phone items say to send the designated player when that matchup is put up, with a
+one-player/one-matchup caution for competing coverage. Three focused cases passed in10.40s,
+including generated Packet formulas and changed-plan retirement. No response selection changes.
+Native print acceptance remains pending final artifact validation; F2/F3 remain pending here.
+
 Paul authorized GPT to implement and self-audit while Claude is unavailable. M313 is corrected:
 hold coverage and fallback reasons now inspect feasible opposing put-ups and feasible own senders.
 The solver, utility and decision ordering are unchanged. The M313 synthetic case retains lead B,

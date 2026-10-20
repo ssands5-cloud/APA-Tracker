@@ -243,7 +243,7 @@ def test_packet_prints_the_phone_start_of_night_plan_and_retires_it_after_any_ch
     show=lambda label: str(book.display('Captain Packet',f'C{col[label]}') or '')
     assert show('IF WE PUT UP FIRST').startswith(lead+' (')
     assert show('IF WE PUT UP FIRST').split('\n')[0]==text['lead']
-    assert show('IF THEY PUT UP')==text['responses'] and show('HOLD BACK')==text['holds']
+    assert show('IF THEY PUT UP')==text['responses'] and show('DESIGNATED\nANSWERS')==text['holds']
     assert show('IF WE MUST CONCEDE')==text['sacrifices'] and show("TONIGHT'S PLAN")==text['summary']
     # Paper cannot re-plan: any send, availability change or entered cap retires the printed plan.
     book.set('Lineup Lab','D12','Played')

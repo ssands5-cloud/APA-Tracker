@@ -1913,7 +1913,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         return max(_worst_height(t + extra, width, size, minimum) for t in texts)
     h(r, tallest("Lead", 12, 30, "\n" + _budget_scope_worst()))
     for label, cell, col in (("IF THEY PUT UP", "wr_PlanResponses", "Responses"),
-                             ("HOLD BACK", "wr_PlanHolds", "Holds"),
+                             ("DESIGNATED\nANSWERS", "wr_PlanHolds", "Holds"),
                              ("IF WE MUST CONCEDE", "wr_PlanSacrifices", "Sacrifices"),
                              ("TONIGHT'S PLAN", "wr_PlanSummary", "Summary")):
         r += 1

@@ -267,3 +267,40 @@ def test_f3_equal_strength_alternative_is_hidden_even_when_naive_matches_plan():
     chosen_total = values[('Alice', 'Xavier')]['points'] + values[('Bob', 'Yvonne')]['points']
     alternative_total = values[('Bob', 'Xavier')]['points'] + values[('Alice', 'Yvonne')]['points']
     assert chosen_total - alternative_total == 9  # Existing utility, never match points or win estimates.
+
+
+def test_f1_designated_answers_are_conditional_send_instructions(tmp_path):
+    from playwright.sync_api import sync_playwright
+    from tests.test_excel_war_room_formulas import _games, _payload, _hist
+    from ui.ultimate_coach import render
+    payload = _payload()
+    payload['players'] = [p for p in payload['players'] if p['id'] in (1, 2, 3, 10, 11, 12)]
+    for player in payload['players']:
+        if player['id'] == 12:
+            player['team_history'] = [_hist('falcons-a', 'd1', 'EIGHT', 4)]
+        for history in player['team_history']:
+            history['skill_level'] = 4
+    payload['evidence'] = (_games(1, 10, 'WWWWWW') + _games(1, 11, 'WWWWWW')
+                           + _games(2, 12, 'WWWWWW') + _games(2, 11, 'LLL'))
+    for game in payload['evidence']:
+        game['own_skill_level'] = game['opponent_skill_level'] = 4
+    path = tmp_path / 'f1.html'
+    path.write_text(render(payload, built_at='2026-10-20 13:00 UTC',
+                           viewer_member_external_id='1001'), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            for width in (390, 1280):
+                page = browser.new_page(viewport={'width': width, 'height': 900})
+                page.goto(path.as_uri())
+                page.select_option('#team-a', 'sharks-a|d1|Fall 2026')
+                page.select_option('#team-b', 'falcons-a|d1|Fall 2026')
+                holds = page.locator('#match-plan .mp-hold')
+                assert holds.count() == 1
+                assert holds.locator('.mp-label').text_content() == 'Designated answers'
+                assert 'send when that matchup is put up' in holds.inner_text()
+                assert 'Ann Archer' in holds.inner_text() and 'Cam Cole' in holds.inner_text()
+                assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+                page.close()
+        finally:
+            browser.close()

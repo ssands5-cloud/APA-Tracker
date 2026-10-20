@@ -464,7 +464,11 @@ def plan_text(plan: dict[str, Any]) -> dict[str, str]:
                       f"{', '.join(lead['equally_good'])} (first by roster order; your read decides)")
     responses = "\n".join(f"{r['their']} → {r['our']} ({r['level']})" + (f" · {r['cost_later']}" if r["cost_later"] else "")
                           for r in plan["responses"])
-    holds = "\n".join(f"{h['our']} — {h['why']}" for h in plan["holds"]) or "No player needs holding back."
+    def hold_line(h):
+        instruction = (f"keep for {', '.join(h['covers'])}; send when that matchup is put up. "
+                       + ("One player can cover only one matchup. " if len(h['covers']) > 1 else "")) if h['covers'] else ""
+        return f"{h['our']} — {instruction}{h['why']}"
+    holds = "\n".join(hold_line(h) for h in plan["holds"]) or "No designated answer needs reserving."
     sacrifices = "\n".join(f"{s['our']} vs {s['their']} ({s['level']}) — lowest-cost concession" for s in plan["sacrifices"]) \
         or "No concession planned."
     conf = " · ".join(f"{n} {lv}" for lv, n in plan["confidence"].items()) or "no pairings"

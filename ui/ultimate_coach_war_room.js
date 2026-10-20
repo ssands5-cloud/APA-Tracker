@@ -1124,7 +1124,9 @@
       +'<div class="mp-resp"><span class="mp-label">If they put up</span><ul>'+p.responses.map(function(r){
         return li(esc(r.their+" → ")+'<b>'+esc(r.our)+'</b> '+lvl(r.level)+' <span class="mp-why">'+esc(r.why.split(" — ").slice(1).join(" — "))+'</span>'
           +(r.cost_later?'<span class="mp-cost">'+esc(r.cost_later)+'</span>':''));}).join("")+'</ul></div>'
-      +(p.holds.length?'<div class="mp-hold"><span class="mp-label">Hold back</span><ul>'+p.holds.map(function(h){return li('<b>'+esc(h.our)+'</b> — '+esc(h.why));}).join("")+'</ul></div>':'')
+      +(p.holds.length?'<div class="mp-hold"><span class="mp-label">Designated answers</span><ul>'+p.holds.map(function(h){
+        var instruction=h.covers.length?'keep for '+h.covers.join(', ')+'; send when that matchup is put up. '+(h.covers.length>1?'One player can cover only one matchup. ':''):'';
+        return li('<b>'+esc(h.our)+'</b> — '+esc(instruction+h.why));}).join("")+'</ul></div>':'')
       +(p.sacrifices.length?'<div class="mp-sac"><span class="mp-label">If we must absorb a bad matchup</span><ul>'+p.sacrifices.map(function(s){return li('<b>'+esc(s.our)+'</b> vs '+esc(s.their)+' '+lvl(s.level)+' — '+esc(s.why.split(" — ")[0]));}).join("")+'</ul></div>':'')
       +'<details class="mp-more"><summary>Game plan and boards</summary>'
         +'<p><b>If we win the toss and lead</b></p>'+line(p.plan_if_we_lead)

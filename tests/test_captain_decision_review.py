@@ -149,6 +149,8 @@ def test_rq13_hold_back_and_response_table_name_the_same_player():
         "Expected overlap between holds and responses (F1 scenario); "
         f"holds={holds_players}, responses={response_players}"
     )
+    from analytics.match_night_engine import plan_text
+    assert 'send when that matchup is put up' in plan_text(p)['holds']
 
 
 def test_rq14_cost_later_is_silent_when_tonight_values_are_equal_but_futures_differ():
