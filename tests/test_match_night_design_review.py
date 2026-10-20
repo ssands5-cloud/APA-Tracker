@@ -198,3 +198,70 @@ def test_m313_phone_engine_repeats_budget_excluded_hold_reason(tmp_path):
                 page.close()
         finally:
             browser.close()
+
+
+
+def test_f2_plan_answer_and_save_warning_contradict_in_rendered_next_send(tmp_path):
+    """Characterize Claude F2 in the rendered product; not recommendation acceptance."""
+    from playwright.sync_api import sync_playwright
+    from tests.test_excel_war_room_formulas import _games, _payload
+    from ui.ultimate_coach import render
+    payload = _payload()
+    payload['players'] = [p for p in payload['players'] if p['id'] in (1, 2, 10, 11)]
+    for player in payload['players']:
+        for history in player['team_history']:
+            history['skill_level'] = 4
+    payload['evidence'] = (_games(1, 10, 'WWWWW') + _games(1, 11, 'WW')
+                           + _games(2, 10, 'LLL') + _games(2, 11, 'LLL'))
+    for game in payload['evidence']:
+        game['own_skill_level'] = game['opponent_skill_level'] = 4
+    path = tmp_path / 'f2.html'
+    path.write_text(render(payload, built_at='2026-10-20 13:00 UTC',
+                           viewer_member_external_id='1001'), encoding='utf-8')
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            for width in (390, 1280):
+                page = browser.new_page(viewport={'width': width, 'height': 850})
+                errors = []
+                page.on('pageerror', lambda e: errors.append(str(e)))
+                page.goto(path.as_uri())
+                page.select_option('#team-a', 'sharks-a|d1|Fall 2026')
+                page.select_option('#team-b', 'falcons-a|d1|Fall 2026')
+                page.locator('#next-send [data-next="10"]').click()
+                answer = page.locator('#next-send .ns-plan-answer')
+                assert answer.locator('b').inner_text() == 'Ann Archer'
+                assert answer.locator('.mp-level').inner_text() == 'Strong'
+                row = page.locator('#next-send .ns-medal').filter(
+                    has=page.locator('[data-send-our="1"]'))
+                assert row.count() == 1
+                warning = row.locator('.ns-save')
+                assert 'consider saving' in warning.inner_text()
+                assert 'Eve Ellis' in warning.inner_text()
+                assert '2-0 in 2 meetings' in warning.inner_text()
+                assert errors == []
+                assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
+                page.close()
+        finally:
+            browser.close()
+
+
+
+def test_f3_equal_strength_alternative_is_hidden_even_when_naive_matches_plan():
+    """Qualify Claude F3 with an actual equal-level fixture and its proposed guard."""
+    from tests.test_captain_decision_review import plan, answer
+    p, values = plan({'Alice': 4, 'Bob': 4}, {'Xavier': 4, 'Yvonne': 4},
+                     {('Alice', 'Xavier'): (4, 6), ('Alice', 'Yvonne'): (0, 3),
+                      ('Bob', 'Xavier'): (4, 6), ('Bob', 'Yvonne'): (6, 7)}, games=2)
+    assert values[('Alice', 'Xavier')]['level'] == values[('Bob', 'Xavier')]['level'] == 'Solid'
+    response = answer(p, 'Xavier')
+    assert response['our'] == 'Alice' and response['cost_later'] == ''
+    names = ['Alice', 'Bob']
+    naive = max(names, key=lambda n: (values[(n, 'Xavier')]['points'], -names.index(n)))
+    assert naive == response['our']  # >= alone never reaches the proposed explanation.
+    proposed_guard = (naive != response['our'] and
+                      values[(naive, 'Xavier')]['points'] >= values[(response['our'], 'Xavier')]['points'])
+    assert proposed_guard is False
+    chosen_total = values[('Alice', 'Xavier')]['points'] + values[('Bob', 'Yvonne')]['points']
+    alternative_total = values[('Bob', 'Xavier')]['points'] + values[('Alice', 'Yvonne')]['points']
+    assert chosen_total - alternative_total == 9  # Existing utility, never match points or win estimates.

@@ -1,5 +1,44 @@
 # Match Night Engine (M3): review, Captain Decision Review and risk register status
 
+## GPT verification of Claude F1/F2/F3 — 2026-10-20
+
+Source checkpoint 9fbabc4. Review only; no production correction or ranking/utility change.
+
+**F1:** Claude's RQ13 executes successfully and demonstrates overlap between designated hold players
+and response players. This proves the data overlap, not that every captain interprets the label as a
+prohibition. The proposed conditional-matchup wording is a presentation candidate, not an engine policy.
+
+**F2: rendered conflict verified.** A new sanitized browser fixture uses our Ann/Bea and opposing Cam/Eve,
+all SL4. Ann is 5-0 vs Cam and 2-0 vs Eve; Bea is 0-3 vs both. No broader career form is supplied.
+At both 390 and 1280 pixels, after explicitly selecting the teams and Cam's put-up chip, Next Send's
+visible plan answer is Ann (Strong), while that same player's evidence row says **consider saving**
+as our only favorable direct option vs Eve (2-0 in 2 meetings). No page errors/global overflow.
+This verifies the conflicting instructions in the actual rendered DOM, not a physical-device test or
+visual screenshot review. The initial browser setup left both team selectors empty and timed out before
+any recommendation; corrected explicit selection reaches the intended case. No setup timeout is a pass.
+The fixture differs from Claude's prose example but proves the same decision-context failure with
+complete recorded inputs. Suppression versus contextual integration remains a proposed presentation
+choice; do not silently remove raw evidence or assert an unmeasured win benefit.
+
+**F3: finding valid, original fixture and smallest-fix proposal need correction.** Executing RQ14's
+confidence inputs gives Alice **Strong (6)** vs Xavier (5-2 in seven meetings), Bob **Solid (3)**
+(4-2 in six), not equal Solid answers as its comment claims. The current test passes without checking
+that premise. A new exact tie uses 4-2 in six meetings for both vs Xavier: both Solid (3), Alice 0-3
+vs Yvonne (Caution -3), Bob 6-1 vs Yvonne (Strong 6). The plan answers Alice to Xavier and emits no
+cost-later explanation. Sending Alice then Bob totals 9 existing utility; reversing them totals 0.
+Those totals are not match points, expected wins or probabilities.
+
+In this true-tie roster order, `naive` is already Alice, equal to the chosen plan answer. Therefore
+changing only `>` to `>=` still fails the separate `naive != i` guard. A correction candidate must
+inspect equal-or-better *alternative* answers and their continuation cost, rather than only the single
+roster-first naive answer. This can improve explanations without changing which answer is selected;
+no implementation or policy authorization is inferred from the audit suggestion.
+
+Validation: Claude's RQ13/RQ14 characterization cases passed (2 in0.16s); the new F2 browser and corrected
+F3 characterization cases passed together (2 in3.72s,14 unchanged design cases deselected). These pass
+counts establish reproduced behavior, not acceptance or improved match outcomes. Existing suites were
+not rerun. M313 remains open separately; M312 remains closed.
+
 ## M313 — hold-back explanation can protect an opponent excluded by the known cap
 
 GPT source-executed review, 2026-10-20, checkpoint a33d951. **Open recommendation-context finding.**
