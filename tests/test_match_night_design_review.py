@@ -155,8 +155,8 @@ def m313_budget_excluded_hold_case():
                   ['Solid', 'Strong', 'Thin']])
 
 
-def test_m313_hold_reason_can_name_budget_excluded_opponent():
-    """Characterize the open finding, not acceptance of the hold recommendation."""
+def test_m313_hold_reason_excludes_budget_excluded_opponent():
+    """Hold instructions use the same feasible opponents as the response search."""
     from analytics.match_night_engine import match_plan, plan_text
     ours, theirs, values = m313_budget_excluded_hold_case()
     plan = match_plan(ours, theirs, values, games_left=2, cap=8, opp_cap=8)
@@ -165,13 +165,14 @@ def test_m313_hold_reason_can_name_budget_excluded_opponent():
     for field in ('plan_if_we_lead', 'plan_if_they_lead', 'best_board', 'safest_board'):
         assert all(p['their'] != 'X' for p in plan[field])
     assert plan['lead']['our'] == 'B'
-    assert plan['holds'] == [{'our': 'C', 'why': 'our only Solid answer to X — Solid evidence',
-                              'covers': ['X']}]
-    assert 'our only Solid answer to X' in plan_text(plan)['holds']
+    assert plan['holds'] == [{'our': 'C', 'why': 'the plan is weaker without them', 'covers': []}]
+    assert 'answer to X' not in plan_text(plan)['holds']
+    unrestricted = match_plan(ours, theirs, values, games_left=2, cap=8)
+    assert any('X' in h['covers'] for h in unrestricted['holds'])
 
 
-def test_m313_phone_engine_repeats_budget_excluded_hold_reason(tmp_path):
-    """The same open decision-context error exists in the actual browser engine."""
+def test_m313_phone_engine_excludes_budget_excluded_hold_reason(tmp_path):
+    """Actual browser engine mirrors the corrected feasible hold coverage."""
     from playwright.sync_api import sync_playwright
     from analytics.match_night_engine import match_plan
     from tests.test_excel_war_room_formulas import _payload
@@ -193,7 +194,8 @@ def test_m313_phone_engine_repeats_budget_excluded_hold_reason(tmp_path):
                 actual = page.evaluate('a => window.__ucMatchPlan(...a)',
                                        [ours, theirs, js_values, 2, 8, 0, 8, 0])
                 assert actual == expected
-                assert actual['holds'][0]['covers'] == ['X']
+                assert actual['holds'][0]['covers'] == []
+                assert 'answer to X' not in actual['holds'][0]['why']
                 assert errors == []
                 page.close()
         finally:

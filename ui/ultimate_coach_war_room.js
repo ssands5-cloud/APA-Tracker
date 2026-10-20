@@ -704,23 +704,23 @@
     var planLead=night.principalLine(om,tm,true),planThem=night.principalLine(om,tm,false);
     function covers(i){
       var good={Strong:1,Solid:1},mine=[];
-      for(var j=0;j<theirs.length;j++){
+      for(var tj=0;tj<LT.length;tj++){var j=LT[tj];
         if(!good[conf(i,j).level]) continue;
-        var other=false;for(var k=0;k<ours.length;k++) if(k!==i&&good[conf(k,j).level]&&conf(k,j).points>=conf(i,j).points) other=true;
+        var other=false;for(var ok=0;ok<LO.length;ok++){var k=LO[ok];if(k!==i&&good[conf(k,j).level]&&conf(k,j).points>=conf(i,j).points) other=true;}
         if(!other) mine.push(j);
       }
       return mine.sort(function(a,b){return (conf(i,b).points-conf(i,a).points)||(a-b);});
     }
     var holds=[];
     drops.slice().sort(function(a,b){return (b[0]-a[0])||(a[1]-b[1]);}).forEach(function(d){
-      var drop=d[0],i=d[1];if(drop<=0) return;
+      var drop=d[0],i=d[1];if(drop<=0||LO.indexOf(i)<0) return;
       var cov=covers(i),why;
       if(cov.length){var j=cov[0];why="our only "+conf(i,j).level+" answer to "+name("their",j)+" — "+conf(i,j).why;}
       else{
-        var margin=function(x){var others=[];for(var k=0;k<ours.length;k++) if(k!==i&&(om>>k&1)) others.push(conf(k,x).points);
+        var margin=function(x){var others=[];for(var ok=0;ok<LO.length;ok++){var k=LO[ok];if(k!==i) others.push(conf(k,x).points);}
           return conf(i,x).points-(others.length?Math.max.apply(null,others):conf(i,x).points);};
-        var bj=0;for(var jj=1;jj<theirs.length;jj++) if(margin(jj)>margin(bj)) bj=jj;
-        if(margin(bj)>0){var nxt=null;for(var k2=0;k2<ours.length;k2++){if(k2===i) continue;var c2=conf(k2,bj);if(nxt===null||c2.points>nxt.points) nxt=c2;}
+        var bj=LT[0];for(var tj=1;tj<LT.length;tj++){var jj=LT[tj];if(margin(jj)>margin(bj)) bj=jj;}
+        if(margin(bj)>0){var nxt=null;for(var ok2=0;ok2<LO.length;ok2++){var k2=LO[ok2];if(k2===i) continue;var c2=conf(k2,bj);if(nxt===null||c2.points>nxt.points) nxt=c2;}
           why="our best answer to "+name("their",bj)+" ("+conf(i,bj).level+"); without them the next best is "+nxt.level;}
         else why="the plan is weaker without them";}
       holds.push({our:name("our",i),why:why,covers:cov.map(function(j){return name("their",j);})});

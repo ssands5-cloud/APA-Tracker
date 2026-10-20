@@ -323,17 +323,19 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         drops.append((base - sub_val, i))
     plan_lead = night.principal_line(om, tm, True)
     plan_them = night.principal_line(om, tm, False)
+    feasible_ours = night.legal_ours(om)
+    feasible_theirs = night.legal_theirs(om, tm)
     def covers(i: int) -> list[int]:
-        """Opponents this player is our only Strong/Solid answer to, strongest first."""
+        """Feasible opposing put-ups this player uniquely covers, strongest first."""
         good = ("Strong", "Solid")
-        mine = [j for j in range(len(theirs)) if conf(i, j)["level"] in good
+        mine = [j for j in feasible_theirs if conf(i, j)["level"] in good
                 and not any(conf(k, j)["level"] in good and conf(k, j)["points"] >= conf(i, j)["points"]
-                            for k in range(len(ours)) if k != i)]
+                            for k in feasible_ours if k != i)]
         return sorted(mine, key=lambda j: (-conf(i, j)["points"], j))
 
     holds = []
     for drop, i in sorted(drops, key=lambda d: (-d[0], d[1])):
-        if drop <= 0:
+        if drop <= 0 or i not in feasible_ours:
             continue
         cov = covers(i)
         if cov:
@@ -342,11 +344,11 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
         else:
             # Where does this player matter most? The opponent where they beat our next-best option by most.
             def margin(x):
-                others = [conf(k, x)["points"] for k in range(len(ours)) if k != i and om >> k & 1]
+                others = [conf(k, x)["points"] for k in feasible_ours if k != i]
                 return conf(i, x)["points"] - (max(others) if others else conf(i, x)["points"])
-            j = max(range(len(theirs)), key=lambda x: (margin(x), -x))
+            j = max(feasible_theirs, key=lambda x: (margin(x), -x))
             if margin(j) > 0:
-                nxt = max((conf(k, j) for k in range(len(ours)) if k != i), key=lambda c: c["points"])
+                nxt = max((conf(k, j) for k in feasible_ours if k != i), key=lambda c: c["points"])
                 why = (f"our best answer to {name('their', j)} ({conf(i, j)['level']}); "
                        f"without them the next best is {nxt['level']}")
             else:

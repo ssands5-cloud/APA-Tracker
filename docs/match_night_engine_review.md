@@ -1,5 +1,16 @@
 # Match Night Engine (M3): review, Captain Decision Review and risk register status
 
+## Implementation progress — GPT self-audited, 2026-10-20
+
+Paul authorized GPT to implement and self-audit while Claude is unavailable. M313 is corrected:
+hold coverage and fallback reasons now inspect feasible opposing put-ups and feasible own senders.
+The solver, utility and decision ordering are unchanged. The M313 synthetic case retains lead B,
+its plans/boards, and a neutral dependency reason for C; it no longer protects C against excluded X.
+With the opposing constraint removed, X remains valid coverage. Both regression cases failed before
+the correction; five focused cases passed in7.06s, including the existing Python/browser equivalence
+case and M312. No real-data/native output acceptance is inferred. F1/F2/F3 remain pending at this checkpoint.
+The earlier open finding and review-only statements below record the preceding audit state.
+
 ## GPT verification of Claude F1/F2/F3 — 2026-10-20
 
 Source checkpoint 9fbabc4. Review only; no production correction or ranking/utility change.
