@@ -1,5 +1,19 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Recommendation guidance and deployment gate (2026-10-20, GPT self-audited)
+
+M313/F1/F2/F3 are technically corrected without changing chosen players or planning weights:
+feasible hold targets, conditional designated-answer instructions, future opportunities spent
+by the plan answer, and explanations for rejected equal-strength options. Validation boundaries,
+native synthetic checks, replay counts and remaining layout failures are in the ONE report.
+The historical replay now uses the production confidence function and accepts EIGHT/NINE;
+the small identity-reviewed capture is insufficient to validate the full evidence scale.
+
+Vercel preview is prepared as seven synthetic-only encrypted static files. The verified team
+denied project creation with403, so no deployment exists. Repository source, databases and real
+APA data are not in the prepared upload. Account/project access is required to proceed.
+No installation, merge, real-data publication or production release occurred.
+
 ## Exact captured identity correction (2026-10-18)
 
 Candidate refresh reconciliation now supplements the current-roster resolver with the captured

@@ -1,5 +1,21 @@
 # Match Night Engine (M3): review, Captain Decision Review and risk register status
 
+**Current GPT self-audit checkpoint, 2026-10-20:** M313/F1/F2/F3 are technically corrected.
+Combined validation ran631passes/4failures; all four then passed in a9-case focused correction run
+(three expected strings updated; stronger-immediate alternatives retain explanation priority).
+No single green combined635 claimed. Native synthetic F1/F2/F3 have zero errors across six
+captain sheets each, and Packet first pages were visually reviewed. Full physical/live acceptance
+and the three encrypted-package first-screen layout tests remain open. See the ONE report for
+exact execution boundaries and Vercel's project-creation403 blocker.
+
+The corrected read-only historical replay now calls the production rule on canonical formats,
+using only strictly earlier Denver dates and exact exclusions. Eleven synthetic guards pass.
+The retained private snapshot supplies1650directed observations after excluding20rows from the
+two unresolved scoresheets. No Strong and only one Solid observation are available; this cannot
+establish full-scale/utility validity or improved winning effectiveness. Earlier observed results
+proxy historical overall/shared records, never current career snapshots. No new probability,
+prediction, fitting or planning weight is introduced. Counts and hashes are retained privately.
+
 ## Implementation progress — GPT self-audited, 2026-10-20
 
 F3 is corrected: rejected equal-or-stronger legal alternatives are compared with the selected

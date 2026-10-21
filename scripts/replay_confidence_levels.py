@@ -1,139 +1,116 @@
-"""Check a rule-based captain confidence framework against history (read-only replay).
+"""Read-only chronological review of the production captain evidence levels.
 
-Each candidate pairing (our player p vs their player o) gets a confidence level from plain,
-stated rules over six inputs: direct record, meeting count, recency, skill-level change,
-overall record and shared-opponent evidence. No probability, no fitted weights, no model.
-
-The replay only asks whether the levels mean what they say: does a "Strong" send win its next
-game more often than a "Solid" one, "Solid" more than "Thin", and is "Conflicted" really mixed?
-Every game is judged from games on strictly earlier dates. Internal review output only.
-
-Usage: python scripts/replay_confidence_levels.py <staging.db> <out.json>
+Uses only results on strictly earlier America/Denver dates; never current career
+snapshots (which would leak later results). Observed-history overall/shared records
+are partial-capture proxies, not complete lifetime records. Counts describe played
+pairings, not alternative-send wins, probabilities, or proof of better captain choices.
+Usage: python scripts/replay_confidence_levels.py source.db review.json
+       [--exclude-match-ids-file private-external-match-ids.json]
 """
+from __future__ import annotations
+
+import argparse
+from collections import defaultdict
+from datetime import datetime
+import hashlib
 import json
-import pathlib
+from pathlib import Path
 import sqlite3
 import sys
-from collections import defaultdict
-from datetime import date as Date
+from zoneinfo import ZoneInfo
 
-FORMATS = {"8-Ball Open": "EIGHT", "9-Ball Open": "NINE"}
-FORM_MIN_GAMES = 20       # an overall record needs this many games to count
-SHRINK = 5                # overall form pulled toward .500 by 5 wins and 5 losses
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from analytics.ultimate_coach_confidence import pair_confidence, sl_changed_since_last_meeting
 
-
-def form(rec):
-    w, g = rec
-    return (w + SHRINK) / (g + 2 * SHRINK)
+FORMATS = {"EIGHT": "EIGHT", "NINE": "NINE", "8-Ball Open": "EIGHT", "9-Ball Open": "NINE"}
 
 
-def level(direct, same_sl, age_days, own, opp, shared):
-    """The framework. Returns (level, reasons). Direction = is p a good send against o?
-
-    direct: (wins, meetings) for p vs o; own/opp: overall (wins, games);
-    shared: (our rate vs shared opponents - their rate vs the same opponents, number shared) or None.
-    """
-    w, g = direct
-    reasons = []
-    known_form = own[1] >= FORM_MIN_GAMES and opp[1] >= FORM_MIN_GAMES
-    gap = form(own) - form(opp) if known_form else 0.0
-    form_for, form_against = known_form and gap >= 0.05, known_form and gap <= -0.05
-    strong_form = known_form and gap >= 0.15
-
-    if g:
-        rate = w / g
-        fav, unf = w > g - w, w < g - w
-        deep = g >= 5
-        mid = 3 <= g <= 4
-        if fav and form_against or unf and form_for:
-            return "Conflicted", ["direct record and overall form point opposite ways"]
-        if unf:
-            return "Caution", ["losing direct record"]
-        if not fav:
-            base = "Thin"
-            reasons.append("even direct record")
-        elif deep and rate >= 0.7 or g >= 3 and form_for:
-            base = "Strong"
-        elif mid or deep or form_for:
-            base = "Solid"
-        else:
-            base = "Thin"
-            reasons.append(f"only {g} meeting{'s' if g > 1 else ''}")
-        if not same_sl and base in ("Strong", "Solid"):
-            base = {"Strong": "Solid", "Solid": "Thin"}[base]
-            reasons.append("skill levels changed since they last met")
-        if age_days > 3 * 365 and base == "Strong":
-            base = "Solid"
-            reasons.append("last meeting over 3 years ago")
-        return base, reasons
-    # no direct history: overall form, then shared opponents
-    if strong_form:
-        return "Strong", ["much stronger overall record; no direct history"]
-    if form_for:
-        return "Solid", ["stronger overall record; no direct history"]
-    if form_against:
-        return "Caution", ["weaker overall record; no direct history"]
-    if shared and shared[0] >= 0.10:
-        if shared[1] >= 3:
-            return "Solid", [f"shared-opponent results favor us across {shared[1]} common opponents"]
-        return "Thin", ["shared-opponent results favor us, but through only 1-2 common opponents"]
-    if shared and shared[0] <= -0.10:
-        return "Caution", ["shared-opponent results favor them"]
-    return "Unknown", ["no direct history and no clear overall or shared-opponent edge"]
+def local_day(value):
+    dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return (dt.astimezone(ZoneInfo("America/Denver")) if dt.tzinfo else dt).date().isoformat()
 
 
-def main(db, out):
-    con = sqlite3.connect(pathlib.Path(db).resolve().as_uri() + "?mode=ro", uri=True)
-    rows = con.execute(
-        """select h.player_id, h.opponent_id, h.result, h.own_skill_level, h.opponent_skill_level,
-                  h.format, m.match_date
-           from player_head_to_head h join matches m on m.id = h.match_id
-           where h.result in ('W','L') and h.format in ('8-Ball Open','9-Ball Open')""").fetchall()
+def main(db, out, *, exclude_match_external_ids=()):
+    path = Path(db).resolve()
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    excluded = {str(x) for x in exclude_match_external_ids}
+    with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as con:
+        rows = con.execute("""SELECT h.player_id,h.opponent_id,h.result,h.own_skill_level,
+            h.opponent_skill_level,h.format,m.match_date,h.match_id,m.external_id
+            FROM player_head_to_head h JOIN matches m ON m.id=h.match_id WHERE h.result IN ('W','L')""").fetchall()
+    matched = {str(r[8]) for r in rows if str(r[8]) in excluded}
+    if matched != excluded:
+        raise ValueError("Exact excluded match ID not found in result observations")
     games = defaultdict(list)
-    for p, o, res, slp, slo, fmt, d in rows:
-        games[(FORMATS[fmt], d[:10])].append((p, o, res == "W", slp, slo))
-
+    seen = set()
+    excluded_rows = unsupported = 0
+    for p, o, result, slp, slo, fmt, day, mid, external in rows:
+        if str(external) in excluded:
+            excluded_rows += 1
+            continue
+        if fmt not in FORMATS:
+            unsupported += 1
+            continue
+        fmt = FORMATS[fmt]
+        key = (fmt, mid, p, o)
+        if key in seen or p == o:
+            raise ValueError("Duplicate or self-pair result observation; review source before replay")
+        seen.add(key)
+        games[(fmt, local_day(day))].append((p, o, result == "W", slp, slo))
+    if not seen:
+        raise ValueError("No supported observations remain; no historical validation performed")
     tally = defaultdict(lambda: [0, 0])
-    shared_tally = defaultdict(lambda: [0, 0])
-    pairs = defaultdict(dict)      # (fmt, p) -> {o: [w, g, last_date, slp, slo]}
+    pairs = defaultdict(dict)
     overall = defaultdict(lambda: [0, 0])
-    for (fmt, d) in sorted(games):
-        day = games[(fmt, d)]
-        today = Date.fromisoformat(d)
-        for p, o, won, slp, slo in day:
+    for (fmt, day), observations in sorted(games.items()):
+        for p, o, won, slp, slo in observations:
             mine, theirs = pairs[(fmt, p)], pairs[(fmt, o)]
             rec = mine.get(o)
             shared = None
             if rec is None:
-                # shared-opponent evidence, as the coach computes it: our record vs common opponents
-                # against their record vs the same opponents (bounded to keep the replay fast)
-                small, big = (mine, theirs) if len(mine) <= len(theirs) else (theirs, mine)
-                common = [x for x in small if x in big and x not in (p, o)][:200]
+                common = mine.keys() & theirs.keys() - {p, o}
                 if common:
-                    ow = sum(mine[x][0] for x in common); og = sum(mine[x][1] for x in common)
-                    tw = sum(theirs[x][0] for x in common); tg = sum(theirs[x][1] for x in common)
-                    shared = (ow / og - tw / tg, len(common))
-                    sb = ("ours better" if shared[0] >= 0.10 else "theirs better" if shared[0] <= -0.10 else "level") + \
-                         (" 1-2 shared" if len(common) < 3 else " 3+ shared")
-                    shared_tally[(fmt, sb)][0] += won
-                    shared_tally[(fmt, sb)][1] += 1
-            direct = (rec[0], rec[1]) if rec else (0, 0)
-            same_sl = bool(rec) and (rec[3], rec[4]) == (slp, slo)
-            age = (today - Date.fromisoformat(rec[2])).days if rec else 0
-            lv, _ = level(direct, same_sl, age, overall[(fmt, p)], overall[(fmt, o)], shared)
-            tally[(fmt, lv)][0] += won
-            tally[(fmt, lv)][1] += 1
-        for p, o, won, slp, slo in day:
-            r = pairs[(fmt, p)].setdefault(o, [0, 0, d, slp, slo])
-            r[0] += int(won); r[1] += 1; r[2] = d; r[3] = slp; r[4] = slo
+                    shared = (sum(mine[x][0] for x in common), sum(mine[x][1] for x in common),
+                              sum(theirs[x][0] for x in common), sum(theirs[x][1] for x in common), len(common))
+            changed = sl_changed_since_last_meeting(
+                [{"sort": rec[2], "own_sl": rec[3], "opp_sl": rec[4]}] if rec else [], slp, slo)
+            level = pair_confidence((rec[0], rec[1]) if rec else None,
+                                    own_overall=tuple(overall[(fmt, p)]), opp_overall=tuple(overall[(fmt, o)]),
+                                    shared=shared, sl_changed=changed)["level"]
+            tally[(fmt, level)][0] += int(won)
+            tally[(fmt, level)][1] += 1
+        # Every observation on this local date is evaluated before any is added to history.
+        for p, o, won, slp, slo in observations:
+            rec = pairs[(fmt, p)].setdefault(o, [0, 0, day, slp, slo])
+            rec[0] += int(won); rec[1] += 1; rec[2:] = [day, slp, slo]
             overall[(fmt, p)][0] += int(won); overall[(fmt, p)][1] += 1
-
-    def dump(t):
-        return {f"{k[0]} {k[1]}": {"n": n, "won_next": round(w / n, 4)} for k, (w, n) in sorted(t.items())}
-    result = {"levels": dump(tally), "shared_opponent_no_direct": dump(shared_tally)}
-    pathlib.Path(out).write_text(json.dumps(result, indent=1))
-    print(json.dumps(result, indent=1))
+    if hashlib.sha256(path.read_bytes()).hexdigest() != before:
+        raise RuntimeError("Source database changed during read-only replay")
+    result = {
+        "production_rule": "analytics.ultimate_coach_confidence.pair_confidence",
+        "source_sha256": before,
+        "rule_sha256": hashlib.sha256(Path(sys.modules[pair_confidence.__module__].__file__).read_bytes()).hexdigest(),
+        "excluded_matches": len(matched), "excluded_observations": excluded_rows,
+        "unsupported_format_observations": unsupported,
+        "observations": sum(n for _, n in tally.values()),
+        "levels": {fmt + " " + lv: {"n": n, "observed_wins": w, "observed_losses": n-w}
+                   for (fmt, lv), (w, n) in sorted(tally.items())},
+        "limits": ["Incomplete captured history; earlier observed results proxy overall records",
+                   "No declaration-order or unplayed-alternative outcomes",
+                   "No estimated win probabilities or captain-selection effectiveness claim"],
+    }
+    Path(out).write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(json.dumps(result, indent=2))
+    return result
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("database")
+    parser.add_argument("output")
+    parser.add_argument("--exclude-match-ids-file", type=Path)
+    args = parser.parse_args()
+    ids = json.loads(args.exclude_match_ids_file.read_text(encoding="utf-8")) if args.exclude_match_ids_file else []
+    if not isinstance(ids, list) or any(type(x) not in (int, str) for x in ids):
+        parser.error("Excluded match IDs must be a JSON list of exact external IDs")
+    main(args.database, args.output, exclude_match_external_ids=ids)

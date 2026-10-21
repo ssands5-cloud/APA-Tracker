@@ -307,7 +307,7 @@ def match_plan(ours: list[dict[str, Any]], theirs: list[dict[str, Any]],
                 continue
             loss = v - (night.pair(k, j) + night.solve(om & ~(1 << k), tm & ~(1 << j), True))
             if loss > 0:
-                alternatives.append((loss, night.pair(k, j), -k, k))
+                alternatives.append((night.pair(k, j), loss, -k, k))
         cost = ""
         if alternatives:
             k = max(alternatives)[3]

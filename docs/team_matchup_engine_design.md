@@ -1,5 +1,14 @@
 # Team matchup engine: "Best Scenario Match Night" (design proposal)
 
+**2026-10-20 current-state note:** the design-only status below records the earlier review.
+M3 has since been implemented, and Paul authorized GPT as builder/self-auditor while Claude is
+unavailable. Current implementation, M313/F1/F2/F3 corrections and validation limits are in
+`docs/match_night_engine_review.md` and the ONE report. Lead, responses, designated/protected
+matchups, concessions, best/safest boards and briefing already exist; this document is not a
+request to create another engine. No superior win effectiveness is established by the retained
+partial historical snapshot. Review the exact current constraints before treating a board as
+a complete tournament-rule or match-result guarantee.
+
 **Current GPT review status, 2026-10-18: NOT implementation-ready.** The original proposal below is
 preserved for discussion. The executed review at the end identifies unresolved objective/utility rules,
 unenforceable static boards, missing declaration-order evidence, and a board-count correction. Its phrase

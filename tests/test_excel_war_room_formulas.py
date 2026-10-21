@@ -559,7 +559,7 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert _next_send(book)[0]==lines[0]
     assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
+        f"≈ Not ordered (shared-opponent results only): {ANN_N} · Sending now spends our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
         f"⚠ Avoid records — recorded losses, not exclusions: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
@@ -1174,7 +1174,7 @@ def test_captain_packet_answers_the_lead_before_anything_else_on_the_page(built,
     label = _row(built, CP, "IF WE PUT UP FIRST")
     sends = _row(built, CP, "Recorded options preview — direct order: win percentage, then meetings; not confidence")
     assert label < sends, "the lead answer must print above the per-opponent sends"
-    for row in ("IF THEY PUT UP", "HOLD BACK", "IF WE MUST CONCEDE", "TONIGHT'S PLAN"):
+    for row in ("IF THEY PUT UP", "DESIGNATED\nANSWERS", "IF WE MUST CONCEDE", "TONIGHT'S PLAN"):
         assert label < _row(built, CP, row) < sends, row
 
     text = str(book.display(CP, f"C{label}"))

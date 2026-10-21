@@ -689,7 +689,7 @@
       var L=night.legalOurs(om),alternative=null,largestLoss=0;
       for(var a=0;a<L.length;a++){var k=L[a];if(k===i||night.pair(k,j)<night.pair(i,j)) continue;
         var loss=v-(night.pair(k,j)+night.solve(om&~(1<<k),tm&~(1<<j),true));
-        if(loss>largestLoss||(loss>0&&loss===largestLoss&&night.pair(k,j)>night.pair(alternative,j))){alternative=k;largestLoss=loss;}}
+        if(loss>0&&(alternative===null||night.pair(k,j)>night.pair(alternative,j)||(night.pair(k,j)===night.pair(alternative,j)&&loss>largestLoss))){alternative=k;largestLoss=loss;}}
       var cost="";
       if(alternative!==null){
         var k=alternative,comparison=conf(k,j).level===conf(i,j).level?"an equally supported option here":night.pair(k,j)>night.pair(i,j)?"a stronger recorded option here":"another option here";
