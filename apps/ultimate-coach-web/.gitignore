@@ -1,0 +1,8 @@
+node_modules/
+.pnpm-store/
+.next/
+.vercel/
+.env*
+!.env.example
+*.tsbuildinfo
+test-results/

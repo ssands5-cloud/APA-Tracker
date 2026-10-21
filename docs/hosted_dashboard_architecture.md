@@ -1,5 +1,14 @@
 # Ultimate Coach production web architecture and implementation plan
 
+**Phase 1 synthetic pilot approved and implemented, 2026-10-20.** Paul's later instruction
+supersedes the implementation pause below: the dedicated Next.js/TypeScript application is
+`apps/ultimate-coach-web`, using invented data and authored example responses only. Its six
+sections are Home, Match Night, Recommendations, Threats, Team Status and Summary. It has no
+APA/database/refresh integration. Authentication, assigned-team access and admin implementation
+are deferred to Phase 2; therefore only synthetic data may be published. The production design
+below remains the gate before any real team information is connected. Local build/typecheck,
+3 data/boundary tests and 37 Chromium browser checks passed; deployment is a separate live gate.
+
 2026-10-20. GPT self-audited design, source checkpoint 8b483823.
 Status: architecture only. No frontend, backend, database or deployment is released by this document.
 Paul confirmed Vercel access and directed a dedicated web frontend; do not deploy the repository root.
