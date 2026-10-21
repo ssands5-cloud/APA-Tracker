@@ -96,3 +96,7 @@ desktop.ini
 # Machine-local Ultimate Coach overrides (a real viewer identity). This repo is
 # public; never commit a person's APA identity.
 apa_config.local.yaml
+
+# Explicit public dashboard projection; all other source databases/data stay ignored.
+!apps/ultimate-coach-web/data/
+!apps/ultimate-coach-web/data/snapshot.json

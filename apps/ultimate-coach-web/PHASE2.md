@@ -1,8 +1,10 @@
 # Phase 2: authentication, team access and administration
 
-Design only. Phase 1 is deployed at https://apa-tracker.vercel.app with synthetic data.
-No real APA data may be added until the read-access gates below pass. Existing Vercel
-protection of alternate deployment URLs is separate from application authentication.
+Design only. Phase 1 began with invented data; Paul's later historical-demo instruction
+authorizes the specifically minimized public historical fixture projection described in README.md.
+The site is labeled REALISTIC DEMO USING HISTORICAL DATA. It is not a private current-team service.
+Unrestricted/live production data and private observations still require the read-access gates
+below. Existing Vercel protection of alternate URLs is separate from application authentication.
 
 ## 1. Authentication
 
@@ -34,7 +36,7 @@ Check organization/team/fixture authorization on every read and write, including
 routes, server-rendered responses and direct URLs. Do not put protected snapshots in public/,
 static browser bundles or statically generated pages. Missing or invalid membership fails closed.
 Avoid shared response caching for private data; prevent one team's cache entries serving another.
-Old public synthetic deployment URLs stay synthetic. Never turn one into a private-data URL
+Old public deployment URLs remain public historical/demo projections only. Never turn one into a private-data URL
 without verifying every alias, preview and environment access boundary.
 
 ## 3. Read-only real-data gate

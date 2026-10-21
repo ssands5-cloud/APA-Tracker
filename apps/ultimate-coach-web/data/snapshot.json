@@ -1,0 +1,1410 @@
+{
+  "schema": "ultimate-coach-dashboard-snapshot-v1",
+  "mode": "historical-simulation",
+  "label": "REALISTIC DEMO USING HISTORICAL DATA",
+  "provenance": {
+    "capturedAt": "2026-10-15 03:37 UTC",
+    "latestResult": "Fri Oct 9, 2026",
+    "fixtureWhen": "Sun Oct 18, 2026 · 11:00 AM MDT",
+    "notice": "Historical export replay, not a current APA feed. Availability and cap are simulation assumptions; no results are predicted."
+  },
+  "fixture": {
+    "team": "Brunch Ballers · Fall 2026 · 8-Ball",
+    "opponent": "Inglorious Poolsters · Fall 2026 · 8-Ball",
+    "format": "8-ball",
+    "when": "League-night simulation",
+    "venue": "Historical fixture replay",
+    "scope": "8 vs 8 captured players",
+    "source": "Reviewed historical HTML export"
+  },
+  "simulation": {
+    "cap": 23,
+    "games": 5,
+    "availability": "All captured roster players assumed available; none marked played.",
+    "capNote": "Simulated reference cap for both teams; not a tournament legality check."
+  },
+  "players": [
+    {
+      "id": "our-1",
+      "name": "JD Boye",
+      "skill": 6,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-2",
+      "name": "Butch Miller",
+      "skill": 4,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-3",
+      "name": "Jeremy Pratt",
+      "skill": 4,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-4",
+      "name": "John Yara",
+      "skill": 4,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-5",
+      "name": "Paul Smith",
+      "skill": 4,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-6",
+      "name": "Rashael Richardson",
+      "skill": 3,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-7",
+      "name": "Shawna Larsen",
+      "skill": 3,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "our-8",
+      "name": "Karsten Banz",
+      "skill": 2,
+      "availability": "Assumed available (simulation)"
+    }
+  ],
+  "opponents": [
+    {
+      "id": "their-1",
+      "name": "Michael Otero",
+      "skill": 6,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-2",
+      "name": "Garrett Petrie",
+      "skill": 5,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-3",
+      "name": "Eric Johnson",
+      "skill": 4,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-4",
+      "name": "Mel Castillo",
+      "skill": 3,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-5",
+      "name": "Timothy Doherty",
+      "skill": 3,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-6",
+      "name": "Kelli Likens",
+      "skill": 2,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-7",
+      "name": "Owen Olson",
+      "skill": 2,
+      "availability": "Assumed available (simulation)"
+    },
+    {
+      "id": "their-8",
+      "name": "Thomas Yorker",
+      "skill": 2,
+      "availability": "Assumed available (simulation)"
+    }
+  ],
+  "evidence": {
+    "their-1": {
+      "our-2": {
+        "wins": 0,
+        "losses": 1,
+        "hasDirect": true,
+        "note": "0-1 direct record (1 meeting) — concerning · small sample · Latest dated meeting: Sun Aug 9, 2026",
+        "level": "Caution",
+        "confidenceWhy": "0-1 in 1 meeting direct",
+        "category": "R",
+        "sharedCount": 4
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 4-4 vs theirs 4-6 across 7 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Strong",
+        "confidenceWhy": "no direct history; much stronger overall 474-319 vs 19-29",
+        "category": "I",
+        "sharedCount": 7
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-5 vs theirs 2-5 across 5 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "no direct history; stronger overall 141-148 vs 19-29",
+        "category": "I",
+        "sharedCount": 5
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-3 vs theirs 0-6 across 4 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "no direct history; stronger overall 107-111 vs 19-29",
+        "category": "I",
+        "sharedCount": 4
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-2 vs theirs 3-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "no direct history; stronger overall 136-146 vs 19-29",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-4 vs theirs 1-3 across 3 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "3 shared opponents: ours 3-4, theirs 1-3",
+        "category": "I",
+        "sharedCount": 3
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-2": {
+      "our-5": {
+        "wins": 1,
+        "losses": 0,
+        "hasDirect": true,
+        "note": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL 4; roster capture SL 5 · Latest dated meeting: Sun Sep 28, 2025",
+        "level": "Thin",
+        "confidenceWhy": "only 1-0 in 1 meeting",
+        "category": "G",
+        "sharedCount": 22
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 2,
+        "hasDirect": true,
+        "note": "0-2 direct record (2 meetings) — concerning · small sample · Meeting opponent SL 3, 4; roster capture SL 5 · Latest dated meeting: Sun Mar 1, 2026",
+        "level": "Caution",
+        "confidenceWhy": "0-2 in 2 meetings direct",
+        "category": "R",
+        "sharedCount": 25
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 1,
+        "hasDirect": true,
+        "note": "0-1 direct record (1 meeting) — concerning · small sample · Meeting opponent SL 4; roster capture SL 5 · Latest dated meeting: Sun Mar 15, 2026",
+        "level": "Caution",
+        "confidenceWhy": "0-1 in 1 meeting direct",
+        "category": "R",
+        "sharedCount": 18
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 15-8 vs theirs 13-22 across 17 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "no direct history; stronger overall 474-319 vs 111-117",
+        "category": "I",
+        "sharedCount": 17
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 4-3 vs theirs 6-6 across 7 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 7
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 6-12 vs theirs 13-17 across 15 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "15 shared opponents: ours 6-12, theirs 13-17",
+        "category": "I",
+        "sharedCount": 15
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-6 vs theirs 9-9 across 8 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "8 shared opponents: ours 2-6, theirs 9-9",
+        "category": "I",
+        "sharedCount": 8
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 0-1 vs theirs 2-2 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "1 shared opponent: ours 0-1, theirs 2-2",
+        "category": "I",
+        "sharedCount": 1
+      }
+    },
+    "their-3": {
+      "our-3": {
+        "wins": 2,
+        "losses": 0,
+        "hasDirect": true,
+        "note": "2-0 direct record (2 meetings) — favorable · small sample · Latest dated meeting: Fri Jun 20, 2025",
+        "level": "Conflicted",
+        "confidenceWhy": "2-0 in 2 meetings, but a weaker overall 141-148 vs 131-108",
+        "category": "G",
+        "sharedCount": 9
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 6-2 vs theirs 6-7 across 8 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "no direct history; stronger overall 474-319 vs 131-108",
+        "category": "I",
+        "sharedCount": 8
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-3 vs theirs 2-5 across 5 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "no direct history; weaker overall 457-542 vs 131-108",
+        "category": "I",
+        "sharedCount": 5
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-2 vs theirs 3-3 across 4 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "no direct history; weaker overall 107-111 vs 131-108",
+        "category": "I",
+        "sharedCount": 4
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 5-9 vs theirs 6-5 across 9 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "no direct history; weaker overall 136-146 vs 131-108",
+        "category": "I",
+        "sharedCount": 9
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 12-8 vs theirs 7-4 across 10 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "no direct history; weaker overall 172-249 vs 131-108",
+        "category": "I",
+        "sharedCount": 10
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 4-3 vs theirs 5-5 across 6 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "no direct history; weaker overall 16-21 vs 131-108",
+        "category": "I",
+        "sharedCount": 6
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-4": {
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-1 vs theirs 2-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "2 shared opponents: ours 3-1, theirs 2-0",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "2 shared opponents: ours 3-1, theirs 1-1",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-4 vs theirs 2-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "2 shared opponents: ours 1-4, theirs 2-0",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-5": {
+      "our-3": {
+        "wins": 0,
+        "losses": 1,
+        "hasDirect": true,
+        "note": "0-1 direct record (1 meeting) — concerning · small sample · Meeting opponent SL 2; roster capture SL 3 · Latest dated meeting: Sun Aug 9, 2026",
+        "level": "Caution",
+        "confidenceWhy": "0-1 in 1 meeting direct",
+        "category": "R",
+        "sharedCount": 2
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-3 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "2 shared opponents: ours 2-3, theirs 0-2",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 8-1 vs theirs 3-2 across 5 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "5 shared opponents: ours 8-1, theirs 3-2",
+        "category": "I",
+        "sharedCount": 5
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 7-5 vs theirs 2-2 across 4 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 4
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-4 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "2 shared opponents: ours 2-4, theirs 1-1",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-6": {
+      "our-7": {
+        "wins": 1,
+        "losses": 0,
+        "hasDirect": true,
+        "note": "1-0 direct record (1 meeting) — favorable · small sample · Latest dated meeting: Sun Aug 9, 2026",
+        "level": "Thin",
+        "confidenceWhy": "only 1-0 in 1 meeting",
+        "category": "G",
+        "sharedCount": 1
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "1 shared opponent: ours 1-1, theirs 0-1",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-1 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "2 shared opponents: ours 3-1, theirs 0-2",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 6-2 vs theirs 0-4 across 4 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Solid",
+        "confidenceWhy": "4 shared opponents: ours 6-2, theirs 0-4",
+        "category": "I",
+        "sharedCount": 4
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-7": {
+      "our-4": {
+        "wins": 1,
+        "losses": 0,
+        "hasDirect": true,
+        "note": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL 4; roster capture SL 2 · Latest dated meeting: Sun Aug 9, 2026",
+        "level": "Thin",
+        "confidenceWhy": "only 1-0 in 1 meeting",
+        "category": "G",
+        "sharedCount": 2
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "1 shared opponent: ours 1-0, theirs 0-1",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "2 shared opponents: ours 3-1, theirs 1-1",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-1 vs theirs 1-0 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Caution",
+        "confidenceWhy": "1 shared opponent: ours 3-1, theirs 1-0",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-7": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-0 vs theirs 1-0 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    },
+    "their-8": {
+      "our-7": {
+        "wins": 1,
+        "losses": 0,
+        "hasDirect": true,
+        "note": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL not captured · Latest dated meeting: Sun Aug 9, 2026",
+        "level": "Thin",
+        "confidenceWhy": "only 1-0 in 1 meeting",
+        "category": "G",
+        "sharedCount": 2
+      },
+      "our-3": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 3-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "1 shared opponent: ours 3-0, theirs 0-1",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-5": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "I",
+        "sharedCount": 1
+      },
+      "our-6": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "shared-opponent results only: ours 2-2 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+        "level": "Thin",
+        "confidenceWhy": "2 shared opponents: ours 2-2, theirs 0-2",
+        "category": "I",
+        "sharedCount": 2
+      },
+      "our-1": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-2": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-4": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      },
+      "our-8": {
+        "wins": 0,
+        "losses": 0,
+        "hasDirect": false,
+        "note": "no recorded evidence",
+        "level": "Unknown",
+        "confidenceWhy": "no direct history and no clear overall or shared-opponent edge",
+        "category": "X",
+        "sharedCount": 0
+      }
+    }
+  },
+  "responses": {
+    "their-1": {
+      "player": "JD Boye",
+      "why": "Strong — no direct history; much stronger overall 474-319 vs 19-29",
+      "level": "Strong",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "JD Boye",
+          "reason": "shared-opponent results only: ours 4-4 vs theirs 4-6 across 7 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "shared-opponent results only: ours 3-5 vs theirs 2-5 across 5 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Eric Johnson (2-0 in 2 meetings, small sample)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "John Yara",
+          "reason": "shared-opponent results only: ours 1-3 vs theirs 0-6 across 4 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Owen Olson (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 1-2 vs theirs 3-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 3-4 vs theirs 1-3 across 3 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Butch Miller",
+          "reason": "0-1 direct record (1 meeting) — concerning · small sample · Latest dated meeting: Sun Aug 9, 2026",
+          "save": "",
+          "group": "avoid",
+          "order": null
+        }
+      ]
+    },
+    "their-2": {
+      "player": "JD Boye",
+      "why": "Solid — no direct history; stronger overall 474-319 vs 111-117",
+      "level": "Solid",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "Paul Smith",
+          "reason": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL 4; roster capture SL 5 · Latest dated meeting: Sun Sep 28, 2025",
+          "save": "",
+          "group": "ranked",
+          "order": 1
+        },
+        {
+          "name": "JD Boye",
+          "reason": "shared-opponent results only: ours 15-8 vs theirs 13-22 across 17 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Butch Miller",
+          "reason": "shared-opponent results only: ours 4-3 vs theirs 6-6 across 7 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "John Yara",
+          "reason": "shared-opponent results only: ours 6-12 vs theirs 13-17 across 15 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Owen Olson (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Shawna Larsen",
+          "reason": "shared-opponent results only: ours 2-6 vs theirs 9-9 across 8 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting), Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Karsten Banz",
+          "reason": "shared-opponent results only: ours 0-1 vs theirs 2-2 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "0-2 direct record (2 meetings) — concerning · small sample · Meeting opponent SL 3, 4; roster capture SL 5 · Latest dated meeting: Sun Mar 1, 2026",
+          "save": "",
+          "group": "avoid",
+          "order": null
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "0-1 direct record (1 meeting) — concerning · small sample · Meeting opponent SL 4; roster capture SL 5 · Latest dated meeting: Sun Mar 15, 2026",
+          "save": "",
+          "group": "avoid",
+          "order": null
+        }
+      ]
+    },
+    "their-3": {
+      "player": "JD Boye",
+      "why": "Solid — no direct history; stronger overall 474-319 vs 131-108",
+      "level": "Solid",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "Jeremy Pratt",
+          "reason": "2-0 direct record (2 meetings) — favorable · small sample · Latest dated meeting: Fri Jun 20, 2025",
+          "save": "",
+          "group": "ranked",
+          "order": 1
+        },
+        {
+          "name": "JD Boye",
+          "reason": "shared-opponent results only: ours 6-2 vs theirs 6-7 across 8 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Butch Miller",
+          "reason": "shared-opponent results only: ours 2-3 vs theirs 2-5 across 5 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "John Yara",
+          "reason": "shared-opponent results only: ours 2-2 vs theirs 3-3 across 4 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Owen Olson (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 5-9 vs theirs 6-5 across 9 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 12-8 vs theirs 7-4 across 10 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Shawna Larsen",
+          "reason": "shared-opponent results only: ours 4-3 vs theirs 5-5 across 6 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting), Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        }
+      ]
+    },
+    "their-4": {
+      "player": "Rashael Richardson",
+      "why": "Thin — 2 shared opponents: ours 3-1, theirs 1-1",
+      "level": "Thin",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 3-1 vs theirs 2-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 3-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Shawna Larsen",
+          "reason": "shared-opponent results only: ours 1-4 vs theirs 2-0 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting), Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        }
+      ]
+    },
+    "their-5": {
+      "player": "Paul Smith",
+      "why": "Solid — 5 shared opponents: ours 8-1, theirs 3-2",
+      "level": "Solid",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "Butch Miller",
+          "reason": "shared-opponent results only: ours 2-3 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "John Yara",
+          "reason": "shared-opponent results only: ours 1-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Owen Olson (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 8-1 vs theirs 3-2 across 5 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "Sending now spends our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 7-5 vs theirs 2-2 across 4 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Shawna Larsen",
+          "reason": "shared-opponent results only: ours 2-4 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting), Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "0-1 direct record (1 meeting) — concerning · small sample · Meeting opponent SL 2; roster capture SL 3 · Latest dated meeting: Sun Aug 9, 2026",
+          "save": "",
+          "group": "avoid",
+          "order": null
+        }
+      ]
+    },
+    "their-6": {
+      "player": "Rashael Richardson",
+      "why": "Solid — 4 shared opponents: ours 6-2, theirs 0-4",
+      "level": "Solid",
+      "cost": "No extra continuation-cost warning from this plan. This is not a guarantee of no future cost.",
+      "candidates": [
+        {
+          "name": "Shawna Larsen",
+          "reason": "1-0 direct record (1 meeting) — favorable · small sample · Latest dated meeting: Sun Aug 9, 2026",
+          "save": "consider saving — our only favorable direct option vs Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "ranked",
+          "order": 1
+        },
+        {
+          "name": "JD Boye",
+          "reason": "shared-opponent results only: ours 1-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Butch Miller",
+          "reason": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Eric Johnson (2-0 in 2 meetings, small sample)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "John Yara",
+          "reason": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Owen Olson (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 3-1 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 6-2 vs theirs 0-4 across 4 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        }
+      ]
+    },
+    "their-7": {
+      "player": "Jeremy Pratt",
+      "why": "Thin — 1 shared opponent: ours 1-0, theirs 0-1",
+      "level": "Thin",
+      "cost": "John Yara is an equally supported option here (Thin), but sending them now leaves a weaker remaining plan; keep John Yara available for Garrett Petrie (Caution)",
+      "candidates": [
+        {
+          "name": "John Yara",
+          "reason": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL 4; roster capture SL 2 · Latest dated meeting: Sun Aug 9, 2026",
+          "save": "",
+          "group": "ranked",
+          "order": 1
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "shared-opponent results only: ours 1-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "Sending now spends our only favorable direct option vs Eric Johnson (2-0 in 2 meetings, small sample)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 3-1 vs theirs 1-1 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 3-1 vs theirs 1-0 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Shawna Larsen",
+          "reason": "shared-opponent results only: ours 2-0 vs theirs 1-0 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting), Thomas Yorker (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        }
+      ]
+    },
+    "their-8": {
+      "player": "Shawna Larsen",
+      "why": "Thin — only 1-0 in 1 meeting",
+      "level": "Thin",
+      "cost": "Jeremy Pratt is an equally supported option here (Thin), but sending them now leaves a weaker remaining plan; keep Jeremy Pratt available",
+      "candidates": [
+        {
+          "name": "Shawna Larsen",
+          "reason": "1-0 direct record (1 meeting) — favorable · small sample · Meeting opponent SL not captured · Latest dated meeting: Sun Aug 9, 2026",
+          "save": "Sending now spends our only favorable direct option vs Kelli Likens (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "ranked",
+          "order": 1
+        },
+        {
+          "name": "Jeremy Pratt",
+          "reason": "shared-opponent results only: ours 3-0 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Eric Johnson (2-0 in 2 meetings, small sample)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Paul Smith",
+          "reason": "shared-opponent results only: ours 0-1 vs theirs 0-1 across 1 shared opponent (no verified direct meetings in this snapshot)",
+          "save": "consider saving — our only favorable direct option vs Garrett Petrie (1-0 in 1 meeting, small sample · Only 1 meeting)",
+          "group": "unordered",
+          "order": null
+        },
+        {
+          "name": "Rashael Richardson",
+          "reason": "shared-opponent results only: ours 2-2 vs theirs 0-2 across 2 shared opponents (no verified direct meetings in this snapshot)",
+          "save": "",
+          "group": "unordered",
+          "order": null
+        }
+      ]
+    }
+  },
+  "threats": [
+    {
+      "name": "Garrett Petrie",
+      "text": "Garrett Petrie · SL 5 · 3-1 vs our roster still in play (4 meetings, 3 of 8 remaining players) · no direct record vs 5 remaining players",
+      "wins": 3,
+      "meetings": 4,
+      "playersMet": 3
+    },
+    {
+      "name": "Michael Otero",
+      "text": "Michael Otero · SL 6 · 1-0 vs our roster still in play (1 meeting, 1 of 8 remaining players) · no direct record vs 7 remaining players · small sample",
+      "wins": 1,
+      "meetings": 1,
+      "playersMet": 1
+    },
+    {
+      "name": "Timothy Doherty",
+      "text": "Timothy Doherty · SL 3 · 1-0 vs our roster still in play (1 meeting, 1 of 8 remaining players) · no direct record vs 7 remaining players · small sample",
+      "wins": 1,
+      "meetings": 1,
+      "playersMet": 1
+    }
+  ],
+  "plan": {
+    "lead": {
+      "player": "JD Boye",
+      "level": "Thin",
+      "why": "Lead JD Boye: keeps Paul Smith for their best answers; their most damaging reply is Kelli Likens (Thin for us)",
+      "alternatives": []
+    },
+    "holds": [
+      {
+        "our": "Jeremy Pratt",
+        "why": "the plan is weaker without them",
+        "covers": []
+      },
+      {
+        "our": "John Yara",
+        "why": "the plan is weaker without them",
+        "covers": []
+      },
+      {
+        "our": "Paul Smith",
+        "why": "our only Solid answer to Timothy Doherty — 5 shared opponents: ours 8-1, theirs 3-2",
+        "covers": [
+          "Timothy Doherty"
+        ]
+      }
+    ],
+    "protect": [
+      {
+        "our": "Paul Smith",
+        "why": "our only Solid answer to Timothy Doherty — 5 shared opponents: ours 8-1, theirs 3-2",
+        "covers": [
+          "Timothy Doherty"
+        ]
+      }
+    ],
+    "sacrifices": [
+      {
+        "our": "Butch Miller",
+        "their": "Michael Otero",
+        "level": "Caution",
+        "why": "lowest-cost concession — Caution — 0-1 in 1 meeting direct"
+      },
+      {
+        "our": "John Yara",
+        "their": "Eric Johnson",
+        "level": "Caution",
+        "why": "lowest-cost concession — Caution — no direct history; weaker overall 107-111 vs 131-108"
+      }
+    ],
+    "responses": "Michael Otero → JD Boye (Strong)\nGarrett Petrie → JD Boye (Solid)\nEric Johnson → JD Boye (Solid)\nMel Castillo → Rashael Richardson (Thin)\nTimothy Doherty → Paul Smith (Solid)\nKelli Likens → Rashael Richardson (Solid)\nOwen Olson → Jeremy Pratt (Thin) · John Yara is an equally supported option here (Thin), but sending them now leaves a weaker remaining plan; keep John Yara available for Garrett Petrie (Caution)\nThomas Yorker → Shawna Larsen (Thin) · Jeremy Pratt is an equally supported option here (Thin), but sending them now leaves a weaker remaining plan; keep Jeremy Pratt available",
+    "summary": "5 games · Plan: 3 Thin · 2 Caution · Fragility: High — leans most on JD Boye · thin: JD Boye vs Kelli Likens (Thin), Jeremy Pratt vs Owen Olson (Thin), Rashael Richardson vs Thomas Yorker (Thin) · Cap 23: 7 to spare after the cheapest remaining lineup · their replies limited to lineups they can field under the same cap. Levels describe recorded evidence, not odds; the plan assumes their captain makes the choice that hurts us most.",
+    "ifWeLead": [
+      {
+        "game": 1,
+        "leader": "us",
+        "our": "JD Boye",
+        "their": "Kelli Likens",
+        "level": "Thin"
+      },
+      {
+        "game": 2,
+        "leader": "them",
+        "our": "Jeremy Pratt",
+        "their": "Owen Olson",
+        "level": "Thin"
+      },
+      {
+        "game": 3,
+        "leader": "us",
+        "our": "John Yara",
+        "their": "Eric Johnson",
+        "level": "Caution"
+      },
+      {
+        "game": 4,
+        "leader": "them",
+        "our": "Rashael Richardson",
+        "their": "Thomas Yorker",
+        "level": "Thin"
+      },
+      {
+        "game": 5,
+        "leader": "us",
+        "our": "Butch Miller",
+        "their": "Michael Otero",
+        "level": "Caution"
+      }
+    ],
+    "ifTheyLead": [
+      {
+        "game": 1,
+        "leader": "them",
+        "our": "Rashael Richardson",
+        "their": "Mel Castillo",
+        "level": "Thin"
+      },
+      {
+        "game": 2,
+        "leader": "us",
+        "our": "John Yara",
+        "their": "Garrett Petrie",
+        "level": "Caution"
+      },
+      {
+        "game": 3,
+        "leader": "them",
+        "our": "Paul Smith",
+        "their": "Kelli Likens",
+        "level": "Thin"
+      },
+      {
+        "game": 4,
+        "leader": "us",
+        "our": "Karsten Banz",
+        "their": "Michael Otero",
+        "level": "Unknown"
+      },
+      {
+        "game": 5,
+        "leader": "them",
+        "our": "Butch Miller",
+        "their": "Timothy Doherty",
+        "level": "Thin"
+      }
+    ],
+    "bestBoard": [
+      {
+        "our": "JD Boye",
+        "their": "Michael Otero",
+        "level": "Strong"
+      },
+      {
+        "our": "Paul Smith",
+        "their": "Timothy Doherty",
+        "level": "Solid"
+      },
+      {
+        "our": "Rashael Richardson",
+        "their": "Kelli Likens",
+        "level": "Solid"
+      },
+      {
+        "our": "Jeremy Pratt",
+        "their": "Owen Olson",
+        "level": "Thin"
+      },
+      {
+        "our": "Shawna Larsen",
+        "their": "Thomas Yorker",
+        "level": "Thin"
+      }
+    ],
+    "safestBoard": [
+      {
+        "our": "JD Boye",
+        "their": "Michael Otero",
+        "level": "Strong"
+      },
+      {
+        "our": "Paul Smith",
+        "their": "Timothy Doherty",
+        "level": "Solid"
+      },
+      {
+        "our": "Rashael Richardson",
+        "their": "Kelli Likens",
+        "level": "Solid"
+      },
+      {
+        "our": "Jeremy Pratt",
+        "their": "Owen Olson",
+        "level": "Thin"
+      },
+      {
+        "our": "Shawna Larsen",
+        "their": "Thomas Yorker",
+        "level": "Thin"
+      }
+    ],
+    "cap": {
+      "cap": 23,
+      "used": 0,
+      "cheapest_rest": 16,
+      "slack": 7,
+      "incomplete": false
+    },
+    "fragility": {
+      "rating": "High",
+      "player": "JD Boye",
+      "thinPairings": [
+        "JD Boye vs Kelli Likens (Thin)",
+        "Jeremy Pratt vs Owen Olson (Thin)",
+        "Rashael Richardson vs Thomas Yorker (Thin)"
+      ]
+    },
+    "strongest": {
+      "our": "JD Boye",
+      "their": "Kelli Likens",
+      "level": "Thin",
+      "why": "1 shared opponent: ours 1-1, theirs 0-1"
+    },
+    "weakest": {
+      "our": "John Yara",
+      "their": "Eric Johnson",
+      "level": "Caution",
+      "why": "no direct history; weaker overall 107-111 vs 131-108"
+    }
+  },
+  "totals": {
+    "meetings": 11,
+    "directPairs": 9,
+    "possiblePairs": 64,
+    "favorablePairs": 5,
+    "concerningPairs": 4
+  }
+}
