@@ -2,6 +2,12 @@
 
 ## Protected historical dashboard in progress (GPT self-audited)
 
+Safe source0c52fc9 is live at https://apa-tracker.vercel.app, deployment
+ dpl_FXtgWxBpcbYR7fpu951FRc5YgUJd READY. Hosted WebKit50 access-isolation checks pass.
+Public pages are synthetic; historical routes redirect to the locked sign-in setup page.
+The approved viewer's production allowlist is configured privately for the next deployment.
+Clerk keys/invitation and snapshot-key environment setup plus real-login verification remain open.
+
 Public visitors must receive invented demo data only. Candidate code now checks managed Clerk
 sessions plus an explicit verified-email allowlist before loading an encrypted historical
 snapshot. Missing provider setup denies historical access. Real Clerk setup, approved and

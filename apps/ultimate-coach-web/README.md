@@ -2,6 +2,14 @@
 
 Public demo: https://apa-tracker.vercel.app
 
+Safe production source: `0c52fc9090c936f4c10dfddcd867a6479cea46ad`.
+Deployment: `dpl_FXtgWxBpcbYR7fpu951FRc5YgUJd` (READY). Public synthetic pages and
+locked historical routes were verified in hosted WebKit at phone/tablet widths: 50 checks pass.
+Local Chromium50/WebKit50, ten Node checks, seventeen Python checks and production build pass.
+These are GPT self-audited checks of denied access with Clerk unconfigured, not a real-login pass.
+The approved viewer's production allowlist is stored privately; environment changes need redeploy.
+Clerk invitation/keys and private snapshot-key setup remain required before historical access.
+
 Public routes use entirely invented teams and records. The read-only historical dashboard is
 under `/dashboard`; all six sections require server authorization before snapshot access.
 Clerk setup and real login verification are still required. Do not call protected historical
