@@ -1,6 +1,6 @@
 """Export one historical league-night simulation from an existing HTML export, never a DB.
 
-Only the allowlisted display snapshot is publishable. Original payload/identity keys remain local.
+Plaintext remains in ignored tmp/. Encrypt the minimized snapshot before any Git/deployment step.
 """
 from __future__ import annotations
 
@@ -165,6 +165,10 @@ def build_snapshot(payload, pick, *, built_at, latest_result, cap=23):
 
 def write_snapshot(document, out: Path):
     check_no_links(out, ROOT, 'dashboard snapshot')
+    # Plaintext snapshots contain identifiable records and must never become web source.
+    private_root = (ROOT / 'tmp').resolve()
+    if not out.resolve().is_relative_to(private_root):
+        raise ValueError('Plaintext historical snapshots must remain under ignored tmp/')
     out.parent.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(document, ensure_ascii=False, indent=2, allow_nan=False)+'\n').encode('utf-8')
     # Explicit projection above is the boundary; these reject accidental future whole-payload copying.
@@ -185,7 +189,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--html', type=Path, required=True)
     parser.add_argument('--expected-sha256', required=True)
-    parser.add_argument('--out',type=Path,default=ROOT/'apps/ultimate-coach-web/data/snapshot.json')
+    parser.add_argument('--out',type=Path,default=ROOT/'tmp/uat/protected-historical/snapshot.json')
     parser.add_argument('--cap',type=int,default=23)
     args=parser.parse_args(argv)
     check_no_links(args.html,ROOT,'historical export')

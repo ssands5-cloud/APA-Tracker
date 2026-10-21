@@ -1,4 +1,4 @@
-"""Public display projection and offline historical-export boundaries; synthetic fixtures only."""
+"""Private display projection and offline historical-export boundaries; synthetic fixtures only."""
 import hashlib
 import json
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from scripts.build_historical_dashboard_snapshot import build_snapshot, historical_payload, write_snapshot
+from scripts.protect_dashboard_snapshot import encrypt_snapshot, ROOT, FORMAT
 from tests.test_excel_war_room_formulas import _payload
 from ui.match_night import select_fixture, slim_payload
 from ui.ultimate_coach import render
@@ -74,6 +75,36 @@ def test_forbidden_field_does_not_replace_last_good_snapshot(tmp_path,key):
 def test_output_outside_repository_refused_without_writes():
     with pytest.raises(RuntimeError,match='not inside'):
         write_snapshot({},Path('C:/outside-apa-snapshot.json'))
+
+
+@pytest.mark.parametrize('relative', ['apps/ultimate-coach-web/data/leak.json', 'apps/ultimate-coach-web/public/leak.json', 'docs/leak.json'])
+def test_plaintext_web_and_tracked_output_refused(relative):
+    out = ROOT / relative
+    assert not out.exists()
+    with pytest.raises(ValueError, match='ignored tmp'):
+        write_snapshot({}, out)
+    assert not out.exists()
+
+
+def test_encrypted_projection_round_trip_and_wrong_key_refusal(tmp_path):
+    import os
+    import base64
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.exceptions import InvalidTag
+    payload, pick = fixture()
+    document = build_snapshot(payload, pick, built_at=BUILT, latest_result='Historical', cap=23)
+    source = tmp_path / 'private-snapshot.json'
+    write_snapshot(document, source)
+    key = os.urandom(32)
+    frame = encrypt_snapshot(source, key)
+    assert set(frame) == {'format', 'iv', 'ciphertext'}
+    assert frame['format'] == FORMAT
+    iv, ciphertext = base64.b64decode(frame['iv']), base64.b64decode(frame['ciphertext'])
+    assert json.loads(AESGCM(key).decrypt(iv, ciphertext, FORMAT.encode())) == document
+    with pytest.raises(InvalidTag):
+        AESGCM(os.urandom(32)).decrypt(iv, ciphertext, FORMAT.encode())
+    with pytest.raises(ValueError, match='32-byte'):
+        encrypt_snapshot(source, b'')
 
 
 @pytest.mark.parametrize('cap',[0,-1,None,23.5])

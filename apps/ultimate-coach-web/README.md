@@ -1,61 +1,67 @@
-# Ultimate Coach web · historical league-night simulation
+# Ultimate Coach web
 
-Live: https://apa-tracker.vercel.app
+Public demo: https://apa-tracker.vercel.app
 
-**REALISTIC DEMO USING HISTORICAL DATA** — Brunch Ballers vs Inglorious Poolsters,
-8-Ball, eight captured players on each side. Recommendations are produced by the existing
-Python evidence/M3 engine, not authored placeholders or a new frontend scoring model.
+Public routes use entirely invented teams and records. The read-only historical dashboard is
+under `/dashboard`; all six sections require server authorization before snapshot access.
+Clerk setup and real login verification are still required. Do not call protected historical
+access live or accepted until the configured-provider checks below pass.
 
-## What is real and what is simulated
+## Access boundary
 
-- Real: captured roster names, captured skill levels, verified direct results, shared-opponent
-  aggregates and overall-record context from an existing reviewed historical HTML export.
-- Historical source: exported October 15, 2026; latest recorded result October 9; selected
-  scheduled fixture October 18. This is a replay, not an assertion of a current/upcoming schedule.
-- Simulated: all captured players available, none played, five games remaining, reference cap23
-  applied to both teams. No winner, score, winning percentage or observed opponent order is invented.
-- Conditional: lead, responses, holds/protection, concessions and boards from the existing engine.
-  A hypothetical board is not a required lineup or a tournament legality check.
+- Clerk verifies sign-in. The server freshly checks the provider session and user account.
+- Only an active, non-revoked session belonging to a non-banned/non-locked account with an
+  explicitly allowlisted verified email may read this pilot snapshot.
+- `UC_AUTHORIZED_EMAILS` is a server-only list, initially one owner-approved viewer.
+- The pilot grants one fixed historical snapshot scope, not arbitrary teams or path-selected files.
+- Missing configuration, missing membership, provider failure and invalid ciphertext deny access.
+- Unknown accounts go to Access Denied; anonymous requests go to sign-in.
+- Private pages are dynamic and use private/no-store headers. No private JSON/download endpoint exists.
+- Public pages and static browser JS contain no real historical identities or records.
+- Only AES-256-GCM ciphertext is committed. Its key is server-only, separate from Git and artifacts.
+- No APA credentials, cookies, production DB, refresh runner or private notes are deployed.
 
-The six routes show Home, Match Night, Recommendations, Threats, Team Status and Summary.
-Every page discloses the historical mode and dates. No editing or write API exists.
+An authorized response necessarily sends the authorized display data to that viewer's browser.
+It is not embedded in publicly downloadable JavaScript bundles or public pre-rendered pages.
 
-## Data boundary
+## Provider setup (required before historical release)
 
-Only `data/snapshot.json`, the deliberately public allowlisted display projection, is committed.
-The operator's original HTML, full payload, APA identifiers/card numbers, notes, database,
-credentials, cookies and raw capture files remain private. Both GitHub and this dashboard are
-public; publishing names and aggregate records is deliberate under Paul's historical-demo request.
-This is not authorization to publish an unrestricted production dataset or private coach notes.
+Connect Clerk to the existing Vercel apa-tracker project. Select invitation-only registration;
+invite only the approved viewer. Store `CLERK_SECRET_KEY` and
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` through Vercel settings, never chat/Git.
+Set server-only `UC_AUTHORIZED_EMAILS` and `UC_SNAPSHOT_KEY` for the intended environment.
+Do not share production keys with previews by default. `.env.example` lists names only.
 
-Next.js imports the local JSON at build time. It never opens a DB or calls APA. The Python
-exporter runs only on the operator machine, outside the Vercel app root. It verifies the exact
-source HTML hash, reads its embedded export, selects the historically configured viewer's fixture,
-uses existing evidence/M3 functions, and atomically writes only the display snapshot.
+Before release verify: anonymous denial, unapproved verified account denial, approved verified
+account access to all six sections, sign-out, revoked session denial, direct RSC requests,
+private/no-store headers and absence of private data in public assets. Also test actual iPad use.
+Synthetic policy tests and missing-provider denial are not substitutes for these provider checks.
+
+## Local snapshot workflow
 
 ```text
-reviewed historical HTML export (private)
- -> local scripts/build_historical_dashboard_snapshot.py
- -> apps/ultimate-coach-web/data/snapshot.json
- -> tests + Next.js build
- -> commit/push app and snapshot
- -> Git preview / reviewed production deployment
+reviewed historical HTML export (private, exact hash)
+ -> scripts/build_historical_dashboard_snapshot.py
+ -> ignored tmp/uat/protected-historical/snapshot.json (plaintext, private)
+ -> scripts/protect_dashboard_snapshot.py (UC_SNAPSHOT_KEY supplied privately)
+ -> apps/ultimate-coach-web/private-snapshots/historical.enc.json (ciphertext)
+ -> validate public isolation and protected access
+ -> commit/push reviewed app and ciphertext only
+ -> Vercel build using private environment configuration
 ```
 
-Local export from the repository root (replace placeholders with reviewed private inputs):
+The exporter refuses plaintext outputs outside ignored tmp/. The encryption helper uses an
+existing 32-byte random key provided privately as base64 in `UC_SNAPSHOT_KEY`; it never publishes
+or prints the key. Keep the key in the deployment environment and private operator storage.
+No automatic refresh or production database integration is connected.
 
-```sh
-python scripts/build_historical_dashboard_snapshot.py --html <historical-export.html> --expected-sha256 <reviewed-html-sha256> --cap 23
-```
+Historical recommendations reuse the existing Python evidence/M3 engine. They are captured
+results under simulated availability/cap assumptions, not a current live APA feed. Dates and
+assumptions appear after authorization; there are no editing or write APIs.
 
-This does not run a refresh or publish anything itself. The earlier proposed automatic
-refresh-to-snapshot-to-production pipeline is not connected by this historical-demo task.
-A branch push can produce a Git preview; production promotion/branch policy must be verified,
-not inferred from a successful push. Do not merge branches or overwrite production data blindly.
+## Validation
 
-## Build and validation
-
-From this app directory, using Node24 and pnpm11.25.0:
+Node24 / pnpm11.25.0:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -65,22 +71,19 @@ pnpm run build
 pnpm start
 ```
 
-Python exporter tests: `python -B -m pytest tests/test_historical_dashboard_snapshot.py` from
-repo root. Browser checks: `tests/browser_smoke.py` using an existing Python Playwright setup;
-`UC_WEB_BASE_URL` selects local/hosted URL and `UC_WEB_BROWSER=webkit` selects WebKit.
-Evidence belongs in private tmp/, never the repository's public data directory.
+Python exporter/protection tests: `tests/test_historical_dashboard_snapshot.py` with a new
+`--basetemp` under ignored tmp/. Local negative browser checks: `tests/private_access.py`.
+`UC_WEB_BASE_URL` and `UC_WEB_BROWSER=chromium|webkit` select the test target. These checks
+explicitly describe missing-provider behavior; they do not claim a real authenticated login.
+Keep raw results and screenshots private.
 
-Verified: thirteen exporter tests, five snapshot/frontend checks, production build/typecheck,
-and79 Chromium +79 touch-enabled WebKit local browser checks. Physical iPad use is not claimed.
+Vercel root stays `apps/ultimate-coach-web`, framework Next.js, Node24, locked pnpm install.
+Never deploy the repository root, environment files, plaintext snapshots or private tmp/.
 
-## Vercel
+## Previous exposure
 
-Existing project: apa-tracker. Root Directory: apps/ultimate-coach-web. Framework: Next.js.
-Node24; locked pnpm install/build, Next.js output defaults. No source access outside the app root,
-no Python runtime, environment secrets or database. Explicit file deployment must include only
-reviewed app source/config/lockfile and data/snapshot.json, never repo root or private outputs.
+A plaintext historical snapshot was previously pushed in commit83faa58. Deleting the current
+file and encrypting later copies does not remove that public Git history. No history rewrite
+was performed. See ../../docs/hosted_dashboard_exposure.md for the documented boundary.
 
-Navigation uses ordinary page links after WebKit exposed unnecessary RSC prefetch errors in
-Phase1. Opponent selection is local React view state; no participation or availability is saved.
-
-Phase2 auth/team/admin security plan: [PHASE2.md](PHASE2.md).
+Administration and team-access design: [PHASE2.md](PHASE2.md).

@@ -7,4 +7,5 @@ node_modules/
 *.tsbuildinfo
 test-results/
 data/*
-!data/snapshot.json
+private-snapshots/*
+!private-snapshots/historical.enc.json

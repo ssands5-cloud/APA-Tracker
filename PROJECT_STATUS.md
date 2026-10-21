@@ -1,5 +1,15 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Protected historical dashboard in progress (GPT self-audited)
+
+Public visitors must receive invented demo data only. Candidate code now checks managed Clerk
+sessions plus an explicit verified-email allowlist before loading an encrypted historical
+snapshot. Missing provider setup denies historical access. Real Clerk setup, approved and
+unapproved sign-in, revocation, and protected hosted verification remain release gates.
+No production DB, APA credentials or refresh infrastructure is connected. Earlier plaintext
+snapshot exposure remains in public Git history; no rewrite was performed or authorized.
+Details: docs/hosted_dashboard_exposure.md and apps/ultimate-coach-web/README.md.
+
 ## Synthetic Next.js dashboard live (2026-10-20, GPT self-audited)
 
 https://apa-tracker.vercel.app serves the six-section read-only synthetic demo, built from

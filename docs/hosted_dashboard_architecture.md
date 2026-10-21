@@ -1,5 +1,11 @@
 # Ultimate Coach production web architecture and implementation plan
 
+**Current security direction:** public routes are synthetic only. A fixed historical pilot uses
+Clerk server authorization and server-only encrypted snapshot loading under `/dashboard`.
+Provider setup and actual login verification remain gates. All earlier statements that permit
+public historical names/records are superseded. See apps/ultimate-coach-web/README.md and
+docs/hosted_dashboard_exposure.md. No production DB or refresh service is connected.
+
 **Phase 1 synthetic pilot approved and implemented, 2026-10-20.** Paul's later instruction
 supersedes the implementation pause below: the dedicated Next.js/TypeScript application is
 `apps/ultimate-coach-web`, using invented data and authored example responses only. Its six

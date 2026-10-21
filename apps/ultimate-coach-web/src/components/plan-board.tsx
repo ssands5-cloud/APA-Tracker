@@ -1,4 +1,4 @@
-import type { Pairing } from '@/lib/snapshot';
+import type { Pairing } from '@/lib/snapshot-types';
 
 export function PlanBoard({ rows, caption }: { rows: Pairing[]; caption: string }) {
   return <div className="table-scroll" role="region" aria-label={caption} tabIndex={0}><table><caption>{caption}</caption><thead><tr>

@@ -1,5 +1,3 @@
-import raw from '../../data/snapshot.json';
-
 export type Player = { id: string; name: string; skill: number | null; availability: string };
 export type Evidence = { wins: number; losses: number; hasDirect: boolean; note: string; level: string; confidenceWhy: string; category: string; sharedCount: number };
 export type Pairing = { our: string; their: string; level: string; game?: number; leader?: string };
@@ -22,12 +20,5 @@ export type Snapshot = {
   totals: { meetings: number; directPairs: number; possiblePairs: number; favorablePairs: number; concerningPairs: number };
 };
 
-// Fail the build on a wrong contract instead of silently falling back to invented players.
-if (raw.schema !== 'ultimate-coach-dashboard-snapshot-v1' || raw.mode !== 'historical-simulation'
-    || raw.label !== 'REALISTIC DEMO USING HISTORICAL DATA' || !raw.players.length || !raw.opponents.length) {
-  throw new Error('Dashboard snapshot contract is invalid');
-}
-export const snapshot = raw as Snapshot;
-export const { players, opponents, fixture, evidence, responses } = snapshot;
 export function record(row?: Evidence): string { return row?.hasDirect ? `${row.wins}–${row.losses}` : 'No direct record'; }
 export function meetings(row?: Evidence): number { return row?.hasDirect ? row.wins + row.losses : 0; }

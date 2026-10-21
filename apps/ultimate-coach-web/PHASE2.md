@@ -1,15 +1,14 @@
 # Phase 2: authentication, team access and administration
 
-Design only. Phase 1 began with invented data; Paul's later historical-demo instruction
-authorizes the specifically minimized public historical fixture projection described in README.md.
-The site is labeled REALISTIC DEMO USING HISTORICAL DATA. It is not a private current-team service.
-Unrestricted/live production data and private observations still require the read-access gates
-below. Existing Vercel protection of alternate URLs is separate from application authentication.
+Current authority: public visitors see invented demo data only. Historical snapshots require
+managed sign-in and explicit server authorization. Earlier public historical-demo assumptions
+are superseded. Clerk integration and a fixed-scope pilot allowlist are implemented in candidate
+source; provider provisioning and real authenticated end-to-end verification remain release gates.
+Team administration and editing below remain design only, not implemented.
 
 ## 1. Authentication
 
-Propose invite-only managed email sign-in using a supported Next.js identity SDK, such as
-Clerk. Select/configure the provider and confirm cost before provisioning. Do not build custom
+Use invite-only Clerk sign-in. Configure the real provider and invitation before protected release. Do not build custom
 password hashing, token signing or email-login infrastructure. Disable automatic access from
 public registration; a verified identity alone does not grant access to team information.
 
@@ -36,14 +35,14 @@ Check organization/team/fixture authorization on every read and write, including
 routes, server-rendered responses and direct URLs. Do not put protected snapshots in public/,
 static browser bundles or statically generated pages. Missing or invalid membership fails closed.
 Avoid shared response caching for private data; prevent one team's cache entries serving another.
-Old public deployment URLs remain public historical/demo projections only. Never turn one into a private-data URL
+Old synthetic deployment URLs remain public demo pages. The earlier plaintext Git snapshot remains
+a documented exposure, not a private source. Never turn a public URL into a private-data URL
 without verifying every alias, preview and environment access boundary.
 
 ## 3. Read-only real-data gate
 
 Reuse the existing Python engine and completed-run validations to produce a minimized immutable
-fixture snapshot; do not port ranking logic into the web app. Real-data integration is a separate
-authorized task. Before release prove authentication/authorization, selected-fixture identity,
+fixture snapshot; do not port ranking logic into the web app. The fixed historical pilot is authorized; broader/live integration remains separate. Before release prove authentication/authorization, selected-fixture identity,
 scope and source hashes, missing-data disclosures, no public asset leaks, no credential logging,
 and rollback. The retained two unresolved refresh identities must remain protected; do not guess.
 No production DB or APA session is deployed to Vercel.
