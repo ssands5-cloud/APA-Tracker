@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const pages = [ ['/', 'Home', '01'], ['/match-night', 'Match Night', '02'],
@@ -10,7 +9,7 @@ const pages = [ ['/', 'Home', '01'], ['/match-night', 'Match Night', '02'],
 export function Navigation() {
   const path = usePathname();
   return <nav className="navigation" aria-label="Main navigation">{pages.map(([href, title, n]) =>
-    <Link key={href} href={href} aria-current={path === href ? 'page' : undefined}>
+    <a key={href} href={href} aria-current={path === href ? 'page' : undefined}>
       <span className="nav-number" aria-hidden="true">{n}</span>{title}<span className="nav-arrow" aria-hidden="true">↗</span>
-    </Link>)}</nav>;
+    </a>)}</nav>;
 }

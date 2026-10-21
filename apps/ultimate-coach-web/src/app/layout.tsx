@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Navigation } from '@/components/navigation';
 import './globals.css';
 
@@ -10,7 +9,7 @@ export const metadata: Metadata = {
 };
 export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body><a className="skip-link" href="#content">Skip to content</a>
-    <aside className="sidebar"><Link href="/" className="brand" aria-label="Ultimate Coach home"><span className="brand-mark" aria-hidden="true">UC</span><span>ULTIMATE<br/><b>COACH</b></span></Link>
+    <aside className="sidebar"><a href="/" className="brand" aria-label="Ultimate Coach home"><span className="brand-mark" aria-hidden="true">UC</span><span>ULTIMATE<br/><b>COACH</b></span></a>
       <p className="sidebar-caption">THE CAPTAIN’S CORNER</p><Navigation/>
       <div className="sidebar-foot"><span className="status-dot"/> PHASE 1 · READ ONLY<p>Clear evidence.<br/>Your decision.</p></div></aside>
     <div className="workspace"><div className="topbar"><span>Match-night companion</span><span className="demo-pill">SYNTHETIC DEMO</span></div>

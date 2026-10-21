@@ -61,13 +61,13 @@ def main():
         page.set_viewport_size({'width': 1024, 'height': 1366})
         page.goto(BASE + '/match-night')
         page.screenshot(path=str(OUT / 'match-night-tablet.png'), full_page=True)
-        # Verify real client navigation, not only direct route loads.
+        # Verify the visible navigation links, not only direct route loads.
         for route, heading in ROUTES.items():
             page.locator('nav').get_by_role('link', name=heading if route != '/' else 'Home', exact=False).click()
             page.wait_for_url(BASE + route)
             page.wait_for_load_state('networkidle')
             assert page.locator('h1').inner_text() == heading
-        cases.append('six client navigation links')
+        cases.append('six visible navigation links')
         for route in ('/', '/match-night'):
             rejected = context.request.post(BASE + route, data='synthetic-write-probe')
             assert rejected.status in (404, 405), (route, rejected.status)

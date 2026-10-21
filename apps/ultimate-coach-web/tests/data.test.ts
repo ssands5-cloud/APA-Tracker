@@ -36,3 +36,10 @@ test('phase 1 app contains no write, persistence or external data integration', 
     assert.doesNotMatch(text, /export\s+(?:async\s+)?function\s+(?:POST|PUT|PATCH|DELETE)\b/, file);
   }
 });
+test('simple demo navigation avoids speculative RSC fetches', () => {
+  for (const file of ['src/components/navigation.tsx', 'src/app/layout.tsx', 'src/app/page.tsx']) {
+    const text = readFileSync(file, 'utf8');
+    assert.doesNotMatch(text, /next\/link|<Link\b/);
+    assert.match(text, /<a\b/);
+  }
+});
