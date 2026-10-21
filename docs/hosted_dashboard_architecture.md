@@ -6,11 +6,15 @@ supersedes the implementation pause below: the dedicated Next.js/TypeScript appl
 sections are Home, Match Night, Recommendations, Threats, Team Status and Summary. It has no
 APA/database/refresh integration. Authentication, assigned-team access and admin implementation
 are deferred to Phase 2; therefore only synthetic data may be published. The production design
-below remains the gate before any real team information is connected. Local build/typecheck,
-3 data/boundary tests and 37 Chromium browser checks passed; deployment is a separate live gate.
+below remains the gate before any real team information is connected. Build/typecheck and4
+data/boundary tests pass; final local Chromium37/WebKit37 and hosted WebKit37 pass. Public URL
+https://apa-tracker.vercel.app is live, READY, source5194609, deployment
+dpl_8JZ6DKgAxR1aqxtazTyUxVvdRVP4. All19 uploaded app files match committed source. No root Python,
+DB or APA data was uploaded. Phase 2 execution plan: apps/ultimate-coach-web/PHASE2.md.
 
 2026-10-20. GPT self-audited design, source checkpoint 8b483823.
-Status: architecture only. No frontend, backend, database or deployment is released by this document.
+The remainder records the original production architecture proposal; the current synthetic
+release is described above. Real-data/backend/auth/admin work below is still proposed, not enabled.
 Paul confirmed Vercel access and directed a dedicated web frontend; do not deploy the repository root.
 This plan supersedes the earlier static-only hosting proposal.
 

@@ -4,6 +4,9 @@ Dedicated Next.js/TypeScript dashboard. **Synthetic public demo only.** No sign-
 APA login, refresh integration, real identities or production recommendation execution.
 Authored sample responses demonstrate presentation; they do not change the Python engine.
 
+Live synthetic dashboard: **https://apa-tracker.vercel.app**.
+Phase 2 security/admin design: [PHASE2.md](PHASE2.md).
+
 Six routes: `/`, `/match-night`, `/recommendations`, `/threats`, `/team-status`, `/summary`.
 The only state is the currently viewed opponent. There are no editing actions or stored marks.
 
@@ -40,6 +43,9 @@ Deployment status/URL must come from Vercel READY plus an HTTP/browser check, no
 `tests/browser_smoke.py`: production-server browser checks at phone, tablet and desktop sizes;
 run using an existing Python Playwright environment and `UC_WEB_BASE_URL` if not localhost.
 Browser dimensions are emulation, not physical iPad acceptance.
+
+Navigation uses ordinary page links to avoid the unnecessary RSC prefetch/navigation path that
+failed WebKit verification. The opponent selector is hydrated React state and resets on reload.
 
 The app intentionally has no broad app-wide script CSP until nonce/hash behavior is designed
 for Next.js and future identity-provider scripts. Current headers prevent framing/object embeds,

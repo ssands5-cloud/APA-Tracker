@@ -9,7 +9,8 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get('UC_WEB_BASE_URL', 'http://127.0.0.1:3000').rstrip('/')
 ENGINE = os.environ.get('UC_WEB_BROWSER', 'chromium')
 assert ENGINE in ('chromium', 'webkit')
-OUT = Path(__file__).resolve().parents[3] / 'tmp' / 'uat' / 'ultimate-coach-web-phase1' / ENGINE
+OUT = (Path(__file__).resolve().parents[3] / 'tmp' / 'uat' / 'ultimate-coach-web-phase1'
+       / ('hosted' if BASE.startswith('https://') else 'local') / ENGINE)
 ROUTES = {'/': 'See the night clearly.', '/match-night': 'Match Night',
           '/recommendations': 'Recommendations', '/threats': 'Threats',
           '/team-status': 'Team Status', '/summary': 'Summary'}
@@ -37,8 +38,10 @@ def main():
                 assert page.locator('a[aria-current="page"]').count() == 1
                 assert page.locator('input, textarea, form, button').count() == 0
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (width, route)
-                assert response.headers.get('x-frame-options') == 'DENY'
-                assert 'noindex' in response.headers.get('x-robots-tag', '')
+                # A CDN 304 may omit unchanged headers. Verify those on a fresh HTTP representation.
+                headers_response = response if response.status == 200 else context.request.get(BASE + route)
+                assert headers_response.headers.get('x-frame-options') == 'DENY'
+                assert 'noindex' in headers_response.headers.get('x-robots-tag', '')
                 cases.append(f'{width} {route}')
             page.goto(BASE + '/recommendations')
             page.wait_for_load_state('networkidle')

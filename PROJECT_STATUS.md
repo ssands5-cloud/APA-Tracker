@@ -1,5 +1,15 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Synthetic Next.js dashboard live (2026-10-20, GPT self-audited)
+
+https://apa-tracker.vercel.app serves the six-section read-only synthetic demo, built from
+apps/ultimate-coach-web. Existing Vercel apa-tracker project now targets that dedicated root
+with Next.js; deployment dpl_8JZ6DKgAxR1aqxtazTyUxVvdRVP4 is READY. Deployed app source5194609.
+Production build/typecheck,4 data/boundary tests, local Chromium37/WebKit37 and hosted WebKit37
+pass. No production APA data, credentials, database or refresh integration. Phase 2 authentication,
+team access and admin plan: apps/ultimate-coach-web/PHASE2.md. Physical iPad acceptance remains
+with the owner; automated WebKit is not physical testing. Full evidence boundaries are in the ONE report.
+
 ## Recommendation guidance and deployment gate (2026-10-20, GPT self-audited)
 
 M313/F1/F2/F3 are technically corrected without changing chosen players or planning weights:
@@ -9,10 +19,9 @@ native synthetic checks, replay counts and remaining layout failures are in the 
 The historical replay now uses the production confidence function and accepts EIGHT/NINE;
 the small identity-reviewed capture is insufficient to validate the full evidence scale.
 
-Vercel preview is prepared as seven synthetic-only encrypted static files. The verified team
-denied project creation with403, so no deployment exists. Repository source, databases and real
-APA data are not in the prepared upload. Account/project access is required to proceed.
-No installation, merge, real-data publication or production release occurred.
+The earlier encrypted static preview/create-project403 is superseded by the dedicated synthetic
+Next.js deployment above. The canonical desktop tools, database, real APA data and refresh remain
+private and unchanged by web implementation. No main merge or real-data publication occurred.
 
 ## Exact captured identity correction (2026-10-18)
 
