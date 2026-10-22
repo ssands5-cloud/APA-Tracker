@@ -3,6 +3,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { authConfigured } from '../auth-config';
 import { getUser, getUserByEmail, createUser, activateBootstrap, type Role } from '../db/users';
 import { appendAuditLog } from '../db/audit';
+import { logActivity } from '../db/activity';
 
 export type AccessResult =
   | { ok: true; scope: 'historical-pilot'; role: Role; userId: string }
@@ -43,6 +44,7 @@ export async function historicalAccess(): Promise<AccessResult> {
         const displayName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
         await activateBootstrap(userId, primaryEmail, displayName);
         await appendAuditLog(userId, 'bootstrap', userId, null, 'ADMIN', 'Seed admin activated');
+        await logActivity(userId, 'sign_in', { bootstrap: true });
         user = await getUser(userId);
       } else {
         // New user — register as PENDING; no access until an admin approves.
@@ -54,6 +56,12 @@ export async function historicalAccess(): Promise<AccessResult> {
 
     if (!user || user.role === 'PENDING' || user.role === 'SUSPENDED') {
       return { ok: false, reason: 'denied' };
+    }
+
+    // Log sign-in; log admin sign-ins to the audit trail too.
+    await logActivity(userId, 'sign_in', { role: user.role });
+    if (user.role === 'ADMIN') {
+      await appendAuditLog(userId, 'admin_sign_in', userId, null, null, null);
     }
 
     return { ok: true, scope: 'historical-pilot', role: user.role, userId };

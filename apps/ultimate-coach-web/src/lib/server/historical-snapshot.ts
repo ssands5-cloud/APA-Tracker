@@ -2,6 +2,7 @@ import 'server-only';
 import { decryptSnapshot } from './snapshot-crypto';
 import { historicalAccess, type AccessResult } from './authorization';
 import type { Snapshot } from '../snapshot-types';
+import { logActivity } from '../db/activity';
 
 export type SnapshotResult = { ok: true; snapshot: Snapshot } | Extract<AccessResult, { ok: false }>;
 
@@ -40,6 +41,8 @@ export async function authorizedSnapshot(): Promise<SnapshotResult> {
     ) {
       return { ok: false, reason: 'unavailable' };
     }
+    // Log snapshot view after successful decryption and schema validation.
+    await logActivity(access.userId, 'snapshot_view', { role: access.role });
     return { ok: true, snapshot };
   } catch {
     return { ok: false, reason: 'unavailable' };
