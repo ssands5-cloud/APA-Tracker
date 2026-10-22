@@ -389,6 +389,61 @@ the plan answer does not change.
 
 ---
 
+## Claude independent audit — 2026-10-21
+
+Covers commits `263c71e` through `8f27901` (12 GPT commits since checkpoint `52112bf`).
+All diffs read; full test suite re-run independently; probability/prediction scan performed.
+
+### Engine fixes: F1 / F2 / F3 — VERIFIED CORRECT
+
+**263c71e** — "Keep hold guidance within feasible matchup choices" (M313/F1 scoping)
+`covers()` and `holds` now iterate `feasible_ours`/`feasible_theirs` from `night.legal_ours()`/`night.legal_theirs()`. The `i not in feasible_ours` guard also prevents holds for cap-excluded players. The `margin()` fallback and `nxt` computation both restrict to feasible senders. Correct — no probability language, Python engine only (JS mirror follows in bc1e978).
+
+**bc1e978** — "Make designated answers conditional send instructions" (F1 UI label fix)
+"Hold back" → "Designated answers" in JS war room and `plan_text`. Adds conditional instruction: "keep for X; send when that matchup is put up" with a "One player can cover only one matchup" note for multi-cover cases. `plan_text` fallback updated to "No designated answer needs reserving." RQ13 assertion `'send when that matchup is put up' in plan_text(p)['holds']` passes. Correct.
+
+**a6f7a5b** — "Reconcile future-save notes with the current plan answer" (F2 UI fix)
+`wrSaveWarning()` now receives a `spending` flag. When the plan's recommended answer IS the candidate being shown, the text changes from "consider saving" to "Sending now spends our only favorable direct option vs" — disambiguating plan-instruction from a conflicting save warning. The plan answer card gains a note "Future records below show the opportunity spent by this send, not another instruction to hold." F2 test cases pass. Correct.
+
+**b2ed957** — "Explain the future cost of rejected equal-strength answers" (F3 engine fix)
+Replaces the `naive` single-pick approach with a scan: for each legal sender `k ≠ i` where `pair(k,j) >= pair(i,j)`, compute `loss = v − (pair(k,j) + solve(...))`. Max-loss alternative becomes the explanation target. `comparison` string uses "equally supported option" when same level, "stronger recorded option" when higher points — never a probability. `keep` names the specific future opponent from `principalLine`. JS mirror is identical in logic. RQ14 assertion (`'equally supported' in cost_later`, `'keep Bob' in cost_later`) passes. The earlier proposed `>` → `>=` approach was correctly rejected; this implementation handles the true equal-tonight case. Correct.
+
+### Test run — 35 / 35 PASS
+
+Run against HEAD of `codex/captain-display-cleanup`:
+- RQ01–RQ14 (captain decision review): 14 pass
+- M301–M313 (design review): 13 pass
+- F1, F2 (×4 parametrized + paper), F3 (×3): 8 pass
+
+No failures. One openpyxl print-area warning (pre-existing, not a defect).
+
+### Replay script rewrite (8b48382) — CLEAN
+
+`scripts/replay_confidence_levels.py` explicitly labels what is NOT computed:
+"No probability, no fitted weights, no model." New `tests/test_replay_confidence_levels.py` includes assertion that output carries "No estimated win probabilities or captain-selection effectiveness claim." Descriptive-only intent is preserved in both code and tests.
+
+### Next.js dashboard (`apps/ultimate-coach-web/`) — SCOPE EXPANSION
+
+Six commits (`ff46d3a`, `6cc382d`, `5194609`, `6396c0e`, `83faa58`, `0c52fc9`) add a new authenticated web surface. Key findings:
+
+**Probability check — CLEAN.** `demo.ts` contains only wins/losses/meetings integers and notes. All page components display evidence labels (W-L records, meeting counts, confidence descriptors). `match-night/page.tsx` explicitly states "This demo does not calculate a game tree, a safest board or a win estimate." The historical snapshot carries `provenance.notice = "no results are predicted"`. No `win_probability` field, no prediction model, no percentage shown as a win estimate anywhere in the new code.
+
+**Auth protection — IN PLACE.** `0c52fc9` gates the historical snapshot behind Clerk (`access.scope === 'historical-pilot'`), encrypts the file at rest (`historical.enc.json`, 5 lines in repo), and deletes the raw 1410-line `data/snapshot.json` from tracked files. Authorization runs before file access on every server request.
+
+**Flags for Paul — decision required:**
+
+1. **Real player names in snapshot.** The historical snapshot contained real APA player names from "Brunch Ballers / Fall 2026" before encryption. Names are now encrypted in-repo. Is this the intended data scope for `codex/captain-display-cleanup`? This was not part of the original branch charter.
+
+2. **`vercel.json` deployment config present.** No deploy has occurred, but deployment config exists. Any actual deploy to Vercel requires Paul's explicit authorization — this audit does not authorize it.
+
+3. **New external service dependency.** `apps/ultimate-coach-web` now depends on Clerk for authentication and assumes a `UC_SNAPSHOT_KEY` env var. Neither existed before this branch.
+
+4. **Branch scope.** The branch is `codex/captain-display-cleanup`. The Next.js app is a substantial new surface (1400+ lines of new code across 40+ files). It is correctly labeled as demo/illustrative and gated behind auth, but the scope expansion should be explicitly acknowledged before the branch is merged.
+
+5. **Surface parity note.** This new surface shows a static historical snapshot — it is NOT in live parity with the phone war room, workbook, or plan-text surfaces. This is clearly labeled in the UI ("REALISTIC DEMO USING HISTORICAL DATA"). Not a defect, but relevant context.
+
+---
+
 ## Decisions for Paul (defaults are in place; none blocks use)
 
 1. **Planning weights.** Keep the history-anchored 6/3/1/0/−3, or choose another scale. The sensitivity
