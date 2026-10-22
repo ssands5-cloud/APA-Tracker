@@ -10,6 +10,16 @@
 
 # CURRENT PRIORITIES
 
+**captain-display-cleanup advances to 82c3564 — F1/F2/F3 verified correct, Next.js dashboard scope flags for Paul (2026-10-21/22, scheduled run).** Step 0 (`list_task_runs` cross-checked against `get_session self`) found only this session `local_fcbc9656` running — no overlap, proceeded. Step 1 verified: toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. Current branch: `claude/unruffled-chatterjee-f4f65e`, HEAD `1f167af` (unchanged), clean working tree.
+
+`origin/codex/captain-display-cleanup` has advanced from `52112bf` to `82c3564` (+12 commits since last recorded entry). Paul added an independent Claude audit commit (`82c3564`, 2026-10-21) covering all 12 GPT commits:
+
+- **Engine fixes F1/F2/F3 — all verified correct.** `263c71e`: `covers()`/`holds` now use `feasible_ours`/`feasible_theirs`; M313 cap-exclusion guard in place. `bc1e978`: "Hold back" → "Designated answers" label; conditional send instruction ("keep for X; send when that matchup is put up"). `a6f7a5b`: `spending` flag added to `wrSaveWarning()` — disambiguates plan instruction from conflicting save warning (F2). `b2ed957`: F3 scan replaces naive-pick approach; scans all legal `k≠i` with `pair(k,j) >= pair(i,j)`, finds max-future-cost alternative, emits "equally supported option" or "stronger recorded option" as appropriate; `cost_later` now fires in the true equal-tonight case. 35/35 tests pass: RQ01–RQ14, M301–M313, F1/F2/F3 cases.
+- **Replay script (`8b48382`) — CLEAN.** Descriptive-only confirmed; test asserts output carries "No estimated win probabilities or captain-selection effectiveness claim."
+- **New Next.js dashboard (`apps/ultimate-coach-web/`, 1400+ lines, 40+ files, commits `ff46d3a`–`0c52fc9`).** Clerk auth gate + AES-encrypted historical snapshot. Probability scan clean: W-L records only. Historical snapshot contained real APA player names before encryption. **Four scope flags for Paul before any merge:** (1) Real player names in encrypted snapshot — is this intended scope for `codex/captain-display-cleanup`? (2) `vercel.json` deployment config present — no deploy has occurred; explicit authorization required before any deploy. (3) New external dependencies: Clerk + `UC_SNAPSHOT_KEY` env var. (4) Branch now contains 1400+ lines of Next.js code outside the original charter — explicit acknowledgment before merge.
+
+`origin/codex/audit-pr83-privacy` still at `6b6a30b` — unchanged. Issue #84 still at 320 comments — no new auditor pressure. Builder hold on this branch unchanged — no code changed this pass. **Blocker for Paul unchanged:** retarget this scheduled task to the current builder branch, or pause it.
+
 **Paul advances captain-display-cleanup to 52112bf — F3 fix corrected, F2 DOM-verified (2026-10-20, scheduled run).** Step 0 (`list_task_runs` cross-checked against `get_session self`) found only this session `local_0b1b0bb2` running — no overlap, proceeded. Step 1 verified: toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. Current branch: `claude/unruffled-chatterjee-f4f65e`, HEAD `b651544` (unchanged), clean working tree.
 
 `origin/codex/captain-display-cleanup` has advanced from `9fbabc4` to `52112bf` (+2 Paul commits, both 2026-10-20 morning):
