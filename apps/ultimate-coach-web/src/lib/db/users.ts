@@ -59,6 +59,20 @@ export async function activateBootstrap(
   ]);
 }
 
+// Activate a pre-seeded placeholder row (id convention: 'preseed-*') when that
+// user first signs in via Clerk.  The placeholder is inserted by an admin before
+// the user signs up, giving them a specific role on first arrival instead of PENDING.
+export async function activatePreseed(
+  preseedId: string, clerkId: string, displayName: string | null
+): Promise<void> {
+  await executeBatch([
+    {
+      sql: "UPDATE users SET id = ?, display_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?",
+      args: [clerkId, displayName, preseedId],
+    },
+  ]);
+}
+
 export async function deleteUser(id: string): Promise<void> {
   await execute('DELETE FROM users WHERE id = ?', [id]);
 }

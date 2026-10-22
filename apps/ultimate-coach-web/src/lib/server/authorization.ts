@@ -1,7 +1,7 @@
 import 'server-only';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { authConfigured } from '../auth-config';
-import { getUser, getUserByEmail, createUser, activateBootstrap, type Role } from '../db/users';
+import { getUser, getUserByEmail, createUser, activateBootstrap, activatePreseed, type Role } from '../db/users';
 import { appendAuditLog } from '../db/audit';
 import { logActivity } from '../db/activity';
 
@@ -45,6 +45,14 @@ export async function historicalAccess(): Promise<AccessResult> {
         await activateBootstrap(userId, primaryEmail, displayName);
         await appendAuditLog(userId, 'bootstrap', userId, null, 'ADMIN', 'Seed admin activated');
         await logActivity(userId, 'sign_in', { bootstrap: true });
+        user = await getUser(userId);
+      } else if (byEmail?.id.startsWith('preseed-') && byEmail.role !== 'PENDING' && byEmail.role !== 'SUSPENDED') {
+        // Pre-authorized user: an admin seeded this email with a role before sign-up.
+        // Activate the placeholder by replacing the preseed id with the real Clerk id.
+        const displayName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
+        await activatePreseed(byEmail.id, userId, displayName);
+        await appendAuditLog(userId, 'bootstrap', userId, null, byEmail.role, `Pre-seed activated: ${byEmail.id}`);
+        await logActivity(userId, 'sign_in', { preseed: true, role: byEmail.role });
         user = await getUser(userId);
       } else {
         // New user — register as PENDING; no access until an admin approves.
