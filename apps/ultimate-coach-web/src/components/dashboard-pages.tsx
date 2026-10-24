@@ -432,16 +432,28 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
 export function TeamStatusPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players, opponents, fixture } = s;
   return <>
-    <PageTitle eyebrow="Captured rosters, explicit assumptions" title="Team Status">Your historical roster and the opponent&apos;s roster. Every availability label below is simulated, not a live attendance check.</PageTitle>
+    <PageTitle eyebrow="Player intelligence · historical reference" title="Team Status">Know who to lean on, protect, and scout before the first put-up. Availability is simulated, not a live attendance check.</PageTitle>
+    <section className="roster-command" aria-label="Captain roster priorities">
+      <div><p className="roster-command-label">Opening option</p><strong>{s.plan.lead.player}</strong><span>{s.plan.lead.level} evidence in the historical plan</span></div>
+      <div><p className="roster-command-label">Protect</p><strong>{s.plan.protect.length ? s.plan.protect.map(item => item.our).join(' · ') : 'No designated answer'}</strong><span>Save matchup-specific options until their target appears.</span></div>
+      <div><p className="roster-command-label">Scout first</p><strong>{s.threats[0]?.name ?? 'No named threat'}</strong><span>{s.threats[0] ? s.threats[0].text : 'Missing evidence is not clearance.'}</span></div>
+    </section>
     <div className="two-columns">
       {[{ title: fixture.team, kicker: 'Our captured roster', roster: players, ours: true }, { title: fixture.opponent, kicker: 'Opponent captured roster', roster: opponents, ours: false }].map(team => (
         <Card key={team.title} title={team.title} kicker={team.kicker}>
           <ul className="roster">
             {team.roster.map(player => (
-              <li key={player.id}>
+              <li className="player-intel-card" key={player.id}>
                 <span className="avatar" aria-hidden="true">{player.name.slice(0, 1)}</span>
-                <div><strong>{player.name}</strong><small>{player.availability}</small>{team.ours && player.name === s.plan.lead.player && <small className="captain-player-tag">Opening option · historical plan</small>}{team.ours && s.plan.protect.some(item => item.our === player.name) && <small className="captain-player-tag">Protect for a matchup</small>}</div>
+                <div className="player-intel-main"><strong>{player.name}</strong><small>{player.availability}</small>{team.ours && player.name === s.plan.lead.player && <small className="captain-player-tag">Opening option · historical plan</small>}{team.ours && s.plan.protect.some(item => item.our === player.name) && <small className="captain-player-tag">Protect for a matchup</small>}{!team.ours && s.threats.some(item => item.name === player.name) && <small className="captain-player-tag threat-tag">Scout · winning direct record</small>}</div>
                 <span className="skill" aria-label={`Skill level ${player.skill ?? 'unknown'}`}><span>SL</span><b>{player.skill ?? '?'}</b></span>
+                {team.ours && (() => {
+                  const rows = opponents.map(opponent => s.evidence[opponent.id]?.[player.id]).filter(Boolean);
+                  const direct = rows.filter(row => row!.hasDirect);
+                  const favorable = direct.filter(row => row!.wins > row!.losses).length;
+                  const concern = direct.filter(row => row!.wins < row!.losses).length;
+                  return <p className="player-intel-evidence"><strong>{favorable}</strong> favorable · <strong>{concern}</strong> concern · {direct.length} recorded {direct.length === 1 ? 'pairing' : 'pairings'}</p>;
+                })()}
               </li>
             ))}
           </ul>

@@ -1775,9 +1775,21 @@ body {
 .roster li::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#e2c075, #665027); }
 .roster .skill { display: grid; justify-items: center; gap: 2px; color: #d7e3d5; font-size: 10px; }
 .roster .skill b { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: radial-gradient(circle at 35% 25%, #fff, #e1dfd2 58%, #a8a69c); color: #122018; border: 2px solid #836b35; box-shadow: 0 3px 9px rgba(0,0,0,.45); font-size: 15px; }
+.roster-command { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+.roster-command > div { display: grid; gap: 5px; min-height: 112px; padding: 18px; border: 1px solid rgba(226,198,118,.32); border-radius: 9px; background: linear-gradient(135deg, rgba(32,76,51,.96), rgba(10,29,21,.98)); box-shadow: 0 12px 28px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.07); }
+.roster-command-label { margin: 0; color: var(--gold-bright); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.roster-command strong { color: var(--ivory); font-size: 19px; line-height: 1.15; }
+.roster-command span { color: #cddbcf; font-size: 13px; font-weight: 600; line-height: 1.4; }
+.roster .player-intel-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; }
+.player-intel-main { min-width: 0; }
+.roster .player-intel-main > small { margin-top: 3px; }
+.player-intel-evidence { grid-column: 2 / -1; margin: 9px 0 0; padding: 9px 10px; border-top: 1px solid rgba(226,198,118,.18); color: #cddbcf; font-size: 12px; font-weight: 650; line-height: 1.3; }
+.player-intel-evidence strong { color: var(--gold-bright); font-size: inherit; }
+.threat-tag { color: #ffafa1 !important; }
 @media (max-width: 700px) {
   .arena-hero { min-height: 300px; }
   .arena-hero-overlay { padding: 22px; background: linear-gradient(90deg, rgba(2,10,6,.84), rgba(2,10,6,.28)); }
   .war-room-hero { min-height: 190px; }
   .briefing-items { padding: 12px; }
+  .roster-command { grid-template-columns: 1fr; }
 }
