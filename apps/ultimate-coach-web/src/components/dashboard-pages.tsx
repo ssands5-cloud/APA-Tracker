@@ -17,7 +17,7 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players, opponents, fixture } = s;
   return <>
     {/* ARENA HERO */}
-    <div className="arena-hero" style={{ minHeight: 270 }}>
+    <div className="arena-hero">
       <svg viewBox="0 0 900 270" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
         <defs>
           <radialGradient id="ah-sg1" cx="18%" cy="3%" r="52%">
@@ -121,29 +121,31 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
         <p className="arena-eyebrow">Historical Match Simulation · {fixture.format} · {fixture.scope}</p>
         <h2 className="arena-matchup">{fixture.team}<span className="arena-matchup-vs">vs</span>{fixture.opponent}</h2>
         <p className="arena-meta">{fixture.when} · Reference cap {s.simulation.cap}</p>
-        <a className="arena-cta" href="/dashboard/match-night">Open tonight&rsquo;s plan <span aria-hidden="true">↗</span></a>
+        <p className="match-readiness">Match readiness: <strong>Historical plan available</strong></p>
+        <ul className="match-brief-points">
+          <li><span aria-hidden="true">✓</span> {s.totals.favorablePairs} favorable direct {s.totals.favorablePairs === 1 ? 'record' : 'records'} identified</li>
+          <li><span aria-hidden="true">!</span> {s.threats.length} {s.threats.length === 1 ? 'opponent' : 'opponents'} with winning direct records to scout</li>
+          <li><span aria-hidden="true">●</span> {s.plan.lead.player ? `Opening option: ${s.plan.lead.player}` : 'Opening option unavailable'}</li>
+        </ul>
+        <a className="arena-cta" href="/dashboard/match-night">Open match plan <span aria-hidden="true">→</span></a>
       </div>
     </div>
 
-    {/* STATS STRIP */}
-    <div className="arena-stats-strip">
-      <div className="arena-stat">
-        <div className="arena-stat-val">{players.length}<small style={{ fontSize:'0.5em', fontWeight:400 }}> vs {opponents.length}</small></div>
-        <div className="arena-stat-lbl">Players</div>
-      </div>
-      <div className="arena-stat">
-        <div className="arena-stat-val">{s.totals.meetings}</div>
-        <div className="arena-stat-lbl">Meetings</div>
-      </div>
-      <div className="arena-stat">
-        <div className="arena-stat-val">{s.totals.directPairs}</div>
-        <div className="arena-stat-lbl">Direct pairs</div>
-      </div>
-      <div className="arena-stat">
-        <div className="arena-stat-val">{s.simulation.games}</div>
-        <div className="arena-stat-lbl">Games</div>
-      </div>
-    </div>
+    <nav className="captain-next" aria-label="Captain's next steps">
+      <a href="/dashboard/match-night"><strong>01 · Make the call</strong><span>Explore responses to their put-up →</span></a>
+      <a href="/dashboard/threats"><strong>02 · Scout the opposition</strong><span>Review recorded threats →</span></a>
+      <a href="/dashboard/recommendations"><strong>03 · Check the evidence</strong><span>Compare matchup support →</span></a>
+    </nav>
+
+    <section className="captain-brief" aria-label="Captain's briefing">
+      <div><p className="captain-kicker">Best opening move · historical plan</p><h2>Lead with {s.plan.lead.player}.</h2><p>{s.plan.lead.why}</p><a href="/dashboard/match-night">Open the match plan →</a></div>
+      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : 'No winning direct-record threat is established in this snapshot.'}</p><span>Historical simulation · confirm tonight’s roster</span></div>
+    </section>
+
+    <Card kicker="Captain readiness · confirm before the first put-up" title="Make the historical plan usable tonight">
+      <div className="readiness-checks"><div><strong>1. Confirm the fixture</strong><p>This plan is for {fixture.team} vs {fixture.opponent}, {fixture.when}. Verify tonight’s opponent and format.</p></div><div><strong>2. Confirm who is here</strong><p>{s.simulation.availability} Attendance has not been verified.</p></div><div><strong>3. Confirm the rules</strong><p>The reference cap is {s.simulation.cap}; verify the current cap and player skill levels.</p></div></div>
+      <a className="text-link" href="/dashboard/match-night">Review the opening and responses →</a>
+    </Card>
 
     {/* BLIND SEND + OPPORTUNITIES */}
     <div className="two-columns">
@@ -172,7 +174,13 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
 /* ─── Match Night ───────────────────────────────────────────────────────────── */
 export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players, opponents, fixture } = s;
-  const leadSL = players.find(p => p.name === s.plan.lead.player)?.skill;
+  const lead = players.find(p => p.name === s.plan.lead.player);
+  const leadSL = lead?.skill;
+  const leadRecords = opponents.map(opponent => lead ? s.evidence[opponent.id]?.[lead.id] : undefined);
+  const recorded = leadRecords.filter(row => row?.hasDirect);
+  const favorable = recorded.filter(row => row!.wins > row!.losses).length;
+  const neutral = recorded.filter(row => row!.wins === row!.losses).length;
+  const concern = recorded.filter(row => row!.wins < row!.losses).length;
   return <>
     {/* WAR ROOM HERO */}
     <div className="war-room-hero">
@@ -228,44 +236,39 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
       </div>
     </div>
 
-    {/* PRIMARY RECOMMENDATION — visually dominant */}
-    <div className="recommendation-primary">
-      <p className="rec-eyebrow">If We Put Up First · Blind Send</p>
+    <div className="captain-decision-grid">
+    <div className="captain-explorer">
+      <HistoricalOpponentView snapshot={s}/>
+    </div>
+    <aside className="recommendation-primary" aria-label="Blind Send recommendation">
+      <p className="rec-eyebrow">If we put up first · Blind Send</p>
       <div className="rec-player-row">
         {leadSL != null && (
-          <div className={`sl-ball sl-ball-lg`} data-sl={leadSL} aria-label={`SL ${leadSL}`}>{leadSL !== 8 ? leadSL : ''}</div>
+          <div className="sl-ball" data-sl={leadSL} aria-label={`SL ${leadSL}`}>{leadSL !== 8 ? leadSL : ''}</div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="rec-player-name">{s.plan.lead.player}</p>
-          <p className="rec-player-meta">{s.plan.lead.why}</p>
+          <p className="rec-player-meta">{s.plan.lead.level} evidence</p>
         </div>
-        <span className="rec-level-pill">{s.plan.lead.level}</span>
       </div>
+      <p className="coverage-heading">Direct-record coverage</p>
+      <div className="coverage-grid">
+        <span>Favorable <strong>{favorable}</strong></span><span>Neutral <strong>{neutral}</strong></span>
+        <span>Concern <strong>{concern}</strong></span><span>Unknown <strong>{opponents.length - recorded.length}</strong></span>
+      </div>
+      <p className="rec-player-meta">Evidence coverage: {recorded.length} of {opponents.length} opposing pairings contain a recorded direct meeting.</p>
       {s.plan.lead.alternatives.length > 0 && (
-        <p className="rec-alternatives">Equally supported alternatives: {s.plan.lead.alternatives.join(', ')}.</p>
+        <p className="rec-alternatives"><strong>Equally Supported Alternatives</strong><br/>{s.plan.lead.alternatives.join(', ')}</p>
       )}
-    </div>
-
-    {/* RESPONSE EXPLORER — dominant command center */}
-    <HistoricalOpponentView snapshot={s}/>
-
-    {/* COMPACT BLIND SEND CONFIRMATION STRIP */}
-    <div className="blind-send-strip">
-      {leadSL != null && (
-        <div className="sl-ball" data-sl={leadSL} aria-hidden="true">{leadSL !== 8 ? leadSL : ''}</div>
-      )}
-      <div>
-        <p className="bss-label">Blind Send Confirmation</p>
-        <p className="bss-name">{s.plan.lead.player}</p>
-      </div>
-      <span className="bss-pill">{s.plan.lead.level}</span>
+      <details className="blind-send-details"><summary>View full analysis</summary><p>{s.plan.lead.why}</p></details>
+    </aside>
     </div>
 
     {/* RESPONSE TABLE */}
     <Card kicker="If they lead instead" title="Response table">
       <div className="table-scroll" role="region" aria-label="Responses to every opposing player" tabIndex={0}>
         <table><thead><tr><th scope="col">Their put-up</th><th scope="col">Our response</th><th scope="col">Evidence</th><th scope="col">Future cost</th></tr></thead>
-        <tbody>{opponents.map(opp => <tr key={opp.id}><th scope="row">{opp.name}</th><td>{s.responses[opp.id].player}</td><td>{s.responses[opp.id].level}</td><td>{s.responses[opp.id].cost}</td></tr>)}</tbody></table>
+        <tbody>{opponents.map(opp => <tr key={opp.id}><th scope="row"><a href={`/dashboard/match-night?opponent=${encodeURIComponent(opp.id)}#response-explorer`} aria-label={`Explore the response to ${opp.name}`}>{opp.name}</a></th><td>{s.responses[opp.id].player}</td><td>{s.responses[opp.id].level}</td><td>{s.responses[opp.id].cost}</td></tr>)}</tbody></table>
       </div>
     </Card>
 
@@ -377,7 +380,7 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
       <div className="shark-hero-overlay">
         <p className="arena-eyebrow" style={{ color: 'var(--shark-bright)' }}>Shark Tank · Threat Intelligence</p>
         <h1>Know the water before you send.</h1>
-        <p style={{ fontSize: 12, color: 'rgba(220,200,200,0.7)', margin: 0 }}>{s.threats.length} {s.threats.length === 1 ? 'threat' : 'threats'} with winning direct records · {players.length} players scouted</p>
+        <p style={{ fontSize: 14, fontWeight: 650, color: '#eee4e4', margin: 0 }}>{s.threats.length} {s.threats.length === 1 ? 'threat' : 'threats'} with winning direct records · {players.length} players scouted</p>
       </div>
     </div>
 
@@ -386,6 +389,9 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
       {s.threats.map(t => {
         const threatPct = Math.min(100, Math.round((t.wins / Math.max(t.meetings, 1)) * 100));
         const fillWidth = `${threatPct}%`;
+        const opponent = s.opponents.find(player => player.name === t.name);
+        const response = opponent ? s.responses[opponent.id] : undefined;
+        const favorablePlayers = opponent ? players.filter(player => { const row = s.evidence[opponent.id]?.[player.id]; return row?.hasDirect && row.wins > row.losses; }) : [];
         return (
           <div className="shark-profile-card" key={t.name}>
             <div className="spc-header">
@@ -399,13 +405,15 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
               </div>
             </div>
             <div className="spc-body">
-              <p className="spc-threat-level">Threat intensity — {threatPct}% winning record</p>
+              <p className="spc-threat-level">Historical record — {threatPct}% wins in recorded meetings</p>
               <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
-              <p>{t.text}</p>
-              <Notice>{t.meetings < 3 ? 'Thin record: do not treat one meeting as a proven dangerous matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
+              <p><strong>Why dangerous:</strong> {t.text}</p>
+              <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>
+              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
+              <Notice>{t.meetings < 3 ? 'Thin record: a small number of meetings is limited evidence, not a proven matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
             </div>
             <div className="spc-footer">
-              <a href="/dashboard/recommendations">Inspect exact response evidence →</a>
+              <a href={opponent ? `/dashboard/recommendations?opponent=${encodeURIComponent(opponent.id)}` : '/dashboard/recommendations'}>Inspect response evidence →</a>
             </div>
           </div>
         );
@@ -426,14 +434,14 @@ export function TeamStatusPage({ snapshot: s }: { snapshot: Snapshot }) {
   return <>
     <PageTitle eyebrow="Captured rosters, explicit assumptions" title="Team Status">Your historical roster and the opponent&apos;s roster. Every availability label below is simulated, not a live attendance check.</PageTitle>
     <div className="two-columns">
-      {[{ title: fixture.team, kicker: 'Our captured roster', roster: players }, { title: fixture.opponent, kicker: 'Opponent captured roster', roster: opponents }].map(team => (
+      {[{ title: fixture.team, kicker: 'Our captured roster', roster: players, ours: true }, { title: fixture.opponent, kicker: 'Opponent captured roster', roster: opponents, ours: false }].map(team => (
         <Card key={team.title} title={team.title} kicker={team.kicker}>
           <ul className="roster">
             {team.roster.map(player => (
               <li key={player.id}>
                 <span className="avatar" aria-hidden="true">{player.name.slice(0, 1)}</span>
-                <div><strong>{player.name}</strong><small>{player.availability}</small></div>
-                <span className="skill">SL {player.skill ?? 'unknown'}</span>
+                <div><strong>{player.name}</strong><small>{player.availability}</small>{team.ours && player.name === s.plan.lead.player && <small className="captain-player-tag">Opening option · historical plan</small>}{team.ours && s.plan.protect.some(item => item.our === player.name) && <small className="captain-player-tag">Protect for a matchup</small>}</div>
+                <span className="skill" aria-label={`Skill level ${player.skill ?? 'unknown'}`}><span>SL</span><b>{player.skill ?? '?'}</b></span>
               </li>
             ))}
           </ul>
@@ -447,6 +455,10 @@ export function TeamStatusPage({ snapshot: s }: { snapshot: Snapshot }) {
         <p>The M3 plan restricts both sides to the same supplied cap; no actual cap or local rule was verified.</p>
       </> : <p>No complete cap reference is available.</p>}
       <p className="notice">No one is marked played. This page cannot record presence, send players or change the cap.</p>
+    </Card>
+    <Card kicker="Team momentum" title="Recent form is not established">
+      <p>The snapshot records its latest result as <strong>{s.provenance.latestResult}</strong>. It does not provide a verified sequence of recent results for each player, so streaks and current momentum cannot be determined here.</p>
+      <p>Before match night, check attendance and recent play with your team, then use the historical matchups as supporting evidence.</p>
     </Card>
     <Assumptions snapshot={s}/>
   </>;
@@ -519,23 +531,29 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
       <div className="briefing-item lead">
         <span className="briefing-item-icon" aria-hidden="true">🎯</span>
         <div>
-          <p className="briefing-item-type">Lead</p>
+          <p className="briefing-item-type">Opening strategy</p>
           <p className="briefing-item-content"><strong>Lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
         </div>
       </div>
       <div className="briefing-item protect">
         <span className="briefing-item-icon" aria-hidden="true">🛡</span>
         <div>
-          <p className="briefing-item-type">Protect</p>
+          <p className="briefing-item-type">Protect these players</p>
           <p className="briefing-item-content">{s.plan.protect.length ? s.plan.protect.map(h => `${h.our} for ${h.covers.join(', ')}; send when that matchup is put up.`).join(' ') : 'No unique designated-answer protection is established.'}</p>
         </div>
       </div>
       <div className="briefing-item threat">
         <span className="briefing-item-icon" aria-hidden="true">🦈</span>
         <div>
-          <p className="briefing-item-type">Shark Alert</p>
+          <p className="briefing-item-type">Threat to scout</p>
           <p className="briefing-item-content">{s.threats[0]?.text ?? 'No winning direct-record threat established; inspect missing evidence.'}</p>
         </div>
+      </div>
+      <div className="briefing-item lead">
+        <span className="briefing-item-icon" aria-hidden="true">🎱</span><div><p className="briefing-item-type">Best opportunity in the plan</p><p className="briefing-item-content"><strong>{s.plan.strongest.our} against {s.plan.strongest.their}.</strong> {s.plan.strongest.why}</p></div>
+      </div>
+      <div className="briefing-item verify">
+        <span className="briefing-item-icon" aria-hidden="true">↗</span><div><p className="briefing-item-type">When the plan changes</p><p className="briefing-item-content">Open the response explorer, select their put-up, and review the suggested answer and future cost.</p><a className="text-link" href="/dashboard/match-night">Open the war room →</a></div>
       </div>
       <div className="briefing-item verify">
         <span className="briefing-item-icon" aria-hidden="true">✓</span>
