@@ -178,6 +178,9 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   /* Phones: Next Send already answers the open opponent, so threats and risks come before the per-opponent overview. */
   .decide-threats { order:1; } .decide-risks { order:2; } .decide-sends { order:3; } }
 .ns-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; align-items:center; }
+.ns-phone-details { display:block; }
+.ns-phone-details > summary { display:none; }
+.ns-phone-details:not([open]) > .ns-phone-content { display:block; }
 .ns-chip { min-height:40px; padding:6px 10px; border-radius:20px; border:1px solid #c9b88f; background:#fff; color:#3b2f17; font-size:13px; }
 .ns-chip.on { background:#5d4413; color:#fff; border-color:#5d4413; font-weight:700; }
 .ns-head { margin:2px 0; font-size:15px; }
@@ -227,6 +230,33 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
 .ns-foot { margin:-4px 0 8px; font-size:11px; }
 @media print { .ns-chips, .ns-send, .mv-toggle { display:none; } }
 @media (max-width:600px) {
+  /* The first screen is for the call, the opposing put-up, and the immediate risks.
+     Keep the complete evidence one tap away rather than hiding or deleting it. */
+  body.match-night #tonight { display:flex; flex-direction:column; }
+  body.match-night #tonight > h2 { order:0; }
+  body.match-night #tonight > .when { order:1; }
+  body.match-night #tonight > .vs { order:2; }
+  body.match-night #next-send { order:3; }
+  body.match-night #tonight > .tonight-grid.decide { order:4; }
+  body.match-night #match-plan { order:5; }
+  body.match-night #tonight > .lineup-budget { order:6; }
+  body.match-night #tonight > .ns-foot { order:7; }
+  body.match-night #tonight > .tonight-grid.detail { order:8; }
+  body.match-night #tonight > .tonight-links { order:9; }
+  .ns-phone-details { display:block; margin:5px 0 0; border-top:1px solid #d7c99e; }
+  .ns-phone-details > summary { display:block; min-height:44px; padding:12px 0; box-sizing:border-box; cursor:pointer; color:#5d4413; font-size:13px; font-weight:700; }
+  .ns-phone-details:not([open]) > .ns-phone-content { display:none; }
+  /* Preserve the actual choice and the three immediate decision cards in a 390×664
+     Safari viewport; full evidence remains in the disclosure above. */
+  .next-send { padding:5px 8px; }
+  .next-send h3 { font-size:14px; }
+  .ns-plan-answer { margin:3px 0; padding:4px 6px; }
+  .ns-plan-answer b { font-size:15px; }
+  .ns-plan-answer .mp-why, .ns-plan-answer .mp-cost, .ns-plan-answer .muted { font-size:11px; }
+  .ns-chips { gap:3px; margin-bottom:2px; }
+  .ns-chip { min-height:40px; padding:5px 8px; }
+  .tonight-grid.decide { gap:3px; margin-bottom:4px; }
+  .ns-phone-details[open] > summary { border-bottom:1px solid #d7c99e; }
   /* One swipeable row of opponents on phones (full names; a real roster has 8). */
   .ns-chips { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; padding-bottom:2px; }
   .ns-chip { flex:0 0 auto; white-space:nowrap; min-height:44px; max-width:85%; overflow:hidden; text-overflow:ellipsis; }
