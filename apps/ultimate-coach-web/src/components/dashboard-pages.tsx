@@ -139,7 +139,7 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
 
     <section className="captain-brief" aria-label="Captain’s briefing">
       <div><p className="captain-kicker">Best opening move · historical plan</p><h2>Lead with {s.plan.lead.player}.</h2><p>{s.plan.lead.why}</p><a href="/dashboard/match-night">Open the match plan →</a></div>
-      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : ‘No winning direct-record threat is established in this snapshot.’}</p><span>Historical simulation · confirm tonight’s roster</span></div>
+      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : "No winning direct-record threat is established in this snapshot."}</p><span>Historical simulation · confirm tonight’s roster</span></div>
     </section>
 
     <Card kicker="Captain readiness · confirm before the first put-up" title="Make the historical plan usable tonight">

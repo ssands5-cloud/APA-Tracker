@@ -16,19 +16,19 @@ const BOOTSTRAP_ID = 'bootstrap-seed';
 
 export async function getUser(id: string): Promise<User | null> {
   const rows = await execute('SELECT * FROM users WHERE id = ?', [id]);
-  return rows[0] as User ?? null;
+  return rows[0] as unknown as User ?? null;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
   const rows = await execute('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
-  return rows[0] as User ?? null;
+  return rows[0] as unknown as User ?? null;
 }
 
 export async function listUsers(role?: Role): Promise<User[]> {
   const rows = role
     ? await execute('SELECT * FROM users WHERE role = ? ORDER BY created_at DESC', [role])
     : await execute('SELECT * FROM users ORDER BY role ASC, created_at DESC', []);
-  return rows as User[];
+  return rows as unknown as User[];
 }
 
 export async function createUser(
