@@ -1834,6 +1834,12 @@ body {
 .command-risk { margin: 0 0 16px; padding-left: 12px; border-left: 3px solid #e3a68f; }
 .command-risk p { margin: 0; color: #ffe0d2; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .command-risk p + p { margin-top: 4px; color: #c9dace; font-size: 13px; }
+.command-preserve { color: #fbe3a1; font-size: 15px; font-weight: 550; line-height: 1.5; }
+.command-preserve strong { display: block; font-weight: 800; }
+.command-protected-players { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.command-protected-players li { display: grid; gap: 3px; }
+.command-protected-players strong { color: var(--ivory); font-size: 21px; font-weight: 800; line-height: 1.25; }
+.command-protected-players span { color: #f8dc8a; font-size: 15px; font-weight: 650; }
 .command-primary { display: inline-flex; align-items: center; min-height: 46px; padding: 11px 18px; border: 1px solid #efcf7d; border-radius: 6px; background: #f3d579; color: #102217; font-size: 15px; font-weight: 800; line-height: 1.4; }
 .command-primary:hover { background: #ffe9a8; }
 .command-primary:focus-visible, .command-dossier a:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }

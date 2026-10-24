@@ -76,7 +76,7 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
     </div>
 
     {/* SUPPORTING REFERENCE — below the fold */}
-    <div className="two-columns"><Holds snapshot={s}/><Holds snapshot={s} protect/></div>
+    <div className="two-columns"><Holds snapshot={s}/><div id="protected-options"><Holds snapshot={s} protect/></div></div>
 
     <Card kicker="If they lead instead" title="Response table">
       <div className="table-scroll" role="region" aria-label="Responses to every opposing player" tabIndex={0}>

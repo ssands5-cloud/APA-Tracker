@@ -5,6 +5,7 @@
     "threats": [{ "name": "Xeno", "text": "Winning recorded results against 2 of 3 captured players. Small sample." }],
     "plan": {
       "lead": { "player": "Jordan", "level": "Solid", "why": "Keeps a supported response available against the remaining roster." },
+      "protect": [{ "our": "Quinn", "covers": ["Xeno"], "why": "Keep this designated answer until Xeno is put up." }],
       "strongest": { "our": "Jordan", "their": "Xeno", "level": "Strong", "why": "8–2 in 10 recorded meetings. Current form is not established." }
     }
   }

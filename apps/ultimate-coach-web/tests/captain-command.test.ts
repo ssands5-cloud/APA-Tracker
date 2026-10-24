@@ -20,7 +20,8 @@ test('the command presents the supplied opening, reasoning and matchup without c
   assert.match(html, /Lead with<\/span> Jordan/);
   assert.match(html, /Solid Evidence/);
   assert.match(html, /Keeps a supported response/);
-  assert.match(html, /8–2 in 10 recorded meetings/);
+  assert.match(html, /Quinn/);
+  assert.match(html, /Save for Xeno/);
   assert.match(html, /Historical reference/);
   assert.match(html, /href="\/dashboard\/match-night\?opponent=demo-xeno#response-explorer"/);
   assert.deepEqual(input, before);
@@ -57,4 +58,21 @@ test('the opening action, reason and recorded concern precede supporting site br
   assert.ok(html.indexOf('class="command-risk"') < html.indexOf('class="command-primary"'));
   assert.match(html, /Biggest recorded concern/);
   assert.match(html, /Risk is not rated by the historical engine/);
+});
+
+test('the opening panel exposes protection and its lineup cost before branding', () => {
+  const html = render({ ...fixture(), withShell: true });
+  assert.ok(html.indexOf('Who to protect') < html.indexOf('class="brand"'));
+  assert.match(html, /Don’t spend your next answer/);
+  assert.match(html, /one player can cover only one match/);
+  assert.match(html, /href="\/dashboard\/match-night#protected-options"/);
+});
+
+test('no protected option does not invent a hold or claim the lineup is safe', () => {
+  const input = fixture();
+  input.snapshot.plan.protect = [];
+  const html = render(input);
+  assert.match(html, /No designated protection/);
+  assert.match(html, /Check response tradeoffs/);
+  assert.doesNotMatch(html, /Don’t spend your next answer|Save for Xeno/);
 });
