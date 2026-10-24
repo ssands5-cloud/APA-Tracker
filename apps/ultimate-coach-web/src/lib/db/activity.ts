@@ -29,13 +29,13 @@ export interface ActivityRow {
 
 export async function listActivity(userId?: string, limit = 50): Promise<ActivityRow[]> {
   if (userId) {
-    return execute(
+    return (await execute(
       'SELECT * FROM user_activity WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
       [userId, limit],
-    ) as Promise<ActivityRow[]>;
+    )) as unknown as ActivityRow[];
   }
-  return execute(
+  return (await execute(
     'SELECT * FROM user_activity ORDER BY created_at DESC LIMIT ?',
     [limit],
-  ) as Promise<ActivityRow[]>;
+  )) as unknown as ActivityRow[];
 }

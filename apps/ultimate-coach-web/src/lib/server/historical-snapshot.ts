@@ -5,6 +5,13 @@ import type { Snapshot } from '../snapshot-types';
 import { logActivity } from '../db/activity';
 
 export type SnapshotResult = { ok: true; snapshot: Snapshot } | Extract<AccessResult, { ok: false }>;
+type EncryptedFrame = { format: string; iv: string; ciphertext: string };
+
+function isEncryptedFrame(value: unknown): value is EncryptedFrame {
+  if (!value || typeof value !== 'object') return false;
+  const frame = value as Record<string, unknown>;
+  return typeof frame.format === 'string' && typeof frame.iv === 'string' && typeof frame.ciphertext === 'string';
+}
 
 async function fetchEncryptedFrame(): Promise<unknown> {
   const snapshotUrl = process.env.UC_SNAPSHOT_URL;
@@ -30,6 +37,7 @@ export async function authorizedSnapshot(): Promise<SnapshotResult> {
     const key = Buffer.from(process.env.UC_SNAPSHOT_KEY ?? '', 'base64');
     if (key.length !== 32 || access.scope !== 'historical-pilot') return { ok: false, reason: 'unavailable' };
     const frame = await fetchEncryptedFrame();
+    if (!isEncryptedFrame(frame)) return { ok: false, reason: 'unavailable' };
     const text = decryptSnapshot(frame, key);
     const snapshot = JSON.parse(text) as Snapshot;
     if (

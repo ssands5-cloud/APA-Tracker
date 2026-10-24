@@ -1,7 +1,7 @@
 import 'server-only';
 import { execute } from './client';
 
-export type AdminAction = 'approve' | 'deny' | 'promote' | 'demote' | 'suspend' | 'remove' | 'bootstrap';
+export type AdminAction = 'approve' | 'deny' | 'promote' | 'demote' | 'suspend' | 'remove' | 'bootstrap' | 'admin_sign_in';
 
 export interface AuditEntry {
   id: number;
@@ -40,5 +40,5 @@ export async function listAuditLog(limit = 50): Promise<AuditEntry[]> {
      ORDER BY a.id DESC LIMIT ?`,
     [limit],
   );
-  return rows as AuditEntry[];
+  return rows as unknown as AuditEntry[];
 }
