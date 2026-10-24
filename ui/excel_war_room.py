@@ -2348,9 +2348,12 @@ def _packet_caution_worst(wb) -> str:
         rec=dict(zip(ME_COLUMNS,row))
         if rec['Rank']=='vs':blocks.append([])
         elif rec['Category']=='R':
+            games = _direct_games_count(rec['Direct Games'])
+            if games is None:
+                continue
             blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+
-                (' · SMALL SAMPLE' if rec['Direct Games']<3 else '')+
-                (' · Lost once · Only 1 meeting' if rec['Direct Games']==1 else ''))
+                (' · SMALL SAMPLE' if games<3 else '')+
+                (' · Lost once · Only 1 meeting' if games==1 else ''))
     return 'Loss cautions — recorded losses, not exclusions:\n'+max(('\n'.join(b) for b in blocks),key=len)
 
 
@@ -2359,9 +2362,18 @@ def _deeper_records_worst(wb) -> str:
     for row in wb['Matchup Evidence'].iter_rows(min_row=2,values_only=True):
         rec=dict(zip(ME_COLUMNS,row))
         if rec['Rank']=='vs':blocks.append([])
-        elif rec['Direct Games'] and rec['Direct Games']>1:
+        elif (_direct_games_count(rec['Direct Games']) or 0) > 1:
             blocks[-1].append(rec['Player']+' — '+rec['Direct Record']+' · concerning · SMALL SAMPLE')
     return 'Deeper direct records — more meetings, not a new order:\n'+max(('\n'.join(b) for b in blocks),key=len)
+
+
+def _direct_games_count(value: Any) -> int | None:
+    """Worksheet cells outside the evidence table may be labels or formulas, never game counts."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    return None
 
 
 def _budget_scope_worst() -> str:
