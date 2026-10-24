@@ -1,0 +1,5 @@
+minimumReleaseAgeExclude:
+  - '@clerk/backend@3.26.0'
+  - '@clerk/nextjs@7.9.18'
+  - '@clerk/react@6.18.0'
+  - '@clerk/shared@4.41.0'

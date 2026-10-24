@@ -3,38 +3,52 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.orm import Session
 
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
+from analytics.ultimate_coach_match_day import load_match_day_settings
 from database.engine import create_db_engine
 from ui.ultimate_coach import render
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = PROJECT_ROOT / "data" / "ultimate_coach_staging.db"
 DEFAULT_OUTPUT = PROJECT_ROOT / "output" / "ultimate_coach.html"
+DEFAULT_CONFIG = PROJECT_ROOT / "apa_config.yaml"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
     if not args.db.is_file():
         print(f"Ultimate Coach staging DB does not exist: {args.db}")
         return 1
 
+    settings = load_match_day_settings(args.config)
     engine = create_db_engine({"database": {"path": str(args.db)}}, create_tables=False)
     try:
         with Session(engine) as db:
-            payload = build_verified_cockpit_payload(db)
+            payload = build_verified_cockpit_payload(db, match_day_timezone=settings.timezone)
     finally:
         engine.dispose()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    html = render(payload, built_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    html = render(
+        payload,
+        built_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        consume_evidence=True,
+        viewer_member_external_id=settings.viewer_member_external_id,
+        viewer_card_number=settings.viewer_card_number,
+    )
     args.output.write_text(html, encoding="utf-8")
     print(
         f"Ultimate Coach HTML written: {payload['counts']['players']} players, "
