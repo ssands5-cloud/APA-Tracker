@@ -1,4 +1,5 @@
 import { Card, Notice, PageTitle } from './ui';
+import { CaptainCommand } from './captain-command';
 import { HistoricalOpponentView } from './historical-opponent-view';
 import { PlanBoard } from './plan-board';
 import { record, meetings, type Snapshot } from '@/lib/snapshot-types';
@@ -14,133 +15,15 @@ function Holds({ snapshot: s, protect = false }: { snapshot: Snapshot; protect?:
 
 /* ─── Home ─────────────────────────────────────────────────────────────────── */
 export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
-  const { players, opponents, fixture } = s;
+  const { fixture } = s;
   return <>
-    {/* ARENA HERO */}
-    <div className="arena-hero">
-      <svg viewBox="0 0 900 270" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="ah-sg1" cx="18%" cy="3%" r="52%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.18)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <radialGradient id="ah-sg2" cx="50%" cy="3%" r="55%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.22)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <radialGradient id="ah-sg3" cx="75%" cy="3%" r="42%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.14)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <linearGradient id="ah-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="transparent"/>
-            <stop offset="20%" stopColor="#c9a840"/>
-            <stop offset="50%" stopColor="#e8c85a"/>
-            <stop offset="80%" stopColor="#c9a840"/>
-            <stop offset="100%" stopColor="transparent"/>
-          </linearGradient>
-          <linearGradient id="ah-lv" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(4,11,5,0.88)"/>
-            <stop offset="50%" stopColor="rgba(4,11,5,0.35)"/>
-            <stop offset="100%" stopColor="rgba(4,11,5,0)"/>
-          </linearGradient>
-          <linearGradient id="ah-bv" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(4,11,5,0)"/>
-            <stop offset="100%" stopColor="rgba(4,11,5,0.94)"/>
-          </linearGradient>
-        </defs>
-        {/* Arena background */}
-        <rect width="900" height="270" fill="#040b05"/>
-        {/* Spotlight cones */}
-        <polygon points="155,0 100,270 210,270" fill="rgba(201,168,64,0.042)"/>
-        <polygon points="380,0 305,270 455,270" fill="rgba(201,168,64,0.058)"/>
-        <polygon points="630,0 578,270 682,270" fill="rgba(201,168,64,0.048)"/>
-        {/* Spotlight fixtures */}
-        <circle cx="155" cy="5" r="8" fill="rgba(255,242,160,0.75)"/>
-        <circle cx="380" cy="5" r="10" fill="rgba(255,242,160,0.88)"/>
-        <circle cx="630" cy="5" r="8" fill="rgba(255,242,160,0.72)"/>
-        {/* Pool table outer rail */}
-        <rect x="468" y="28" width="408" height="214" rx="14" fill="#2a1204"/>
-        <rect x="468" y="28" width="408" height="5" rx="4" fill="rgba(201,168,64,0.14)"/>
-        {/* Felt surface */}
-        <rect x="492" y="48" width="358" height="176" rx="5" fill="#0b3a0d"/>
-        {/* Center light on felt */}
-        <ellipse cx="672" cy="136" rx="145" ry="60" fill="rgba(14,70,16,0.38)"/>
-        {/* 6 pockets */}
-        <circle cx="494" cy="50" r="13" fill="#030904"/>
-        <circle cx="848" cy="50" r="13" fill="#030904"/>
-        <circle cx="494" cy="222" r="13" fill="#030904"/>
-        <circle cx="848" cy="222" r="13" fill="#030904"/>
-        <circle cx="671" cy="42" r="11" fill="#030904"/>
-        <circle cx="671" cy="230" r="11" fill="#030904"/>
-        {/* Rail diamond markers */}
-        <polygon points="547,43 551,48 547,53 543,48" fill="rgba(201,168,64,0.5)"/>
-        <polygon points="609,43 613,48 609,53 605,48" fill="rgba(201,168,64,0.5)"/>
-        <polygon points="733,43 737,48 733,53 729,48" fill="rgba(201,168,64,0.5)"/>
-        <polygon points="794,43 798,48 794,53 790,48" fill="rgba(201,168,64,0.5)"/>
-        {/* Ball rack — 15-ball triangle */}
-        {/* Row 5 back */}
-        <circle cx="855" cy="152" r="8.5" fill="#f0c000"/>
-        <circle cx="838" cy="152" r="8.5" fill="#1a6cc4"/>
-        <circle cx="820" cy="152" r="8.5" fill="#ab1a1a"/>
-        <circle cx="803" cy="152" r="8.5" fill="#6e22a8"/>
-        <circle cx="786" cy="152" r="8.5" fill="#d45f00"/>
-        {/* Row 4 */}
-        <circle cx="846" cy="137" r="8.5" fill="#1a7a43"/>
-        <circle cx="829" cy="137" r="8.5" fill="#5c1a1a"/>
-        <circle cx="812" cy="137" r="8.5" fill="#f0c000"/>
-        <circle cx="795" cy="137" r="8.5" fill="#1a6cc4"/>
-        {/* Row 3 */}
-        <circle cx="837" cy="122" r="8.5" fill="#ab1a1a"/>
-        <circle cx="820" cy="122" r="8.5" fill="#050505"/>
-        <circle cx="803" cy="122" r="8.5" fill="#6e22a8"/>
-        {/* 8-ball white circle */}
-        <circle cx="820" cy="122" r="4" fill="rgba(255,255,255,0.92)"/>
-        {/* Row 2 */}
-        <circle cx="828" cy="107" r="8.5" fill="#d45f00"/>
-        <circle cx="811" cy="107" r="8.5" fill="#1a7a43"/>
-        {/* Row 1 apex */}
-        <circle cx="820" cy="92" r="8.5" fill="#5c1a1a"/>
-        {/* Cue ball */}
-        <circle cx="566" cy="136" r="12" fill="white"/>
-        <circle cx="562" cy="132" r="4.5" fill="rgba(255,255,255,0.55)"/>
-        {/* Cue stick */}
-        <rect x="508" y="170" width="258" height="3.5" rx="1.75" fill="#d4a96a" opacity="0.4" transform="rotate(-15 508 170)"/>
-        {/* Spotlight radial glows */}
-        <rect width="900" height="270" fill="url(#ah-sg1)"/>
-        <rect width="900" height="270" fill="url(#ah-sg2)"/>
-        <rect width="900" height="270" fill="url(#ah-sg3)"/>
-        {/* Gold top rail */}
-        <rect x="0" y="0" width="900" height="4" fill="url(#ah-gold)"/>
-        {/* Left text vignette */}
-        <rect x="0" y="0" width="900" height="270" fill="url(#ah-lv)"/>
-        {/* Bottom vignette */}
-        <rect x="0" y="215" width="900" height="55" fill="url(#ah-bv)"/>
-      </svg>
-      <div className="arena-hero-overlay">
-        <p className="arena-eyebrow">Historical Match Simulation · {fixture.format} · {fixture.scope}</p>
-        <h2 className="arena-matchup">{fixture.team}<span className="arena-matchup-vs">vs</span>{fixture.opponent}</h2>
-        <p className="arena-meta">{fixture.when} · Reference cap {s.simulation.cap}</p>
-        <p className="match-readiness">Match readiness: <strong>Historical plan available</strong></p>
-        <ul className="match-brief-points">
-          <li><span aria-hidden="true">✓</span> {s.totals.favorablePairs} favorable direct {s.totals.favorablePairs === 1 ? 'record' : 'records'} identified</li>
-          <li><span aria-hidden="true">!</span> {s.threats.length} {s.threats.length === 1 ? 'opponent' : 'opponents'} with winning direct records to scout</li>
-          <li><span aria-hidden="true">●</span> {s.plan.lead.player ? `Opening option: ${s.plan.lead.player}` : 'Opening option unavailable'}</li>
-        </ul>
-        <a className="arena-cta" href="/dashboard/match-night">Open match plan <span aria-hidden="true">→</span></a>
-      </div>
-    </div>
+    <CaptainCommand snapshot={s}/>
 
     <nav className="captain-next" aria-label="Captain’s next steps">
-      <a href="/dashboard/match-night"><strong>01 · Make the call</strong><span>Explore responses to their put-up →</span></a>
-      <a href="/dashboard/threats"><strong>02 · Scout the opposition</strong><span>Review recorded threats →</span></a>
-      <a href="/dashboard/recommendations"><strong>03 · Check the evidence</strong><span>Compare matchup support →</span></a>
+      <a href="/dashboard/match-night"><strong>Make the call</strong><span>Explore responses to their put-up →</span></a>
+      <a href="/dashboard/threats"><strong>Scout the opposition</strong><span>Read opponent dossiers →</span></a>
+      <a href="/dashboard/summary"><strong>Read the briefing</strong><span>Opening strategy, holds and contingencies →</span></a>
     </nav>
-
-    <section className="captain-brief" aria-label="Captain’s briefing">
-      <div><p className="captain-kicker">Best opening move · historical plan</p><h2>Lead with {s.plan.lead.player}.</h2><p>{s.plan.lead.why}</p><a href="/dashboard/match-night">Open the match plan →</a></div>
-      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : "No winning direct-record threat is established in this snapshot."}</p><span>Historical simulation · confirm tonight’s roster</span></div>
-    </section>
 
     <Card kicker="Captain readiness · confirm before the first put-up" title="Make the historical plan usable tonight">
       <div className="readiness-checks"><div><strong>1. Confirm the fixture</strong><p>This plan is for {fixture.team} vs {fixture.opponent}, {fixture.when}. Verify tonight’s opponent and format.</p></div><div><strong>2. Confirm who is here</strong><p>{s.simulation.availability} Attendance has not been verified.</p></div><div><strong>3. Confirm the rules</strong><p>The reference cap is {s.simulation.cap}; verify the current cap and player skill levels.</p></div></div>
@@ -153,7 +36,7 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
 
 /* ─── Match Night ───────────────────────────────────────────────────────────── */
 export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
-  const { players, opponents, fixture } = s;
+  const { players, opponents } = s;
   const lead = players.find(p => p.name === s.plan.lead.player);
   const leadSL = lead?.skill;
   const leadRecords = opponents.map(opponent => lead ? s.evidence[opponent.id]?.[lead.id] : undefined);
@@ -162,59 +45,7 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
   const neutral = recorded.filter(row => row!.wins === row!.losses).length;
   const concern = recorded.filter(row => row!.wins < row!.losses).length;
   return <>
-    {/* WAR ROOM HERO */}
-    <div className="war-room-hero">
-      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="wr-sg1" cx="15%" cy="5%" r="60%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.2)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <radialGradient id="wr-sg2" cx="85%" cy="5%" r="55%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.18)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <linearGradient id="wr-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="transparent"/>
-            <stop offset="20%" stopColor="#c9a840"/>
-            <stop offset="50%" stopColor="#e8c85a"/>
-            <stop offset="80%" stopColor="#c9a840"/>
-            <stop offset="100%" stopColor="transparent"/>
-          </linearGradient>
-          <linearGradient id="wr-bv" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(4,11,5,0)"/>
-            <stop offset="100%" stopColor="rgba(4,11,5,0.95)"/>
-          </linearGradient>
-        </defs>
-        <rect width="900" height="200" fill="#060e08"/>
-        {/* Crosshair lines (war room grid feel) */}
-        <line x1="0" y1="100" x2="900" y2="100" stroke="rgba(201,168,64,0.06)" strokeWidth="1"/>
-        <line x1="450" y1="0" x2="450" y2="200" stroke="rgba(201,168,64,0.06)" strokeWidth="1"/>
-        {/* Corner spotlights */}
-        <polygon points="0,0 200,0 0,140" fill="rgba(201,168,64,0.03)"/>
-        <polygon points="900,0 700,0 900,140" fill="rgba(201,168,64,0.03)"/>
-        {/* 8-ball graphic top-right */}
-        <circle cx="845" cy="38" r="28" fill="#141414"/>
-        <circle cx="845" cy="38" r="12" fill="white" opacity="0.9"/>
-        <circle cx="840" cy="34" r="5" fill="#141414"/>
-        {/* Rack dots bottom right */}
-        <circle cx="780" cy="170" r="5" fill="rgba(201,168,64,0.35)"/>
-        <circle cx="796" cy="170" r="5" fill="rgba(171,26,26,0.35)"/>
-        <circle cx="812" cy="170" r="5" fill="rgba(26,108,196,0.35)"/>
-        <circle cx="788" cy="158" r="5" fill="rgba(110,34,168,0.35)"/>
-        <circle cx="804" cy="158" r="5" fill="rgba(212,95,0,0.35)"/>
-        <circle cx="796" cy="146" r="5" fill="rgba(26,122,67,0.35)"/>
-        <rect width="900" height="200" fill="url(#wr-sg1)"/>
-        <rect width="900" height="200" fill="url(#wr-sg2)"/>
-        <rect x="0" y="0" width="900" height="4" fill="url(#wr-gold)"/>
-        <rect x="0" y="155" width="900" height="45" fill="url(#wr-bv)"/>
-      </svg>
-      <div className="war-room-hero-overlay">
-        <p className="arena-eyebrow">Match Night War Room · {fixture.format} · Cap {s.simulation.cap}</p>
-        <h1>{fixture.team} <span style={{ color:'var(--gold)', fontWeight: 400 }}>vs</span> {fixture.opponent}</h1>
-        <p>{fixture.when} · Historical simulation · {s.simulation.games} games</p>
-      </div>
-    </div>
+    <CaptainCommand snapshot={s} matchNight/>
 
     <div className="captain-decision-grid">
     <div className="captain-explorer">
@@ -291,72 +122,9 @@ export function RecommendationsPage({ snapshot: s }: { snapshot: Snapshot }) {
 export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players } = s;
   return <>
-    {/* SHARK TANK HERO */}
-    <div className="shark-hero">
-      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="st-sr" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(192,57,43,0.22)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <linearGradient id="st-water" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#020a12"/>
-            <stop offset="100%" stopColor="#040e18"/>
-          </linearGradient>
-          <linearGradient id="st-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="transparent"/>
-            <stop offset="20%" stopColor="#c9a840"/>
-            <stop offset="50%" stopColor="#e8c85a"/>
-            <stop offset="80%" stopColor="#c9a840"/>
-            <stop offset="100%" stopColor="transparent"/>
-          </linearGradient>
-          <linearGradient id="st-bv" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(2,10,18,0)"/>
-            <stop offset="100%" stopColor="rgba(2,10,18,0.96)"/>
-          </linearGradient>
-          <linearGradient id="st-lv" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(2,10,18,0.88)"/>
-            <stop offset="55%" stopColor="rgba(2,10,18,0.3)"/>
-            <stop offset="100%" stopColor="rgba(2,10,18,0)"/>
-          </linearGradient>
-        </defs>
-        {/* Deep water background */}
-        <rect width="900" height="200" fill="url(#st-water)"/>
-        {/* Water depth lines */}
-        {[40,70,100,130,160].map(y => <line key={y} x1="0" y1={y} x2="900" y2={y} stroke="rgba(30,80,140,0.08)" strokeWidth="1"/>)}
-        {/* Shark silhouette (right side) */}
-        {/* Body */}
-        <ellipse cx="680" cy="110" rx="160" ry="38" fill="rgba(10,20,30,0.85)"/>
-        {/* Dorsal fin */}
-        <polygon points="640,72 660,110 700,110 710,72" fill="rgba(10,20,30,0.85)"/>
-        {/* Tail fin */}
-        <polygon points="840,80 818,108 818,112 840,140 826,110" fill="rgba(10,20,30,0.8)"/>
-        {/* Pectoral fin */}
-        <polygon points="630,116 640,145 680,118" fill="rgba(10,20,30,0.7)"/>
-        {/* Shark eye */}
-        <circle cx="525" cy="108" r="5" fill="rgba(192,57,43,0.9)"/>
-        <circle cx="524" cy="107" r="2" fill="rgba(0,0,0,0.9)"/>
-        {/* Shark grin lines */}
-        <path d="M 508 116 Q 520 126 532 116" stroke="rgba(10,20,30,0.9)" strokeWidth="2" fill="none"/>
-        {/* Blood-red glow around shark */}
-        <ellipse cx="650" cy="110" rx="200" ry="60" fill="url(#st-sr)"/>
-        {/* Bubbles */}
-        {[[510,85,3],[498,65,2],[520,55,4],[490,95,2.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(100,160,220,0.18)"/>)}
-        {/* Spotlight glows */}
-        <rect width="900" height="200" fill="url(#st-sr)" opacity="0.4"/>
-        {/* Gold top rail */}
-        <rect x="0" y="0" width="900" height="4" fill="url(#st-gold)"/>
-        {/* Left text vignette */}
-        <rect x="0" y="0" width="900" height="200" fill="url(#st-lv)"/>
-        {/* Bottom vignette */}
-        <rect x="0" y="148" width="900" height="52" fill="url(#st-bv)"/>
-      </svg>
-      <div className="shark-hero-overlay">
-        <p className="arena-eyebrow" style={{ color: 'var(--shark-bright)' }}>Shark Tank · Threat Intelligence</p>
-        <h1>Know the water before you send.</h1>
-        <p style={{ fontSize: 14, fontWeight: 650, color: '#eee4e4', margin: 0 }}>{s.threats.length} {s.threats.length === 1 ? 'threat' : 'threats'} with winning direct records · {players.length} players scouted</p>
-      </div>
-    </div>
+    <PageTitle eyebrow="Shark Tank · Opponent dossiers" title="Prepare the counter before they put up.">
+      {s.threats.length} opponents with winning recorded results against the captured roster. Start with the counter options, then inspect the evidence.
+    </PageTitle>
 
     {/* SCOUTING REPORT CARDS */}
     <div className="two-columns" style={{ marginBottom: 20 }}>
@@ -378,11 +146,12 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
               </div>
             </div>
             <div className="spc-body">
+              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
               <p className="spc-threat-level">Historical record — {threatPct}% wins in recorded meetings</p>
               <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
               <p><strong>Why dangerous:</strong> {t.text}</p>
               <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>
-              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
+
               <Notice>{t.meetings < 3 ? 'Thin record: a small number of meetings is limited evidence, not a proven matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
             </div>
             <div className="spc-footer">
