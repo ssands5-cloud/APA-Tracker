@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from analytics.ultimate_coach_data_contract import build_contract
 from analytics.ultimate_coach_identity_manifest import build_verified_identity_manifest
 from analytics.ultimate_coach_identity_namespace_audit import audit_identity_namespace
+from analytics.ultimate_coach_match_day import DEFAULT_MATCH_DAY_TIMEZONE, build_match_day_section
 
 
 def _result_for_perspective(all_games_row: dict[str, Any], player_id: int) -> str:
@@ -43,8 +44,14 @@ def _result_for_perspective(all_games_row: dict[str, Any], player_id: int) -> st
     return ""
 
 
-def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
+def build_verified_cockpit_payload(
+    db: Session, *, match_day_timezone: str = DEFAULT_MATCH_DAY_TIMEZONE
+) -> dict[str, Any]:
     """Return the cockpit payload, gated end-to-end by verified identity.
+
+    `match_day_timezone` is the disclosed display timezone every Match Day
+    date/kickoff is derived in (see analytics.ultimate_coach_match_day) --
+    computed once here so the HTML and Excel exports can never disagree.
 
     Every step is deterministic given identical database content: the same
     contract -> manifest -> audit chain the offline analytics/export layer
@@ -52,13 +59,46 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
     """
     contract = build_contract(db)
     manifest = build_verified_identity_manifest(contract)
-    audit = audit_identity_namespace(contract, manifest=manifest)
+    audit = audit_identity_namespace(
+        contract, manifest=manifest, include_participant_details=False
+    )
 
     verified_game_keys = set(audit["identity_verified_game_keys"])
     quarantined_game_keys = set(audit["quarantined_game_keys"])
     verified_player_ids = {identity["player_id"] for identity in manifest["identities"]}
 
     tables = contract["tables"]
+
+    team_formats_by_scope: dict[tuple[str, str], set[str]] = defaultdict(set)
+    team_formats_by_id: dict[str, set[str]] = defaultdict(set)
+    for match in tables["team_matches"]:
+        # Real team_matches rows carry MASTERS/MASTERS ALT too (see
+        # scraper.graphql_scraper._VALID_FORMATS) -- a team-vs-team match in
+        # one of those formats is just as real as an EIGHT/NINE one and
+        # must count toward that team's derived format. Only a genuinely
+        # blank/unrecognized format is excluded; nothing is hardcoded to a
+        # 2-value allowlist.
+        fmt = str(match.get("format") or "").upper()
+        if not fmt:
+            continue
+        session_name = str(match.get("session_name") or "")
+        for field in ("home_team_id", "away_team_id"):
+            team_id = str(match.get(field) or "")
+            if not team_id:
+                continue
+            team_formats_by_scope[(team_id, session_name)].add(fmt)
+            team_formats_by_id[team_id].add(fmt)
+
+    def _team_history_format(row: dict[str, Any]) -> str:
+        team_id = str(row.get("team_external_id") or "")
+        session_name = str(row.get("session_name") or "")
+        scoped = team_formats_by_scope.get((team_id, session_name), set())
+        if len(scoped) == 1:
+            return next(iter(scoped))
+        global_formats = team_formats_by_id.get(team_id, set())
+        if len(global_formats) == 1:
+            return next(iter(global_formats))
+        return ""
 
     history_by_player: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for row in tables["team_history"]:
@@ -68,6 +108,7 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
                 "team_name": row["team_name"] or "",
                 "division_id": row["division_id"] or "",
                 "session_name": row["session_name"] or "",
+                "format": _team_history_format(row),
                 "is_current": bool(row["is_current"]),
                 "skill_level": row["skill_level"],
                 "matches_won": row["matches_won"],
@@ -206,6 +247,9 @@ def build_verified_cockpit_payload(db: Session) -> dict[str, Any]:
         "identity_policy": "ROSTER_PROVENANCE_REQUIRED",
         "players": players,
         "evidence": evidence,
+        "match_day": build_match_day_section(
+            tables["team_matches"], players, display_timezone=match_day_timezone
+        ),
         "trust": trust,
         "counts": {
             "players": len(players),

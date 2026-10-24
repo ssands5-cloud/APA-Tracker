@@ -1,0 +1,3 @@
+# Complete Windows refresh: existing application dependencies plus native Excel automation.
+-r requirements.txt
+pywin32==312; sys_platform == "win32"
