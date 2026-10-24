@@ -1062,7 +1062,7 @@
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +'<details class="ns-phone-details"><summary>Open full evidence and candidates</summary><div class="ns-phone-content">'+wrNextSendEvidence(w,plan,ns,sel)+'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied. Losing-record cautions use most net losses first, then meeting count.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
+      +'<details class="ns-phone-details" open><summary>Open full evidence and candidates</summary><div class="ns-phone-content">'+wrNextSendEvidence(w,plan,ns,sel)+'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied. Losing-record cautions use most net losses first, then meeting count.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
@@ -1186,6 +1186,10 @@
       +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient verified evidence in this snapshot: '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
+    // A closed native <details> element suppresses its body before CSS can restore it.
+    // Keep desktop controls usable, then collapse only the phone-first disclosure.
+    var nextDetails=el.querySelector("#next-send .ns-phone-details");
+    if(nextDetails&&window.matchMedia&&window.matchMedia("(max-width: 600px)").matches) nextDetails.open=false;
     // Keep the selected opponent's chip fully visible inside the swipeable row (scrolls the row, not the page).
     var on=el.querySelector("#next-send .ns-chip.on");
     if(on){var row=on.parentNode,left=on.offsetLeft-row.offsetLeft,right=left+on.offsetWidth;
