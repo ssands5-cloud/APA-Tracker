@@ -101,3 +101,15 @@ apa_config.local.yaml
 apps/ultimate-coach-web/data/
 apps/ultimate-coach-web/private-snapshots/*
 !apps/ultimate-coach-web/private-snapshots/historical.enc.json
+
+# Credential and session artifacts that must never be committed.
+# These files exist locally but are not and must not be tracked.
+# .env.txt — APA account credentials (username, password)
+# token.txt / token.xlsx — session/auth tokens
+# dashboard*.html — exported dashboard HTML with embedded data
+.env.txt
+.env.*
+token.txt
+token.xlsx
+dashboard*.html
+run_apa_full_scrape.bat
