@@ -1323,7 +1323,7 @@ def test_match_night_ranks_our_players_against_each_opponent_with_evidence(tmp_p
                 ["—", "Ann Archer", "4", "No verified direct meetings in this snapshot", "No shared opponents",
                  "No verified direct or shared-opponent evidence in this snapshot"],
             ]
-            notes = page.locator(".rank-block p.muted").all_inner_texts()
+            notes = page.locator(".rank-block p.muted:not(.wr-history-scope)").all_inner_texts()
             assert notes[0] == "1 of 2 of our players have direct or shared-opponent evidence against this opponent."
             assert notes[1] == "No recorded 8-Ball games for this opponent in the verified evidence — nothing to rank on."
             assert _ranking_rows(page, 2)[0] == ["1", "Ann Archer", "4", "2-0 (2 meetings)",
@@ -1410,7 +1410,7 @@ def test_html_ranking_matches_the_shared_python_module_exactly(tmp_path: Path):
             page.select_option("#team-b", "Falcons|d1|Spring 2026")
             for i, block in enumerate(expected["opponents"]):
                 assert page.locator(f"#rank-block-{i} h3").inner_text().startswith("vs " + block["opponent_label"])
-                assert page.locator(f"#rank-block-{i} p.muted").inner_text() == block["note"]
+                assert page.locator(f"#rank-block-{i} p.muted:not(.wr-history-scope)").inner_text() == block["note"]
                 got = [(r[0], r[1], r[3], r[4], r[5]) for r in _ranking_rows(page, i)]
                 want = [(r["rank"], r["player"], r["direct_text"], r["shared_text"], r["basis"]) for r in block["rows"]]
                 assert got == want
