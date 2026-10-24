@@ -233,6 +233,11 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
         <p className="arena-eyebrow">Match Night War Room · {fixture.format} · Cap {s.simulation.cap}</p>
         <h1>{fixture.team} <span style={{ color:'var(--gold)', fontWeight: 400 }}>vs</span> {fixture.opponent}</h1>
         <p>{fixture.when} · Historical simulation · {s.simulation.games} games</p>
+        <div className="captain-callout">
+          <span>Captain&apos;s call</span>
+          <strong>Lead with {s.plan.lead.player}</strong>
+          <p>{s.plan.lead.why}</p>
+        </div>
       </div>
     </div>
 
