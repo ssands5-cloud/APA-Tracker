@@ -59,14 +59,29 @@ def main():
                     brand = page.locator('.brand').bounding_box()
                     command = page.locator('.captain-command').bounding_box()
                     assert brand['y'] >= command['y'] + command['height'], 'branding precedes the decision'
-                    # In the standard iPad/desktop layout all five decision signals fit together.
-                    if width >= 1024 and html is standard:
-                        box = page.locator('.captain-command').bounding_box()
+                    # The four immediate decisions fit on standard phone, iPad and desktop screens.
+                    if html is standard:
+                        box = page.locator('.command-glance').bounding_box()
                         assert box['y'] + box['height'] <= height, (browser_type.name, width, box)
+                    if browser_type.name == 'webkit' and html is standard and width in [390, 1024]:
+                        page.screenshot(path=str(WEB / 'node_modules' / f'captain-command-{width}.png'), full_page=True)
                     count += 1
                 page.close()
+            for name in ['dossiers', 'briefing']:
+                for width, height in [(390, 664), (1024, 768), (1180, 820)]:
+                    page = browser.new_page(viewport={'width': width, 'height': height})
+                    page.set_content(render({**fixture, 'view': name}))
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), (name, width)
+                    for element in page.locator('.threat-dossier a, .captain-minute a, .captain-minute summary').all():
+                        box = element.bounding_box()
+                        if box:
+                            assert box['height'] >= 44, (name, width, box)
+                    if browser_type.name == 'webkit' and width == 1024:
+                        page.screenshot(path=str(WEB / 'node_modules' / f'captain-{name}.png'), full_page=True)
+                    page.close()
+                    count += 1
             browser.close()
-    print(f'{count} command layouts passed (Chromium + WebKit; phone, iPad, desktop; long text).')
+    print(f'{count} captain layouts passed (Chromium + WebKit; phone, iPad, desktop; long text; scouting and briefing).')
 
 
 if __name__ == '__main__':

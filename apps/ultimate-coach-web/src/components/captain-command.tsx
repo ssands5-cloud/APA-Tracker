@@ -4,9 +4,8 @@ import { evidenceLabel } from '../lib/evidence-label';
 /** Presentation of the supplied plan only. No ranking or recommendation is calculated here. */
 export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: Snapshot; matchNight?: boolean }) {
   const threat = s.threats[0];
-  const threatOpponent = s.opponents.find(player => player.name === threat?.name);
   const protectedOptions = s.plan.protect;
-  const responseLink = (id?: string) => `/dashboard/match-night${id ? `?opponent=${encodeURIComponent(id)}` : ''}#response-explorer`;
+  const firstProtection = protectedOptions[0];
 
   return <section className="captain-command" aria-label="Captain Command Center">
     <header className="command-fixture">
@@ -18,7 +17,22 @@ export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: 
       <span className="command-scope">Historical reference{' '}<br/>Confirm tonight’s fixture &amp; roster</span>
     </header>
 
-    <div className="command-intelligence">
+    <dl className="command-glance" aria-label="Five-second captain decisions">
+      <div><dt>SEND · if we lead</dt><dd>{s.plan.lead.player}</dd><p>{evidenceLabel(s.plan.lead.level)}</p></div>
+      <div><dt>PROTECT</dt><dd>{firstProtection?.our ?? 'No designated hold'}</dd><p>{firstProtection ? `For ${firstProtection.covers.join(' or ')}${protectedOptions.length > 1 ? ` · +${protectedOptions.length - 1} other protected options` : ''}` : 'Check response costs first'}</p></div>
+      <div><dt>THREAT</dt><dd>{threat?.name ?? 'Not established'}</dd><p>{threat ? 'Recorded concern · inspect coverage' : 'Unknown does not mean safe'}</p></div>
+      <div><dt>TRADEOFF</dt><dd>{firstProtection ? 'Don’t spend the next answer' : 'Check what sending costs'}</dd><p>{firstProtection ? 'Keep the designated matchup available' : 'No extra safety is implied'}</p></div>
+    </dl>
+    {matchNight ? <details className="command-opening-details"><summary>Opening strategy and protection · if we put up first</summary><CommandReasoning snapshot={s} matchNight/></details> : <CommandReasoning snapshot={s}/>}
+  </section>;
+}
+
+function CommandReasoning({ snapshot: s, matchNight = false }: { snapshot: Snapshot; matchNight?: boolean }) {
+  const threat = s.threats[0];
+  const threatOpponent = s.opponents.find(player => player.name === threat?.name);
+  const protectedOptions = s.plan.protect;
+  const responseLink = (id?: string) => `/dashboard/match-night${id ? `?opponent=${encodeURIComponent(id)}` : ''}#response-explorer`;
+  return <div className="command-intelligence">
       <div className="command-recommendation">
         <p className="command-kicker">Strategic Recommendation · If we put up first</p>
         <h2><span>Lead with</span> {s.plan.lead.player}</h2>
@@ -55,6 +69,5 @@ export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: 
           <a href={threatOpponent ? responseLink(threatOpponent.id) : '/dashboard/threats'}>{threatOpponent ? 'Prepare a counter →' : 'Scout the opposition →'}</a>
         </article>
       </div>
-    </div>
-  </section>;
+  </div>;
 }

@@ -76,3 +76,41 @@ test('no protected option does not invent a hold or claim the lineup is safe', (
   assert.match(html, /Check response tradeoffs/);
   assert.doesNotMatch(html, /Don’t spend your next answer|Save for Xeno/);
 });
+
+test('four immediate decisions precede full opening analysis', () => {
+  const html = render(fixture());
+  for (const label of ['SEND · if we lead', 'PROTECT', 'THREAT', 'TRADEOFF']) {
+    assert.ok(html.indexOf(label) < html.indexOf('class="command-intelligence"'));
+  }
+});
+
+test('scouting preserves only the answers designated for this opponent', () => {
+  const input = fixture();
+  input.view = 'dossiers';
+  input.snapshot.plan.protect.push({ our: 'Alex', covers: ['Zane'], why: 'Save for Zane.' });
+  const html = render(input);
+  assert.match(html, /Plan’s counter<\/dt><dd>Jordan/);
+  assert.match(html, /Who to preserve<\/dt><dd>Quinn/);
+  assert.doesNotMatch(html, /Alex/);
+  assert.match(html, /Spends the recorded answer against Zane/);
+  assert.match(html, /2 of 3 captured players/);
+  assert.match(html, /opponent=demo-xeno#response-explorer/);
+});
+
+test('scouting does not invent a counter when a response is absent', () => {
+  const input = fixture(); input.view = 'dossiers'; input.snapshot.responses = {};
+  const html = render(input);
+  assert.match(html, /No response supplied/);
+  assert.match(html, /No counter is established/);
+  assert.doesNotMatch(html, /Strong Evidence/);
+});
+
+test('the team briefing presents conditional actions and their opportunity cost', () => {
+  const input = fixture(); input.view = 'briefing';
+  const html = render(input);
+  assert.match(html, /If we put up first, lead with <b>Jordan/);
+  assert.match(html, /Quinn for Xeno/);
+  assert.match(html, /Sending a protected player early spends a later answer/);
+  assert.match(html, /Confirm who is here/);
+  assert.match(html, /Opening reason:/);
+});

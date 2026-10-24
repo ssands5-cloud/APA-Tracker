@@ -1872,3 +1872,30 @@ body:has(.captain-command) .private-nav a { min-height: 44px; }
   .command-recommendation, .command-dossier { padding: 18px 16px; }
   .command-scouting { border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* Action summary: readable in one glance, with evidence beneath it. */
+.command-glance { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; margin:0; background:var(--border); border-bottom:1px solid var(--border); }
+.command-glance > div { min-width:0; padding:16px 20px; background:#102b20; overflow-wrap:anywhere; }
+.command-glance dt { color:#f8dc8a; font-size:12px; font-weight:850; letter-spacing:.06em; }
+.command-glance dd { margin:6px 0; color:#fff8e5; font-size:20px; font-weight:800; line-height:1.2; }
+.command-glance p { margin:0; color:#d8e5d9; font-size:13px; line-height:1.4; font-weight:550; }
+.command-opening-details > summary { padding:14px 20px; min-height:48px; color:#f8dc8a; cursor:pointer; font-weight:750; }
+.dossier-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.dossier-actions > div { min-width:0; border-left:3px solid var(--gold-bright); padding-left:12px; }
+.dossier-actions dt { font-size:13px; font-weight:700; color:var(--chalk-dim); }
+.dossier-actions dd { margin:4px 0 0; font-size:20px; font-weight:800; overflow-wrap:anywhere; }
+.threat-dossier p { line-height:1.6; }
+.captain-minute ol { padding-left:26px; display:grid; gap:18px; max-width:78ch; font-size:18px; line-height:1.6; font-weight:550; }
+.captain-minute li { padding-left:6px; }
+.captain-minute details { margin-top:20px; }
+.captain-minute summary { min-height:44px; cursor:pointer; font-weight:750; }
+@media (max-width:740px) {
+ .command-glance { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .command-glance > div { padding:12px; }
+ .command-glance dd { font-size:18px; }
+ .dossier-actions { grid-template-columns:minmax(0,1fr); }
+ .captain-minute ol { font-size:17px; }
+}
+
+
+.threat-dossier .text-link { display:inline-flex; align-items:center; min-height:44px; }

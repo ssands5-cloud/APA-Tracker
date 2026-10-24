@@ -1,5 +1,6 @@
 import { Card, Notice, PageTitle } from './ui';
 import { CaptainCommand } from './captain-command';
+import { CaptainBriefing, ThreatDossiers } from './captain-decisions';
 import { HistoricalOpponentView } from './historical-opponent-view';
 import { PlanBoard } from './plan-board';
 import { record, meetings, type Snapshot } from '@/lib/snapshot-types';
@@ -120,47 +121,12 @@ export function RecommendationsPage({ snapshot: s }: { snapshot: Snapshot }) {
 
 /* ─── Shark Tank (Threats) ──────────────────────────────────────────────────── */
 export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
-  const { players } = s;
   return <>
     <PageTitle eyebrow="Shark Tank · Opponent dossiers" title="Prepare the counter before they put up.">
       {s.threats.length} opponents with winning recorded results against the captured roster. Start with the counter options, then inspect the evidence.
     </PageTitle>
 
-    {/* SCOUTING REPORT CARDS */}
-    <div className="two-columns" style={{ marginBottom: 20 }}>
-      {s.threats.map(t => {
-        const threatPct = Math.min(100, Math.round((t.wins / Math.max(t.meetings, 1)) * 100));
-        const fillWidth = `${threatPct}%`;
-        const opponent = s.opponents.find(player => player.name === t.name);
-        const response = opponent ? s.responses[opponent.id] : undefined;
-        const favorablePlayers = opponent ? players.filter(player => { const row = s.evidence[opponent.id]?.[player.id]; return row?.hasDirect && row.wins > row.losses; }) : [];
-        return (
-          <div className="shark-profile-card" key={t.name}>
-            <div className="spc-header">
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p className="spc-name">{t.name}</p>
-                <div>
-                  <span className="spc-record">{t.wins}W – {t.meetings - t.wins}L</span>
-                  <span className="spc-coverage">{t.playersMet} of {players.length} players met</span>
-                </div>
-              </div>
-            </div>
-            <div className="spc-body">
-              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
-              <p className="spc-threat-level">Historical record — {threatPct}% wins in recorded meetings</p>
-              <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
-              <p><strong>Why dangerous:</strong> {t.text}</p>
-              <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>
-
-              <Notice>{t.meetings < 3 ? 'Thin record: a small number of meetings is limited evidence, not a proven matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
-            </div>
-            <div className="spc-footer">
-              <a href={opponent ? `/dashboard/recommendations?opponent=${encodeURIComponent(opponent.id)}` : '/dashboard/recommendations'}>Inspect response evidence →</a>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <ThreatDossiers snapshot={s}/>
 
     <Card title="Why the warning is limited">
       <p>All captured players are assumed available. Changing availability can change the relevant threat scope. A record against only a few players is not evidence against every player on the roster.</p>
@@ -210,101 +176,10 @@ export function TeamStatusPage({ snapshot: s }: { snapshot: Snapshot }) {
 export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { fixture } = s;
   return <>
-    {/* CAPTAIN'S BRIEFING HERO */}
-    <div className="briefing-hero">
-      <svg viewBox="0 0 900 190" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="cb-sg" cx="50%" cy="10%" r="70%">
-            <stop offset="0%" stopColor="rgba(220,190,80,0.24)"/>
-            <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-          </radialGradient>
-          <linearGradient id="cb-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="transparent"/>
-            <stop offset="20%" stopColor="#c9a840"/>
-            <stop offset="50%" stopColor="#e8c85a"/>
-            <stop offset="80%" stopColor="#c9a840"/>
-            <stop offset="100%" stopColor="transparent"/>
-          </linearGradient>
-          <linearGradient id="cb-bv" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(4,11,5,0)"/>
-            <stop offset="100%" stopColor="rgba(4,11,5,0.95)"/>
-          </linearGradient>
-          <linearGradient id="cb-lv" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(4,11,5,0.85)"/>
-            <stop offset="60%" stopColor="rgba(4,11,5,0.2)"/>
-            <stop offset="100%" stopColor="rgba(4,11,5,0)"/>
-          </linearGradient>
-        </defs>
-        <rect width="900" height="190" fill="#040b05"/>
-        {/* Main spotlight */}
-        <polygon points="450,0 320,190 580,190" fill="rgba(201,168,64,0.06)"/>
-        <polygon points="450,0 370,190 530,190" fill="rgba(201,168,64,0.06)"/>
-        <circle cx="450" cy="6" r="12" fill="rgba(255,242,160,0.92)"/>
-        {/* Trophy art (right side) */}
-        {/* Cup body */}
-        <path d="M 730 140 Q 720 100 700 80 L 800 80 Q 780 100 770 140 Z" fill="rgba(201,168,64,0.25)"/>
-        {/* Cup base */}
-        <rect x="730" y="140" width="40" height="8" rx="2" fill="rgba(201,168,64,0.3)"/>
-        <rect x="722" y="148" width="56" height="6" rx="3" fill="rgba(201,168,64,0.35)"/>
-        {/* Cup handles */}
-        <path d="M 700 90 Q 680 105 700 120 L 712 120 Q 694 106 712 90 Z" fill="rgba(201,168,64,0.2)"/>
-        <path d="M 800 90 Q 820 105 800 120 L 788 120 Q 806 106 788 90 Z" fill="rgba(201,168,64,0.2)"/>
-        {/* Star on trophy */}
-        <polygon points="750,95 752,103 760,103 754,108 756,116 750,111 744,116 746,108 740,103 748,103" fill="rgba(201,168,64,0.45)"/>
-        {/* Side spotlights */}
-        <polygon points="100,0 60,190 140,190" fill="rgba(201,168,64,0.035)"/>
-        <polygon points="800,0 760,190 840,190" fill="rgba(201,168,64,0.03)"/>
-        <circle cx="100" cy="5" r="7" fill="rgba(255,242,160,0.6)"/>
-        <circle cx="800" cy="5" r="7" fill="rgba(255,242,160,0.6)"/>
-        <rect width="900" height="190" fill="url(#cb-sg)"/>
-        <rect x="0" y="0" width="900" height="4" fill="url(#cb-gold)"/>
-        <rect x="0" y="0" width="900" height="190" fill="url(#cb-lv)"/>
-        <rect x="0" y="140" width="900" height="50" fill="url(#cb-bv)"/>
-      </svg>
-      <div className="briefing-hero-overlay">
-        <p className="arena-eyebrow">Captain&rsquo;s Briefing · Historical Replay</p>
-        <h1 className="briefing-hero-title">{fixture.team} <span style={{ color: 'var(--gold)', fontWeight: 400 }}>vs</span> {fixture.opponent}</h1>
-        <p style={{ fontSize: 12, color: 'var(--chalk-muted)', margin: 0 }}>{fixture.when} · Cap {s.simulation.cap}</p>
-      </div>
-    </div>
-
-    {/* BRIEFING ITEMS */}
-    <div className="briefing-items">
-      <div className="briefing-item lead">
-        <span className="briefing-item-icon" aria-hidden="true">🎯</span>
-        <div>
-          <p className="briefing-item-type">Opening strategy</p>
-          <p className="briefing-item-content"><strong>Lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
-        </div>
-      </div>
-      <div className="briefing-item protect">
-        <span className="briefing-item-icon" aria-hidden="true">🛡</span>
-        <div>
-          <p className="briefing-item-type">Protect these players</p>
-          <p className="briefing-item-content">{s.plan.protect.length ? s.plan.protect.map(h => `${h.our} for ${h.covers.join(', ')}; send when that matchup is put up.`).join(' ') : 'No unique designated-answer protection is established.'}</p>
-        </div>
-      </div>
-      <div className="briefing-item threat">
-        <span className="briefing-item-icon" aria-hidden="true">🦈</span>
-        <div>
-          <p className="briefing-item-type">Threat to scout</p>
-          <p className="briefing-item-content">{s.threats[0]?.text ?? 'No winning direct-record threat established; inspect missing evidence.'}</p>
-        </div>
-      </div>
-      <div className="briefing-item lead">
-        <span className="briefing-item-icon" aria-hidden="true">🎱</span><div><p className="briefing-item-type">Best opportunity in the plan</p><p className="briefing-item-content"><strong>{s.plan.strongest.our} against {s.plan.strongest.their}.</strong> {s.plan.strongest.why}</p></div>
-      </div>
-      <div className="briefing-item verify">
-        <span className="briefing-item-icon" aria-hidden="true">↗</span><div><p className="briefing-item-type">When the plan changes</p><p className="briefing-item-content">Open the response explorer, select their put-up, and review the suggested answer and future cost.</p><a className="text-link" href="/dashboard/match-night">Open the war room →</a></div>
-      </div>
-      <div className="briefing-item verify">
-        <span className="briefing-item-icon" aria-hidden="true">✓</span>
-        <div>
-          <p className="briefing-item-type">Verify Before Acting</p>
-          <p className="briefing-item-content">{s.simulation.availability} Cap {s.simulation.cap} is simulated. The historical fixture is not a claim about tonight&apos;s actual schedule.</p>
-        </div>
-      </div>
-    </div>
+    <PageTitle eyebrow="Captain’s Briefing · One-minute team plan" title="Here’s our plan.">
+      {fixture.team} vs {fixture.opponent} · {fixture.format} · Historical reference. Confirm the current fixture and roster.
+    </PageTitle>
+    <CaptainBriefing snapshot={s}/>
 
     <div className="two-columns">
       <PairSupport title="Strongest evidence in the planned matchups" pair={s.plan.strongest}/>
