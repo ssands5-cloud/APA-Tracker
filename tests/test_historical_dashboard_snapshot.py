@@ -85,7 +85,9 @@ def test_forbidden_field_does_not_replace_last_good_snapshot(private_snapshot_di
 
 
 def test_output_outside_repository_refused_without_writes():
-    with pytest.raises(RuntimeError,match='not inside'):
+    # Windows preserves the foreign absolute path and rejects it at the repository boundary.
+    # On POSIX, that spelling is relative and is rejected by the ignored-tmp boundary instead.
+    with pytest.raises((RuntimeError, ValueError), match='not inside|ignored tmp'):
         write_snapshot({},Path('C:/outside-apa-snapshot.json'))
 
 
