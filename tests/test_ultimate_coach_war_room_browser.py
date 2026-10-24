@@ -1660,6 +1660,12 @@ def test_save_warning_opens_exact_future_meetings_without_changing_put_up(tmp_pa
                 assert not details.evaluate("el => el.open")
                 details.locator(":scope > summary").click()
             page.locator('#next-send [data-next="10"]').click()
+            if width == 390:
+                # A new opponent re-renders the compact disclosure closed.  Reopen it
+                # before inspecting the selected pairing's detailed evidence.
+                details = page.locator("#next-send .ns-phone-details")
+                assert not details.evaluate("el => el.open")
+                details.locator(":scope > summary").click()
             page.locator('[data-plan="note"][data-pid="11"]').fill("Keep this observation")
             saved = page.evaluate('localStorage.getItem("ultimate-coach:plan-v2")')
             assert saved and "Keep this observation" in saved
