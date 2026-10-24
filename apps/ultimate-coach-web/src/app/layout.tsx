@@ -13,7 +13,7 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
       <p className="sidebar-caption">THE CAPTAIN’S CORNER</p><Navigation/>
       <div className="sidebar-foot"><span className="status-dot"/> PHASE 1 · READ ONLY<p>Clear evidence.<br/>Your decision.</p></div></aside>
     <div className="workspace"><div className="topbar"><span>Match-night companion</span><span className="demo-pill">SYNTHETIC DEMO</span></div>
-      <div className="demo-banner"><strong>Demo data only.</strong> Invented teams and records. No live APA connection. Historical snapshots require authorized sign-in. <a className="text-link" href="/dashboard">Captain sign-in →</a></div>
+      <div className="demo-banner"><strong>Demo data only.</strong> Invented teams and records. No live APA connection. <a className="text-link" href="/dashboard">Open protected historical dashboard →</a></div>
       <main id="content" tabIndex={-1}>{children}</main><footer>ULTIMATE COACH <span>Illustrative guidance · not predictions · captain decides</span></footer>
     </div></body></html>;
 }
