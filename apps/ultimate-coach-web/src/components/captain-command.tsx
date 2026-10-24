@@ -25,6 +25,10 @@ export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: 
         <h2><span>Lead with</span> {s.plan.lead.player}</h2>
         <span className="command-confidence">{evidenceLabel(s.plan.lead.level)}</span>
         <p className="command-why"><strong>Why:</strong> {s.plan.lead.why}</p>
+        <div className="command-risk">
+          <p><strong>Biggest recorded concern:</strong> {threat?.text ?? 'Missing matchup evidence. No named threat does not mean a safe matchup.'}</p>
+          <p>Risk is not rated by the historical engine.</p>
+        </div>
         <a className="command-primary" href={matchNight ? '#response-explorer' : '/dashboard/match-night'}>{matchNight ? 'If they put up → Find our response' : 'Open Tonight’s Plan →'}</a>
         <p className="command-limit">Historical plan, not a win prediction. Confirm attendance, skill levels and the current cap before sending.</p>
       </div>

@@ -1831,6 +1831,9 @@ body {
 .command-recommendation h2 > span { display: block; margin-bottom: 6px; color: #e4eddf; font-size: 18px; font-weight: 650; }
 .command-confidence { display: inline-block; margin-bottom: 12px; padding: 3px 9px; border: 1px solid rgba(243,213,121,.5); border-radius: 4px; color: #fbe3a1; font-size: 13px; font-weight: 750; }
 .command-why { margin: 0 0 18px; color: #f0f4e9; font-size: 16px; font-weight: 550; line-height: 1.55; overflow-wrap: anywhere; }
+.command-risk { margin: 0 0 16px; padding-left: 12px; border-left: 3px solid #e3a68f; }
+.command-risk p { margin: 0; color: #ffe0d2; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.command-risk p + p { margin-top: 4px; color: #c9dace; font-size: 13px; }
 .command-primary { display: inline-flex; align-items: center; min-height: 46px; padding: 11px 18px; border: 1px solid #efcf7d; border-radius: 6px; background: #f3d579; color: #102217; font-size: 15px; font-weight: 800; line-height: 1.4; }
 .command-primary:hover { background: #ffe9a8; }
 .command-primary:focus-visible, .command-dossier a:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
@@ -1842,6 +1845,19 @@ body {
 .command-dossier h2 { margin: 0 0 8px; color: #f5f0e0; font-size: 19px; font-weight: 800; line-height: 1.3; }
 .command-dossier p:not(.command-kicker) { margin: 0; color: #dbe7d9; font-size: 14px; line-height: 1.5; }
 .command-dossier a { display: inline-flex; align-items: center; min-height: 44px; margin-top: 5px; color: #f8dc8a; font-size: 14px; font-weight: 750; }
+.snapshot-context { margin-top: 24px; padding: 14px 0; color: #c9dace; border-top: 1px solid var(--border); font-size: 13px; }
+.snapshot-context summary { min-height: 44px; cursor: pointer; font-weight: 700; }
+/* Home and Match Night use the full opening screen for decisions. The brand
+   and supplementary site navigation follow the workspace in document order. */
+body:has(.captain-command) .workspace { margin-left: 0; }
+body:has(.captain-command) .sidebar { position: static; width: auto; padding: 18px 24px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 24px; }
+body:has(.captain-command) .sidebar-caption,
+body:has(.captain-command) .sidebar-foot { display: none; }
+body:has(.captain-command) .navigation { display: flex; flex-wrap: wrap; margin: 0; gap: 6px; }
+body:has(.captain-command) .navigation a { min-height: 44px; }
+body:has(.captain-command) main { padding-top: 16px; }
+body:has(.captain-command) .private-nav { padding: 0 0 12px; background: transparent; }
+body:has(.captain-command) .private-nav a { min-height: 44px; }
 @media (max-width: 740px) {
   .command-fixture { display: block; padding: 16px; }
   .command-scope { display: block; margin-top: 10px; }

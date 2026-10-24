@@ -19,16 +19,19 @@ def render(fixture):
         cwd=WEB, input=json.dumps(fixture), capture_output=True, text=True, encoding='utf-8', check=True,
     )
     css = (WEB / 'src/app/globals.css').read_text(encoding='utf-8')
-    return f'<!doctype html><html lang="en"><head><meta charset="utf-8"><style>{css}</style></head><body><div class="workspace"><main>{result.stdout}</main></div></body></html>'
+    return result.stdout.replace('<html lang="en">', f'<html lang="en"><head><meta charset="utf-8"><style>{css}</style></head>')
 
 
 def main():
-    standard = render(FIXTURE)
+    fixture = json.loads(json.dumps(FIXTURE))
+    fixture['withShell'] = True
+    standard = render(fixture)
     long = json.loads(json.dumps(FIXTURE))
     long['snapshot']['fixture']['team'] = 'The Championship Contenders of Evergreen'
     long['snapshot']['fixture']['opponent'] = 'Copper Ridge League Night Challengers'
     long['snapshot']['plan']['lead']['player'] = 'Avery-Alexander Montgomery-Wellington'
     long['snapshot']['plan']['lead']['why'] *= 4
+    long['withShell'] = True
     expanded = render(long)
     count = 0
     with sync_playwright() as p:
@@ -39,7 +42,7 @@ def main():
                 for html in [standard, expanded]:
                     page.set_content(html)
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), f'{browser_type.name}: overflow at {width}'
-                    for selector in ['.command-fixture h1', '.command-recommendation h2', '.command-why', '.command-primary', '.command-dossier']:
+                    for selector in ['.command-fixture h1', '.command-recommendation h2', '.command-why', '.command-risk', '.command-primary', '.command-dossier']:
                         for element in page.locator(selector).all():
                             box = element.bounding_box()
                             assert box and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (selector, width, box)
@@ -53,6 +56,9 @@ def main():
                                 return true;
                             }'''), f'clipped {selector} at {width}'
                     assert page.locator('.command-primary').bounding_box()['height'] >= 44
+                    brand = page.locator('.brand').bounding_box()
+                    command = page.locator('.captain-command').bounding_box()
+                    assert brand['y'] >= command['y'] + command['height'], 'branding precedes the decision'
                     # In the standard iPad/desktop layout all five decision signals fit together.
                     if width >= 1024 and html is standard:
                         box = page.locator('.captain-command').bounding_box()

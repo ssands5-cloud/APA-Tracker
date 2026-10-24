@@ -49,3 +49,12 @@ test('caution and conflicted evidence are preserved rather than upgraded to conf
   for (const level of ['Strong', 'Solid', 'Thin']) assert.equal(evidenceLabel(level), `${level} Evidence`);
   for (const level of ['Unknown', 'Caution', 'Conflicted']) assert.equal(evidenceLabel(level), level);
 });
+
+test('the opening action, reason and recorded concern precede supporting site branding', () => {
+  const html = render({ ...fixture(), withShell: true });
+  assert.ok(html.indexOf('Lead with') < html.indexOf('class="brand"'));
+  assert.ok(html.indexOf('class="command-why"') < html.indexOf('class="brand"'));
+  assert.ok(html.indexOf('class="command-risk"') < html.indexOf('class="command-primary"'));
+  assert.match(html, /Biggest recorded concern/);
+  assert.match(html, /Risk is not rated by the historical engine/);
+});
