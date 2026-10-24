@@ -1187,9 +1187,13 @@
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
       +'</div><div class="tonight-links"><a href="#team-section">Open the War Room ↓</a><a href="#lineup-lab">Lineup Lab</a><a href="#match-day-card">Change matchup</a></div>';
     // A closed native <details> element suppresses its body before CSS can restore it.
-    // Keep desktop controls usable, then collapse only the phone-first disclosure.
+    // Keep desktop controls usable, then collapse only a real touch-phone disclosure.
+    // A narrow desktop browser still needs its evidence controls exposed for keyboard and
+    // mouse use; an iPhone reports touch capability as well as the narrow viewport.
     var nextDetails=el.querySelector("#next-send .ns-phone-details");
-    if(nextDetails&&window.matchMedia&&window.matchMedia("(max-width: 600px)").matches) nextDetails.open=false;
+    var touchPhone=window.matchMedia&&window.matchMedia("(max-width: 600px)").matches
+      &&(window.matchMedia("(pointer: coarse)").matches||(navigator.maxTouchPoints||0)>0);
+    if(nextDetails&&touchPhone) nextDetails.open=false;
     // Keep the selected opponent's chip fully visible inside the swipeable row (scrolls the row, not the page).
     var on=el.querySelector("#next-send .ns-chip.on");
     if(on){var row=on.parentNode,left=on.offsetLeft-row.offsetLeft,right=left+on.offsetWidth;
