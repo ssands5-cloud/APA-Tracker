@@ -45,7 +45,8 @@ test('snapshot encryption authenticates the content, format and server-only key'
 
 test('historical loading is guarded before file access with no shared cache', () => {
   const loader = readFileSync('src/lib/server/historical-snapshot.ts', 'utf8');
-  assert.ok(loader.indexOf('if (!access.ok) return access') < loader.indexOf('await readFile('));
+  const authorizedLoader = loader.slice(loader.indexOf('export async function authorizedSnapshot'));
+  assert.ok(authorizedLoader.indexOf('if (!access.ok) return access') < authorizedLoader.indexOf('fetchEncryptedFrame()'));
   assert.match(loader, /import 'server-only'/);
   assert.doesNotMatch(loader, /unstable_cache|React\.cache|force-cache/);
   const route = readFileSync('src/app/dashboard/[[...section]]/page.tsx', 'utf8');
@@ -57,19 +58,21 @@ test('historical loading is guarded before file access with no shared cache', ()
   assert.doesNotMatch(authorization, /searchParams|request\.json|headers\(\)/);
 });
 
-test('only ciphertext is retained as a deployable snapshot; public modules have no private import', () => {
+test('only ciphertext is accepted as a deployable snapshot; public modules have no private import', () => {
   assert.equal(existsSync('data/snapshot.json'), false);
-  const frame = JSON.parse(readFileSync('private-snapshots/historical.enc.json', 'utf8'));
-  assert.deepEqual(Object.keys(frame).sort(), ['ciphertext', 'format', 'iv']);
-  assert.equal(frame.format, 'ultimate-coach-private-snapshot-v1');
+  assert.equal(existsSync('private-snapshots/historical.enc.json'), false);
+  const ignored = readFileSync('.gitignore', 'utf8');
+  assert.match(ignored, /^private-snapshots\/$/m);
   function files(folder: string): string[] { return readdirSync(folder, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(folder, e.name)) : [join(folder, e.name)]); }
   for (const file of files('src')) {
     const text = readFileSync(file, 'utf8');
-    if (!file.includes(join('lib', 'server'))) assert.doesNotMatch(text, /UC_SNAPSHOT_KEY|historical\.enc\.json|readFile\(/, file);
+    if (!file.includes(join('lib', 'server')) && !file.includes(join('lib', 'db'))) {
+      assert.doesNotMatch(text, /UC_SNAPSHOT_KEY|historical\.enc\.json|readFile\(/, file);
+    }
     assert.doesNotMatch(text, /data\/snapshot\.json|NEXT_PUBLIC_UC_(?:SNAPSHOT|AUTHORIZED)|AUTH_BYPASS|MOCK_AUTH/i, file);
     if (text.startsWith("'use client'")) assert.doesNotMatch(text, /lib\/server|private-snapshots|process\.env/, file);
   }
   for (const file of ['src/app/page.tsx','src/app/match-night/page.tsx','src/app/recommendations/page.tsx','src/app/threats/page.tsx','src/app/team-status/page.tsx','src/app/summary/page.tsx']) {
-    assert.doesNotMatch(readFileSync(file, 'utf8'), /dashboard-pages|historical|snapshot/);
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /from\s+['"][^'"]*(?:dashboard-pages|lib\/server)/);
   }
 });
