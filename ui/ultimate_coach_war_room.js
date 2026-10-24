@@ -1058,11 +1058,11 @@
     return '<div id="next-send" class="next-send" tabindex="-1"><h3>Next Send — options against '+esc(wrDisplayName(opp,w.theirs))+'</h3>'
       +(chosen?'':'<p class="ns-hypothetical">Nobody put up yet — showing a possible response to '
         +esc(wrDisplayName(opp,w.theirs))+'. Tap who they actually put up.</p>')
-      +wrPlanAnswer(answer,spends)+wrNextSendEvidence(w,plan,ns,sel)
+      +wrPlanAnswer(answer,spends)
       +'<div class="ns-chips" role="group" aria-label="Opponent they put up"><span class="ns-ask">'
       +(chosen?'They put up:':'If they put up:')+'</span>'
       +open.map(function(j){var o=w.theirs[j];return '<button type="button" class="ns-chip'+(j===sel?' on':'')+'" data-next="'+esc(o.id)+'" aria-pressed="'+(j===sel)+'">'+esc(wrDisplayName(o,w.theirs)+" · Captured SL "+slText(o))+'</button>';}).join("")+'</div>'
-      +'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied. Losing-record cautions use most net losses first, then meeting count.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
+      +'<details class="ns-phone-details"><summary>Open full evidence and candidates</summary><div class="ns-phone-content">'+wrNextSendEvidence(w,plan,ns,sel)+'<div class="ns-method"><b>Not an overall player ranking.</b> Direct records are ordered by recorded win percentage before meeting count, not confidence. A 1-0 record can appear before 8-2. <b>First does not mean better supported or the better practical send.</b> Small samples do not reduce position. Equal evidence stays tied. Losing-record cautions use most net losses first, then meeting count.<br>Shared-only comparisons are not ordered. No verified direct/shared comparison means unknown, not weak.</div>'
       +(ns.ranked.length?'':'<p class="ns-head"><b>'+esc(ns.headline)+'</b></p>')+budgetScope+'<ul class="ns-list">'
       +ns.ranked.map(function(m,i){var cost=wrCostText(w,sel,m.member.id,plan.rem,plan.unplayed);
         var evidence=w.blocks[sel].rows.filter(function(r){return r.member.id===m.member.id;})[0].c.direct;
@@ -1087,7 +1087,7 @@
       })()
       +wrBroaderRecords(w,plan,ta,tb,opp)
       +wrNoteFlagSlot(opp.id,"preview","your opinion, not APA facts","div","ns-coach")
-      +'</div>';
+      +'</div></details></div>';
   }
 
   function wrList(items,empty){return '<ul class="wr-list">'+(items.length?items.map(function(t){return '<li>'+esc(t)+'</li>';}).join(""):'<li class="muted">'+esc(empty)+'</li>')+'</ul>';}

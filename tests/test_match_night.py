@@ -116,6 +116,12 @@ def test_phone_unlock_first_screen_remember_and_offline(served):
             for sel in ("#tonight .when", "#next-send", "#tonight .decide-sends", "#tonight .decide-threats", "#tonight .decide-risks"):
                 box = page.locator(sel).bounding_box()
                 assert box and box["y"] + box["height"] <= 844, (sel, box)
+            # Regression #next-send: detailed evidence remains available, but it cannot push the
+            # captain's first decision screen below an iPhone Safari viewport.
+            details = page.locator("#next-send .ns-phone-details")
+            assert details.count() == 1 and not details.evaluate("element => element.open")
+            details.locator(":scope > summary").click()
+            assert "Not an overall player ranking." in details.inner_text()
             assert page.evaluate("document.documentElement.scrollWidth") <= 390
             # The section chips scroll sideways: the right edge fades as a "more" cue, and the last chip can be
             # scrolled fully clear of that fade (it used to stop flush at the edge, with no cue at all).
