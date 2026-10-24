@@ -21,8 +21,10 @@ export default async function HistoricalPage({ params }: { params: Promise<{ sec
   }
   const Page = pages[(path[0] ?? '') as keyof typeof pages];
   const snapshot = result.snapshot;
-  return <ClerkProvider><div className="private-shell"><header className="private-header"><a href="/dashboard">Ultimate Coach · protected snapshot</a><SignOut/></header>
-    <p className="demo-banner"><strong>{snapshot.label}</strong><br/>{snapshot.provenance.notice} Captured {snapshot.provenance.capturedAt}; latest result {snapshot.provenance.latestResult}.</p>
+  return <ClerkProvider><div className="private-shell">
     <nav className="private-nav" aria-label="Historical dashboard navigation">{[['','Home'],['match-night','Match Night'],['recommendations','Recommendations'],['threats','Shark Tank'],['team-status','Team Status'],['summary',"Captain's Briefing"]].map(([slug,title]) => <a key={slug} href={`/dashboard${slug?'/'+slug:''}`} aria-current={(path[0]??'')===slug?'page':undefined}>{title}</a>)}</nav>
-    <section id="historical-content"><Page snapshot={snapshot}/></section></div></ClerkProvider>;
+    <section id="historical-content"><Page snapshot={snapshot}/></section>
+    <details className="snapshot-context"><summary>Historical snapshot · source and limitations</summary><p><strong>{snapshot.label}</strong><br/>{snapshot.provenance.notice} Captured {snapshot.provenance.capturedAt}; latest result {snapshot.provenance.latestResult}.</p></details>
+    <header className="private-header"><a href="/dashboard">Ultimate Coach · protected snapshot</a><SignOut/></header>
+  </div></ClerkProvider>;
 }

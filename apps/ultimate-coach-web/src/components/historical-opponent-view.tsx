@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { record, meetings, type Snapshot } from '@/lib/snapshot-types';
 import { opponentFromSearch } from './opponent-link';
+import { evidenceLabel } from '../lib/evidence-label';
 
 export function HistoricalOpponentView({ snapshot }: { snapshot: Snapshot }) {
   const { evidence, players, opponents, responses } = snapshot;
@@ -35,14 +36,14 @@ export function HistoricalOpponentView({ snapshot }: { snapshot: Snapshot }) {
       </div>
 
       <div className="re-answer-dominant" aria-live="polite" aria-atomic="true">
-        <span className="pill">Send · {answer.level} evidence</span>
+        <span className="pill">Strategic Recommendation · {evidenceLabel(answer.level)}</span>
         <h2 className="re-answer-name">{answer.player}</h2>
         <p className="re-answer-why"><strong>Why:</strong> {answer.why}</p>
         <p className="decision-evidence"><strong>Head-to-head:</strong> {directEvidence?.hasDirect ? `${record(directEvidence)} in ${meetings(directEvidence)} ${meetings(directEvidence) === 1 ? 'recorded meeting' : 'recorded meetings'}` : 'No recorded direct meeting; review the supporting evidence below.'}</p>
         <div className="decision-cautions"><p><strong>Risk:</strong> Not rated by the historical engine.</p><p><strong>Counter / tradeoff:</strong> {answer.cost}</p></div>
         <details style={{ marginTop: 8 }}>
-          <summary className="re-details-summary">Direct-record order and save-for-later cautions</summary>
-          <p className="muted" style={{ marginTop: 8 }}>Direct-record order is separate from the M3 answer. Shared-only candidates remain unranked.</p>
+          <summary className="re-details-summary">Recorded Evidence Order</summary>
+          <p className="muted" style={{ marginTop: 8 }}>This is not a recommendation ranking. Recorded results can put a 1–0 record ahead of an 8–2 record; the strategic recommendation above also considers the body of evidence and the remaining plan. Shared-only candidates remain unranked.</p>
           {answer.candidates.map((candidate, i) => (
             <div className="candidate" key={`${candidate.name}-${i}`}>
               <strong>{candidate.order ? `Direct-record order ${candidate.order}: ` : candidate.group === 'avoid' ? 'Losing direct record: ' : 'Shared, not ordered: '}{candidate.name}</strong>
