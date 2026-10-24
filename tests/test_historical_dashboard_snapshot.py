@@ -1,6 +1,8 @@
 """Private display projection and offline historical-export boundaries; synthetic fixtures only."""
 import hashlib
 import json
+import shutil
+import uuid
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,16 @@ from analytics.ultimate_coach_matchup_evidence import members_by_scope, build_pa
 from analytics.ultimate_coach_war_room import war_room_pair, meetings_index, sl_bucket_index
 
 BUILT = '2026-10-07 18:00 UTC'
+
+
+@pytest.fixture
+def private_snapshot_dir():
+    path = ROOT / 'tmp' / 'pytest-private-snapshot' / uuid.uuid4().hex
+    path.mkdir(parents=True)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def fixture():
@@ -64,8 +76,8 @@ def test_historical_compact_round_trip_and_hash_tamper_refusal(tmp_path):
 
 
 @pytest.mark.parametrize('key',['external_id','card_number','cookie','password','access_token','source_db'])
-def test_forbidden_field_does_not_replace_last_good_snapshot(tmp_path,key):
-    out=tmp_path/'snapshot.json'
+def test_forbidden_field_does_not_replace_last_good_snapshot(private_snapshot_dir,key):
+    out=private_snapshot_dir/'snapshot.json'
     out.write_text('last good snapshot',encoding='utf-8')
     with pytest.raises(ValueError,match='Forbidden'):
         write_snapshot({key:'DO-NOT-PUBLISH'},out)
@@ -73,7 +85,9 @@ def test_forbidden_field_does_not_replace_last_good_snapshot(tmp_path,key):
 
 
 def test_output_outside_repository_refused_without_writes():
-    with pytest.raises(RuntimeError,match='not inside'):
+    # Windows preserves the foreign absolute path and rejects it at the repository boundary.
+    # On POSIX, that spelling is relative and is rejected by the ignored-tmp boundary instead.
+    with pytest.raises((RuntimeError, ValueError), match='not inside|ignored tmp'):
         write_snapshot({},Path('C:/outside-apa-snapshot.json'))
 
 
@@ -86,14 +100,14 @@ def test_plaintext_web_and_tracked_output_refused(relative):
     assert not out.exists()
 
 
-def test_encrypted_projection_round_trip_and_wrong_key_refusal(tmp_path):
+def test_encrypted_projection_round_trip_and_wrong_key_refusal(private_snapshot_dir):
     import os
     import base64
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.exceptions import InvalidTag
     payload, pick = fixture()
     document = build_snapshot(payload, pick, built_at=BUILT, latest_result='Historical', cap=23)
-    source = tmp_path / 'private-snapshot.json'
+    source = private_snapshot_dir / 'private-snapshot.json'
     write_snapshot(document, source)
     key = os.urandom(32)
     frame = encrypt_snapshot(source, key)
@@ -112,3 +126,6 @@ def test_invalid_simulation_cap_refused(cap):
     payload,pick=fixture()
     with pytest.raises(ValueError,match='positive integer'):
         build_snapshot(payload,pick,built_at=BUILT,latest_result='Historical',cap=cap)
+
+
+
