@@ -1672,6 +1672,12 @@ def test_save_warning_opens_exact_future_meetings_without_changing_put_up(tmp_pa
             cells = page.locator('#wr-matrix .mcell').all_text_contents()
             sends = page.locator('#next-send [data-send-our]').evaluate_all('es=>es.map(e=>[e.dataset.sendOur,e.dataset.sendOpp])')
             for opponent, meetings, cue in [(11, 2, "player 1 of 2"), (20, 1, "player 2 of 2")]:
+                if width == 390:
+                    # Opening a pair returns the captain to the compact summary.
+                    # Reopen it before moving on to the next piece of evidence.
+                    details = page.locator("#next-send .ns-phone-details")
+                    if not details.evaluate("el => el.open"):
+                        details.locator(":scope > summary").click()
                 more = page.locator('#next-send details.ns-more')
                 if current_basis == "shared" and not more.get_attribute("open"):
                     more.locator('summary').click()
