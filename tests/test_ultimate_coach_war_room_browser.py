@@ -592,6 +592,10 @@ def test_scouting_cards_open_with_a_quick_read_and_never_clip_on_a_phone(tmp_pat
             tops = page.evaluate("[...document.querySelectorAll('#next-send .ns-chip')].map(c => Math.round(c.getBoundingClientRect().top))")
             assert len(set(tops)) == 1
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            details = page.locator("#next-send .ns-phone-details")
+            assert not details.evaluate("el => el.open")
+            details.locator(":scope > summary").click()
+            assert details.evaluate("el => el.open")
             sizes=page.locator("#next-send .ns-send, #next-send .ns-chip").evaluate_all(
                 "els=>els.map(e=>{let r=e.getBoundingClientRect();return [r.width,r.height]})")
             assert sizes and all(w>=44 and h>=44 for w,h in sizes),sizes
@@ -1651,6 +1655,10 @@ def test_save_warning_opens_exact_future_meetings_without_changing_put_up(tmp_pa
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(path.as_uri())
+            if width == 390:
+                details = page.locator("#next-send .ns-phone-details")
+                assert not details.evaluate("el => el.open")
+                details.locator(":scope > summary").click()
             page.locator('#next-send [data-next="10"]').click()
             page.locator('[data-plan="note"][data-pid="11"]').fill("Keep this observation")
             saved = page.evaluate('localStorage.getItem("ultimate-coach:plan-v2")')
@@ -3265,6 +3273,10 @@ def test_first_action_after_cap_edit_is_not_swallowed(tmp_path, width, gesture, 
             errors = []
             page.on('pageerror', lambda exc: errors.append(str(exc)))
             page.goto(path.as_uri())
+            if action == 'sent' and gesture == 'tap':
+                details = page.locator('#next-send .ns-phone-details')
+                assert not details.evaluate('el=>el.open')
+                details.locator(':scope > summary').click()
             evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
             cap = page.locator('#ll-cap')
             cap.fill('23')
