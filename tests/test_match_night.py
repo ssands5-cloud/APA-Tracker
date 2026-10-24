@@ -359,6 +359,36 @@ def test_a_full_roster_keeps_every_decision_on_a_safari_screen_and_every_name_re
         server.shutdown()
 
 
+def test_next_send_details_are_open_on_desktop_and_compact_but_reachable_on_phone(served):
+    """Native details hides its content unless it is explicitly open; desktop must keep actions available."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            desktop = browser.new_page(viewport={"width": 1280, "height": 900})
+            desktop.goto(served)
+            desktop.fill("#pass", PASS)
+            desktop.click("#go")
+            desktop.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            desktop.wait_for_selector("#next-send .ns-phone-details[open]")
+            assert desktop.locator("#next-send .ns-medal").first.is_visible()
+
+            phone_context = browser.new_context(**{**IPHONE, "viewport": {"width": 390, "height": 664}})
+            phone = phone_context.new_page()
+            phone.goto(served)
+            phone.fill("#pass", PASS)
+            phone.click("#go")
+            phone.wait_for_selector("#tonight .decide-sends", timeout=20000)
+            phone.wait_for_selector("#next-send .ns-phone-details")
+            details = phone.locator("#next-send .ns-phone-details")
+            assert not details.evaluate("el => el.open")
+            assert phone.locator("#next-send .ns-phone-details > summary").is_visible()
+            phone.locator("#next-send .ns-phone-details > summary").click()
+            assert details.evaluate("el => el.open")
+            assert phone.locator("#next-send .ns-medal").first.is_visible()
+        finally:
+            browser.close()
+
+
 def test_slim_payload_names_the_viewers_own_missing_results_first(tmp_path):
     # Excel (f3b6a64) already leads its stale warning with the selected team's own gap; the Match Night package
     # fixes "our team" at build time, so it can carry the same lead-in without any client-side JS.

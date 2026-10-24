@@ -267,6 +267,15 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   .ns-send { min-width:44px; min-height:44px; }
   .ns-list li { margin:6px 0; }
 }
+/* A short iPhone landscape-like viewport still needs to show the three immediate
+   decision cards.  Keep the 44px disclosure target intact; reclaim space only
+   from surrounding chrome. */
+@media (max-width:600px) and (max-height:700px) {
+  body.match-night main { padding-top:4px; }
+  body.match-night #tonight { padding-top:4px; padding-bottom:6px; }
+  body.match-night .next-send { margin:0 0 2px; }
+  body.match-night .tonight-grid.decide > div { padding-top:3px; padding-bottom:3px; }
+}
 .tonight-grid.decide > div { background:#fff8e8; border-color:#e7d4a7; }
 .tonight-grid.decide b { color:#5d4413; }
 .tonight-grid.detail > div { font-size:12px; }
