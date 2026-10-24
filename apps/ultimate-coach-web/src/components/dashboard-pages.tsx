@@ -131,40 +131,20 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
       </div>
     </div>
 
-    <nav className="captain-next" aria-label="Captain's next steps">
+    <nav className="captain-next" aria-label="Captain’s next steps">
       <a href="/dashboard/match-night"><strong>01 · Make the call</strong><span>Explore responses to their put-up →</span></a>
       <a href="/dashboard/threats"><strong>02 · Scout the opposition</strong><span>Review recorded threats →</span></a>
       <a href="/dashboard/recommendations"><strong>03 · Check the evidence</strong><span>Compare matchup support →</span></a>
     </nav>
 
-    <section className="captain-brief" aria-label="Captain's briefing">
+    <section className="captain-brief" aria-label="Captain’s briefing">
       <div><p className="captain-kicker">Best opening move · historical plan</p><h2>Lead with {s.plan.lead.player}.</h2><p>{s.plan.lead.why}</p><a href="/dashboard/match-night">Open the match plan →</a></div>
-      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : 'No winning direct-record threat is established in this snapshot.'}</p><span>Historical simulation · confirm tonight’s roster</span></div>
+      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : ‘No winning direct-record threat is established in this snapshot.’}</p><span>Historical simulation · confirm tonight’s roster</span></div>
     </section>
 
     <Card kicker="Captain readiness · confirm before the first put-up" title="Make the historical plan usable tonight">
       <div className="readiness-checks"><div><strong>1. Confirm the fixture</strong><p>This plan is for {fixture.team} vs {fixture.opponent}, {fixture.when}. Verify tonight’s opponent and format.</p></div><div><strong>2. Confirm who is here</strong><p>{s.simulation.availability} Attendance has not been verified.</p></div><div><strong>3. Confirm the rules</strong><p>The reference cap is {s.simulation.cap}; verify the current cap and player skill levels.</p></div></div>
       <a className="text-link" href="/dashboard/match-night">Review the opening and responses →</a>
-    </Card>
-
-    {/* BLIND SEND + OPPORTUNITIES */}
-    <div className="two-columns">
-      <Card kicker="Blind Send · M3 lead" title={s.plan.lead.player}>
-        <span className="pill">{s.plan.lead.level} evidence vs worst reply</span>
-        <p>{s.plan.lead.why}</p>
-        <a className="text-link" href="/dashboard/match-night">See responses and holds →</a>
-      </Card>
-      <Card kicker="Team strengths, with limits" title="Use the opportunities we have">
-        <p>{s.totals.favorablePairs} favorable direct pair records and {s.totals.concerningPairs} losing direct pair records are captured.</p>
-        <p className="notice">{s.totals.possiblePairs - s.totals.directPairs} pairings have no verified direct meetings here. A full roster does not mean full evidence.</p>
-        <p>Plan fragility: <strong>{s.plan.fragility.rating}</strong>{s.plan.fragility.player ? ` · leans most on ${s.plan.fragility.player}` : ''}.</p>
-      </Card>
-    </div>
-
-    {/* KEY THREATS PREVIEW */}
-    <Card kicker="Read before the first put-up" title="Key opposing threats">
-      {s.threats.length ? s.threats.slice(0, 3).map(t => <p key={t.name}><strong>{t.name}</strong> — {t.wins}–{t.meetings - t.wins} vs the simulated available roster in {t.meetings} {t.meetings === 1 ? 'meeting' : 'meetings'}, covering {t.playersMet} of {players.length} players.{t.meetings < 3 ? ' Small sample.' : ''}</p>) : <p>No winning direct-record threat is established; missing evidence is not clearance.</p>}
-      <a className="text-link" href="/dashboard/threats">See every threat and caution →</a>
     </Card>
 
     <Assumptions snapshot={s}/>
@@ -264,7 +244,9 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
     </aside>
     </div>
 
-    {/* RESPONSE TABLE */}
+    {/* SUPPORTING REFERENCE — below the fold */}
+    <div className="two-columns"><Holds snapshot={s}/><Holds snapshot={s} protect/></div>
+
     <Card kicker="If they lead instead" title="Response table">
       <div className="table-scroll" role="region" aria-label="Responses to every opposing player" tabIndex={0}>
         <table><thead><tr><th scope="col">Their put-up</th><th scope="col">Our response</th><th scope="col">Evidence</th><th scope="col">Future cost</th></tr></thead>
@@ -272,19 +254,11 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
       </div>
     </Card>
 
-    <div className="two-columns"><Holds snapshot={s}/><Holds snapshot={s} protect/></div>
-
     <Card kicker="Tradeoffs, not instructions to lose" title="Sacrifice / concession candidates">
       {s.plan.sacrifices.length ? s.plan.sacrifices.map(p => <div className="candidate" key={`${p.our}-${p.their}`}><h3>{p.our} → {p.their}</h3><p><span className="pill caution">{p.level}</span> {p.why}</p></div>) : <p>No concession is proposed by this plan.</p>}
       <p className="muted">These are lowest-cost concessions within the current engine&apos;s assumptions, not predicted defeats or required sends.</p>
     </Card>
 
-    <Card kicker="Five games · one conditional sequence" title="If we lead"><PlanBoard rows={s.plan.ifWeLead} caption="Conditional game plan if we put up first"/></Card>
-    <Card kicker="Five games · the other opening" title="If they lead"><PlanBoard rows={s.plan.ifTheyLead} caption="Conditional game plan if they put up first"/></Card>
-    <div className="two-columns">
-      <Card title="Best-case board"><PlanBoard rows={s.plan.bestBoard} caption="Cooperative pairing reference; opponent may not allow it"/></Card>
-      <Card title="Safest board"><PlanBoard rows={s.plan.safestBoard} caption="Evidence-floor pairing reference, not a guaranteed outcome"/></Card>
-    </div>
     <Assumptions snapshot={s}/>
   </>;
 }
@@ -395,12 +369,11 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
         return (
           <div className="shark-profile-card" key={t.name}>
             <div className="spc-header">
-              <div className="spc-shark-icon" aria-hidden="true">🦈</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="spc-name">{t.name}</p>
                 <div>
-                  <span className="spc-record">{t.wins}W – {t.meetings - t.wins}L in {t.meetings} {t.meetings === 1 ? 'meeting' : 'meetings'}</span>
-                  <span className="spc-coverage">{t.playersMet} of {players.length} met</span>
+                  <span className="spc-record">{t.wins}W – {t.meetings - t.wins}L</span>
+                  <span className="spc-coverage">{t.playersMet} of {players.length} players met</span>
                 </div>
               </div>
             </div>
