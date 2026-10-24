@@ -166,9 +166,44 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.match-night .freshness .utc { display:none; }
   body.match-night #tonight .vs { margin:1px 0 4px; }
   body.match-night .tonight-grid.decide > div { padding:4px 9px; }
-  body.match-night .tonight-grid.decide b { margin-bottom:1px; }
-  body.match-night .next-send { margin:2px 0 6px; }
+  /* Decide card headings ("Open risks", "Threat records") are below a section titled for decisions already;
+     hide them on match-night phone to recover the ~16px needed to keep risks on the first screen. */
+  body.match-night .tonight-grid.decide b { display:none; }
+  body.match-night .next-send { margin:2px 0 3px; }
   body.match-night header h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Full match plan card is 650px+ on the phone; the compact plan answer inside Next Send covers the key decision.
+     Hide the full card so Next Send, threats, and risks stay on the first screen. */
+  body.match-night #match-plan { display:none; }
+  /* Broader records, methodology note, and evidence-detail sections are reference material — not needed for
+     the first-screen decision. The plan answer and ordered player list stay visible. */
+  body.match-night #next-send .ns-broader { display:none; }
+  body.match-night #next-send .ns-method { display:none; }
+  body.match-night #next-send .ns-evidence-head { display:none; }
+  body.match-night #next-send .ns-deeper { display:none; }
+  /* Hypothetical note ("nobody put up yet") takes a full line — hidden; the chip row makes it clear. */
+  body.match-night #next-send .ns-hypothetical { display:none; }
+  /* ns-more folds avoid/unordered/unknown rows; reference info, not needed on first screen. */
+  body.match-night #next-send .ns-more { display:none; }
+  /* Reduce Next Send heading from 16px (two lines on 340px) to 13px so it fits on one line. */
+  body.match-night #next-send h3 { font-size:13px; }
+  /* Plan answer: hide the why-text and muted note — the player + level badge is the decision signal. */
+  body.match-night #next-send .ns-plan-answer .mp-why { display:none; }
+  body.match-night #next-send .ns-plan-answer .mp-cost { display:none; }
+  body.match-night #next-send .ns-plan-answer .muted { display:none; }
+  /* Cap list item reason text to 2 lines to keep each row compact on the first screen. */
+  body.match-night #next-send .ns-why { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  /* Full-roster (8 opponents) on short Safari screens (664px): tighten list spacing so .decide-threats fits. */
+  body.match-night #next-send .ns-list li { margin:2px 0; }
+  body.match-night #next-send .ns-plan-answer { margin:4px 0; padding:6px; }
+  /* "Best match-ups" section heading is redundant — the list position already signals priority. Hide it to
+     save the ~48px that would otherwise push .decide-risks off a short Safari screen. */
+  body.match-night #next-send .ns-head { display:none; }
+  /* Tighten the Next Send card vertical padding to recover space; keep 10px horizontal so chip max-width rounding stays stable. */
+  body.match-night .next-send { padding:2px 10px; }
+  body.match-night .ns-chip { min-height:36px; }
+  /* Shrink decide-card font and tighten padding/gap so threats+risks both fit on a short Safari screen. */
+  body.match-night .tonight-grid.decide > div { font-size:11px; padding:2px 9px; }
+  body.match-night .tonight-grid.decide { gap:3px; }
 }
 .tonight-grid.decide { margin-bottom:10px; }
 .next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
