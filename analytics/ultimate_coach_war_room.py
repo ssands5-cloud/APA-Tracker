@@ -1059,7 +1059,7 @@ def build_version() -> str:
                              cwd=Path(__file__).resolve().parent).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         sha = ""
-    return f"PR #83 · {sha}" if sha else "unversioned"
+    return sha if sha else "unversioned"
 
 
 def worked_example(match_day: dict[str, Any], default: dict[str, Any] | None, viewer_label: str | None,
