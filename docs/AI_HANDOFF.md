@@ -16,6 +16,19 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 
 ---
 
+## Authoritative files — go here first
+
+| Purpose | File |
+|---------|------|
+| Refresh script | `QUICK_REFRESH.bat` |
+| Production database | `D:\APA-Tracker-Data\databases\apa_tracker.db` |
+| System architecture | `docs/SYSTEM_ARCHITECTURE.md` |
+| Function registry | `docs/FUNCTION_INDEX.md` |
+| Repository navigation | `docs/CODEBASE.md` |
+| AI onboarding (this file) | `docs/AI_HANDOFF.md` |
+
+---
+
 ## Two systems. Know which one you're in.
 
 | System | Stack | Database | Entry point |
@@ -47,6 +60,25 @@ No direct commits to `main`.
 4. **`<aside>` before `<div.workspace>` in `layout.tsx`** — DOM order is load-bearing for mobile. The sidebar is `position: fixed`; reversing the order breaks mobile nav. File: `apps/ultimate-coach-web/src/app/layout.tsx`.
 
 5. **Role checks server-side only** — `historicalAccess(userId)` in `lib/server/authorization.ts` must never be called from client components. Admin page returns 404 to non-admins, not a redirect.
+
+---
+
+## Full module map
+
+| Directory | Role | Called by |
+|-----------|------|-----------|
+| `auth/` | APA portal login + session persistence | `scraper/`, `scheduler/` |
+| `parser/` | GraphQL query docs + HTML parsing helpers | `scraper/` |
+| `scraper/` | APA.com data acquisition | `pipeline/refresh_sources.py` |
+| `database/` | SQLAlchemy ORM models + engine | `pipeline/ingest.py`, all analytics |
+| `pipeline/` | Refresh orchestration + fixture management | `scripts/run_game_night.py` |
+| `analytics/` | All statistical computation | `scripts/build_*.py`, `ui/` |
+| `ui/` | Excel/HTML rendering | `scripts/build_*.py` |
+| `scheduler/` | Automated daily/weekly sync jobs | Runs independently (cron/task scheduler) |
+| `tools/` | Operator browser utilities (auth bridge) | Manual operator use |
+| `scripts/` | CLI entry points for all workflows | Operator-facing |
+| `apps/ultimate-coach-web/` | Next.js web app (Ultimate Coach) | End users via browser |
+| `tests/` | 171 test files — pytest + node:test | CI and pre-commit |
 
 ---
 
@@ -113,6 +145,16 @@ python scripts/build_ultimate_coach_production.py
 from paths import APA_DB, DATABASES_DIR, EXPORTS_DIR  # import from scripts/paths.py
 # Never construct D:\ paths inline
 ```
+
+---
+
+## IGNORE FOR APA TRACKER ANALYSIS
+
+```
+.github/skills/sports-skills-main/
+```
+
+External `sports_skills` Python package (116 files), untracked. Not APA Tracker code. Exclude from all file counts, searches, and analysis. Grep flag: `--exclude-dir=.github/skills/sports-skills-main`
 
 ---
 

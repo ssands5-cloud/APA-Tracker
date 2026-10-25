@@ -26,6 +26,42 @@ PR #104 pending: `feat/apa-tactics-coach-skill` → main
 
 ---
 
+## `auth/` — 4 files
+
+Authentication layer for APA.com. Used by `scraper/` and `scheduler/` — not a public API.
+
+| File | Role |
+|------|------|
+| `auth/login.py` | Authenticates against the APA portal; returns a `requests.Session` |
+| `auth/graphql_client.py` | Thin HTTP client for the APA GraphQL API |
+| `auth/session_manager.py` | Persists and reuses an authenticated `requests.Session` across scheduler runs to avoid logging in on every invocation |
+
+---
+
+## `parser/` — 4 files
+
+Shared parsing utilities consumed by `scraper/`. Not called directly by scripts.
+
+| File | Role |
+|------|------|
+| `parser/apa_graphql.py` | GraphQL query/mutation documents for the APA Member Services API |
+| `parser/html_parser.py` | Generic HTML table/summary parsing helpers used by all scraper modules |
+| `parser/apa_page_map.py` | APA page structure mapping |
+
+---
+
+## `scheduler/` — 4 files
+
+Automated sync jobs that run on a schedule. Each imports from `auth/` and `pipeline/`.
+
+| File | Role |
+|------|------|
+| `scheduler/daily_sync.py` | Daily job: pull latest team data (HTML scrape) and ingest |
+| `scheduler/graphql_sync.py` | Live job: pull team data via APA GraphQL API and ingest (GraphQL counterpart to daily_sync) |
+| `scheduler/weekly_refresh.py` | Weekly job: full re-pull of standings + roster + fresh Excel export |
+
+---
+
 ## `scraper/` — 15 files, ~189 KB
 
 Acquires data from APA.com. Never writes to the production database directly; writes raw fixture JSON consumed by the pipeline.
@@ -219,6 +255,73 @@ Operator-facing CLI entry points. Each has `def main(argv=None)`. No hardcoded d
 | `decision-brief.tsx` | `DecisionBrief` — send/hold decision block |
 | `navigation.tsx` | Sidebar nav |
 | `ui.tsx` | `PageTitle`, `Card`, `Notice` — primitives |
+
+---
+
+## `tools/` — operator utilities
+
+| File | Role |
+|------|------|
+| `tools/capture_apa_graphql.py` | Captures APA GraphQL traffic from a browser session — replaces the DevTools → HAR → PowerShell dance |
+| `tools/run_ultimate_coach_browser.py` | Runs the Ultimate Coach live build using browser-based auth (browser is an auth bridge only; credentials never touch the script) |
+
+---
+
+## Root-level utility files
+
+| File | Role |
+|------|------|
+| `env_loader.py` | Environment variable loading helper used by scripts that need `.env` |
+| `pipeline_run_all.py` | Top-level pipeline runner — orchestrates the full pipeline in one command |
+| `apa_full_scrape.py` | Gitignored superseded Playwright scrape draft — **not source, do not modify** |
+| `playwright_login_scrape.py` | Playwright-based login scrape draft — experimental, not part of the canonical pipeline |
+
+---
+
+## `tests/` — 171 files
+
+Node built-in `node:test` (TypeScript) + pytest (Python). Every analytics module has a corresponding test file.
+
+**Key test files for AI agents modifying analytics:**
+
+| Test file | Covers |
+|-----------|--------|
+| `tests/test_match_night_engine.py` | `analytics/match_night_engine.py` |
+| `tests/test_lineup_legality.py` | `analytics/lineup_legality.py` |
+| `tests/test_lineup_optimizer.py` | `analytics/lineup_optimizer.py` |
+| `tests/test_pairing_evidence.py` | `analytics/pairing_evidence.py` |
+| `tests/test_ultimate_coach_cockpit_identity_bridge.py` | Identity bridge |
+| `tests/test_ultimate_coach_data_contract.py` | Data contract |
+| `tests/test_ultimate_coach_identity_manifest.py` | Identity manifest |
+| `tests/test_match_night.py` | `ui/match_night.py` encryption |
+| `tests/test_publish_match_night.py` | `scripts/publish_match_night.py` boundary guards |
+| `tests/test_repo_boundary.py` | `scripts/repo_boundary.py` |
+| `apps/ultimate-coach-web/tests/` | TypeScript — captain-command (primary CI gate), browser smoke, private access |
+
+**Run Python tests:** `pytest tests/`  
+**Run TS tests:** `node --experimental-strip-types apps/ultimate-coach-web/tests/*.test.ts`
+
+---
+
+## IGNORE FOR APA TRACKER ANALYSIS
+
+```
+.github/skills/sports-skills-main/
+```
+
+**This is an external package, not part of APA Tracker production code.**  
+Reason: GPT/Jeeves dropped a `sports_skills` Python package (116 files) here as untracked content.  
+It has nothing to do with APA pool league analytics.
+
+**Exclude from:**
+- File counts and directory listings
+- Architecture analysis
+- Code searches (grep, glob)
+- Import tracing
+- Coverage calculations
+
+Unless the user explicitly asks about it, treat this directory as absent.  
+Recommended grep/glob exclusion: `--exclude-dir=.github/skills/sports-skills-main`
 
 ---
 

@@ -48,6 +48,47 @@ Override: env var `APA_DB_PATH`
 
 ---
 
+## Auth layer — `auth/`
+
+Sits between `scraper/` and APA.com. Not called by analytics or UI.
+
+```
+auth/login.py          — authenticates against APA portal, returns requests.Session
+auth/graphql_client.py — thin HTTP client wrapping the APA GraphQL API
+auth/session_manager.py — persists session across scheduler invocations (avoids re-login)
+```
+
+Used by: `scraper/graphql_scraper.py`, `scheduler/` jobs  
+Config: `APA_USERNAME` / `APA_PASSWORD` from `.env`
+
+---
+
+## Parser layer — `parser/`
+
+Shared parsing utilities, not called directly by scripts.
+
+```
+parser/apa_graphql.py  — GraphQL query/mutation documents
+parser/html_parser.py  — generic HTML table/summary helpers used by all scrapers
+parser/apa_page_map.py — APA page structure mapping
+```
+
+---
+
+## Scheduler layer — `scheduler/`
+
+Automated background sync jobs. Each imports `auth/` + `pipeline/`.
+
+| Job | Frequency | What it does |
+|-----|-----------|--------------|
+| `scheduler/daily_sync.py` | Daily | HTML scrape → ingest |
+| `scheduler/graphql_sync.py` | Live | GraphQL API → ingest |
+| `scheduler/weekly_refresh.py` | Weekly | Full standings + roster + Excel export |
+
+These run independently of the operator-driven `scripts/run_game_night.py` workflow.
+
+---
+
 ## Key data flow: game night
 
 **Script**: `scripts/run_game_night.py`  
@@ -153,6 +194,17 @@ Phase 1 constraint: **all new features must derive from this type — no new dat
 
 ---
 
+## Tools layer — `tools/`
+
+Operator browser utilities. Not part of the pipeline; used when browser-based auth is needed.
+
+| Tool | Purpose |
+|------|---------|
+| `tools/capture_apa_graphql.py` | Captures APA GraphQL traffic from a browser — replaces HAR export workflow |
+| `tools/run_ultimate_coach_browser.py` | Runs UC live build via browser auth (browser is auth bridge only) |
+
+---
+
 ## Key integrations
 
 | Integration | Direction | Config |
@@ -161,6 +213,16 @@ Phase 1 constraint: **all new features must derive from this type — no new dat
 | Turso cloud DB | Outbound (web app) | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` |
 | Clerk auth | Outbound (web app) | `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` |
 | GitHub Pages | Outbound (publish) | `scripts/publish_match_night.py` (fail-closed) |
+
+---
+
+## IGNORE FOR APA TRACKER ANALYSIS
+
+```
+.github/skills/sports-skills-main/
+```
+
+External `sports_skills` Python package (116 files) dropped as untracked content by GPT/Jeeves. Not part of APA Tracker. Exclude from all architecture analysis, file counts, and code searches unless explicitly requested. Grep exclusion: `--exclude-dir=.github/skills/sports-skills-main`
 
 ---
 
