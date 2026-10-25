@@ -67,6 +67,13 @@ venv*/
 .pytest_cache/
 scraper/sanitized_fixtures.zip
 
+# Test/audit scratch output written by pytest, UAT runs, and autonomous agents.
+# 340 MB on 2026-10-25; grows with each test cycle.  All regenerable.
+tmp/
+
+# Storage migration: planning document (not source, not data — leave committable)
+# storage-migration-plan.md
+
 # Windows Explorer folder-customization metadata. Machine-local, never source.
 desktop.ini
 
