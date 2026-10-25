@@ -26,6 +26,8 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 | Function registry | `docs/FUNCTION_INDEX.md` |
 | Repository navigation | `docs/CODEBASE.md` |
 | AI onboarding (this file) | `docs/AI_HANDOFF.md` |
+| Test coverage map | `docs/TEST_MAP.md` |
+| Architect recommendations | `docs/ARCHITECT_RECOMMENDATIONS.md` |
 
 ---
 
