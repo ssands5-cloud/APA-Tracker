@@ -1,0 +1,70 @@
+{
+  "snapshot": {
+    "fixture": {
+      "team": "Evergreen",
+      "opponent": "Copper Ridge",
+      "format": "8-ball",
+      "when": "League-night simulation",
+      "venue": "Historical fixture replay"
+    },
+    "opponents": [
+      {
+        "id": "demo-xeno",
+        "name": "Xeno"
+      }
+    ],
+    "threats": [
+      {
+        "name": "Xeno",
+        "text": "Winning recorded results against 2 of 3 captured players. Small sample.",
+        "wins": 2,
+        "meetings": 3,
+        "playersMet": 2
+      }
+    ],
+    "plan": {
+      "lead": {
+        "player": "Jordan",
+        "level": "Solid",
+        "why": "Keeps a supported response available against the remaining roster."
+      },
+      "protect": [
+        {
+          "our": "Quinn",
+          "covers": [
+            "Xeno"
+          ],
+          "why": "Keep this designated answer until Xeno is put up."
+        }
+      ],
+      "strongest": {
+        "our": "Jordan",
+        "their": "Xeno",
+        "level": "Strong",
+        "why": "8\u00e2\u20ac\u201c2 in 10 recorded meetings. Current form is not established."
+      }
+    },
+    "players": [
+      {
+        "id": "quinn",
+        "name": "Quinn"
+      },
+      {
+        "id": "jordan",
+        "name": "Jordan"
+      },
+      {
+        "id": "alex",
+        "name": "Alex"
+      }
+    ],
+    "responses": {
+      "demo-xeno": {
+        "player": "Jordan",
+        "why": "8\u20132 across 10 recorded meetings.",
+        "level": "Strong",
+        "cost": "Spends the recorded answer against Zane."
+      }
+    }
+  }
+}

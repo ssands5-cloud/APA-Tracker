@@ -26,6 +26,11 @@ demo-runs/
 # Same reasoning as demo-runs/ above -- all build output, none of it source.
 coach-advantage-runs/
 
+# Verified Ultimate Coach production candidates from
+# scripts/build_ultimate_coach_production.py -- generated HTML/manifest/READY
+# bundles, all build output, none of it source.
+ultimate-coach-runs/
+
 # Local scratch state from agent tooling; not part of the project.
 .superpowers/
 
@@ -62,6 +67,13 @@ venv*/
 .pytest_cache/
 scraper/sanitized_fixtures.zip
 
+# Test/audit scratch output written by pytest, UAT runs, and autonomous agents.
+# 340 MB on 2026-10-25; grows with each test cycle.  All regenerable.
+tmp/
+
+# Storage migration: planning document (not source, not data — leave committable)
+# storage-migration-plan.md
+
 # Windows Explorer folder-customization metadata. Machine-local, never source.
 desktop.ini
 
@@ -87,3 +99,24 @@ desktop.ini
 # --opponent-team-id/--format/--session.
 /run_demo.bat
 /run_full_demo.bat
+
+# Machine-local Ultimate Coach overrides (a real viewer identity). This repo is
+# public; never commit a person's APA identity.
+apa_config.local.yaml
+
+# Historical web snapshots are private; no plaintext exception to the data ignore rule.
+apps/ultimate-coach-web/data/
+apps/ultimate-coach-web/private-snapshots/*
+!apps/ultimate-coach-web/private-snapshots/historical.enc.json
+
+# Credential and session artifacts that must never be committed.
+# These files exist locally but are not and must not be tracked.
+# .env.txt — APA account credentials (username, password)
+# token.txt / token.xlsx — session/auth tokens
+# dashboard*.html — exported dashboard HTML with embedded data
+.env.txt
+.env.*
+token.txt
+token.xlsx
+dashboard*.html
+run_apa_full_scrape.bat

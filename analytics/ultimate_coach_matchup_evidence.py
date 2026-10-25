@@ -1,0 +1,303 @@
+"""Match Night evidence: a team comparison and an evidence-backed ranking of
+our players against each opponent player.
+
+REPORTER, not a predictor: every number shown is a recorded fact from the
+identity-verified evidence (analytics.ultimate_coach_excel_payload's
+Player vs Player pairs), and the ordering rule is fixed and disclosed:
+
+1. players with DIRECT meetings against that opponent first, ordered by
+   their observed direct record, then by more meetings;
+2. then players with only SHARED-OPPONENT results (opponents both players
+   have faced), shown together as an unranked comparison group;
+3. players with neither are listed last and NOT ranked.
+
+Identical evidence is a tie ("2=") and is explained, never broken silently.
+The ranking is not a win probability (none is calibrated or published) and
+not a guaranteed or optimal lineup. The standalone HTML mirrors these rules
+and texts in JavaScript (ui/ultimate_coach.py); a browser test checks both
+produce the same ranking for the same rosters.
+
+Names use readable labels; record IDs are available on Players. Every lookup keys
+on the verified player id and roster scope, never on a name.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from fractions import Fraction
+from typing import Any, Iterable
+
+# "No evidence" / "No direct meetings" asserted more than the data supports: a
+# pairing can have real recorded meetings that this snapshot excluded because
+# their identities are unresolved. The honest claim is about what is verified
+# here, not about what was ever played. Defined in this module because
+# ultimate_coach_war_room imports from it, so the constants have to live on the
+# lower side of that dependency.
+NO_VERIFIED_EVIDENCE = "No verified evidence"
+NO_VERIFIED_DIRECT = "No verified direct meetings in this snapshot"
+
+FORMAT_LABELS = {"EIGHT": "8-Ball", "NINE": "9-Ball", "MASTERS": "Masters", "MASTERS ALT": "Masters Alt"}
+
+TIER_DIRECT = 3
+TIER_SHARED = 2
+TIER_NONE = 1
+
+PairIndex = dict[tuple[Any, str], dict[Any, tuple[int, int]]]
+
+
+def format_label(fmt: str) -> str:
+    return FORMAT_LABELS.get(fmt, fmt or "this format")
+
+
+def build_pair_index(pairs: Iterable[dict[str, Any]]) -> PairIndex:
+    """(player_id, format) -> {opponent_id: (wins, games)} from the same
+    Player vs Player aggregation the workbook's own sheet is written from."""
+    index: PairIndex = defaultdict(dict)
+    for row in pairs:
+        index[(row["player_id"], row["format"])][row["opponent_id"]] = (int(row["wins"]), int(row["games"]))
+    return index
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def record_text(wins: int, games: int) -> str:
+    return f"{wins}-{games - wins}"
+
+
+def player_display_labels(players) -> dict[str, str]:
+    """Unique readable names, with stable ordinal labels only for duplicate names."""
+    groups = defaultdict(list)
+    for p in players:
+        groups[p["name"].strip().casefold()].append(p)
+    labels = {}
+    for group in groups.values():
+        group.sort(key=lambda p: str(p.get("external_id") or ""))
+        for position, p in enumerate(group, 1):
+            labels[str(p.get("external_id"))] = (p["name"] if len(group) == 1 else
+                f"{p['name']} (player {position} of {len(group)})")
+    return labels
+
+
+def player_ref(member: dict[str, Any]) -> str:
+    return member.get("display_name") or member["name"]
+
+
+def display_name(member: dict[str, Any], roster: Iterable[dict[str, Any]]) -> str:
+    """Captain-facing name for surfaces outside Players (Next Send and the
+    like): no APA record ID. Every lookup still keys on member['id'] --
+    this is display text only.
+
+    Two players on the same roster can share a name. When they do, a
+    captured skill level that differs tells them apart; if even that ties
+    (or is missing), a readable "(n of m by this name)" position does --
+    never the raw record ID, per NAME-DISPLAY-01."""
+    name = member["name"]
+    dupes = [m for m in roster
+             if m["id"] != member["id"] and str(m.get("name", "")).strip().lower() == str(name).strip().lower()]
+    if not dupes:
+        return player_ref(member)
+    sl = member.get("skill_level")
+    if sl is not None and sl not in {m.get("skill_level") for m in dupes}:
+        return f"{name} (SL {sl})"
+    if member.get("display_name"):
+        return member["display_name"]
+    group = sorted([member, *dupes], key=member_order_key)
+    position = next(i for i, m in enumerate(group, start=1) if m["id"] == member["id"])
+    return f"{name} ({position} of {len(group)} by this name)"
+
+
+def member_order_key(member: dict[str, Any]) -> tuple[Any, ...]:
+    """Roster display order shared with the HTML: captured SL high to low
+    (missing SL last), then name, then record ID."""
+    sl = member.get("skill_level")
+    return (sl is None, -(sl or 0), str(member["name"]).lower(), str(member.get("external_id") or ""))
+
+
+def _rank_key(candidate: dict[str, Any]) -> tuple[Any, ...]:
+    return (candidate["tier"], candidate["rate"], candidate["n"], candidate["extra"])
+
+
+def rank_vs_opponent(
+    our_members: list[dict[str, Any]], opponent: dict[str, Any], index: PairIndex, fmt: str
+) -> dict[str, Any]:
+    opp_games = index.get((opponent["id"], fmt), {})
+    opp_total = sum(g for _, g in opp_games.values())
+    candidates = []
+    for member in our_members:
+        mine = index.get((member["id"], fmt), {})
+        direct = mine.get(opponent["id"])
+        shared = sorted(set(mine) & set(opp_games), key=str)
+        ow = sum(mine[s][0] for s in shared)
+        og = sum(mine[s][1] for s in shared)
+        tw = sum(opp_games[s][0] for s in shared)
+        tg = sum(opp_games[s][1] for s in shared)
+        if direct and direct[1] > 0:
+            tier, rate, n, extra = TIER_DIRECT, Fraction(direct[0], direct[1]), direct[1], 0
+        elif shared and og > 0:
+            # Shared-opponent results are NOT ordered against each other: our record vs the
+            # shared opponents says nothing about how the opponent did against them, and no
+            # defensible single ordering combines the two (GPT audit, PR #85). One unordered group.
+            tier, rate, n, extra = TIER_SHARED, Fraction(0), 0, 0
+        else:
+            tier, rate, n, extra = TIER_NONE, Fraction(0), 0, 0
+        candidates.append({
+            "member": member, "tier": tier, "rate": rate, "n": n, "extra": extra,
+            "direct": direct if direct and direct[1] > 0 else None,
+            "shared_count": len(shared), "ours": (ow, og), "theirs": (tw, tg),
+        })
+    def order(c):
+        if c["direct"] and 2 * c["direct"][0] < c["direct"][1]:
+            w, g = c["direct"]
+            # Losing-record cautions share Top Risks' order on every surface.
+            # Favorable/even direct and shared-only ordering is unchanged.
+            return (-c["tier"], Fraction(1), -(g - 2 * w), -g, member_order_key(c["member"]))
+        return (-c["tier"], -c["rate"], -c["n"], -c["extra"], member_order_key(c["member"]))
+    candidates.sort(key=order)
+
+    rows = []
+    position = 0
+    i = 0
+    while i < len(candidates):
+        j = i
+        while j + 1 < len(candidates) and _rank_key(candidates[j + 1]) == _rank_key(candidates[i]):
+            j += 1
+        group = candidates[i:j + 1]
+        for c in group:
+            position += 1
+        start_rank = position - len(group) + 1
+        for c in group:
+            ranked = c["tier"] == TIER_DIRECT
+            tied = ranked and len(group) > 1
+            if c["direct"]:
+                direct_text = f"{record_text(*c['direct'])} ({plural(c['direct'][1], 'meeting')})"
+            else:
+                direct_text = NO_VERIFIED_DIRECT
+            if c["shared_count"]:
+                ow, og = c["ours"]
+                tw, tg = c["theirs"]
+                shared_text = (f"{plural(c['shared_count'], 'shared opponent')} · ours {record_text(ow, og)} "
+                               f"({plural(og, 'game')}) · theirs {record_text(tw, tg)} ({plural(tg, 'game')})")
+            else:
+                shared_text = "No shared opponents"
+            if c["tier"] == TIER_DIRECT:
+                basis = "Direct record"
+            elif c["tier"] == TIER_SHARED:
+                basis = ("Shared-opponent results only (no verified direct meetings in this snapshot) — not ordered against other "
+                         "indirect candidates; compare ours vs theirs")
+            else:
+                basis = "No verified direct or shared-opponent evidence in this snapshot"
+            if tied:
+                others = [display_name(o["member"], our_members) for o in group if o is not c]
+                basis += " · Tied with " + ", ".join(others) + " — same evidence; the ranking can't separate them"
+            rows.append({
+                "rank": (f"{start_rank}=" if tied else str(start_rank)) if ranked else
+                        ("≈" if c["tier"] == TIER_SHARED else "—"),
+                "member": c["member"], "player": display_name(c["member"], our_members), "tier": c["tier"],
+                "direct_text": direct_text, "shared_text": shared_text, "basis": basis,
+                "direct": c["direct"], "shared_count": c["shared_count"], "ours": c["ours"], "theirs": c["theirs"],
+            })
+        i = j + 1
+
+    with_evidence = sum(1 for r in rows if r["tier"] != TIER_NONE)
+    if not our_members:
+        note = "Our roster has no current players captured — nothing to rank."
+    elif opp_total == 0:
+        note = (f"No recorded {format_label(fmt)} games for this opponent in the verified evidence — "
+                "nothing to rank on.")
+    else:
+        note = (f"{with_evidence} of {len(our_members)} of our players have direct or shared-opponent "
+                "evidence against this opponent.")
+    return {
+        "opponent": opponent, "opponent_label": player_ref(opponent),
+        "opponent_sample": f"{plural(opp_total, 'recorded game')} in {format_label(fmt)}",
+        "opponent_games": opp_total, "note": note, "rows": rows, "with_evidence": with_evidence,
+    }
+
+
+def team_comparison(
+    our_members: list[dict[str, Any]], opp_members: list[dict[str, Any]], index: PairIndex, fmt: str
+) -> dict[str, Any]:
+    def side(members: list[dict[str, Any]]) -> dict[str, Any]:
+        known = [m for m in members if m.get("skill_level") is not None]
+        games = [sum(g for _, g in index.get((m["id"], fmt), {}).values()) for m in members]
+        total = sum(m["skill_level"] for m in known)
+        return {
+            "rostered": str(len(members)),
+            "captured_sl": f"{len(known)} of {len(members)}",
+            "sl_total": str(total) if len(known) == len(members) else f"{total} (from {len(known)} of {len(members)})",
+            "games": str(sum(games)),
+            "no_games": str(sum(1 for g in games if g == 0)),
+        }
+
+    dw = dg = 0
+    met: set[Any] = set()
+    direct_pairs = shared_pairs = none_pairs = 0
+    for member in our_members:
+        mine = index.get((member["id"], fmt), {})
+        for opp in opp_members:
+            rec = mine.get(opp["id"])
+            if rec and rec[1] > 0:
+                dw += rec[0]
+                dg += rec[1]
+                met.add(opp["id"])
+                direct_pairs += 1
+            elif set(mine) & set(index.get((opp["id"], fmt), {})):
+                shared_pairs += 1
+            else:
+                none_pairs += 1
+    total_pairs = len(our_members) * len(opp_members)
+    return {
+        "format": format_label(fmt),
+        "ours": side(our_members),
+        "theirs": side(opp_members),
+        "direct_meetings": (f"{plural(dg, 'game')} · our players {record_text(dw, dg)}" if dg
+                            else "No verified direct meetings between these rosters in this snapshot"),
+        "opponents_met": f"{len(met)} of {len(opp_members)}",
+        "pairings": (f"{direct_pairs} direct · {shared_pairs} shared-opponent only · {none_pairs} no verified evidence "
+                     f"({total_pairs} total)"),
+    }
+
+
+def matchup_evidence(
+    our_members: list[dict[str, Any]], opp_members: list[dict[str, Any]], index: PairIndex, fmt: str
+) -> dict[str, Any]:
+    ours = sorted(our_members, key=member_order_key)
+    theirs = sorted(opp_members, key=member_order_key)
+    return {
+        "format": fmt,
+        "comparison": team_comparison(ours, theirs, index, fmt),
+        "opponents": [rank_vs_opponent(ours, opp, index, fmt) for opp in theirs],
+    }
+
+
+def fixture_scope_pairs(match_day: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Every directed (our scope, opponent scope, format category) pairing
+    that has at least one scheduled fixture with a resolved opponent roster."""
+    fixtures = match_day.get("fixtures") or []
+    seen: set[tuple[str, str, str]] = set()
+    for scope_key, sides in (match_day.get("schedule") or {}).items():
+        for side in sides:
+            opponent = side.get("opponent") or {}
+            if opponent.get("status") != "resolved":
+                continue
+            fmt = str(fixtures[side["fixture_index"]].get("format") or "")
+            seen.add((scope_key, opponent["scope_key"], fmt))
+    return sorted(seen)
+
+
+def members_by_scope(rosters: list[dict[str, Any]], players: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Roster members per scope from analytics.ultimate_coach_excel_payload.build_team_rosters()
+    rows -- the same live-SL-else-division-SL rule the HTML's TEAM_INDEX uses."""
+    external_ids = {p["id"]: p.get("external_id") for p in players}
+    labels = player_display_labels(players)
+    out: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rosters:
+        out[row["team_scope_key"]].append({
+            "id": row["player_id"], "external_id": external_ids.get(row["player_id"]), "name": row["player_name"],
+            "skill_level": row["skill_level"],
+            "display_name": labels.get(str(external_ids.get(row["player_id"])), row["player_name"]),
+            "matches_won": row.get("matches_won"), "matches_played": row.get("matches_played"),
+        })
+    return out

@@ -1,0 +1,58 @@
+import 'server-only';
+import { decryptSnapshot } from './snapshot-crypto';
+import { historicalAccess, type AccessResult } from './authorization';
+import type { Snapshot } from '../snapshot-types';
+import { logActivity } from '../db/activity';
+
+export type SnapshotResult = { ok: true; snapshot: Snapshot } | Extract<AccessResult, { ok: false }>;
+type EncryptedFrame = { format: string; iv: string; ciphertext: string };
+
+function isEncryptedFrame(value: unknown): value is EncryptedFrame {
+  if (!value || typeof value !== 'object') return false;
+  const frame = value as Record<string, unknown>;
+  return typeof frame.format === 'string' && typeof frame.iv === 'string' && typeof frame.ciphertext === 'string';
+}
+
+async function fetchEncryptedFrame(): Promise<unknown> {
+  const snapshotUrl = process.env.UC_SNAPSHOT_URL;
+  if (snapshotUrl) {
+    // Phase 1+: fetch encrypted frame from external storage (Vercel Blob, R2, S3, etc.).
+    // URL is private — never forwarded to or exposed in the browser.
+    const resp = await fetch(snapshotUrl, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`Snapshot fetch ${resp.status}`);
+    return resp.json();
+  }
+  // Fallback for local development: read from a file placed manually outside git tracking.
+  // This path is never used in production once UC_SNAPSHOT_URL is set.
+  const { readFile } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  return JSON.parse(await readFile(join(process.cwd(), 'private-snapshots', 'historical.enc.json'), 'utf8'));
+}
+
+export async function authorizedSnapshot(): Promise<SnapshotResult> {
+  // Authorization precedes file access and decryption on every request.
+  const access = await historicalAccess();
+  if (!access.ok) return access;
+  try {
+    const key = Buffer.from(process.env.UC_SNAPSHOT_KEY ?? '', 'base64');
+    if (key.length !== 32 || access.scope !== 'historical-pilot') return { ok: false, reason: 'unavailable' };
+    const frame = await fetchEncryptedFrame();
+    if (!isEncryptedFrame(frame)) return { ok: false, reason: 'unavailable' };
+    const text = decryptSnapshot(frame, key);
+    const snapshot = JSON.parse(text) as Snapshot;
+    if (
+      snapshot.schema !== 'ultimate-coach-dashboard-snapshot-v1' ||
+      snapshot.mode !== 'historical-simulation' ||
+      snapshot.label !== 'REALISTIC DEMO USING HISTORICAL DATA' ||
+      !snapshot.players?.length ||
+      !snapshot.opponents?.length
+    ) {
+      return { ok: false, reason: 'unavailable' };
+    }
+    // Log snapshot view after successful decryption and schema validation.
+    await logActivity(access.userId, 'snapshot_view', { role: access.role });
+    return { ok: true, snapshot };
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+}
