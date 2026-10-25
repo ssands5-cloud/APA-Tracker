@@ -1462,6 +1462,7 @@ a, select { -webkit-tap-highlight-color: rgba(201,168,64,.18) }
   text-transform: uppercase;
 }
 .re-select {
+  color-scheme: dark;
   width: 100%;
   min-height: 48px;
   background: var(--felt-raised);
