@@ -35,7 +35,7 @@ test('sparse evidence does not clear opponents or invent readiness', () => {
   const html = render(input);
   assert.match(html, /Unknown/);
   assert.match(html, /Unknown opponents are not cleared/);
-  assert.match(html, /Confirm tonight(?:&#x27;|’)s fixture/);
+  assert.match(html, /Confirm tonight(?:&#x27;|')s fixture/);
   assert.doesNotMatch(html, /Strong Evidence|READY|win probability/i);
 });
 
@@ -51,19 +51,19 @@ test('caution and conflicted evidence are preserved rather than upgraded to conf
   for (const level of ['Unknown', 'Caution', 'Conflicted']) assert.equal(evidenceLabel(level), level);
 });
 
-test('the opening action, reason and recorded concern precede supporting site branding', () => {
-  const html = render({ ...fixture(), withShell: true });
-  assert.ok(html.indexOf('Lead with') < html.indexOf('class="brand"'));
-  assert.ok(html.indexOf('class="command-why"') < html.indexOf('class="brand"'));
+test('the opening action, reason and recorded concern precede scouting section', () => {
+  const html = render(fixture());
+  assert.ok(html.indexOf('Lead with') < html.indexOf('class="command-scouting"'));
+  assert.ok(html.indexOf('class="command-why"') < html.indexOf('class="command-scouting"'));
   assert.ok(html.indexOf('class="command-risk"') < html.indexOf('class="command-primary"'));
   assert.match(html, /Biggest recorded concern/);
   assert.match(html, /Risk is not rated by the historical engine/);
 });
 
-test('the opening panel exposes protection and its lineup cost before branding', () => {
-  const html = render({ ...fixture(), withShell: true });
-  assert.ok(html.indexOf('Who to protect') < html.indexOf('class="brand"'));
-  assert.match(html, /Don(?:&#x27;|’)t spend your next answer/);
+test('the opening panel exposes protection and its lineup cost before threat scouting', () => {
+  const html = render(fixture());
+  assert.ok(html.indexOf('Who to protect') < html.indexOf('Biggest recorded threat'));
+  assert.match(html, /Don(?:&#x27;|')t spend your next answer/);
   assert.match(html, /one player can cover only one match/);
   assert.match(html, /href="\/dashboard\/match-night#protected-options"/);
 });
@@ -74,12 +74,12 @@ test('no protected option does not invent a hold or claim the lineup is safe', (
   const html = render(input);
   assert.match(html, /No designated protection/);
   assert.match(html, /Check response tradeoffs/);
-  assert.doesNotMatch(html, /Don’t spend your next answer|Save for Xeno/);
+  assert.doesNotMatch(html, /Don't spend your next answer|Save for Xeno/);
 });
 
 test('four immediate decisions precede full opening analysis', () => {
   const html = render(fixture());
-  for (const label of ['SEND · if we lead', 'PROTECT', 'THREAT', 'TRADEOFF']) {
+  for (const label of ['SEND \xb7 if we lead', 'PROTECT', 'THREAT', 'TRADEOFF']) {
     assert.ok(html.indexOf(label) < html.indexOf('class="command-intelligence"'));
   }
 });
@@ -89,7 +89,7 @@ test('scouting preserves only the answers designated for this opponent', () => {
   input.view = 'dossiers';
   input.snapshot.plan.protect.push({ our: 'Alex', covers: ['Zane'], why: 'Save for Zane.' });
   const html = render(input);
-  assert.match(html, /Plan(?:&#x27;|’)s counter<\/dt><dd>Jordan/);
+  assert.match(html, /Plan(?:&#x27;|')s counter<\/dt><dd>Jordan/);
   assert.match(html, /Who to preserve<\/dt><dd>Quinn/);
   assert.doesNotMatch(html, /Alex/);
   assert.match(html, /Spends the recorded answer against Zane/);
