@@ -1781,3 +1781,93 @@ body {
   .war-room-hero { min-height: 190px; }
   .briefing-items { padding: 12px; }
 }
+
+/* ─── Captain Command Center ──────────────────────────────────── */
+.captain-command { display: flex; flex-direction: column; gap: 0; }
+
+.command-fixture {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 20px 24px; background: linear-gradient(135deg, rgba(15,36,24,.98), rgba(6,14,8,.98));
+  border: 1px solid var(--border); border-radius: 10px 10px 0 0; gap: 16px;
+}
+.command-fixture h1 { font-size: clamp(1.3rem,2.5vw,1.8rem); margin: 4px 0; }
+.command-fixture h1 span { color: var(--chalk-muted); font-weight: 400; }
+.command-fixture p { margin: 0; color: var(--chalk-dim); font-size: 13px; }
+.command-scope { flex: none; text-align: right; font-size: 12px; color: var(--chalk-muted); line-height: 1.4; }
+
+.command-kicker {
+  margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--gold-dim); }
+
+.command-glance {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0;
+  border: 1px solid var(--border); border-top: none; border-radius: 0;
+  background: linear-gradient(180deg, rgba(12,28,18,.97), rgba(6,14,8,.98));
+}
+.command-glance > div {
+  padding: 16px 18px; border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.command-glance > div:last-child { border-right: none; }
+.command-glance dt { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--chalk-muted); }
+.command-glance dd { font-size: 1.05rem; font-weight: 700; color: var(--ivory); margin: 0; }
+.command-glance p { margin: 0; font-size: 12px; color: var(--chalk-dim); }
+@media (max-width: 740px) {
+  .command-glance { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .command-glance > div:nth-child(2) { border-right: none; }
+  .command-glance > div:nth-child(3), .command-glance > div:nth-child(4) { border-top: 1px solid var(--border-subtle); }
+}
+
+.command-intelligence {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px;
+  background: rgba(9,21,16,.97);
+}
+@media (max-width: 860px) { .command-intelligence { grid-template-columns: 1fr; } }
+
+.command-recommendation {
+  padding: 20px 24px; display: flex; flex-direction: column; gap: 10px;
+  border-right: 1px solid var(--border-subtle);
+}
+.command-recommendation h2 { font-size: 1.5rem; margin: 0; }
+.command-recommendation h2 span { color: var(--chalk-muted); font-weight: 400; font-size: 1rem; }
+.command-confidence { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em; padding: 3px 9px; border-radius: 4px; background: rgba(201,168,64,.14); color: var(--gold); border: 1px solid rgba(201,168,64,.3); align-self: flex-start; }
+.command-why { margin: 0; font-size: 14px; color: var(--chalk-dim); }
+
+/* Phase 1 additions */
+.command-cost { margin: 0; font-size: 14px; padding: 8px 12px; border-left: 3px solid var(--caution); background: var(--caution-bg); border-radius: 0 4px 4px 0; color: var(--chalk); }
+.command-cost strong { color: var(--caution); }
+.command-alternative { margin: 0; font-size: 13px; color: var(--chalk-dim); padding: 6px 10px; border-left: 2px solid var(--border-strong); background: rgba(201,168,64,.05); border-radius: 0 4px 4px 0; }
+.command-preserve { margin: 0; font-size: 14px; padding: 8px 12px; border-left: 3px solid var(--shark); background: var(--shark-bg); border-radius: 0 4px 4px 0; color: var(--chalk); }
+.command-preserve strong { color: var(--shark-bright); }
+
+.command-risk { padding: 10px 14px; background: rgba(192,57,43,.07); border: 1px solid rgba(192,57,43,.2); border-radius: 6px; font-size: 13px; }
+.command-risk p { margin: 0 0 4px; }
+.command-risk p:last-child { margin: 0; color: var(--chalk-muted); font-size: 12px; }
+.command-primary { display: inline-block; padding: 10px 18px; background: linear-gradient(135deg, #f5dda0, #c9a34a); color: var(--felt-deep); font-weight: 700; font-size: 14px; border-radius: 6px; text-align: center; }
+.command-limit { margin: 0; font-size: 12px; color: var(--chalk-muted); font-style: italic; }
+
+.command-scouting { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.command-dossier { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+.command-dossier h2 { font-size: 1.05rem; margin: 0; }
+.command-dossier p { margin: 0; font-size: 13px; color: var(--chalk-dim); }
+.command-dossier a { font-size: 13px; color: var(--gold); }
+.command-dossier-threat { border-color: rgba(192,57,43,.3); background: rgba(192,57,43,.04); }
+
+.dossier-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+.dossier-actions dt { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--chalk-muted); margin-bottom: 3px; }
+.dossier-actions dd { font-size: 14px; font-weight: 600; color: var(--ivory); margin: 0; }
+
+.command-protected-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.command-protected-players li { font-size: 13px; display: flex; gap: 8px; align-items: baseline; }
+.command-protected-players strong { color: var(--ivory); }
+.command-protected-players span { color: var(--chalk-dim); }
+
+.command-opening-details { border-top: 1px solid var(--border-subtle); }
+.command-opening-details summary { padding: 12px 24px; font-size: 13px; color: var(--gold-dim); cursor: pointer; }
+.command-opening-details summary:hover { color: var(--gold); }
+
+body:has(.captain-command) .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
+
+.snapshot-context { border-top: 1px solid var(--border-subtle); margin-top: 24px; }
+.snapshot-context summary { padding: 12px 0; font-size: 13px; color: var(--chalk-muted); cursor: pointer; }

@@ -2,6 +2,8 @@ import { Card, Notice, PageTitle } from './ui';
 import { HistoricalOpponentView } from './historical-opponent-view';
 import { PlanBoard } from './plan-board';
 import { record, meetings, type Snapshot } from '@/lib/snapshot-types';
+import { CaptainCommand } from './captain-command';
+import { ThreatDossiers, CaptainBriefing } from './captain-decisions';
 
 function Assumptions({ snapshot: s }: { snapshot: Snapshot }) { return <Notice>{s.simulation.availability} Reference cap: {s.simulation.cap}. {s.simulation.capNote} Historical fixture: {s.provenance.fixtureWhen}. Latest recorded result: {s.provenance.latestResult}.</Notice>; }
 function PairSupport({ title, pair }: { title: string; pair: Snapshot['plan']['strongest'] }) { return <Card title={title}><span className="pill">{pair.level}</span><h3>{pair.our} → {pair.their}</h3><p>{pair.why}</p><p className="muted">Evidence strength within the conditional plan; not a predicted win or loss.</p></Card>; }
@@ -14,10 +16,12 @@ function Holds({ snapshot: s, protect = false }: { snapshot: Snapshot; protect?:
 
 /* ─── Home ─────────────────────────────────────────────────────────────────── */
 export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
-  const { players, opponents, fixture } = s;
+  const { fixture } = s;
   return <>
-    {/* ARENA HERO */}
-    <div className="arena-hero">
+    <CaptainCommand snapshot={s}/>
+
+    {/* ARENA HERO (replaced by CaptainCommand — preserved for reference) */}
+    <div className="arena-hero" hidden>
       <svg viewBox="0 0 900 270" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
         <defs>
           <radialGradient id="ah-sg1" cx="18%" cy="3%" r="52%">
@@ -136,11 +140,6 @@ export function HomePage({ snapshot: s }: { snapshot: Snapshot }) {
       <a href="/dashboard/threats"><strong>02 · Scout the opposition</strong><span>Review recorded threats →</span></a>
       <a href="/dashboard/recommendations"><strong>03 · Check the evidence</strong><span>Compare matchup support →</span></a>
     </nav>
-
-    <section className="captain-brief" aria-label="Captain’s briefing">
-      <div><p className="captain-kicker">Best opening move · historical plan</p><h2>Lead with {s.plan.lead.player}.</h2><p>{s.plan.lead.why}</p><a href="/dashboard/match-night">Open the match plan →</a></div>
-      <div className="captain-brief-note"><p className="captain-kicker">Threat to scout</p><p>{s.threats[0] ? <><strong>{s.threats[0].name}</strong> — {s.threats[0].text}</> : "No winning direct-record threat is established in this snapshot."}</p><span>Historical simulation · confirm tonight’s roster</span></div>
-    </section>
 
     <Card kicker="Captain readiness · confirm before the first put-up" title="Make the historical plan usable tonight">
       <div className="readiness-checks"><div><strong>1. Confirm the fixture</strong><p>This plan is for {fixture.team} vs {fixture.opponent}, {fixture.when}. Verify tonight’s opponent and format.</p></div><div><strong>2. Confirm who is here</strong><p>{s.simulation.availability} Attendance has not been verified.</p></div><div><strong>3. Confirm the rules</strong><p>The reference cap is {s.simulation.cap}; verify the current cap and player skill levels.</p></div></div>
@@ -498,6 +497,8 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
         <p style={{ fontSize: 12, color: 'var(--chalk-muted)', margin: 0 }}>{fixture.when} · Cap {s.simulation.cap}</p>
       </div>
     </div>
+
+    <CaptainBriefing snapshot={s}/>
 
     {/* BRIEFING ITEMS */}
     <div className="briefing-items">
