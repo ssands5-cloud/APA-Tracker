@@ -231,13 +231,13 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
           <p className="rec-player-meta">{s.plan.lead.level} evidence</p>
         </div>
       </div>
+      {leadCost && <p className="command-cost rec-lead-cost"><strong>Cost:</strong> {leadCost}</p>}
       <p className="coverage-heading">Direct-record coverage</p>
       <div className="coverage-grid">
         <span>Favorable <strong>{favorable}</strong></span><span>Neutral <strong>{neutral}</strong></span>
         <span>Concern <strong>{concern}</strong></span><span>Unknown <strong>{opponents.length - recorded.length}</strong></span>
       </div>
       <p className="rec-player-meta">Evidence coverage: {recorded.length} of {opponents.length} opposing pairings contain a recorded direct meeting.</p>
-      {leadCost && <p className="command-cost rec-lead-cost"><strong>Cost:</strong> {leadCost}</p>}
       {s.plan.lead.alternatives.length > 0 && (
         <p className="rec-alternatives"><strong>Equally Supported Alternatives</strong><br/>{s.plan.lead.alternatives.join(', ')}</p>
       )}
@@ -380,7 +380,7 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
               </div>
             </div>
             <div className="spc-body">
-              <p className="spc-threat-level">Historical record — {threatPct}% wins in recorded meetings</p>
+              <p className="spc-threat-level">Historical direct record rate — {threatPct}% of recorded meetings won</p>
               <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
               <p><strong>Why dangerous:</strong> {t.text}</p>
               <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>

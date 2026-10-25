@@ -1325,7 +1325,7 @@ a, select { -webkit-tap-highlight-color: rgba(201,168,64,.18) }
   .captain-decision-grid, .captain-next { grid-template-columns: 1fr; }
   .captain-decision-grid .recommendation-primary { order: -1; }
 }
-.rec-lead-cost { margin: 0 0 4px; }
+.rec-lead-cost { margin: 0 0 16px; }
 @media (max-width: 740px) { .captain-brief, .decision-cautions, .readiness-checks, .decision-brief { grid-template-columns: 1fr; } .captain-brief-note { padding: 16px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.22); } }
 
 /* Primary recommendation block — visually dominant */
