@@ -155,6 +155,7 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players, opponents, fixture } = s;
   const lead = players.find(p => p.name === s.plan.lead.player);
   const leadSL = lead?.skill;
+  const leadCost = Object.values(s.responses).find(r => r.player === s.plan.lead.player)?.cost ?? null;
   const leadRecords = opponents.map(opponent => lead ? s.evidence[opponent.id]?.[lead.id] : undefined);
   const recorded = leadRecords.filter(row => row?.hasDirect);
   const favorable = recorded.filter(row => row!.wins > row!.losses).length;
@@ -236,6 +237,7 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
         <span>Concern <strong>{concern}</strong></span><span>Unknown <strong>{opponents.length - recorded.length}</strong></span>
       </div>
       <p className="rec-player-meta">Evidence coverage: {recorded.length} of {opponents.length} opposing pairings contain a recorded direct meeting.</p>
+      {leadCost && <p className="command-cost rec-lead-cost"><strong>Cost:</strong> {leadCost}</p>}
       {s.plan.lead.alternatives.length > 0 && (
         <p className="rec-alternatives"><strong>Equally Supported Alternatives</strong><br/>{s.plan.lead.alternatives.join(', ')}</p>
       )}
@@ -358,6 +360,7 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
     </div>
 
     {/* SCOUTING REPORT CARDS */}
+    {s.threats.length === 0 && <section className="card" style={{ textAlign: 'center', padding: '32px 24px' }}><h2>No winning direct-record threat established</h2><p>Every opponent in this snapshot has either no direct record against our players, or a losing one. That is not clearance — unknown opponents may still present risk.</p><a className="text-link" href="/dashboard/match-night#response-explorer">Check response costs before sending →</a></section>}
     <div className="two-columns" style={{ marginBottom: 20 }}>
       {s.threats.map(t => {
         const threatPct = Math.min(100, Math.round((t.wins / Math.max(t.meetings, 1)) * 100));
@@ -503,34 +506,34 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
     {/* BRIEFING ITEMS */}
     <div className="briefing-items">
       <div className="briefing-item lead">
-        <span className="briefing-item-icon" aria-hidden="true">🎯</span>
+        <span className="briefing-item-icon" aria-hidden="true">01</span>
         <div>
           <p className="briefing-item-type">Opening strategy</p>
           <p className="briefing-item-content"><strong>Lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
         </div>
       </div>
       <div className="briefing-item protect">
-        <span className="briefing-item-icon" aria-hidden="true">🛡</span>
+        <span className="briefing-item-icon" aria-hidden="true">02</span>
         <div>
           <p className="briefing-item-type">Protect these players</p>
           <p className="briefing-item-content">{s.plan.protect.length ? s.plan.protect.map(h => `${h.our} for ${h.covers.join(', ')}; send when that matchup is put up.`).join(' ') : 'No unique designated-answer protection is established.'}</p>
         </div>
       </div>
       <div className="briefing-item threat">
-        <span className="briefing-item-icon" aria-hidden="true">🦈</span>
+        <span className="briefing-item-icon" aria-hidden="true">03</span>
         <div>
           <p className="briefing-item-type">Threat to scout</p>
           <p className="briefing-item-content">{s.threats[0]?.text ?? 'No winning direct-record threat established; inspect missing evidence.'}</p>
         </div>
       </div>
       <div className="briefing-item lead">
-        <span className="briefing-item-icon" aria-hidden="true">🎱</span><div><p className="briefing-item-type">Best opportunity in the plan</p><p className="briefing-item-content"><strong>{s.plan.strongest.our} against {s.plan.strongest.their}.</strong> {s.plan.strongest.why}</p></div>
+        <span className="briefing-item-icon" aria-hidden="true">04</span><div><p className="briefing-item-type">Best opportunity in the plan</p><p className="briefing-item-content"><strong>{s.plan.strongest.our} against {s.plan.strongest.their}.</strong> {s.plan.strongest.why}</p></div>
       </div>
       <div className="briefing-item verify">
-        <span className="briefing-item-icon" aria-hidden="true">↗</span><div><p className="briefing-item-type">When the plan changes</p><p className="briefing-item-content">Open the response explorer, select their put-up, and review the suggested answer and future cost.</p><a className="text-link" href="/dashboard/match-night">Open the war room →</a></div>
+        <span className="briefing-item-icon" aria-hidden="true">05</span><div><p className="briefing-item-type">When the plan changes</p><p className="briefing-item-content">Open the response explorer, select their put-up, and review the suggested answer and future cost.</p><a className="text-link" href="/dashboard/match-night">Open the war room →</a></div>
       </div>
       <div className="briefing-item verify">
-        <span className="briefing-item-icon" aria-hidden="true">✓</span>
+        <span className="briefing-item-icon" aria-hidden="true">06</span>
         <div>
           <p className="briefing-item-type">Verify Before Acting</p>
           <p className="briefing-item-content">{s.simulation.availability} Cap {s.simulation.cap} is simulated. The historical fixture is not a claim about tonight&apos;s actual schedule.</p>

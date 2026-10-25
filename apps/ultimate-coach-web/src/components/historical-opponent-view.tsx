@@ -39,7 +39,7 @@ export function HistoricalOpponentView({ snapshot }: { snapshot: Snapshot }) {
         <h2 className="re-answer-name">{answer.player}</h2>
         <p className="re-answer-why"><strong>Why:</strong> {answer.why}</p>
         <p className="decision-evidence"><strong>Head-to-head:</strong> {directEvidence?.hasDirect ? `${record(directEvidence)} in ${meetings(directEvidence)} ${meetings(directEvidence) === 1 ? 'recorded meeting' : 'recorded meetings'}` : 'No recorded direct meeting; review the supporting evidence below.'}</p>
-        <div className="decision-cautions"><p><strong>Risk:</strong> Not rated by the historical engine.</p><p><strong>Counter / tradeoff:</strong> {answer.cost}</p></div>
+        <div className="decision-cautions"><p><strong>Risk:</strong> Not rated by the historical engine.</p><p className="command-cost decision-cost"><strong>Sending now costs:</strong> {answer.cost}</p></div>
         <details style={{ marginTop: 8 }}>
           <summary className="re-details-summary">Direct-record order and save-for-later cautions</summary>
           <p className="muted" style={{ marginTop: 8 }}>Direct-record order is separate from the M3 answer. Shared-only candidates remain unranked.</p>
