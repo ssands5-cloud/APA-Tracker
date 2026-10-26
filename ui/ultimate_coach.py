@@ -150,6 +150,14 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.match-night .next-send { margin:2px 0 6px; }
   body.match-night header h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 }
+/* Compact phone (e.g. 390×664 Safari): reclaim margin/padding so all three decision cards fit
+   on the first screen even when a coach note adds a line to the threats card. */
+@media (max-width:600px) and (max-height:700px) {
+  body.match-night main { padding-top:4px; }
+  body.match-night #tonight { padding-top:4px; padding-bottom:6px; }
+  body.match-night .next-send { margin:0 0 2px; }
+  body.match-night .tonight-grid.decide > div { padding-top:3px; padding-bottom:3px; }
+}
 .tonight-grid.decide { margin-bottom:10px; }
 .next-send { background:#fffdf6; border:2px solid #c9a24a; border-radius:10px; padding:6px 10px; margin:4px 0 8px; }
 .next-send h3 { margin:0 0 2px; font-size:16px; text-transform:uppercase; letter-spacing:.4px; color:#5d4413; }
