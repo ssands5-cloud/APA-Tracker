@@ -10,6 +10,10 @@
 
 # CURRENT PRIORITIES
 
+**fix(match-night): compact-viewport CSS keeps Risks on 390×664 Safari screen (2026-10-26, scheduled run, `local_b6d557cc`).** Step 0: only this session running. Step 1: verified — toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. All three tracked signals unchanged: `origin/codex/audit-pr83-privacy` at `6b6a30b`, `origin/codex/captain-display-cleanup` at `82c3564`, issue #84 at 320 comments.
+
+Found one pre-existing failing test: `test_a_long_coach_note_stays_reachable_without_pushing_risks_off_a_safari_screen` (`tests/test_match_night.py:274`). The test was added in `ab42ef0` but the companion CSS fix (`@media (max-width:600px) and (max-height:700px)`) landed only on `captain-display-cleanup` (`a76c5bd`) and was never backported here. With a 24-word coach note on Eve, `.decide-risks` measured `y=634 + h=46 = 680px`, 16px beyond the 664px Safari viewport. Applied the same compact-viewport rule to `ui/ultimate_coach.py`: reduces `main padding-top` 8→4px, `#tonight` 10→4px top/6px bottom, `.next-send` margin 2/6→0/2px, `.tonight-grid.decide > div` padding 4→3px top/bottom. All three test suites pass: **12/12 match-night, 46/46 war-room-browser, 40/40 ultimate-coach-browser**. Committed `3665e74`, pushed to `origin/claude/unruffled-chatterjee-f4f65e`. Builder hold on other branch features unchanged.
+
 **captain-display-cleanup advances to 82c3564 — F1/F2/F3 verified correct, Next.js dashboard scope flags for Paul (2026-10-21/22, scheduled run).** Step 0 (`list_task_runs` cross-checked against `get_session self`) found only this session `local_fcbc9656` running — no overlap, proceeded. Step 1 verified: toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. Current branch: `claude/unruffled-chatterjee-f4f65e`, HEAD `1f167af` (unchanged), clean working tree.
 
 `origin/codex/captain-display-cleanup` has advanced from `52112bf` to `82c3564` (+12 commits since last recorded entry). Paul added an independent Claude audit commit (`82c3564`, 2026-10-21) covering all 12 GPT commits:
