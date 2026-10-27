@@ -1,4 +1,5 @@
-import { ClerkProvider, SignIn } from '@clerk/nextjs';
+import { ClerkProvider } from '@clerk/nextjs';
+import { CaptainSignIn } from '@/components/captain-sign-in';
 import { authConfigured } from '@/lib/auth-config';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -9,6 +10,6 @@ export default function SignInPage() {
     <a className="button" href="/">Open public demo</a></main>;
   return <ClerkProvider><main className="auth-page"><h1>Authorized captain sign-in</h1>
     <p>Invite-only access. A sign-in does not grant permission to historical snapshots.</p>
-    <SignIn routing="path" path="/sign-in" forceRedirectUrl="/dashboard" signUpUrl="/access-denied"/>
+    <CaptainSignIn/>
     <a className="text-link" href="/">Return to public demo</a></main></ClerkProvider>;
 }

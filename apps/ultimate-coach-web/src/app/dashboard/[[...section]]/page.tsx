@@ -16,8 +16,13 @@ export default async function HistoricalPage({ params }: { params: Promise<{ sec
   if (path.length > 1 || !Object.hasOwn(pages, path[0] ?? '')) notFound();
   const result = await authorizedSnapshot();
   if (!result.ok) {
+    if (result.reason === 'anonymous') redirect('/sign-in');
     if (result.reason === 'denied') redirect('/access-denied');
-    redirect('/sign-in');
+    const retryPath = path[0] ? `/dashboard/${path[0]}` : '/dashboard';
+    return <main className="auth-page"><h1>Historical dashboard temporarily unavailable</h1>
+      <p>Historical data could not be loaded. Try again, or contact your administrator if this continues.</p>
+      <a className="button" href={retryPath}>Try historical dashboard again</a>
+      <p><a className="text-link" href="/">Return to public demo</a></p></main>;
   }
   const Page = pages[(path[0] ?? '') as keyof typeof pages];
   const snapshot = result.snapshot;
