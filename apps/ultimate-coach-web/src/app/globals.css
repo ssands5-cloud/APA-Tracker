@@ -796,6 +796,9 @@ a, select { -webkit-tap-highlight-color: rgba(201,168,64,.18) }
   padding: 24px;
 }
 
+/* Keep the designated-answer heading clear of the sticky account header. */
+#protected-options { scroll-margin-top: 8rem; }
+
 .private-header {
   display: flex;
   justify-content: space-between;
