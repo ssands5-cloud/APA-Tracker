@@ -145,8 +145,14 @@ body.match-night .freshness span.stale:nth-child(n) { display:inline-block; }
   body.match-night .freshness span { border:0; background:none; padding:0; }
   body.match-night .freshness .utc { display:none; }
   body.match-night #tonight .vs { margin:1px 0 4px; }
-  body.match-night .tonight-grid.decide > div { padding:4px 9px; }
-  body.match-night .tonight-grid.decide b { margin-bottom:1px; }
+  /* GPT audit #84: a long coach note's one-line preview in Open risks'
+     sibling card (decide-threats) was just tall enough to push Open risks
+     (decide-risks, reordered to the bottom of the stack below) past a
+     390x664 Safari viewport. No information is trimmed or hidden here --
+     only the grid's own spacing, which still fits a short note fine. */
+  body.match-night .tonight-grid.decide { gap:2px; margin-bottom:2px; }
+  body.match-night .tonight-grid.decide > div { padding:1px 9px; font-size:12px; line-height:1.28; }
+  body.match-night .tonight-grid.decide b { margin-bottom:0; }
   body.match-night .next-send { margin:2px 0 6px; }
   body.match-night header h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 }

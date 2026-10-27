@@ -964,6 +964,83 @@ def test_match_day_no_fixture_on_chosen_date_is_disclosed_clearly(tmp_path: Path
             browser.close()
 
 
+def test_match_day_sequence_never_leaves_tonight_or_war_room_on_a_stale_opponent(tmp_path: Path):
+    """Issue #84 P1: a SINGLE page session switching through every Match Day
+    state in sequence (valid match -> bye -> no match on this date -> missing
+    opponent roster -> multiple fixtures -> back to the original valid match)
+    must never leave Tonight, War Room, Next Send or planning marks showing
+    the PREVIOUS valid opponent. Every other Match Day test here loads a
+    fresh page per scenario, which can't catch a bug that only shows up
+    when switching WITHIN one live page -- this is the gap that regression
+    needs, and the one Paul/GPT actually reported.
+    """
+    valid = _team_match(match_id=201, match_external_id="201", match_date="2026-10-11T11:00:00-06:00")
+    bye = _team_match(match_id=202, match_external_id="202", match_date="2026-10-18T11:00:00-06:00",
+                       is_bye=True, away_team_id="13082714", away_team_name="BYE")
+    missing_roster = _team_match(match_id=203, match_external_id="203", match_date="2026-11-01T11:00:00-06:00",
+                                  away_team_id="Ghosts", away_team_name="Ghosts")
+    multi_a = _team_match(match_id=204, match_external_id="204", match_date="2026-11-08T11:00:00-06:00")
+    multi_b = _team_match(match_id=205, match_external_id="205", match_date="2026-11-08T19:00:00-06:00",
+                           away_team_id="Ghosts", away_team_name="Ghosts")
+    path = _match_day_page(
+        tmp_path, "md_sequence.html", [valid, bye, missing_roster, multi_a, multi_b], viewer="1",
+    )
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _open(browser, path)
+            # Falcons' real roster (_team_payload): any of these names in
+            # #wr-opportunities proves the Falcons matchup is still active --
+            # the team name itself only ever appears in #tonight's heading.
+            falcons_players = ("Cam Cole", "Drew Diaz", "Finn Frost")
+
+            def stale_falcons():
+                tonight = page.locator("#tonight").inner_text()
+                wr = page.locator("#wr-opportunities").inner_text()
+                return "Falcons" in tonight or any(p in wr for p in falcons_players)
+
+            # 1. Valid match auto-applies (single fixture, resolved roster).
+            page.fill("#md-date", "2026-10-11")
+            assert "Falcons" in page.locator("#tonight").inner_text()
+            assert any(p in page.locator("#wr-opportunities").inner_text() for p in falcons_players)
+
+            # 2. Bye week: no opponent anywhere, and no Falcons survives.
+            page.fill("#md-date", "2026-10-18")
+            assert not stale_falcons()
+            assert "Bye" in page.locator("#tonight").inner_text()
+
+            # 3. A date with no scheduled match at all.
+            page.fill("#md-date", "2026-10-25")
+            assert not stale_falcons()
+
+            # 4. A fixture whose opponent has no current roster captured.
+            # mdNoFixture's own note legitimately names "Ghosts" here (disclosing
+            # WHICH opponent lacks a roster) -- that's the intended behavior, not
+            # stale state. What must NOT happen is Falcons surviving from step 1.
+            page.fill("#md-date", "2026-11-01")
+            assert not stale_falcons()
+
+            # 5. Multiple fixtures on one date -- none chosen automatically.
+            # Both fixture cards render; only multi_a (resolved Falcons roster)
+            # gets a Compare button -- multi_b's opponent (Ghosts) has no
+            # current roster, so it correctly gets none (mdFixtureCard's own
+            # resolved-status gate, already hardened for this issue).
+            page.fill("#md-date", "2026-11-08")
+            assert not stale_falcons()
+            assert page.locator(".fixture").count() == 2
+            assert page.locator("[id^='md-compare-']").count() == 1
+
+            # 6. Back to the original valid match -- it must reapply correctly,
+            # not get stuck on whatever state step 5 left behind.
+            page.fill("#md-date", "2026-10-11")
+            assert "Falcons" in page.locator("#tonight").inner_text()
+            assert any(p in page.locator("#wr-opportunities").inner_text() for p in falcons_players)
+
+            assert errors == []
+        finally:
+            browser.close()
+
+
 def test_match_day_missing_and_unparseable_dates_are_counted_not_hidden(tmp_path: Path):
     path = _match_day_page(tmp_path, "md_undated.html", [
         _team_match(match_id=1, match_external_id="1", match_date="not-a-real-timestamp"),
