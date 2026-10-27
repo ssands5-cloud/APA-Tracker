@@ -6,6 +6,7 @@ export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: 
   const threat = s.threats[0];
   const protectedOptions = s.plan.protect;
   const firstProtection = protectedOptions[0];
+  const protectionTarget = firstProtection?.covers.length ? `For ${firstProtection.covers.join(' or ')}` : 'Target not established';
 
   return <section className="captain-command" aria-label="Captain Command Center">
     <header className="command-fixture">
@@ -19,9 +20,9 @@ export function CaptainCommand({ snapshot: s, matchNight = false }: { snapshot: 
 
     <dl className="command-glance" aria-label="Five-second captain decisions">
       <div><dt>SEND · if we lead</dt><dd>{s.plan.lead.player}</dd><p>{evidenceLabel(s.plan.lead.level)}</p></div>
-      <div><dt>PROTECT</dt><dd>{firstProtection?.our ?? 'No designated hold'}</dd><p>{firstProtection ? `For ${firstProtection.covers.join(' or ')}${protectedOptions.length > 1 ? ` · +${protectedOptions.length - 1} other protected options` : ''}` : 'Check response costs first'}</p></div>
+      <div><dt>PROTECT</dt><dd>{firstProtection?.our ?? 'No designated hold'}</dd><p>{firstProtection ? `${protectionTarget}${protectedOptions.length > 1 ? ` · +${protectedOptions.length - 1} other protected options` : ''}` : 'Check response costs first'}</p></div>
       <div><dt>THREAT</dt><dd>{threat?.name ?? 'Not established'}</dd><p>{threat ? 'Recorded concern · inspect coverage' : 'Unknown does not mean safe'}</p></div>
-      <div><dt>TRADEOFF</dt><dd>{firstProtection ? "Don't spend your next answer" : 'Check what sending costs'}</dd><p>{firstProtection ? 'Keep the designated matchup available' : 'No extra safety is implied'}</p></div>
+      <div><dt>TRADEOFF</dt><dd>{firstProtection ? `Save ${firstProtection.our}` : 'Check response cost'}</dd><p>{firstProtection ? protectionTarget : 'No extra safety is implied'}</p></div>
     </dl>
     {matchNight ? <details className="command-opening-details"><summary>Opening strategy and protection · if we put up first</summary><CommandReasoning snapshot={s} matchNight/></details> : <CommandReasoning snapshot={s}/>}
   </section>;
