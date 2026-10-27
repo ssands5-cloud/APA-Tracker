@@ -10,6 +10,12 @@
 
 # CURRENT PRIORITIES
 
+**Fourth unauthorized push to PR #83 head branch — builder hold unchanged (2026-10-27, scheduled run, `local_ee2abd0d`).** Step 0: only this session running. Step 1: verified — toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. Signals: `origin/codex/audit-pr83-privacy` at `6b6a30b` (unchanged), `origin/codex/captain-display-cleanup` at `82c3564` (unchanged). Issue #84 at **323 comments** (unchanged).
+
+New commit `15b342e` on `origin/integration/ultimate-coach-pr81-pr82-reconciliation` (PR #83's head branch), fast-forward from `b9a14de`: `fix(web): give the phone Open-risks fix real margin -- first pass failed real CI`. This is a CI-fix follow-up to the third push's compact-viewport CSS; the other session is iterating on the same CSS change on the PR #83 branch. **This is the fourth unauthorized push to that branch in as many runs.** This session did NOT push to the PR #83 branch. Feature pipeline builder hold unchanged — all feature work still blocked by `captain-display-cleanup` divergence.
+
+**Blocker for Paul unchanged:** retarget this scheduled task to the `captain-display-cleanup` builder branch, or pause it. Additionally: four commits now exist on PR #83's head branch from an unauthorized session (`7b53c2c` docs entry → `83c91d2` → `b9a14de` → `15b342e`); decide whether to revert or keep them before UAT.
+
 **Third unauthorized push to PR #83 head branch — builder hold unchanged (2026-10-27, scheduled run, `local_7eb40678`).** Step 0: only this session running. Step 1: verified — toplevel resolves under this worktree, origin is `https://github.com/ssands5-cloud/APA-Tracker.git`. Signals: `origin/codex/audit-pr83-privacy` at `6b6a30b` (unchanged), `origin/codex/captain-display-cleanup` at `82c3564` (unchanged). Issue #84 now at **323 comments** (+1 since last recorded 322).
 
 New comment (`IC_kwDOUJM06s8AAAABgLsy5w`, 22:02 UTC) is a push-notification from another Claude session working from `/home/user/apa-tracker` (canonical root mismatch — actual root is Windows path). That session pushed commit `b9a14de` to `origin/integration/ultimate-coach-pr81-pr82-reconciliation` (PR #83's head branch), fast-forward from `83c91d2`. **This is the third unauthorized push to that branch.** Changes in `b9a14de`:
