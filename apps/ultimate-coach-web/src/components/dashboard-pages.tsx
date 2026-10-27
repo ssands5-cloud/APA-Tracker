@@ -155,7 +155,6 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
   const { players, opponents, fixture } = s;
   const lead = players.find(p => p.name === s.plan.lead.player);
   const leadSL = lead?.skill;
-  const leadCost = Object.values(s.responses).find(r => r.player === s.plan.lead.player)?.cost ?? null;
   const leadRecords = opponents.map(opponent => lead ? s.evidence[opponent.id]?.[lead.id] : undefined);
   const recorded = leadRecords.filter(row => row?.hasDirect);
   const favorable = recorded.filter(row => row!.wins > row!.losses).length;
@@ -231,7 +230,7 @@ export function MatchNightPage({ snapshot: s }: { snapshot: Snapshot }) {
           <p className="rec-player-meta">{s.plan.lead.level} evidence</p>
         </div>
       </div>
-      {leadCost && <p className="command-cost rec-lead-cost"><strong>Cost:</strong> {leadCost}</p>}
+      <p className="command-cost rec-lead-cost">Opening-specific cost is not established in this snapshot.</p>
       <p className="coverage-heading">Direct-record coverage</p>
       <div className="coverage-grid">
         <span>Favorable <strong>{favorable}</strong></span><span>Neutral <strong>{neutral}</strong></span>
