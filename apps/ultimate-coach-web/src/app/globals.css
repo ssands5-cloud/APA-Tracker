@@ -1839,6 +1839,8 @@ body {
   .command-glance > div { padding: 8px 14px; }
   .command-glance dd { line-height: 1.25; }
   .command-glance p { line-height: 1.5; }
+  .command-glance dd, .command-glance p { overflow-wrap: anywhere; }
+  .command-protected-players li { flex-wrap: wrap; }
   .command-glance > div:nth-child(2) { border-right: none; }
   .command-glance > div:nth-child(3), .command-glance > div:nth-child(4) { border-top: 1px solid var(--border-subtle); }
 }
