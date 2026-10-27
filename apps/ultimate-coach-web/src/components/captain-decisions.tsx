@@ -33,11 +33,10 @@ export function ThreatDossiers({ snapshot: s }: { snapshot: Snapshot }) {
 
 export function CaptainBriefing({ snapshot: s }: { snapshot: Snapshot }) {
   const threat = s.threats[0];
-  const leadCost = Object.values(s.responses).find(r => r.player === s.plan.lead.player)?.cost ?? null;
   return <section className="card captain-minute" aria-label="One-minute team briefing">
     <h2>Tell the team our plan</h2>
     <ol>
-      <li><strong>Opening:</strong> If we put up first, lead with <b>{s.plan.lead.player}</b>. Evidence: {evidenceLabel(s.plan.lead.level)}.{leadCost && <> Cost: <em>{leadCost}</em></>}</li>
+      <li><strong>Opening:</strong> If we put up first, lead with <b>{s.plan.lead.player}</b>. Evidence: {evidenceLabel(s.plan.lead.level)}. Opening-specific cost is not established in this snapshot.</li>
       <li><strong>Protect:</strong> {s.plan.protect.length ? s.plan.protect.map(option => `${option.our} for ${option.covers.join(' or ')}`).join('; ') + '.' : 'No matchup-specific protection is designated.'} One player can cover only one match.</li>
       <li><strong>Watch:</strong> {threat ? `${threat.name}. The recorded concern does not establish an advantage against everyone.` : 'No named threat is established. Unknown opponents are not cleared.'}</li>
       <li><strong>Tradeoff:</strong> {s.plan.protect.length ? 'Sending a protected player early spends a later answer. Keep the named matchups available.' : 'Check the future cost of each response; no designated hold does not mean no cost.'}</li>
