@@ -63,7 +63,7 @@ test('the opening action, reason and recorded concern precede scouting section',
 test('the opening panel exposes protection and its lineup cost before threat scouting', () => {
   const html = render(fixture());
   assert.ok(html.indexOf('Who to protect') < html.indexOf('Biggest recorded threat'));
-  assert.match(html, /Don(?:&#x27;|')t spend your next answer/);
+  assert.match(html, /<dt>TRADEOFF<\/dt><dd>Save Quinn<\/dd>/);
   assert.match(html, /one player can cover only one match/);
   assert.match(html, /href="\/dashboard\/match-night#protected-options"/);
 });
@@ -74,7 +74,7 @@ test('no protected option does not invent a hold or claim the lineup is safe', (
   const html = render(input);
   assert.match(html, /No designated protection/);
   assert.match(html, /Check response tradeoffs/);
-  assert.doesNotMatch(html, /Don't spend your next answer|Save for Xeno/);
+  assert.doesNotMatch(html, /Save Quinn|Keep for Xeno|Save for Xeno/);
 });
 
 test('four immediate decisions precede full opening analysis', () => {
@@ -113,4 +113,20 @@ test('the team briefing presents conditional actions and their opportunity cost'
   assert.match(html, /Sending a protected player early spends a later answer/);
   assert.match(html, /Confirm who is here/);
   assert.match(html, /Opening reason:/);
+});
+
+
+test('quick tradeoff names the supplied designated answer and keeps missing targets honest', () => {
+  const input = fixture();
+  let html = render(input);
+  assert.match(html, /<dt>TRADEOFF<\/dt><dd>Save Quinn<\/dd><p>For Xeno<\/p>/);
+  input.snapshot.plan.protect[0] = { our: 'Casey Montgomery', covers: ['Xeno', 'Zane'], why: 'Supplied protection rationale.' };
+  html = render(input);
+  assert.match(html, /<dt>TRADEOFF<\/dt><dd>Save Casey Montgomery<\/dd><p>For Xeno or Zane<\/p>/);
+  input.snapshot.plan.protect[0].covers = [];
+  html = render(input);
+  assert.match(html, /<dt>TRADEOFF<\/dt><dd>Save Casey Montgomery<\/dd><p>Target not established<\/p>/);
+  input.snapshot.plan.protect = [];
+  html = render(input);
+  assert.match(html, /<dt>TRADEOFF<\/dt><dd>Check response cost<\/dd><p>No extra safety is implied<\/p>/);
 });
