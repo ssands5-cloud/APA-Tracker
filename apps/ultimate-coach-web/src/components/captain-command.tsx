@@ -31,7 +31,6 @@ function CommandReasoning({ snapshot: s, matchNight = false }: { snapshot: Snaps
   const threat = s.threats[0];
   const threatOpponent = s.opponents.find(player => player.name === threat?.name);
   const protectedOptions = s.plan.protect;
-  const leadCost = Object.values(s.responses).find(r => r.player === s.plan.lead.player)?.cost ?? null;
   const alternatives = s.plan.lead.alternatives ?? [];
   const responseLink = (id?: string) => `/dashboard/match-night${id ? `?opponent=${encodeURIComponent(id)}` : ''}#response-explorer`;
   return <div className="command-intelligence">
@@ -40,8 +39,8 @@ function CommandReasoning({ snapshot: s, matchNight = false }: { snapshot: Snaps
         <h2><span>Lead with</span> {s.plan.lead.player}</h2>
         <span className="command-confidence">{evidenceLabel(s.plan.lead.level)}</span>
         <p className="command-why"><strong>Why:</strong> {s.plan.lead.why}</p>
-        {leadCost && <p className="command-cost"><strong>Cost:</strong> {leadCost}</p>}
-        {alternatives.length > 0 && <p className="command-alternative"><strong>Alternative:</strong> {alternatives.join(' · ')}</p>}
+        <p className="command-cost">Opening-specific cost is not established in this snapshot.</p>
+        {alternatives.length > 0 && <p className="command-alternative"><strong>Equally Supported Alternatives:</strong> {alternatives.join(' · ')}</p>}
         <div className="command-risk">
           <p><strong>Biggest recorded concern:</strong> {threat?.text ?? 'Missing matchup evidence. No named threat does not mean a safe matchup.'}</p>
           <p>Risk is not rated by the historical engine.</p>

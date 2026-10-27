@@ -114,3 +114,33 @@ test('the team briefing presents conditional actions and their opportunity cost'
   assert.match(html, /Confirm who is here/);
   assert.match(html, /Opening reason:/);
 });
+
+test('opening cost stays unknown when the lead has distinct opponent-specific response costs', () => {
+  const costs = ['Spends the answer reserved for Xeno.', 'Spends the answer reserved for Zane.'];
+  for (const reverse of [false, true]) {
+    for (const view of ['command', 'briefing']) {
+      const input = fixture();
+      input.view = view;
+      input.snapshot.opponents.push({ id: 'demo-zane', name: 'Zane' });
+      const responses = [
+        ['demo-xeno', { ...input.snapshot.responses['demo-xeno'], cost: costs[0] }],
+        ['demo-zane', { ...input.snapshot.responses['demo-xeno'], cost: costs[1] }],
+      ];
+      input.snapshot.responses = Object.fromEntries(reverse ? responses.reverse() : responses);
+      const html = render(input);
+      for (const cost of costs) assert.ok(!html.includes(cost), `${view} borrowed an opponent-specific cost: ${cost}`);
+      assert.match(html, /Opening-specific cost is not established in this snapshot\./);
+      assert.match(html, /Quinn/);
+      assert.match(html, /one player can cover only one match/i);
+    }
+  }
+});
+
+test('opening alternatives are labelled equally supported and only shown when supplied', () => {
+  const input = fixture();
+  input.snapshot.plan.lead.alternatives = ['Quinn', 'Alex'];
+  const html = render(input);
+  assert.match(html, /Equally Supported Alternatives:<\/strong> Quinn · Alex/);
+  input.snapshot.plan.lead.alternatives = [];
+  assert.doesNotMatch(render(input), /Equally Supported Alternatives:/);
+});
