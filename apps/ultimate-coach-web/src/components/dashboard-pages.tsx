@@ -503,13 +503,14 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
 
     <CaptainBriefing snapshot={s}/>
 
-    {/* BRIEFING ITEMS */}
+    <details className="snapshot-context"><summary>Supporting plan and historical evidence</summary>
+    {/* Reference notes remain available after the primary team briefing. */}
     <div className="briefing-items">
       <div className="briefing-item lead">
         <span className="briefing-item-icon" aria-hidden="true">01</span>
         <div>
           <p className="briefing-item-type">Opening strategy</p>
-          <p className="briefing-item-content"><strong>Lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
+          <p className="briefing-item-content"><strong>If we put up first, lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
         </div>
       </div>
       <div className="briefing-item protect">
@@ -551,5 +552,6 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
       <p>{s.plan.fragility.thinPairings.join(' · ') || 'No thin pairing flagged in this plan.'}</p>
     </Card>
     <Assumptions snapshot={s}/>
+    </details>
   </>;
 }
