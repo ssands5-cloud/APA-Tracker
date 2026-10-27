@@ -359,7 +359,10 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
       </div>
     </div>
 
-    {/* SCOUTING REPORT CARDS */}
+    <ThreatDossiers snapshot={s}/>
+
+    <details className="snapshot-context"><summary>Recorded threat evidence and context</summary>
+    {/* Supporting recorded evidence is retained below the actionable dossiers. */}
     {s.threats.length === 0 && <section className="card" style={{ textAlign: 'center', padding: '32px 24px' }}><h2>No winning direct-record threat established</h2><p>Every opponent in this snapshot has either no direct record against our players, or a losing one. That is not clearance — unknown opponents may still present risk.</p><a className="text-link" href="/dashboard/match-night#response-explorer">Check response costs before sending →</a></section>}
     <div className="two-columns" style={{ marginBottom: 20 }}>
       {s.threats.map(t => {
@@ -384,7 +387,7 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
               <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
               <p><strong>Why dangerous:</strong> {t.text}</p>
               <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>
-              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
+              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost?.trim() || 'Response cost is not established in this snapshot.'}</p></div>}
               <Notice>{t.meetings < 3 ? 'Thin record: a small number of meetings is limited evidence, not a proven matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
             </div>
             <div className="spc-footer">
@@ -394,6 +397,8 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
         );
       })}
     </div>
+
+    </details>
 
     <Card title="Why the warning is limited">
       <p>All captured players are assumed available. Changing availability can change the relevant threat scope. A record against only a few players is not evidence against every player on the roster.</p>
