@@ -11,3 +11,8 @@
 - 35 registered worktrees include this documentation checkout. Preserve the scheduled refresh, publishing, UAT and open-PR worktrees. Worktree deletion remains frozen.
 - To recover, stage a backup in a separate location. Confirm repository identity, Git refs, local and ignored data, and artifact checksums. GitHub cannot recover unpublished work or local databases. The current full-machine restore is unverified.
 - The enabled failure alert and disabled QUICK Refresh still point to the old checkout. Keep QUICK Refresh disabled until unattended operation is validated. Do not copy credentials into handoff documentation.
+
+## Reconciliation check — 2026-11-05 (late)
+- Database: scripts/paths.py defaults to D:\APA-Tracker-Data\databases\apa_tracker.db. That folder exists but is empty, and no APA_DB_PATH or APA_DATA_ROOT override is set. The only pipeline database is the checkout-local data\apa_tracker.db. The staging database is APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db.
+- Scheduler: the failure alert is enabled and the QUICK Refresh is disabled; both still point at the C: checkout. The three Claude scheduled tasks are disabled. Both APA Codex automations are paused, and each prompt still names a C: Desktop path.
+- The C: Desktop rollback copy holds no branch commits that are missing on D:.
