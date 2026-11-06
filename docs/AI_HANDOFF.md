@@ -21,7 +21,7 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 | Purpose | File |
 |---------|------|
 | Refresh script | `QUICK_REFRESH.bat` |
-| Production database | `D:\APA-Tracker-Data\databases\apa_tracker.db` |
+| Production database | `data\apa_tracker.db` in the canonical checkout (the `D:\APA-Tracker-Data` default in `scripts/paths.py` doesn't exist yet) |
 | System architecture | `docs/SYSTEM_ARCHITECTURE.md` |
 | Function registry | `docs/FUNCTION_INDEX.md` |
 | Repository navigation | `docs/CODEBASE.md` |
@@ -36,7 +36,7 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 
 | System | Stack | Database | Entry point |
 |--------|-------|----------|-------------|
-| **Python pipeline** | Python + SQLAlchemy | SQLite at `D:\APA-Tracker-Data\databases\apa_tracker.db` | `scripts/run_game_night.py` |
+| **Python pipeline** | Python + SQLAlchemy | SQLite at `data\apa_tracker.db` (see `SYSTEM_STATE.md`) | `scripts/run_game_night.py` |
 | **Web app** | Next.js (App Router) + Clerk + Turso | Turso cloud DB (libsql HTTP) | `apps/ultimate-coach-web/` |
 
 They share the codebase but **not a runtime database**. The Python DB is local SQLite. The web app talks to Turso via `TURSO_DATABASE_URL`.
@@ -123,8 +123,8 @@ No direct commits to `main`.
 
 ### "I need to run the pipeline"
 ```
-# Active production DB:
-D:\APA-Tracker-Data\databases\apa_tracker.db
+# Active production DB (legacy location; D:\APA-Tracker-Data\databases\ is still empty):
+data\apa_tracker.db
 
 # Game night refresh:
 python scripts/run_game_night.py
