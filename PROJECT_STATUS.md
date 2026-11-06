@@ -1,5 +1,13 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## D: drive migration (2026-11-05, Claude)
+
+The canonical checkout is now `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` (commit `beaeb65`).
+The old `C:\Users\ssand\Desktop\...` copy is stale rollback protection only; the machine boundary guard
+blocks commits there. All 34 remaining worktrees, both venvs and the boundary guard point at D:. Two
+Windows tasks still need Paul to repoint them, and other branches keep the old C: defaults until rebased
+onto `beaeb65`. Machine-level state, open items and what still needs Paul: `SYSTEM_STATE.md`.
+
 ## Protected historical dashboard in progress (GPT self-audited)
 
 Safe source0c52fc9 is live at https://apa-tracker.vercel.app, deployment

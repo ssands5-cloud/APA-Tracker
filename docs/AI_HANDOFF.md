@@ -28,6 +28,7 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 | AI onboarding (this file) | `docs/AI_HANDOFF.md` |
 | Test coverage map | `docs/TEST_MAP.md` |
 | Architect recommendations | `docs/ARCHITECT_RECOMMENDATIONS.md` |
+| Machine state (paths, tasks, venvs, deploy) | `SYSTEM_STATE.md` |
 
 ---
 
@@ -233,7 +234,13 @@ All Phase 1 features must work with the existing `Snapshot` type — no new data
 
 ## Storage migration status
 
-- Phase 0 complete (commit `70ea1a1`): `D:\APA-Tracker-Data\` created, `scripts/paths.py` written, `.gitignore` updated
-- Phase 1 (move backups/demo-runs to D:): awaiting Paul's go-ahead
-- Phase 2 (update ~12 scripts to use `paths.py` defaults): requires Phase 1 first
+- 2026-11-05: the whole working copy moved from `C:\Users\ssand\Desktop\APA Tracker Scorekeeper` to
+  `D:\APA Tracker Scorekeeper` (commit `beaeb65`). Work only on D:. If a session starts in the C: copy,
+  stop and switch; the boundary guard refuses commits there.
+- Worktree links were repaired to D:, and both venvs were rebuilt on D: with identical packages.
+- Branches other than `feat/phase1-war-room` and `codex/scheduled-refresh-task` still default to C:
+  paths in `scripts/repo_boundary.py` and three other files until they are rebased onto `beaeb65`.
+- Machine-level state (tasks, guard, venvs, worktrees, Vercel/Clerk, open items): `SYSTEM_STATE.md`.
+- Earlier plan: Phase 0 complete (commit `70ea1a1`): `D:\APA-Tracker-Data\` created, `scripts/paths.py`
+  written. Phase 1 (move backups/demo-runs) and Phase 2 (scripts use `paths.py` defaults) not started.
 - `LEGACY_DATA_DIR = PROJECT_ROOT / "data"` in `paths.py` bridges old scripts during migration
