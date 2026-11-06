@@ -23,7 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-CANONICAL_ROOT = Path(r"C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker")
+CANONICAL_ROOT = Path(r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker")
 CANONICAL_ORIGIN = "https://github.com/ssands5-cloud/APA-Tracker.git"
 
 

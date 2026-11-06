@@ -1,7 +1,7 @@
 # APA Tracker — Codebase Map
 
 ## Repository root
-`C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`  
+`D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`  
 GitHub: `https://github.com/ssands5-cloud/APA-Tracker.git`  
 Active branch for web work: `feat/phase1-war-room`  
 PR #104 pending: `feat/apa-tactics-coach-skill` → main

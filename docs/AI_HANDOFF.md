@@ -44,7 +44,7 @@ They share the codebase but **not a runtime database**. The Python DB is local S
 
 ## Repository location
 
-`C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`  
+`D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`  
 Origin: `https://github.com/ssands5-cloud/APA-Tracker.git`  
 Current active branch: `feat/phase1-war-room`  
 No direct commits to `main`.

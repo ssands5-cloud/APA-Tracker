@@ -1,5 +1,5 @@
 param(
-    [string]$SourceDb = "C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db",
+    [string]$SourceDb = "D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db",
     [string]$DestinationRoot = (Join-Path $PSScriptRoot "..\tmp\uat")
 )
 

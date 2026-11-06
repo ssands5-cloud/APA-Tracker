@@ -41,7 +41,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SOURCE = Path(r"C:\Users\ssand\Desktop\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live"
+DEFAULT_SOURCE = Path(r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live"
                       r"\data\ultimate_coach_staging.db")
 DEFAULT_CATALOG = DEFAULT_SOURCE.with_name("ultimate_coach_historical_catalog.json")
 REPORT_SCHEMA = "ultimate-coach-current-session-refresh-v1"
