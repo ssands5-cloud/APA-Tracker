@@ -8,19 +8,24 @@ Facts about this machine and its deployment that git history alone doesn't show.
 | What | Path |
 |---|---|
 | Canonical checkout | `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` |
-| Production pipeline database | `D:\APA-Tracker-Data\databases\apa_tracker.db` |
+| Production pipeline database | `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker\data\apa_tracker.db` (legacy location). The `scripts/paths.py` default, `D:\APA-Tracker-Data\databases\apa_tracker.db`, doesn't exist: storage Phase 1 never ran. The `databases` folder exists but is empty, and neither `APA_DB_PATH` nor `APA_DATA_ROOT` is set (checked 2026-11-05), so scripts using the default will not find the legacy file. Confirm which file a script uses before any refresh or publish. |
 | Staging database (read-only input to UAT builds) | `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db` |
 | Production-candidate artifact | `D:\Ultimate Coach` (HTML, `manifest.json`, `READY`) |
 | Historical UAT artifacts | `D:\Ultimate Coach FINAL UAT` (top-level HTML and workbook plus build folders) |
 | Stale pre-move copy | `C:\Users\ssand\Desktop\APA Tracker Scorekeeper` (rollback only; guard blocks commits) |
 
 The two `D:\Ultimate Coach*` folders matched their C: originals file for file and by SHA-256 on
-2026-11-05. Keep them free of extra files so that comparison can be repeated.
+2026-11-05. The Codex audit the same day reports that the H: copies match too. Each folder has since
+gained a small `PROJECT_STATUS.md`; leave those two files out when repeating the comparison.
 
 ## Migration to D: (2026-11-05)
 
-- Commits: `beaeb65` on `feat/phase1-war-room` and `6038fd7` on `codex/scheduled-refresh-task`. Neither is pushed.
-- All worktree links were repaired to D:. `git worktree list` shows 34 worktrees, none prunable.
+- Commits: `beaeb65` (paths) plus doc commits on `feat/phase1-war-room`, and `6038fd7` on
+  `codex/scheduled-refresh-task`. Run `git status -sb` for push state. Before pushing,
+  `feat/phase1-war-room` must take in GitHub's `62cfff6` (an Oct 27 `docs/AI_STATUS.md` note).
+- All worktree links were repaired to D:. `git worktree list` shows 35 worktrees, none prunable.
+  The newest is `.worktrees\docs-d-drive-handoff` (branch `docs/d-drive-handoff`, on GitHub), the
+  Codex agent's main-based doc branch.
 - Every other branch still has C: defaults in `scripts/repo_boundary.py`,
   `scripts/refresh_ultimate_coach_current_session.py`, `tools/build_ultimate_coach_final_uat.ps1` and
   `tools/publish_match_night.ps1`. Each picks up the fix when rebased onto `beaeb65`.
@@ -37,14 +42,16 @@ The two `D:\Ultimate Coach*` folders matched their C: originals file for file an
 | `C:\Users\ssand\.gitconfig` includeIf entries | The old C: entries remain but are harmless. The `**/APA-Tracker/.git` and remote-URL entries already cover D:. |
 | Codex `C:\Users\ssand\.codex\AGENTS.md` and `config.toml` | Updated to D: roots. All five D: project folders are trusted. |
 | Claude scheduled tasks (`C:\Users\ssand\.claude\scheduled-tasks`) | All three are disabled. Prompts updated to D: paths. |
+| Codex automations (`C:\Users\ssand\.codex\automations`) | `apa-finishing-work-until-6-p-m` and `apa-ultimate-coach-review-with-claude` are PAUSED, and each prompt still names one C: Desktop path. Fix the path before resuming either. |
 
 ## Windows Task Scheduler
 
 | Task | State | Action needed |
 |---|---|---|
 | Ultimate Coach - Refresh Failure Alert | Enabled | Still runs from C:. Paul must repoint it; saving needs admin rights. |
-| Ultimate Coach - Daily QUICK Refresh | Disabled | Still on C:. Saving it asks for Paul's Windows password. |
-| Crypto Tracker, CryptoTracker Daily Run, Daily Market Manager | Disabled | They point at the empty `C:\...\Desktop\Invest`, so they need a decision, not a path swap. |
+| Ultimate Coach - Daily QUICK Refresh | Disabled | Still on C:. Saving it asks for Paul's Windows password. Keep it disabled until unattended APA sign-in and Excel are proven. |
+| CryptoTracker Daily Run | Disabled | Already points at `D:\Invest-master\run_daily.bat SCHEDULED`. |
+| Crypto Tracker, Daily Market Manager | Disabled | Still point at the empty `C:\...\Desktop\Invest`, so they need a decision, not a path swap. |
 
 D: values for both Ultimate Coach tasks (Program `C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe`,
 Start in `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`):
@@ -70,9 +77,10 @@ Start in `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`):
 
 - On 2026-11-05, 11 merged or abandoned worktrees were removed and their branches kept. The inventory,
   with exact commit hashes for re-creation, is in `tmp\worktree-retirement\` (git-ignored).
-- Nine more are clean and safe to remove later (listed in that inventory as `safe-later`).
-  `APA-Tracker-Ultimate-Coach-FINAL`, `release-candidate-verification` and `APA-Tracker-UC-Summary-Doc`
-  (PR #63 still open) need Paul's confirmation first.
+- **Deletion freeze:** no more worktrees are removed until Paul lifts it. The nine marked
+  `safe-later` in that inventory are only candidates. `APA-Tracker-Ultimate-Coach-FINAL`,
+  `release-candidate-verification` and `APA-Tracker-UC-Summary-Doc` (PR #63 still open) also need
+  his confirmation.
 - Keep: the main checkout, `scheduled-refresh-task` (the Windows tasks run its scripts), `gh-pages`
   (Match Night publisher), `APA-Tracker-Ultimate-Coach-Live` (staging DB), `pr83` (awaiting Paul's
   UAT), `unruffled-chatterjee-f4f65e` (bound UAT candidate), the open-PR worktrees, and any with
@@ -142,8 +150,8 @@ change needs a new deployment; an empty commit is enough.
   It rewrites the links on both sides.
 - **Preview shows MIDDLEWARE_INVOCATION_FAILED or Clerk `secret-key-invalid`:** the publishable and
   secret keys come from different Clerk instances. Copy both from the same instance and redeploy.
-- **Fallback copies:** the C: Desktop copy is at commit `92d4ccd`, one commit behind. The H: copy
-  was still in progress on 2026-11-05 and isn't verified.
+- **Fallback copies:** the C: Desktop copy and the H: copy are both at commit `92d4ccd`, before the
+  migration commits. Committed work is also on GitHub. A full H: restore hasn't been verified.
 
 ## Starting a new AI session here
 
@@ -161,7 +169,14 @@ change needs a new deployment; an empty commit is enough.
 2. Decide on the three disabled Invest Windows tasks.
 3. Approve deleting `venv.pre-d-move` and `venv312.pre-d-move`.
 4. Decide when the C: Desktop copies can go, once the H: backup copy is finished and verified.
-5. Push `beaeb65` and `6038fd7` when ready.
+5. Pick where the handoff docs live on GitHub: this branch, or the main-based `docs/d-drive-handoff`.
+   Then push `beaeb65` and `6038fd7` when ready.
 6. Run the PR #83 UAT on Windows. It's the release gate.
 7. Choose how production does auth: a custom domain with a Clerk production instance, or the
    development instance. Production has no `CLERK_SECRET_KEY` today.
+
+Maintainer: Claude keeps this file current; GPT/Codex audits it and reports discrepancies back to
+Claude. Cross-project overview: `D:\PROJECT_PORTFOLIO.md` and `D:\NEW_SESSION_STARTUP.md`.
+
+## Reconciliation check — 2026-11-05 (late)
+Live checks after the D: move. Checkout `feat/phase1-war-room` at `3ca900e`: three commits ahead of GitHub and one behind (`62cfff6`). 35 worktrees, none prunable. All 51 branch tips and four stashes of the C: Desktop copy also exist on D:. Windows tasks: failure alert enabled (Ready), QUICK Refresh disabled, both still on C:. Claude scheduled tasks: all three disabled. Codex APA automations: both paused, each prompt still names a C: Desktop path.

@@ -4,7 +4,7 @@
 
 The canonical checkout is now `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` (commit `beaeb65`).
 The old `C:\Users\ssand\Desktop\...` copy is stale rollback protection only; the machine boundary guard
-blocks commits there. All 34 remaining worktrees, both venvs and the boundary guard point at D:. Two
+blocks commits there. All 35 registered worktrees, both venvs and the boundary guard point at D:. Two
 Windows tasks still need Paul to repoint them, and other branches keep the old C: defaults until rebased
 onto `beaeb65`. Machine-level state, open items and what still needs Paul: `SYSTEM_STATE.md`.
 
@@ -245,3 +245,6 @@ It stages and commits only the allowlisted files and records `Source: <commit>` 
 - **Native Excel test of the latest workbook:** separate session; results go to issue #84.
 - **WebKit primed-offline reload:** fails in emulation. Physical iPhone and Android checks are PENDING PAUL REVIEW.
 - **Preference:** whether the matrix opens in Evidence view (current) or Captain view. PENDING PAUL REVIEW.
+
+## Session reset checkpoint — 2026-11-05
+Start with AGENTS.md, AI_HANDOFF.md and the fresh-session verification in SYSTEM_STATE.md. Prioritize preserving local work, confirming the production database and H: restore, and migrating the enabled failure alert when authorized. Worktree deletion remains frozen.
