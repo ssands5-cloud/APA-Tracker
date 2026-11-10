@@ -1,12 +1,17 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
-## D: drive migration (2026-11-05, Claude)
+## D: drive migration — documentation reconciled 2026-11-09 (Claude)
 
-The canonical checkout is now `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` (commit `beaeb65`).
-The old `C:\Users\ssand\Desktop\...` copy is stale rollback protection only; the machine boundary guard
-blocks commits there. All 35 registered worktrees, both venvs and the boundary guard point at D:. Two
-Windows tasks still need Paul to repoint them, and other branches keep the old C: defaults until rebased
-onto `beaeb65`. Machine-level state, open items and what still needs Paul: `SYSTEM_STATE.md`.
+Status: the move to D: is done and verified. Owner decisions and the Windows task repointing are **not** done (listed below).
+
+- Canonical checkout: `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`, authoritative branch `feat/phase1-war-room`.
+- Snapshot 2026-11-09: local tip `e535ace`, GitHub tip `62cfff6`, local 4 ahead / 1 behind. `beaeb65` is the D: migration commit; `3ca900e` is an earlier, now historical, database-location doc fix. Full table: `SYSTEM_STATE.md` → Git state.
+- 35 registered worktrees, none prunable. Deletion freeze still on.
+- Databases: pipeline DB `data\apa_tracker.db`; staging DB `APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db`; web app uses Turso. **Production database selection pending owner decision.**
+- Ultimate Coach: **no owner-approved candidate.** `D:\Ultimate Coach` is the preserved offline candidate; PR #83 UAT and the FINAL UAT build choice are pending Paul.
+- Not done: both Ultimate Coach Windows tasks still point at the C: copy (needs Paul's admin rights); no restore from H: has been run.
+- The old `C:\Users\ssand\Desktop\...` copy is rollback only; the guard blocks commits there.
+- Details: `SYSTEM_STATE.md`. Recovery: `RECOVERY.md` and `docs/migration/2026-11-05/`.
 
 ## Protected historical dashboard in progress (GPT self-audited)
 
@@ -246,5 +251,5 @@ It stages and commits only the allowlisted files and records `Source: <commit>` 
 - **WebKit primed-offline reload:** fails in emulation. Physical iPhone and Android checks are PENDING PAUL REVIEW.
 - **Preference:** whether the matrix opens in Evidence view (current) or Captain view. PENDING PAUL REVIEW.
 
-## Session reset checkpoint — 2026-11-05
-Start with AGENTS.md, AI_HANDOFF.md and the fresh-session verification in SYSTEM_STATE.md. Prioritize preserving local work, confirming the production database and H: restore, and migrating the enabled failure alert when authorized. Worktree deletion remains frozen.
+## Session reset checkpoint — 2026-11-09
+Start with AGENTS.md, AI_HANDOFF.md and the "Starting a new AI session here" steps in SYSTEM_STATE.md. Preserve local work and other agents' uncommitted edits. The pipeline uses the checkout's `data\apa_tracker.db`; production database selection is pending Paul. Confirm the file before any refresh or publish. Recovery: RECOVERY.md. Repoint the C: Windows tasks only with Paul's admin authorization. Worktree deletion remains frozen. No Ultimate Coach build is approved.

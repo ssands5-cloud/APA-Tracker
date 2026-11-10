@@ -21,7 +21,7 @@ The human operator (Paul, the captain) uses this to decide who plays who at leag
 | Purpose | File |
 |---------|------|
 | Refresh script | `QUICK_REFRESH.bat` |
-| Production database | `data\apa_tracker.db` in the canonical checkout (the `D:\APA-Tracker-Data` default in `scripts/paths.py` doesn't exist yet) |
+| Pipeline database | `data\apa_tracker.db` in the canonical checkout. Production database selection is pending Paul (see `SYSTEM_STATE.md`). `D:\APA-Tracker-Data` is unused. |
 | System architecture | `docs/SYSTEM_ARCHITECTURE.md` |
 | Function registry | `docs/FUNCTION_INDEX.md` |
 | Repository navigation | `docs/CODEBASE.md` |
@@ -123,7 +123,7 @@ No direct commits to `main`.
 
 ### "I need to run the pipeline"
 ```
-# Active production DB (legacy location; D:\APA-Tracker-Data\databases\ is still empty):
+# Pipeline DB the code uses (production selection pending Paul; D:\APA-Tracker-Data\databases\ is unused):
 data\apa_tracker.db
 
 # Game night refresh:
