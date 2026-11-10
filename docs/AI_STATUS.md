@@ -1,7 +1,33 @@
 # AI Status — APA Tracker Repository Architect
 
-**Role:** Repository Architect (Claude)  
-**Shift:** 2026-10-25, autonomous until 18:00  
+## Shift: 2026-10-27 (Claude)
+
+**Role:** PR #105 engineering validation, combined-candidate assessment, architecture integrity.
+**Scope today:** Review PR #105 + PR #106 for combined compatibility, without merging either. Could not sustain unattended work across the full window to 18:00 America/Denver — no mechanism here for continuous operation across ~20 unattended hours; this is one real work cycle, verified, with a clean stopping point.
+
+### Current Work
+Independently verified PR #105 (`1fb3c75`) and PR #106 (`5873c31`) against their live heads (not cached claims), then built and validated a **local-only combined candidate** (`combined-candidate-105-106`, merge of both onto `phase1-war-room`@`92d4ccd`) — never pushed anywhere, no merge to either real PR branch.
+
+### Decision Made
+Both PRs are compatible and safe to eventually land independently or together:
+- **Zero file overlap.** PR #105 touches `historical-opponent-view.tsx`, `globals.css`, and 2 test helpers. PR #106 touches `dashboard/[[...section]]/page.tsx`, `sign-in/[[...sign-in]]/page.tsx`, `captain-sign-in.tsx` (new), and a test file. No shared files at all.
+- **Clean merge.** `git merge` of both onto `phase1-war-room` tip: zero conflicts, exactly the expected 8-file combined diff (+416/-17).
+- **Combined validation, under real Node 24.9.0 (not the sandbox's default 22):** `tsc --noEmit` clean, **31/31 tests pass** (22 base + 9 from PR #106's `auth-navigation.test.ts` — matches PR #106's own claimed count exactly), `next build` succeeds, same 11-route output.
+- **PR #106 code review against AI_HANDOFF.md's five invariant rules:** compliant. `authorizedSnapshot()` stays server-only; the new client component (`captain-sign-in.tsx`) only reads Clerk's own `useAuth()` session state, never calls `historicalAccess()` client-side. Correctly distinguishes the `anonymous` case (still redirects to `/sign-in`) from `unavailable` (signed in, data/decrypt/db issue — now a stable retry page instead of a redirect loop).
+
+### Captain Mistake Prevented
+A captain who's already signed in on their phone, but hits a transient data/decrypt issue right before league night, would have been stuck in an infinite sign-in redirect loop with no way to even see an error — PR #106 replaces that with a page that says what's wrong and offers a retry. Validated this is real (not just claimed) by independently running the regression test and the combined build.
+
+### Recommendation For Other AI
+No conflicts to resolve — both PRs are independently mergeable into `phase1-war-room` whenever ready; order doesn't matter, they don't touch the same files. Live auth/DB/snapshot acceptance and iPhone/iPad acceptance remain unverified by me (no browser, no credentials, per the database hold) — if you have real Vercel/browser access restored, that's the next real gate, not more code review of these two.
+
+### Next Action
+Nothing further planned on PR #105/#106 from this side unless new commits land on either. Available for architecture/docs review or another focused, independently-verifiable task against the priority order (navigation/error/loading/empty-state fixes with existing evidence) if one surfaces.
+
+---
+
+## Shift: 2026-10-25, autonomous until 18:00 (prior session)
+
 **Branch:** `feat/phase1-war-room`
 
 ---
