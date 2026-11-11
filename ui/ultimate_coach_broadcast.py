@@ -121,7 +121,7 @@ body.bc:not([data-view="home"]) .page-foot{color:#5b6a61}
 body.bc .freshness{padding:10px max(16px,env(safe-area-inset-left,0px));max-width:1160px;margin:12px auto 0}
 body.bc #bc-home{display:none}
 body.bc[data-view="home"] #bc-home,body.bc[data-view="all"] #bc-home{display:block}
-body.bc[data-view="home"] main>:not(#bc-home):not(.page-foot){display:none}
+@media screen{body.bc[data-view="home"] main>:not(#bc-home):not(.page-foot){display:none}}
 /* Section header for the non-home tabs */
 body.bc .section-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 body.bc .section-header[hidden]{display:none}
@@ -207,8 +207,8 @@ body.bc .section-title h2{color:#07151f}
 @media (max-width:480px){
   body.bc .nav-tab{padding:0 10px;font-size:11px}body.bc .logo{padding:0 12px}
 }
-@media print{body.bc .app-header,body.bc .ticker-wrap,body.bc #bc-home,body.bc #bc-tabhead{display:none!important}
-  body.bc [data-bc]{display:revert!important}body.bc main{background:#fff!important;color:#000!important}}
+@media print{body.bc .app-header,body.bc .ticker-wrap,body.bc #bc-home,body.bc #bc-tabhead,body.bc #bc-night{display:none!important}
+  body.bc main{background:#fff!important;color:#000!important;margin:0!important}body.bc{background:#fff!important;color:#000!important}}
 """
 
 _CSS_NIGHT = r"""
@@ -218,7 +218,7 @@ body.bc[data-view="matchnight"] #bc-night,body.bc[data-view="all"] #bc-night{dis
 body.bc[data-view="matchnight"] main{background:transparent;color:var(--fg);margin-top:0}
 body.bc[data-view="matchnight"] #bc-tabhead .section-title{color:var(--fg)}
 body.bc[data-view="matchnight"] #bc-tabhead .section-sub{color:var(--fg-dim)}
-body.bc:not([data-view="all"]):not(.bc-full) #tonight{display:none!important}
+@media screen{body.bc:not([data-view="all"]):not(.bc-full) #tonight{display:none!important}}
 body.bc[data-view="matchnight"].bc-full #tonight{display:block!important;background:#f4f1ea;color:#17221c;margin-top:16px}
 body.bc .night-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:12px}
 body.bc .night-status .nm{font-family:var(--cond);font-weight:800;font-size:18px;letter-spacing:.04em;text-transform:uppercase}
@@ -269,7 +269,7 @@ body.bc .game-row .res.W{background:rgba(0,212,240,.18);color:var(--home)}body.b
 @media (max-width:740px){body.bc .alt-row{grid-template-columns:28px 1fr auto}body.bc .alt-row .matchup-bars{grid-column:1/-1}body.bc .bench{grid-template-columns:1fr}body.bc .send-bars{width:100%}}
 """
 
-CSS = _CSS_BODY + _CSS_NIGHT + _hide_rules() + "\n"
+CSS = _CSS_BODY + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
 
 
 _JS_BODY = r"""
@@ -335,15 +335,21 @@ _JS_BODY = r"""
   function badgeClass(level){return "badge-"+String(level||"unknown").toLowerCase();}
   // Team options read "Name · Session · Format · Div · N rostered". The hero shows the name, and adds
   // the format and division only where two teams share a name.
-  function opts(sel){
-    var src=$(sel); if(!src) return "";
-    var all=Array.prototype.map.call(src.options,function(o){return o.text.split(" · ");});
-    var count={};all.forEach(function(p){count[p[0]]=(count[p[0]]||0)+1;});
-    return Array.prototype.map.call(src.options,function(o,i){
-      var p=all[i],label=o.value?(count[p[0]]>1?p.slice(0,4).join(" · "):p[0]):o.text;
-      return '<option value="'+esc(o.value)+'">'+esc(label)+'</option>';}).join("");
+  var TEAM_LABELS={};
+  function opts(sel,teams){
+    var src=$(sel),list=[];
+    if(teams&&teams.length) list=teams.map(function(t){return [t.key,t.label];});
+    else if(src) list=Array.prototype.filter.call(src.options,function(o){return o.value;}).map(function(o){return [o.value,o.text.replace(/ · \d+ rostered$/,"")];});
+    var parts=list.map(function(x){return x[1].split(" · ");}),count={};
+    parts.forEach(function(p){count[p[0]]=(count[p[0]]||0)+1;});
+    return '<option value="">Select a team...</option>'+list.map(function(x,i){
+      var p=parts[i],label=count[p[0]]>1?p.slice(0,4).join(" · "):p[0];TEAM_LABELS[x[0]]=x[1];
+      return '<option value="'+esc(x[0])+'">'+esc(label)+'</option>';}).join("");
   }
-  function relay(id,value){var s=$(id);if(!s) return;s.value=value;s.dispatchEvent(new Event("change",{bubbles:true}));}
+  // The classic selects only hold search matches, so make sure the chosen team is an option before selecting it.
+  function relay(id,value){var s=$(id);if(!s) return;
+    if(value&&!Array.prototype.some.call(s.options,function(o){return o.value===value;})){var o=document.createElement("option");o.value=value;o.text=TEAM_LABELS[value]||value;s.appendChild(o);}
+    s.value=value;s.dispatchEvent(new Event("change",{bubbles:true}));}
   function openNight(theirId){
     show("matchnight");
     if(theirId){var chip=document.querySelector('#next-send .ns-chip[data-next="'+String(theirId).replace(/"/g,'\\"')+'"]');if(chip) chip.click();}
@@ -386,12 +392,12 @@ _JS_BODY = r"""
     var hero='<div class="match-hero" aria-label="Fixture">'
       +'<div class="team-panel team-panel-home"><span class="team-breadcrumb">'+(side?esc(side)+' &rsaquo; ':'')+'<span>Your Team</span></span>'
       +'<div class="team-mono team-mono-home" aria-hidden="true">'+esc(mono(ourName))+'</div>'
-      +'<label class="team-pick"><span class="vh">Our team</span><select id="bc-team-a" class="team-name-select">'+opts("team-a")+'</select></label></div>'
+      +'<label class="team-pick"><span class="vh">Our team</span><select id="bc-team-a" class="team-name-select">'+opts("team-a",m&&m.teams)+'</select></label></div>'
       +'<div class="match-center"><span class="badge-prematch">'+esc(status)+'</span><div class="vs-circle">VS</div>'
       +'<div class="match-datetime">'+esc(ready?m.dateText:"Pick a matchup")+'</div></div>'
       +'<div class="team-panel team-panel-away"><span class="team-breadcrumb-away">Opponent</span>'
       +'<div class="team-mono team-mono-away" aria-hidden="true">'+esc(mono(theirName))+'</div>'
-      +'<label class="team-pick"><span class="vh">Opponent team</span><select id="bc-team-b" class="team-name-select">'+opts("team-b")+'</select></label></div></div>';
+      +'<label class="team-pick"><span class="vh">Opponent team</span><select id="bc-team-b" class="team-name-select">'+opts("team-b",m&&m.teams)+'</select></label></div></div>';
     var stats='<div class="match-stats" aria-label="Match details">'
       +'<div class="stat-cell"><div class="stat-label">Match Date</div><div class="stat-value">'+esc(ready?m.dateText:"—")+'</div></div>'
       +'<div class="stat-cell"><div class="stat-label">Format</div><div class="stat-value">'+esc(ready?m.format:"—")+'</div></div>'

@@ -143,6 +143,7 @@ def build_candidate(
     *,
     viewer_member_external_id: str | None = None,
     settings: MatchDaySettings | None = None,
+    ui: str = "classic",
 ) -> Path:
     if settings is None:
         settings = MatchDaySettings(
@@ -174,7 +175,7 @@ def build_candidate(
             render(
                 payload, built_at=built_at, consume_evidence=True,
                 viewer_member_external_id=settings.viewer_member_external_id,
-                viewer_card_number=settings.viewer_card_number,
+                viewer_card_number=settings.viewer_card_number, ui=ui,
             ),
             encoding="utf-8",
         )
@@ -239,11 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-root", type=Path, default=DEFAULT_RUN_ROOT)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--ui", choices=("classic", "broadcast"), default="classic",
+                        help="page presentation; classic is the default and unchanged")
     args = parser.parse_args(argv)
 
     out_dir = args.out or _default_run_dir(args.run_root)
     try:
-        completed = build_candidate(args.db, out_dir, settings=load_match_day_settings(args.config))
+        completed = build_candidate(args.db, out_dir, settings=load_match_day_settings(args.config), ui=args.ui)
     except CandidateError as exc:
         print(f"ULTIMATE COACH CANDIDATE BLOCKED: {exc}")
         return 1

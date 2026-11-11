@@ -1161,7 +1161,12 @@
       wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
     avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();}
   };
+  // Every current team playing the selected format, for the scoreboard's team pickers (the classic selects only list
+  // search matches). Same scope key and label the classic selects use.
+  function wrBcTeams(){return TEAM_KEYS.filter(function(k){var tm=TEAM_INDEX[k];return !tm.format||tm.format===TF.value;})
+    .map(function(k){return {key:k,label:teamDisplay(TEAM_INDEX[k])};});}
   function wrBroadcastPublish(model){
+    if(model&&document.body&&document.body.classList.contains("bc")) model.teams=wrBcTeams();
     if(!document.body||!document.body.classList.contains("bc")) return;
     window.UC_BC_LAST=model;
     if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);

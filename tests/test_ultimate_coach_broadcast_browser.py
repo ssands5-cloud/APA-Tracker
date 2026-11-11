@@ -187,3 +187,14 @@ def test_the_classic_page_is_unchanged():
     assert 'id="bc-home"' not in classic and 'id="bc-night"' not in classic and "<body class=\"\"" in classic
     with pytest.raises(ValueError):
         render(_payload(), ui="other")
+
+
+def test_printing_the_packet_from_any_tab_includes_the_whole_matchup(page):
+    """Tabs are a screen convenience. Print (the Captain Packet) must carry every matchup section, as the classic page does."""
+    _pick(page)
+    _tab(page, "matchnight")
+    assert not page.locator("#wr-matrix").first.is_visible()                           # hidden on screen in this tab
+    page.emulate_media(media="print")
+    for sel in ("#wr-matrix", "#wr-opportunities", "#wr-risks", "#lineup-lab", "#scouting-cards", "#wr-meetings"):
+        assert page.locator(sel).first.is_visible(), sel
+    assert not page.locator("header.app-header").is_visible() and not page.locator("#bc-night").is_visible()
