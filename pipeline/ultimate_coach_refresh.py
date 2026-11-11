@@ -19,6 +19,7 @@ import threading
 import time
 import uuid
 
+from pipeline.identity_overrides import IdentityOverrides
 from pipeline.refresh_progress import progress_span
 from pipeline.refresh_sources import ResponseFixtures, acquire_current_sources, digest, encoded, sha256
 
@@ -88,7 +89,7 @@ def previous_bundle(root: Path, check):
     return previous
 
 
-def fixture_identity_resolver(store, catalog, division):
+def fixture_identity_resolver(store, catalog, division, overrides=None):
     """Supplement current-roster resolution only with an exact captured ID chain.
 
     Departed membership stays historical. Require the exact team, division and
@@ -106,6 +107,7 @@ def fixture_identity_resolver(store, catalog, division):
 
     def resolve(db, session_name, scores, *, current_only=True):
         mapping, _, _ = resolve_scoresheet_identities(db, session_name, scores, current_only=current_only)
+        roster_mapping = mapping.copy() if overrides else {}
         if len(contexts) == 1 and session_name == division['session_name']:
             league, session = next(iter(contexts))
             for row in scores:
@@ -130,12 +132,44 @@ def fixture_identity_resolver(store, catalog, division):
                     raise RefreshFailed('captured member identity conflicts with current roster identity')
                 else:
                     mapping[alias] = member
+            if overrides and current_only:
+                from collections import Counter
+
+                aliases = Counter(str(row.get('player_id') or '') for row in scores)
+                reviewed = []
+                for row in scores:
+                    alias = str(row.get('player_id') or '')
+                    key = (
+                        str(row.get('match_id') or ''), str(row.get('score_row_id') or ''),
+                        alias, str(row.get('team_id') or ''), str(division['division_id']),
+                        league, session, division['format'],
+                    )
+                    approval = overrides.rows.get(key)
+                    if approval is None:
+                        continue
+                    member = approval['canonical_member_id']
+                    captured = links.get((league, session, division['format'], alias))
+                    if (aliases[alias] != 1 or (captured and captured != {member})
+                            or roster_mapping.get(alias, member) != member or mapping.get(alias, member) != member):
+                        raise RefreshFailed('reviewed identity conflicts with captured scoresheet or roster evidence')
+                    player = db.query(Player).filter_by(external_id=member).one_or_none()
+                    if player is None:
+                        raise RefreshFailed('reviewed canonical member is missing from the staging database')
+                    mapping[alias] = member
+                    reviewed.append((key, row, player))
+                if reviewed:
+                    effective_ids = Counter(mapping.get(alias, alias) for alias in aliases if alias)
+                    for key, row, player in reviewed:
+                        if effective_ids[player.external_id] != 1:
+                            raise RefreshFailed('reviewed identity would merge multiple rows on one scoresheet')
+                        row['reviewed_canonical_name'] = player.name
+                        overrides.applied.add(key)
         identities = {str(row['player_id']) for row in scores if row.get('player_id')}
         return mapping, len(identities & mapping.keys()), len(identities - mapping.keys())
     return resolve
 
 
-def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path, *, progress=None):
+def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path, *, progress=None, overrides=None):
     from sqlalchemy.orm import Session
     from auth.graphql_client import use_fixture_provider
     from database.engine import create_db_engine
@@ -182,7 +216,7 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
                 gaps.extend(sync.reconcile_division_wide_coverage(totals))
                 matches = [m for m in api.division_schedule_rows(api.fetch_division_schedule(run_config, did))
                            if m["is_scored"] and not m["is_bye"]]
-                resolve = fixture_identity_resolver(store, scope['catalog'], division)
+                resolve = fixture_identity_resolver(store, scope['catalog'], division, overrides)
                 for match_number, match in enumerate(matches, 1):
                     if progress:
                         progress(f"RECONCILE SCORESHEET {match_number}/{len(matches)} in current division")
@@ -210,6 +244,9 @@ def replay_ingest(config, fixtures: Path, scope, database: Path, directory: Path
               "gaps": gaps, "coverage": "partial" if gaps else "complete",
               "career_counts": enrichment["counts"],
               "historical_scope": "Existing historical games retained; current listed divisions and resolvable career contexts rechecked."}
+    if overrides:
+        report["identity_override_count"] = len(overrides.applied)
+        atomic_json(directory / "identity_override_audit.json", overrides.audit())
     (directory / "refresh_report.json").write_bytes(encoded(report))
     if gaps:
         if progress:
@@ -264,7 +301,7 @@ def check_database(path):
             raise RefreshFailed("database contains unresolved foreign keys")
 
 
-def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=None,
+def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=None, identity_overrides=None,
                 acquire=acquire_current_sources, workbook_validator=None, html_validator=None,
                 boundary=None, token_loader=None):
     started = time.monotonic()
@@ -314,6 +351,12 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             config = load_config(str(config_path))
             if mode not in ("full", "quick"):
                 raise RefreshFailed("refresh mode must be full or quick")
+            overrides = None
+            if identity_overrides:
+                override_path = Path(identity_overrides).absolute()
+                check(override_path)
+                overrides = IdentityOverrides(override_path)
+                atomic_json(directory / "identity_override_audit.json", overrides.audit())
             settings = load_match_day_settings(config_path)
             config = {**config, "apa": {**(config.get("apa") or {})}}
             base_setting = (config.get("refresh") or {}).get("source_database")
@@ -382,6 +425,7 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             input_key = digest({"sources": store.content_sha256, "scope": digest(scope),
                                 "ingestion": code_signature(["auth", "scraper", "parser", "database", "scheduler", "analytics"]),
                                 "pipeline": code_signature(["pipeline"]),
+                                "identity_overrides": overrides.fingerprint if overrides else None,
                                 "reconcile": sha256(ROOT / "scripts/refresh_ultimate_coach_current_session.py"),
                                 "h2h_builder": sha256(ROOT / "scripts/build_head_to_head.py"),
                                 "trends_builder": sha256(ROOT / "scripts/build_player_trends.py"), "base": base_sha})
@@ -397,10 +441,15 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                     raise RefreshFailed("previous coverage report checksum mismatch")
                 report = json.loads(prior_report.read_text(encoding="utf-8"))
                 (directory / "refresh_report.json").write_bytes(encoded(report))
+                if overrides:
+                    prior_audit = root / previous["run"] / "identity_override_audit.json"
+                    if sha256(prior_audit) != previous.get("identity_override_audit_sha256"):
+                        raise RefreshFailed("previous identity override audit checksum mismatch")
+                    shutil.copyfile(prior_audit, directory / "identity_override_audit.json")
                 status("DATABASE UP TO DATE - unchanged source content")
             else:
                 with progress_span(status, "database ingestion and scoresheet reconciliation"):
-                    report = replay_ingest(config, fixtures, scope, database, directory, progress=status)
+                    report = replay_ingest(config, fixtures, scope, database, directory, progress=status, overrides=overrides)
                 status("DATABASE UPDATED")
             status("SOURCE SCOPE: current dashboard divisions; existing older games retained, not recrawled")
             career = report["career_counts"]
@@ -492,6 +541,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                             "coverage": report["coverage"], "career_counts": report["career_counts"],
                             "report_sha256": sha256(directory / "refresh_report.json"),
                             "historical_scope": report["historical_scope"], "production_database_promoted": False}
+                if overrides:
+                    manifest["identity_override_audit_sha256"] = sha256(directory / "identity_override_audit.json")
                 atomic_json(directory / "manifest.json", manifest)
                 atomic_json(directory / "READY", {"manifest_sha256": sha256(directory / "manifest.json")})
             # Finish required progress writes before committing the pointer.
@@ -518,12 +569,14 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, default=ROOT / "apa_config.yaml")
     parser.add_argument("--run-root", type=Path)
     parser.add_argument("--fixtures", type=Path, help="explicit offline verification input; not a live refresh")
+    parser.add_argument("--identity-overrides", type=Path, help="private owner-reviewed exact scoresheet bindings")
     parser.add_argument("--open", action="store_true", help="open the completed workbook and HTML")
     parser.add_argument("--no-open", dest="open", action="store_false", help="leave completed files closed")
     parser.set_defaults(open=False)
     args = parser.parse_args(argv)
     try:
-        manifest = run_refresh(mode=args.mode, config_path=args.config, run_root=args.run_root, fixture_source=args.fixtures)
+        manifest = run_refresh(mode=args.mode, config_path=args.config, run_root=args.run_root,
+                               fixture_source=args.fixtures, identity_overrides=args.identity_overrides)
     except (Exception, KeyboardInterrupt) as exc:
         if not getattr(exc, "_refresh_step_logged", False):
             print(f"FAILED AT STEP 1 INITIALIZATION: {type(exc).__name__}; no completed files replaced.", flush=True)
