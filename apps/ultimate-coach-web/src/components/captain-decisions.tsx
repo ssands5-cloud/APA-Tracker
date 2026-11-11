@@ -21,7 +21,7 @@ export function ThreatDossiers({ snapshot: s }: { snapshot: Snapshot }) {
         <p><strong>Mistake to avoid:</strong> {protections.length ? 'Do not spend the designated answer before this matchup appears. One player can cover only one match.' : 'Do not treat a winning roster-level record as a proven advantage against every player.'}</p>
         {response ? <>
           <p><strong>Why this counter:</strong> {response.why}</p>
-          <p><strong>Sending now costs:</strong> {response.cost}</p>
+          <p><strong>Sending now costs:</strong> {response.cost?.trim() || 'Response cost is not established in this snapshot.'}</p>
           <span className="pill">{evidenceLabel(response.level)}</span>
         </> : <p>No counter is established here. Inspect the recorded matchup evidence before sending.</p>}
         <p className="muted">Recorded meetings cover {threat.playersMet} of {s.players.length} captured players. {threat.meetings < 3 ? 'Small sample; this is not a proven dangerous matchup.' : 'Other pairings can remain unknown.'}</p>
