@@ -233,6 +233,15 @@ def reconcile_match(config: dict, db, match_id: str, session_name: str, *,
     mapping, _resolved, unresolved = resolve(db, session_name, scores, current_only=True)
     scores = gs.apply_identity_mapping(scores, mapping, ("player_id",))
     h2h = gs.apply_identity_mapping(h2h, mapping, ("player_id", "opponent_id"))
+    if any(row.get("match_id") != str(match_id) for row in scores if "reviewed_canonical_name" in row):
+        raise ValueError("reviewed identity row does not belong to the requested match")
+    reviewed_names = {row["player_id"]: row["reviewed_canonical_name"]
+                      for row in scores if "reviewed_canonical_name" in row}
+    for row in h2h:
+        if row.get("player_id") in reviewed_names:
+            row["player_name"] = reviewed_names[row["player_id"]]
+        if row.get("opponent_id") in reviewed_names:
+            row["opponent_name"] = reviewed_names[row["opponent_id"]]
     authoritative = {str(s["player_id"]) for s in scores if s.get("player_id")}
     out: dict[str, Any] = {"match_id": str(match_id), "rows_before": len(before), "fetched_utc": fetched,
                            "scoresheet_rows_received": len(scores), "scoresheet_sha256": digest}

@@ -396,7 +396,9 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
             logger.debug("Skipping a scoresheet entry with no player id for match %s", match_id)
             continue
 
-        player = upsert_player(db, player_id, player_name)
+        reviewed = "reviewed_canonical_name" in entry
+        player = (db.query(Player).filter_by(external_id=player_id).one() if reviewed
+                  else upsert_player(db, player_id, player_name))
 
         existing = _resolve_bound_player_match(db, player.id, match.id)
         # opponent is the OTHER side's name, not this player's own team --
@@ -414,7 +416,8 @@ def ingest_match_scores(db: Session, match_id, scores: list[dict]) -> tuple[int,
             opponent = None
             own_team_name = entry.get("team_name")
 
-        backfill_player_team(db, player, own_team_id, own_team_name)
+        if not reviewed:
+            backfill_player_team(db, player, own_team_id, own_team_name)
 
         fields = {
             "match_date": match.match_date,

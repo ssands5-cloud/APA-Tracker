@@ -139,3 +139,41 @@ Reviewed project launchers in the canonical root and builder; dependency/vendor 
 | `tools/launch_apa_refresh.bat` | KEEP | Shared interpreter selection/exit-code handling, called by both entry points |
 
 Build/audit execution evidence and release gates remain in the single `docs/overnight_coach_advantage_report.md`; this document is the durable user runbook and source call map.
+
+## Owner-reviewed scoresheet identities
+
+Use this only after Paul reviews authoritative APA evidence binding an exact score row to a canonical member already established in the staging database. This is an explicit operator input. The refresh never infers a binding from a name or creates current roster membership from it.
+
+Keep the private approval JSON under the ignored `tmp/` directory. The schema below uses synthetic identifiers. Use exact decimal string IDs, `EIGHT` or `NINE`, a timezone-bearing review timestamp and a private evidence reference. Store the source evidence privately. An approval file records a human decision and is not proof of identity on its own.
+
+```json
+{
+  "schema": "ultimate-coach-identity-overrides-v1",
+  "overrides": [
+    {
+      "match_id": "100",
+      "score_row_id": "101",
+      "scoresheet_player_id": "102",
+      "team_id": "103",
+      "division_id": "104",
+      "league_id": "105",
+      "session_id": "106",
+      "format": "EIGHT",
+      "canonical_member_id": "107",
+      "reviewed_by": "Paul",
+      "reviewed_at": "2026-11-11T09:00:00-07:00",
+      "evidence_reference": "Private APA confirmation reference"
+    }
+  ]
+}
+```
+
+First test against a captured source in a new, private run directory:
+
+```powershell
+.\FULL_APA_REFRESH.bat --no-open --fixtures "<captured-fixture-directory>" --run-root "<new-staging-run-root>" --identity-overrides "tmp\reviewed-identities.json"
+```
+
+Check `identity_override_audit.json` for the reviewed rows and applied scope hashes. Compare `refresh_report.json` against the APA sheets and verify the candidate database's canonical player and head-to-head rows. The manifest binds the audit by SHA-256, and a change to the approval document forces fresh ingestion in QUICK mode. A mismatch, missing staged member, or conflicting source evidence cannot establish an identity. Missing evidence leaves the coverage gate in force. The audit file and fixtures contain private data and must stay local.
+
+After offline verification and production database selection, run live FULL with the same approved file and an isolated run root, omitting `--fixtures`. Verify a complete manifest and matching READY marker, then run the Windows acceptance checklist for the resulting package on both outputs. Keep the Windows daily task disabled until unattended APA authentication and native workbook validation have separately succeeded.

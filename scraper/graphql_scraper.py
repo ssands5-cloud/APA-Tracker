@@ -626,6 +626,7 @@ def match_player_scores(match: dict[str, Any]) -> list[dict[str, Any]]:
                 {
                     "match_id": str(match.get("id") or ""),
                     "player_id": str(player.get("id") or ""),
+                    "score_row_id": str(score.get("id") or ""),
                     "player_name": player.get("displayName") or "",
                     "team_id": str(team.get("id") or ""),
                     "team_name": team.get("name") or "",

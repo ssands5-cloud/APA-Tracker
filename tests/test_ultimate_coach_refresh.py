@@ -22,9 +22,11 @@ from pipeline.refresh_workbook import validate_structure
 from tests.test_division_wide_sync import ROSTERS_PAYLOAD, SCHEDULE_PAYLOAD, MATCH_DETAIL_PAYLOAD, SESSION_NAME
 
 
-def fixtures(root, *, corrected=False, empty=False, career=False):
+def fixtures(root, *, corrected=False, empty=False, career=False, reviewed_participant=False):
     store = ResponseFixtures(root)
     detail = copy.deepcopy(MATCH_DETAIL_PAYLOAD)
+    if reviewed_participant:
+        detail['results'][0]['scores'][0].update(id=1234, player={'id': 500, 'displayName': 'Scoresheet Display'})
     if corrected:
         detail['results'][0]['scores'][0]['winLoss'] = 'L'
         detail['results'][1]['scores'][0]['winLoss'] = 'W'
@@ -60,7 +62,7 @@ def fixtures(root, *, corrected=False, empty=False, career=False):
     scope={'viewer_id':'9001','team_ids':['301','302'],
            'divisions':[{'division_id':'300','format':'EIGHT','session_name':SESSION_NAME}],
            'catalog':{'schema':'ultimate-coach-historical-catalog-v1','divisions':[
-               {'division_id':'300','catalog_session_name':SESSION_NAME,'league_id':'1','league_slug':'fixture'}]}}
+               {'division_id':'300','catalog_session_name':SESSION_NAME,'catalog_session_id':'26','format':'EIGHT','league_id':'1','league_slug':'fixture'}]}}
     (root/'scope.json').write_bytes(encoded(scope))
     return root
 
@@ -110,6 +112,44 @@ def test_full_refresh_reaches_database_matchups_trends_workbook_html_and_status(
     assert 'Teams Updated: 2' in text and 'Players Updated: 2' in text
     assert 'Matchups Rebuilt: Yes' in text and 'Workbook Built: Yes' in text and 'HTML Built: Yes' in text
     assert str(directory) in text and 'Total Time:' in text
+
+
+def test_reviewed_scoresheet_binding_is_audited_and_bound_to_quick_reuse(setup, tmp_path):
+    from pipeline.identity_overrides import SCHEMA
+
+    run, root, sources, calls, seed = setup
+    fixtures(sources, reviewed_participant=True)
+    with sqlite3.connect(seed) as db:
+        db.execute("INSERT INTO players (external_id, name) VALUES ('101', 'Canonical Player')")
+    reviewed = tmp_path / 'reviewed.json'
+    reviewed.write_text(json.dumps({'schema': SCHEMA, 'overrides': [{
+        'match_id': '90401', 'score_row_id': '1234', 'scoresheet_player_id': '500',
+        'team_id': '301', 'division_id': '300', 'league_id': '1', 'session_id': '26', 'format': 'EIGHT',
+        'canonical_member_id': '101', 'reviewed_by': 'Owner', 'reviewed_at': '2026-11-11T16:00:00Z',
+        'evidence_reference': 'Synthetic match-row confirmation',
+    }]}), encoding='utf-8')
+
+    with pytest.raises(refresh.RefreshFailed, match='source coverage incomplete'):
+        run()
+    assert not (root / 'CURRENT.json').exists()
+    first = run(identity_overrides=reviewed)
+    folder = root / first['run']
+    audit = folder / 'identity_override_audit.json'
+    assert len(json.loads(audit.read_text())['applied_scope_sha256']) == 1
+    assert first['identity_override_audit_sha256'] == sha256(audit)
+    assert json.loads((folder / 'refresh_report.json').read_text())['identity_override_count'] == 1
+    with sqlite3.connect(folder / 'ultimate_coach_staging.db') as db:
+        assert db.execute("SELECT p.external_id FROM player_matches pm JOIN players p ON p.id=pm.player_id "
+                          "JOIN matches m ON m.id=pm.match_id WHERE m.external_id='90401' ORDER BY p.external_id").fetchall() == [
+            ('101',), ('9002',),
+        ]
+    calls.clear()
+    second = run(mode='quick', identity_overrides=reviewed)
+    assert not calls
+    assert second['identity_override_audit_sha256'] == first['identity_override_audit_sha256']
+    with pytest.raises(refresh.RefreshFailed, match='source coverage incomplete'):
+        run(mode='quick')
+    assert json.loads((root / 'CURRENT.json').read_text()) == second
 
 
 def test_quick_unchanged_sources_reuse_both_outputs_and_derived_generation(setup,monkeypatch,capsys):
