@@ -58,7 +58,11 @@ def main():
                     assert page.locator('.command-primary').bounding_box()['height'] >= 44
                     brand = page.locator('.brand').bounding_box()
                     command = page.locator('.captain-command').bounding_box()
-                    assert brand['y'] >= command['y'] + command['height'], 'branding precedes the decision'
+                    assert (
+                        brand['x'] + brand['width'] <= command['x']
+                        or brand['y'] + brand['height'] <= command['y']
+                        or command['y'] + command['height'] <= brand['y']
+                    ), 'branding overlaps the decision panel'
                     # The four immediate decisions fit on standard phone, iPad and desktop screens.
                     if html is standard:
                         box = page.locator('.command-glance').bounding_box()

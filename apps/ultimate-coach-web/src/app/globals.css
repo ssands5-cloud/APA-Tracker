@@ -1881,7 +1881,7 @@ body {
 .command-risk { padding: 10px 14px; background: rgba(192,57,43,.07); border: 1px solid rgba(192,57,43,.2); border-radius: 6px; font-size: 13px; }
 .command-risk p { margin: 0 0 4px; }
 .command-risk p:last-child { margin: 0; color: var(--chalk-muted); font-size: 12px; }
-.command-primary { display: inline-block; padding: 10px 18px; background: linear-gradient(135deg, #f5dda0, #c9a34a); color: var(--felt-deep); font-weight: 700; font-size: 14px; border-radius: 6px; text-align: center; }
+.command-primary { display: inline-grid; place-items: center; min-height: 44px; padding: 10px 18px; background: linear-gradient(135deg, #f5dda0, #c9a34a); color: var(--felt-deep); font-weight: 700; font-size: 14px; border-radius: 6px; text-align: center; }
 .command-limit { margin: 0; font-size: 12px; color: var(--chalk-muted); font-style: italic; }
 
 .command-scouting { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
