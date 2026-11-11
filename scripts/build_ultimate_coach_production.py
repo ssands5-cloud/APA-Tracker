@@ -246,7 +246,8 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir = args.out or _default_run_dir(args.run_root)
     try:
-        completed = build_candidate(args.db, out_dir, settings=load_match_day_settings(args.config), ui=args.ui)
+        completed = build_candidate(args.db, out_dir, settings=load_match_day_settings(args.config),
+                                    **({} if args.ui == "classic" else {"ui": args.ui}))
     except CandidateError as exc:
         print(f"ULTIMATE COACH CANDIDATE BLOCKED: {exc}")
         return 1
