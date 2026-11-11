@@ -62,11 +62,22 @@ node node_modules/typescript/bin/tsc --noEmit
 node node_modules/next/dist/bin/next build
 ```
 
+Layout against a running server (Playwright for Python, as in `tests/browser_smoke.py`; prints no page content):
+
+```bash
+# simulated: after a build, serve it locally
+node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3012
+UC_WEB_BASE_URL=http://127.0.0.1:3012 python tests/showcase_layout.py
+# real-data beta: run it against the dev server instead (port 3011 above)
+```
+
+Last run (both modes): 30 page loads each, 6 routes at 320, 390, 768, 1024 and 1280 px, all passing. With the real-data flag still set in `.env.local`, a production-mode server correctly showed the simulated label and none of the real team names.
+
 `tests/showcase.test.ts` covers: simulated-season consistency (standings add up, probabilities in (0, 1), lineups fit the cap), the real-data gate (production, Vercel, CI and non-local hosts all refuse), no browser file importing season data, no private file tracked, no placeholder text or network calls in showcase source, and the engine on a real-shaped division (byes, tied APA ranks, fewer than five players).
 
 ## Known limits
 
 - Ratings in a 14-week season stay within a few points of even, so most pairings read as toss-ups. That is what the data supports, not a styling choice.
 - Real skill levels change up and down during the season in APA's own scoresheets; the feed reports them as recorded.
-- No Playwright suite is committed; layout was checked with ad hoc headless runs at 1280 px and 390 px. A committed visual test is the obvious next step.
+- `tests/showcase_layout.py` checks layout structurally (no horizontal scroll, one h1, one active tab, no NaN/undefined, tables inside their box, no console errors). It is not a pixel or screenshot comparison, so a visual regression it cannot see would still need a human look.
 - Fonts load from Google Fonts; a self-hosted copy would remove that external request.
