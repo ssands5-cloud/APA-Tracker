@@ -2,10 +2,10 @@
 
 ## ESPN-style showcase local beta (2026-11-10)
 
-- Claude's showcase is on the linked `claude/espn-broadcast-dashboard` branch at `9f7223c` on GitHub, with implementation in `ee1a823`. Vercel returned zero deployments for the pushed head. The showcase covers Home, Matchup, Standings, Power Rankings, Players, and Results & Stats.
+- Claude's showcase is on the linked `claude/espn-broadcast-dashboard` branch on GitHub, with implementation in `ee1a823`. The showcase covers Home, Matchup, Standings, Power Rankings, Players, and Results & Stats.
 - The showcase defaults to a simulated season. The real-data beta uses a git-ignored local export and is restricted to local development. Standings rank and points come from APA. Win-loss, ratings, and win probabilities are computed from scoresheets. The probability model is uncalibrated and real-data probabilities remain local.
-- Claude reported 31 passing tests, clean type checking, and a successful local build for the showcase. Commit `17f260c` adjusts the probability labels and fixes the display of unrated skill levels. The refresh that supplied the export stopped at its coverage gate with two unresolved rows. It produced no promoted Ultimate Coach output.
-- Draft PR #83 still needs a Windows acceptance build at its current head, `15b342e`. The build at `b1660ad` is 229 commits behind. GitHub pushes require a verified branch opt-out to avoid triggering Vercel.
+- Claude reported 43 passing tests, clean type checking, and a successful local build at `c2488cf`. Commit `17f260c` adjusts the probability labels and fixes the display of unrated skill levels. The refresh that supplied the export stopped at its coverage gate with two unresolved rows. It produced no promoted Ultimate Coach output.
+- Draft PR #83 has a Windows acceptance candidate at its exact head, `15b342e`, in `.worktrees/pr83-head-uat/tmp/uat/build-15b342e/`. Both artifact hashes match the build record. Results end September 20, 2026. Native Excel and Windows acceptance are pending Paul.
 
 ## D: drive migration — documentation reconciled 2026-11-09 (Claude)
 
