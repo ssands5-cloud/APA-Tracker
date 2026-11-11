@@ -7,6 +7,8 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from ui import ultimate_coach_broadcast as bc
+
 from analytics.ultimate_coach_match_day import (
     DEFAULT_MATCH_DAY_TIMEZONE,
     FORMAT_FILTER_ALL,
@@ -583,7 +585,10 @@ def render(
     viewer_member_external_id: str | None = None,
     viewer_card_number: str | None = None,
     match_night: dict[str, Any] | None = None,
+    ui: str = "classic",
 ) -> str:
+    if ui not in ("classic", "broadcast"):
+        raise ValueError(f"unknown ui {ui!r}: expected 'classic' or 'broadcast'")
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     compact_payload["match_night"] = match_night
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -656,6 +661,7 @@ def render(
            if fresh["unplayed_before_build"] else "")
         + ' · this page never refreshes itself.</p></details>'
     )
+    start_here = start_here.replace('<details class="card start-here"', '<details class="card start-here"' + bc.tag(ui, "summary"), 1)
     data = _script_json(compact_payload)
     built_label_js = _script_json(f"Ultimate Coach · built {built_at}" if built_at else "Ultimate Coach · offline build")
     player_count = int((payload.get("counts") or {}).get("players") or 0)
@@ -673,6 +679,14 @@ def render(
     location_note = (
         f"Venue is blank in the source for {int(coverage.get('location_missing_count') or 0):,} of these fixtures and shows as “No data”."
     )
+    bc_facts = [
+        "Not a Current APA Feed",
+        f"Built {fresh['build_date']}" if build_local else (f"Built {built_at}" if built_at else "Offline snapshot"),
+        f"Latest Result {fresh['latest_result']}",
+        *([stale_warning(fresh).strip()] if fresh["unplayed_before_build"] else []),
+        "Win probability not calibrated: none shown",
+        f"Match Day times {display_tz}",
+    ]
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -829,17 +843,17 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
-{_WAR_ROOM_CSS}</style></head>
-<body class="{'match-night' if match_night else ''}">
-<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
+{_WAR_ROOM_CSS}</style>{bc.style_markup(ui)}</head>
+<body class="{'match-night' if match_night else ''}{bc.body_class(ui)}"{' data-view="home"' if ui == "broadcast" else ''}>
+{bc.top_markup(ui, bc_facts)}<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
 <div><h1>Ultimate Coach — Captain's War Room</h1>
 <p>{player_count} verified players · {evidence_count} identity-verified evidence rows · offline scouting cockpit</p></div></div>
 <nav class="sections" aria-label="Sections"><a href="#match-day-card">Match Day</a><a href="#team-section">War Room</a><a href="#wr-matrix">Matrix</a><a href="#lineup-lab">Lineup Lab</a><a href="#scouting-cards">Scouting</a><a href="#player-section">Player vs Player</a><a href="#trust-section">Data trust</a></nav></header>
-{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"><span>Built {escape(fresh["build_date"]) + ' <i class="utc">(' + escape(built_at) + ")</i>" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span class="stale">{escape(fresh.get("team_stale_note", "") + stale_warning(fresh))}</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
+{f'<div class="mn-banner" title="{escape(match_night["fixture_label"])} · {escape(match_night["fixture_display"])}">{"DEMO (synthetic players) · " if match_night.get("demo") else ""}Match Night package · data frozen at build — re-publish before league night</div>' if match_night else ''}<div class="freshness"{bc.tag(ui, "summary")}><span>Built {escape(fresh["build_date"]) + ' <i class="utc">(' + escape(built_at) + ")</i>" if build_local else (escape(built_at) if built_at else "from the selected SQLite snapshot")}</span><span>Offline snapshot: latest recorded result {escape(fresh["latest_result"])}</span>{f'<span class="stale">{escape(fresh.get("team_stale_note", "") + stale_warning(fresh))}</span>' if fresh["unplayed_before_build"] else ""}<span>Never refreshes itself — rebuild for new results</span><span>Match Day times: {display_tz}</span><span class="badge-uncal">Win probability: NOT CALIBRATED — none shown</span></div>
 <main>
-{f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"></section>
+{bc.home_markup(ui)}{f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}<section id="tonight" class="card tonight" aria-label="Tonight at a glance"{bc.tag(ui, "matchnight")}></section>
 {start_here}
-<section class="card card-feature" id="match-day-card">
+<section class="card card-feature" id="match-day-card"{bc.tag(ui, "schedule")}>
   <div class="card-head"><h2>Match Day</h2><span class="pill" id="md-tz">All dates &amp; times in {display_tz}</span></div>
   <div class="viewer-box">
     <label>I am (verified player)<input id="md-viewer-search" type="search" placeholder="Search your name or APA record ID" autocomplete="off"><select id="md-viewer"></select></label>
@@ -863,8 +877,8 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   </ul></details>
 </section>
 
-<div class="section-title" id="team-section"><h2>Captain's War Room</h2><p>Who do I put up next? Follows Match Day; pick other teams here to explore.</p></div>
-<div class="card">
+<div class="section-title" id="team-section"{bc.tag(ui, "recs")}><h2>Captain's War Room</h2><p>Who do I put up next? Follows Match Day; pick other teams here to explore.</p></div>
+<div class="card"{bc.tag(ui, "recs")}>
   <div class="controls">
     <label>Our Team<input id="search-team-a" type="search" placeholder="Search our team"><select id="team-a"></select><span id="search-status-team-a" class="muted"></span></label>
     <label>Opponent Team<input id="search-team-b" type="search" placeholder="Search opponent team"><select id="team-b"></select><span id="search-status-team-b" class="muted"></span></label>
@@ -873,20 +887,20 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   <p class="muted">Rosters are each team's current captured roster, not who played on any particular past date.</p>
 </div>
 <section id="matchup-print" aria-label="Printable matchup">{f'<div class="demo-flag">DEMO — synthetic players, not real data</div>' if (match_night or {}).get("demo") else ''}
-<div id="matchup-head" class="card matchup-head"></div>
-<div id="team-rosters" class="grid"></div>
-<div id="wr-opportunities" class="card"></div>
-<div id="wr-risks" class="card"></div>
-<div id="wr-matrix" class="card"></div>
-<div id="lineup-lab" class="card"></div>
-<div id="team-comparison" class="card"></div>
-<div id="team-matchups" class="card"></div>
-<div id="scouting-cards" class="card"></div>
-<div id="wr-meetings" class="card"></div>
-<div id="matchup-notes" class="card matchup-notes"></div>
+<div id="matchup-head" class="card matchup-head"{bc.tag(ui, "recs")}></div>
+<div id="team-rosters" class="grid"{bc.tag(ui, "team")}></div>
+<div id="wr-opportunities" class="card"{bc.tag(ui, "recs")}></div>
+<div id="wr-risks" class="card"{bc.tag(ui, "threats")}></div>
+<div id="wr-matrix" class="card"{bc.tag(ui, "recs")}></div>
+<div id="lineup-lab" class="card"{bc.tag(ui, "team")}></div>
+<div id="team-comparison" class="card"{bc.tag(ui, "recs")}></div>
+<div id="team-matchups" class="card"{bc.tag(ui, "recs")}></div>
+<div id="scouting-cards" class="card"{bc.tag(ui, "threats")}></div>
+<div id="wr-meetings" class="card"{bc.tag(ui, "recs")}></div>
+<div id="matchup-notes" class="card matchup-notes"{bc.tag(ui, "threats")}></div>
 </section>
 
-<div id="player-section">
+<div id="player-section"{bc.tag(ui, "recs")}>
 <div class="section-title"><h2>Player vs Player</h2><p>Direct and shared-opponent history between any two verified players.</p></div>
 <div class="card">
   <div class="controls">
@@ -906,7 +920,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div id="meetings" class="card"></div>
 </div>
 
-<div id="trust-section">
+<div id="trust-section"{bc.tag(ui, "summary")}>
 <div class="section-title"><h2>Data trust &amp; freshness</h2><p>What is verified, what is excluded, and why.</p></div>
 {trust_card}
 </div>
@@ -1822,4 +1836,4 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   MD_FORMAT.addEventListener("change",renderMatchDay);
   renderMatchDay();
 }})();
-</script></body></html>"""
+</script>{bc.script_markup(ui)}</body></html>"""

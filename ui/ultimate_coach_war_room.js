@@ -1143,6 +1143,30 @@
         +'<p><b>Safest board</b> (protects the worst pairing first)</p>'+board(p.safest_board)+'</details>'
       +'<p class="muted mp-foot">Levels describe recorded evidence, not odds. The plan assumes their captain makes the choice that hurts us most, and re-plans after every ✓ Sent.</p></div>';
   }
+  // Broadcast presentation (ui="broadcast"): a plain-data model of what the engine already decided, handed to the
+  // presentation layer. It reads the same plan, evidence and marks the classic page shows and calculates nothing new.
+  function wrBroadcastPublish(model){
+    if(!document.body||!document.body.classList.contains("bc")) return;
+    window.UC_BC_LAST=model;
+    if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);
+  }
+  function wrBroadcastModel(w,plan,ta,tb,ctx){
+    var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
+    var rows=(mp.responses||[]).map(function(r,i){
+      var oi=-1;w.theirs.forEach(function(o,j){if(oi<0&&wrDisplayName(o,w.theirs)===r.their) oi=j;});
+      var our=w.ours.filter(function(m){return wrDisplayName(m,w.ours)===r.our;})[0],opp=oi>=0?w.theirs[oi]:null;
+      var d=(oi>=0&&our&&w.blocks[oi].byMember[String(our.id)])?w.blocks[oi].byMember[String(our.id)].c.direct:null;
+      return {n:i+1,their:r.their,theirId:opp?String(opp.id):null,theirSl:opp&&wrKnown(opp.skill_level)?opp.skill_level:null,
+        our:r.our,ourId:our?String(our.id):null,ourSl:our&&wrKnown(our.skill_level)?our.skill_level:null,
+        level:r.level,why:r.why.split(" — ").slice(1).join(" — "),cost:r.cost_later||"",
+        wins:d?d.w:null,games:d?d.g:0};
+    });
+    return {empty:false,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
+      side:ctx?ctx.ourSide:null,dateText:f?(f.date_status==="ok"?f.local_display:"Undated fixture"):"Teams picked by hand",
+      venue:f?(f.location||null):null,cap:x.cap,played:x.playedN,gamesLeft:mp.games_left,rows:rows,
+      lead:mp.lead?{our:mp.lead.our,level:mp.lead.level,why:mp.lead.why_lead}:null,selected:WR_STATE.next,
+      remaining:w.ours.filter(function(m){return plan.rem[String(m.id)];}).length,rostered:w.ours.length,theirRostered:w.theirs.length};
+  }
   // "Tonight" at the top of the page: the fixture and the decision overview first, setup below.
   function wrTonight(w,plan,ta,tb){
     var el=document.getElementById("tonight");
@@ -1198,8 +1222,9 @@
     var on=el.querySelector("#next-send .ns-chip.on");
     if(on){var row=on.parentNode,left=on.offsetLeft-row.offsetLeft,right=left+on.offsetWidth;
       if(left<row.scrollLeft) row.scrollLeft=left; else if(right>row.scrollLeft+row.clientWidth) row.scrollLeft=right-row.clientWidth;}
+    wrBroadcastPublish(wrBroadcastModel(w,plan,ta,tb,ctx));
   }
-  function wrClear(){WR_STATE.next=null;WR_STATE.nextScope=null;var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
+  function wrClear(){wrBroadcastPublish({empty:true,note:WR_TONIGHT_NOTE||null});WR_STATE.next=null;WR_STATE.nextScope=null;var t=document.getElementById("tonight");if(t) t.innerHTML=WR_TONIGHT_NOTE?'<h2>Tonight</h2>'
       +(WR_TONIGHT_NOTE.when?'<div class="when">'+esc(WR_TONIGHT_NOTE.when)+'</div>':'')+'<div class="vs">'+esc(WR_TONIGHT_NOTE.text)+'</div>'
       +'<p class="muted">Following Match Day — nothing to plan until it names one fixture with an opponent roster.</p>'
       +'<div class="tonight-links"><a href="#match-day-card">Change matchup</a></div>':"";["wr-opportunities","wr-risks","wr-matrix","lineup-lab","scouting-cards","wr-meetings"].forEach(function(id){var el=document.getElementById(id);if(el) el.innerHTML="";});}
