@@ -57,7 +57,10 @@ def home_markup(ui: str) -> str:
     """Containers the broadcast script draws into (inside <main>)."""
     if ui != "broadcast":
         return ""
-    return '<div id="bc-home" class="page-view" aria-label="Home"></div><div id="bc-tabhead" class="section-header" hidden></div>'
+    return (
+        '<div id="bc-home" class="page-view" aria-label="Home"></div><div id="bc-tabhead" class="section-header" hidden></div>'
+        '<div id="bc-night" aria-label="Match Night board"></div>'
+    )
 
 
 def style_markup(ui: str) -> str:
@@ -208,7 +211,65 @@ body.bc .section-title h2{color:#07151f}
   body.bc [data-bc]{display:revert!important}body.bc main{background:#fff!important;color:#000!important}}
 """
 
-CSS = _CSS_BODY + _hide_rules() + "\n"
+_CSS_NIGHT = r"""
+/* Match Night board (built from the artifact's hero, rows, badges and bars) */
+body.bc #bc-night{display:none}
+body.bc[data-view="matchnight"] #bc-night,body.bc[data-view="all"] #bc-night{display:block}
+body.bc[data-view="matchnight"] main{background:transparent;color:var(--fg);margin-top:0}
+body.bc[data-view="matchnight"] #bc-tabhead .section-title{color:var(--fg)}
+body.bc[data-view="matchnight"] #bc-tabhead .section-sub{color:var(--fg-dim)}
+body.bc:not([data-view="all"]):not(.bc-full) #tonight{display:none!important}
+body.bc[data-view="matchnight"].bc-full #tonight{display:block!important;background:#f4f1ea;color:#17221c;margin-top:16px}
+body.bc .night-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:12px}
+body.bc .night-status .nm{font-family:var(--cond);font-weight:800;font-size:18px;letter-spacing:.04em;text-transform:uppercase}
+body.bc .night-status .nm i{color:var(--away);font-style:normal;margin:0 6px}
+body.bc .night-pill{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-dim);border:1px solid var(--border-hi);border-radius:3px;padding:3px 9px}
+body.bc .night-pill.gold{background:var(--gold);color:#000;border-color:var(--gold)}
+body.bc .night-spacer{flex:1}
+body.bc .night-btn{font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:7px 12px;min-height:36px;cursor:pointer}
+body.bc .night-btn:hover{border-color:var(--fg-dim);background:transparent}
+body.bc .night-btn.primary{background:var(--home);color:#000;border-color:var(--home)}
+body.bc .night-btn.primary:hover{opacity:.9;background:var(--home)}
+body.bc .night-btn:focus-visible,body.bc .night-chip:focus-visible,body.bc .avail-btn:focus-visible{outline:2px solid var(--home);outline-offset:2px}
+body.bc .night-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}
+body.bc .night-ask{font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--away);margin-right:6px}
+body.bc .night-chip{font-family:var(--cond);font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:8px 14px;min-height:44px;cursor:pointer}
+body.bc .night-chip[aria-pressed="true"]{background:var(--away);color:#000;border-color:var(--away)}
+body.bc .night-chip small{font-family:var(--sans);font-weight:600;font-size:11px;opacity:.8;margin-left:6px}
+body.bc .send-hero{background:linear-gradient(135deg,#061e1e 0%,#04141a 60%,#0a0d11 100%);border:1px solid var(--border);border-left:4px solid var(--home);border-radius:6px;padding:18px 22px;margin-bottom:12px;display:grid;gap:8px}
+body.bc .send-kicker{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--home)}
+body.bc .send-name{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(34px,6vw,56px);line-height:.95;letter-spacing:-.01em;text-transform:uppercase;color:var(--home);overflow-wrap:anywhere}
+body.bc .send-why{color:var(--fg);font-size:14px;max-width:80ch}
+body.bc .send-cost{color:var(--gold);font-size:12.5px;font-weight:600}
+body.bc .send-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+body.bc .send-bars{width:220px}
+body.bc .night-h{font-family:var(--cond);font-weight:900;font-style:italic;font-size:22px;letter-spacing:.02em;text-transform:uppercase;margin:18px 0 8px;color:var(--fg)}
+body.bc .alt-row{display:grid;grid-template-columns:34px 1fr 200px auto;gap:14px;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:11px 16px;margin-bottom:3px}
+body.bc .alt-row .alt-note{grid-column:2/-1;font-size:12px;color:var(--fg-dim);margin-top:-4px}
+body.bc .alt-row.avoid{border-left:3px solid var(--away)}
+body.bc .alt-row .matchup-player{font-size:18px}
+body.bc .risk-list{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+body.bc .risk-list li{background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:4px;padding:9px 14px;font-size:13px;color:var(--fg)}
+body.bc .risk-list li.bad{border-left-color:var(--away)}
+body.bc .bench{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+body.bc .bench-col{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 14px;min-width:0}
+body.bc .bench-col h4{margin:0 0 8px;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted)}
+body.bc .bench-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border);flex-wrap:wrap}
+body.bc .bench-item:first-of-type{border-top:0}
+body.bc .bench-item .bn{font-family:var(--cond);font-weight:800;font-size:16px;letter-spacing:.03em;text-transform:uppercase;flex:1;min-width:8em}
+body.bc .bench-item.used .bn{text-decoration:line-through;color:var(--fg-muted)}
+body.bc .bench-item .tagx{font-size:11px;color:var(--fg-dim)}
+body.bc .avail-btn{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--border-hi);background:transparent;color:var(--fg-dim);border-radius:3px;padding:5px 10px;min-height:32px;cursor:pointer}
+body.bc .avail-btn.Available{color:#00c8a0;border-color:rgba(0,200,160,.4)}body.bc .avail-btn.Unavailable{color:var(--away);border-color:rgba(255,61,98,.4)}
+body.bc .game-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:3px}
+body.bc .game-row .gn{font-family:var(--cond);font-weight:800;color:var(--fg-muted);width:2.2em}
+body.bc .game-row .gt{flex:1;min-width:10em;font-family:var(--cond);font-weight:800;font-size:16px;letter-spacing:.03em;text-transform:uppercase}
+body.bc .game-row .res{font-family:var(--cond);font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:3px}
+body.bc .game-row .res.W{background:rgba(0,212,240,.18);color:var(--home)}body.bc .game-row .res.L{background:rgba(255,61,98,.18);color:var(--away)}
+@media (max-width:740px){body.bc .alt-row{grid-template-columns:28px 1fr auto}body.bc .alt-row .matchup-bars{grid-column:1/-1}body.bc .bench{grid-template-columns:1fr}body.bc .send-bars{width:100%}}
+"""
+
+CSS = _CSS_BODY + _CSS_NIGHT + _hide_rules() + "\n"
 
 
 _JS_BODY = r"""
@@ -351,9 +412,91 @@ _JS_BODY = r"""
       if(keepFocus){cap.focus();try{cap.setSelectionRange(cap.value.length,cap.value.length);}catch(e){}}}
     Array.prototype.forEach.call(el.querySelectorAll(".matchup-row"),function(btn){btn.onclick=function(){openNight(btn.getAttribute("data-their"));};});
   }
-  window.UC_BC={render:function(m){renderHome(m);ticker(m);}};
+  /* ---------- Match Night board ---------- */
+  function barsHtml(w,g,cls){
+    var own=pct(w,g),opp=g>0?pct(g-w,g):null;
+    var note=g>0?(w+"-"+(g-w)+" direct · "+g+(g===1?" meeting":" meetings")+(g<3?" · small sample":"")):"No direct meetings";
+    return '<div class="matchup-bars '+(cls||"")+'" role="img" aria-label="Recorded head-to-head: '+esc(note)+'">'
+      +'<div class="bar-row"><span class="bar-pct">'+(own==null?"—":own.toFixed(0)+"%")+'</span><div class="bar-track"><div class="bar-fill-home" style="width:'+(own||0)+'%"></div></div></div>'
+      +'<div class="bar-row"><span class="bar-pct">'+(opp==null?"—":opp.toFixed(0)+"%")+'</span><div class="bar-track"><div class="bar-fill-away" style="width:'+(opp||0)+'%"></div></div></div>'
+      +'<div class="bar-note">'+esc(note)+'</div></div>';
+  }
+  function slTag(sl){return sl!=null?'<span class="matchup-sl">SL '+esc(sl)+'</span>':'';}
+  var CAT={G:"Favorable",E:"Even",I:"Shared only",R:"Avoid",X:"Unknown"};
+  function candRow(c,kind,oppId){
+    var mark=kind==="ranked"?((c.choice||0)<10?"0":"")+c.choice:(kind==="avoid"?"✕":"≈");
+    var note=[CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost].filter(Boolean).join(" · ");
+    return '<div class="alt-row'+(kind==="avoid"?" avoid":"")+'"><div class="matchup-num">'+mark+'</div>'
+      +'<div class="matchup-our"><div class="matchup-kicker">'+(kind==="avoid"?"Recorded losing record":"Option")+'</div><div class="matchup-player">'+esc(c.name)+slTag(c.sl)+'</div></div>'
+      +barsHtml(c.wins,c.games)
+      +'<button type="button" class="night-btn" data-send="'+esc(c.id)+'" data-opp="'+esc(oppId)+'" aria-label="Send '+esc(c.name)+'">✓ Send</button>'
+      +(note?'<div class="alt-note">'+esc(note)+'</div>':'')+'</div>';
+  }
+  function renderNight(m){
+    var el=$("bc-night"); if(!el) return;
+    if(!m||m.empty||!m.night){el.innerHTML='<div class="home-empty">Pick a team and opponent on Home (or a fixture in Schedule Planner) to run the night.</div>';return;}
+    var n=m.night,played=m.played||0,gameNo=Math.min(5,played+1),done=m.gamesLeft===0;
+    var undo=n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
+    var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
+      +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
+      +'<span class="night-pill">Score '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
+      +'<button type="button" class="night-btn" data-full="1">Full evidence</button></div>';
+    var chips='<div class="night-chips" role="group" aria-label="Opponent they put up"><span class="night-ask">'+(n.chosen?"They put up":"If they put up")+'</span>'
+      +n.chips.map(function(c){return '<button type="button" class="night-chip" data-pick="'+esc(c.id)+'" aria-pressed="'+c.on+'">'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+'</button>';}).join("")
+      +(n.chips.length?"":'<span class="matchup-footnote">Every opponent has played.</span>')+'</div>';
+    var hero="",alts="",risks="";
+    if(n.opp){
+      var all=n.ranked.concat(n.unordered).concat(n.avoid);
+      var pick=null;
+      if(n.answer) pick=all.filter(function(c){return c.name===n.answer.our;})[0]||null;
+      if(!pick&&n.ranked.length) pick=n.ranked[0];
+      var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
+      var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
+      if(pickName){
+        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now":"Best answer")+' vs '+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
+          +'<div class="send-name">'+esc(pickName)+'</div>'
+          +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'
+          +(pick?barsHtml(pick.wins,pick.games,"send-bars"):"")
+          +(pickId?'<button type="button" class="night-btn primary" data-send="'+esc(pickId)+'" data-opp="'+esc(n.opp.id)+'">✓ Send '+esc(pickName)+'</button>':"")+'</div>'
+          +(n.answer&&n.answer.why?'<div class="send-why">'+esc(n.answer.why)+'</div>':'<div class="send-why">'+esc(n.headline)+'</div>')
+          +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')+'</section>';
+      } else hero='<section class="send-hero"><span class="send-kicker">No send</span><div class="send-why">'+esc(n.headline)+'</div></section>';
+      var rest=function(list,kind){return list.filter(function(c){return !pickName||c.name!==pickName;}).map(function(c){return candRow(c,kind,n.opp.id);}).join("");};
+      var a1=rest(n.ranked,"ranked"),a2=rest(n.unordered,"shared"),a3=rest(n.avoid,"avoid");
+      alts='<h3 class="night-h">Alternatives</h3>'+(a1+a2+a3||'<p class="matchup-footnote">No other recorded option.</p>')
+        +(n.unknown.length?'<p class="matchup-footnote">Unknown (no verified evidence, not weak): '+esc(n.unknown.join(", "))+'</p>':"");
+      var rl=[];
+      all.forEach(function(c){if(c.save) rl.push('<li>'+esc(c.name+" — "+c.save)+'</li>');});
+      n.holds.forEach(function(h){rl.push('<li>'+esc("Keep "+h.our+(h.covers.length?" for "+h.covers.join(", "):"")+" — "+h.why)+'</li>');});
+      n.sacrifices.forEach(function(s){rl.push('<li class="bad">'+esc("If we must absorb a bad matchup: "+s.our+" vs "+s.their+" ("+s.level+") — "+s.why)+'</li>');});
+      if(n.openRisks.length) rl.push('<li class="bad">'+esc("No favorable direct option left vs "+n.openRisks.join(", "))+'</li>');
+      risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>';
+    }
+    var avlNext={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"};
+    var bench='<h3 class="night-h">Bench</h3><div class="bench"><div class="bench-col"><h4>Our players</h4>'
+      +n.bench.ours.map(function(b){return '<div class="bench-item'+(b.lineup==="Played"?" used":"")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
+        +(b.lineup==="Played"?'<span class="tagx">played</span>':'<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.avail)+'</button>')+'</div>';}).join("")
+      +'</div><div class="bench-col"><h4>Their players</h4>'
+      +n.bench.theirs.map(function(b){return '<div class="bench-item'+(b.unplayed?"":" used")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)+(b.unplayed?"":'<span class="tagx">played</span>')+'</div>';}).join("")+'</div></div>';
+    var log="";
+    if(n.games.length){
+      log='<h3 class="night-h">Games tonight</h3>'+n.games.map(function(g){
+        return '<div class="game-row"><span class="gn">G'+(g.i+1)+'</span><span class="gt">'+esc(g.our)+' vs '+esc(g.their)+'</span>'
+          +(g.r?'<span class="res '+g.r+'">'+(g.r==="W"?"We won":"We lost")+'</span><button type="button" class="night-btn" data-result="'+g.i+'" data-r="">Clear</button>'
+            :'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>')+'</div>';}).join("")
+        +'<p class="matchup-footnote">Results are kept in this browser for tonight. They never change any recorded evidence or recommendation.</p>';
+    }
+    el.innerHTML=status+chips+hero+alts+risks+bench+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-pick]"),function(b){b.onclick=function(){window.UC_ACT.pick(b.getAttribute("data-pick"));};});
+    Array.prototype.forEach.call(el.querySelectorAll("[data-send]"),function(b){b.onclick=function(){window.UC_ACT.send(b.getAttribute("data-send"),b.getAttribute("data-opp"));};});
+    Array.prototype.forEach.call(el.querySelectorAll("[data-avail]"),function(b){b.onclick=function(){window.UC_ACT.avail(b.getAttribute("data-avail"),b.getAttribute("data-next"));};});
+    Array.prototype.forEach.call(el.querySelectorAll("[data-result]"),function(b){b.onclick=function(){window.UC_ACT.result(+b.getAttribute("data-result"),b.getAttribute("data-r"));};});
+    var u=el.querySelector("[data-undo]");if(u) u.onclick=function(){window.UC_ACT.undo();};
+    var f=el.querySelector("[data-full]");if(f) f.onclick=function(){body.classList.toggle("bc-full");};
+  }
+  window.UC_BC={render:function(m){renderHome(m);renderNight(m);ticker(m);}};
   show("home");
-  renderHome(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null);
+  renderHome(window.UC_BC_LAST||null); renderNight(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null);
   route();
 })();
 """

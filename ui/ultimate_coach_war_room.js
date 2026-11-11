@@ -250,7 +250,7 @@
   var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false,WR_PLAN_CHANGED_ELSEWHERE=false,WR_PLAN_SAVED=null;
   var WR_PLAN=(function(){
     var o=null;try{WR_PLAN_SAVED=window.localStorage.getItem("ultimate-coach:plan-v2");o=JSON.parse(WR_PLAN_SAVED||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
-    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{}};
+    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{},games:o.games||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{},games:{}};
     // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
     // different one (another team scope, or a note that already exists) is archived with its scope. The archive
     // is shown on the card as an earlier opinion and is never copied back into the editable note.
@@ -1000,6 +1000,9 @@
     }
     var facts=lab&&lab.querySelector(".matchup-facts");
     if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
+    // The broadcast board shows the cap and the plan it drives: publish the re-planned model (no-op on the classic page).
+    var tb2=TEAM_INDEX[TB.value],c2=MATCHUP_CONTEXT;
+    if(tb2) wrBroadcastPublish(wrBroadcastModel(w,plan,ta,tb2,c2&&c2.ourKey===ta.key&&c2.oppKey===tb2.key&&c2.fixture?c2:null));
   }
 
   function wrBroaderRecords(w,plan,ta,tb,opp){
@@ -1145,6 +1148,19 @@
   }
   // Broadcast presentation (ui="broadcast"): a plain-data model of what the engine already decided, handed to the
   // presentation layer. It reads the same plan, evidence and marks the classic page shows and calculates nothing new.
+  function wrRecordGame(ck,ourId,oppId){var g=WR_PLAN.games[ck]||(WR_PLAN.games[ck]=[]);g.push({o:String(ourId),t:String(oppId),r:""});wrSave();}
+  function wrBcCur(){var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value];return ta&&tb?{ta:ta,tb:tb,ck:wrCtx(ta,tb)}:null;}
+  // Actions the broadcast board calls. Each one uses the same marks and storage the classic buttons use.
+  window.UC_ACT={
+    pick:function(oppId){WR_STATE.next=String(oppId);renderTeamMatchups();},
+    send:function(ourId,oppId){var c=wrBcCur();if(!c) return;
+      wrSetMark("our",c.ck,ourId,"l","Played",true);wrSetMark("opp",c.ck,oppId,"p",true);wrRecordGame(c.ck,ourId,oppId);
+      WR_STATE.next=null;renderTeamMatchups();},
+    result:function(i,r){var c=wrBcCur();if(!c) return;var g=WR_PLAN.games[c.ck]||[];if(!g[i]) return;g[i].r=r;wrSave();renderTeamMatchups();},
+    undo:function(){var c=wrBcCur();if(!c) return;var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
+      wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
+    avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();}
+  };
   function wrBroadcastPublish(model){
     if(!document.body||!document.body.classList.contains("bc")) return;
     window.UC_BC_LAST=model;
@@ -1161,7 +1177,33 @@
         level:r.level,why:r.why.split(" — ").slice(1).join(" — "),cost:r.cost_later||"",
         wins:d?d.w:null,games:d?d.g:0};
     });
-    return {empty:false,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
+    var ck=plan.ck,open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
+    var selJ=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0],chosen=selJ!==undefined;
+    if(!chosen) selJ=open[0];
+    var night={chosen:chosen,chips:open.map(function(j){var o=w.theirs[j];return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,on:j===selJ};}),
+      answer:null,ranked:[],unordered:[],avoid:[],unknown:[],headline:"",opp:null,holds:[],sacrifices:[],openRisks:[]};
+    if(selJ!==undefined){
+      var ns=wrNextSend(w,selJ,plan.rem,plan.unplayed),opp=w.theirs[selJ],who=wrDisplayName(opp,w.theirs);
+      var ans=(mp.responses||[]).filter(function(r){return r.their===who;})[0];
+      var cand=function(c){var row=w.blocks[selJ].byMember[String(c.member.id)],d=row?row.c.direct:null;
+        return {id:String(c.member.id),name:c.display,sl:wrKnown(c.member.skill_level)?c.member.skill_level:null,choice:c.choice_number||null,cat:c.category,
+          tied:c.tied_with||[],wins:d?d.w:null,games:d?d.g:0,save:c.save||"",cost:wrCostText(w,selJ,c.member.id,plan.rem,plan.unplayed),
+          avail:wrAvail(ck,c.member.id)};};
+      night.opp={id:String(opp.id),name:who,sl:wrKnown(opp.skill_level)?opp.skill_level:null};
+      night.answer=ans?{our:ans.our,level:ans.level,why:ans.why.split(" — ").slice(1).join(" — "),cost:ans.cost_later||""}:null;
+      night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
+    }
+    night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
+    night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
+    night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
+      .map(function(o){return wrDisplayName(o,w.theirs);});
+    night.capText=mp.cap?(mp.cap.incomplete?"Cap "+mp.cap.cap+": check incomplete (missing skill levels)":"Cap "+mp.cap.cap+": "+mp.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
+    night.bench={ours:w.ours.map(function(m){return {id:String(m.id),name:wrDisplayName(m,w.ours),sl:wrKnown(m.skill_level)?m.skill_level:null,avail:wrAvail(ck,m.id),lineup:wrLineup(ck,m.id),rem:!!plan.rem[String(m.id)]};}),
+      theirs:w.theirs.map(function(o,j){return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,unplayed:!!plan.unplayed[j]};})};
+    var nameOf=function(list,id){var m=list.filter(function(x){return String(x.id)===String(id);})[0];return m?wrDisplayName(m,list):String(id);};
+    night.games=(WR_PLAN.games[ck]||[]).map(function(g,i){return {i:i,our:nameOf(w.ours,g.o),their:nameOf(w.theirs,g.t),ourId:g.o,theirId:g.t,r:g.r||""};});
+    night.score={w:night.games.filter(function(g){return g.r==="W";}).length,l:night.games.filter(function(g){return g.r==="L";}).length};
+    return {empty:false,night:night,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
       side:ctx?ctx.ourSide:null,dateText:f?(f.date_status==="ok"?f.local_display:"Undated fixture"):"Teams picked by hand",
       venue:f?(f.location||null):null,cap:x.cap,played:x.playedN,gamesLeft:mp.games_left,rows:rows,
       lead:mp.lead?{our:mp.lead.our,level:mp.lead.level,why:mp.lead.why_lead}:null,selected:WR_STATE.next,
@@ -1451,6 +1493,7 @@
       if(t.hasAttribute("data-send-our")&&ta&&tb){var ck=wrCtx(ta,tb);
         // One Sent action saves both marks together; a rejected write must not leave half a pairing.
         wrSetMark("our",ck,t.getAttribute("data-send-our"),"l","Played",true);wrSetMark("opp",ck,t.getAttribute("data-send-opp"),"p",true);
+        if(document.body.classList.contains("bc")) wrRecordGame(ck,t.getAttribute("data-send-our"),t.getAttribute("data-send-opp"));
         WR_STATE.next=null;renderTeamMatchups();}
     });
   })();
