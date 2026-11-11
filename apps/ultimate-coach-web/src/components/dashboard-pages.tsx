@@ -9,7 +9,7 @@ function Assumptions({ snapshot: s }: { snapshot: Snapshot }) { return <Notice>{
 function PairSupport({ title, pair }: { title: string; pair: Snapshot['plan']['strongest'] }) { return <Card title={title}><span className="pill">{pair.level}</span><h3>{pair.our} → {pair.their}</h3><p>{pair.why}</p><p className="muted">Evidence strength within the conditional plan; not a predicted win or loss.</p></Card>; }
 function Holds({ snapshot: s, protect = false }: { snapshot: Snapshot; protect?: boolean }) {
   const rows = protect ? s.plan.protect : s.plan.holds;
-  return <Card kicker={protect ? 'Preserve the named opportunity' : 'Future lineup value'} title={protect ? 'Protect / designated answers' : 'Hold-back options'}>
+  return <Card id={protect ? 'protected-options' : undefined} kicker={protect ? 'Preserve the named opportunity' : 'Future lineup value'} title={protect ? 'Protect / designated answers' : 'Hold-back options'}>
     {rows.length ? rows.map(row => <div key={row.our} className="candidate"><h3>{row.our}</h3><p>{row.why}</p>{row.covers.length ? <p className="notice">Keep for {row.covers.join(', ')}; send when that matchup is put up. One player can cover only one match.</p> : <p className="muted">General remaining-plan value; no unique target is claimed.</p>}</div>) : <p>No designated hold is established under these assumptions.</p>}
   </Card>;
 }
