@@ -168,9 +168,14 @@ def main(argv=None) -> int:
         info = player_info[pid]
         if info["team"] not in team_index:
             continue
-        log = sorted(sl_log.get(pid, []))
-        sl = info["sl"] if info["sl"] is not None else (log[-1][1] if log else 3)
-        start = log[0][1] if log and log[0][1] is not None else sl
+        # APA 8-ball skill levels run 2-7. A recorded 0 or 1 means "not rated yet" in the source, not a real level.
+        log = sorted((wk, lv) for wk, lv in sl_log.get(pid, []) if lv is not None and lv >= 2)
+        sl = log[-1][1] if log else info["sl"]
+        if sl is None or sl < 2:
+            # Unrated and never on a scoresheet: cannot be projected or counted against the cap. Omit, and say so.
+            notes["roster members omitted (unrated, no games)"] += 1
+            continue
+        start = log[0][1] if log else sl
         events, prev = [], start
         for week, level in log:
             if level is not None and prev is not None and level != prev:

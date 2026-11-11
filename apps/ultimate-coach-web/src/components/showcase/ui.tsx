@@ -60,13 +60,18 @@ export function PlayerLine({ p, side, meta }: { p: Player; side: 'home' | 'away'
   </span>;
 }
 
+/** How far a model probability sits from a coin flip, in words. APA handicaps keep real pairings close, so the bands are tight. */
+export function edgeLabel(p: number): { tone: 'cyan' | 'coral' | 'grey'; label: 'TOSS-UP' | 'LEAN' | 'EDGE' | 'STRONG' } {
+  const edge = Math.abs(p - 0.5);
+  const tone = edge < 0.02 ? 'grey' : p > 0.5 ? 'cyan' : 'coral';
+  return { tone, label: edge < 0.02 ? 'TOSS-UP' : edge < 0.05 ? 'LEAN' : edge < 0.1 ? 'EDGE' : 'STRONG' };
+}
+
 /** One lineup pairing with its model win probability. */
 export function Pairing({ no, homeId, awayId, href }: { no: number; homeId: string; awayId: string; href?: string }) {
   const a = player(homeId), b = player(awayId);
   const p = playerWinProb(a, b);
-  const edge = Math.abs(p - 0.5);
-  const tone = edge < 0.04 ? 'grey' : p > 0.5 ? 'cyan' : 'coral';
-  const label = edge < 0.04 ? 'TOSS-UP' : edge < 0.1 ? 'LEAN' : edge < 0.18 ? 'EDGE' : 'STRONG';
+  const { tone, label } = edgeLabel(p);
   const body = <>
     <span className="bc-no">{two(no)}</span>
     <PlayerLine p={a} side="home"/>

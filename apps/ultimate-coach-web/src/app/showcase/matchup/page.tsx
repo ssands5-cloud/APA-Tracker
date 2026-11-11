@@ -1,5 +1,5 @@
 import { LEAGUE, MY_TEAM, featured, upcoming, team, teamRecord, player, playerWinProb, headToHead, winPct, ppm, ratingTrend, allResults } from '@/lib/showcase/league';
-import { TeamMark, Tag, Trend, ProbBar, Form, Section, Pairing, Sparkline, pct, pct0, rankText } from '@/components/showcase/ui';
+import { TeamMark, Tag, Trend, ProbBar, Form, Section, Pairing, Sparkline, pct, pct0, rankText, edgeLabel } from '@/components/showcase/ui';
 
 export const metadata = { title: 'Matchup' };
 
@@ -13,9 +13,7 @@ export default async function Matchup({ searchParams }: { searchParams: Promise<
   const a = player(preview.homeLineup[pickIndex]), b = player(preview.awayLineup[pickIndex]);
   const p = playerWinProb(a, b);
   const h2h = headToHead(a, b);
-  const edge = Math.abs(p - 0.5);
-  const lean = p > 0.5 ? 'cyan' as const : 'coral' as const;
-  const tag = edge < 0.04 ? { tone: 'grey' as const, label: 'TOSS-UP' } : edge < 0.1 ? { tone: lean, label: 'LEAN' } : edge < 0.18 ? { tone: lean, label: 'EDGE' } : { tone: lean, label: 'STRONG' };
+  const tag = edgeLabel(p);
   const lastMeeting = allResults.filter(m => (m.home === home.id && m.away === away.id) || (m.home === away.id && m.away === home.id)).at(-1);
   const roster = (t: number) => team(t).roster.map(player);
   const avgRating = (t: number) => Math.round(roster(t).reduce((s, x) => s + x.rating, 0) / Math.max(roster(t).length, 1));
