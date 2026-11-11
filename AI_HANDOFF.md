@@ -10,3 +10,9 @@ Read, in order: AGENTS.md, SYSTEM_STATE.md, PROJECT_STATUS.md, RECOVERY.md, docs
 - Windows tasks: both Ultimate Coach tasks still point at the C: Desktop copy. Repointing needs Paul's admin rights.
 - Recovery: RECOVERY.md; records in docs/migration/2026-11-05/.
 - Leave other agents' uncommitted work alone. Never bypass the boundary guard. Don't delete worktrees or data.
+
+## Local development and deployment boundary (2026-11-10)
+- Use local worktrees and GitHub for coordination. Push only when the update is verified to skip Vercel. Preview and production deployments require Paul's explicit approval. Pushes of `6a5ce06` and `ea7efea` triggered previews.
+- Claude's ESPN-style showcase is in the linked worktree on `claude/espn-broadcast-dashboard` at `23508e7`. See PROJECT_STATUS.md for validation and scope. Keep real exports under git-ignored `private-snapshots/`; keep real names and records out of GitHub updates.
+- Draft PR #83 is at `15b342e`. The preserved `b1660ad` UAT build is 229 commits behind that head. Build and verify the exact head before Windows acceptance, and leave selection and approval to Paul.
+- Use GitHub issue #84 for meaningful coordination updates. Claude's 30-minute check is session-scoped. Review the shared docs and exact branch heads whenever work resumes.
