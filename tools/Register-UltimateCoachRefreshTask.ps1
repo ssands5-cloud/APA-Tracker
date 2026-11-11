@@ -4,6 +4,7 @@ param(
     [string]$Repository = 'D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker',
     [string]$User = 'PAULS-DESKTOP\ssand',
     [switch]$PlanOnly,
+    [switch]$RepointExisting,
     [string]$PlanPath
 )
 $ErrorActionPreference = 'Stop'
@@ -34,6 +35,24 @@ if ($PlanOnly) {
 }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not ([Security.Principal.WindowsPrincipal]::new($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run the installer in elevated Windows PowerShell. The refresh itself uses limited privileges.' }
+if ($RepointExisting) {
+    $dailyName = 'Ultimate Coach - Daily QUICK Refresh'
+    $alertName = 'Ultimate Coach - Refresh Failure Alert'
+    $daily = Get-ScheduledTask -TaskName $dailyName -TaskPath '\'
+    $installedAlert = Get-ScheduledTask -TaskName $alertName -TaskPath '\'
+    if ($daily.State -ne 'Disabled' -or $installedAlert.State -eq 'Running') {
+        throw 'Keep the daily task disabled and wait for the alert task to finish before repointing.'
+    }
+    $credential = Get-Credential -UserName $daily.Principal.UserId -Message 'Existing daily refresh task account password. It is passed only to Windows Task Scheduler.'
+    if (-not $credential -or $credential.UserName -ne $daily.Principal.UserId) {
+        throw 'Credential account does not match the installed daily task.'
+    }
+    Set-ScheduledTask -TaskName $dailyName -TaskPath '\' -Action $action -User $credential.UserName -Password $credential.GetNetworkCredential().Password | Out-Null
+    Set-ScheduledTask -TaskName $alertName -TaskPath '\' -Action $alertAction | Out-Null
+    Get-ScheduledTask -TaskName $dailyName, $alertName -TaskPath '\' |
+        Select-Object TaskName, State, @{Name='WorkingDirectory';Expression={$_.Actions.WorkingDirectory}}, @{Name='Arguments';Expression={$_.Actions.Arguments}}
+    exit 0
+}
 if (Get-ScheduledTask -TaskName 'Ultimate Coach - Daily QUICK Refresh' -ErrorAction SilentlyContinue) { throw 'Task already exists. Inspect it first; installer does not overwrite tasks.' }
 if (Get-ScheduledTask -TaskName 'Ultimate Coach - Refresh Failure Alert' -ErrorAction SilentlyContinue) { throw 'Failure-alert task already exists. Inspect it first.' }
 $credential = Get-Credential -UserName $User -Message 'Windows task account password (not Windows Hello PIN). Stored by Task Scheduler; never put it in a script or chat.'

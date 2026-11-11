@@ -70,6 +70,17 @@ locks require review rather than blindly launching another refresh.
 changes. The computer must be powered on; a wake timer cannot power on a shut-down
 computer. Catch-up can run later than 08:00 after a missed start.
 
+## Repoint the two installed tasks
+
+Run from **Windows PowerShell as administrator**. Enter the existing daily task account password only in the local credential prompt. This updates the installed actions and working directories while preserving their triggers and leaving the daily task disabled.
+
+```powershell
+$repo = 'D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker'
+& (Join-Path $repo 'tools\Register-UltimateCoachRefreshTask.ps1') -Repository $repo -RepointExisting
+```
+
+Check that both reported working directories use the canonical checkout and both script paths use its `tools` folder. Verify the alert while signed in. The daily task remains disabled until the unattended requirements below pass.
+
 ## Exact Task Scheduler UI setup
 
 1. Press **Win+R**, enter `taskschd.msc`, and choose **Create Task**.
