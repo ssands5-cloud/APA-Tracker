@@ -11,6 +11,13 @@ Read, in order: AGENTS.md, SYSTEM_STATE.md, PROJECT_STATUS.md, RECOVERY.md, docs
 - Recovery: RECOVERY.md; records in docs/migration/2026-11-05/.
 - Leave other agents' uncommitted work alone. Never bypass the boundary guard. Don't delete worktrees or data.
 
+## Worktree coordination (2026-11-11)
+
+- Codex integrates Phase 1 in the canonical checkout at `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` on `feat/phase1-war-room`. Use `origin/feat/phase1-war-room` as the shared sync point and read `AI_HANDOFF.md` and `PROJECT_STATUS.md` there. Codex maintains those shared files.
+- Claude works on the showcase in the linked `.worktrees/espn-broadcast-dashboard` checkout on `claude/espn-broadcast-dashboard`. Bring in canonical changes from the shared sync point in that worktree and audit the integrated commits. Preserve unfinished changes in the older Codex worktrees.
+- Codex already integrated PRs #106 and #107. Codex owns the integration review of #105 and #108–#111, including checking overlap and testing changes before pushing. Claude audits the resulting commits.
+- Keep `.worktrees/pr83-head-uat` pinned to `15b342e` for the existing draft PR #83 acceptance candidate. Keep the Vercel branch opt-out in place for GitHub pushes.
+
 ## Local development and deployment boundary (2026-11-10)
 - Use local worktrees and GitHub for coordination. Push only when the update is verified to skip Vercel. Preview and production deployments require Paul's explicit approval. Pushes of `6a5ce06` and `ea7efea` triggered previews. Vercel returned zero deployments for `cff8212` and `9f7223c` after their branch opt-outs.
 - Claude's ESPN-style showcase is in the linked worktree on `claude/espn-broadcast-dashboard` published on GitHub. See PROJECT_STATUS.md for validation and scope. Keep real exports under git-ignored `private-snapshots/`; keep real names and records out of GitHub updates.
