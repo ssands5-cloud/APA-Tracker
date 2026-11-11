@@ -9,7 +9,7 @@ function Assumptions({ snapshot: s }: { snapshot: Snapshot }) { return <Notice>{
 function PairSupport({ title, pair }: { title: string; pair: Snapshot['plan']['strongest'] }) { return <Card title={title}><span className="pill">{pair.level}</span><h3>{pair.our} → {pair.their}</h3><p>{pair.why}</p><p className="muted">Evidence strength within the conditional plan; not a predicted win or loss.</p></Card>; }
 function Holds({ snapshot: s, protect = false }: { snapshot: Snapshot; protect?: boolean }) {
   const rows = protect ? s.plan.protect : s.plan.holds;
-  return <Card kicker={protect ? 'Preserve the named opportunity' : 'Future lineup value'} title={protect ? 'Protect / designated answers' : 'Hold-back options'}>
+  return <Card id={protect ? 'protected-options' : undefined} kicker={protect ? 'Preserve the named opportunity' : 'Future lineup value'} title={protect ? 'Protect / designated answers' : 'Hold-back options'}>
     {rows.length ? rows.map(row => <div key={row.our} className="candidate"><h3>{row.our}</h3><p>{row.why}</p>{row.covers.length ? <p className="notice">Keep for {row.covers.join(', ')}; send when that matchup is put up. One player can cover only one match.</p> : <p className="muted">General remaining-plan value; no unique target is claimed.</p>}</div>) : <p>No designated hold is established under these assumptions.</p>}
   </Card>;
 }
@@ -358,7 +358,10 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
       </div>
     </div>
 
-    {/* SCOUTING REPORT CARDS */}
+    <ThreatDossiers snapshot={s}/>
+
+    <details className="snapshot-context"><summary>Recorded threat evidence and context</summary>
+    {/* Supporting recorded evidence is retained below the actionable dossiers. */}
     {s.threats.length === 0 && <section className="card" style={{ textAlign: 'center', padding: '32px 24px' }}><h2>No winning direct-record threat established</h2><p>Every opponent in this snapshot has either no direct record against our players, or a losing one. That is not clearance — unknown opponents may still present risk.</p><a className="text-link" href="/dashboard/match-night#response-explorer">Check response costs before sending →</a></section>}
     <div className="two-columns" style={{ marginBottom: 20 }}>
       {s.threats.map(t => {
@@ -383,7 +386,7 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
               <div className="spc-threat-bar"><div className="spc-threat-fill" style={{ width: fillWidth }}/></div>
               <p><strong>Why dangerous:</strong> {t.text}</p>
               <p><strong>Recorded opportunities:</strong> {favorablePlayers.length ? favorablePlayers.map(player => { const row = s.evidence[opponent!.id][player.id]; const count = meetings(row); return `${player.name} (${record(row)}; ${count} ${count === 1 ? 'meeting' : 'meetings'})`; }).join(' · ') : 'No favorable direct record is established in this snapshot.'}</p>
-              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost}</p></div>}
+              {response && <div className="scouting-action"><span>Counter option</span><strong>Consider {response.player}</strong><p>{response.why}</p><p>Future cost: {response.cost?.trim() || 'Response cost is not established in this snapshot.'}</p></div>}
               <Notice>{t.meetings < 3 ? 'Thin record: a small number of meetings is limited evidence, not a proven matchup.' : 'This is a winning recorded roster-level result; inspect each player\'s evidence before responding.'}</Notice>
             </div>
             <div className="spc-footer">
@@ -393,6 +396,8 @@ export function ThreatsPage({ snapshot: s }: { snapshot: Snapshot }) {
         );
       })}
     </div>
+
+    </details>
 
     <Card title="Why the warning is limited">
       <p>All captured players are assumed available. Changing availability can change the relevant threat scope. A record against only a few players is not evidence against every player on the roster.</p>
@@ -502,13 +507,14 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
 
     <CaptainBriefing snapshot={s}/>
 
-    {/* BRIEFING ITEMS */}
+    <details className="snapshot-context"><summary>Supporting plan and historical evidence</summary>
+    {/* Reference notes remain available after the primary team briefing. */}
     <div className="briefing-items">
       <div className="briefing-item lead">
         <span className="briefing-item-icon" aria-hidden="true">01</span>
         <div>
           <p className="briefing-item-type">Opening strategy</p>
-          <p className="briefing-item-content"><strong>Lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
+          <p className="briefing-item-content"><strong>If we put up first, lead with {s.plan.lead.player}.</strong> {s.plan.lead.why}</p>
         </div>
       </div>
       <div className="briefing-item protect">
@@ -550,5 +556,6 @@ export function SummaryPage({ snapshot: s }: { snapshot: Snapshot }) {
       <p>{s.plan.fragility.thinPairings.join(' · ') || 'No thin pairing flagged in this plan.'}</p>
     </Card>
     <Assumptions snapshot={s}/>
+    </details>
   </>;
 }

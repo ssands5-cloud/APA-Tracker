@@ -1,11 +1,19 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Phase 1 integration (2026-11-11)
+
+Code checkpoint on `origin/feat/phase1-war-room`: `d769711`.
+
+- #105 `2146294` keeps War Room recommendations tied to the selected opponent. #106 `e55dd74` fixes the historical sign-in loop. #107 `8e43194` and `fddfab5` keep opponent costs out of opening advice.
+- #108 `9745710` connects protection links to the designated answer. #109 `35aa2a8` surfaces opponent-specific counters and preservation. #110 `e1ee142` consolidates the conditional captain briefing. Claude audited all three on a clean checkout with 40 passing web tests, clean type checking, a successful build and 22 passing browser scenarios.
+- #111 `d769711` keeps four captain decisions visible at the initial phone viewport for the tested fixture. The integration preserves both PRs' tests and adds wrapping for long names in the supporting cards. Type checking and all 40 applicable local web tests passed. Chromium and WebKit passed synthetic checks at 390×664, 1024×768 and 240 px with long names. The clean-checkout snapshot test was excluded from the canonical run because an ignored encrypted snapshot is present. Claude's #111 audit is pending.
+
 ## ESPN-style showcase local beta (2026-11-10)
 
-- Claude's showcase is on the linked `claude/espn-broadcast-dashboard` branch at `9f7223c` on GitHub, with implementation in `ee1a823`. Vercel returned zero deployments for the pushed head. The showcase covers Home, Matchup, Standings, Power Rankings, Players, and Results & Stats.
+- Claude's showcase is on the linked `claude/espn-broadcast-dashboard` branch on GitHub, with implementation in `ee1a823`. The showcase covers Home, Matchup, Standings, Power Rankings, Players, and Results & Stats.
 - The showcase defaults to a simulated season. The real-data beta uses a git-ignored local export and is restricted to local development. Standings rank and points come from APA. Win-loss, ratings, and win probabilities are computed from scoresheets. The probability model is uncalibrated and real-data probabilities remain local.
-- Claude reported 31 passing tests, clean type checking, and a successful local build for the showcase. Commit `17f260c` adjusts the probability labels and fixes the display of unrated skill levels. The refresh that supplied the export stopped at its coverage gate with two unresolved rows. It produced no promoted Ultimate Coach output.
-- Draft PR #83 still needs a Windows acceptance build at its current head, `15b342e`. The build at `b1660ad` is 229 commits behind. GitHub pushes require a verified branch opt-out to avoid triggering Vercel.
+- Claude reported 43 passing tests, clean type checking, and a successful local build at `c2488cf`. Commit `17f260c` adjusts the probability labels and fixes the display of unrated skill levels. The refresh that supplied the export stopped at its coverage gate with two unresolved rows. It produced no promoted Ultimate Coach output.
+- Draft PR #83 has a Windows acceptance candidate at its exact head, `15b342e`, in `.worktrees/pr83-head-uat/tmp/uat/build-15b342e/`. Both artifact hashes match the build record. Results end September 20, 2026. Native Excel and Windows acceptance are pending Paul.
 
 ## D: drive migration — documentation reconciled 2026-11-09 (Claude)
 

@@ -796,6 +796,9 @@ a, select { -webkit-tap-highlight-color: rgba(201,168,64,.18) }
   padding: 24px;
 }
 
+/* Keep the designated-answer heading clear of the sticky account header. */
+#protected-options { scroll-margin-top: 8rem; }
+
 .private-header {
   display: flex;
   justify-content: space-between;
@@ -1462,6 +1465,7 @@ a, select { -webkit-tap-highlight-color: rgba(201,168,64,.18) }
   text-transform: uppercase;
 }
 .re-select {
+  color-scheme: dark;
   width: 100%;
   min-height: 48px;
   background: var(--felt-raised);
@@ -1813,7 +1817,7 @@ body {
 .command-fixture p { margin: 0; color: var(--chalk-dim); font-size: 13px; }
 .command-scope { flex: none; text-align: right; font-size: 12px; color: var(--chalk-muted); line-height: 1.4; }
 @media (max-width: 480px) {
-  .command-fixture { flex-direction: column; gap: 10px; }
+  .command-fixture { flex-direction: column; gap: 6px; padding: 10px 14px; }
   .command-scope { text-align: left; }
 }
 
@@ -1835,7 +1839,12 @@ body {
 .command-glance dd { font-size: 1.05rem; font-weight: 700; color: var(--ivory); margin: 0; }
 .command-glance p { margin: 0; font-size: 12px; color: var(--chalk-dim); }
 @media (max-width: 740px) {
-  .command-glance { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .command-glance { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 0; }
+  .command-glance > div { padding: 8px 14px; }
+  .command-glance dd { line-height: 1.25; }
+  .command-glance p { line-height: 1.5; }
+  .command-glance dd, .command-glance p { overflow-wrap: anywhere; }
+  .command-protected-players li { flex-wrap: wrap; }
   .command-glance > div:nth-child(2) { border-right: none; }
   .command-glance > div:nth-child(3), .command-glance > div:nth-child(4) { border-top: 1px solid var(--border-subtle); }
 }
@@ -1845,7 +1854,10 @@ body {
   border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px;
   background: rgba(9,21,16,.97);
 }
-@media (max-width: 860px) { .command-intelligence { grid-template-columns: 1fr; } }
+@media (max-width: 860px) {
+  .command-intelligence { grid-template-columns: minmax(0,1fr); overflow-wrap: anywhere; }
+  .command-intelligence .dossier-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
 
 .command-recommendation {
   padding: 20px 24px; display: flex; flex-direction: column; gap: 10px;
