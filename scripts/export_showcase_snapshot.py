@@ -115,6 +115,24 @@ def main(argv=None) -> int:
     unplayed = [m for m in matches if not m["is_scored"]]
     current_week = min(m["week"] for m in unplayed) if unplayed else max(weeks_all) + 1
 
+    # Say precisely whether the refresh's coverage gaps touch THIS division (they are listed by match id).
+    gap_ids: set[str] = set()
+    report_file = run / "refresh_report.json"
+    if report_file.is_file():
+        for gap in json.loads(report_file.read_text(encoding="utf-8")).get("gaps", []):
+            found = re.match(r"match (\d+):", str(gap))
+            if found:
+                gap_ids.add(found.group(1))
+    gaps_here = sorted(gap_ids & {str(m["external_id"]) for m in matches})
+    if not (run / "FAILED.json").is_file():
+        coverage_note = "Completed refresh run."
+    elif gaps_here:
+        coverage_note = (f"Local beta from a refresh run that stopped at its source-coverage gate; "
+                         f"{len(gaps_here)} scoresheet(s) in this division have unresolved player identities.")
+    else:
+        coverage_note = ("Local beta from a refresh run that stopped at its source-coverage gate. "
+                         f"The {len(gap_ids)} scoresheet(s) it flagged are in a different division; none are in this one.")
+
     # ── Resolve every scoresheet row to ONE canonical person ──────────────────────────────────────────
     # A scoresheet can carry a throwaway alias id for someone who is also on the roster. Merge only on an
     # exact team + exact name match to exactly one roster player; otherwise keep the id as a separate person.
@@ -228,8 +246,7 @@ def main(argv=None) -> int:
                        "capturedAt": captured.isoformat() if captured else None,
                        "exportedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
                        "coverage": "partial" if (run / "FAILED.json").is_file() else "complete",
-                       "note": "Local beta from a refresh run that stopped at its source-coverage gate; two scoresheet rows had unresolved identities."
-                       if (run / "FAILED.json").is_file() else "Completed refresh run.",
+                       "note": coverage_note,
                        "notes": dict(notes)},
         "league": {"name": league_name(viewer.get("league", "")), "division": div_label or f"Division {division}",
                    "season": session, "format": "8-Ball" if fmt == "EIGHT" else "9-Ball" if fmt == "NINE" else fmt,

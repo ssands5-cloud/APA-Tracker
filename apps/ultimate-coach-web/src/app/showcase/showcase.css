@@ -112,6 +112,8 @@ body:has(.bc-shell) { background: var(--bg, oklch(0.1 0.02 265)) }
 .bc-player-text strong { font: 800 15px/1.05 var(--display); font-stretch: 110%; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .bc-player-text small { font: 500 11px var(--mono); color: var(--text-3); white-space: nowrap }
 .bc-no { font: 900 italic 24px/1 var(--display); font-stretch: 120%; color: oklch(0.4 0.04 265) }
+/* Lineup rows sit in a half-width column: let a long name wrap instead of being cut off. */
+.bc-pair .bc-player-text strong { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.05 }
 
 /* Scoreboard hero */
 .bc-board { position: relative; overflow: hidden; border-radius: 6px; background: var(--surface); border: 1px solid var(--line-2) }
