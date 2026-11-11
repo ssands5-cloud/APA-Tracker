@@ -10,14 +10,14 @@ a delete or a push; ask Paul first.
 - Refresh runs `ultimate-coach-runs\`, UAT builds in worktree `tmp\` folders (17.8 GB), `.session_cache\`.
 - `.env` (APA credentials; never copy its values into docs, chats or commits).
 - Local-only branches and commits: `codex/scheduled-refresh-task` (`6038fd7`, not on GitHub as of 2026-11-10), any
-  worktree branch without a remote, and `feat/phase1-war-room` commits until the 2026-11-09 docs push succeeds.
+  and any worktree branch without a remote. (`feat/phase1-war-room` is synchronized with GitHub at `ea7efea` as of the documentation reconciliation.)
 - Other agents' uncommitted work (listed in `SYSTEM_STATE.md`).
 
 ## Backup locations
 
 | Location | Contents | State |
 |---|---|---|
-| GitHub `ssands5-cloud/APA-Tracker` | Pushed branches only | `feat/phase1-war-room` GitHub tip `62cfff6` at the 2026-11-09 snapshot |
+| GitHub `ssands5-cloud/APA-Tracker` | Pushed branches only | `feat/phase1-war-room` synchronized with GitHub at `ea7efea` as of the documentation reconciliation (historical 2026-11-09 snapshot: GitHub tip `62cfff6`) |
 | `H:\APA Tracker Scorekeeper` | Full pre-migration tree, commit `92d4ccd`, including worktrees, venvs and data | Present. Includes three worktree folders removed on D: (`APA-Tracker-cockpit-bridge`, `-scoresheet-gate-fix`, `-viewer-revalidation-fix`) |
 | `C:\Users\ssand\Desktop\APA Tracker Scorekeeper` | Pre-migration rollback copy, commit `92d4ccd` | Present. Boundary guard blocks commits there. Its 51 branch tips and 4 stashes are also on D: |
 | `docs/migration/2026-11-05/` (this repo) | Worktree inventory with exact HEAD SHAs, removal log, venv package lists, C:/D:/H: comparison | Tracked in git |

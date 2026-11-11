@@ -5,7 +5,8 @@
 Status: the move to D: is done and verified. Owner decisions and the Windows task repointing are **not** done (listed below).
 
 - Canonical checkout: `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker`, authoritative branch `feat/phase1-war-room`.
-- Snapshot 2026-11-09: local tip `e535ace`, GitHub tip `62cfff6`, local 4 ahead / 1 behind. `beaeb65` is the D: migration commit; `3ca900e` is an earlier, now historical, database-location doc fix. Full table: `SYSTEM_STATE.md` → Git state.
+- Repository synchronized with GitHub at `ea7efea` as of the documentation reconciliation (verified 2026-11-10). Later docs-only commits sit on top; check `git status -sb` and `git log -1` for live state. `beaeb65` is the D: migration commit; `3ca900e` is an earlier, now historical, database-location doc fix. Full table: `SYSTEM_STATE.md` → Git state.
+- Historical snapshot (2026-11-09, before the reconciliation push): local tip `e535ace`, GitHub tip `62cfff6`, local 4 ahead / 1 behind. No longer current.
 - 35 registered worktrees, none prunable. Deletion freeze still on.
 - Databases: pipeline DB `data\apa_tracker.db`; staging DB `APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db`; web app uses Turso. **Production database selection pending owner decision.**
 - Ultimate Coach: **no owner-approved candidate.** `D:\Ultimate Coach` is the preserved offline candidate; PR #83 UAT and the FINAL UAT build choice are pending Paul.
@@ -251,5 +252,5 @@ It stages and commits only the allowlisted files and records `Source: <commit>` 
 - **WebKit primed-offline reload:** fails in emulation. Physical iPhone and Android checks are PENDING PAUL REVIEW.
 - **Preference:** whether the matrix opens in Evidence view (current) or Captain view. PENDING PAUL REVIEW.
 
-## Session reset checkpoint — 2026-11-09
-Start with AGENTS.md, AI_HANDOFF.md and the "Starting a new AI session here" steps in SYSTEM_STATE.md. Preserve local work and other agents' uncommitted edits. The pipeline uses the checkout's `data\apa_tracker.db`; production database selection is pending Paul. Confirm the file before any refresh or publish. Recovery: RECOVERY.md. Repoint the C: Windows tasks only with Paul's admin authorization. Worktree deletion remains frozen. No Ultimate Coach build is approved.
+## Session reset checkpoint — 2026-11-09 (Git line updated 2026-11-10)
+Repository synchronized with GitHub at `ea7efea` as of the documentation reconciliation. Start with AGENTS.md, AI_HANDOFF.md and the "Starting a new AI session here" steps in SYSTEM_STATE.md. Preserve local work and other agents' uncommitted edits. The pipeline uses the checkout's `data\apa_tracker.db`; production database selection is pending Paul. Confirm the file before any refresh or publish. Recovery: RECOVERY.md. Repoint the C: Windows tasks only with Paul's admin authorization. Worktree deletion remains frozen. No Ultimate Coach build is approved.

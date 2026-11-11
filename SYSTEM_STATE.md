@@ -32,24 +32,29 @@ The two `D:\Ultimate Coach*` folders matched their C: originals and their H: cop
 - PR #83 UAT is pending Paul's acceptance on Windows. Build selection in `D:\Ultimate Coach FINAL UAT`
   is Paul's decision and is pending.
 
-## Git state (snapshot taken 2026-11-09; check live with `git status -sb` and `git log -1`)
+## Git state (updated 2026-11-10; check live with `git status -sb` and `git log -1`)
+
+Repository synchronized with GitHub at `ea7efea` as of the documentation reconciliation (verified 2026-11-10,
+0 ahead / 0 behind). Later docs-only commits sit on top of `ea7efea`.
 
 | Item | Value |
 |---|---|
 | Authoritative branch | `feat/phase1-war-room` |
-| Local branch tip (snapshot) | `e535ace` docs: reconcile D-drive handoff with live state (2026-11-05) |
-| GitHub branch tip (snapshot) | `62cfff6` docs(infra): log combined-candidate assessment for PR #105/#106 (2026-10-27, docs/AI_STATUS.md only) |
-| Ahead/behind (snapshot) | local 4 ahead, 1 behind GitHub. The 4 local-only commits are `beaeb65`, `50abde1`, `3ca900e`, `e535ace`. `62cfff6` merges without conflict. |
-| Registered worktrees | 35 (this checkout plus 34 linked), none prunable, all on D: |
+| Reconciled tip (local = GitHub) | `ea7efea` docs(infra): reconcile D: migration docs - git snapshot, DB status, tasks, RECOVERY.md |
+| Registered worktrees | 35 (this checkout plus 34 linked), none prunable, all on D: (re-checked 2026-11-10) |
+
+Historical snapshot (2026-11-09, before the reconciliation push; no longer current): local tip `e535ace`,
+GitHub tip `62cfff6`, local 4 ahead / 1 behind. The 4 then-local-only commits were `beaeb65`, `50abde1`,
+`3ca900e`, `e535ace`; `62cfff6` was merged in `bd7afff` without conflict.
 
 Commit meanings:
 - `92d4ccd` — last commit before the move. The C: Desktop copy and the H: copy are both at this commit. Historical snapshot.
 - `beaeb65` — **the D: migration commit**: canonical paths moved from the C: Desktop to D: in AGENTS.md, PROJECT_STATUS.md, docs and four scripts.
 - `50abde1` — first post-migration SYSTEM_STATE.md / AI_HANDOFF.md. Historical snapshot.
 - `3ca900e` — earlier correction of the database location in docs/AI_HANDOFF.md (from the unused `D:\APA-Tracker-Data` default to `data\apa_tracker.db`). Historical snapshot; superseded by the database section below.
-- `e535ace` — current local `feat/phase1-war-room` tip at the 2026-11-09 snapshot.
-
-The 2026-11-09 documentation commit is made on top of a merge of `62cfff6` and then pushed. That commit can't record its own hash. If `git status -sb` still shows ahead or behind, the push didn't complete.
+- `e535ace` — local `feat/phase1-war-room` tip at the 2026-11-09 snapshot. Historical snapshot.
+- `bd7afff` — merge of `62cfff6` into the local branch.
+- `ea7efea` — the 2026-11-09 documentation reconciliation commit, pushed; local and GitHub matched here on 2026-11-10.
 
 ## Migration to D: (2026-11-05; documentation reconciled 2026-11-09)
 
