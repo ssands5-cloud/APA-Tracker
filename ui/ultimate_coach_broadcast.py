@@ -321,6 +321,7 @@ body.bc .precommend{font-size:14px;font-weight:600;color:var(--fg);border-top:1p
 body.bc .pwhatif{font-size:12px;color:var(--fg-dim)}
 body.bc .pwhatif b{color:var(--fg)}
 body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
+body.bc details.more{margin:4px 0}body.bc details.more>summary{cursor:pointer;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--home);padding:8px 2px;min-height:36px}
 body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
 body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
 """
@@ -646,16 +647,19 @@ _JS_BODY = r"""
           +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')
           +(pick&&pick.after?'<div class="send-after"><b>After this send:</b> '+esc(afterText(pick.after))+'</div>':'')+'</section>';
       } else hero='<section class="send-hero"><span class="send-kicker">No send</span><div class="send-why">'+esc(n.headline)+'</div></section>';
-      var rest=function(list,kind){return list.filter(function(c){return !pickName||c.name!==pickName;}).map(function(c){return candRow(c,kind,n.opp.id);}).join("");};
-      var a1=rest(n.ranked,"ranked"),a2=rest(n.unordered,"shared"),a3=rest(n.avoid,"avoid");
-      alts='<h3 class="night-h">Alternatives</h3>'+(a1+a2+a3||'<p class="matchup-footnote">No other recorded option.</p>')
+      var rest=function(list,kind){return list.filter(function(c){return !pickName||c.name!==pickName;}).map(function(c){return candRow(c,kind,n.opp.id);});};
+      var altRows=rest(n.ranked,"ranked").concat(rest(n.unordered,"shared"),rest(n.avoid,"avoid"));
+      // The three best alternatives stay in view; the rest are one tap away, none removed.
+      var altHtml=altRows.slice(0,3).join("")+(altRows.length>3?'<details class="more"><summary>'+(altRows.length-3)+' more option'+(altRows.length-3===1?'':'s')+'</summary>'+altRows.slice(3).join("")+'</details>':"");
+      alts='<h3 class="night-h">Alternatives</h3>'+(altHtml||'<p class="matchup-footnote">No other recorded option.</p>')
         +(n.unknown.length?'<p class="matchup-footnote">Unknown (no verified evidence, not weak): '+esc(n.unknown.join(", "))+'</p>':"");
       var rl=[];
       all.forEach(function(c){if(c.save) rl.push('<li>'+esc(c.name+" — "+c.save)+'</li>');});
       n.holds.forEach(function(h){rl.push('<li>'+esc("Keep "+h.our+(h.covers.length?" for "+h.covers.join(", "):"")+" — "+h.why)+'</li>');});
       n.sacrifices.forEach(function(s){rl.push('<li class="bad">'+esc("If we must absorb a bad matchup: "+s.our+" vs "+s.their+" ("+s.level+") — "+s.why)+'</li>');});
       if(n.openRisks.length) rl.push('<li class="bad">'+esc("No favorable direct option left vs "+n.openRisks.join(", "))+'</li>');
-      risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>';
+      risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.slice(0,4).join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>'
+        +(rl.length>4?'<details class="more"><summary>'+(rl.length-4)+' more risk'+(rl.length-4===1?'':'s')+'</summary><ul class="risk-list">'+rl.slice(4).join("")+'</ul></details>':"");
     }
     var avlNext={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"};
     var bench='<h3 class="night-h">Bench</h3><div class="bench"><div class="bench-col"><h4>Our players</h4>'
