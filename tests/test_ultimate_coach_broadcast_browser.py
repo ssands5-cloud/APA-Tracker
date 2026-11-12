@@ -276,4 +276,7 @@ def test_command_board_shows_the_plan_after_each_send(page):
     after = page.evaluate("window.UC_BC_LAST.night.command.cards.filter(c=>c.name.indexOf('Ann Archer')===0)[0].targets[0].after")
     assert after["left"] == 1 and after["conf"]
     page.click("#bc-night .send-hero [data-send]")
+    page.locator("#bc-night .night-chip").first.click()
+    after_text = page.locator("#bc-night .send-after").text_content()
+    assert "no remaining path" in after_text and "3 open slots" in after_text
     assert page.errors == []

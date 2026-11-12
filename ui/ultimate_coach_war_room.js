@@ -1196,13 +1196,11 @@
     if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);
   }
   // Compare sends against the same put-up, then solve the remaining night with both players used.
-  function wrSendScenarios(w,plan,x,j,answer){
-    var slots=Math.max(0,5-x.playedN-1),other=plan.unplayed.slice(),block=w.blocks[j];
-    other[j]=false;
+  function wrSendScenarios(w,plan,x,j,answer,solveAfterSend){
+    var slots=Math.max(0,5-x.playedN-1),block=w.blocks[j];
     var scenarios=w.ours.filter(function(m){return plan.rem[String(m.id)];}).map(function(m){
-      var id=String(m.id),rest=Object.assign({},plan.rem),sl=mnKnown(m.skill_level)?m.skill_level:null;
-      rest[id]=false;
-      var after=mnPlanFor(w,rest,other,x.playedN+1,x.playedSl+(sl||0),x.cap);
+      var id=String(m.id),sl=mnKnown(m.skill_level)?m.skill_level:null;
+      var after=solveAfterSend(m,j);
       var path=after.plan_if_we_lead||[],evidence=block.byMember[id];
       var budget=x.cap===null?null:(sl===null||after.cap.incomplete?"Skill budget incomplete":
         (x.playedSl+sl>x.cap||after.cap.slack<0?"Over the entered cap":"Within the entered cap"));
@@ -1230,15 +1228,25 @@
   function wrConfText(p){var s=MN_LEVEL_ORDER.filter(function(lv){return p.confidence&&p.confidence[lv];}).map(function(lv){return p.confidence[lv]+" "+lv;}).join(" · ");return s||"no pairings";}
   var WR_FRAG_RANK={Low:0,Medium:1,High:2};
   // What the plan becomes if this player is sent against this opponent now: the engine re-solved with both used.
-  function wrAfterSend(w,plan,x,id,j){
-    var m=w.ours.filter(function(q){return String(q.id)===String(id);})[0];if(!m) return null;
-    var rem2={};Object.keys(plan.rem).forEach(function(k){rem2[k]=plan.rem[k];});rem2[String(id)]=false;
-    var un2=plan.unplayed.slice();un2[j]=false;
-    var p2=mnPlanFor(w,rem2,un2,x.playedN+1,x.playedSl+(wrKnown(m.skill_level)?Number(m.skill_level):0),x.cap);
-    if(!p2.games_left) return {conf:"night complete",frag:"n/a",left:0};
-    return {conf:p2.lead?wrConfText(p2):"no legal plan under the cap",frag:p2.lead?p2.fragility.rating:"n/a",leans:p2.lead&&p2.fragility.player||"",left:p2.games_left};
+  function wrAfterSendPlanner(w,plan,x){
+    var cache=new Map();
+    return function(member,j){
+      var id=String(member.id),key=JSON.stringify([id,j]);
+      if(!cache.has(key)){
+        var rest=Object.assign({},plan.rem),other=plan.unplayed.slice();
+        rest[id]=false;other[j]=false;
+        var sl=mnKnown(member.skill_level)?member.skill_level:0;
+        cache.set(key,mnPlanFor(w,rest,other,x.playedN+1,x.playedSl+sl,x.cap));
+      }
+      return cache.get(key);
+    };
   }
-  function wrCommand(w,plan,mp,x){
+  function wrAfterSendSummary(after,x){
+    var slots=Math.max(0,5-x.playedN-1);
+    return {conf:after.lead?wrConfText(after):"no remaining path",frag:after.lead?after.fragility.rating:null,
+      leans:after.lead&&after.fragility.player||"",left:after.plan_if_we_lead.length,slots:slots};
+  }
+  function wrCommand(w,plan,mp,x,solveAfterSend){
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];}),ck=plan.ck;
     var fragility=mp.fragility||{rating:"Unavailable",player:""};
     var holds={};(mp.holds||[]).forEach(function(h){holds[h.our]=h;});
@@ -1254,7 +1262,7 @@
           if(gs.length===1&&String(gs[0].member.id)===id) card.unique.push(it.opp);}});
       card.targets.sort(function(a,b){return a.rank-b.rank;});
       card.answers=(mp.responses||[]).filter(function(r){return r.our===name;}).map(function(r){return {opp:r.their,level:r.level};});
-      if(rem) card.targets.slice(0,3).forEach(function(t){var jj=-1;w.theirs.forEach(function(o,k){if(String(o.id)===t.oppId) jj=k;});if(jj>=0) t.after=wrAfterSend(w,plan,x,id,jj);});
+      if(rem) card.targets.slice(0,3).forEach(function(t){var j=w.theirs.findIndex(function(o){return String(o.id)===t.oppId;});if(j>=0) t.after=wrAfterSendSummary(solveAfterSend(m,j),x);});
       if(card.used||!rem){card.role=card.used?"used":"out";card.recommend=card.used?"Already played tonight":"Marked unavailable";return card;}
       // What the plan loses without this player: the engine, re-solved with them removed.
       var rem2={};Object.keys(plan.rem).forEach(function(k){rem2[k]=plan.rem[k];});rem2[id]=false;
@@ -1287,6 +1295,7 @@
   }
   function wrBroadcastModel(w,plan,ta,tb,ctx){
     var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
+    var solveAfterSend=wrAfterSendPlanner(w,plan,x);
     var rows=(mp.responses||[]).map(function(r,i){
       var oi=-1;w.theirs.forEach(function(o,j){if(oi<0&&wrDisplayName(o,w.theirs)===r.their) oi=j;});
       var our=w.ours.filter(function(m){return wrDisplayName(m,w.ours)===r.our;})[0],opp=oi>=0?w.theirs[oi]:null;
@@ -1307,13 +1316,13 @@
       var cand=function(c){var row=w.blocks[selJ].byMember[String(c.member.id)],d=row?row.c.direct:null;
         return {id:String(c.member.id),name:c.display,sl:wrKnown(c.member.skill_level)?c.member.skill_level:null,choice:c.choice_number||null,cat:c.category,
           tied:c.tied_with||[],wins:d?d.w:null,games:d?d.g:0,save:c.save||"",cost:wrCostText(w,selJ,c.member.id,plan.rem,plan.unplayed),
-          avail:wrAvail(ck,c.member.id),after:wrAfterSend(w,plan,x,c.member.id,selJ)};};
+          avail:wrAvail(ck,c.member.id),after:wrAfterSendSummary(solveAfterSend(c.member,selJ),x)};};
       night.opp={id:String(opp.id),name:who,sl:wrKnown(opp.skill_level)?opp.skill_level:null};
-      if(chosen) night.sendScenarios=wrSendScenarios(w,plan,x,selJ,ans);
+      if(chosen) night.sendScenarios=wrSendScenarios(w,plan,x,selJ,ans,solveAfterSend);
       night.answer=ans?{our:ans.our,level:ans.level,why:ans.why.split(" — ").slice(1).join(" — "),cost:ans.cost_later||""}:null;
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
-    night.command=wrCommand(w,plan,mp,x);
+    night.command=wrCommand(w,plan,mp,x,solveAfterSend);
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
     night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})

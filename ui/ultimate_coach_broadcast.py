@@ -555,7 +555,12 @@ _JS_BODY = r"""
   /* ---------- Captain command board ---------- */
   var pathMode="weLead";
   var ROLE_LABEL={save:"Protect",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
-  function afterText(a){return a?(a.left?'plan after: '+a.conf+' · fragility '+a.frag+(a.leans?' (leans on '+a.leans+')':''):'night complete'):"";}
+  function afterText(a){
+    if(!a.slots) return "final pairing";
+    var open=a.slots-a.left;
+    return "plan after: "+a.conf+(a.frag?" · fragility "+a.frag+(a.leans?" (leans on "+a.leans+")":""):"")
+      +(open?" · "+open+" open "+(open===1?"slot":"slots"):"");
+  }
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
@@ -592,7 +597,7 @@ _JS_BODY = r"""
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
       +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
 
-      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer, a designated answer, or the plan weakens without them. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
+      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer or is designated for a specific opponent. <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
   }
 
   function renderSendCosts(scenarios,opp){
