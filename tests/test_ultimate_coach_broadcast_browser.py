@@ -198,3 +198,15 @@ def test_printing_the_packet_from_any_tab_includes_the_whole_matchup(page):
     for sel in ("#wr-matrix", "#wr-opportunities", "#wr-risks", "#lineup-lab", "#scouting-cards", "#wr-meetings"):
         assert page.locator(sel).first.is_visible(), sel
     assert not page.locator("header.app-header").is_visible() and not page.locator("#bc-night").is_visible()
+
+
+def test_summary_shows_the_league_table_and_results_from_recorded_matches(page):
+    _pick(page)
+    _tab(page, "summary")
+    table = page.locator("#bc-league .league-table tbody tr")
+    cells = [[c.strip() for c in r.locator("td").all_text_contents()] for r in table.all()]
+    by_name = {c[1].lower(): c for c in cells}
+    assert by_name["owls"][2:] == ["1", "1", "0", "0", "3"] and by_name["sharks"][2:] == ["1", "0", "1", "0", "2"]
+    assert page.locator("#bc-league tr.mine .tn").text_content().lower() == "sharks"
+    assert "owls vs sharks" in page.locator("#bc-league .res-row").first.text_content().lower()
+    assert "not apa" not in page.locator("#bc-league").text_content().lower() and "official table" in page.locator("#bc-league .sub").first.text_content()

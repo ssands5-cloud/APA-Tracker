@@ -60,6 +60,7 @@ def home_markup(ui: str) -> str:
     return (
         '<div id="bc-home" class="page-view" aria-label="Home"></div><div id="bc-tabhead" class="section-header" hidden></div>'
         '<div id="bc-night" aria-label="Match Night board"></div>'
+        '<section id="bc-league" data-bc="summary" aria-label="League table and results"></section>'
     )
 
 
@@ -266,6 +267,27 @@ body.bc .mv-toggle button[aria-pressed="true"]{background:var(--home);color:#000
 body.bc .matrix tbody th,body.bc .matrix thead th{color:var(--fg)}
 """
 
+_CSS_LEAGUE = r"""
+body.bc #bc-league:empty{display:none}
+body.bc #bc-league{margin:0 0 16px}
+body.bc .league-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+body.bc .league-card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:14px 16px;min-width:0}
+body.bc .league-card h3{margin:0 0 4px;font-family:var(--cond);font-weight:900;font-style:italic;font-size:22px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg)}
+body.bc .league-card .sub{font-size:11.5px;color:var(--fg-muted);margin:0 0 8px}
+body.bc .league-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+body.bc .league-table th{font-family:var(--cond);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-muted);text-align:right;padding:6px 8px;background:transparent;border-bottom:1px solid var(--border)}
+body.bc .league-table th:nth-child(-n+2),body.bc .league-table td:nth-child(-n+2){text-align:left}
+body.bc .league-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--border);font-size:13.5px}
+body.bc .league-table td.tn{font-family:var(--cond);font-weight:800;font-size:15px;letter-spacing:.03em;text-transform:uppercase}
+body.bc .league-table tr.mine td{background:rgba(0,212,240,.1)}
+body.bc .league-table tr.mine td.tn{color:var(--home)}
+body.bc .res-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+body.bc .res-row.mine{border-left:3px solid var(--home);padding-left:10px}
+body.bc .res-row .sc{font-family:var(--cond);font-weight:800;font-size:16px;letter-spacing:.04em}
+body.bc .res-row .dt{grid-column:1/-1;font-size:11px;color:var(--fg-muted)}
+@media (max-width:740px){body.bc .league-grid{grid-template-columns:1fr}}
+"""
+
 _CSS_NIGHT = r"""
 /* Match Night board (built from the artifact's hero, rows, badges and bars) */
 body.bc #bc-night{display:none}
@@ -324,7 +346,7 @@ body.bc .game-row .res.W{background:rgba(0,212,240,.18);color:var(--home)}body.b
 @media (max-width:740px){body.bc .alt-row{grid-template-columns:28px 1fr auto}body.bc .alt-row .matchup-bars{grid-column:1/-1}body.bc .bench{grid-template-columns:1fr}body.bc .send-bars{width:100%}}
 """
 
-CSS = _CSS_BODY + _CSS_DARK + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
+CSS = _CSS_BODY + _CSS_DARK + _CSS_LEAGUE + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
 
 
 _JS_BODY = r"""
@@ -555,9 +577,20 @@ _JS_BODY = r"""
     var u=el.querySelector("[data-undo]");if(u) u.onclick=function(){window.UC_ACT.undo();};
     var f=el.querySelector("[data-full]");if(f) f.onclick=function(){body.classList.toggle("bc-full");};
   }
-  window.UC_BC={render:function(m){renderHome(m);renderNight(m);ticker(m);}};
+  /* ---------- League table and results (Summary tab) ---------- */
+  function renderLeague(m){
+    var el=$("bc-league"); if(!el) return;
+    var L=m&&!m.empty?m.league:null;
+    if(!L||!L.table.length){el.innerHTML="";return;}
+    var rows=L.table.map(function(r,i){return '<tr'+(r.mine?' class="mine"':'')+'><td>'+(i+1)+'</td><td class="tn">'+esc(r.name)+'</td><td>'+r.p+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+(r.t||0)+'</td><td>'+r.pts+'</td></tr>';}).join("");
+    var res=L.recent.map(function(g){return '<div class="res-row'+(g.mine?' mine':'')+'"><span>'+esc(g.home)+' vs '+esc(g.away)+'</span><span class="sc">'+g.hs+' – '+g.as+'</span><span class="dt">'+esc(g.date)+(g.week?' · week '+esc(g.week):'')+'</span></div>';}).join("");
+    el.innerHTML='<div class="league-grid"><div class="league-card"><h3>League table</h3><p class="sub">'+esc(L.session)+' · computed from the '+L.games+' scored matches recorded in this snapshot. APA’s official table also counts bye weeks and can differ.</p>'
+      +'<div class="table-wrap"><table class="league-table"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>T</th><th>Pts</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'
+      +'<div class="league-card"><h3>Recent results</h3><p class="sub">Newest first. Your team’s matches are marked.</p>'+res+'</div></div>';
+  }
+  window.UC_BC={render:function(m){renderHome(m);renderNight(m);renderLeague(m);ticker(m);}};
   show("home");
-  renderHome(window.UC_BC_LAST||null); renderNight(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null);
+  renderHome(window.UC_BC_LAST||null); renderNight(window.UC_BC_LAST||null); renderLeague(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null);
   route();
 })();
 """

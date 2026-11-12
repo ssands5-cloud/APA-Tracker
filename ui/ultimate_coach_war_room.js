@@ -1165,8 +1165,32 @@
   // search matches). Same scope key and label the classic selects use.
   function wrBcTeams(){return TEAM_KEYS.filter(function(k){var tm=TEAM_INDEX[k];return !tm.format||tm.format===TF.value;})
     .map(function(k){return {key:k,label:teamDisplay(TEAM_INDEX[k])};});}
+  // League table and results from the recorded scored fixtures in this snapshot, for the team's own division
+  // (teams connected to it by scored matches in the same session and format). Not APA's official table.
+  function wrBcLeague(team){
+    var fx=(DATA.match_day&&DATA.match_day.fixtures)||[],id=String(team&&team.team_external_id||"");
+    if(!id) return null;
+    var pool=fx.filter(function(f){return f.session_name===team.session_name&&f.format===team.format&&!f.is_bye&&f.is_scored&&f.home_score!=null&&f.away_score!=null;});
+    var adj={};pool.forEach(function(f){var a=String(f.home_team_id),b=String(f.away_team_id);(adj[a]||(adj[a]={}))[b]=1;(adj[b]||(adj[b]={}))[a]=1;});
+    var seen={},queue=[id];seen[id]=1;
+    while(queue.length){var cur=queue.shift();Object.keys(adj[cur]||{}).forEach(function(n){if(!seen[n]){seen[n]=1;queue.push(n);}});}
+    var games=pool.filter(function(f){return seen[String(f.home_team_id)]&&seen[String(f.away_team_id)];});
+    var rows={};
+    function row(tid,name){return rows[tid]||(rows[tid]={id:tid,name:name,p:0,w:0,l:0,t:0,pts:0,mine:tid===id});}
+    games.forEach(function(f){
+      var h=row(String(f.home_team_id),f.home_team_name),a=row(String(f.away_team_id),f.away_team_name),hs=Number(f.home_score),as=Number(f.away_score);
+      h.p++;a.p++;h.pts+=hs;a.pts+=as;
+      if(hs>as){h.w++;a.l++;}else if(as>hs){a.w++;h.l++;}else{h.t++;a.t++;}
+    });
+    var table=Object.keys(rows).map(function(k){return rows[k];}).sort(function(x,y){return (y.w-x.w)||(y.pts-x.pts)||x.name.localeCompare(y.name);});
+    var recent=games.slice().sort(function(x,y){return String(y.local_sort||y.match_date).localeCompare(String(x.local_sort||x.match_date));}).slice(0,12)
+      .map(function(f){return {date:f.local_display||f.local_date||"",week:f.week,home:f.home_team_name,away:f.away_team_name,hs:Number(f.home_score),as:Number(f.away_score),
+        mine:String(f.home_team_id)===id||String(f.away_team_id)===id};});
+    return {table:table,recent:recent,games:games.length,session:team.session_name};
+  }
   function wrBroadcastPublish(model){
-    if(model&&document.body&&document.body.classList.contains("bc")) model.teams=wrBcTeams();
+    if(model&&document.body&&document.body.classList.contains("bc")){model.teams=wrBcTeams();
+      var ct=model.ourKey?TEAM_INDEX[model.ourKey]:null;model.league=ct?wrBcLeague(ct):null;}
     if(!document.body||!document.body.classList.contains("bc")) return;
     window.UC_BC_LAST=model;
     if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);
