@@ -329,6 +329,20 @@ body.bc table.glance .grade{font-size:15px;line-height:1.3;padding:0 6px}body.bc
 body.bc table.glance td.gn{font-family:var(--cond);font-weight:800;font-size:15px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
 body.bc table.glance tr.save td:first-child{border-left:4px solid var(--gold)}body.bc table.glance tr.core td:first-child{border-left:4px solid #c9a24a}
 body.bc table.glance tr.flexible td:first-child{border-left:4px solid var(--home)}body.bc table.glance tr.burn td:first-child{border-left:4px solid var(--away)}
+@media (max-width:740px){
+  body.bc table.glance{min-width:0;border:0;background:transparent}
+  body.bc table.glance thead{display:none}
+  body.bc table.glance,body.bc table.glance tbody{display:block}
+  body.bc table.glance tr{display:grid;grid-template-columns:1fr auto auto;gap:2px 8px;background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--border-hi);border-radius:6px;padding:8px 10px;margin-bottom:6px}
+  body.bc table.glance tr.save{border-left-color:var(--gold)}body.bc table.glance tr.core{border-left-color:#c9a24a}body.bc table.glance tr.flexible{border-left-color:var(--home)}body.bc table.glance tr.burn{border-left-color:var(--away)}
+  body.bc table.glance td{display:block;border:0;padding:1px 0;border-left:0!important}
+  body.bc table.glance td.gn{grid-column:1}
+  body.bc table.glance td:nth-child(2){grid-column:2}body.bc table.glance td:nth-child(3){grid-column:3}
+  body.bc table.glance td:nth-child(n+4){grid-column:1/-1;font-size:12.5px}
+  body.bc table.glance td:nth-child(4)::before{content:"Best: ";color:var(--fg-muted)}
+  body.bc table.glance td:nth-child(5)::before{content:"Avoid: ";color:var(--fg-muted)}
+  body.bc table.glance td:nth-child(6){font-weight:600;border-top:1px solid var(--border);margin-top:3px;padding-top:4px}
+}
 body.bc details.more{margin:4px 0}body.bc details.more>summary{cursor:pointer;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--home);padding:8px 2px;min-height:36px}
 body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
 body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
