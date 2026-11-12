@@ -115,9 +115,8 @@ body.bc .ticker-item::before{content:'\25C6 ';color:var(--home);font-size:7px;ve
 @media (prefers-reduced-motion:reduce){body.bc .ticker-track{animation:none}}
 /* Content area: dark on Home (the artifact), a light reading surface on the other tabs that hold existing panels. */
 body.bc main{max-width:1160px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));width:100%}
-body.bc:not([data-view="home"]) main{background:#f4f1ea;color:#17221c;margin-top:18px;border-radius:6px}
+body.bc main{color:var(--fg)}
 body.bc .page-foot{color:var(--fg-muted)}
-body.bc:not([data-view="home"]) .page-foot{color:#5b6a61}
 body.bc .freshness{padding:10px max(16px,env(safe-area-inset-left,0px));max-width:1160px;margin:12px auto 0}
 body.bc #bc-home{display:none}
 body.bc[data-view="home"] #bc-home,body.bc[data-view="all"] #bc-home{display:block}
@@ -125,8 +124,8 @@ body.bc[data-view="home"] #bc-home,body.bc[data-view="all"] #bc-home{display:blo
 /* Section header for the non-home tabs */
 body.bc .section-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 body.bc .section-header[hidden]{display:none}
-body.bc #bc-tabhead .section-title{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(24px,3.2vw,32px);letter-spacing:.02em;text-transform:uppercase;color:#07151f;margin:0}
-body.bc #bc-tabhead .section-sub{font-size:13px;color:#4a5a52}
+body.bc #bc-tabhead .section-title{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(24px,3.2vw,32px);letter-spacing:.02em;text-transform:uppercase;color:var(--fg);margin:0}
+body.bc #bc-tabhead .section-sub{font-size:13px;color:var(--fg-dim)}
 /* Home: hero */
 body.bc .match-hero{display:grid;grid-template-columns:1fr auto 1fr;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:2px;min-height:200px}
 body.bc .team-panel{padding:24px 28px 28px;display:flex;flex-direction:column;justify-content:flex-end;position:relative;min-width:0}
@@ -188,8 +187,6 @@ body.bc .badge-caution,body.bc .badge-conflicted{background:var(--badge-caution-
 body.bc .matchup-why{grid-column:2/-1;font-size:12px;color:var(--fg-dim);margin-top:-6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 body.bc .matchup-footnote{font-size:11px;color:var(--fg-muted);margin:10px 0 0;line-height:1.5}
 body.bc .home-empty{padding:28px 20px;color:var(--fg-dim);font-size:14px;border:1px dashed var(--border-hi);border-radius:4px}
-body.bc .card-feature{border-top-color:#0e2f3d}
-body.bc .section-title h2{color:#07151f}
 @media (max-width:740px){
   body.bc .match-hero{grid-template-columns:1fr}
   body.bc .match-center{flex-direction:row;border-left:none;border-right:none;border-top:1px solid var(--border);border-bottom:1px solid var(--border);min-width:unset;padding:14px 20px}
@@ -211,6 +208,64 @@ body.bc .section-title h2{color:#07151f}
   body.bc main{background:#fff!important;color:#000!important;margin:0!important}body.bc{background:#fff!important;color:#000!important}}
 """
 
+_CSS_DARK = r"""
+/* Existing panels, re-themed to the artifact: same components and ids, dark surfaces, the artifact's accents. */
+body.bc{--paper:#07090d;--card:#0d1117;--ink:#f0f4ff;--muted:#8a99b0;--line:rgba(255,255,255,.09);--line-strong:rgba(255,255,255,.2);
+--felt:#0f5f73;--felt-deep:#0a3f4f;--felt-soft:rgba(0,212,240,.12);--brass-soft:rgba(245,197,24,.1);--warn-bg:rgba(245,197,24,.1);--warn-line:#f5c518;--info-bg:rgba(0,212,240,.08);--info-line:#00d4f0}
+body.bc .card,body.bc .match-plan,body.bc .next-send,body.bc .pair,body.bc .fixture,body.bc .scout,body.bc .viewer-box,body.bc .metric,body.bc details.start-here{background:var(--card);color:var(--fg);border-color:var(--border);box-shadow:none}
+body.bc .card{border-radius:6px}
+body.bc .card-feature{border-top:3px solid var(--home)}
+body.bc h1,body.bc h2,body.bc h3,body.bc h4,body.bc .section-title h2,body.bc .mp-name{color:var(--fg)}
+body.bc .section-title{border-bottom:1px solid var(--border);padding-bottom:6px}
+body.bc .section-title h2,body.bc .card h2,body.bc .card-head h2{font-family:var(--cond);font-weight:900;font-style:italic;letter-spacing:.02em;text-transform:uppercase}
+body.bc .muted,body.bc .section-title p,body.bc .mp-sub,body.bc .mp-why{color:var(--fg-dim)}
+body.bc label,body.bc .legend{color:var(--fg-dim)}
+body.bc a{color:var(--home)}
+body.bc select,body.bc input[type="search"],body.bc input[type="date"],body.bc input[type="number"],body.bc input[type="text"],body.bc textarea{background:#111826;color:var(--fg);border:1px solid var(--border-hi)}
+body.bc select:focus,body.bc input:focus,body.bc textarea:focus{outline:2px solid var(--home);border-color:var(--home)}
+body.bc select:disabled,body.bc input:disabled{background:#0b0f16;color:var(--fg-muted)}
+body.bc select.plan,body.bc textarea.plan,body.bc input#ll-cap{background:rgba(245,197,24,.08);color:var(--gold);border-color:rgba(245,197,24,.45)}
+body.bc table{color:var(--fg)}
+body.bc th{background:#101722;color:var(--fg-dim);border-bottom:1px solid var(--border)}
+body.bc td{border-bottom:1px solid var(--border)}
+body.bc tbody tr:nth-child(even) td{background:rgba(255,255,255,.025)}
+body.bc .matrix th a{color:var(--home)}
+body.bc .pill,body.bc .tag,body.bc .badge{background:rgba(0,212,240,.12);color:var(--home);border-color:rgba(0,212,240,.25)}
+body.bc .badge.side{background:var(--home);color:#000}
+body.bc button.chip,body.bc button.secondary{background:transparent;color:var(--fg);border-color:var(--border-hi)}
+body.bc button.chip:hover,body.bc button.secondary:hover,body.bc button.chip[aria-pressed="true"]{background:rgba(0,212,240,.14)}
+body.bc .warn,body.bc .note.warn-note{background:var(--warn-bg);color:var(--gold)}
+body.bc .good{background:rgba(0,200,160,.1);color:#00c8a0;border-left-color:#00c8a0}
+body.bc .note{color:var(--fg)}
+body.bc .freshness span{background:var(--card);color:var(--fg-dim);border-color:var(--border)}
+body.bc .freshness .badge-uncal{background:rgba(245,197,24,.1);color:var(--gold);border-color:rgba(245,197,24,.3)}
+body.bc details.disclosure{border-top-color:var(--border)}
+body.bc details.disclosure summary,body.bc .match-plan details summary{color:var(--home)}
+body.bc .match-plan,body.bc .next-send{border-left-color:var(--home)}
+body.bc .mp-label,body.bc .fixture dt,body.bc .metric span{color:var(--fg-muted)}
+body.bc .metric b,body.bc .fixture-when,body.bc .fixture-vs b{color:var(--fg)}
+body.bc .viewer-box{background:rgba(245,197,24,.06)}
+body.bc .viewer-box label{color:var(--gold)}
+body.bc .ns-budget{background:rgba(245,197,24,.1);color:var(--gold)}
+body.bc .ns-coach{background:rgba(0,212,240,.08);color:var(--fg)}
+body.bc .quick-read{background:rgba(245,197,24,.08);color:var(--fg)}
+body.bc .quick-read-badges span,body.bc .ns-chip{background:var(--bg-card);color:var(--fg);border-color:var(--border-hi)}
+body.bc .ns-chip.on{background:var(--away);color:#000}
+body.bc .cat-border-G,body.bc .cat-border-R,body.bc .cat-border-E,body.bc .cat-border-I{background:transparent}
+body.bc .legend,body.bc .table-wrap{color:var(--fg-dim)}
+body.bc .mcell{color:#102018}
+body.bc .roster-head,body.bc .page-foot{color:var(--fg-dim)}
+body.bc #player-section .card{background:var(--card)}
+body.bc table td{color:var(--fg)}
+body.bc table td:first-child{color:var(--fg)}
+body.bc .quick-read b{color:var(--gold)}
+body.bc details.start-here summary,body.bc details.start-here summary b{color:var(--fg)}
+body.bc .mv-toggle{border-color:var(--border-hi)}
+body.bc .mv-toggle button{background:transparent;color:var(--fg-dim);border:0}
+body.bc .mv-toggle button[aria-pressed="true"]{background:var(--home);color:#000}
+body.bc .matrix tbody th,body.bc .matrix thead th{color:var(--fg)}
+"""
+
 _CSS_NIGHT = r"""
 /* Match Night board (built from the artifact's hero, rows, badges and bars) */
 body.bc #bc-night{display:none}
@@ -219,7 +274,7 @@ body.bc[data-view="matchnight"] main{background:transparent;color:var(--fg);marg
 body.bc[data-view="matchnight"] #bc-tabhead .section-title{color:var(--fg)}
 body.bc[data-view="matchnight"] #bc-tabhead .section-sub{color:var(--fg-dim)}
 @media screen{body.bc:not([data-view="all"]):not(.bc-full) #tonight{display:none!important}}
-body.bc[data-view="matchnight"].bc-full #tonight{display:block!important;background:#f4f1ea;color:#17221c;margin-top:16px}
+body.bc[data-view="matchnight"].bc-full #tonight{display:block!important;margin-top:16px}
 body.bc .night-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:12px}
 body.bc .night-status .nm{font-family:var(--cond);font-weight:800;font-size:18px;letter-spacing:.04em;text-transform:uppercase}
 body.bc .night-status .nm i{color:var(--away);font-style:normal;margin:0 6px}
@@ -269,7 +324,7 @@ body.bc .game-row .res.W{background:rgba(0,212,240,.18);color:var(--home)}body.b
 @media (max-width:740px){body.bc .alt-row{grid-template-columns:28px 1fr auto}body.bc .alt-row .matchup-bars{grid-column:1/-1}body.bc .bench{grid-template-columns:1fr}body.bc .send-bars{width:100%}}
 """
 
-CSS = _CSS_BODY + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
+CSS = _CSS_BODY + _CSS_DARK + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
 
 
 _JS_BODY = r"""
