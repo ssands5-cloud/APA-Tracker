@@ -557,10 +557,11 @@ _JS_BODY = r"""
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
     var best=c.targets.length?'<p class="plist"><span class="k">Best targets</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Best targets</span><span class="matchup-sl">none with a favorable direct record left</span></p>';
+    var ans=(c.answers&&c.answers.length)?'<p class="plist"><span class="k">Plan answer</span>'+c.answers.map(function(a){return esc(a.opp)+' <span class="evidence-badge '+badgeClass(a.level)+'">'+esc(a.level)+'</span>';}).join(" ")+'</p>':"";
     var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
     var wi=c.whatIf?'<div class="pwhatif"><b>With them:</b> '+esc(c.whatIf.before)+' \u00b7 <b>Without them (used up or out):</b> '+esc(c.whatIf.after)+' \u00b7 fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+'</div>':"";
     return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
-      +'<span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+av
+      +'<span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
       +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
   }
   function commandHtml(m){

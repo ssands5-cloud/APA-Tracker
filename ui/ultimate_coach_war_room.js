@@ -1216,6 +1216,7 @@
         if(r.category==="G"&&rem){var gs=w.blocks[j].rows.filter(function(q){return q.category==="G"&&plan.rem[String(q.member.id)];});
           if(gs.length===1&&String(gs[0].member.id)===id) card.unique.push(it.opp);}});
       card.targets.sort(function(a,b){return a.rank-b.rank;});
+      card.answers=(mp.responses||[]).filter(function(r){return r.our===name;}).map(function(r){return {opp:r.their,level:r.level};});
       if(card.used||!rem){card.role=card.used?"used":"out";card.recommend=card.used?"Already played tonight":"Marked unavailable";return card;}
       // What the plan loses without this player: the engine, re-solved with them removed.
       var rem2={};Object.keys(plan.rem).forEach(function(k){rem2[k]=plan.rem[k];});rem2[id]=false;
