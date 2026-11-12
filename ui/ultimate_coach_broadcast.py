@@ -305,14 +305,14 @@ body.bc .slot .st{font-size:12px;color:var(--fg-dim)}
 body.bc .slot .evidence-badge{margin-top:4px;display:inline-block}
 body.bc .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
 body.bc .pcard{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--border-hi);border-radius:6px;padding:12px 14px;display:grid;gap:6px;min-width:0}
-body.bc .pcard.save{border-left-color:var(--gold)}body.bc .pcard.flexible{border-left-color:var(--home)}body.bc .pcard.situational{border-left-color:#7a8aa3}
+body.bc .pcard.save{border-left-color:var(--gold)}body.bc .pcard.core{border-left-color:#c9a24a}body.bc .pcard.flexible{border-left-color:var(--home)}body.bc .pcard.situational{border-left-color:#7a8aa3}
 body.bc .pcard.burn{border-left-color:var(--away)}body.bc .pcard.used,body.bc .pcard.out{opacity:.55}
 body.bc .pcard-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 body.bc .pcard-name{font-family:var(--cond);font-weight:900;font-size:21px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg);flex:1;min-width:8em;overflow-wrap:anywhere}
 body.bc .grade{font-family:var(--cond);font-weight:900;font-size:20px;color:#000;background:var(--home);border-radius:3px;padding:0 8px;line-height:1.5}
 body.bc .grade.lo{background:#7a8aa3}
 body.bc .role{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--border-hi);color:var(--fg-dim)}
-body.bc .role.save{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
+body.bc .role.save,body.bc .role.core{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
 body.bc .role.burn{color:var(--away);border-color:rgba(255,61,98,.5)}
 body.bc .plist{font-size:13px;color:var(--fg);margin:0}
 body.bc .plist .k{font-family:var(--cond);font-weight:800;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted);display:block}
@@ -554,7 +554,7 @@ _JS_BODY = r"""
   }
   /* ---------- Captain command board ---------- */
   var pathMode="weLead";
-  var ROLE_LABEL={save:"Protect",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
+  var ROLE_LABEL={save:"Protect",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
   function afterText(a){return a?(a.left?'plan after: '+a.conf+' · fragility '+a.frag+(a.leans?' (leans on '+a.leans+')':''):'night complete'):"";}
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
@@ -590,7 +590,7 @@ _JS_BODY = r"""
     return '<section class="cmd" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
       +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
-      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Critical:</b> '+names("save")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Expendable:</b> '+names("burn")+'</p></div>'
+      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
 
       +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer, a designated answer, or the plan weakens without them. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
   }

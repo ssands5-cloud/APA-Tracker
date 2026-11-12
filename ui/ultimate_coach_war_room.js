@@ -1264,12 +1264,13 @@
         ||(WR_FRAG_RANK[p2.fragility.rating]||0)>(WR_FRAG_RANK[fragility.rating]||0));
       card.whatIf=mp.lead?{before:before,after:after,fragBefore:fragility.rating,fragAfter:p2.lead?p2.fragility.rating:"n/a",weakens:weakens}:null;
       var hold=holds[name],n=card.targets.length;
-      if(card.unique.length||hold||weakens){
+      if(card.unique.length||(hold&&hold.covers.length)){
         card.role="save";
-        card.recommend=card.unique.length?"Save for "+card.unique.join(", ")
-          :hold&&hold.covers.length?"Save for "+hold.covers.join(", ")
-          :weakens?"Keep: the plan weakens without them ("+before+" → "+after+")"
-          :"Keep: "+hold.why;
+        card.recommend="Save for "+(card.unique.length?card.unique:hold.covers).join(", ");
+      }else if(n===0&&(hold||weakens)){
+        // No favorable target of their own, but the plan relies on them: keep them in it, do not burn them.
+        card.role="core";
+        card.recommend="Core: the plan gets worse without them ("+before+" → "+after+")";
       }else if(n>=2){card.role="flexible";card.recommend="Use now if "+card.targets[0].opp+" comes up; flexible otherwise";}
       else if(n===1){card.role="flexible";card.recommend="Use if "+card.targets[0].opp+" comes up";}
       else if(!mp.lead){card.role="situational";card.recommend="Check the remaining lineup before sending";}
@@ -1278,7 +1279,7 @@
       var u=card.unique.length;
       card.grade=u>=1&&n>=2?"A":card.role==="save"?"A-":n>=2?"B+":n===1?"B":(card.even.length||card.shared.length)?"C":"D";
       return card;});
-    var order={save:0,flexible:1,situational:2,burn:3,used:4,out:5};
+    var order={save:0,core:1,flexible:2,situational:3,burn:4,used:5,out:6};
     cards.sort(function(a,b){return (order[a.role]-order[b.role])||String(a.grade||"Z").localeCompare(String(b.grade||"Z"))||a.name.localeCompare(b.name);});
     var path=function(rows){return (rows||[]).map(function(g){return {leader:g.leader,our:g.our,their:g.their,level:g.level};});};
     return {cards:cards,plan:{conf:wrConfText(mp),fragility:fragility.rating,leans:fragility.player||"",gamesLeft:mp.games_left,
