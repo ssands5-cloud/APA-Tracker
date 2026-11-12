@@ -322,6 +322,12 @@ body.bc .pwhatif{font-size:12px;color:var(--fg-dim)}
 body.bc .pwhatif b{color:var(--fg)}
 body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
 body.bc #bc-send-costs .game-row{align-items:center}body.bc #bc-send-costs .path-more{flex:1 1 100%;margin:0}body.bc #bc-send-costs .path-more>span{display:block;font-size:12.5px;color:var(--fg-dim);padding:2px 2px 6px}
+body.bc table.glance{width:100%;border-collapse:collapse;margin-top:10px;background:var(--bg-card);border:1px solid var(--border);min-width:780px}
+body.bc table.glance th{font-family:var(--cond);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-muted);background:transparent;padding:6px 10px;text-align:left}
+body.bc table.glance td{padding:6px 10px;font-size:13px;vertical-align:middle;border-bottom:1px solid var(--border)}
+body.bc table.glance td.gn{font-family:var(--cond);font-weight:800;font-size:16px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+body.bc table.glance tr.save td:first-child{border-left:4px solid var(--gold)}body.bc table.glance tr.core td:first-child{border-left:4px solid #c9a24a}
+body.bc table.glance tr.flexible td:first-child{border-left:4px solid var(--home)}body.bc table.glance tr.burn td:first-child{border-left:4px solid var(--away)}
 body.bc details.more{margin:4px 0}body.bc details.more>summary{cursor:pointer;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--home);padding:8px 2px;min-height:36px}
 body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
 body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
@@ -592,6 +598,11 @@ _JS_BODY = r"""
     for(var i=route.length;i<left;i++){
       slots+='<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+'</div><div class="st">No pairing planned</div></div>';
     }
+    var names2=function(items){return items.length?items.map(function(i){return esc(i.opp);}).join(", "):"—";};
+    var glance='<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th>Best targets</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
+      +cards.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
+        +'<td><span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
+        +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td>'+esc(c.recommend)+'</td></tr>';}).join("")+'</tbody></table></div>';
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
     var start=selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
       :tab("weLead","If we put up first")+tab("theyLead","If they put up first");
@@ -599,6 +610,7 @@ _JS_BODY = r"""
       +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
       +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
+      +glance
 
       +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer or is designated for a specific opponent. <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
   }
@@ -677,8 +689,8 @@ _JS_BODY = r"""
             :'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>')+'</div>';}).join("")
         +'<p class="matchup-footnote">'+(n.storageWarning?"Results are available while this page is open.":"Results are kept in this browser for tonight.")+' They never change any recorded evidence or recommendation.</p>';
     }
-    var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><h3 class="night-h">Bench strategy</h3>'
-      +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></section>':"";
+    var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><details class="more"><summary>Player details: what each send does to the plan</summary>'
+      +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></details></section>':"";
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
     el.innerHTML=status+storage+commandHtml(m)+(done?"":chips+hero+strategyBench+renderSendCosts(n.sendScenarios,n.opp)+alts+risks)+bench+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-path]"),function(b){b.onclick=function(){pathMode=b.getAttribute("data-path");renderNight(m);};});
