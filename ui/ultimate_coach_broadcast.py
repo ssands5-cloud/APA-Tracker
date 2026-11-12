@@ -305,14 +305,14 @@ body.bc .slot .st{font-size:12px;color:var(--fg-dim)}
 body.bc .slot .evidence-badge{margin-top:4px;display:inline-block}
 body.bc .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
 body.bc .pcard{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--border-hi);border-radius:6px;padding:12px 14px;display:grid;gap:6px;min-width:0}
-body.bc .pcard.save{border-left-color:var(--gold)}body.bc .pcard.core{border-left-color:#c9a24a}body.bc .pcard.flexible{border-left-color:var(--home)}body.bc .pcard.situational{border-left-color:#7a8aa3}
+body.bc .pcard.save{border-left-color:var(--gold)}body.bc .pcard.flexible{border-left-color:var(--home)}body.bc .pcard.situational{border-left-color:#7a8aa3}
 body.bc .pcard.burn{border-left-color:var(--away)}body.bc .pcard.used,body.bc .pcard.out{opacity:.55}
 body.bc .pcard-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 body.bc .pcard-name{font-family:var(--cond);font-weight:900;font-size:21px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg);flex:1;min-width:8em;overflow-wrap:anywhere}
 body.bc .grade{font-family:var(--cond);font-weight:900;font-size:20px;color:#000;background:var(--home);border-radius:3px;padding:0 8px;line-height:1.5}
 body.bc .grade.lo{background:#7a8aa3}
 body.bc .role{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--border-hi);color:var(--fg-dim)}
-body.bc .role.save,body.bc .role.core{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
+body.bc .role.save{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
 body.bc .role.burn{color:var(--away);border-color:rgba(255,61,98,.5)}
 body.bc .plist{font-size:13px;color:var(--fg);margin:0}
 body.bc .plist .k{font-family:var(--cond);font-weight:800;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted);display:block}
@@ -554,7 +554,7 @@ _JS_BODY = r"""
   }
   /* ---------- Captain command board ---------- */
   var pathMode="weLead";
-  var ROLE_LABEL={save:"Save",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
+  var ROLE_LABEL={save:"Protect",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
   function afterText(a){return a?(a.left?'plan after: '+a.conf+' · fragility '+a.frag+(a.leans?' (leans on '+a.leans+')':''):'night complete'):"";}
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
@@ -562,7 +562,7 @@ _JS_BODY = r"""
     var best=c.targets.length?'<p class="plist"><span class="k">Best targets</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Best targets</span><span class="matchup-sl">none with a favorable direct record left</span></p>';
     var ans=(c.answers&&c.answers.length)?'<p class="plist"><span class="k">Plan answer</span>'+c.answers.map(function(a){return esc(a.opp)+' <span class="evidence-badge '+badgeClass(a.level)+'">'+esc(a.level)+'</span>';}).join(" ")+'</p>':"";
     var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
-    var wi=c.whatIf?'<div class="pwhatif"><b>With them:</b> '+esc(c.whatIf.before)+' \u00b7 <b>Without them (used up or out):</b> '+esc(c.whatIf.after)+' \u00b7 fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+'</div>':"";
+    var wi=c.whatIf?'<div class="pwhatif"><b>Save:</b> plan stays '+esc(c.whatIf.before)+' \u00b7 <b>If unavailable:</b> becomes '+esc(c.whatIf.after)+' (fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+')</div>':"";
     return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
       +'<span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
       +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
@@ -571,21 +571,49 @@ _JS_BODY = r"""
     var cmd=m.night&&m.night.command; if(!cmd) return "";
     var cards=cmd.cards,pl=cmd.plan;
     var names=function(role){return cards.filter(function(c){return c.role===role;}).map(function(c){return esc(c.name);}).join(", ")||"none";};
-    var slots=(pathMode==="theyLead"?pl.theyLead:pl.weLead).map(function(s,i){
-      return '<div class="slot"><div class="sn">Game '+(i+1)+' \u00b7 '+(s.leader==="us"?"we put up":"they put up")+'</div><div class="so">'+esc(s.our)+'</div><div class="st">vs '+esc(s.their)+'</div><span class="evidence-badge '+badgeClass(s.level)+'">'+esc(s.level)+'</span></div>';}).join("");
+    var completed=m.night.games.map(function(g){
+      return '<div class="slot"><div class="sn">Game '+(g.i+1)+' · '+(g.r==="W"?"Won":g.r==="L"?"Lost":"Pairing confirmed")+'</div>'
+        +'<div class="so">'+esc(g.our)+'</div><div class="st">vs '+esc(g.their)+'</div></div>';
+    }).join("");
+    var selected=m.night.chosen&&(m.night.sendScenarios||[]).find(function(s){return s.recommended;});
+    var route=selected?[{leader:"them",our:selected.name,their:m.night.opp.name,level:selected.level}].concat(selected.path)
+      :(pathMode==="theyLead"?pl.theyLead:pl.weLead);
+    var slots=route.map(function(s,i){
+      return '<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+' \u00b7 '+(s.leader==="us"?"we put up":"they put up")+'</div><div class="so">'+esc(s.our)+'</div><div class="st">vs '+esc(s.their)+'</div><span class="evidence-badge '+badgeClass(s.level)+'">'+esc(s.level)+'</span></div>';}).join("");
+    var left=Math.max(0,5-(m.played||0));
+    for(var i=route.length;i<left;i++){
+      slots+='<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+'</div><div class="st">No pairing planned</div></div>';
+    }
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
+    var start=selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
+      :tab("weLead","If we put up first")+tab("theyLead","If they put up first");
     return '<section class="cmd" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
-      +'<span class="cmd-sum">Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 '+pl.gamesLeft+' game'+(pl.gamesLeft===1?'':'s')+' left</span></div>'
-      +'<div class="path"><div class="path-tabs">'+tab("weLead","If we put up first")+tab("theyLead","If they put up first")+'</div><div class="path-slots">'+slots+'</div>'
-      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Save:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
-      +'<div class="cmd-grid">'+cards.map(cardHtml).join("")+'</div>'
-      +'<p class="ladder">Roles come from the engine: <b>Save</b> = the only favorable answer to an opponent, or a designated answer for one; <b>Core</b> = no favorable target, but the plan gets worse without them; <b>Flexible</b> = 2+ favorable targets; <b>Burn early</b> = no favorable target and the plan is unchanged without them. Value (v1 rule): A = unique answer and 2+ favorable targets; A- = unique answer; B+ = 2+ favorable targets; B = 1; C = even or shared-opponent evidence only; D = none. Recorded results, not odds.</p></section>';
+      +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
+      +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
+      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Critical:</b> '+names("save")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Expendable:</b> '+names("burn")+'</p></div>'
+
+      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer, a designated answer, or the plan weakens without them. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
   }
 
+  function renderSendCosts(scenarios,opp){
+    if(!scenarios||!scenarios.length) return "";
+    return '<section id="bc-send-costs"><h3 class="night-h">Use now or save</h3>'
+      +'<p class="matchup-footnote">Compare every available send against '+esc(opp.name)+'.</p>'
+      +scenarios.map(function(s){
+        var path=s.path.map(function(p){return esc(p.our+" vs "+p.their+" ("+p.level+")");}).join(" · ");
+        var coverage=s.lost.length?"Only favorable answer lost for "+s.lost.join(", "):"No unique favorable answer spent";
+        var summary=s.slots?(path||"No remaining path"):"Final pairing";
+        if(s.slots&&s.path.length<s.slots) summary+=" · "+(s.slots-s.path.length)+" open "+(s.slots-s.path.length===1?"slot":"slots");
+        return '<div class="game-row" data-cost-player="'+esc(s.id)+'"><strong>'+esc(s.name)+'</strong>'
+          +'<span>'+esc(s.recommended?"Engine answer · "+s.level:s.level)+'</span>'
+          +'<span>'+esc(coverage)+(s.tradeoff?" · "+esc(s.tradeoff):"")+(s.budget?" · "+esc(s.budget):"")+'</span>'
+          +'<span>'+summary+'</span></div>';
+      }).join("")+'</section>';
+  }
   function renderNight(m){
     var el=$("bc-night"); if(!el) return;
     if(!m||m.empty||!m.night){el.innerHTML='<div class="home-empty">Pick a team and opponent on Home (or a fixture in Schedule Planner) to run the night.</div>';return;}
-    var n=m.night,played=m.played||0,gameNo=Math.min(5,played+1),done=m.gamesLeft===0;
+    var n=m.night,played=m.played||0,gameNo=Math.min(5,played+1),done=played>=5;
     var undo=n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
     var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
       +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
@@ -637,7 +665,9 @@ _JS_BODY = r"""
             :'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>')+'</div>';}).join("")
         +'<p class="matchup-footnote">Results are kept in this browser for tonight. They never change any recorded evidence or recommendation.</p>';
     }
-    el.innerHTML=status+commandHtml(m)+chips+hero+alts+risks+bench+log;
+    var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><h3 class="night-h">Bench strategy</h3>'
+      +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></section>':"";
+    el.innerHTML=status+commandHtml(m)+(done?"":chips+hero+strategyBench+renderSendCosts(n.sendScenarios,n.opp)+alts+risks)+bench+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-path]"),function(b){b.onclick=function(){pathMode=b.getAttribute("data-path");renderNight(m);};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-pick]"),function(b){b.onclick=function(){window.UC_ACT.pick(b.getAttribute("data-pick"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-send]"),function(b){b.onclick=function(){window.UC_ACT.send(b.getAttribute("data-send"),b.getAttribute("data-opp"));};});
