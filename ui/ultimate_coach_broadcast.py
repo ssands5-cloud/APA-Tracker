@@ -324,6 +324,7 @@ body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
 body.bc details.more{margin:4px 0}body.bc details.more>summary{cursor:pointer;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--home);padding:8px 2px;min-height:36px}
 body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
 body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
+body.bc .night-save-warning:not(:empty){margin:8px 0;padding:10px;border:1px solid var(--gold);border-radius:6px;color:var(--gold)}
 """
 
 _CSS_NIGHT = r"""
@@ -673,11 +674,12 @@ _JS_BODY = r"""
         return '<div class="game-row"><span class="gn">G'+(g.i+1)+'</span><span class="gt">'+esc(g.our)+' vs '+esc(g.their)+'</span>'
           +(g.r?'<span class="res '+g.r+'">'+(g.r==="W"?"We won":"We lost")+'</span><button type="button" class="night-btn" data-result="'+g.i+'" data-r="">Clear</button>'
             :'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>')+'</div>';}).join("")
-        +'<p class="matchup-footnote">Results are kept in this browser for tonight. They never change any recorded evidence or recommendation.</p>';
+        +'<p class="matchup-footnote">'+(n.storageWarning?"Results are available while this page is open.":"Results are kept in this browser for tonight.")+' They never change any recorded evidence or recommendation.</p>';
     }
     var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><h3 class="night-h">Bench strategy</h3>'
       +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></section>':"";
-    el.innerHTML=status+commandHtml(m)+(done?"":chips+hero+strategyBench+renderSendCosts(n.sendScenarios,n.opp)+alts+risks)+bench+log;
+    var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
+    el.innerHTML=status+storage+commandHtml(m)+(done?"":chips+hero+strategyBench+renderSendCosts(n.sendScenarios,n.opp)+alts+risks)+bench+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-path]"),function(b){b.onclick=function(){pathMode=b.getAttribute("data-path");renderNight(m);};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-pick]"),function(b){b.onclick=function(){window.UC_ACT.pick(b.getAttribute("data-pick"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-send]"),function(b){b.onclick=function(){window.UC_ACT.send(b.getAttribute("data-send"),b.getAttribute("data-opp"));};});

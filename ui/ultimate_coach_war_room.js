@@ -1333,6 +1333,7 @@
     var nameOf=function(list,id){var m=list.filter(function(x){return String(x.id)===String(id);})[0];return m?wrDisplayName(m,list):String(id);};
     night.games=(WR_PLAN.games[ck]||[]).map(function(g,i){return {i:i,our:nameOf(w.ours,g.o),their:nameOf(w.theirs,g.t),ourId:g.o,theirId:g.t,r:g.r||""};});
     night.score={w:night.games.filter(function(g){return g.r==="W";}).length,l:night.games.filter(function(g){return g.r==="L";}).length};
+    night.storageWarning=wrStorageMessage();
     return {empty:false,night:night,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
       side:ctx?ctx.ourSide:null,dateText:f?(f.date_status==="ok"?f.local_display:"Undated fixture"):"Teams picked by hand",
       venue:f?(f.location||null):null,cap:x.cap,played:x.playedN,gamesLeft:mp.games_left,rows:rows,

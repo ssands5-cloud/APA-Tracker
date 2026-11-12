@@ -146,6 +146,35 @@ def test_bench_availability_changes_the_recommendation_inputs(page):
     assert page.locator("#bc-night .alt-row .matchup-player, #bc-night .send-name").all_text_contents()  # engine still answers
 
 
+def test_match_night_surfaces_failed_result_saves_and_recovers(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.locator("#bc-night .night-chip").first.click()
+    page.locator("#bc-night .send-hero [data-send]").click()
+    page.evaluate("""() => {
+        window.originalSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(key, value) {
+            if (key === "ultimate-coach:plan-v2") throw new DOMException("Synthetic quota", "QuotaExceededError");
+            return window.originalSetItem.call(this, key, value);
+        };
+    }""")
+    page.locator("#bc-night [data-result][data-r=W]").click()
+    warning = page.locator("#bc-night [role=status]")
+    assert warning.is_visible()
+    assert "Planning changes are not saved" in warning.inner_text()
+    assert "Results are available while this page is open" in page.locator("#bc-night").inner_text()
+    page.evaluate("() => { Storage.prototype.setItem = window.originalSetItem; }")
+    page.locator("#bc-night [data-result][data-r='']").click()
+    page.locator("#bc-night [data-result][data-r=W]").click()
+    assert warning.text_content() == ""
+    page.reload()
+    _tab(page, "home")
+    _pick(page)
+    _tab(page, "matchnight")
+    assert page.locator("#bc-night .game-row .res.W").count() == 1
+    assert page.errors == []
+
+
 def test_command_board_updates_send_costs_and_the_five_game_path(page):
     _pick(page)
     _tab(page, "matchnight")
