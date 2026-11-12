@@ -1195,6 +1195,55 @@
     window.UC_BC_LAST=model;
     if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);
   }
+  // Captain command board: for every one of our players, what the engine's own evidence says about their targets,
+  // the matchups to avoid, and what the plan loses without them (the engine re-solved with that player removed).
+  // Roles come from those facts, not from a new score. The letter value is a documented ladder over the same facts.
+  function wrConfText(p){var s=MN_LEVEL_ORDER.filter(function(lv){return p.confidence&&p.confidence[lv];}).map(function(lv){return p.confidence[lv]+" "+lv;}).join(" · ");return s||"no pairings";}
+  var WR_FRAG_RANK={Low:0,Medium:1,High:2};
+  function wrCommand(w,plan,ta,mp,x){
+    var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];}),ck=plan.ck;
+    var holds={};(mp.holds||[]).forEach(function(h){holds[h.our]=h;});
+    var sacs={};(mp.sacrifices||[]).forEach(function(s){(sacs[s.our]||(sacs[s.our]=[])).push(s);});
+    // Plan quality as the sum of level ranks over its pairings (Strong best ... Caution worst); lower is better.
+    var planCost=function(p){var s=0;MN_LEVEL_ORDER.forEach(function(lv,i){s+=((p.confidence&&p.confidence[lv])||0)*i;});return s;};
+    var cards=w.ours.map(function(m){
+      var id=String(m.id),name=wrDisplayName(m,w.ours),rem=!!plan.rem[id];
+      var card={id:id,name:name,sl:wrKnown(m.skill_level)?m.skill_level:null,used:wrLineup(ck,m.id)==="Played",avail:wrAvail(ck,m.id),
+        targets:[],avoid:[],even:[],shared:[],unique:[],role:"",grade:"",recommend:"",whatIf:null};
+      open.forEach(function(j){var r=w.blocks[j].byMember[id];if(!r) return;var o=w.theirs[j];
+        var it={opp:wrDisplayName(o,w.theirs),oppId:String(o.id),oppSl:wrKnown(o.skill_level)?o.skill_level:null,cell:r.cell,g:r.c.direct?r.c.direct.g:0,rank:parseInt(String(r.rank),10)||99};
+        if(r.category==="G") card.targets.push(it);else if(r.category==="R") card.avoid.push(it);else if(r.category==="E") card.even.push(it);else if(r.category==="I") card.shared.push(it);
+        if(r.category==="G"&&rem){var gs=w.blocks[j].rows.filter(function(q){return q.category==="G"&&plan.rem[String(q.member.id)];});
+          if(gs.length===1&&String(gs[0].member.id)===id) card.unique.push(it.opp);}});
+      card.targets.sort(function(a,b){return a.rank-b.rank;});
+      if(card.used||!rem){card.role=card.used?"used":"out";card.recommend=card.used?"Already played tonight":"Marked unavailable";return card;}
+      // What the plan loses without this player: the engine, re-solved with them removed.
+      var rem2={};Object.keys(plan.rem).forEach(function(k){rem2[k]=plan.rem[k];});rem2[id]=false;
+      var p2=mnPlanFor(w,rem2,plan.unplayed,x.playedN,x.playedSl,x.cap);
+      var before=wrConfText(mp),after=p2.lead?wrConfText(p2):"no legal plan";
+      var weakens=!p2.lead||planCost(p2)>planCost(mp)||(WR_FRAG_RANK[p2.fragility.rating]||0)>(WR_FRAG_RANK[mp.fragility.rating]||0);
+      card.whatIf={before:before,after:after,fragBefore:mp.fragility.rating,fragAfter:p2.lead?p2.fragility.rating:"n/a",weakens:weakens};
+      var hold=holds[name],n=card.targets.length;
+      if(card.unique.length||(hold&&hold.covers.length)){
+        card.role="save";
+        card.recommend="Save for "+(card.unique.length?card.unique:hold.covers).join(", ");
+      }else if(n===0&&(hold||weakens)){
+        card.role="core";
+        card.recommend="Core: "+(hold&&!weakens?hold.why:"the plan gets worse without them")+" — keep them in the plan";
+      }else if(n>=2){card.role="flexible";card.recommend="Use now if "+card.targets[0].opp+" comes up; flexible otherwise";}
+      else if(n===1){card.role="situational";card.recommend="Use if "+card.targets[0].opp+" comes up";}
+      else{card.role="burn";card.recommend=(sacs[name]?"Concession option vs "+sacs[name].map(function(s){return s.their;}).join(", ")+" (lowest cost). ":"")+"Burn early: the plan is unchanged without them";}
+      // Value ladder (documented on the page): unique answers and favorable targets, lowered by avoids.
+      var u=card.unique.length;
+      card.grade=u>=1&&n>=2?"A":u>=1?"A-":n>=2?"B+":n===1?"B":(card.even.length||card.shared.length)?"C":"D";
+      return card;});
+    var order={save:0,core:1,flexible:2,situational:3,burn:4,used:5,out:6};
+    cards.sort(function(a,b){return (order[a.role]-order[b.role])||String(a.grade||"Z").localeCompare(String(b.grade||"Z"))||a.name.localeCompare(b.name);});
+    var path=function(rows){return (rows||[]).map(function(g){return {leader:g.leader,our:g.our,their:g.their,level:g.level};});};
+    return {cards:cards,plan:{conf:wrConfText(mp),fragility:mp.fragility.rating,leans:mp.fragility.player||"",gamesLeft:mp.games_left,
+      weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead),best:(mp.best_board||[]).map(function(g){return {our:g.our,their:g.their,level:g.level};}),
+      safest:(mp.safest_board||[]).map(function(g){return {our:g.our,their:g.their,level:g.level};})}};
+  }
   function wrBroadcastModel(w,plan,ta,tb,ctx){
     var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
     var rows=(mp.responses||[]).map(function(r,i){
@@ -1222,6 +1271,7 @@
       night.answer=ans?{our:ans.our,level:ans.level,why:ans.why.split(" — ").slice(1).join(" — "),cost:ans.cost_later||""}:null;
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
+    night.command=wrCommand(w,plan,ta,mp,x);
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
     night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})

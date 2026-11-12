@@ -288,6 +288,41 @@ body.bc .res-row .dt{grid-column:1/-1;font-size:11px;color:var(--fg-muted)}
 @media (max-width:740px){body.bc .league-grid{grid-template-columns:1fr}}
 """
 
+_CSS_CMD = r"""
+/* Captain command board: the whole remaining roster and the path through the night */
+body.bc .cmd{margin-bottom:22px}
+body.bc .cmd-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin-bottom:10px}
+body.bc .cmd-head h3{margin:0;font-family:var(--cond);font-weight:900;font-style:italic;font-size:26px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg)}
+body.bc .cmd-sum{font-size:13px;color:var(--fg-dim)}
+body.bc .cmd-sum b{color:var(--fg)}
+body.bc .path{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:6px;padding:12px 16px;margin-bottom:12px}
+body.bc .path-tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+body.bc .path-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+body.bc .slot{border:1px solid var(--border-hi);border-radius:4px;padding:8px 12px;background:#0a0f17}
+body.bc .slot .sn{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted)}
+body.bc .slot .so{font-family:var(--cond);font-weight:800;font-size:17px;letter-spacing:.03em;text-transform:uppercase;color:var(--home);overflow-wrap:anywhere}
+body.bc .slot .st{font-size:12px;color:var(--fg-dim)}
+body.bc .slot .evidence-badge{margin-top:4px;display:inline-block}
+body.bc .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
+body.bc .pcard{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--border-hi);border-radius:6px;padding:12px 14px;display:grid;gap:6px;min-width:0}
+body.bc .pcard.save{border-left-color:var(--gold)}body.bc .pcard.core{border-left-color:#c9a24a}body.bc .pcard.flexible{border-left-color:var(--home)}body.bc .pcard.situational{border-left-color:#7a8aa3}
+body.bc .pcard.burn{border-left-color:var(--away)}body.bc .pcard.used,body.bc .pcard.out{opacity:.55}
+body.bc .pcard-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.bc .pcard-name{font-family:var(--cond);font-weight:900;font-size:21px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg);flex:1;min-width:8em;overflow-wrap:anywhere}
+body.bc .grade{font-family:var(--cond);font-weight:900;font-size:20px;color:#000;background:var(--home);border-radius:3px;padding:0 8px;line-height:1.5}
+body.bc .grade.lo{background:#7a8aa3}
+body.bc .role{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--border-hi);color:var(--fg-dim)}
+body.bc .role.save,body.bc .role.core{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
+body.bc .role.burn{color:var(--away);border-color:rgba(255,61,98,.5)}
+body.bc .plist{font-size:13px;color:var(--fg);margin:0}
+body.bc .plist .k{font-family:var(--cond);font-weight:800;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted);display:block}
+body.bc .plist .goodt{color:#00c8a0}body.bc .plist .badt{color:var(--away)}
+body.bc .precommend{font-size:14px;font-weight:600;color:var(--fg);border-top:1px solid var(--border);padding-top:6px}
+body.bc .pwhatif{font-size:12px;color:var(--fg-dim)}
+body.bc .pwhatif b{color:var(--fg)}
+body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
+"""
+
 _CSS_NIGHT = r"""
 /* Match Night board (built from the artifact's hero, rows, badges and bars) */
 body.bc #bc-night{display:none}
@@ -346,7 +381,7 @@ body.bc .game-row .res.W{background:rgba(0,212,240,.18);color:var(--home)}body.b
 @media (max-width:740px){body.bc .alt-row{grid-template-columns:28px 1fr auto}body.bc .alt-row .matchup-bars{grid-column:1/-1}body.bc .bench{grid-template-columns:1fr}body.bc .send-bars{width:100%}}
 """
 
-CSS = _CSS_BODY + _CSS_DARK + _CSS_LEAGUE + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
+CSS = _CSS_BODY + _CSS_DARK + _CSS_LEAGUE + _CSS_CMD + _CSS_NIGHT + "@media screen{\n" + _hide_rules() + "\n}\n"
 
 
 _JS_BODY = r"""
@@ -515,6 +550,34 @@ _JS_BODY = r"""
       +'<button type="button" class="night-btn" data-send="'+esc(c.id)+'" data-opp="'+esc(oppId)+'" aria-label="Send '+esc(c.name)+'">✓ Send</button>'
       +(note?'<div class="alt-note">'+esc(note)+'</div>':'')+'</div>';
   }
+  /* ---------- Captain command board ---------- */
+  var pathMode="weLead";
+  var ROLE_LABEL={save:"Save",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
+  function oppList(items,withRecord){return items.map(function(i){return esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'');}).join(", ");}
+  function cardHtml(c){
+    var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
+    var best=c.targets.length?'<p class="plist"><span class="k">Best targets</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Best targets</span><span class="matchup-sl">none with a favorable direct record left</span></p>';
+    var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
+    var wi=c.whatIf?'<div class="pwhatif"><b>With them:</b> '+esc(c.whatIf.before)+' \u00b7 <b>Without them (used up or out):</b> '+esc(c.whatIf.after)+' \u00b7 fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+'</div>':"";
+    return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
+      +'<span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+av
+      +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
+  }
+  function commandHtml(m){
+    var cmd=m.night&&m.night.command; if(!cmd) return "";
+    var cards=cmd.cards,pl=cmd.plan;
+    var names=function(role){return cards.filter(function(c){return c.role===role;}).map(function(c){return esc(c.name);}).join(", ")||"none";};
+    var slots=(pathMode==="theyLead"?pl.theyLead:pl.weLead).map(function(s,i){
+      return '<div class="slot"><div class="sn">Game '+(i+1)+' \u00b7 '+(s.leader==="us"?"we put up":"they put up")+'</div><div class="so">'+esc(s.our)+'</div><div class="st">vs '+esc(s.their)+'</div><span class="evidence-badge '+badgeClass(s.level)+'">'+esc(s.level)+'</span></div>';}).join("");
+    var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
+    return '<section class="cmd" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
+      +'<span class="cmd-sum">Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 '+pl.gamesLeft+' game'+(pl.gamesLeft===1?'':'s')+' left</span></div>'
+      +'<div class="path"><div class="path-tabs">'+tab("weLead","If we put up first")+tab("theyLead","If they put up first")+'</div><div class="path-slots">'+slots+'</div>'
+      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Save:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
+      +'<div class="cmd-grid">'+cards.map(cardHtml).join("")+'</div>'
+      +'<p class="ladder">Roles come from the engine: <b>Save</b> = the only favorable answer to an opponent, or a designated answer for one; <b>Core</b> = no favorable target, but the plan gets worse without them; <b>Flexible</b> = 2+ favorable targets; <b>Burn early</b> = no favorable target and the plan is unchanged without them. Value (v1 rule): A = unique answer and 2+ favorable targets; A- = unique answer; B+ = 2+ favorable targets; B = 1; C = even or shared-opponent evidence only; D = none. Recorded results, not odds.</p></section>';
+  }
+
   function renderNight(m){
     var el=$("bc-night"); if(!el) return;
     if(!m||m.empty||!m.night){el.innerHTML='<div class="home-empty">Pick a team and opponent on Home (or a fixture in Schedule Planner) to run the night.</div>';return;}
@@ -569,7 +632,8 @@ _JS_BODY = r"""
             :'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>')+'</div>';}).join("")
         +'<p class="matchup-footnote">Results are kept in this browser for tonight. They never change any recorded evidence or recommendation.</p>';
     }
-    el.innerHTML=status+chips+hero+alts+risks+bench+log;
+    el.innerHTML=status+commandHtml(m)+chips+hero+alts+risks+bench+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-path]"),function(b){b.onclick=function(){pathMode=b.getAttribute("data-path");renderNight(m);};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-pick]"),function(b){b.onclick=function(){window.UC_ACT.pick(b.getAttribute("data-pick"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-send]"),function(b){b.onclick=function(){window.UC_ACT.send(b.getAttribute("data-send"),b.getAttribute("data-opp"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-avail]"),function(b){b.onclick=function(){window.UC_ACT.avail(b.getAttribute("data-avail"),b.getAttribute("data-next"));};});

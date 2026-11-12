@@ -210,3 +210,22 @@ def test_summary_shows_the_league_table_and_results_from_recorded_matches(page):
     assert page.locator("#bc-league tr.mine .tn").text_content().lower() == "sharks"
     assert "owls vs sharks" in page.locator("#bc-league .res-row").first.text_content().lower()
     assert "not apa" not in page.locator("#bc-league").text_content().lower() and "official table" in page.locator("#bc-league .sub").first.text_content()
+
+
+def test_command_board_covers_the_whole_roster_with_engine_derived_roles(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    cards = page.locator("#bc-night .pcard")
+    assert cards.count() == 3                                                          # every one of our three players
+    texts = {c.locator(".pcard-name").text_content().split("SL")[0].strip().lower(): c for c in cards.all()}
+    ann = texts["ann archer (player 1 of 2)"]
+    assert "save for cam cole" in ann.locator(".precommend").text_content().lower()    # her only favorable answer
+    assert ann.locator(".role").text_content().lower() == "save"
+    assert "best targets" in ann.text_content().lower() and "cam cole" in ann.text_content().lower()
+    assert "avoid" in texts["bea baker"].text_content().lower()                        # her recorded losing record
+    assert all(c.locator(".pwhatif").count() == 1 for c in cards.all())                # what the plan loses without each player
+    page.click("#bc-night [data-path=theyLead]")
+    assert page.locator("#bc-night .path-slots .slot").count() == 2 and "they put up" in page.locator("#bc-night .path-slots").text_content().lower()
+    # sending a player moves them to Used and the board re-plans
+    page.locator("#bc-night .send-hero [data-send]").click()
+    assert page.locator("#bc-night .pcard.used").count() == 1
