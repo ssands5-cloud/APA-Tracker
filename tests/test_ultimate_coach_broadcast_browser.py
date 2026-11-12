@@ -146,6 +146,41 @@ def test_bench_availability_changes_the_recommendation_inputs(page):
     assert page.locator("#bc-night .alt-row .matchup-player, #bc-night .send-name").all_text_contents()  # engine still answers
 
 
+def test_command_board_updates_send_costs_and_the_five_game_path(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    slots = page.locator("#bc-night .path-slots .slot")
+    assert slots.count() == 5
+    assert "No pairing planned" in slots.last.inner_text()
+    assert page.locator("#bc-night .pcard .grade").count() > 0
+    page.locator("#bc-night .night-chip").first.click()
+    costs = page.locator("#bc-send-costs [data-cost-player]")
+    available = page.evaluate("UC_BC_LAST.night.bench.ours.filter(p => p.rem).map(p => p.id)")
+    assert sorted(costs.evaluate_all("rows => rows.map(r => r.dataset.costPlayer)")) == sorted(available)
+    send = page.locator("#bc-night .send-hero [data-send]")
+    sent_id = send.get_attribute("data-send")
+    assert costs.first.get_attribute("data-cost-player") == sent_id
+    assert "Engine answer" in costs.first.inner_text()
+    assert "vs " in costs.first.inner_text()
+    assert page.locator("#bc-night .path-tabs strong").is_visible()
+    assert "we put up" in slots.nth(1).inner_text().lower()
+    send.click()
+    assert "pairing confirmed" in slots.first.inner_text().lower()
+    assert slots.nth(1).inner_text().lower().startswith("game 2")
+    assert page.locator("#bc-send-costs").count() == 0
+    page.locator("#bc-night .night-chip").first.click()
+    assert page.locator(f'#bc-send-costs [data-cost-player="{sent_id}"]').count() == 0
+    assert page.errors == []
+
+
+def test_command_board_shows_open_slots_when_cap_blocks_a_plan(page):
+    _pick(page)
+    page.fill("#bc-cap", "1")
+    _tab(page, "matchnight")
+    assert page.locator("#bc-night .path-slots .slot .st").all_text_contents() == ["No pairing planned"] * 5
+    assert page.errors == []
+
+
 def test_every_existing_capability_is_reachable_in_a_tab(page):
     _pick(page)
     expect = {"schedule": ["#match-day-card"], "matchnight": ["#bc-night"],
@@ -220,12 +255,12 @@ def test_command_board_covers_the_whole_roster_with_engine_derived_roles(page):
     texts = {c.locator(".pcard-name").text_content().split("SL")[0].strip().lower(): c for c in cards.all()}
     ann = texts["ann archer (player 1 of 2)"]
     assert "save for cam cole" in ann.locator(".precommend").text_content().lower()    # her only favorable answer
-    assert ann.locator(".role").text_content().lower() == "save"
+    assert ann.locator(".role").text_content().lower() == "protect"
     assert "best targets" in ann.text_content().lower() and "cam cole" in ann.text_content().lower()
     assert "avoid" in texts["bea baker"].text_content().lower()                        # her recorded losing record
     assert all(c.locator(".pwhatif").count() == 1 for c in cards.all())                # what the plan loses without each player
     page.click("#bc-night [data-path=theyLead]")
-    assert page.locator("#bc-night .path-slots .slot").count() == 2 and "they put up" in page.locator("#bc-night .path-slots").text_content().lower()
+    assert page.locator("#bc-night .path-slots .slot").count() == 5 and "they put up" in page.locator("#bc-night .path-slots").text_content().lower()
     # sending a player moves them to Used and the board re-plans
     page.locator("#bc-night .send-hero [data-send]").click()
     assert page.locator("#bc-night .pcard.used").count() == 1

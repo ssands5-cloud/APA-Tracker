@@ -1195,17 +1195,45 @@
     window.UC_BC_LAST=model;
     if(window.UC_BC&&window.UC_BC.render) window.UC_BC.render(model);
   }
+  // Compare sends against the same put-up, then solve the remaining night with both players used.
+  function wrSendScenarios(w,plan,x,j,answer){
+    var slots=Math.max(0,5-x.playedN-1),other=plan.unplayed.slice(),block=w.blocks[j];
+    other[j]=false;
+    var scenarios=w.ours.filter(function(m){return plan.rem[String(m.id)];}).map(function(m){
+      var id=String(m.id),rest=Object.assign({},plan.rem),sl=mnKnown(m.skill_level)?m.skill_level:null;
+      rest[id]=false;
+      var after=mnPlanFor(w,rest,other,x.playedN+1,x.playedSl+(sl||0),x.cap);
+      var path=after.plan_if_we_lead||[],evidence=block.byMember[id];
+      var budget=x.cap===null?null:(sl===null||after.cap.incomplete?"Skill budget incomplete":
+        (x.playedSl+sl>x.cap||after.cap.slack<0?"Over the entered cap":"Within the entered cap"));
+      return {id:id,name:wrDisplayName(m,w.ours),level:evidence?evidence.confidence.level:"Unknown",
+        recommended:!!answer&&wrDisplayName(m,w.ours)===answer.our,remainingValue:after.total_if_we_lead,
+        lost:wrSendCost(w,j,id,plan.rem,plan.unplayed).lost,budget:budget,slots:slots,
+        path:path.map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};})};
+    });
+    var first=scenarios.findIndex(function(s){return s.recommended;});
+    if(first>0) scenarios.unshift(scenarios.splice(first,1)[0]);
+    if(first>=0){
+      var baseline=scenarios[0];
+      scenarios.forEach(function(s){
+        if(s.recommended) return;
+        if(s.path.length<baseline.path.length) s.tradeoff="Leaves fewer planned pairings";
+        else if(s.path.length===baseline.path.length&&s.remainingValue<baseline.remainingValue) s.tradeoff="Weaker remaining path";
+        else if(s.path.length===baseline.path.length&&s.remainingValue>baseline.remainingValue) s.tradeoff="Stronger remaining path after this game";
+      });
+    }
+    return scenarios;
+  }
   // Captain command board: for every one of our players, what the engine's own evidence says about their targets,
   // the matchups to avoid, and what the plan loses without them (the engine re-solved with that player removed).
-  // Roles come from those facts, not from a new score. The letter value is a documented ladder over the same facts.
+  // Roles and letter grades describe the remaining roster. They do not feed back into the planner.
   function wrConfText(p){var s=MN_LEVEL_ORDER.filter(function(lv){return p.confidence&&p.confidence[lv];}).map(function(lv){return p.confidence[lv]+" "+lv;}).join(" · ");return s||"no pairings";}
   var WR_FRAG_RANK={Low:0,Medium:1,High:2};
-  function wrCommand(w,plan,ta,mp,x){
+  function wrCommand(w,plan,mp,x){
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];}),ck=plan.ck;
+    var fragility=mp.fragility||{rating:"Unavailable",player:""};
     var holds={};(mp.holds||[]).forEach(function(h){holds[h.our]=h;});
     var sacs={};(mp.sacrifices||[]).forEach(function(s){(sacs[s.our]||(sacs[s.our]=[])).push(s);});
-    // Plan quality as the sum of level ranks over its pairings (Strong best ... Caution worst); lower is better.
-    var planCost=function(p){var s=0;MN_LEVEL_ORDER.forEach(function(lv,i){s+=((p.confidence&&p.confidence[lv])||0)*i;});return s;};
     var cards=w.ours.map(function(m){
       var id=String(m.id),name=wrDisplayName(m,w.ours),rem=!!plan.rem[id];
       var card={id:id,name:name,sl:wrKnown(m.skill_level)?m.skill_level:null,used:wrLineup(ck,m.id)==="Played",avail:wrAvail(ck,m.id),
@@ -1222,28 +1250,29 @@
       var rem2={};Object.keys(plan.rem).forEach(function(k){rem2[k]=plan.rem[k];});rem2[id]=false;
       var p2=mnPlanFor(w,rem2,plan.unplayed,x.playedN,x.playedSl,x.cap);
       var before=wrConfText(mp),after=p2.lead?wrConfText(p2):"no legal plan";
-      var weakens=!p2.lead||planCost(p2)>planCost(mp)||(WR_FRAG_RANK[p2.fragility.rating]||0)>(WR_FRAG_RANK[mp.fragility.rating]||0);
-      card.whatIf={before:before,after:after,fragBefore:mp.fragility.rating,fragAfter:p2.lead?p2.fragility.rating:"n/a",weakens:weakens};
+      var weakens=!!mp.lead&&(!p2.lead||p2.games_left<mp.games_left||p2.total_if_we_lead<mp.total_if_we_lead||p2.total_if_they_lead<mp.total_if_they_lead
+        ||(WR_FRAG_RANK[p2.fragility.rating]||0)>(WR_FRAG_RANK[fragility.rating]||0));
+      card.whatIf=mp.lead?{before:before,after:after,fragBefore:fragility.rating,fragAfter:p2.lead?p2.fragility.rating:"n/a",weakens:weakens}:null;
       var hold=holds[name],n=card.targets.length;
-      if(card.unique.length||(hold&&hold.covers.length)){
+      if(card.unique.length||hold||weakens){
         card.role="save";
-        card.recommend="Save for "+(card.unique.length?card.unique:hold.covers).join(", ");
-      }else if(n===0&&(hold||weakens)){
-        card.role="core";
-        card.recommend="Core: "+(hold&&!weakens?hold.why:"the plan gets worse without them")+" — keep them in the plan";
+        card.recommend=card.unique.length?"Save for "+card.unique.join(", ")
+          :hold&&hold.covers.length?"Save for "+hold.covers.join(", ")
+          :weakens?"Keep: the plan weakens without them ("+before+" → "+after+")"
+          :"Keep: "+hold.why;
       }else if(n>=2){card.role="flexible";card.recommend="Use now if "+card.targets[0].opp+" comes up; flexible otherwise";}
-      else if(n===1){card.role="situational";card.recommend="Use if "+card.targets[0].opp+" comes up";}
-      else{card.role="burn";card.recommend=(sacs[name]?"Concession option vs "+sacs[name].map(function(s){return s.their;}).join(", ")+" (lowest cost). ":"")+"Burn early: the plan is unchanged without them";}
-      // Value ladder (documented on the page): unique answers and favorable targets, lowered by avoids.
+      else if(n===1){card.role="flexible";card.recommend="Use if "+card.targets[0].opp+" comes up";}
+      else if(!mp.lead){card.role="situational";card.recommend="Check the remaining lineup before sending";}
+      else{card.role="burn";card.recommend=(sacs[name]?"Concession option vs "+sacs[name].map(function(s){return s.their;}).join(", ")+" (lowest cost). ":"")+"Burn early: the remaining plan holds without them";}
+      // Value ladder (documented on the page): unique answers, coverage, and favorable targets.
       var u=card.unique.length;
-      card.grade=u>=1&&n>=2?"A":u>=1?"A-":n>=2?"B+":n===1?"B":(card.even.length||card.shared.length)?"C":"D";
+      card.grade=u>=1&&n>=2?"A":card.role==="save"?"A-":n>=2?"B+":n===1?"B":(card.even.length||card.shared.length)?"C":"D";
       return card;});
-    var order={save:0,core:1,flexible:2,situational:3,burn:4,used:5,out:6};
+    var order={save:0,flexible:1,situational:2,burn:3,used:4,out:5};
     cards.sort(function(a,b){return (order[a.role]-order[b.role])||String(a.grade||"Z").localeCompare(String(b.grade||"Z"))||a.name.localeCompare(b.name);});
     var path=function(rows){return (rows||[]).map(function(g){return {leader:g.leader,our:g.our,their:g.their,level:g.level};});};
-    return {cards:cards,plan:{conf:wrConfText(mp),fragility:mp.fragility.rating,leans:mp.fragility.player||"",gamesLeft:mp.games_left,
-      weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead),best:(mp.best_board||[]).map(function(g){return {our:g.our,their:g.their,level:g.level};}),
-      safest:(mp.safest_board||[]).map(function(g){return {our:g.our,their:g.their,level:g.level};})}};
+    return {cards:cards,plan:{conf:wrConfText(mp),fragility:fragility.rating,leans:fragility.player||"",gamesLeft:mp.games_left,
+      weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead)}};
   }
   function wrBroadcastModel(w,plan,ta,tb,ctx){
     var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
@@ -1269,10 +1298,11 @@
           tied:c.tied_with||[],wins:d?d.w:null,games:d?d.g:0,save:c.save||"",cost:wrCostText(w,selJ,c.member.id,plan.rem,plan.unplayed),
           avail:wrAvail(ck,c.member.id)};};
       night.opp={id:String(opp.id),name:who,sl:wrKnown(opp.skill_level)?opp.skill_level:null};
+      if(chosen) night.sendScenarios=wrSendScenarios(w,plan,x,selJ,ans);
       night.answer=ans?{our:ans.our,level:ans.level,why:ans.why.split(" — ").slice(1).join(" — "),cost:ans.cost_later||""}:null;
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
-    night.command=wrCommand(w,plan,ta,mp,x);
+    night.command=wrCommand(w,plan,mp,x);
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
     night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
