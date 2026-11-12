@@ -190,7 +190,7 @@ def test_command_board_updates_send_costs_and_the_five_game_path(page):
     sent_id = send.get_attribute("data-send")
     assert costs.first.get_attribute("data-cost-player") == sent_id
     assert "Engine answer" in costs.first.inner_text()
-    assert "vs " in costs.first.inner_text()
+    assert "vs " in costs.first.text_content()
     assert page.locator("#bc-night .path-tabs strong").is_visible()
     assert "we put up" in slots.nth(1).inner_text().lower()
     send.click()

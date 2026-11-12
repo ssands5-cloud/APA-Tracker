@@ -321,6 +321,7 @@ body.bc .precommend{font-size:14px;font-weight:600;color:var(--fg);border-top:1p
 body.bc .pwhatif{font-size:12px;color:var(--fg-dim)}
 body.bc .pwhatif b{color:var(--fg)}
 body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
+body.bc #bc-send-costs .game-row{align-items:center}body.bc #bc-send-costs .path-more{flex:1 1 100%;margin:0}body.bc #bc-send-costs .path-more>span{display:block;font-size:12.5px;color:var(--fg-dim);padding:2px 2px 6px}
 body.bc details.more{margin:4px 0}body.bc details.more>summary{cursor:pointer;font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--home);padding:8px 2px;min-height:36px}
 body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
 body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
@@ -615,7 +616,7 @@ _JS_BODY = r"""
           +'<span>'+esc(s.recommended?"Engine answer · "+s.level:s.level)+'</span>'
           +'<span>'+esc(coverage)+(s.tradeoff?" · "+esc(s.tradeoff):"")+(s.budget?" · "+esc(s.budget):"")+'</span>'
           +'<button type="button" class="night-btn" data-send="'+esc(s.id)+'" data-opp="'+esc(opp.id)+'" aria-label="Confirm '+esc(s.name+' vs '+opp.name)+'">Confirm pairing</button>'
-          +'<span>'+summary+'</span></div>';
+          +'<details class="more path-more"><summary>Plan after this send</summary><span>'+summary+'</span></details></div>';
       }).join("")+'</section>';
   }
   function renderNight(m){
