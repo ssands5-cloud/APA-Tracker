@@ -229,3 +229,16 @@ def test_command_board_covers_the_whole_roster_with_engine_derived_roles(page):
     # sending a player moves them to Used and the board re-plans
     page.locator("#bc-night .send-hero [data-send]").click()
     assert page.locator("#bc-night .pcard.used").count() == 1
+
+
+def test_command_board_shows_the_plan_after_each_send(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    assert "after this send" in page.locator("#bc-night .send-hero").text_content().lower()
+    ann = [c for c in page.locator("#bc-night .pcard").all() if "ann archer" in c.text_content().lower()][0]
+    assert "if used now vs cam cole" in ann.text_content().lower() and "plan after" in ann.text_content().lower()
+    # the engine itself, re-solved with Ann and Cam Cole used, gives the same plan text
+    after = page.evaluate("window.UC_BC_LAST.night.command.cards.filter(c=>c.name.indexOf('Ann Archer')===0)[0].targets[0].after")
+    assert after["left"] == 1 and after["conf"]
+    page.click("#bc-night .send-hero [data-send]")
+    assert page.errors == []

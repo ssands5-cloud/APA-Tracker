@@ -321,6 +321,8 @@ body.bc .precommend{font-size:14px;font-weight:600;color:var(--fg);border-top:1p
 body.bc .pwhatif{font-size:12px;color:var(--fg-dim)}
 body.bc .pwhatif b{color:var(--fg)}
 body.bc .ladder{font-size:11.5px;color:var(--fg-muted);margin:8px 0 0}
+body.bc .oitem{display:block;margin-bottom:2px}body.bc .afterline{display:block;font-size:11.5px;color:var(--fg-dim);margin:0 0 3px}
+body.bc .send-after{font-size:12.5px;color:var(--fg-dim)}body.bc .send-after b{color:var(--fg)}
 """
 
 _CSS_NIGHT = r"""
@@ -543,7 +545,7 @@ _JS_BODY = r"""
   var CAT={G:"Favorable",E:"Even",I:"Shared only",R:"Avoid",X:"Unknown"};
   function candRow(c,kind,oppId){
     var mark=kind==="ranked"?((c.choice||0)<10?"0":"")+c.choice:(kind==="avoid"?"✕":"≈");
-    var note=[CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost].filter(Boolean).join(" · ");
+    var note=[CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost,c.after?"if sent: "+afterText(c.after):""].filter(Boolean).join(" · ");
     return '<div class="alt-row'+(kind==="avoid"?" avoid":"")+'"><div class="matchup-num">'+mark+'</div>'
       +'<div class="matchup-our"><div class="matchup-kicker">'+(kind==="avoid"?"Recorded losing record":"Option")+'</div><div class="matchup-player">'+esc(c.name)+slTag(c.sl)+'</div></div>'
       +barsHtml(c.wins,c.games)
@@ -553,7 +555,8 @@ _JS_BODY = r"""
   /* ---------- Captain command board ---------- */
   var pathMode="weLead";
   var ROLE_LABEL={save:"Save",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
-  function oppList(items,withRecord){return items.map(function(i){return esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'');}).join(", ");}
+  function afterText(a){return a?(a.left?'plan after: '+a.conf+' · fragility '+a.frag+(a.leans?' (leans on '+a.leans+')':''):'night complete'):"";}
+  function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
     var best=c.targets.length?'<p class="plist"><span class="k">Best targets</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Best targets</span><span class="matchup-sl">none with a favorable direct record left</span></p>';
@@ -606,7 +609,8 @@ _JS_BODY = r"""
           +(pick?barsHtml(pick.wins,pick.games,"send-bars"):"")
           +(pickId?'<button type="button" class="night-btn primary" data-send="'+esc(pickId)+'" data-opp="'+esc(n.opp.id)+'">✓ Send '+esc(pickName)+'</button>':"")+'</div>'
           +(n.answer&&n.answer.why?'<div class="send-why">'+esc(n.answer.why)+'</div>':'<div class="send-why">'+esc(n.headline)+'</div>')
-          +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')+'</section>';
+          +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')
+          +(pick&&pick.after?'<div class="send-after"><b>After this send:</b> '+esc(afterText(pick.after))+'</div>':'')+'</section>';
       } else hero='<section class="send-hero"><span class="send-kicker">No send</span><div class="send-why">'+esc(n.headline)+'</div></section>';
       var rest=function(list,kind){return list.filter(function(c){return !pickName||c.name!==pickName;}).map(function(c){return candRow(c,kind,n.opp.id);}).join("");};
       var a1=rest(n.ranked,"ranked"),a2=rest(n.unordered,"shared"),a3=rest(n.avoid,"avoid");
