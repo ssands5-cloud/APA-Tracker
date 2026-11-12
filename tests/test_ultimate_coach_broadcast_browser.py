@@ -181,6 +181,21 @@ def test_command_board_shows_open_slots_when_cap_blocks_a_plan(page):
     assert page.errors == []
 
 
+def test_captain_can_confirm_a_different_player_from_the_send_comparison(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.locator("#bc-night .night-chip").first.click()
+    recommended = page.locator("#bc-night .send-hero [data-send]").get_attribute("data-send")
+    option = page.locator(f'#bc-send-costs [data-cost-player]:not([data-cost-player="{recommended}"])').first
+    player = option.get_attribute("data-cost-player")
+    name = option.locator("strong").text_content()
+    option.get_by_role("button", name="Confirm", exact=False).click()
+    assert name.lower() in page.locator("#bc-night .path-slots .slot").first.inner_text().lower()
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).lineup", player) == "Played"
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).rem", recommended)
+    assert page.errors == []
+
+
 def test_every_existing_capability_is_reachable_in_a_tab(page):
     _pick(page)
     expect = {"schedule": ["#match-day-card"], "matchnight": ["#bc-night"],

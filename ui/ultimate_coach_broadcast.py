@@ -612,6 +612,7 @@ _JS_BODY = r"""
         return '<div class="game-row" data-cost-player="'+esc(s.id)+'"><strong>'+esc(s.name)+'</strong>'
           +'<span>'+esc(s.recommended?"Engine answer · "+s.level:s.level)+'</span>'
           +'<span>'+esc(coverage)+(s.tradeoff?" · "+esc(s.tradeoff):"")+(s.budget?" · "+esc(s.budget):"")+'</span>'
+          +'<button type="button" class="night-btn" data-send="'+esc(s.id)+'" data-opp="'+esc(opp.id)+'" aria-label="Confirm '+esc(s.name+' vs '+opp.name)+'">Confirm pairing</button>'
           +'<span>'+summary+'</span></div>';
       }).join("")+'</section>';
   }
