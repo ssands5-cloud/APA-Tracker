@@ -299,7 +299,7 @@ def test_command_board_covers_the_whole_roster_with_engine_derived_roles(page):
     texts = {c.locator(".pcard-name").text_content().split("SL")[0].strip().lower(): c for c in cards.all()}
     ann = texts["ann archer (player 1 of 2)"]
     assert "save for cam cole" in ann.locator(".precommend").text_content().lower()    # her only favorable answer
-    assert ann.locator(".role").text_content().lower() == "protect"
+    assert ann.locator(".prole").text_content().lower() == "protect"
     assert "best targets" in ann.text_content().lower() and "cam cole" in ann.text_content().lower()
     assert "avoid" in texts["bea baker"].text_content().lower()                        # her recorded losing record
     assert all(c.locator(".pwhatif").count() == 1 for c in cards.all())                # what the plan loses without each player

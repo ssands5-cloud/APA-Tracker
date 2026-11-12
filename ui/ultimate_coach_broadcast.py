@@ -222,7 +222,7 @@ body.bc .card{border-radius:6px}
 body.bc .card-feature{border-top:3px solid var(--home)}
 body.bc h1,body.bc h2,body.bc h3,body.bc h4,body.bc .section-title h2,body.bc .mp-name{color:var(--fg)}
 body.bc .section-title{border-bottom:1px solid var(--border);padding-bottom:6px}
-body.bc .section-title h2,body.bc .card h2,body.bc .card-head h2{font-family:var(--cond);font-weight:900;font-style:italic;letter-spacing:.02em;text-transform:uppercase}
+body.bc .section-title h2,body.bc .card h2,body.bc .card-head h2{font-family:var(--cond);font-weight:900;font-style:italic;letter-spacing:.02em;font-variant-caps:all-small-caps;font-size:1.15em}
 body.bc .muted,body.bc .section-title p,body.bc .mp-sub,body.bc .mp-why{color:var(--fg-dim)}
 body.bc label,body.bc .legend{color:var(--fg-dim)}
 body.bc a{color:var(--home)}
@@ -315,9 +315,9 @@ body.bc .pcard-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 body.bc .pcard-name{font-family:var(--cond);font-weight:900;font-size:21px;letter-spacing:.02em;text-transform:uppercase;color:var(--fg);flex:1;min-width:8em;overflow-wrap:anywhere}
 body.bc .grade{font-family:var(--cond);font-weight:900;font-size:20px;color:#000;background:var(--home);border-radius:3px;padding:0 8px;line-height:1.5}
 body.bc .grade.lo{background:#7a8aa3}
-body.bc .role{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--border-hi);color:var(--fg-dim)}
-body.bc .role.save,body.bc .role.core{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .role.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
-body.bc .role.burn{color:var(--away);border-color:rgba(255,61,98,.5)}
+body.bc .prole{font-family:var(--cond);font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid var(--border-hi);color:var(--fg-dim)}
+body.bc .prole.save,body.bc .prole.core{color:var(--gold);border-color:rgba(245,197,24,.5)}body.bc .prole.flexible{color:var(--home);border-color:rgba(0,212,240,.5)}
+body.bc .prole.burn{color:var(--away);border-color:rgba(255,61,98,.5)}
 body.bc .plist{font-size:13px;color:var(--fg);margin:0}
 body.bc .plist .k{font-family:var(--cond);font-weight:800;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-muted);display:block}
 body.bc .plist .goodt{color:#00c8a0}body.bc .plist .badt{color:var(--away)}
@@ -329,7 +329,7 @@ body.bc #bc-send-costs .game-row{align-items:center}body.bc #bc-send-costs .path
 body.bc table.glance{width:100%;border-collapse:collapse;margin-top:10px;background:var(--bg-card);border:1px solid var(--border);min-width:780px}
 body.bc table.glance th{font-family:var(--cond);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-muted);background:transparent;padding:6px 10px;text-align:left}
 body.bc table.glance td{padding:3px 10px;font-size:12.5px;line-height:1.25;vertical-align:middle;border-bottom:1px solid var(--border)}
-body.bc table.glance .grade{font-size:15px;line-height:1.3;padding:0 6px}body.bc table.glance .role{padding:1px 6px;font-size:10px}
+body.bc table.glance .grade{font-size:15px;line-height:1.3;padding:0 6px}body.bc table.glance .prole{padding:1px 6px;font-size:10px}
 body.bc table.glance td.gn{font-family:var(--cond);font-weight:800;font-size:15px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
 body.bc table.glance tr.save td:first-child{border-left:4px solid var(--gold)}body.bc table.glance tr.core td:first-child{border-left:4px solid #c9a24a}
 body.bc table.glance tr.flexible td:first-child{border-left:4px solid var(--home)}body.bc table.glance tr.burn td:first-child{border-left:4px solid var(--away)}
@@ -597,7 +597,7 @@ _JS_BODY = r"""
     var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
     var wi=c.whatIf?'<div class="pwhatif"><b>Save:</b> plan stays '+esc(c.whatIf.before)+' \u00b7 <b>If unavailable:</b> becomes '+esc(c.whatIf.after)+' (fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+')</div>':"";
     return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
-      +'<span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
+      +'<span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
       +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
   }
   function commandHtml(m){
@@ -620,7 +620,7 @@ _JS_BODY = r"""
     var names2=function(items){return items.length?items.map(function(i){return esc(i.opp);}).join(", "):"—";};
     var glance='<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th>Best targets</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
       +cards.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
-        +'<td><span class="role '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
+        +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
         +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>';
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
     var start=selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
