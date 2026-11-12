@@ -276,7 +276,7 @@ def test_printing_the_packet_from_any_tab_includes_the_whole_matchup(page):
     page.emulate_media(media="print")
     for sel in ("#wr-matrix", "#wr-opportunities", "#wr-risks", "#lineup-lab", "#scouting-cards", "#wr-meetings"):
         assert page.locator(sel).first.is_visible(), sel
-    assert not page.locator("header.app-header").is_visible() and not page.locator("#bc-night").is_visible()
+    assert not page.locator("header.app-header").is_visible() and not page.locator("#bc-night .send-hero").is_visible()
 
 
 def test_summary_shows_the_league_table_and_results_from_recorded_matches(page):
@@ -324,3 +324,14 @@ def test_command_board_shows_the_plan_after_each_send(page):
     after_text = page.locator("#bc-night .send-after").text_content()
     assert "no remaining path" in after_text and "3 open slots" in after_text
     assert page.errors == []
+
+
+def test_plain_print_carries_the_path_and_roster_and_the_captain_packet_is_unchanged(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.emulate_media(media="print")
+    assert page.locator("#bc-night .cmd-main table.glance").is_visible()
+    assert page.locator("#bc-night .cmd-main .path-slots").is_visible()
+    assert not page.locator("#bc-night .send-hero").is_visible() and not page.locator("header.app-header").is_visible()
+    page.evaluate("document.body.classList.add('print-matchup')")                      # the focused Captain Packet
+    assert not page.locator("#bc-night").is_visible() and page.locator("#matchup-print").is_visible()

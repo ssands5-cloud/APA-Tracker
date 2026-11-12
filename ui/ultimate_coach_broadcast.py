@@ -205,7 +205,11 @@ body.bc .home-empty{padding:28px 20px;color:var(--fg-dim);font-size:14px;border:
 @media (max-width:480px){
   body.bc .nav-tab{padding:0 10px;font-size:11px}body.bc .logo{padding:0 12px}
 }
-@media print{body.bc .app-header,body.bc .ticker-wrap,body.bc #bc-home,body.bc #bc-tabhead,body.bc #bc-night{display:none!important}
+@media print{body.bc .app-header,body.bc .ticker-wrap,body.bc #bc-home,body.bc #bc-tabhead{display:none!important}
+  body.bc #bc-night>:not(.cmd-main){display:none!important}
+  body.bc .cmd-main,body.bc .cmd-main *{color:#000!important;background:#fff!important;border-color:#999!important;box-shadow:none!important}
+  body.bc .cmd-main .night-btn,body.bc .cmd-main .path-tabs{display:none!important}
+  body.bc.print-matchup #bc-night{display:none!important}
   body.bc main{background:#fff!important;color:#000!important;margin:0!important}body.bc{background:#fff!important;color:#000!important}}
 """
 
@@ -621,7 +625,7 @@ _JS_BODY = r"""
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
     var start=selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
       :tab("weLead","If we put up first")+tab("theyLead","If they put up first");
-    return '<section class="cmd" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
+    return '<section class="cmd cmd-main" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
       +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
       +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
