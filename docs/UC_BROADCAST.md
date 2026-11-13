@@ -25,3 +25,15 @@ Build it: `python scripts/build_ultimate_coach_production.py --db <staging.db> -
 - Printing (Captain Packet) includes every matchup section regardless of the tab on screen.
 - Tests: `tests/test_ultimate_coach_broadcast_browser.py`; the full existing browser suites also run against this UI with
   `UC_TEST_UI=broadcast python -m pytest -p tests.uc_broadcast_plugin <suite>`.
+
+## Companion workbook and historical evidence
+
+**Recommended Lineup** follows Match Day and shows one row per teammate. Lock an opponent in the yellow dropdown to reserve that player and recalculate the other rows. **Five-Game Plan** shows the engine's two starting sequences and lets the captain compare trial pairings. Live replanning after confirmed sends remains in Broadcast Match Night.
+
+To build matching local HTML and Excel files with historical evidence, supply a completed refresh folder, a local history archive, and the refresh configuration.
+
+```powershell
+python scripts/build_ultimate_coach_archive_evidence.py --refresh-root <refresh-folder> --archive-db <archive.sqlite> --config <apa_config.yaml> --out <new-output-folder>
+```
+
+The builder verifies the refresh database checksum, retains its rosters and fixtures, and adds identity-verified archive results involving the scoped players. Refreshed fixtures take precedence. It validates both artifacts and writes their hashes in `history-scope.json`. The scheduled refresh uses its configured seed and runs separately.

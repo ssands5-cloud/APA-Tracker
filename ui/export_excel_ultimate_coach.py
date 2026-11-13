@@ -128,7 +128,7 @@ TABLE_STYLE = "TableStyleMedium7"  # green, matches the felt palette
 
 NAV_SHEETS = ["Match Day", "War Room", "Lineup Lab", "Captain Packet", "Coach Dashboard", "Schedule",
               "Team Rosters", "Players", "Data Trust", "Build Info"]
-SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
+SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "Recommended Lineup", "Five-Game Plan", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
                "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
                "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
                "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
@@ -150,6 +150,8 @@ INTERNAL_SHEETS = (
     "Lists",
     "Engine",
     "Engine MD",
+    "Lineup Paths",
+    "Roster Matchups",
 )
 
 RAIL = "5A3A1F"
@@ -867,6 +869,8 @@ def build_workbook(
                         card_number=viewer_card_number if viewer else None, default_team=default_team, stats=stats,
                         format_options_source="FormatFilterList")
     war.build_war_room(wb, slots=slots, engine=engine)
+    war.build_recommended_lineup(wb, slots=slots)
+    war.build_five_game_plan(wb, engine=engine, slots=slots)
     war.build_lineup_lab(wb, slots=slots, default_team=default_team, default_opp=default_opp, default_date=default_date)
     war.build_scouting_cards(wb, slots=slots)
     war.build_captain_packet(wb, slots=slots, stats=stats)

@@ -141,6 +141,8 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
     tc_rows: list[list[Any]] = []
     threat_rows: list[list[Any]] = []
     plan_rows: list[list[Any]] = []
+    lineup_rows: list[list[Any]] = []
+    roster_matchup_rows: list[list[Any]] = []
     answer_rows: list[list[Any]] = []
     concern_rows: list[list[Any]] = []
     meeting_rows: list[list[Any]] = []
@@ -173,6 +175,15 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
         # The Match Night Engine's start-of-night plan (no marks, no cap) -- the printed plan. Paper cannot
         # re-plan; the workbook shows it only while nothing has changed, and points to the phone after that.
         night_plan = plan_for_war_room(wr)
+        for j, block in enumerate(wr["blocks"], 1):
+            for row in block["rows"]:
+                player_id = row["member"]["id"]
+                confidence = row["confidence"]
+                roster_matchup_rows.append([f"{key}|{player_id}|{j}", confidence["text"], confidence["points"]])
+        for toss, path in (("We put up first", "plan_if_we_lead"), ("They put up first", "plan_if_they_lead")):
+            for game in night_plan[path]:
+                lineup_rows.append([f"{key}|{toss}|{game['game']}", game["our"], game["their"], game["level"],
+                                    "Us" if game["leader"] == "us" else "Them"])
         text = plan_text(night_plan)
         by_opponent = {r["their"]: r for r in night_plan.get("responses") or []}
         for j, block in enumerate(wr["blocks"], start=1):
@@ -220,6 +231,10 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
            "Basis": 70, "Rows": 6, "Player ID": 10, "Category": 9, "Cell": 26, "Reason": 70})
     table("Threats_Table", "Threats", THREATS_COLUMNS, threat_rows, {"Key": 44, "Threat": 90})
     table("PlanAnswers_Table", "Plan Answers", PLAN_ANSWER_COLUMNS, answer_rows, {"Key": 48, "Answer": 110})
+    table("LineupPaths_Table", "Lineup Paths", ["Key", "Our player", "Opponent", "Evidence", "Put-up"],
+          lineup_rows, {"Key": 65, "Our player": 32, "Opponent": 32})
+    table("RosterMatchups_Table", "Roster Matchups", ["Key", "Evidence", "Planning score"],
+          roster_matchup_rows, {"Key": 65, "Evidence": 90})
     table("MatchPlan_Table", "Match Plan", MATCH_PLAN_COLUMNS, plan_rows,
           {"Key": 44, "Lead": 90, "Responses": 90, "Holds": 90, "Sacrifices": 70, "Summary": 90,
            "Best Board": 90, "Safest Board": 90})
@@ -1561,7 +1576,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
 # ---------------------------------------------------------------------------
 
 _MD_PREFIX = {"wr_": "md_", "ll_": "lm_"}
-_MD_SHEETS = ("Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard", "Command Center")
+_MD_SHEETS = ("Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard", "Command Center", "Recommended Lineup",
+              "Five-Game Plan")
 
 
 def _to_md(text: str, engine_title: str, md_title: str) -> str:
@@ -1627,6 +1643,129 @@ def split_match_day_engine(wb) -> None:
 # the TEXT: the label is context, the clause saying the marks are NOT applied is the point, and a
 # clipped row loses the clause while a clipped label loses nothing that matters.
 LABEL_CLIP = 60
+
+
+def build_recommended_lineup(wb, *, slots: dict[str, int]) -> None:
+    ws = wb.create_sheet("Recommended Lineup")
+    _head(ws, "Recommended Lineup", "Lock an opponent in yellow. The rest of the roster updates around your picks.", last=6,
+          current=ws.title)
+    _link(ws, 7, 1, "Five-Game Plan", "Five-Game Plan")
+    for col, width in zip("ABCDEF", (26, 8, 27, 27, 49, 57)):
+        ws.column_dimensions[col].width = width
+    _span(ws, 4, 1, 6, '=IF(uc_Fixture="","Choose a fixture on Match Day.",uc_Fixture)', font=base.SUBHEAD_FONT)
+    _span(ws, 5, 1, 6, "The board fills from top to bottom with the best remaining matchup for each player. Each opponent is used once.", height=27)
+    _span(ws, 6, 1, 6, "Clear a yellow pick to release that opponent. Clear all yellow picks when changing fixtures.", height=24)
+    for col, title in enumerate(("Our player", "SL", "Suggested opponent", "Lock opponent", "Matchup evidence", "Who I’d send · starting plan"), 1):
+        ws.cell(8, col, title).font = base.SUBHEAD_FONT
+    end = 8 + slots["roster"]
+    size = slots["roster"]
+    last_score = get_column_letter(9 + size)
+    first_available = get_column_letter(10 + size)
+    last_available = get_column_letter(9 + 2 * size)
+    first_choice = get_column_letter(10 + 2 * size)
+    last_choice = get_column_letter(9 + 3 * size)
+    for slot, row in enumerate(range(9, end + 1), 1):
+        _calc(ws.cell(row, 1), f'=INDEX(wr_OurLabels,{slot})', bold=True)
+        _calc(ws.cell(row, 2), f'=IF(A{row}="","",INDEX(wr_OurSL,{slot}))')
+        ws.cell(row, 7, f'=IF(OR(A{row}="",uc_PairKey=""),"",uc_PairKey&"|"&INDEX(wr_OurPids,{slot})&"|")')
+        scores = f'J{row}:{last_score}{row}'
+        _calc(ws.cell(row, 3), f'=IF(OR(G{row}="",D{row}<>"",COUNT({scores})=0),"",'
+              f'INDEX(wr_OppLabels,MATCH(MAX({scores}),{scores},0)))')
+        base._input(ws.cell(row, 4), "")
+        ws.cell(row, 8, f'=IF(D{row}="",C{row},D{row})')
+        ws.cell(row, 9, f'=IF(H{row}="","",IFERROR(MATCH(H{row},wr_OppLabels,0),""))')
+        _calc(ws.cell(row, 5), f'=IF(G{row}="","",IF(H{row}="","No opponent left to suggest",'
+              f'IF(I{row}="","Pick an opponent from this fixture",IF(NOT(INDEX(wr_OppUnplayed,I{row})),"Opponent already played",'
+              f'IF(SUMPRODUCT(--($D$9:$D${end}=H{row}))>1,"Opponent locked more than once",'
+              f'IFERROR(INDEX(RosterMatchups_Table[Evidence],MATCH(G{row}&I{row},RosterMatchups_Table[Key],0)),'
+              f'"Evidence unavailable"))))))')
+        _calc(ws.cell(row, 6), f'=IF(OR(G{row}="",I{row}=""),"",IF(NOT(INDEX(wr_OppUnplayed,I{row})),'
+              f'"Opponent already played",IF(NOT(wr_PlanFresh),"Use Broadcast Match Night for the updated send",'
+              f'IFERROR(INDEX(PlanAnswers_Table[Answer],MATCH(uc_PairKey&"|"&I{row},PlanAnswers_Table[Key],0)),'
+              f'"No starting-plan answer"))))')
+        ws.row_dimensions[row].height = 56
+        for opponent_slot in range(1, size + 1):
+            label = f'INDEX(wr_OppLabels,{opponent_slot})'
+            earlier = f',SUMPRODUCT(--($C$9:$C${row - 1}={label}))>0' if row > 9 else ""
+            ws.cell(row, 9 + opponent_slot,
+                    f'=IF(OR(G{row}="",D{row}<>"",{label}="",NOT(INDEX(wr_OppUnplayed,{opponent_slot})),'
+                    f'SUMPRODUCT(--($D$9:$D${end}={label}))>0{earlier}),"",'
+                    f'IFERROR(INDEX(RosterMatchups_Table[Planning score],'
+                    f'MATCH(G{row}&"{opponent_slot}",RosterMatchups_Table[Key],0)),""))')
+            ws.cell(row, 9 + size + opponent_slot,
+                    f'=IF(OR(G{row}="",{label}=""),"",'
+                    f'IF(AND(OR({label}=D{row},INDEX(wr_OppUnplayed,{opponent_slot})),'
+                    f'SUMPRODUCT(--($D$9:$D${end}={label}))=--({label}=D{row})),{opponent_slot},""))')
+        available = f'${first_available}${row}:${last_available}${row}'
+        for choice in range(1, size + 1):
+            ws.cell(row, 9 + 2 * size + choice,
+                    f'=IFERROR(INDEX(wr_OppLabels,SMALL({available},{choice})),"")')
+        name = f"LineupOpponents{row}"
+        first_cell = f"'{ws.title}'!${first_choice}${row}"
+        choices = f"{first_cell}:${last_choice}${row}"
+        wb.defined_names.add(DefinedName(name, attr_text=f'{first_cell}:INDEX({choices},1,MAX(1,COUNT(\'{ws.title}\'!{available})))'))
+        _dv(ws, f"D{row}", name, "Choose an opponent who is still available.")
+        validation = ws.data_validations.dataValidation[-1]
+        validation.showErrorMessage = True
+        validation.errorTitle = "Opponent unavailable"
+        validation.error = "Choose an opponent from the dropdown."
+    ws.column_dimensions.group("G", last_choice, hidden=True)
+    ws.freeze_panes = "B9"
+
+
+def build_five_game_plan(wb, *, engine: dict[str, Any], slots: dict[str, int]) -> None:
+    ws = wb.create_sheet("Five-Game Plan")
+    _head(ws, "Five-Game Plan", "Choose who puts up first. The starting plan follows Match Day.", last=8,
+          current=ws.title)
+    for col, width in zip("ABCDEFGH", (11, 27, 27, 17, 27, 27, 31, 12)):
+        ws.column_dimensions[col].width = width
+    _span(ws, 4, 1, 8, '=IF(uc_Fixture="","Choose a fixture on Match Day.",uc_Fixture)', font=base.SUBHEAD_FONT)
+    ws["A5"] = "First put-up"
+    base._input(ws["B5"], "We put up first")
+    _dv(ws, "B5", '"We put up first,They put up first"', "Choose who puts up first.")
+    _span(ws, 6, 1, 8, "The engine plans against the opponent’s strongest replies. Opponent names show a possible route. "
+          "Use Command Center for the actual put-up.", font=base.MUTED_FONT, height=28)
+    _span(ws, 7, 1, 8, "Try changes in the yellow cells. Leave them blank to use the suggested player. Clear old picks when you switch fixtures.",
+          font=base.MUTED_FONT, height=25)
+    for col, title in enumerate(("Game", "Suggested player", "Scenario opponent", "Plan evidence", "Try our player",
+                                 "Try opponent", "Selected pairing evidence", "Our SL"), 1):
+        ws.cell(9, col, title).font = base.SUBHEAD_FONT
+    _dv(ws, "E10:E14", "wr_OurLabels", "Choose one of our players.")
+    _dv(ws, "F10:F14", "wr_OppLabels", "Choose an opposing player.")
+    first = engine["grid"][(1, 1)][1]
+    roster_size = slots["roster"]
+    last = engine["grid"][(roster_size, roster_size)][1].split("!")[1]
+    for game, row in enumerate(range(10, 15), 1):
+        ws.cell(row, 1, f'="{game} · "&IF(I{row}="","—",INDEX(LineupPaths_Table[Put-up],I{row}))')
+        for col, field in ((2, "Our player"), (3, "Opponent"), (4, "Evidence")):
+            _calc(ws.cell(row, col), f'=IF(I{row}="","",INDEX(LineupPaths_Table[{field}],I{row}))')
+        for col in (5, 6):
+            base._input(ws.cell(row, col), "")
+        _calc(ws.cell(row, 7), f'=IF(OR(J{row}="",K{row}=""),"",IF(OR(L{row}=0,M{row}=0),"Check player selection",'
+              f'IF(INDEX(wr_OurAvail,L{row})="Unavailable","Our player unavailable",'
+              f'IF(INDEX(wr_OurLineup,L{row})="Played","Our player already played",'
+              f'IF(NOT(INDEX(wr_OppUnplayed,M{row})),"Opponent already played",'
+              f'IF(OR(COUNTIF($J$10:$J$14,J{row})>1,COUNTIF($K$10:$K$14,K{row})>1),"Duplicate player",'
+              f'IFERROR(INDEX({first}:{last},L{row},M{row}),"Evidence unavailable")))))))')
+        _calc(ws.cell(row, 8), f'=IF(L{row}=0,"",IF(INDEX(wr_OurSLNum,L{row})>0,INDEX(wr_OurSLNum,L{row}),"Unknown"))')
+        ws.cell(row, 9, f'=IF(OR(uc_PairKey="",NOT(OR($B$5="We put up first",$B$5="They put up first"))),"",'
+                f'IFERROR(MATCH(uc_PairKey&"|"&$B$5&"|{game}",LineupPaths_Table[Key],0),""))')
+        ws.cell(row, 10, f'=IF(E{row}="",B{row},E{row})')
+        ws.cell(row, 11, f'=IF(F{row}="",C{row},F{row})')
+        ws.cell(row, 12, f'=IF(J{row}="",0,IFERROR(MATCH(J{row},wr_OurLabels,0),0))')
+        ws.cell(row, 13, f'=IF(K{row}="",0,IFERROR(MATCH(K{row},wr_OppLabels,0),0))')
+        ws.row_dimensions[row].height = 30
+    ws.column_dimensions.group("I", "M", hidden=True)
+    _span(ws, 16, 1, 8, '=IF(COUNTIF(G10:G14,"Duplicate player")+COUNTIF(G10:G14,"Check player selection")'
+          '+COUNTIF(G10:G14,"*already played")+COUNTIF(G10:G14,"Our player unavailable")>0,'
+          '"Review the flagged pairings before using this lineup.",IF(COUNT(H10:H14)=0,"Skill total unavailable",'
+          '"Known skill total: "&SUM(H10:H14)&" · "&COUNT(H10:H14)&"/5 skill levels captured"'
+          '&IF(wr_BudgetCap="",""," · Reference cap: "&wr_BudgetCap'
+          '&IF(SUM(H10:H14)>wr_BudgetCap," · Above reference",IF(COUNT(H10:H14)=5," · At or below reference"," · Check incomplete")))))',
+          font=base.SUBHEAD_FONT, height=24)
+    _span(ws, 17, 1, 8, "The starting plan uses the captured rosters without a cap. Edits show evidence for your selected pairings. "
+          "Use Broadcast Match Night to replan around availability, played matches, or a skill cap.", font=base.MUTED_FONT, height=36)
+    ws.freeze_panes = "B10"
 
 
 def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, default_opp: str | None,

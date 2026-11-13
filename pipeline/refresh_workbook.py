@@ -22,26 +22,26 @@ def preflight():
     pywintypes.IID("Excel.Application")
 
 
-def validate_structure(path: Path):
+def validate_structure(path: Path, *, captain_sheets=CAPTAIN_SHEETS):
     # Never save through openpyxl: that can discard the dynamic print area.
     book = load_workbook(path, read_only=True, data_only=False)
     try:
-        missing = set(CAPTAIN_SHEETS) - set(book.sheetnames)
+        missing = set(captain_sheets) - set(book.sheetnames)
         if missing:
             raise RuntimeError("workbook is missing captain sheets: " + ", ".join(sorted(missing)))
         if book.vba_archive or book._external_links:
             raise RuntimeError("unexpected workbook macros or external links")
-        return {"captain_sheets": list(CAPTAIN_SHEETS)}
+        return {"captain_sheets": list(captain_sheets)}
     finally:
         book.close()
 
 
-def recalculate_and_validate(path: Path):
+def recalculate_and_validate(path: Path, *, captain_sheets=CAPTAIN_SHEETS):
     import pythoncom
     import win32com.client.dynamic
     import pywintypes
 
-    validate_structure(path)
+    validate_structure(path, captain_sheets=captain_sheets)
     excel = book = None
     pythoncom.CoInitialize()
     try:
@@ -58,7 +58,7 @@ def recalculate_and_validate(path: Path):
             raise RuntimeError("generated workbook opened read-only; recalculation could not be saved")
         excel.CalculateFullRebuild()
         errors = {}
-        for name in CAPTAIN_SHEETS:
+        for name in captain_sheets:
             sheet = book.Worksheets(name)
             try:
                 cells = sheet.UsedRange.SpecialCells(-4123, 16)
@@ -74,7 +74,7 @@ def recalculate_and_validate(path: Path):
             raise RuntimeError("workbook has external Excel links")
         book.Save()
         return {"native_excel_recalculated": True, "captain_sheet_formula_errors": 0,
-                "captain_sheets": list(CAPTAIN_SHEETS)}
+                "captain_sheets": list(captain_sheets)}
     finally:
         if book is not None:
             book.Close(SaveChanges=False)

@@ -109,12 +109,25 @@ def test_workbook_has_expected_sheets_and_no_fabricated_probability(tmp_path):
         "START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
         "Coach Dashboard", "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
         "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning", "Match Plan", "Plan Answers",
-        "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info",
+        "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info", "Recommended Lineup", "Lineup Paths",
+        "Five-Game Plan", "Roster Matchups",
     }
     # START HERE first (and open), then the coach-facing sheets with Match Day as the control panel.
-    assert wb.sheetnames[:9] == ["START HERE", "Command Center", "Match Day", "War Room", "Lineup Lab", "Scouting Cards",
+    assert wb.sheetnames[:11] == ["START HERE", "Command Center", "Match Day", "Recommended Lineup", "Five-Game Plan", "War Room", "Lineup Lab", "Scouting Cards",
                                  "Captain Packet", "Coach Dashboard", "Coach Notes"]
     assert wb.active.title == "START HERE"
+    lineup = wb["Recommended Lineup"]
+    opponent_dropdown = lineup.data_validations.dataValidation[0]
+    assert opponent_dropdown.formula1 == "LineupOpponents9" and opponent_dropdown.showErrorMessage
+    assert "'Recommended Lineup'!" in wb.defined_names["LineupOpponents9"].attr_text
+    assert lineup.data_validations.dataValidation[1].formula1 == "LineupOpponents10"
+    assert lineup["A9"].value == "=INDEX(md_OurLabels,1)"
+    assert "RosterMatchups_Table[Evidence]" in lineup["E9"].value
+    assert "PlanAnswers_Table[Answer]" in lineup["F9"].value
+    assert 'COUNT(J9:' in lineup["C9"].value and 'RosterMatchups_Table[Planning score]' in lineup["J9"].value
+    assert '$C$9:$C$9' in lineup["J10"].value
+    assert "Opponent locked more than once" in lineup["E9"].value
+    assert wb["Roster Matchups"].sheet_state == "hidden"
 
     build_info = {row[0].value: row[1].value for row in wb["Build Info"].iter_rows(min_row=2, max_col=2) if row[0].value}
     assert build_info["Probability publication"] == "FORBIDDEN"
