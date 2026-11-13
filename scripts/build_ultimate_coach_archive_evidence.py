@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
 from analytics.ultimate_coach_match_day import load_match_day_settings
 from pipeline import refresh_workbook
+from pipeline.captured_scoresheet_evidence import add_captured_scoresheets
 from ui.export_excel_ultimate_coach import write_workbook
 from ui.ultimate_coach import render
 
@@ -89,6 +90,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh-root", type=Path, required=True, help="Folder containing the verified CURRENT.json")
     parser.add_argument("--archive-db", type=Path, required=True)
+    parser.add_argument("--catchup-folder", type=Path, help="Local APA match and roster captures")
     parser.add_argument("--archive-checked-at", type=datetime.fromisoformat,
                         help="Timestamp from the verified archive capture, including its UTC offset")
     parser.add_argument("--config", type=Path, required=True)
@@ -113,6 +115,7 @@ def main() -> None:
     current = read_payload(database, settings.timezone)
     archive = read_payload(args.archive_db, settings.timezone)
     cutoff = evidence_checked_at.date().isoformat()
+    catchup = add_captured_scoresheets(current, archive, args.catchup_folder, cutoff) if args.catchup_folder else None
     added = add_archive_evidence(current, archive, cutoff)
 
     args.out.mkdir(parents=True, exist_ok=False)
@@ -137,10 +140,14 @@ def main() -> None:
         "refresh_checked_at": checked_at.isoformat(),
         "archive_checked_at": archive_checked_at.isoformat() if archive_checked_at else None,
         "historical_games_added": added,
+        "catchup_pairs_used": len({r["game_key"] for r in current["evidence"] if r["game_key"].startswith("archive:catchup:")}),
+        "catchup_counts": catchup["counts"] if catchup else None,
         "artifacts": {p.name: sha256(p) for p in (html, workbook)},
         "validation": validation,
     }
     (args.out / "history-scope.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    if catchup:
+        (args.out / "catchup-exclusions.json").write_text(json.dumps(catchup["excluded"], indent=2) + "\n", encoding="utf-8")
     print(args.out.resolve())
 
 

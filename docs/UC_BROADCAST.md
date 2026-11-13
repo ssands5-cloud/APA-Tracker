@@ -39,3 +39,5 @@ python scripts/build_ultimate_coach_archive_evidence.py --refresh-root <refresh-
 The builder verifies the refresh database checksum, retains its rosters and fixtures, and adds identity-verified archive results involving the scoped players. Refreshed fixtures take precedence. It validates both artifacts and writes their hashes in `history-scope.json`. The scheduled refresh uses its configured seed and runs separately.
 
 When the archive was checked after the refresh, pass its verified timestamp with `--archive-checked-at` and include the UTC offset. Use a refreshed fixture snapshot if a fixture in that snapshot gained or changed a result after it was captured.
+
+Pass `--catchup-folder` to include local APA scoresheets and team rosters. The import pairs the two scoresheet sides by position and verifies each player against the exact team and roster ID. It keeps repeated meetings at different positions and records excluded results in `catchup-exclusions.json`. The manifest counts accepted catch-up results and shows how many contribute to the scoped build.
