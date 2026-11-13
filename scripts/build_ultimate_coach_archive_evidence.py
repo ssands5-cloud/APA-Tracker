@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -89,6 +89,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh-root", type=Path, required=True, help="Folder containing the verified CURRENT.json")
     parser.add_argument("--archive-db", type=Path, required=True)
+    parser.add_argument("--archive-checked-at", type=datetime.fromisoformat,
+                        help="Timestamp from the verified archive capture, including its UTC offset")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True, help="New output folder")
     args = parser.parse_args()
@@ -103,13 +105,18 @@ def main() -> None:
         parser.error("The refresh database does not match CURRENT.json")
 
     checked_at = datetime.fromisoformat(pointer["checked_at"])
+    archive_checked_at = args.archive_checked_at
+    if archive_checked_at is not None and archive_checked_at.utcoffset() is None:
+        parser.error("--archive-checked-at requires a UTC offset")
+    evidence_checked_at = max(checked_at, archive_checked_at or checked_at)
     settings = load_match_day_settings(args.config)
     current = read_payload(database, settings.timezone)
     archive = read_payload(args.archive_db, settings.timezone)
-    added = add_archive_evidence(current, archive, checked_at.date().isoformat())
+    cutoff = evidence_checked_at.date().isoformat()
+    added = add_archive_evidence(current, archive, cutoff)
 
     args.out.mkdir(parents=True, exist_ok=False)
-    stamp = checked_at.strftime("%Y-%m-%d %H:%M UTC")
+    stamp = evidence_checked_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     viewer = {
         "viewer_member_external_id": settings.viewer_member_external_id,
         "viewer_card_number": settings.viewer_card_number,
@@ -126,7 +133,9 @@ def main() -> None:
     }
     manifest = {
         "base_run": run.name,
-        "archive_cutoff_inclusive": checked_at.date().isoformat(),
+        "archive_cutoff_inclusive": cutoff,
+        "refresh_checked_at": checked_at.isoformat(),
+        "archive_checked_at": archive_checked_at.isoformat() if archive_checked_at else None,
         "historical_games_added": added,
         "artifacts": {p.name: sha256(p) for p in (html, workbook)},
         "validation": validation,
