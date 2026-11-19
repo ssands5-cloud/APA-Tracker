@@ -593,7 +593,7 @@ _JS_BODY = r"""
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
-    var best=c.targets.length?'<p class="plist"><span class="k">Best targets</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Best targets</span><span class="matchup-sl">none with a favorable direct record left</span></p>';
+    var best=c.targets.length?'<p class="plist"><span class="k">Winning record vs</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Winning record vs</span><span class="matchup-sl">no winning head-to-head record left</span></p>';
     var ans=(c.answers&&c.answers.length)?'<p class="plist"><span class="k">Plan answer</span>'+c.answers.map(function(a){return esc(a.opp)+' <span class="evidence-badge '+badgeClass(a.level)+'">'+esc(a.level)+'</span>';}).join(" ")+'</p>':"";
     var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
     var wi=c.whatIf?'<div class="pwhatif"><b>Save:</b> plan stays '+esc(c.whatIf.before)+' \u00b7 <b>If unavailable:</b> becomes '+esc(c.whatIf.after)+' (fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+')</div>':"";
@@ -623,7 +623,7 @@ _JS_BODY = r"""
       slots+='<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+'</div><div class="st">No pairing planned</div></div>';
     }
     var names2=function(items){return items.length?items.map(function(i){return esc(i.opp);}).join(", "):"—";};
-    var glance='<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th>Best targets</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
+    var glance='<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
       +cards.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
         +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
         +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>';
@@ -638,7 +638,7 @@ _JS_BODY = r"""
       +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
       +glance
 
-      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player is the only favorable answer or is designated for a specific opponent. <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
+      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
   }
 
   function renderSendCosts(scenarios,opp){

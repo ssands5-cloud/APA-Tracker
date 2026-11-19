@@ -1307,7 +1307,10 @@
       var hold=holds[name],n=card.targets.length;
       if(card.unique.length||(hold&&hold.covers.length)){
         card.role="save";
-        card.recommend="Save for "+(card.unique.length?card.unique:hold.covers).join(", ");
+        // Two different reasons, said differently: the only winning head-to-head record left against someone, or
+        // the engine's designated answer (its evidence level also weighs overall and shared-opponent records).
+        card.recommend=card.unique.length?"Save for "+card.unique.join(", ")+" \u2014 our only winning record against them"
+          :"Save for "+hold.covers.join(", ")+" \u2014 the plan\u2019s best answer, not a head-to-head record";
       }else if(n===0&&(hold||weakens)){
         // No favorable target of their own, but the plan relies on them: keep them in it, do not burn them.
         card.role="core";
