@@ -8,7 +8,8 @@ deleted.
 
 What one run collects:
   1. Every division in each league the logged-in account plays in (current
-     session), plus every division already saved by earlier runs.
+     session), plus every division of the past seasons in PAST_SEASONS.
+     Past-season schedules and rosters never change, so they are fetched once.
   2. Each division's full schedule.
   3. The scoresheet of every scored match played on or before today.
   4. Scoresheets the archive database is missing (completed matches with no
@@ -56,6 +57,10 @@ DEFAULT_ARCHIVE = MAIN.parent / "APA-Tracker-Ultimate-Coach-Live" / "data" / "ul
 SESSION_PROFILE = MAIN / ".session_cache" / "apa_chromium"
 EARLIER_RUNS = [MAIN / "tmp" / "ultimate-coach-release" / "catchup-20261112"]
 PAUSE = 0.3
+# Past seasons to cover, as (league slug, APA session id). Arapahoe County split
+# from Metro Denver in Fall 2024 (session 134); earlier seasons live in Metro Denver.
+PAST_SEASONS = [("MetroDenver", s) for s in (125, 129, 130, 132, 133)] +                [("arapahoecounty", s) for s in (134, 135, 136, 137, 138, 139)]
+SINCE = "2023-01-01"
 STALE_DAYS = 21  # unfinalized scoresheets older than this are not re-checked
 
 
@@ -101,7 +106,7 @@ class Apa:
         shutil.rmtree(self.copy, ignore_errors=True)
 
 
-def archive_gaps(archive: Path, today: str) -> tuple[dict[str, str], set[str]]:
+def archive_gaps(archive: Path, today: str, since: str = SINCE) -> tuple[dict[str, str], set[str]]:
     """Matches the archive holds no game results for, and the ones it already has."""
     if not archive.exists():
         log(f"archive not found, skipping gap check: {archive}")
@@ -114,7 +119,7 @@ def archive_gaps(archive: Path, today: str) -> tuple[dict[str, str], set[str]]:
         if mid in with_games:
             have.add(str(ext))
             continue
-        if bye or not when or str(when)[:10] > today:
+        if bye or not when or not (since <= str(when)[:10] <= today):
             continue
         done = scored or str(status or "").upper() == "COMPLETED"
         gaps[str(ext)] = "missing_scoresheet" if done else "past_unplayed"
@@ -175,28 +180,35 @@ def main() -> int:
     try:
         apa.login()
 
-        # 1. divisions: every league the account plays in, plus earlier runs
-        divisions = set()
-        for folder in [out / "divisions", *(r / "divisions" for r in EARLIER_RUNS)]:
-            divisions |= {Path(f).stem for f in glob.glob(str(folder / "*.json"))}
+        # 1. divisions: current season of every league the account plays in, plus past seasons
+        divisions, past = set(), set()
+        for slug, sid in PAST_SEASONS:
+            league = apa.call(api.fetch_league_divisions, slug, sid) or {}
+            past |= {r["division_id"] for r in api.league_division_rows(league)}
         viewer = apa.call(api.fetch_dashboard_teams) or {}
         slugs = sorted({r["league_slug"] for r in api.dashboard_teams_rows(viewer)
                         if r["league_slug"] and not r["is_tournament"]})
         for slug in slugs:
             league = apa.call(api.fetch_league_divisions, slug) or {}
             divisions |= {r["division_id"] for r in api.league_division_rows(league)}
-        log(f"leagues: {len(slugs)} | divisions to check: {len(divisions)}")
+        past -= divisions
+        log(f"leagues: {len(slugs)} | current divisions: {len(divisions)} | past-season divisions: {len(past)}")
+        divisions |= past
         if not divisions:
             raise SystemExit("APA returned no divisions; nothing to do.")
 
         # 2. schedules (always refreshed: they change every week)
         targets: dict[str, str] = {}
         for n, did in enumerate(sorted(divisions), 1):
-            sched = apa.call(api.fetch_division_schedule, did)
-            if sched is None:
-                log(f"division {did}: schedule unavailable")
-                continue
-            (out / "divisions" / f"{did}.json").write_text(json.dumps(sched, ensure_ascii=False), encoding="utf-8")
+            cached = out / "divisions" / f"{did}.json"
+            if did in past and cached.exists():
+                sched = json.loads(cached.read_text(encoding="utf-8"))
+            else:
+                sched = apa.call(api.fetch_division_schedule, did)
+                if sched is None:
+                    log(f"division {did}: schedule unavailable")
+                    continue
+                cached.write_text(json.dumps(sched, ensure_ascii=False), encoding="utf-8")
             rows = api.division_schedule_rows(sched)
             played = [r for r in rows if r["is_scored"] and not r["is_bye"] and str(r["date"] or "")[:10] <= today]
             for r in played:
@@ -214,7 +226,7 @@ def main() -> int:
         todo = {m: t for m, t in targets.items() if not is_final(saved_match(m, out), today)}
         by_tag = {t: sum(1 for v in todo.values() if v == t) for t in sorted(set(targets.values()))}
         log(f"scoresheets known: {len(targets)} | already saved: {len(targets) - len(todo)} | to fetch: {len(todo)} {by_tag}")
-        summary.update(divisions=len(divisions), leagues=len(slugs), scoresheets_known=len(targets),
+        summary.update(divisions=len(divisions), past_season_divisions=len(past), leagues=len(slugs), since=SINCE, scoresheets_known=len(targets),
                        already_saved=len(targets) - len(todo), to_fetch=len(todo), to_fetch_by_source=by_tag,
                        archive_gaps=len(gaps))
 
@@ -237,6 +249,8 @@ def main() -> int:
 
             # 5. rosters for player identity
             for n, did in enumerate(sorted(divisions), 1):
+                if did in past and (out / "rosters" / f"{did}.json").exists():
+                    continue
                 ros = apa.call(api.fetch_division_rosters, did)
                 if ros is not None:
                     (out / "rosters" / f"{did}.json").write_text(json.dumps(ros, ensure_ascii=False), encoding="utf-8")
