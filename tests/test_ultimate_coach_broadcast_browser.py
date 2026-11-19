@@ -414,5 +414,19 @@ def test_check_in_before_game_one_and_results_to_record_at_the_top(page):
     assert "g1 result" in bar.text_content().lower()
     bar.locator("[data-r=L]").click()
     assert page.locator("#bc-night .night-results").count() == 0
-    assert "0-1" in page.locator("#bc-night .night-pill", has_text="Score").text_content()
+    assert "0-1" in page.locator("#bc-night .night-pill", has_text="Matches").text_content()
+    assert page.errors == []
+
+
+def test_their_toughest_put_up_is_marked_until_they_put_up(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    toughest = page.evaluate("UC_BC_LAST.night.command.plan.theyLead[0].their")
+    marked = page.locator("#bc-night .night-chip.toughest")
+    assert marked.count() == 1 and marked.text_content().startswith(toughest)
+    page.click("#bc-night [data-toss=us]")                                           # our put-up: no their-chips shown
+    assert page.locator("#bc-night .night-chip.toughest").count() == 0
+    page.click("#bc-night [data-toss=them]")
+    page.locator("#bc-night .night-chip[data-pick]").first.click()                   # once they put up, the mark goes
+    assert page.locator("#bc-night .night-chip.toughest").count() == 0
     assert page.errors == []

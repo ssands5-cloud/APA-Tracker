@@ -374,6 +374,7 @@ body.bc .night-btn.primary{background:var(--home);color:#000;border-color:var(--
 body.bc .night-btn.primary:hover{opacity:.9;background:var(--home)}
 body.bc .night-btn:focus-visible,body.bc .night-chip:focus-visible,body.bc .avail-btn:focus-visible{outline:2px solid var(--home);outline-offset:2px}
 body.bc .night-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}
+body.bc .night-chip .tough-tag{color:var(--away);margin-left:6px}
 body.bc .night-ask{font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--away);margin-right:6px}
 body.bc .night-chip{font-family:var(--cond);font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:8px 14px;min-height:44px;cursor:pointer}
 body.bc .night-chip[aria-pressed="true"]{background:var(--away);color:#000;border-color:var(--away)}
@@ -665,10 +666,12 @@ _JS_BODY = r"""
     var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
       +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
       +(n.nextLeader&&!done?'<span class="night-pill" data-leader="'+n.nextLeader+'">'+(n.nextLeader==="us"?"We put up":"They put up")+'</span>':'')
-      +'<span class="night-pill">Score '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
+      +'<span class="night-pill" title="Individual matches won and lost tonight">Matches '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
       +'<button type="button" class="night-btn" data-full="1">Full evidence</button></div>';
+    // Their put-up the engine plans against (the choice that hurts us most), marked until they actually put up.
+    var tl=(n.command&&n.command.plan.theyLead)||[],toughest=!n.chosen&&n.nextLeader!=="us"&&tl.length?tl[0].their:null;
     var chips='<div class="night-chips" role="group" aria-label="Opponent they put up"><span class="night-ask">'+(n.chosen?"They put up":"If they put up")+'</span>'
-      +n.chips.map(function(c){return '<button type="button" class="night-chip" data-pick="'+esc(c.id)+'" aria-pressed="'+c.on+'">'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+'</button>';}).join("")
+      +n.chips.map(function(c){var t=toughest&&c.name===toughest;return '<button type="button" class="night-chip'+(t?' toughest':'')+'" data-pick="'+esc(c.id)+'" aria-pressed="'+c.on+'"'+(t?' title="The put-up the plan expects to hurt us most"':'')+'>'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+(t?'<small class="tough-tag">toughest</small>':'')+'</button>';}).join("")
       +(n.chips.length?"":'<span class="matchup-footnote">Every opponent has played.</span>')+'</div>';
     var hero="",alts="",risks="";
     // Coin toss: recorded once, before the first pairing. Put-ups alternate after game 1.
