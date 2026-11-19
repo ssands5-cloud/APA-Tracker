@@ -63,6 +63,13 @@ class ResponseFixtures:
         return digest({"query": query, "variables": variables})
 
     def __call__(self, query, variables, fetch):
+        if self.replay:
+            from parser.apa_graphql import MATCH_DETAIL_QUERY, MATCH_DETAIL_LEGACY_QUERY
+
+            if query == MATCH_DETAIL_QUERY and self.key(query, variables) not in self.entries:
+                legacy_key = self.key(MATCH_DETAIL_LEGACY_QUERY, variables)
+                if legacy_key in self.entries:
+                    query = MATCH_DETAIL_LEGACY_QUERY
         match = re.search(r"\b(query|mutation)\s+([A-Za-z_][A-Za-z0-9_]*)", query)
         operation = match.group(2) if match else "anonymous"
         if (match and match.group(1) == "mutation") or any(

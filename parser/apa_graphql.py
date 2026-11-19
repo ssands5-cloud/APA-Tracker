@@ -216,7 +216,7 @@ query MatchPage($id: Int!) {
       points { bonus penalty won adjustment sportsmanship total skillLevelViolationAdjustment }
       scores {
         id
-        player { id displayName }
+        player { id displayName member { id } }
         matchPositionNumber playerPosition skillLevel
         eightBallWins eightOnBreak eightBallBreakAndRun
         nineBallPoints nineOnSnap nineBallBreakAndRun nineBallMatchPointsEarned
@@ -226,6 +226,9 @@ query MatchPage($id: Int!) {
   }
 }
 """
+
+# Retain the exact old request identity for replaying earlier captured runs.
+MATCH_DETAIL_LEGACY_QUERY = MATCH_DETAIL_QUERY.replace(" member { id }", "")
 
 # --- Viewer-scoped queries: no id needed at all ---
 #

@@ -51,6 +51,17 @@ def test_replay_refuses_corrupt_response(tmp_path):
         ResponseFixtures(tmp_path, replay=True)("query Team { team { id } }", {}, lambda: {})
 
 
+def test_old_match_capture_replays_without_inventing_member_fields(tmp_path):
+    from parser.apa_graphql import MATCH_DETAIL_QUERY, MATCH_DETAIL_LEGACY_QUERY
+
+    capture = ResponseFixtures(tmp_path)
+    old = {'match': {'id': 42, 'results': []}}
+    capture(MATCH_DETAIL_LEGACY_QUERY, {'id': 42}, lambda: old)
+    capture.save_index()
+    replay = ResponseFixtures(tmp_path, replay=True)
+    assert replay(MATCH_DETAIL_QUERY, {'id': 42}, lambda: pytest.fail('must stay offline')) == old
+
+
 def test_career_player_links_require_exact_member_alias_session_and_format(tmp_path):
     from parser.apa_graphql import FORMATS_BY_MEMBER_ID_QUERY, GET_EIGHT_BALL_STATS_QUERY
     capture = ResponseFixtures(tmp_path)

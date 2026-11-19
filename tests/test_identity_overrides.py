@@ -28,6 +28,32 @@ def write_overrides(path, *approvals):
     return IdentityOverrides(path)
 
 
+@pytest.mark.parametrize('member,expected', [('101', ({'500': '101'}, 1, 0)),
+                                          ('999', ({}, 0, 1))])
+def test_direct_scoresheet_member_resolves_known_substitute_without_roster_guess(db, member, expected):
+    from scraper.graphql_scraper import match_player_scores
+
+    detail = {'id': 90401, 'home': {'id': 301}, 'results': [
+        {'homeAway': 'HOME', 'scores': [{'id': 1234, 'player': {
+            'id': 500, 'displayName': 'Unrelated display', 'member': {'id': member}}}]}]}
+    rows = match_player_scores(detail)
+    resolver = fixture_identity_resolver(SimpleNamespace(exact_player_members=lambda: {}), CATALOG, DIVISION)
+    assert rows[0]['member_external_id'] == member
+    assert resolver(db, 'Fall', rows) == expected
+    assert db.query(PlayerTeamHistory).count() == 0
+
+
+def test_direct_scoresheet_member_rejects_conflicting_alias_and_career_chain(db):
+    rows = [{**SOURCE_ROW, 'member_external_id': '101'}]
+    resolver = fixture_identity_resolver(SimpleNamespace(exact_player_members=lambda: {}), CATALOG, DIVISION)
+    with pytest.raises(ValueError, match='conflicting captured'):
+        resolver(db, 'Fall', rows + [{**rows[0], 'member_external_id': '102'}])
+    resolver = fixture_identity_resolver(SimpleNamespace(exact_player_members=lambda: {
+        ('7', '26', 'EIGHT', '500'): {'102'}}), CATALOG, DIVISION)
+    with pytest.raises(RefreshFailed, match='conflicts with career'):
+        resolver(db, 'Fall', rows)
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")

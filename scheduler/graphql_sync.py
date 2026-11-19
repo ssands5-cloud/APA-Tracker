@@ -228,8 +228,9 @@ def match_already_has_scoresheet(db: Session, match_external_id) -> bool:
 def resolve_scoresheet_identities(
     db: Session, session_name: str, scores: list[dict], *, current_only: bool = True
 ) -> tuple[dict[str, str], int, int]:
-    """Map each scoresheet row's own per-position alias player id to its
-    real canonical-roster external id, via database.queries.
+    """Map a score alias through its captured member ID when that member
+    already exists in the seed. Older captures retain the roster resolver
+    via database.queries.
     resolve_roster_identity scoped to that row's own real team id and this
     session -- see that function's docstring for why the alias id is not a
     stable identity by itself.
@@ -243,6 +244,15 @@ def resolve_scoresheet_identities(
     An alias id absent from the mapping was not uniquely resolvable -- a
     caller must leave it exactly as the scoresheet reported it, never guess.
     """
+    # A member ID carried by the exact APA score row is authoritative even
+    # when a substitute is absent from the current roster. Unknown canonical
+    # members still require acquisition into the verified seed first.
+    direct_members: dict[str, set[str]] = {}
+    for entry in scores:
+        if entry.get("player_id") and entry.get("member_external_id"):
+            direct_members.setdefault(str(entry["player_id"]), set()).add(str(entry["member_external_id"]))
+    if any(len(members) != 1 for members in direct_members.values()):
+        raise ValueError("scoresheet alias has conflicting captured member identities")
     mapping: dict[str, str] = {}
     resolved = 0
     unresolved = 0
@@ -254,6 +264,14 @@ def resolve_scoresheet_identities(
         seen.add(alias_id)
         team_id = entry.get("team_id")
         name = entry.get("player_name")
+        if team_id and str(alias_id) in direct_members:
+            member = next(iter(direct_members[str(alias_id)]))
+            if db.query(Player).filter_by(external_id=member).one_or_none() is None:
+                unresolved += 1
+            else:
+                mapping[alias_id] = member
+                resolved += 1
+            continue
         if not team_id or not name:
             unresolved += 1
             continue

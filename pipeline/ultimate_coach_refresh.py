@@ -115,6 +115,11 @@ def fixture_identity_resolver(store, catalog, division, overrides=None):
                 if not alias or not row.get('team_id'):
                     continue
                 members = links.get((league, session, division['format'], alias))
+                direct_member = str(row.get('member_external_id') or '')
+                if direct_member:
+                    if members and members != {direct_member}:
+                        raise RefreshFailed('captured scoresheet member conflicts with career identity')
+                    continue
                 if not members:
                     continue
                 if len(members) != 1:
