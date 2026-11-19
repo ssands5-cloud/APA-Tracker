@@ -682,10 +682,14 @@
       out.best_board=[];out.safest_board=[];out.confidence={};out.fragility=null;out.cap=mnCapSafety(night,om);return out;
     }
     var l=night.lead(om,tm),li=l[0],lj=l[1],leadValue=l[2],equal=[],LO=night.legalOurs(om);
-    var LT=night.legalTheirs(om,tm);
-    for(var q=0;q<LO.length;q++){var ii=LO[q];if(ii===li) continue;var ww=null;
-      for(var tq=0;tq<LT.length;tq++){var jq=LT[tq],vv=night.pair(ii,jq)+night.solve(om&~(1<<ii),tm&~(1<<jq),false);if(ww===null||vv<ww) ww=vv;}
-      if(ww===leadValue) equal.push(name("our",ii));}
+    var LT=night.legalTheirs(om,tm),leadOptions=[{our_id:ours[li].id,value:leadValue,reply_id:theirs[lj].id,level:conf(li,lj).level}];
+    for(var q=0;q<LO.length;q++){var ii=LO[q];if(ii===li) continue;var ww=null,wj=null;
+      for(var tq=0;tq<LT.length;tq++){var jq=LT[tq],vv=night.pair(ii,jq)+night.solve(om&~(1<<ii),tm&~(1<<jq),false);if(ww===null||vv<ww){ww=vv;wj=jq;}}
+      if(ww===leadValue) equal.push(name("our",ii));
+      if(wj!==null) leadOptions.push({our_id:ours[ii].id,value:ww,reply_id:theirs[wj].id,level:conf(ii,wj).level});}
+    // Every legal lead with its worst-case value, for the Broadcast put-up comparison. Non-enumerable so the
+    // engine's output stays identical to analytics.match_night_engine (the parity tests compare it field by field).
+    Object.defineProperty(out,"lead_options",{value:leadOptions,enumerable:false});
     out.lead={our:name("our",li),our_id:ours[li].id,their_reply:name("their",lj),level:conf(li,lj).level,why:conf(li,lj).text,equally_good:equal};
     var totalThey=night.solve(om,tm,false),responses=[];
     for(var rj=0;rj<LT.length;rj++){var j=LT[rj];
@@ -759,7 +763,19 @@
     return out;
   }
   // The plan for this War Room as it stands (mirrors analytics.match_night_engine.plan_for_war_room).
+  // The same plan is asked for several times per render (classic cards, Broadcast board, what-ifs). Its result
+  // depends only on these inputs and the pair's evidence, so identical requests share one solve. Callers treat
+  // the plan as read-only.
+  var MN_PLAN_MEMO=typeof WeakMap==="function"?new WeakMap():null;
   function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap){
+    if(!MN_PLAN_MEMO) return mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap);
+    var memo=MN_PLAN_MEMO.get(w);if(!memo){memo=new Map();MN_PLAN_MEMO.set(w,memo);}
+    var key=JSON.stringify([w.ours.map(function(m){return rem[String(m.id)]?1:0;}),unplayed.map(function(u){return u?1:0;}),
+      (w.oppOut||[]).map(function(o){return o?1:0;}),playedCount,playedSl,cap===undefined?null:cap]);
+    if(!memo.has(key)){if(memo.size>400) memo.clear();memo.set(key,mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap));}
+    return memo.get(key);
+  }
+  function mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap){
     var ours=w.ours.filter(function(m){return rem[String(m.id)];}).map(function(m){return {id:m.id,name:wrDisplayName(m,w.ours),sl:m.skill_level===undefined?null:m.skill_level};});
     var theirs=[],value={},oppUsed=0;
     w.blocks.forEach(function(b,j){if(!unplayed[j]&&!(w.oppOut&&w.oppOut[j])&&mnKnown(b.opponent.skill_level)) oppUsed+=Math.trunc(b.opponent.skill_level);});
@@ -1310,24 +1326,27 @@
     return {cards:cards,plan:{conf:wrConfText(mp),fragility:fragility.rating,leans:fragility.player||"",gamesLeft:mp.games_left,
       weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead)}};
   }
-  function wrLeadOptions(w,plan,x,mp,open,solveAfterSend){
+  // Every legal put-up for our lead, valued exactly as the engine chose its own lead (MnNight.lead): their most
+  // damaging reply, then the rest of the night with them putting up next. mnMatchPlan records these values while
+  // it searches, so this costs nothing extra; only the put-up actually made is re-solved, for its path.
+  function wrLeadOptions(w,plan,x,mp,solveAfterSend,putUpId){
     var leadId=mp.lead?String(mp.lead.our_id):null,slots=Math.max(0,5-x.playedN-1);
-    var opts=w.ours.filter(function(m){return plan.rem[String(m.id)];}).map(function(m){
-      var id=String(m.id),sl=wrKnown(m.skill_level)?Number(m.skill_level):null,worst=null,reply=null,after=null;
-      open.forEach(function(j){var row=w.blocks[j].byMember[id];if(!row) return;
-        var a=solveAfterSend(m,j),v=row.confidence.points+(a.total_if_they_lead||0);
-        if(worst===null||v<worst){worst=v;reply={id:String(w.theirs[j].id),name:wrDisplayName(w.theirs[j],w.theirs),level:row.confidence.level};after=a;}});
-      var path=after?(after.plan_if_they_lead||[]).map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};}):[];
-      var budget=x.cap===null?null:(sl===null||(after&&after.cap&&after.cap.incomplete)?"Skill budget incomplete":
-        (x.playedSl+sl>x.cap||(after&&after.cap&&after.cap.slack<0)?"Over the entered cap":"Within the entered cap"));
-      return {id:id,name:wrDisplayName(m,w.ours),sl:sl,recommended:id===leadId,worst:worst,reply:reply,path:path,slots:slots,budget:budget,
-        avail:wrAvail(plan.ck,m.id)};
-    }).filter(function(o){return o.reply;});
-    opts.sort(function(a,b){return (b.recommended-a.recommended)||((b.worst||0)-(a.worst||0))||a.name.localeCompare(b.name);});
+    var ourBy={},theirIx={};w.ours.forEach(function(m){ourBy[String(m.id)]=m;});w.theirs.forEach(function(o,j){theirIx[String(o.id)]=j;});
+    var path=function(rows){return (rows||[]).map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};});};
+    var opts=(mp.lead_options||[]).map(function(o){
+      var m=ourBy[String(o.our_id)],j=theirIx[String(o.reply_id)];if(!m||j===undefined) return null;
+      var id=String(m.id),sl=wrKnown(m.skill_level)?Number(m.skill_level):null;
+      return {id:id,name:wrDisplayName(m,w.ours),sl:sl,recommended:id===leadId,worst:o.value,
+        reply:{id:String(o.reply_id),name:wrDisplayName(w.theirs[j],w.theirs),level:o.level,j:j},path:[],slots:slots,
+        budget:x.cap===null?null:(sl===null?"Skill budget incomplete":"Within the entered cap"),avail:wrAvail(plan.ck,m.id)};
+    }).filter(Boolean);
+    opts.sort(function(a,b){return (b.recommended-a.recommended)||(b.worst-a.worst)||a.name.localeCompare(b.name);});
     var best=opts.length?opts[0]:null;
-    opts.forEach(function(o){if(!best||o===best) return;
-      if(o.path.length<best.path.length) o.tradeoff="Leaves fewer planned pairings";
-      else if(o.worst<best.worst) o.tradeoff="Weaker night if they reply with "+o.reply.name;
+    opts.forEach(function(o){
+      if(o.recommended) o.path=path(mp.plan_if_we_lead).slice(1);
+      else if(o.id===String(putUpId||"")) o.path=path(solveAfterSend(ourBy[o.id],o.reply.j).plan_if_they_lead);
+      if(!best||o===best) return;
+      if(o.worst<best.worst) o.tradeoff="Weaker night if they reply with "+o.reply.name;
       else if(o.worst===best.worst) o.tradeoff="Equally good put-up";});
     return opts;
   }
@@ -1369,7 +1388,7 @@
     night.nextLeader=night.toss&&x.playedN<5?((x.playedN%2===0)===(night.toss==="us")?"us":"them"):null;
     night.putUp=null;night.leadOptions=[];
     if(night.nextLeader==="us"&&open.length){
-      night.leadOptions=wrLeadOptions(w,plan,x,mp,open,solveAfterSend);
+      night.leadOptions=wrLeadOptions(w,plan,x,mp,solveAfterSend,toss.up);
       var up=toss.up&&plan.rem[String(toss.up)]?w.ours.filter(function(m){return String(m.id)===String(toss.up);})[0]:null;
       if(up) night.putUp={id:String(up.id),name:wrDisplayName(up,w.ours),sl:wrKnown(up.skill_level)?up.skill_level:null};
     }
