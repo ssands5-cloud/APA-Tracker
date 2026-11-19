@@ -55,3 +55,28 @@ def test_captured_schedule_replaces_unplayed_facts_and_rejects_wrong_team(tmp_pa
     fixture["away_team_id"] = "different-team"
     with pytest.raises(ValueError, match="team mismatch"):
         update_captured_fixtures(current, tmp_path, "America/Denver")
+
+
+def test_exact_score_members_recover_missing_roster_and_reject_conflicting_roster(tmp_path):
+    (tmp_path / 'rosters').mkdir()
+    (tmp_path / 'matches').mkdir()
+    (tmp_path / 'rosters/1.json').write_text(json.dumps({'teams': [
+        {'id': 10, 'roster': [{'id': 100, 'displayName': 'Home', 'member': {'id': 1}}]}]}))
+    home = {'id': 100, 'displayName': 'Home', 'member': {'id': 1}}
+    away = {'id': 200, 'displayName': 'Away', 'member': {'id': 2}}
+    match = {'id': 42, 'startTime': '2026-11-10', 'isFinalized': True,
+             'home': {'id': 10}, 'away': {'id': 20}, 'results': [
+                 {'homeAway': side, 'scores': [{'player': player, 'matchPositionNumber': 1,
+                   'winLoss': result, 'eightBallWins': 1}]}
+                 for side, player, result in [('HOME', home, 'W'), ('AWAY', away, 'L')]]}
+    path = tmp_path / 'matches/42.json'
+    path.write_text(json.dumps({'match': match}))
+    archive = {'players': [], 'evidence': []}
+    report = add_captured_scoresheets({'evidence': []}, archive, tmp_path, '2026-11-19')
+    assert report['counts']['accepted_pairs'] == report['counts']['direct_member_pairs'] == 1
+    assert {p['external_id'] for p in archive['players']} == {'1', '2'}
+    assert all(p['team_history'] == [] for p in archive['players'])
+    home['member']['id'] = 3
+    path.write_text(json.dumps({'match': match}))
+    with pytest.raises(ValueError, match='conflicts with roster'):
+        add_captured_scoresheets({'evidence': []}, {'players': [], 'evidence': []}, tmp_path, '2026-11-19')

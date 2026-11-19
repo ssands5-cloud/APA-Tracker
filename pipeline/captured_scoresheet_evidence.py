@@ -84,6 +84,14 @@ def add_captured_scoresheets(current, archive, folder, cutoff):
             member_sets = [
                 aliases[(str(team["id"]), str(p["id"]))] for (team, _), p in zip(pair, players)
             ]
+            for i, player in enumerate(players):
+                member = str((player.get("member") or {}).get("id") or "")
+                if not member:
+                    continue
+                if member_sets[i] and member_sets[i] != {member}:
+                    raise ValueError(f"Scoresheet member conflicts with roster: {path.stem} position {position}")
+                member_sets[i] = {member}
+                names.setdefault(member, player.get("displayName") or "")
             formats = {
                 fmt for fmt, field in (("EIGHT", "eightBallWins"), ("NINE", "nineBallPoints"))
                 if all(s.get(field) is not None for s in scores)
@@ -127,4 +135,6 @@ def add_captured_scoresheets(current, archive, folder, cutoff):
                     "nine_ball_points": score.get("nineBallPoints"),
                 })
             counts["accepted_pairs"] += 1
+            if any((p.get("member") or {}).get("id") for p in players):
+                counts["direct_member_pairs"] += 1
     return {"counts": dict(counts), "excluded": excluded}
