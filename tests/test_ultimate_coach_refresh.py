@@ -103,6 +103,9 @@ def test_full_refresh_reaches_database_matchups_trends_workbook_html_and_status(
     assert sha256(seed)==before
     assert result['coverage']=='complete' and not result['live_sources_checked']
     assert (directory/'READY').is_file()
+    html=(directory/'ultimate_coach.html').read_text(encoding='utf-8')
+    assert 'id="bc-night"' in html and 'data-tab="matchnight"' in html
+    assert {'Recommended Lineup','Five-Game Plan'} <= set(result['validations']['Ultimate_Coach.xlsx']['captain_sheets'])
     assert json.loads((root/'CURRENT.json').read_text())==result
     text=capsys.readouterr().out
     for message in ('SCRAPE COMPLETE','DATABASE UPDATED','MATCHUPS REBUILT','WORKBOOK REBUILT','HTML REBUILT','ALL REFRESH TASKS COMPLETE'):
@@ -190,10 +193,11 @@ def test_quick_rebuilds_only_a_corrupt_output(setup):
     assert calls==['html'] and second['reused']==['Ultimate_Coach.xlsx']
 
 
-def test_html_dependency_change_does_not_rebuild_workbook(setup,monkeypatch):
+@pytest.mark.parametrize('dependency',['ultimate_coach_war_room.js','ultimate_coach_broadcast.py'])
+def test_html_dependency_change_does_not_rebuild_workbook(setup,monkeypatch,dependency):
     run,root,sources,calls,seed=setup
     first=run();calls.clear();real=refresh.sha256
-    monkeypatch.setattr(refresh,'sha256',lambda p:'changed-runtime' if Path(p).name=='ultimate_coach_war_room.js' else real(p))
+    monkeypatch.setattr(refresh,'sha256',lambda p:'changed-runtime' if Path(p).name==dependency else real(p))
     second=run(mode='quick')
     assert calls==['html'] and second['reused']==['Ultimate_Coach.xlsx']
 

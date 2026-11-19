@@ -4,7 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 from openpyxl import load_workbook
 
-CAPTAIN_SHEETS = ("Match Day", "Command Center", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet")
+CAPTAIN_SHEETS = (
+    "Match Day", "Command Center", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet",
+    "Recommended Lineup", "Five-Game Plan",
+)
 
 
 def preflight():

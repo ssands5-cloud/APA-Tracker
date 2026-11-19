@@ -140,9 +140,7 @@ def main() -> None:
     write_workbook(current, workbook, built_at=stamp, source_db="Verified current snapshot and historical archive", **viewer)
     validation = {
         html.name: refresh_workbook.validate_html(html),
-        workbook.name: refresh_workbook.recalculate_and_validate(
-            workbook, captain_sheets=(*refresh_workbook.CAPTAIN_SHEETS, "Recommended Lineup", "Five-Game Plan"),
-        ),
+        workbook.name: refresh_workbook.recalculate_and_validate(workbook),
     }
     manifest = {
         "base_run": run.name,

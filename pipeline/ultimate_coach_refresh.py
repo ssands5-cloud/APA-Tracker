@@ -488,10 +488,12 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             status("RECOMMENDATIONS UPDATED")
             built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             common = {"payload": payload_key, "settings": settings_key, "date": built_at[:10],
-                      "analytics": code_signature(["analytics"])}
+                      "analytics": code_signature(["analytics"]),
+                      "validator": sha256(ROOT / "pipeline/refresh_workbook.py")}
             keys = {"Ultimate_Coach.xlsx": digest({**common, "exporter": sha256(ROOT / "ui/export_excel_ultimate_coach.py"),
                       "engine": sha256(ROOT / "ui/excel_war_room.py")}),
                     "ultimate_coach.html": digest({**common, "renderer": sha256(ROOT / "ui/ultimate_coach.py"),
+                      "ui": "broadcast", "broadcast": sha256(ROOT / "ui/ultimate_coach_broadcast.py"),
                       "runtime": sha256(ROOT / "ui/ultimate_coach_war_room.js")})}
             validations, reused = {}, []
             for name, key in keys.items():
@@ -521,7 +523,7 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                     # Workbook consumes/derives its data first; HTML may release
                     # evidence memory only after the shared payload is used.
                     with progress_span(status, "generate Ultimate Coach HTML"):
-                        target.write_text(render(payload, built_at=built_at, consume_evidence=False,
+                        target.write_text(render(payload, built_at=built_at, consume_evidence=False, ui="broadcast",
                             viewer_member_external_id=settings.viewer_member_external_id,
                             viewer_card_number=settings.viewer_card_number), encoding="utf-8")
                     with progress_span(status, "Chromium HTML validation"):
