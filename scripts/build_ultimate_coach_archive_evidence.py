@@ -96,7 +96,8 @@ def sha256(path: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh-root", type=Path, required=True, help="Folder containing the verified CURRENT.json")
-    parser.add_argument("--archive-db", type=Path, required=True)
+    parser.add_argument("--archive-db", type=Path,
+                        help="Optional extra archive; omit when the verified refresh already retains full history")
     parser.add_argument("--catchup-folder", type=Path, help="Local APA match and roster captures")
     parser.add_argument("--archive-checked-at", type=datetime.fromisoformat,
                         help="Timestamp from the verified archive capture, including its UTC offset")
@@ -120,7 +121,7 @@ def main() -> None:
     evidence_checked_at = max(checked_at, archive_checked_at or checked_at)
     settings = load_match_day_settings(args.config)
     current = read_payload(database, settings.timezone)
-    archive = read_payload(args.archive_db, settings.timezone)
+    archive = read_payload(args.archive_db, settings.timezone) if args.archive_db else {"players": [], "evidence": []}
     cutoff = evidence_checked_at.date().isoformat()
     fixtures_updated = 0
     if args.catchup_folder:
@@ -137,13 +138,14 @@ def main() -> None:
     html = args.out / "Ultimate_Coach_Broadcast.html"
     workbook = args.out / "Ultimate_Coach_Archive_Evidence.xlsx"
     html.write_text(render(current, built_at=stamp, ui="broadcast", **viewer), encoding="utf-8")
-    write_workbook(current, workbook, built_at=stamp, source_db="Verified current snapshot and historical archive", **viewer)
+    write_workbook(current, workbook, built_at=stamp, source_db="Verified refresh and captured APA history", **viewer)
     validation = {
         html.name: refresh_workbook.validate_html(html),
         workbook.name: refresh_workbook.recalculate_and_validate(workbook),
     }
     manifest = {
         "base_run": run.name,
+        "extra_archive_supplied": args.archive_db is not None,
         "archive_cutoff_inclusive": cutoff,
         "refresh_checked_at": checked_at.isoformat(),
         "archive_checked_at": archive_checked_at.isoformat() if archive_checked_at else None,

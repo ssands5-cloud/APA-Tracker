@@ -59,3 +59,47 @@ def test_captured_result_for_previously_unplayed_fixture_is_used_once():
     assert len(current["evidence"]) == 2
     assert add_archive_evidence(current, archive, "2026-11-18") == 0
     assert len(current["evidence"]) == 2
+
+
+def test_builder_can_use_full_history_refresh_without_reading_an_extra_archive(tmp_path, monkeypatch):
+    import json
+    import sys
+    from types import SimpleNamespace
+    from scripts import build_ultimate_coach_archive_evidence as builder
+
+    root = tmp_path / 'runs'
+    run = root / 'run-complete'
+    run.mkdir(parents=True)
+    database = run / 'ultimate_coach_staging.db'
+    database.write_bytes(b'verified fixture database')
+    (run / 'READY').write_text('{}')
+    (root / 'CURRENT.json').write_text(json.dumps({
+        'run': run.name, 'coverage': 'complete', 'checked_at': '2026-11-19T12:00:00+00:00',
+        'artifacts': {database.name: builder.sha256(database)}}))
+    current = {'players': [{'id': 1, 'external_id': 'a'}, {'id': 2, 'external_id': 'b'}],
+               'match_day': {'fixtures': []},
+               'evidence': [
+                   {'player_id': player, 'opponent_id': opponent, 'game_key': 'existing-history'}
+                   for player, opponent in ((1, 2), (2, 1))],
+               'counts': {'all_games': 1},
+               'trust': {'identity_verified_game_count': 1, 'total_all_games_rows': 1}}
+    reads = []
+    def read(path, timezone):
+        reads.append(path)
+        return current
+    def workbook(payload, path, **kwargs):
+        assert payload['evidence'][0]['game_key'] == 'existing-history'
+        path.write_bytes(b'workbook')
+    monkeypatch.setattr(builder, 'read_payload', read)
+    monkeypatch.setattr(builder, 'load_match_day_settings', lambda path: SimpleNamespace(
+        timezone='America/Denver', viewer_member_external_id=None, viewer_card_number=None))
+    monkeypatch.setattr(builder, 'render', lambda payload, **kwargs: 'html')
+    monkeypatch.setattr(builder, 'write_workbook', workbook)
+    monkeypatch.setattr(builder.refresh_workbook, 'validate_html', lambda path: {})
+    monkeypatch.setattr(builder.refresh_workbook, 'recalculate_and_validate', lambda path: {})
+    out = tmp_path / 'out'
+    monkeypatch.setattr(sys, 'argv', ['build', '--refresh-root', str(root), '--config', str(tmp_path/'config.yaml'), '--out', str(out)])
+    builder.main()
+    assert reads == [database]
+    assert current['counts']['all_games'] == 1
+    assert json.loads((out/'history-scope.json').read_text())['extra_archive_supplied'] is False
