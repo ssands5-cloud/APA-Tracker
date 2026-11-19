@@ -430,3 +430,25 @@ def test_their_toughest_put_up_is_marked_until_they_put_up(page):
     page.locator("#bc-night .night-chip[data-pick]").first.click()                   # once they put up, the mark goes
     assert page.locator("#bc-night .night-chip.toughest").count() == 0
     assert page.errors == []
+
+
+def test_marking_an_opponent_absent_removes_them_from_the_plan_without_spending_their_skill(page):
+    _pick(page)
+    page.fill("#bc-cap", "23")
+    _tab(page, "matchnight")
+    theirs = page.evaluate("UC_BC_LAST.night.bench.theirs.map(p => p.id)")
+    gone = theirs[0]
+    page.click(f'#bc-night .night-checkin-opp [data-oppout="{gone}"]')
+    night = page.evaluate("UC_BC_LAST.night")
+    assert next(p for p in night["bench"]["theirs"] if p["id"] == gone)["out"] is True
+    assert gone not in [c["id"] for c in night["chips"]]                              # cannot be picked as their put-up
+    name = next(p for p in night["bench"]["theirs"] if p["id"] == gone)["name"]
+    for path in (night["command"]["plan"]["weLead"], night["command"]["plan"]["theyLead"]):
+        assert all(s["their"] != name for s in path)
+    # Absent is not "played": their skill level is not counted against their cap.
+    used = page.evaluate("UC_BC_LAST.night.oppBudget")
+    assert used is None or used["used"] == 0
+    assert page.locator(f'#bc-night .bench [data-oppout="{gone}"]').text_content() == "Out"
+    page.click(f'#bc-night .bench [data-oppout="{gone}"]')                           # back in
+    assert gone in page.evaluate("UC_BC_LAST.night.chips.map(c => c.id)")
+    assert page.errors == []

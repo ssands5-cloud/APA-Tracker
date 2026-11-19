@@ -390,12 +390,16 @@
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
   function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
+  // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
+  // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
+  function wrOppOut(scope,pid){return !!wrMark("opp",scope,pid).o;}
 
 
   function wrPlan(w,ta,tb){
     var ck=wrCtx(ta,tb);
     var rem={};w.ours.forEach(function(m){rem[String(m.id)]=wrRemaining(ck,m.id);});
-    var unplayed=w.theirs.map(function(o){return !wrPlayed(ck,o.id);});
+    w.oppOut=w.theirs.map(function(o){return wrOppOut(ck,o.id)&&!wrPlayed(ck,o.id);});
+    var unplayed=w.theirs.map(function(o,j){return !wrPlayed(ck,o.id)&&!w.oppOut[j];});
     var sends=w.blocks.map(function(b){return b.rows.filter(function(r){return WR_SENDABLE[r.category]&&rem[String(r.member.id)];});});
     var green=w.blocks.map(function(b){return b.rows.filter(function(r){return r.category==="G"&&rem[String(r.member.id)];}).length;});
     var risks=[],unique=[];
@@ -758,7 +762,7 @@
   function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap){
     var ours=w.ours.filter(function(m){return rem[String(m.id)];}).map(function(m){return {id:m.id,name:wrDisplayName(m,w.ours),sl:m.skill_level===undefined?null:m.skill_level};});
     var theirs=[],value={},oppUsed=0;
-    w.blocks.forEach(function(b,j){if(!unplayed[j]&&mnKnown(b.opponent.skill_level)) oppUsed+=Math.trunc(b.opponent.skill_level);});
+    w.blocks.forEach(function(b,j){if(!unplayed[j]&&!(w.oppOut&&w.oppOut[j])&&mnKnown(b.opponent.skill_level)) oppUsed+=Math.trunc(b.opponent.skill_level);});
     w.blocks.forEach(function(b,j){
       if(!unplayed[j]) return;
       theirs.push({id:b.opponent.id,name:wrDisplayName(b.opponent,w.theirs),sl:b.opponent.skill_level===undefined?null:b.opponent.skill_level});
@@ -1171,7 +1175,8 @@
       if(t&&t.up){delete t.up;wrSave();renderTeamMatchups();return;}                // an uncommitted put-up is undone first
       var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
       wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
-    avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();}
+    avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();},
+    oppOut:function(pid,out){var c=wrBcCur();if(!c||wrPlayed(c.ck,pid)) return;wrSetMark("opp",c.ck,pid,"o",out?true:"");WR_STATE.next=null;renderTeamMatchups();}
   };
   // Every current team playing the selected format, for the scoreboard's team pickers (the classic selects only list
   // search matches). Same scope key and label the classic selects use.
@@ -1374,11 +1379,12 @@
       .map(function(o){return wrDisplayName(o,w.theirs);});
     night.capText=mp.cap?(mp.cap.incomplete?"Cap "+mp.cap.cap+": check incomplete (missing skill levels)":"Cap "+mp.cap.cap+": "+mp.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
     night.bench={ours:w.ours.map(function(m){return {id:String(m.id),name:wrDisplayName(m,w.ours),sl:wrKnown(m.skill_level)?m.skill_level:null,avail:wrAvail(ck,m.id),lineup:wrLineup(ck,m.id),rem:!!plan.rem[String(m.id)]};}),
-      theirs:w.theirs.map(function(o,j){return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,unplayed:!!plan.unplayed[j]};})};
+      theirs:w.theirs.map(function(o,j){return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,unplayed:!!plan.unplayed[j],out:!!(w.oppOut&&w.oppOut[j])};})};
     var nameOf=function(list,id){var m=list.filter(function(x){return String(x.id)===String(id);})[0];return m?wrDisplayName(m,list):String(id);};
     night.games=(WR_PLAN.games[ck]||[]).map(function(g,i){return {i:i,our:nameOf(w.ours,g.o),their:nameOf(w.theirs,g.t),ourId:g.o,theirId:g.t,r:g.r||""};});
     night.score={w:night.games.filter(function(g){return g.r==="W";}).length,l:night.games.filter(function(g){return g.r==="L";}).length};
     night.storageWarning=wrStorageMessage();
+    night.oppBudget=mp.opponent_budget||null;
     return {empty:false,night:night,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
       side:ctx?ctx.ourSide:null,dateText:f?(f.date_status==="ok"?f.local_display:"Undated fixture"):"Teams picked by hand",
       venue:f?(f.location||null):null,cap:x.cap,played:x.playedN,gamesLeft:mp.games_left,rows:rows,

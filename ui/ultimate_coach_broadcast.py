@@ -688,7 +688,10 @@ _JS_BODY = r"""
       var avlNext0={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"},label={Unknown:"?",Available:"Here",Unavailable:"Out"};
       checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who\u2019s here?</span>'
         +n.bench.ours.map(function(b){return '<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' \u00b7 '+label[b.avail]+'</button>';}).join("")
-        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan.</span></div>';
+        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan.</span></div>'
+        +'<div class="night-chips night-checkin-opp" role="group" aria-label="Their players here tonight"><span class="night-ask">Their players</span>'
+        +n.bench.theirs.map(function(b){return '<button type="button" class="avail-btn '+(b.out?'Unavailable':'Available')+'" data-oppout="'+esc(b.id)+'" data-out="'+(b.out?'':'1')+'" aria-label="'+esc(b.name+(b.out?" is out; mark here":" is here; mark out"))+'">'+esc(b.name)+' \u00b7 '+(b.out?'Out':'Here')+'</button>';}).join("")
+        +'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them.</span></div>';
     }
     // Results still to enter, at the top where the captain is looking.
     var pending=n.games.filter(function(g){return !g.r;});
@@ -762,7 +765,10 @@ _JS_BODY = r"""
       +n.bench.ours.map(function(b){return '<div class="bench-item'+(b.lineup==="Played"?" used":"")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
         +(b.lineup==="Played"?'<span class="tagx">played</span>':'<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.avail)+'</button>')+'</div>';}).join("")
       +'</div><div class="bench-col"><h4>Their players</h4>'
-      +n.bench.theirs.map(function(b){return '<div class="bench-item'+(b.unplayed?"":" used")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)+(b.unplayed?"":'<span class="tagx">played</span>')+'</div>';}).join("")+'</div></div>';
+      +n.bench.theirs.map(function(b){return '<div class="bench-item'+(b.unplayed?"":" used")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
+        +(b.out?'<button type="button" class="avail-btn Unavailable" data-oppout="'+esc(b.id)+'" data-out="" aria-label="'+esc(b.name+" is out; mark here")+'">Out</button>'
+          :b.unplayed?'<button type="button" class="avail-btn Available" data-oppout="'+esc(b.id)+'" data-out="1" aria-label="'+esc(b.name+" is here; mark out")+'">Here</button>'
+          :'<span class="tagx">played</span>')+'</div>';}).join("")+'</div></div>';
     var log="";
     if(n.games.length){
       log='<h3 class="night-h">Games tonight</h3>'+n.games.map(function(g){
@@ -775,6 +781,7 @@ _JS_BODY = r"""
       +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></details></section>':"";
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
     el.innerHTML=status+storage+resultBar+checkin+tossBar+commandHtml(m)+(done?"":chips+hero+strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-oppout]"),function(b){b.onclick=function(){window.UC_ACT.oppOut(b.getAttribute("data-oppout"),b.getAttribute("data-out")==="1");};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-toss]"),function(b){b.onclick=function(){window.UC_ACT.toss(b.getAttribute("data-toss"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-putup]"),function(b){b.onclick=function(){window.UC_ACT.putUp(b.getAttribute("data-putup"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-answer]"),function(b){b.onclick=function(){if(n.putUp) window.UC_ACT.send(n.putUp.id,b.getAttribute("data-answer"));};});
