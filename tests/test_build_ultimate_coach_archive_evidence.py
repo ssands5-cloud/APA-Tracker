@@ -1,4 +1,5 @@
 from scripts.build_ultimate_coach_archive_evidence import add_archive_evidence
+from copy import deepcopy
 
 
 def test_archive_adds_verified_games_by_member_id_without_replacing_current_fixtures():
@@ -37,3 +38,24 @@ def test_archive_adds_verified_games_by_member_id_without_replacing_current_fixt
     ]
     assert current["match_day"]["fixtures"] == [{"match_external_id": "refreshed"}]
     assert current["counts"] == {"players": 2, "head_to_head_rows": 2, "all_games": 1}
+
+
+def test_captured_result_for_previously_unplayed_fixture_is_used_once():
+    current = {
+        "players": [{"id": 1, "external_id": "a"}, {"id": 2, "external_id": "b"}],
+        "match_day": {"fixtures": [{"match_external_id": "42"}]},
+        "evidence": [], "counts": {"all_games": 0},
+        "trust": {"identity_verified_game_count": 0, "total_all_games_rows": 0},
+    }
+    archive = {
+        "players": deepcopy(current["players"]),
+        "evidence": [
+            {"player_id": a, "opponent_id": b, "match_external_id": "42",
+             "match_date": "2026-11-15", "game_key": "catchup:42:1", "format": "EIGHT"}
+            for a, b in ((1, 2), (2, 1))
+        ],
+    }
+    assert add_archive_evidence(current, archive, "2026-11-18") == 1
+    assert len(current["evidence"]) == 2
+    assert add_archive_evidence(current, archive, "2026-11-18") == 0
+    assert len(current["evidence"]) == 2

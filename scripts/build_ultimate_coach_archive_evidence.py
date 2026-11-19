@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from analytics.ultimate_coach_cockpit_identity_bridge import build_verified_cockpit_payload
 from analytics.ultimate_coach_match_day import load_match_day_settings
 from pipeline import refresh_workbook
-from pipeline.captured_scoresheet_evidence import add_captured_scoresheets
+from pipeline.captured_scoresheet_evidence import add_captured_scoresheets, update_captured_fixtures
 from ui.export_excel_ultimate_coach import write_workbook
 from ui.ultimate_coach import render
 
@@ -54,6 +54,9 @@ def add_archive_evidence(current: dict, archive: dict, cutoff: str) -> int:
         for row in (*current["match_day"]["fixtures"], *current["evidence"])
         if row.get("match_external_id")
     }
+    refreshed_evidence_matches = {
+        str(row["match_external_id"]) for row in current["evidence"] if row.get("match_external_id")
+    }
     additional = []
     used_profiles = set()
     for row in archive["evidence"]:
@@ -63,7 +66,11 @@ def add_archive_evidence(current: dict, archive: dict, cutoff: str) -> int:
             continue
         match = row.get("match_external_id")
         date = str(row.get("match_date") or "")[:10]
-        if not match or str(match) in refreshed_matches or not date or date > cutoff:
+        captured_new_result = (
+            str(row["game_key"]).startswith("catchup:")
+            and str(match) not in refreshed_evidence_matches
+        )
+        if not match or (str(match) in refreshed_matches and not captured_new_result) or not date or date > cutoff:
             continue
         additional.append({
             **row, "player_id": player, "opponent_id": opponent, "game_key": "archive:" + str(row["game_key"]),
@@ -115,6 +122,9 @@ def main() -> None:
     current = read_payload(database, settings.timezone)
     archive = read_payload(args.archive_db, settings.timezone)
     cutoff = evidence_checked_at.date().isoformat()
+    fixtures_updated = 0
+    if args.catchup_folder:
+        fixtures_updated = update_captured_fixtures(current, args.catchup_folder, settings.timezone)
     catchup = add_captured_scoresheets(current, archive, args.catchup_folder, cutoff) if args.catchup_folder else None
     added = add_archive_evidence(current, archive, cutoff)
 
@@ -142,6 +152,7 @@ def main() -> None:
         "historical_games_added": added,
         "catchup_pairs_used": len({r["game_key"] for r in current["evidence"] if r["game_key"].startswith("archive:catchup:")}),
         "catchup_counts": catchup["counts"] if catchup else None,
+        "captured_fixtures_updated": fixtures_updated,
         "artifacts": {p.name: sha256(p) for p in (html, workbook)},
         "validation": validation,
     }

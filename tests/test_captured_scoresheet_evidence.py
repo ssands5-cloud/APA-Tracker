@@ -1,6 +1,8 @@
 import json
 
 from pipeline.captured_scoresheet_evidence import add_captured_scoresheets
+from pipeline.captured_scoresheet_evidence import update_captured_fixtures
+import pytest
 
 
 def test_exact_team_identity_and_repeated_pairing_positions(tmp_path):
@@ -32,3 +34,24 @@ def test_exact_team_identity_and_repeated_pairing_positions(tmp_path):
     assert len(archive["evidence"]) == 4
     assert {row["game_key"] for row in archive["evidence"]} == {"catchup:42:1", "catchup:42:2"}
     assert {row["format"] for row in archive["evidence"]} == {"EIGHT"}
+
+
+def test_captured_schedule_replaces_unplayed_facts_and_rejects_wrong_team(tmp_path):
+    folder = tmp_path / "divisions"
+    folder.mkdir()
+    match = {"id": 42, "home": {"id": 10}, "away": {"id": 20},
+             "startTime": "2026-11-16T02:00:00Z", "status": "PLAYED",
+             "isScored": True, "isFinalized": True,
+             "results": [{"homeAway": "HOME", "points": {"total": 8}},
+                         {"homeAway": "AWAY", "points": {"total": 4}}]}
+    (folder / "1.json").write_text(json.dumps({"schedule": [{"weekOfPlay": 15, "matches": [match]}]}))
+    fixture = {"match_external_id": "42", "home_team_id": "10", "away_team_id": "20",
+               "status": "UNPLAYED", "home_score": None, "away_score": None}
+    current = {"match_day": {"fixtures": [fixture]}}
+    assert update_captured_fixtures(current, tmp_path, "America/Denver") == 1
+    assert (fixture["status"], fixture["home_score"], fixture["away_score"]) == ("PLAYED", 8, 4)
+    assert fixture["local_date"] == "2026-11-15"
+    assert fixture["is_finalized"] is True
+    fixture["away_team_id"] = "different-team"
+    with pytest.raises(ValueError, match="team mismatch"):
+        update_captured_fixtures(current, tmp_path, "America/Denver")

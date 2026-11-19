@@ -3,10 +3,37 @@ from collections import Counter, defaultdict
 import json
 
 from analytics.ultimate_coach_data_contract import normalize_format
+from analytics.ultimate_coach_match_day import localize_match_date
+from scraper.graphql_scraper import division_schedule_rows
 
 
 def load_capture(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def update_captured_fixtures(current, folder, timezone):
+    """Refresh existing fixture facts from exact APA schedule identities."""
+    fixtures = {str(row["match_external_id"]): row for row in current["match_day"]["fixtures"]}
+    updated = set()
+    for path in sorted((folder / "divisions").glob("*.json")):
+        for row in division_schedule_rows(load_capture(path)):
+            fixture = fixtures.get(row["match_id"])
+            if fixture is None:
+                continue
+            for side in ("home", "away"):
+                key = side + "_team_id"
+                if str(fixture[key]) != row[key]:
+                    raise ValueError(f"Captured fixture team mismatch: {row['match_id']} {side}")
+            fields = ("status", "is_bye", "is_scored", "is_finalized", "home_score", "away_score", "week")
+            changes = {key: row[key] for key in fields}
+            if row["date"]:
+                changes["match_date"] = row["date"]
+                changes.update(localize_match_date(row["date"], timezone))
+                changes["date_unparsed"] = changes["date_status"] == "unparseable"
+            if any(fixture.get(key) != value for key, value in changes.items()):
+                fixture.update(changes)
+                updated.add(row["match_id"])
+    return len(updated)
 
 
 def add_captured_scoresheets(current, archive, folder, cutoff):
