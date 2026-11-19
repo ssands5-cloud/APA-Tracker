@@ -61,6 +61,19 @@ def test_captured_result_for_previously_unplayed_fixture_is_used_once():
     assert len(current["evidence"]) == 2
 
 
+def test_proven_capture_between_new_members_is_retained():
+    current = {'players': [{'id': 1, 'external_id': 'a'}], 'match_day': {'fixtures': []},
+               'evidence': [], 'counts': {'all_games': 0},
+               'trust': {'identity_verified_game_count': 0, 'total_all_games_rows': 0}}
+    archive = {'players': [{'id': 2, 'external_id': 'b'}, {'id': 3, 'external_id': 'c'}],
+               'evidence': [{'player_id': player, 'opponent_id': other, 'match_external_id': '42',
+                             'match_date': '2026-11-01', 'game_key': 'catchup:42:1'}
+                            for player, other in ((2, 3), (3, 2))]}
+    assert add_archive_evidence(current, archive, '2026-11-19') == 1
+    assert {p['external_id'] for p in current['players']} == {'a', 'b', 'c'}
+    assert len(current['evidence']) == 2
+
+
 def test_builder_can_use_full_history_refresh_without_reading_an_extra_archive(tmp_path, monkeypatch):
     import json
     import sys

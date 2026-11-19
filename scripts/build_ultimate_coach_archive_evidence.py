@@ -62,12 +62,13 @@ def add_archive_evidence(current: dict, archive: dict, cutoff: str) -> int:
     for row in archive["evidence"]:
         player = mapped_ids[row["player_id"]]
         opponent = mapped_ids[row["opponent_id"]]
-        if player not in current_ids and opponent not in current_ids:
+        captured_result = str(row["game_key"]).startswith("catchup:")
+        if player not in current_ids and opponent not in current_ids and not captured_result:
             continue
         match = row.get("match_external_id")
         date = str(row.get("match_date") or "")[:10]
         captured_new_result = (
-            str(row["game_key"]).startswith("catchup:")
+            captured_result
             and str(match) not in refreshed_evidence_matches
         )
         if not match or (str(match) in refreshed_matches and not captured_new_result) or not date or date > cutoff:
