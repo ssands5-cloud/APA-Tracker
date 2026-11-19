@@ -335,3 +335,61 @@ def test_plain_print_carries_the_path_and_roster_and_the_captain_packet_is_uncha
     assert not page.locator("#bc-night .send-hero").is_visible() and not page.locator("header.app-header").is_visible()
     page.evaluate("document.body.classList.add('print-matchup')")                      # the focused Captain Packet
     assert not page.locator("#bc-night").is_visible() and page.locator("#matchup-print").is_visible()
+
+
+def test_coin_toss_drives_the_put_up_order_and_our_put_up_flow(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") is None                       # no toss yet: unchanged flow
+    page.click("#bc-night [data-toss=us]")
+    night = page.evaluate("UC_BC_LAST.night")
+    assert night["nextLeader"] == "us" and night["toss"] == "us"
+    assert page.locator("#bc-night .night-pill[data-leader=us]").text_content() == "We put up"
+    assert page.locator("#bc-night .path-tabs .primary").text_content().lower() == "we put up next"
+    lead = page.evaluate("UC_BC_LAST.lead.our")
+    rec = night["leadOptions"][0]
+    assert rec["recommended"] and rec["name"] == lead                                # the engine's own lead
+    assert page.locator("#bc-night .send-hero .send-name").text_content() == lead
+    assert page.locator("#bc-send-costs").count() == 0
+    page.click(f'#bc-night .send-hero [data-putup="{rec["id"]}"]')
+    assert page.evaluate("UC_BC_LAST.night.putUp.id") == rec["id"]
+    assert "they answered with" in page.locator("#bc-night .night-ask").first.text_content().lower()
+    assert page.locator("#bc-night [data-toss]").count() == 0                          # toss is fixed once we put up
+    page.reload()                                                                    # the put-up survives a reload
+    page.wait_for_selector("#bc-team-a", state="attached")
+    _tab(page, "home")
+    _pick(page)
+    _tab(page, "matchnight")
+    assert page.evaluate("UC_BC_LAST.night.putUp.id") == rec["id"]
+    page.click("#bc-night [data-undo]")                                              # undo removes the put-up only
+    assert page.evaluate("UC_BC_LAST.night.putUp") is None and page.evaluate("UC_BC_LAST.night.games.length") == 0
+    page.click(f'#bc-night .send-hero [data-putup="{rec["id"]}"]')
+    answer = page.locator("#bc-night [data-answer]").first
+    their = answer.get_attribute("data-answer")
+    answer.click()                                                                   # one tap confirms the pairing
+    game = page.evaluate("UC_BC_LAST.night.games[0]")
+    assert (game["ourId"], game["theirId"]) == (rec["id"], their)
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"                    # put-ups alternate
+    assert page.locator("#bc-night .night-pill[data-leader=them]").text_content() == "They put up"
+    assert page.locator("#bc-night [data-toss]").count() == 0
+    assert page.locator("#bc-night .night-chip[data-pick]").count() >= 1             # their put-up: the usual flow
+    assert page.errors == []
+
+
+def test_they_put_up_first_keeps_the_existing_send_flow_and_hands_over_to_our_put_up(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=them]")
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"
+    assert page.locator("#bc-night .path-tabs .primary").text_content().lower() == "they put up next"
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    page.click("#bc-night .send-hero [data-send]")
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "us"
+    options = page.evaluate("UC_BC_LAST.night.leadOptions")
+    used = page.evaluate("UC_BC_LAST.night.games[0].ourId")
+    assert options and all(o["id"] != used for o in options)                         # the used player is not offered
+    page.click("#bc-night [data-undo]")
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"
+    page.click("#bc-night [data-toss='']")                                           # clearing restores the plain flow
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") is None
+    assert page.errors == []

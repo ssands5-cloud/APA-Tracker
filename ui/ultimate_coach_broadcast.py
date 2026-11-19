@@ -581,7 +581,7 @@ _JS_BODY = r"""
       +(note?'<div class="alt-note">'+esc(note)+'</div>':'')+'</div>';
   }
   /* ---------- Captain command board ---------- */
-  var pathMode="weLead";
+  var pathMode="weLead",autoPath="";
   var ROLE_LABEL={save:"Protect",core:"Core",flexible:"Flexible",situational:"Situational",burn:"Burn early",used:"Used",out:"Unavailable"};
   function afterText(a){
     if(!a.slots) return "final pairing";
@@ -609,7 +609,11 @@ _JS_BODY = r"""
         +'<div class="so">'+esc(g.our)+'</div><div class="st">vs '+esc(g.their)+'</div></div>';
     }).join("");
     var selected=m.night.chosen&&(m.night.sendScenarios||[]).find(function(s){return s.recommended;});
-    var route=selected?[{leader:"them",our:selected.name,their:m.night.opp.name,level:selected.level}].concat(selected.path)
+    var nl=m.night.nextLeader,auto=m.planKey+"|"+(m.played||0)+"|"+(nl||"");
+    if(nl&&autoPath!==auto){pathMode=nl==="us"?"weLead":"theyLead";}autoPath=auto;
+    var upOpt=m.night.putUp&&(m.night.leadOptions||[]).find(function(o){return o.id===m.night.putUp.id;});
+    var route=upOpt?[{leader:"us",our:upOpt.name,their:upOpt.reply.name+" (their likely answer)",level:upOpt.reply.level}].concat(upOpt.path)
+      :selected?[{leader:"them",our:selected.name,their:m.night.opp.name,level:selected.level}].concat(selected.path)
       :(pathMode==="theyLead"?pl.theyLead:pl.weLead);
     var slots=route.map(function(s,i){
       return '<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+' \u00b7 '+(s.leader==="us"?"we put up":"they put up")+'</div><div class="so">'+esc(s.our)+'</div><div class="st">vs '+esc(s.their)+'</div><span class="evidence-badge '+badgeClass(s.level)+'">'+esc(s.level)+'</span></div>';}).join("");
@@ -623,7 +627,9 @@ _JS_BODY = r"""
         +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
         +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>';
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
-    var start=selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
+    var start=upOpt?'<strong>Path after we put up '+esc(upOpt.name)+'</strong>'
+      :selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
+      :nl?tab("weLead",nl==="us"?"We put up next":"If we put up next")+tab("theyLead",nl==="them"?"They put up next":"If they put up next")
       :tab("weLead","If we put up first")+tab("theyLead","If they put up first");
     return '<section class="cmd cmd-main" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
       +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
@@ -654,16 +660,57 @@ _JS_BODY = r"""
     var el=$("bc-night"); if(!el) return;
     if(!m||m.empty||!m.night){el.innerHTML='<div class="home-empty">Pick a team and opponent on Home (or a fixture in Schedule Planner) to run the night.</div>';return;}
     var n=m.night,played=m.played||0,gameNo=Math.min(5,played+1),done=played>=5;
-    var undo=n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
+    var undo=n.putUp?'<button type="button" class="night-btn" data-undo="1">Undo put-up</button>'
+      :n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
     var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
       +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
+      +(n.nextLeader&&!done?'<span class="night-pill" data-leader="'+n.nextLeader+'">'+(n.nextLeader==="us"?"We put up":"They put up")+'</span>':'')
       +'<span class="night-pill">Score '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
       +'<button type="button" class="night-btn" data-full="1">Full evidence</button></div>';
     var chips='<div class="night-chips" role="group" aria-label="Opponent they put up"><span class="night-ask">'+(n.chosen?"They put up":"If they put up")+'</span>'
       +n.chips.map(function(c){return '<button type="button" class="night-chip" data-pick="'+esc(c.id)+'" aria-pressed="'+c.on+'">'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+'</button>';}).join("")
       +(n.chips.length?"":'<span class="matchup-footnote">Every opponent has played.</span>')+'</div>';
     var hero="",alts="",risks="";
-    if(n.opp){
+    // Coin toss: recorded once, before the first pairing. Put-ups alternate after game 1.
+    var tossBar="";
+    if(!done&&!n.games.length&&!n.putUp){
+      tossBar='<div class="night-chips night-toss" role="group" aria-label="Who puts up first"><span class="night-ask">'+(n.toss?"Game 1 put-up":"Who puts up first?")+'</span>'
+        +'<button type="button" class="night-btn'+(n.toss==="us"?' primary':'')+'" data-toss="us" aria-pressed="'+(n.toss==="us")+'">We put up first</button>'
+        +'<button type="button" class="night-btn'+(n.toss==="them"?' primary':'')+'" data-toss="them" aria-pressed="'+(n.toss==="them")+'">They put up first</button>'
+        +(n.toss?'<button type="button" class="night-btn" data-toss="">Clear</button>':'<span class="matchup-footnote">Set after the coin toss; the board then follows each game\u2019s put-up.</span>')+'</div>';
+    }
+    var leadFlow=!done&&n.nextLeader==="us";
+    if(leadFlow&&n.putUp){
+      var po=(n.leadOptions||[]).find(function(o){return o.id===n.putUp.id;});
+      chips='<div class="night-chips" role="group" aria-label="Opponent they answered with"><span class="night-ask">They answered with</span>'
+        +n.chips.map(function(c){return '<button type="button" class="night-chip" data-answer="'+esc(c.id)+'" aria-pressed="false">'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+'</button>';}).join("")+'</div>';
+      hero='<section class="send-hero" aria-label="Our put-up"><span class="send-kicker">We put up \u00b7 game '+gameNo+'</span>'
+        +'<div class="send-name">'+esc(n.putUp.name)+'</div>'
+        +'<div class="send-why">Tap the player they answered with to confirm the pairing.'+(po?' Their most damaging answer: '+esc(po.reply.name)+' ('+esc(po.reply.level)+' for us).':'')+'</div>'
+        +'<div class="send-row"><button type="button" class="night-btn" data-putup="">Change put-up</button></div></section>';
+    }else if(leadFlow){
+      var opts=n.leadOptions||[],rec=opts[0];
+      chips="";
+      if(rec){
+        hero='<section class="send-hero" aria-label="Put up now"><span class="send-kicker">Put up now \u00b7 game '+gameNo+'</span>'
+          +'<div class="send-name">'+esc(rec.name)+'</div>'
+          +'<div class="send-row"><span class="evidence-badge '+badgeClass(rec.reply.level)+'">'+esc(rec.reply.level)+'</span>'
+          +'<button type="button" class="night-btn primary" data-putup="'+esc(rec.id)+'">\u2713 Put up '+esc(rec.name)+'</button></div>'
+          +'<div class="send-why">'+esc(m.lead&&m.lead.our===rec.name?m.lead.why:"Their most damaging answer is "+rec.reply.name+" ("+rec.reply.level+" for us)")+'</div>'
+          +(rec.avail==="Unknown"?'<div class="send-cost">Availability unknown \u2014 confirm '+esc(rec.name)+' is here.</div>':'')
+          +'<div class="send-after"><b>Then they put up:</b> '+esc(rec.path.length?rec.path[0].our+" answers "+rec.path[0].their+" next, per the plan":"final pairing")+'</div></section>';
+        var others=opts.slice(1).map(function(o){
+          var note=["their worst answer: "+o.reply.name+" ("+o.reply.level+")",o.tradeoff||"",o.budget||"",o.avail==="Unknown"?"availability unknown":""].filter(Boolean).join(" \u00b7 ");
+          return '<div class="alt-row" data-lead-player="'+esc(o.id)+'"><div class="matchup-num">\u2248</div>'
+            +'<div class="matchup-our"><div class="matchup-kicker">Put-up option</div><div class="matchup-player">'+esc(o.name)+slTag(o.sl)+'</div></div>'
+            +'<div class="matchup-bars lead-reply" aria-label="Evidence against their worst answer"><span class="evidence-badge '+badgeClass(o.reply.level)+'">'+esc(o.reply.level)+'</span></div>'
+            +'<button type="button" class="night-btn" data-putup="'+esc(o.id)+'" aria-label="Put up '+esc(o.name)+'">Put up</button>'
+            +'<div class="alt-note">'+esc(note)+'</div></div>';});
+        alts='<h3 class="night-h">Other put-ups</h3>'+(others.slice(0,3).join("")||'<p class="matchup-footnote">No other available player.</p>')
+          +(others.length>3?'<details class="more"><summary>'+(others.length-3)+' more option'+(others.length-3===1?'':'s')+'</summary>'+others.slice(3).join("")+'</details>':"");
+      }else hero='<section class="send-hero"><span class="send-kicker">No put-up</span><div class="send-why">No available player can be put up within the current plan.</div></section>';
+    }
+    if(n.opp&&!leadFlow){
       var all=n.ranked.concat(n.unordered).concat(n.avoid);
       var pick=null;
       if(n.answer) pick=all.filter(function(c){return c.name===n.answer.our;})[0]||null;
@@ -711,7 +758,10 @@ _JS_BODY = r"""
     var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><details class="more"><summary>Player details: what each send does to the plan</summary>'
       +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></details></section>':"";
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
-    el.innerHTML=status+storage+commandHtml(m)+(done?"":chips+hero+strategyBench+renderSendCosts(n.sendScenarios,n.opp)+alts+risks)+bench+log;
+    el.innerHTML=status+storage+commandHtml(m)+(done?"":tossBar+chips+hero+strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-toss]"),function(b){b.onclick=function(){window.UC_ACT.toss(b.getAttribute("data-toss"));};});
+    Array.prototype.forEach.call(el.querySelectorAll("[data-putup]"),function(b){b.onclick=function(){window.UC_ACT.putUp(b.getAttribute("data-putup"));};});
+    Array.prototype.forEach.call(el.querySelectorAll("[data-answer]"),function(b){b.onclick=function(){if(n.putUp) window.UC_ACT.send(n.putUp.id,b.getAttribute("data-answer"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-path]"),function(b){b.onclick=function(){pathMode=b.getAttribute("data-path");renderNight(m);};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-pick]"),function(b){b.onclick=function(){window.UC_ACT.pick(b.getAttribute("data-pick"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-send]"),function(b){b.onclick=function(){window.UC_ACT.send(b.getAttribute("data-send"),b.getAttribute("data-opp"));};});

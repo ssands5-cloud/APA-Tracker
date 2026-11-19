@@ -250,7 +250,7 @@
   var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false,WR_PLAN_CHANGED_ELSEWHERE=false,WR_PLAN_SAVED=null;
   var WR_PLAN=(function(){
     var o=null;try{WR_PLAN_SAVED=window.localStorage.getItem("ultimate-coach:plan-v2");o=JSON.parse(WR_PLAN_SAVED||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
-    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{},games:o.games||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{},games:{}};
+    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{},games:o.games||{},toss:o.toss||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{},games:{},toss:{}};
     // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
     // different one (another team scope, or a note that already exists) is archived with its scope. The archive
     // is shown on the card as an earlier opinion and is never copied back into the editable note.
@@ -1154,10 +1154,22 @@
   window.UC_ACT={
     pick:function(oppId){WR_STATE.next=String(oppId);renderTeamMatchups();},
     send:function(ourId,oppId){var c=wrBcCur();if(!c) return;
+      if(wrLineup(c.ck,ourId)==="Played"||wrMark("opp",c.ck,oppId).p) return;   // a double tap never records twice
+      var t=WR_PLAN.toss[c.ck];if(t) delete t.up;
       wrSetMark("our",c.ck,ourId,"l","Played",true);wrSetMark("opp",c.ck,oppId,"p",true);wrRecordGame(c.ck,ourId,oppId);
       WR_STATE.next=null;renderTeamMatchups();},
+    // Who put up first in game 1. Put-ups alternate after that (the engine's plans assume the same order), so the
+    // board knows whose put-up every later game is. It can change only before the first pairing is confirmed.
+    toss:function(first){var c=wrBcCur();if(!c||(WR_PLAN.games[c.ck]||[]).length) return;
+      if(first==="us"||first==="them") WR_PLAN.toss[c.ck]={first:first}; else delete WR_PLAN.toss[c.ck];
+      WR_STATE.next=null;wrSave();renderTeamMatchups();},
+    // Our put-up when we lead: held until the captain records the player they answered with.
+    putUp:function(pid){var c=wrBcCur();if(!c) return;var t=WR_PLAN.toss[c.ck];if(!t) return;
+      if(pid) t.up=String(pid); else delete t.up;WR_STATE.next=null;wrSave();renderTeamMatchups();},
     result:function(i,r){var c=wrBcCur();if(!c) return;var g=WR_PLAN.games[c.ck]||[];if(!g[i]) return;g[i].r=r;wrSave();renderTeamMatchups();},
-    undo:function(){var c=wrBcCur();if(!c) return;var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
+    undo:function(){var c=wrBcCur();if(!c) return;var t=WR_PLAN.toss[c.ck];
+      if(t&&t.up){delete t.up;wrSave();renderTeamMatchups();return;}                // an uncommitted put-up is undone first
+      var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
       wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
     avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();}
   };
@@ -1293,6 +1305,27 @@
     return {cards:cards,plan:{conf:wrConfText(mp),fragility:fragility.rating,leans:fragility.player||"",gamesLeft:mp.games_left,
       weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead)}};
   }
+  function wrLeadOptions(w,plan,x,mp,open,solveAfterSend){
+    var leadId=mp.lead?String(mp.lead.our_id):null,slots=Math.max(0,5-x.playedN-1);
+    var opts=w.ours.filter(function(m){return plan.rem[String(m.id)];}).map(function(m){
+      var id=String(m.id),sl=wrKnown(m.skill_level)?Number(m.skill_level):null,worst=null,reply=null,after=null;
+      open.forEach(function(j){var row=w.blocks[j].byMember[id];if(!row) return;
+        var a=solveAfterSend(m,j),v=row.confidence.points+(a.total_if_they_lead||0);
+        if(worst===null||v<worst){worst=v;reply={id:String(w.theirs[j].id),name:wrDisplayName(w.theirs[j],w.theirs),level:row.confidence.level};after=a;}});
+      var path=after?(after.plan_if_they_lead||[]).map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};}):[];
+      var budget=x.cap===null?null:(sl===null||(after&&after.cap&&after.cap.incomplete)?"Skill budget incomplete":
+        (x.playedSl+sl>x.cap||(after&&after.cap&&after.cap.slack<0)?"Over the entered cap":"Within the entered cap"));
+      return {id:id,name:wrDisplayName(m,w.ours),sl:sl,recommended:id===leadId,worst:worst,reply:reply,path:path,slots:slots,budget:budget,
+        avail:wrAvail(plan.ck,m.id)};
+    }).filter(function(o){return o.reply;});
+    opts.sort(function(a,b){return (b.recommended-a.recommended)||((b.worst||0)-(a.worst||0))||a.name.localeCompare(b.name);});
+    var best=opts.length?opts[0]:null;
+    opts.forEach(function(o){if(!best||o===best) return;
+      if(o.path.length<best.path.length) o.tradeoff="Leaves fewer planned pairings";
+      else if(o.worst<best.worst) o.tradeoff="Weaker night if they reply with "+o.reply.name;
+      else if(o.worst===best.worst) o.tradeoff="Equally good put-up";});
+    return opts;
+  }
   function wrBroadcastModel(w,plan,ta,tb,ctx){
     var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
     var solveAfterSend=wrAfterSendPlanner(w,plan,x);
@@ -1323,6 +1356,18 @@
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
     night.command=wrCommand(w,plan,mp,x,solveAfterSend);
+    // Put-up order. With the toss recorded, game N's leader is known; when it is ours, every available put-up is
+    // compared the way the engine chooses its lead: their most damaging reply, then the rest of the night with
+    // them putting up next. The engine's own lead stays the recommendation.
+    var toss=WR_PLAN.toss[ck]||null;
+    night.toss=toss&&(toss.first==="us"||toss.first==="them")?toss.first:null;
+    night.nextLeader=night.toss&&x.playedN<5?((x.playedN%2===0)===(night.toss==="us")?"us":"them"):null;
+    night.putUp=null;night.leadOptions=[];
+    if(night.nextLeader==="us"&&open.length){
+      night.leadOptions=wrLeadOptions(w,plan,x,mp,open,solveAfterSend);
+      var up=toss.up&&plan.rem[String(toss.up)]?w.ours.filter(function(m){return String(m.id)===String(toss.up);})[0]:null;
+      if(up) night.putUp={id:String(up.id),name:wrDisplayName(up,w.ours),sl:wrKnown(up.skill_level)?up.skill_level:null};
+    }
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
     night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
