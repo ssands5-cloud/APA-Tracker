@@ -137,12 +137,12 @@ def test_match_night_runs_the_loop_pick_send_result_undo(page):
 def test_bench_availability_changes_the_recommendation_inputs(page):
     _pick(page)
     _tab(page, "matchnight")
-    first = page.locator("#bc-night [data-avail]").first
+    first = page.locator("#bc-night .bench [data-avail]").first
     assert first.text_content() == "Unknown"
     first.click()
-    assert page.locator("#bc-night [data-avail]").first.text_content() == "Available"
-    page.locator("#bc-night [data-avail]").first.click()
-    assert page.locator("#bc-night [data-avail]").first.text_content() == "Unavailable"
+    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Available"
+    page.locator("#bc-night .bench [data-avail]").first.click()
+    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Unavailable"
     assert page.locator("#bc-night .alt-row .matchup-player, #bc-night .send-name").all_text_contents()  # engine still answers
 
 
@@ -158,14 +158,14 @@ def test_match_night_surfaces_failed_result_saves_and_recovers(page):
             return window.originalSetItem.call(this, key, value);
         };
     }""")
-    page.locator("#bc-night [data-result][data-r=W]").click()
+    page.locator("#bc-night [data-result][data-r=W]").first.click()
     warning = page.locator("#bc-night [role=status]")
     assert warning.is_visible()
     assert "Planning changes are not saved" in warning.inner_text()
     assert "Results are available while this page is open" in page.locator("#bc-night").inner_text()
     page.evaluate("() => { Storage.prototype.setItem = window.originalSetItem; }")
     page.locator("#bc-night [data-result][data-r='']").click()
-    page.locator("#bc-night [data-result][data-r=W]").click()
+    page.locator("#bc-night [data-result][data-r=W]").first.click()
     assert warning.text_content() == ""
     page.reload()
     _tab(page, "home")
@@ -353,7 +353,7 @@ def test_coin_toss_drives_the_put_up_order_and_our_put_up_flow(page):
     assert page.locator("#bc-send-costs").count() == 0
     page.click(f'#bc-night .send-hero [data-putup="{rec["id"]}"]')
     assert page.evaluate("UC_BC_LAST.night.putUp.id") == rec["id"]
-    assert "they answered with" in page.locator("#bc-night .night-ask").first.text_content().lower()
+    assert page.locator("#bc-night [aria-label='Opponent they answered with'] .night-ask").text_content() == "They answered with"
     assert page.locator("#bc-night [data-toss]").count() == 0                          # toss is fixed once we put up
     page.reload()                                                                    # the put-up survives a reload
     page.wait_for_selector("#bc-team-a", state="attached")
@@ -392,4 +392,27 @@ def test_they_put_up_first_keeps_the_existing_send_flow_and_hands_over_to_our_pu
     assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"
     page.click("#bc-night [data-toss='']")                                           # clearing restores the plain flow
     assert page.evaluate("UC_BC_LAST.night.nextLeader") is None
+    assert page.errors == []
+
+
+def test_check_in_before_game_one_and_results_to_record_at_the_top(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    checkin = page.locator("#bc-night .night-checkin [data-avail]")
+    roster = page.evaluate("UC_BC_LAST.night.bench.ours.map(p => p.id)")
+    assert sorted(checkin.evaluate_all("bs => bs.map(b => b.dataset.avail)")) == sorted(roster)
+    out = checkin.first.get_attribute("data-avail")
+    checkin.first.click()                                                            # Here
+    page.locator(f'#bc-night .night-checkin [data-avail="{out}"]').click()            # Out: same mark as the bench
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).rem", out) is False
+    assert page.locator(f'#bc-night .bench [data-avail="{out}"]').text_content() == "Unavailable"
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    page.click("#bc-night .send-hero [data-send]")
+    assert page.locator("#bc-night .night-checkin").count() == 0                     # check-in closes at game 1
+    bar = page.locator("#bc-night .night-results")
+    assert "g1 result" in bar.text_content().lower()
+    bar.locator("[data-r=L]").click()
+    assert page.locator("#bc-night .night-results").count() == 0
+    assert "0-1" in page.locator("#bc-night .night-pill", has_text="Score").text_content()
     assert page.errors == []

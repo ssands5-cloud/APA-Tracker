@@ -679,6 +679,19 @@ _JS_BODY = r"""
         +'<button type="button" class="night-btn'+(n.toss==="them"?' primary':'')+'" data-toss="them" aria-pressed="'+(n.toss==="them")+'">They put up first</button>'
         +(n.toss?'<button type="button" class="night-btn" data-toss="">Clear</button>':'<span class="matchup-footnote">Set after the coin toss; the board then follows each game\u2019s put-up.</span>')+'</div>';
     }
+    // Before game 1: who is here. Same availability marks as the bench (Unknown is not Unavailable).
+    var checkin="";
+    if(!done&&!n.games.length){
+      var avlNext0={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"},label={Unknown:"?",Available:"Here",Unavailable:"Out"};
+      checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who\u2019s here?</span>'
+        +n.bench.ours.map(function(b){return '<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' \u00b7 '+label[b.avail]+'</button>';}).join("")
+        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan.</span></div>';
+    }
+    // Results still to enter, at the top where the captain is looking.
+    var pending=n.games.filter(function(g){return !g.r;});
+    var resultBar=pending.length?'<div class="night-chips night-results" role="group" aria-label="Results to record">'
+      +pending.map(function(g){return '<span class="night-ask">G'+(g.i+1)+' result</span><span class="night-pill">'+esc(g.our)+' vs '+esc(g.their)+'</span>'
+        +'<button type="button" class="night-btn primary" data-result="'+g.i+'" data-r="W">We won</button><button type="button" class="night-btn" data-result="'+g.i+'" data-r="L">We lost</button>';}).join("")+'</div>':"";
     var leadFlow=!done&&n.nextLeader==="us";
     if(leadFlow&&n.putUp){
       var po=(n.leadOptions||[]).find(function(o){return o.id===n.putUp.id;});
@@ -758,7 +771,7 @@ _JS_BODY = r"""
     var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><details class="more"><summary>Player details: what each send does to the plan</summary>'
       +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></details></section>':"";
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
-    el.innerHTML=status+storage+commandHtml(m)+(done?"":tossBar+chips+hero+strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+    el.innerHTML=status+storage+resultBar+checkin+tossBar+commandHtml(m)+(done?"":chips+hero+strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-toss]"),function(b){b.onclick=function(){window.UC_ACT.toss(b.getAttribute("data-toss"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-putup]"),function(b){b.onclick=function(){window.UC_ACT.putUp(b.getAttribute("data-putup"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-answer]"),function(b){b.onclick=function(){if(n.putUp) window.UC_ACT.send(n.putUp.id,b.getAttribute("data-answer"));};});
