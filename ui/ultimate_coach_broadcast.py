@@ -688,13 +688,13 @@ _JS_BODY = r"""
         +'<button type="button" class="night-btn'+(n.toss==="them"?' primary':'')+'" data-toss="them" aria-pressed="'+(n.toss==="them")+'">They put up first</button>'
         +(n.toss?'<button type="button" class="night-btn" data-toss="">Clear</button>':'<span class="matchup-footnote">Set after the coin toss; the board then follows each game\u2019s put-up.</span>')+'</div>';
     }
-    // Before game 1: who is here. Same availability marks as the bench (Unknown is not Unavailable).
+    // Before game 1: who is here. Everyone is Here unless tapped Out; same marks as the bench.
     var checkin="";
     if(!done&&!n.games.length){
-      var avlNext0={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"},label={Unknown:"?",Available:"Here",Unavailable:"Out"};
+      var avlNext0={Available:"Unavailable",Unavailable:"Available"},label={Available:"Here",Unavailable:"Out"};
       checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who\u2019s here?</span>'
         +n.bench.ours.map(function(b){return '<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' \u00b7 '+label[b.avail]+'</button>';}).join("")
-        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan. Applies to every match tonight (8-Ball and 9-Ball).</span></div>'
+        +'<span class="matchup-footnote">Everyone starts Here; tap anyone who is not. Out players leave the plan. Applies to every match tonight (8-Ball and 9-Ball).</span></div>'
         +'<div class="night-chips night-checkin-opp" role="group" aria-label="Their players here tonight"><span class="night-ask">Their players</span>'
         +n.bench.theirs.map(function(b){return '<button type="button" class="avail-btn '+(b.out?'Unavailable':'Available')+'" data-oppout="'+esc(b.id)+'" data-out="'+(b.out?'':'1')+'" aria-label="'+esc(b.name+(b.out?" is out; mark here":" is here; mark out"))+'">'+esc(b.name)+' \u00b7 '+(b.out?'Out':'Here')+'</button>';}).join("")
         +'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them. Applies to every match tonight.</span></div>';
@@ -769,7 +769,7 @@ _JS_BODY = r"""
       risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.slice(0,4).join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>'
         +(rl.length>4?'<details class="more"><summary>'+(rl.length-4)+' more risk'+(rl.length-4===1?'':'s')+'</summary><ul class="risk-list">'+rl.slice(4).join("")+'</ul></details>':"");
     }
-    var avlNext={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"};
+    var avlNext={Available:"Unavailable",Unavailable:"Available"};
     var bench='<h3 class="night-h">Bench</h3><div class="bench"><div class="bench-col"><h4>Our players</h4>'
       +n.bench.ours.map(function(b){return '<div class="bench-item'+(b.lineup==="Played"?" used":"")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
         +(b.lineup==="Played"?'<span class="tagx">played</span>':'<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.avail)+'</button>')+'</div>';}).join("")

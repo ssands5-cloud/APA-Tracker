@@ -138,11 +138,11 @@ def test_bench_availability_changes_the_recommendation_inputs(page):
     _pick(page)
     _tab(page, "matchnight")
     first = page.locator("#bc-night .bench [data-avail]").first
-    assert first.text_content() == "Unknown"
+    assert first.text_content() == "Available"                                        # everyone starts here
     first.click()
-    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Available"
-    page.locator("#bc-night .bench [data-avail]").first.click()
     assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Unavailable"
+    page.locator("#bc-night .bench [data-avail]").first.click()
+    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Available"
     assert page.locator("#bc-night .alt-row .matchup-player, #bc-night .send-name").all_text_contents()  # engine still answers
 
 
@@ -403,8 +403,8 @@ def test_check_in_before_game_one_and_results_to_record_at_the_top(page):
     roster = page.evaluate("UC_BC_LAST.night.bench.ours.map(p => p.id)")
     assert sorted(checkin.evaluate_all("bs => bs.map(b => b.dataset.avail)")) == sorted(roster)
     out = checkin.first.get_attribute("data-avail")
-    checkin.first.click()                                                            # Here
-    page.locator(f'#bc-night .night-checkin [data-avail="{out}"]').click()            # Out: same mark as the bench
+    assert "here" in checkin.first.text_content().lower()                            # everyone starts here
+    checkin.first.click()                                                            # Out: same mark as the bench
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).rem", out) is False
     assert page.locator(f'#bc-night .bench [data-avail="{out}"]').text_content() == "Unavailable"
@@ -482,8 +482,7 @@ def test_availability_is_shared_by_every_match_on_the_same_night(page):
     ours = page.evaluate("UC_BC_LAST.night.bench.ours.map(p => p.id)")
     theirs_first = page.evaluate("UC_BC_LAST.night.bench.theirs.map(p => p.id)")
     out = ours[0]
-    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                      # Here
-    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                      # Out
+    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                      # Here -> Out
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
     page.locator("#bc-night .night-chip[data-pick]").first.click()
     page.click("#bc-night .send-hero [data-send]")                                    # one game in the first match
@@ -493,11 +492,11 @@ def test_availability_is_shared_by_every_match_on_the_same_night(page):
     assert page.evaluate("UC_BC_LAST.planKey") != first_ck
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
     assert page.evaluate("UC_BC_LAST.night.games.length") == 0                        # games stay per match
-    page.click(f'#bc-night .bench [data-avail="{out}"]')                             # Out -> unknown, from here
+    page.click(f'#bc-night .bench [data-avail="{out}"]')                             # Out -> Here, from here
     _tab(page, "schedule")
     page.click("#md-compare-0")
     _tab(page, "matchnight")
-    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unknown"
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Available"
     assert page.evaluate("UC_BC_LAST.night.games.length") == 1
     assert theirs_first                                                               # fixture had an opponent roster
     assert page.errors == []

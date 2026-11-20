@@ -409,9 +409,10 @@
     Object.keys(WR_PLAN[kind]).forEach(function(k){if(wrScopeDate(k)===d&&WR_PLAN[kind][k][String(pid)]) delete WR_PLAN[kind][k][String(pid)][field];});
     return true;
   }
-  function wrSetAvail(scope,pid,val){var v=val==="Unknown"?"":val;if(!wrSetNight("our",scope,pid,"a",v)) wrSetMark("our",scope,pid,"a",v,true);wrSave();}
+  // Owner decision (2026-11-20): everyone is available unless marked out, so only "Unavailable" is stored.
+  function wrSetAvail(scope,pid,val){var v=val==="Unavailable"?"Unavailable":"";if(!wrSetNight("our",scope,pid,"a",v)) wrSetMark("our",scope,pid,"a",v,true);wrSave();}
   function wrSetOppOut(scope,pid,out){if(!wrSetNight("opp",scope,pid,"o",out?true:"")) wrSetMark("opp",scope,pid,"o",out?true:"",true);wrSave();}
-  function wrAvail(scope,pid){var n=wrNightMark("our",scope,pid),a=n&&n.a?n.a:wrMark("our",scope,pid).a;return a==="Available"||a==="Unavailable"?a:"Unknown";}
+  function wrAvail(scope,pid){var n=wrNightMark("our",scope,pid),a=n&&n.a?n.a:wrMark("our",scope,pid).a;return a==="Unavailable"?"Unavailable":"Available";}
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
   function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
@@ -1599,7 +1600,7 @@
     var ourRows=w.ours.map(function(m){
       var a=wrAvail(plan.ck,m.id),l=wrLineup(plan.ck,m.id),pid=esc(m.id);
       return '<tr class="'+(plan.rem[String(m.id)]?'':'out')+'"><td>'+esc(playerRef(m))+'</td><td>'+esc(slText(m))+'</td>'
-        +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(playerRef(m))+'">'+["Unknown","Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
+        +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(playerRef(m))+'">'+["Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
         +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(playerRef(m))+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td></tr>';
     }).join("");
     var oppRows=w.theirs.map(function(o,j){
