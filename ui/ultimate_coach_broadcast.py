@@ -47,7 +47,10 @@ def top_markup(ui: str, facts: list[str]) -> str:
     return (
         '<header class="app-header"><a class="logo" href="#bc-home"><span class="logo-mark">UC</span>'
         '<span class="logo-text"><span>ULTIMATE</span><span><b>COACH</b></span></span></a>'
-        f'<nav class="main-nav" aria-label="Main">{nav}</nav></header>'
+        f'<nav class="main-nav" aria-label="Main">{nav}</nav>'
+        '<div class="fmt-switch" role="group" aria-label="Switch between tonight\'s 8-Ball and 9-Ball matches">'
+        '<button type="button" data-fmt="EIGHT" aria-pressed="false">8-Ball</button>'
+        '<button type="button" data-fmt="NINE" aria-pressed="false">9-Ball</button></div></header>'
         f'<div class="ticker-wrap" aria-label="Match context"><div class="ticker-track" id="ticker" '
         f'data-facts="{escape(json.dumps(facts), quote=True)}"></div></div>'
     )
@@ -100,6 +103,11 @@ body.bc .logo-text{font-family:var(--cond);font-weight:800;font-size:12px;letter
 body.bc .logo-text span{display:block}
 body.bc .main-nav{display:flex;align-items:stretch;flex:1;overflow-x:auto;scrollbar-width:none}
 body.bc .main-nav::-webkit-scrollbar{display:none}
+body.bc .fmt-switch{display:flex;align-items:center;gap:4px;padding:0 14px;border-left:1px solid var(--border);flex-shrink:0}
+body.bc .fmt-switch button{font-family:var(--cond);font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--fg-dim);border:1px solid var(--border-hi);border-radius:3px;padding:6px 10px;min-height:32px;cursor:pointer}
+body.bc .fmt-switch button.on{background:var(--home);color:#04121a;border-color:var(--home)}
+body.bc .fmt-switch button:disabled{opacity:.35;cursor:not-allowed}
+body.bc .fmt-switch button:focus-visible{outline:2px solid var(--home);outline-offset:2px}
 body.bc .nav-tab{display:flex;align-items:center;padding:0 16px;min-height:48px;font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim);border-bottom:2px solid transparent;white-space:nowrap;text-decoration:none;transition:color .15s,border-color .15s}
 body.bc .nav-tab:hover{color:var(--fg)}
 body.bc .nav-tab.active{color:var(--home);border-bottom-color:var(--home)}
@@ -204,6 +212,7 @@ body.bc .home-empty{padding:28px 20px;color:var(--fg-dim);font-size:14px;border:
 }
 @media (max-width:480px){
   body.bc .nav-tab{padding:0 10px;font-size:11px}body.bc .logo{padding:0 12px}
+  body.bc .fmt-switch{padding:0 8px;gap:3px}body.bc .fmt-switch button{padding:5px 7px;font-size:11px;letter-spacing:.04em}
 }
 @media print{body.bc .app-header,body.bc .ticker-wrap,body.bc #bc-home,body.bc #bc-tabhead{display:none!important}
   body.bc #bc-night>:not(.cmd-main){display:none!important}
@@ -813,9 +822,20 @@ _JS_BODY = r"""
       +'<div class="table-wrap"><table class="league-table"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>T</th><th>Pts</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'
       +'<div class="league-card"><h3>Recent results</h3><p class="sub">Newest first. Your team’s matches are marked.</p>'+res+'</div></div>';
   }
-  window.UC_BC={render:function(m){renderHome(m);renderNight(m);renderLeague(m);ticker(m);}};
+  /* ---------- 8-Ball / 9-Ball switch in the header ---------- */
+  function fmtSwitch(){
+    var F=window.UC_FORMAT;
+    Array.prototype.forEach.call(document.querySelectorAll(".fmt-switch [data-fmt]"),function(b){
+      var f=b.getAttribute("data-fmt"),on=!!F&&F.current()===f,ok=!!F&&F.has(f);
+      b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on));b.disabled=!ok;
+      b.title=ok?(on?"Showing tonight's "+b.textContent+" match":"Switch to tonight's "+b.textContent+" match")
+        :"No "+b.textContent+" match on this date against this opponent";
+      b.onclick=function(){if(!on&&window.UC_FORMAT) window.UC_FORMAT.go(f);};
+    });
+  }
+  window.UC_BC={render:function(m){renderHome(m);renderNight(m);renderLeague(m);ticker(m);fmtSwitch();}};
   show("home");
-  renderHome(window.UC_BC_LAST||null); renderNight(window.UC_BC_LAST||null); renderLeague(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null);
+  renderHome(window.UC_BC_LAST||null); renderNight(window.UC_BC_LAST||null); renderLeague(window.UC_BC_LAST||null); ticker(window.UC_BC_LAST||null); fmtSwitch();
   route();
 })();
 """

@@ -527,3 +527,17 @@ def test_played_players_leave_the_roster_table_for_a_collapsed_line(page):
     assert "already played or out: 1" in gone.locator("summary").text_content().lower()
     assert "(played)" in gone.text_content()
     assert page.errors == []
+
+
+def test_header_format_switch_shows_the_current_format_and_only_offers_real_matches(page):
+    assert page.locator(".fmt-switch [data-fmt=EIGHT]").get_attribute("title")      # drawn on first load too
+    _tab(page, "schedule")
+    page.fill("#md-date", "2026-10-25")
+    page.wait_for_selector("#md-compare-0")
+    page.click("#md-compare-0")                                                       # a dated 8-Ball fixture
+    eight = page.locator(".fmt-switch [data-fmt=EIGHT]")
+    nine = page.locator(".fmt-switch [data-fmt=NINE]")
+    assert eight.is_visible() and eight.get_attribute("aria-pressed") == "true"
+    assert nine.is_disabled()                                                         # no 9-Ball match that night here
+    assert "no 9-ball match" in nine.get_attribute("title").lower()
+    assert page.errors == []

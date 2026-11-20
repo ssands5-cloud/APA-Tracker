@@ -1716,6 +1716,30 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     renderTeamMatchups();
     if(!auto) document.getElementById("matchup-print").scrollIntoView({{behavior:"smooth"}});
   }}
+  // Broadcast 8-Ball / 9-Ball switch: the same night's match in another format for the team with the same name,
+  // against the opponent team with the same name. Loaded exactly like Match Day's Compare, so each match keeps its
+  // own saved night. Only offered when the current match came from a dated fixture.
+  function ucFormatSibling(fmt){{
+    var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value];
+    var date=MATCHUP_CONTEXT&&MATCHUP_CONTEXT.fixture?MATCHUP_CONTEXT.fixture.local_date:null;
+    if(!ta||!date) return null;
+    var found=null;
+    Object.keys(SCHEDULE).forEach(function(k){{
+      var s=TEAM_INDEX[k];if(found||!s||s.name!==ta.name||s.format!==fmt) return;
+      (SCHEDULE[k]||[]).forEach(function(side){{
+        var f=FIXTURES[side.fixture_index],o=side.opponent||{{}},opp=o.scope_key?TEAM_INDEX[o.scope_key]:null;
+        if(found||!f||f.local_date!==date||o.status!=="resolved"||!opp) return;
+        if(tb&&opp.name!==tb.name) return;
+        found={{scope:s,side:side,fixture:f}};
+      }});
+    }});
+    return found;
+  }}
+  window.UC_FORMAT={{
+    current:function(){{return TF.value;}},
+    has:function(fmt){{return fmt===TF.value||!!ucFormatSibling(fmt);}},
+    go:function(fmt){{if(fmt===TF.value) return true;var it=ucFormatSibling(fmt);if(!it) return false;mdApplyFixture(it,true);return true;}}
+  }};
   var MD_DATE_LIST=document.getElementById("md-date-list");
   var BUILD=DATA.build||{{}};
   function scheduledDates(scopes){{
