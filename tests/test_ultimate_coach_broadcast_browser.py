@@ -469,3 +469,35 @@ def test_no_put_up_is_implied_before_one_is_chosen_and_a_late_toss_can_be_record
     assert page.evaluate("UC_BC_LAST.night.nextLeader") == "us"                       # so game 2 is ours
     assert page.locator("#bc-night .night-toss").count() == 0                         # fixed once set
     assert page.errors == []
+
+
+def test_availability_is_shared_by_every_match_on_the_same_night(page):
+    """8-Ball and 9-Ball (or any two matches) on one date share Here/Out; played marks stay per match."""
+    _tab(page, "schedule")
+    page.fill("#md-date", "2026-10-25")
+    page.wait_for_selector("#md-compare-1")
+    page.click("#md-compare-0")                                                       # first match that night
+    _tab(page, "matchnight")
+    first_ck = page.evaluate("UC_BC_LAST.planKey")
+    ours = page.evaluate("UC_BC_LAST.night.bench.ours.map(p => p.id)")
+    theirs_first = page.evaluate("UC_BC_LAST.night.bench.theirs.map(p => p.id)")
+    out = ours[0]
+    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                      # Here
+    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                      # Out
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    page.click("#bc-night .send-hero [data-send]")                                    # one game in the first match
+    _tab(page, "schedule")
+    page.click("#md-compare-1")                                                       # the other match, same night
+    _tab(page, "matchnight")
+    assert page.evaluate("UC_BC_LAST.planKey") != first_ck
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
+    assert page.evaluate("UC_BC_LAST.night.games.length") == 0                        # games stay per match
+    page.click(f'#bc-night .bench [data-avail="{out}"]')                             # Out -> unknown, from here
+    _tab(page, "schedule")
+    page.click("#md-compare-0")
+    _tab(page, "matchnight")
+    assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unknown"
+    assert page.evaluate("UC_BC_LAST.night.games.length") == 1
+    assert theirs_first                                                               # fixture had an opponent roster
+    assert page.errors == []

@@ -250,7 +250,7 @@
   var WR_PLAN_READ_FAILED=false,WR_PLAN_SAVE_FAILED=false,WR_PLAN_CHANGED_ELSEWHERE=false,WR_PLAN_SAVED=null;
   var WR_PLAN=(function(){
     var o=null;try{WR_PLAN_SAVED=window.localStorage.getItem("ultimate-coach:plan-v2");o=JSON.parse(WR_PLAN_SAVED||"null");}catch(e){o=null;WR_PLAN_READ_FAILED=true;}
-    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{},games:o.games||{},toss:o.toss||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{},games:{},toss:{}};
+    var p=(o&&typeof o==="object")?{our:o.our||{},opp:o.opp||{},notes:o.notes||{},cap:o.cap||{},coach:o.coach||{},archive:o.archive||{},games:o.games||{},toss:o.toss||{},night:o.night||{}}:{our:{},opp:{},notes:{},cap:{},coach:{},archive:{},games:{},toss:{},night:{}};
     // Every distinct legacy observation is preserved (GPT audit #84): the first fills an empty note; any other,
     // different one (another team scope, or a note that already exists) is archived with its scope. The archive
     // is shown on the card as an earlier opinion and is never copied back into the editable note.
@@ -386,13 +386,38 @@
   }
   function wrMark(kind,scope,pid){var s=WR_PLAN[kind][scope];return (s&&s[String(pid)])||{};}
   function wrSetMark(kind,scope,pid,field,value,deferSave){var s=WR_PLAN[kind][scope]||(WR_PLAN[kind][scope]={});var m=s[String(pid)]||(s[String(pid)]={});if(value) m[field]=value; else delete m[field];if(!deferSave) wrSave();}
-  function wrAvail(scope,pid){var a=wrMark("our",scope,pid).a;return a==="Available"||a==="Unavailable"?a:"Unknown";}
+  // Availability belongs to a person and a night, not to one fixture: 8-Ball and 9-Ball (and any other team) on the
+  // same date share it. Fixture scopes resolve to their local date; hand-picked "manual" scopes keep per-scope marks.
+  // Played marks, the toss and results stay per fixture.
+  var WR_FIXTURE_DATE=null;
+  function wrScopeDate(scope){
+    var m=/\|\|fixture:(.+)$/.exec(String(scope||""));if(!m) return null;
+    if(!WR_FIXTURE_DATE){WR_FIXTURE_DATE={};((DATA.match_day&&DATA.match_day.fixtures)||[]).forEach(function(f){
+      var d=f.local_date||String(f.match_date||"").slice(0,10);if(!d) return;
+      if(f.match_id!==undefined&&f.match_id!==null) WR_FIXTURE_DATE[String(f.match_id)]=d;
+      if(f.match_external_id) WR_FIXTURE_DATE[String(f.match_external_id)]=d;});}
+    return WR_FIXTURE_DATE[m[1]]||null;
+  }
+  function wrNightMark(side,scope,pid){var d=wrScopeDate(scope),n=d&&WR_PLAN.night[d];return (n&&n[side]&&n[side][String(pid)])||null;}
+  function wrSetNight(side,scope,pid,field,value){
+    var d=wrScopeDate(scope);if(!d) return false;
+    var n=WR_PLAN.night[d]||(WR_PLAN.night[d]={}),s=n[side]||(n[side]={}),m=s[String(pid)]||(s[String(pid)]={});
+    if(value) m[field]=value; else delete m[field];
+    if(!Object.keys(m).length) delete s[String(pid)];
+    // Older per-fixture marks for this person on the same night would shadow the shared one; drop them.
+    var kind=side==="our"?"our":"opp";
+    Object.keys(WR_PLAN[kind]).forEach(function(k){if(wrScopeDate(k)===d&&WR_PLAN[kind][k][String(pid)]) delete WR_PLAN[kind][k][String(pid)][field];});
+    return true;
+  }
+  function wrSetAvail(scope,pid,val){var v=val==="Unknown"?"":val;if(!wrSetNight("our",scope,pid,"a",v)) wrSetMark("our",scope,pid,"a",v,true);wrSave();}
+  function wrSetOppOut(scope,pid,out){if(!wrSetNight("opp",scope,pid,"o",out?true:"")) wrSetMark("opp",scope,pid,"o",out?true:"",true);wrSave();}
+  function wrAvail(scope,pid){var n=wrNightMark("our",scope,pid),a=n&&n.a?n.a:wrMark("our",scope,pid).a;return a==="Available"||a==="Unavailable"?a:"Unknown";}
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
   function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
   // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
   // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
-  function wrOppOut(scope,pid){return !!wrMark("opp",scope,pid).o;}
+  function wrOppOut(scope,pid){var n=wrNightMark("opp",scope,pid);return !!((n&&n.o)||wrMark("opp",scope,pid).o);}
 
 
   function wrPlan(w,ta,tb){
@@ -1193,8 +1218,8 @@
       if(t&&t.up){delete t.up;wrSave();renderTeamMatchups();return;}                // an uncommitted put-up is undone first
       var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
       wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
-    avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetMark("our",c.ck,pid,"a",val==="Unknown"?"":val);renderTeamMatchups();},
-    oppOut:function(pid,out){var c=wrBcCur();if(!c||wrPlayed(c.ck,pid)) return;wrSetMark("opp",c.ck,pid,"o",out?true:"");WR_STATE.next=null;renderTeamMatchups();}
+    avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetAvail(c.ck,pid,val);renderTeamMatchups();},
+    oppOut:function(pid,out){var c=wrBcCur();if(!c||wrPlayed(c.ck,pid)) return;wrSetOppOut(c.ck,pid,out);WR_STATE.next=null;renderTeamMatchups();}
   };
   // Every current team playing the selected format, for the scoreboard's team pickers (the classic selects only list
   // search matches). Same scope key and label the classic selects use.
@@ -1638,7 +1663,7 @@
       }
       if(!k||!cur.ta||!cur.tb) return;
       var pid=t.getAttribute("data-pid"),ck=wrCtx(cur.ta,cur.tb);
-      if(k==="avail") wrSetMark("our",ck,pid,"a",t.value==="Unknown"?"":t.value);
+      if(k==="avail") wrSetAvail(ck,pid,t.value);
       else if(k==="lineup") wrSetMark("our",ck,pid,"l",t.value);
       else if(k==="played") wrSetMark("opp",ck,pid,"p",t.checked?true:"");
       else return;

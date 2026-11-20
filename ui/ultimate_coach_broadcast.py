@@ -688,10 +688,10 @@ _JS_BODY = r"""
       var avlNext0={Unknown:"Available",Available:"Unavailable",Unavailable:"Unknown"},label={Unknown:"?",Available:"Here",Unavailable:"Out"};
       checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who\u2019s here?</span>'
         +n.bench.ours.map(function(b){return '<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' \u00b7 '+label[b.avail]+'</button>';}).join("")
-        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan.</span></div>'
+        +'<span class="matchup-footnote">Tap to cycle Here / Out / unknown. Out players leave the plan. Applies to every match tonight (8-Ball and 9-Ball).</span></div>'
         +'<div class="night-chips night-checkin-opp" role="group" aria-label="Their players here tonight"><span class="night-ask">Their players</span>'
         +n.bench.theirs.map(function(b){return '<button type="button" class="avail-btn '+(b.out?'Unavailable':'Available')+'" data-oppout="'+esc(b.id)+'" data-out="'+(b.out?'':'1')+'" aria-label="'+esc(b.name+(b.out?" is out; mark here":" is here; mark out"))+'">'+esc(b.name)+' \u00b7 '+(b.out?'Out':'Here')+'</button>';}).join("")
-        +'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them.</span></div>';
+        +'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them. Applies to every match tonight.</span></div>';
     }
     // Results still to enter, at the top where the captain is looking.
     var pending=n.games.filter(function(g){return !g.r;});
