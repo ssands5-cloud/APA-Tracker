@@ -172,9 +172,9 @@ def write_lookup_tables(wb, *, payload: dict[str, Any], match_day: dict[str, Any
                                 # Next Send medals: players with the same evidence share a rank group (and a medal).
                                 int(row["rank"].rstrip("=")) if row["category"] in ("G", "E") else "—", save_record_text(row),
                                 row["direct"][0] if row["direct"] else 0, row["direct"][1] if row["direct"] else 0])
-        # The Match Night Engine's start-of-night plan (no marks, no cap) -- the printed plan. Paper cannot
+        # The Match Night Engine's start-of-night plan uses the same default cap as Broadcast. Paper cannot
         # re-plan; the workbook shows it only while nothing has changed, and points to the phone after that.
-        night_plan = plan_for_war_room(wr)
+        night_plan = plan_for_war_room(wr, cap=23 if fmt in ("EIGHT", "NINE") else None)
         for j, block in enumerate(wr["blocks"], 1):
             for row in block["rows"]:
                 player_id = row["member"]["id"]
@@ -512,7 +512,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '=IF(ll_OurTeam="","",IFERROR(INDEX(Teams_Table[Scope Key],MATCH(ll_OurTeam,Teams_Table[Team],0)),""))')
     e.cell("ll_OppScope", "Planning opponent scope",
            '=IF(ll_OppTeam="","",IFERROR(INDEX(Teams_Table[Scope Key],MATCH(ll_OppTeam,Teams_Table[Team],0)),""))')
-    e.cell("ll_Cap", "Reference cap (user-entered)", f'=IF(ISNUMBER({ll}$C$7),{ll}$C$7,"")')
+    e.cell("ll_Cap", "Skill cap (default 23 for 8/9-Ball; editable, blank turns off)", f'=IF(ISNUMBER({ll}$C$7),{ll}$C$7,"")')
 
     # ---- rosters for the effective pairing ----
     ll_our_first, ll_opp_first = slots["ll_our_first"], slots["ll_opp_first"]
@@ -692,7 +692,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_PlanRow", "Match plan row", '=IF(wr_PairKey="","",IFERROR(MATCH(wr_PairKey,MatchPlan_Table[Key],0),""))')
     e.cell("wr_PlanFresh", "Printed plan still applies",
            '=AND(wr_PlanRow<>"",COUNTIF(wr_OurLineup,"Played")=0,COUNTIF(wr_OurAvail,"Unavailable")=0,'
-           'wr_UnplayedCount=INDEX(MatchPlan_Table[Opponents],wr_PlanRow),ll_Cap="")')
+           'wr_UnplayedCount=INDEX(MatchPlan_Table[Opponents],wr_PlanRow),'
+           'IF(OR(wr_Category="EIGHT",wr_Category="NINE"),ll_Cap=23,ll_Cap=""))')
     for col, cell in (("Lead", "wr_PlanLead"), ("Responses", "wr_PlanResponses"), ("Holds", "wr_PlanHolds"),
                       ("Sacrifices", "wr_PlanSacrifices"), ("Summary", "wr_PlanSummary"),
                       ("Best Board", "wr_PlanBest"), ("Safest Board", "wr_PlanSafest")):
@@ -1401,8 +1402,8 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
                                   'wr_RemainingSL&" known subtotal · "&wr_RemainingMissing&" remaining player(s) without a captured SL — not a complete total"))'),
         ("Selected lineup (Planned + Played)", '=IF(wr_SelectedCount=0,"No players marked Planned or Played yet.",IF(wr_SelectedMissing=0,'
                                                '"Skill total "&wr_SelectedSL&" for "&wr_SelectedCount&" selected player(s)","Known subtotal "&wr_SelectedSL&'
-                                               '" · "&wr_SelectedMissing&" selected player(s) without a captured SL")&IF(ll_Cap="",""," · your reference cap: "&'
-                                               'll_Cap&" (user-entered, not verified)")&" — not a lineup-legality check.")'),
+                                               '" · "&wr_SelectedMissing&" selected player(s) without a captured SL")&IF(ll_Cap="",""," · skill cap: "&'
+                                               'll_Cap&" (default or override)")&" — not a lineup-legality check.")'),
         ("Roster flexibility", '=IF(wr_UnplayedCount=0,"—","Favorable direct option left vs "&wr_GreenOpps&" of "&wr_UnplayedCount&'
                                '" unplayed opponents · any evidence-backed option vs "&wr_SendOpps&" of "&wr_UnplayedCount)'),
     ]
@@ -1748,7 +1749,9 @@ def build_five_game_plan(wb, *, engine: dict[str, Any], slots: dict[str, int]) -
               f'IF(OR(COUNTIF($J$10:$J$14,J{row})>1,COUNTIF($K$10:$K$14,K{row})>1),"Duplicate player",'
               f'IFERROR(INDEX({first}:{last},L{row},M{row}),"Evidence unavailable")))))))')
         _calc(ws.cell(row, 8), f'=IF(L{row}=0,"",IF(INDEX(wr_OurSLNum,L{row})>0,INDEX(wr_OurSLNum,L{row}),"Unknown"))')
-        ws.cell(row, 9, f'=IF(OR(uc_PairKey="",NOT(OR($B$5="We put up first",$B$5="They put up first"))),"",'
+        ws.cell(row, 9, f'=IF(OR(uc_PairKey="",'
+                'NOT(IF(OR(wr_Category="EIGHT",wr_Category="NINE"),ll_Cap=23,ll_Cap="")),'
+                f'NOT(OR($B$5="We put up first",$B$5="They put up first"))),"",'
                 f'IFERROR(MATCH(uc_PairKey&"|"&$B$5&"|{game}",LineupPaths_Table[Key],0),""))')
         ws.cell(row, 10, f'=IF(E{row}="",B{row},E{row})')
         ws.cell(row, 11, f'=IF(F{row}="",C{row},F{row})')
@@ -1763,8 +1766,9 @@ def build_five_game_plan(wb, *, engine: dict[str, Any], slots: dict[str, int]) -
           '&IF(wr_BudgetCap="",""," · Reference cap: "&wr_BudgetCap'
           '&IF(SUM(H10:H14)>wr_BudgetCap," · Above reference",IF(COUNT(H10:H14)=5," · At or below reference"," · Check incomplete")))))',
           font=base.SUBHEAD_FONT, height=24)
-    _span(ws, 17, 1, 8, "The starting plan uses the captured rosters without a cap. Edits show evidence for your selected pairings. "
-          "Use Broadcast Match Night to replan around availability, played matches, or a skill cap.", font=base.MUTED_FONT, height=36)
+    _span(ws, 17, 1, 8, "The starting plan uses captured rosters and the default cap: 23 for 8/9-Ball, none for Masters. "
+          "Changing or clearing the cap hides that plan. Edits show pairing evidence; use Broadcast Match Night to replan.",
+          font=base.MUTED_FONT, height=36)
     ws.freeze_panes = "B10"
 
 
@@ -1783,8 +1787,10 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
             (6, "Planning for opponent", default_opp or "", "TeamNameList",
              '=IF(ll_OppOK,"✓ Matches Match Day’s opponent.",IF(ll_OppTeam="","Name the opponent team.","⚠ Match Day’s opponent is "&'
              'IF(LEN(IF(wr_OppLabel="","none",wr_OppLabel))>60,LEFT(IF(wr_OppLabel="","none",wr_OppLabel),59)&"…",IF(wr_OppLabel="","none",wr_OppLabel))&" — opponent marks are NOT applied there."))'),
-            (7, "Reference skill cap (optional)", "", None,
-             '="Your own reference number (e.g. your division rule). Never assumed, never applied automatically."')]
+            (7, "Skill cap (default / override)",
+             '=IF(OR(wr_Category="EIGHT",wr_Category="NINE"),23,"")', None,
+             '="8-Ball and 9-Ball default to 23; Masters has no default. Type your cap to override, clear to turn off. '
+             'A changed cap requires replanning in HTML. Restore the formula to follow format defaults."')]
     for r, label, value, source, status in rows:
         _span(ws, r, 1, 2, label, font=base.LABEL_FONT)
         base._input(ws.cell(row=r, column=3), value)

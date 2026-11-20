@@ -109,6 +109,48 @@ def book(built):
     return Workbook(built)
 
 
+def test_default_cap_and_explicit_override_control_printed_plan_validity(book):
+    def named(name):
+        return book.value("Engine", book.name(name).ref)
+
+    assert book.value(LL, "C7") == 23
+    assert named("ll_Cap") == 23
+    assert named("wr_PlanFresh") is True
+    assert book.value("Five-Game Plan", "I10") != ""
+    book.set(LL, "C7", 22)
+    assert named("ll_Cap") == 22
+    assert named("wr_PlanFresh") is False
+    assert book.value("Five-Game Plan", "I10") == ""
+    book.set(LL, "C7", "")
+    assert named("ll_Cap") == ""
+    assert named("wr_PlanFresh") is False
+    assert book.value("Five-Game Plan", "I10") == ""
+    book.set(LL, "C7", 23)
+    assert named("wr_PlanFresh") is True
+
+
+@pytest.mark.parametrize("category,expected", [("EIGHT", 23), ("NINE", 23), ("MASTERS", ""), ("", "")])
+def test_cap_default_follows_format_without_a_masters_cap(book, category, expected):
+    target = book.name("md_Category")  # Final workbook normalizes formula names to the shared selector.
+    book.set(target.sheet, target.ref, category)
+    assert book.value(LL, "C7") == expected
+
+
+def test_exported_starting_plans_use_the_broadcast_default_cap(monkeypatch, tmp_path):
+    from ui import excel_war_room
+
+    original = excel_war_room.plan_for_war_room
+    observed = []
+
+    def capture(war_room, **kwargs):
+        observed.append(kwargs.get("cap"))
+        return original(war_room, **kwargs)
+
+    monkeypatch.setattr(excel_war_room, "plan_for_war_room", capture)
+    write_workbook(_payload(), tmp_path / "default-cap.xlsx")
+    assert observed and set(observed) == {23}
+
+
 def _row(wb, sheet, text, col="A"):
     for cell in wb[sheet][col]:
         if cell.value == text:
@@ -265,11 +307,11 @@ def test_selected_lineup_and_remaining_totals_disclose_missing_skill_levels(book
         "9 known subtotal · 1 remaining player(s) without a captured SL — not a complete total")
     book.set(LL, "D12", "Played")
     book.set(LL, "D13", "Planned")
-    assert book.display(WR, f"C{snapshot + 3}") == "Skill total 9 for 2 selected player(s) — not a lineup-legality check."
+    assert book.display(WR, f"C{snapshot + 3}") == "Skill total 9 for 2 selected player(s) · skill cap: 23 (default or override) — not a lineup-legality check."
     book.set(LL, "D14", "Planned")
     book.set(LL, "C7", 23)
     assert book.display(WR, f"C{snapshot + 3}") == ("Known subtotal 9 · 1 selected player(s) without a captured SL · "
-                                                    "your reference cap: 23 (user-entered, not verified) — not a lineup-legality check.")
+                                                    "skill cap: 23 (default or override) — not a lineup-legality check.")
     assert book.display(WR, f"C{snapshot + 1}") == "2 of 3 (2 with unknown availability — still counted as remaining)"
 
 
@@ -542,6 +584,7 @@ def _next_send(book):
 
 
 def test_command_center_next_send_answers_the_player_they_put_up(book, built):
+    book.set(LL, "C7", "")  # This test isolates recorded options; cap warnings are checked separately.
     ANN_N, BEA_N, DEE_N = (x.split(" (APA record ID")[0] for x in (ANN, BEA, DEE))
     assert book.display("Command Center", "B6") == "They put up:"
     assert book.display("Command Center", "B7") == "NEXT SEND - RECORDED MATCHUP OPTIONS"
@@ -559,7 +602,7 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert _next_send(book)[0]==lines[0]
     assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN_N} · Sending now spends our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
+        f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
         f"⚠ Avoid records — recorded losses, not exclusions: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
