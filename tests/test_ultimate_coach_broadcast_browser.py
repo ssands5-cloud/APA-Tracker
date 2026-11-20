@@ -501,3 +501,30 @@ def test_availability_is_shared_by_every_match_on_the_same_night(page):
     assert page.evaluate("UC_BC_LAST.night.games.length") == 1
     assert theirs_first                                                               # fixture had an opponent roster
     assert page.errors == []
+
+
+def test_skill_cap_defaults_to_23_and_can_be_changed_or_turned_off(page):
+    _pick(page)
+    assert page.input_value("#bc-cap") == "23"                                        # APA default, nothing typed
+    assert page.evaluate("UC_BC_LAST.cap") == 23 and page.evaluate("UC_BC_LAST.capDefault") is True
+    page.fill("#bc-cap", "20")
+    assert page.evaluate("UC_BC_LAST.cap") == 20 and page.evaluate("UC_BC_LAST.capDefault") is False
+    page.fill("#bc-cap", "")                                                          # cleared = check off
+    assert page.evaluate("UC_BC_LAST.cap") is None
+    _tab(page, "matchnight")
+    assert "no skill cap" in page.locator("#bc-night .night-pill", has_text="cap").text_content().lower()
+    assert page.errors == []
+
+
+def test_played_players_leave_the_roster_table_for_a_collapsed_line(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    rows = page.locator("#bc-night table.glance tbody tr")
+    before = rows.count()
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    page.click("#bc-night .send-hero [data-send]")
+    assert rows.count() == before - 1                                                 # only who is left
+    gone = page.locator("#bc-night .glance-gone")
+    assert "already played or out: 1" in gone.locator("summary").text_content().lower()
+    assert "(played)" in gone.text_content()
+    assert page.errors == []

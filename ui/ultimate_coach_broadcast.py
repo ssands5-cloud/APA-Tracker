@@ -461,7 +461,7 @@ _JS_BODY = r"""
     var dyn=[];
     if(m&&!m.empty){
       dyn.push(m.ourName+" vs "+m.theirName,m.format,m.dateText);
-      dyn.push(m.cap?"Reference Cap "+m.cap:"Reference Cap not entered");
+      dyn.push(m.cap?"Skill cap "+m.cap+(m.capDefault?" (APA default)":""):"Skill cap off");
       dyn.push(m.rostered+" vs "+m.theirRostered+" Captured Players");
     }
     var items=dyn.concat(facts),html=items.map(function(t){return '<span class="ticker-item">'+esc(t)+'</span>';}).join("");
@@ -544,7 +544,7 @@ _JS_BODY = r"""
     var stats='<div class="match-stats" aria-label="Match details">'
       +'<div class="stat-cell"><div class="stat-label">Match Date</div><div class="stat-value">'+esc(ready?m.dateText:"—")+'</div></div>'
       +'<div class="stat-cell"><div class="stat-label">Format</div><div class="stat-value">'+esc(ready?m.format:"—")+'</div></div>'
-      +'<div class="stat-cell"><div class="stat-label"><label for="bc-cap">Reference Cap</label></div><input id="bc-cap" class="cap-input" type="number" min="1" inputmode="numeric" placeholder="Not entered" value="'+esc(capVal)+'"'+(ready?'':' disabled')+'></div>'
+      +'<div class="stat-cell"><div class="stat-label"><label for="bc-cap">Reference Cap</label></div><input id="bc-cap" class="cap-input" type="number" min="1" inputmode="numeric" placeholder="Off" title="APA default 23 for 8-Ball and 9-Ball; type a number to change it, clear to turn the check off" value="'+esc(capVal)+'"'+(ready?'':' disabled')+'></div>'
       +'<div class="stat-cell"><div class="stat-label">Venue</div><div class="stat-value'+(ready&&m.venue?'':' dim')+'">'+esc(ready&&m.venue?m.venue:"Not Captured")+'</div></div></div>';
     var rows="";
     if(ready){
@@ -623,19 +623,25 @@ _JS_BODY = r"""
       slots+='<div class="slot"><div class="sn">Game '+((m.played||0)+i+1)+'</div><div class="st">No pairing planned</div></div>';
     }
     var names2=function(items){return items.length?items.map(function(i){return esc(i.opp);}).join(", "):"—";};
-    var glance='<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
-      +cards.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
+    var matchDone=(m.played||0)>=5;
+    var active=cards.filter(function(c){return c.role!=="used"&&c.role!=="out";}),gone=cards.filter(function(c){return c.role==="used"||c.role==="out";});
+    var goneLine=gone.length?'<details class="more glance-gone"><summary>Already played or out: '+gone.length+'</summary><p class="cmd-sum">'
+      +gone.map(function(c){return esc(c.name)+' ('+(c.role==="used"?"played":"out")+')';}).join(", ")+'</p></details>':'';
+    var glance=matchDone?'<p class="cmd-sum glance-final"><b>Played tonight:</b> '+(gone.filter(function(c){return c.role==="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")
+        +' \u00b7 <b>Didn\u2019t play:</b> '+(cards.filter(function(c){return c.role!=="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")+'</p>'
+      :'<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
+      +active.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
         +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
-        +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>';
+        +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>'+goneLine;
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
-    var start=upOpt?'<strong>Path after we put up '+esc(upOpt.name)+'</strong>'
+    var start=matchDone?'<strong>Final \u00b7 Matches '+m.night.score.w+'-'+m.night.score.l+'</strong>':upOpt?'<strong>Path after we put up '+esc(upOpt.name)+'</strong>'
       :selected?'<strong>Path after they put up '+esc(m.night.opp.name)+'</strong>'
       :nl?tab("weLead",nl==="us"?"We put up next":"If we put up next")+tab("theyLead",nl==="them"?"They put up next":"If they put up next")
       :tab("weLead","If we put up first")+tab("theyLead","If they put up first");
     return '<section class="cmd cmd-main" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
-      +'<span class="cmd-sum">'+(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left</span></div>'
+      +'<span class="cmd-sum">'+(matchDone?'Match complete':(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left')+'</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
-      +'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p></div>'
+      +(matchDone?'':'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p>')+'</div>'
       +glance
 
       +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
@@ -745,7 +751,10 @@ _JS_BODY = r"""
           +(n.answer&&n.answer.why?'<div class="send-why">'+esc(n.answer.why)+'</div>':'<div class="send-why">'+esc(n.headline)+'</div>')
           +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')
           +(pick&&pick.after?'<div class="send-after"><b>After this send:</b> '+esc(afterText(pick.after))+'</div>':'')+'</section>';
-      } else hero='<section class="send-hero"><span class="send-kicker">No send</span><div class="send-why">'+esc(n.headline)+'</div></section>';
+      } else hero='<section class="send-hero"><span class="send-kicker">No engine answer vs '+esc(n.opp.name)+'</span>'
+        +(n.oppCap&&n.oppCap.over?'<div class="send-cost">'+esc(n.opp.name)+' would take them to '+n.oppCap.total+' of '+n.oppCap.cap+' — over the skill cap. Check their lineup before you send.</div>':'')
+        +'<div class="send-why">'+esc(n.headline)+'</div>'
+        +(n.sendScenarios&&n.sendScenarios.length?'<div class="send-after">Record the pairing with <b>Confirm pairing</b> on any player in <i>Use now or save</i> below.</div>':'')+'</section>';
       var rest=function(list,kind){return list.filter(function(c){return !pickName||c.name!==pickName;}).map(function(c){return candRow(c,kind,n.opp.id);});};
       var altRows=rest(n.ranked,"ranked").concat(rest(n.unordered,"shared"),rest(n.avoid,"avoid"));
       // The three best alternatives stay in view; the rest are one tap away, none removed.

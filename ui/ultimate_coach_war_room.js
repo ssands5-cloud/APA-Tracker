@@ -415,6 +415,15 @@
   function wrLineup(scope,pid){var l=wrMark("our",scope,pid).l;return l==="Planned"||l==="Played"?l:"";}
   function wrRemaining(scope,pid){return wrAvail(scope,pid)!=="Unavailable"&&wrLineup(scope,pid)!=="Played";}
   function wrPlayed(scope,pid){return !!wrMark("opp",scope,pid).p;}
+  // Skill cap per team. Owner decision (2026-11-20): APA's 23 applies by default to 8-Ball and 9-Ball teams; a typed
+  // number overrides it, and clearing the field stores an explicit "off". Masters formats get no default.
+  var WR_DEFAULT_CAP=23;
+  function wrCapIsDefault(ta){var raw=WR_PLAN.cap[ta.key];return raw===undefined||raw===null||raw==="";}
+  function wrCapFor(ta){
+    var raw=WR_PLAN.cap[ta.key];if(raw==="off") return null;
+    var v=parseInt(raw,10);if(v>0) return v;
+    return wrCapIsDefault(ta)&&(ta.format==="EIGHT"||ta.format==="NINE")?WR_DEFAULT_CAP:null;
+  }
   // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
   // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
   function wrOppOut(scope,pid){var n=wrNightMark("opp",scope,pid);return !!((n&&n.o)||wrMark("opp",scope,pid).o);}
@@ -440,7 +449,7 @@
       if(r){remN++;if(wrAvail(ck,m.id)==="Unknown") unk++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
       if(l){selN++;if(wrKnown(sl)) selSL+=sl; else selMiss++;}
     });
-    var cap=WR_PLAN.cap[ta.key],openN=unplayed.filter(Boolean).length;
+    var cap=wrCapFor(ta),openN=unplayed.filter(Boolean).length;
     var greenOpps=0,sendOpps=0;w.theirs.forEach(function(o,j){if(!unplayed[j]) return;if(green[j]>0) greenOpps++;if(sends[j].length>0) sendOpps++;});
     var n=w.ours.length;
     return {ck:ck,rem:rem,unplayed:unplayed,sends:sends,risks:risks,unique:unique,
@@ -872,7 +881,7 @@
   // and format constraints are not configured here, so this cannot establish match legality.
   // No cap is assumed; missing captured SL makes the comparison incomplete.
   function wrLineupBudget(w,plan,ta,sending){
-    var cap=parseInt(WR_PLAN.cap[ta.key],10);
+    var cap=wrCapFor(ta)||0;
     if(!(cap>0)) return null;
     var used=0,unknown=0,pool=[],slots=0,i;
     for(i=0;i<w.blocks.length;i++) if(plan.unplayed[i]) slots++;
@@ -1152,8 +1161,7 @@
   function mnInputs(w,plan,ta){
     var playedN=0,playedSl=0;
     w.ours.forEach(function(m){if(wrLineup(plan.ck,m.id)==="Played"){playedN++;if(wrKnown(m.skill_level)) playedSl+=Number(m.skill_level);}});
-    var capRaw=parseInt(WR_PLAN.cap[ta.key],10);
-    return {playedN:playedN,playedSl:playedSl,cap:capRaw>0?capRaw:null};
+    return {playedN:playedN,playedSl:playedSl,cap:wrCapFor(ta)};
   }
   function mnLeadId(w,plan,ta){var x=mnInputs(w,plan,ta),p=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap);return p.lead?p.lead.our_id:null;}
   function wrMatchPlanCard(w,plan,ta){
@@ -1405,6 +1413,11 @@
           tied:c.tied_with||[],wins:d?d.w:null,games:d?d.g:0,save:c.save||"",cost:wrCostText(w,selJ,c.member.id,plan.rem,plan.unplayed),
           avail:wrAvail(ck,c.member.id),after:wrAfterSendSummary(solveAfterSend(c.member,selJ),x)};};
       night.opp={id:String(opp.id),name:who,sl:wrKnown(opp.skill_level)?opp.skill_level:null};
+      // Their skill total if this put-up stands: the opponents who have played plus this one, against the cap.
+      if(x.cap!==null&&night.opp.sl!==null){
+        var theirUsed=0;w.theirs.forEach(function(o,k){if(wrPlayed(ck,o.id)&&wrKnown(o.skill_level)) theirUsed+=Number(o.skill_level);});
+        night.oppCap={used:theirUsed,total:theirUsed+Number(night.opp.sl),cap:x.cap,over:theirUsed+Number(night.opp.sl)>x.cap};
+      }
       if(chosen) night.sendScenarios=wrSendScenarios(w,plan,x,selJ,ans,solveAfterSend);
       night.answer=ans?{our:ans.our,level:ans.level,why:ans.why.split(" — ").slice(1).join(" — "),cost:ans.cost_later||""}:null;
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
@@ -1434,7 +1447,7 @@
     night.score={w:night.games.filter(function(g){return g.r==="W";}).length,l:night.games.filter(function(g){return g.r==="L";}).length};
     night.storageWarning=wrStorageMessage();
     night.oppBudget=mp.opponent_budget||null;
-    return {empty:false,night:night,planKey:plan.ck,ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
+    return {empty:false,night:night,planKey:plan.ck,capDefault:x.cap!==null&&wrCapIsDefault(ta),ourName:ta.name,theirName:tb.name,ourKey:ta.key,theirKey:tb.key,format:fmtLabel(w.format),
       side:ctx?ctx.ourSide:null,dateText:f?(f.date_status==="ok"?f.local_display:"Undated fixture"):"Teams picked by hand",
       venue:f?(f.location||null):null,cap:x.cap,played:x.playedN,gamesLeft:mp.games_left,rows:rows,
       lead:mp.lead?{our:mp.lead.our,level:mp.lead.level,why:mp.lead.why_lead}:null,selected:WR_STATE.next,
@@ -1592,13 +1605,13 @@
     var oppRows=w.theirs.map(function(o,j){
       return '<tr class="'+(plan.unplayed[j]?'':'out')+'"><td>'+esc(playerRef(o))+'</td><td>'+esc(slText(o))+'</td><td><label class="inline"><input type="checkbox" class="plan" data-plan="played" data-pid="'+esc(o.id)+'"'+(plan.unplayed[j]?'':' checked')+'> Played</label><span class="print-only">'+(plan.unplayed[j]?'—':'Played')+'</span></td></tr>';
     }).join("");
-    var cap=WR_PLAN.cap[ta.key];
+    var cap=wrCapFor(ta);
     document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for this fixture</button></div>'
       +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
       +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
-      +'<label class="cap-label">Reference skill cap (optional, user-entered)<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="none — no default is assumed"></label>'
+      +'<label class="cap-label">Skill cap'+(cap&&wrCapIsDefault(ta)?' (APA default 23)':'')+' \u2014 type a number to change it, clear it to turn the check off<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="off"></label>'
       +'<h3>Recorded options now — and why</h3><p class="muted">For each unplayed opponent: our first-listed option by recorded results, with its meeting count. Listed order is not confidence or a prediction.</p>'
       +(function(){
         var items=w.blocks.map(function(b,j){if(!plan.unplayed[j]) return null;
@@ -1674,7 +1687,7 @@
       var t=ev.target,cur=current();
       if(t&&t.id==="ll-cap"&&cur.ta){
         var v=parseFloat(t.value);
-        if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else delete WR_PLAN.cap[cur.ta.key];
+        if(isFinite(v)&&v>0) WR_PLAN.cap[cur.ta.key]=v; else WR_PLAN.cap[cur.ta.key]="off";
         wrSave();
         if(cur.tb&&cur.ta.players.length&&cur.tb.players.length){
           var w=warRoomPair(cur.ta,cur.tb,TF.value);
