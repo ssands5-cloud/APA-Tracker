@@ -453,3 +453,19 @@ def test_marking_an_opponent_absent_removes_them_from_the_plan_without_spending_
     page.click(f'#bc-night .bench [data-oppout="{gone}"]')                           # back in
     assert gone in page.evaluate("UC_BC_LAST.night.chips.map(c => c.id)")
     assert page.errors == []
+
+
+def test_no_put_up_is_implied_before_one_is_chosen_and_a_late_toss_can_be_recorded(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    assert page.locator("#bc-night .night-chip[data-pick][aria-pressed=true]").count() == 0   # nothing pre-chosen
+    assert page.locator("#bc-night .send-hero .send-kicker").text_content().lower().startswith("preview")
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    assert page.locator("#bc-night .send-hero .send-kicker").text_content().lower().startswith("send now")
+    page.click("#bc-night .send-hero [data-send]")                                    # game 1 recorded, no toss yet
+    bar = page.locator("#bc-night .night-toss")
+    assert "game 1" in bar.text_content().lower()
+    page.click("#bc-night [data-toss=them]")                                          # they put up game 1
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "us"                       # so game 2 is ours
+    assert page.locator("#bc-night .night-toss").count() == 0                         # fixed once set
+    assert page.errors == []

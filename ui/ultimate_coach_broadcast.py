@@ -676,8 +676,8 @@ _JS_BODY = r"""
     var hero="",alts="",risks="";
     // Coin toss: recorded once, before the first pairing. Put-ups alternate after game 1.
     var tossBar="";
-    if(!done&&!n.games.length&&!n.putUp){
-      tossBar='<div class="night-chips night-toss" role="group" aria-label="Who puts up first"><span class="night-ask">'+(n.toss?"Game 1 put-up":"Who puts up first?")+'</span>'
+    if(!done&&!n.putUp&&(!n.games.length||!n.toss)){
+      tossBar='<div class="night-chips night-toss" role="group" aria-label="Who puts up first"><span class="night-ask">'+(n.games.length?"Who put up first in game 1?":n.toss?"Game 1 put-up":"Who puts up first?")+'</span>'
         +'<button type="button" class="night-btn'+(n.toss==="us"?' primary':'')+'" data-toss="us" aria-pressed="'+(n.toss==="us")+'">We put up first</button>'
         +'<button type="button" class="night-btn'+(n.toss==="them"?' primary':'')+'" data-toss="them" aria-pressed="'+(n.toss==="them")+'">They put up first</button>'
         +(n.toss?'<button type="button" class="night-btn" data-toss="">Clear</button>':'<span class="matchup-footnote">Set after the coin toss; the board then follows each game\u2019s put-up.</span>')+'</div>';
@@ -737,7 +737,7 @@ _JS_BODY = r"""
       var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
       var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
       if(pickName){
-        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now":"Best answer")+' vs '+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
+        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
           +'<div class="send-name">'+esc(pickName)+'</div>'
           +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'
           +(pick?barsHtml(pick.wins,pick.games,"send-bars"):"")

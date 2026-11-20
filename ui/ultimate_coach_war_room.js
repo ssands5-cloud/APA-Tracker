@@ -1180,7 +1180,9 @@
       WR_STATE.next=null;renderTeamMatchups();},
     // Who put up first in game 1. Put-ups alternate after that (the engine's plans assume the same order), so the
     // board knows whose put-up every later game is. It can change only before the first pairing is confirmed.
-    toss:function(first){var c=wrBcCur();if(!c||(WR_PLAN.games[c.ck]||[]).length) return;
+    // Settable later if game 1 was recorded without it (the order follows from the games played); once set and a
+    // game exists it stays fixed, so a mis-tap mid-night cannot reshuffle the put-up order.
+    toss:function(first){var c=wrBcCur();if(!c||((WR_PLAN.games[c.ck]||[]).length&&WR_PLAN.toss[c.ck])) return;
       if(first==="us"||first==="them") WR_PLAN.toss[c.ck]={first:first}; else delete WR_PLAN.toss[c.ck];
       WR_STATE.next=null;wrSave();renderTeamMatchups();},
     // Our put-up when we lead: held until the captain records the player they answered with.
@@ -1368,7 +1370,7 @@
     var ck=plan.ck,open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];});
     var selJ=open.filter(function(j){return String(w.theirs[j].id)===String(WR_STATE.next);})[0],chosen=selJ!==undefined;
     if(!chosen) selJ=open[0];
-    var night={chosen:chosen,chips:open.map(function(j){var o=w.theirs[j];return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,on:j===selJ};}),
+    var night={chosen:chosen,chips:open.map(function(j){var o=w.theirs[j];return {id:String(o.id),name:wrDisplayName(o,w.theirs),sl:wrKnown(o.skill_level)?o.skill_level:null,on:chosen&&j===selJ};}),
       answer:null,ranked:[],unordered:[],avoid:[],unknown:[],headline:"",opp:null,holds:[],sacrifices:[],openRisks:[]};
     if(selJ!==undefined){
       var ns=wrNextSend(w,selJ,plan.rem,plan.unplayed),opp=w.theirs[selJ],who=wrDisplayName(opp,w.theirs);
