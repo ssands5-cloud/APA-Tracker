@@ -95,7 +95,8 @@ DATEKEYS_COLUMNS = ["Key", "Group Key", "Serial", "Date Display"]
 SUGGESTED_COLUMNS = ["Group Key", "Serial", "Date Display"]
 
 ALL_PLAYERS_CHOICE = "All players…"
-AVAILABILITY_CHOICES = ["Available", "Unavailable", "Unknown"]
+# Owner decision 2026-11-20: everyone is Here (Available) unless marked Out (Unavailable); no Unknown state.
+AVAILABILITY_CHOICES = ["Available", "Unavailable"]
 LINEUP_CHOICES = ["Planned", "Played"]
 MEETING_SLOTS = 40
 
@@ -529,8 +530,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         ]
         if our:
             cols += [
-                (f"{prefix}Avail", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$C${ll_first + k - 1}="","Unknown",'
-                                                f'{ll}$C${ll_first + k - 1}),"Unknown"))'),
+                (f"{prefix}Avail", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$C${ll_first + k - 1}="Unavailable","Unavailable",'
+                                                f'"Available"),"Available"))'),
                 (f"{prefix}Lineup", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$D${ll_first + k - 1}="","—",'
                                                  f'{ll}$D${ll_first + k - 1}),"—"))'),
                 (f"{prefix}Remaining", lambda k, r: f'=AND(B{r}<>"",H{r}<>"Unavailable",I{r}<>"Played")'),
@@ -1009,12 +1010,10 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
             f'&IF(INDEX(wr_UniqueCount,C{r})-IF(AND(D{r}="G",wr_NsSelfUnique),1,0)>0,'
             f'IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,C{r})=wr_PlanAnswerName)," · Sending now spends our only favorable direct option vs ",'
             f'" · consider saving — our only favorable direct option vs ")&INDEX(wr_NsSaveDetails,C{r}),"")'
-            f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," · availability unknown","")'
             f'&IF(INDEX(wr_CandidateBudget,C{r})="",""," · "&INDEX(wr_CandidateBudget,C{r})),"")')),
         ("wr_NsUnordRun", lambda k, r: (f'=IF(AND(E{r},D{r}="I"),1,0)' if k == 1 else f'=L{r - 1}+IF(AND(E{r},D{r}="I"),1,0)')),
         ("wr_NsUnordJoin", lambda k, r: _join(k, r, "M", f'AND(E{r},D{r}="I")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}")
-                                              + f'&IF(INDEX(wr_NsSaveDetails,C{r})="","",IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,C{r})=wr_PlanAnswerName)," · Sending now spends our only favorable direct option vs "," · consider saving — our only favorable direct option vs ")&INDEX(wr_NsSaveDetails,C{r}))'
-                                              + f'&IF(INDEX(wr_OurAvail,C{r})="Unknown"," (availability unknown)","")')),
+                                              + f'&IF(INDEX(wr_NsSaveDetails,C{r})="","",IF(AND(wr_PlanFresh,INDEX(wr_OurLabels,C{r})=wr_PlanAnswerName)," · Sending now spends our only favorable direct option vs "," · consider saving — our only favorable direct option vs ")&INDEX(wr_NsSaveDetails,C{r}))')),
         ("wr_NsUnkJoin", lambda k, r: _join(k, r, "N", f'AND(E{r},D{r}="X")', _nm(f"INDEX({ME}[Player],B{r})", f"C{r}"))),
         ("wr_NsRevRow", lambda k, r: f'=IF(OR(NOT(wr_NsOpen),{k}>wr_NsCount),"",wr_NsStart+{k})'),
         ("wr_NsAvoidOk", lambda k, r: (f'=IF(O{r}="",FALSE,AND(INDEX({ME}[Category],O{r})="R",IFERROR(INDEX(wr_OurRemaining,'
@@ -1353,7 +1352,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
                           'IF(AND(ll_OurTeam<>"",NOT(ll_OurTeamOK)),"⚠ Lineup Lab marks are for "&ll_OurTeam&" — not applied to "&'
                           'wr_OurLabel&". ","")&IF(AND(ll_OppTeam<>"",NOT(ll_OppOK)),"⚠ Opponent marks are for "&ll_OppTeam&'
                           '" — not applied. ","")&"Team W-L = this team’s captured record this session. “No data” = not captured. '
-                          'Availability, lineup and played are your Lineup Lab marks, never evidence; Unknown is not Unavailable."',
+                          'Availability, lineup and played are your Lineup Lab marks, never evidence; everyone is Here unless marked Out."',
           font=base.MUTED_FONT, height=30)
 
     top = end + 2
@@ -1833,7 +1832,7 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         ws.row_dimensions[r].height = _worst_height(
             context, ws.column_dimensions["C"].width, cell.font.sz,
             ws.row_dimensions[r].height or 30)
-    base._section(ws, 10, "Our roster — availability and lineup (blank availability = Unknown)", last_col=6)
+    base._section(ws, 10, "Our roster — availability and lineup (blank availability = Here; mark Unavailable for Out)", last_col=6)
     base._subheader(ws, 11, [(1, "#"), (2, "Player"), (3, "Availability"), (4, "Lineup"), (5, "SL"), (6, "Team W-L")])
     our_first = 12
     avail = DataValidation(type="list", formula1='"' + ",".join(AVAILABILITY_CHOICES) + '"', allow_blank=True)
@@ -2140,8 +2139,8 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     r = roster_first + R
     _span(ws, r, 1, 12, '=IF(AND(ll_OurTeamOK,ll_OppTeamOK,NOT(ll_FixOK)),"⚠ Lineup Lab marks are for another fixture — not '
                         'applied here. ","")&"Team W-L = this team’s captured record this session · “No data” = not captured · '
-                        'availability, lineup and played are your Lineup Lab marks for this fixture, never evidence; Unknown is '
-                        'not Unavailable."', font=font(9, color="5B6A61"))
+                        'availability, lineup and played are your Lineup Lab marks for this fixture, never evidence; everyone '
+                        'is Here unless marked Out."', font=font(9, color="5B6A61"))
     h(r, 26)
     r += 1
     fresh = stats["freshness"]
@@ -2639,7 +2638,7 @@ TAB_TOUR = [
     ("Command Center", "Tonight at a glance: opponent, date, venue, availability counts, the opponent roster and the evidence summary."),
     ("Match Day", "THE control panel. Pick player → team → format → date → fixture once; every other tab follows it."),
     ("War Room", "The match-night overview: both rosters, best sends per opponent, dangerous opponents, avoid sends, open risks, the colour matrix, and Inspect (shared-opponent evidence for one opponent or one of our players). Its own optional overrides only change this tab."),
-    ("Lineup Lab", "Mark our players Available / Unavailable / Unknown and Planned / Played, and which opponents already played. Marks belong to one fixture."),
+    ("Lineup Lab", "Everyone is Here unless marked Unavailable (Out); mark Planned / Played, and which opponents already played. Marks belong to one fixture."),
     ("Scouting Cards", "One card per opponent: records, meetings with our players, record by skill level, missing information and your observations."),
     ("Coach Notes", "Your own observations per player (tags such as 'Slow shooter' plus free text). Opinions, not APA facts — kept apart from evidence."),
     ("Captain Packet", "The printable match-night packet: page 1 summary, then scouting cards, evidence and meeting history."),
@@ -2772,7 +2771,6 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         '=IF(wr_OurLabel="","Choose your team on Match Day.",wr_OurLabel)',
         f'=IF(wr_OurCount=0,"","Available: "&{cnt("Available")})',
         f'=IF(wr_OurCount=0,"","Unavailable: "&{cnt("Unavailable")})',
-        f'=IF(wr_OurCount=0,"","Unknown: "&{cnt("Unknown")}&" (not the same as unavailable)")',
         '=IF(wr_OurCount=0,"","Already used: "&COUNTIF(wr_OurLineup,"Played")&" · planned: "&COUNTIF(wr_OurLineup,"Planned"))',
         '=IF(wr_OurCount=0,"","Remaining skill total: "&IF(wr_RemainingMissing=0,wr_RemainingSL,wr_RemainingSL&" known ('
         '"&wr_RemainingMissing&" without SL)"))',

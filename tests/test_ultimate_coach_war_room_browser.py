@@ -148,21 +148,27 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert "No favorable, even or indirect evidence among our remaining players." in sends
             assert f"{EVE} — no evidence-backed option left" in page.inner_text("#wr-risks")
             lab = page.inner_text("#lineup-lab")
-            assert "2 of 3 (2 with unknown availability — still counted as remaining)" in lab
+            # Everyone is Here unless marked Out (owner decision 2026-11-20): no "unknown availability" bucket.
+            assert "Remaining players" + chr(10) + "2 of 3" + chr(10) in lab and "unknown availability" not in lab
             assert "4 known subtotal · 1 remaining player(s) without a captured SL — not a complete total" in lab
             # Evidence is untouched by marks.
             assert page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))") == before
             assert page.locator("#wr-matrix .mcell").nth(0).inner_text() == "2-0 (2)"
 
-            # Reference cap only when entered; selected lineup totals disclose missing SLs.
+            # The cap line follows the cap: APA's 23 by default (2026-11-20), gone when cleared, back when typed.
+            # Selected lineup totals disclose missing SLs and never claim legality.
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Planned")
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="3"]', "Played")
-            assert "your reference cap" not in page.inner_text("#lineup-lab")
+            cap_line = ("Known subtotal 4 · 1 selected player(s) without a captured SL · skill cap: 23 "
+                        "(default or override) — not a lineup-legality check.")
+            assert cap_line in page.inner_text("#lineup-lab")
+            page.fill("#ll-cap", "")
+            page.press("#ll-cap", "Enter")
+            assert "skill cap:" not in page.inner_text("#lineup-lab")
             page.fill("#ll-cap", "23")
             page.press("#ll-cap", "Enter")
             page.locator("#ll-cap").blur()
-            assert ("Known subtotal 4 · 1 selected player(s) without a captured SL · your reference cap: 23 "
-                    "(user-entered, not verified) — not a lineup-legality check.") in page.inner_text("#lineup-lab")
+            assert cap_line in page.inner_text("#lineup-lab")
 
             # Opponent played retires that opponent; notes reach the scouting card and survive reloads.
             page.check('#lineup-lab input[data-plan="played"][data-pid="10"]')
@@ -249,23 +255,25 @@ def test_planning_marks_belong_to_one_fixture_and_notes_follow_the_player(tmp_pa
 
             page.fill("#md-date", "2026-10-11")                   # back: Oct 11 marks return, Oct 25's don't
             assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
-            assert page.input_value(ann_a) == "Unknown"
+            assert page.input_value(ann_a) == "Available"   # Oct 25's Out mark stays on Oct 25
 
             page.reload(); page.wait_for_load_state("load")       # survives reload, still per fixture
             assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
             oct25_falcons(page)
             assert page.input_value(ann_a) == "Unavailable" and page.input_value(ann_l) == ""
 
-            # Same date, other fixture (vs Owls): a different opponent and fixture -> clean.
+            # Same date, other fixture (vs Owls): lineup and played marks start clean, but Here/Out is shared by every
+            # match on the same night (owner decision 2026-11-20, daa7204): Ann is still Out on Oct 25.
             page.fill("#md-date", "2026-10-25")
             page.click("#md-compare-0")
-            assert "Owls" in page.inner_text("#team-rosters") and page.input_value(ann_a) == "Unknown"
+            assert "Owls" in page.inner_text("#team-rosters") and page.input_value(ann_a) == "Unavailable"
+            assert page.input_value(ann_l) == ""   # lineup marks stay with their own fixture
 
             # Teams picked by hand (no fixture): its own context, no fixture's marks.
             page.fill("#search-team-b", "Falcons"); page.wait_for_timeout(400)
             page.select_option("#team-b", THEIRS)
             assert "picked by hand" in page.inner_text("#ll-context")
-            assert page.input_value(ann_l) == "" and page.input_value(ann_a) == "Unknown" and not page.is_checked(cam_p)
+            assert page.input_value(ann_l) == "" and page.input_value(ann_a) == "Available" and not page.is_checked(cam_p)
             assert errors == []
         finally:
             browser.close()
@@ -416,19 +424,21 @@ def test_tonight_is_a_command_center_with_excels_counts(tmp_path: Path):
         try:
             page, errors = _page(tmp_path, browser)
             t = page.inner_text("#tonight")
-            for needle in ("Available: 0", "Unavailable: 0", "Unknown: 3 (not the same as unavailable)",
+            # Everyone is Here unless marked Out: all three count as Available and there is no Unknown count.
+            assert "Unknown:" not in t and "not the same as unavailable" not in t
+            for needle in ("Available: 3", "Unavailable: 0",
                            "Already used: 0 · planned: 0",
                            "Favorable direct record (any sample size): 1", "Concerning (more direct losses than wins): 2",
                            "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient verified evidence in this snapshot: 1",
                            "Missing information: 0 player(s) without a captured SL · 2 not yet played"):
                 assert needle in t, needle
             lines = t.splitlines()                                         # each count on its own line
-            for needle in ("Available: 0", "Unavailable: 0", "Concerning (more direct losses than wins): 2"):
+            for needle in ("Available: 3", "Unavailable: 0", "Concerning (more direct losses than wins): 2"):
                 assert needle in lines, needle
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Played")
             t = page.inner_text("#tonight")
-            assert "Unavailable: 1" in t and "Unknown: 2 (not the same as unavailable)" in t and "Already used: 1 · planned: 0" in t
+            assert "Unavailable: 1" in t and "Available: 2" in t and "Unknown:" not in t and "Already used: 1 · planned: 0" in t
             assert errors == []
         finally:
             browser.close()
@@ -535,11 +545,13 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             assert first.locator(".ns-m").inner_text()=="Direct-record order 1"
             assert first.locator(".ns-sample").inner_text()=="2 meetings · small sample"
             assert "Ann Archer (player 1 of 2)" in first.inner_text() and "2-0 direct record (2 meetings)" in first.inner_text()
-            assert text.count("availability unknown") == 2                     # said at the action, still eligible
+            # Everyone is Here unless marked Out: no "availability unknown" caveat; Out removes a player, Here restores them.
+            assert text.count("availability unknown") == 0
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
+            assert "Ann Archer (player 1 of 2)" not in card.locator(".ns-medal").first.inner_text()
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
-            assert page.locator("#next-send .ns-medal").nth(0).inner_text().count("availability unknown") == 0
-            assert page.locator("#next-send .ns-medal").nth(1).inner_text().count("availability unknown") == 1
-            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
+            assert "Ann Archer (player 1 of 2)" in card.locator(".ns-medal").first.inner_text()
+            assert card.inner_text().count("availability unknown") == 0
             text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
             assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid records — recorded losses: Bea Baker (0-2 (2 meetings), small sample)"
@@ -1554,13 +1566,19 @@ def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(t
     """APA caps the total skill level you put up; spend the low numbers early and you are stuck.
 
     The cap constant existed in the page and was never used, and the Excel cap said outright it
-    was not a legality check. Nothing is assumed: with no cap entered this renders nothing.
+    was not a legality check. APA's 23 is the default for 8-Ball and 9-Ball; a cleared cap renders nothing.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
             page, errors = _page(tmp_path, browser)
-            assert page.locator("#tonight .lineup-budget").count() == 0, "no cap entered, no claim"
+            # Owner decision 2026-11-20: APA's 23 applies by default to 8-Ball and 9-Ball and is used, not just shown.
+            assert page.input_value("#ll-cap") == "23"
+            assert page.locator("#tonight .lineup-budget").count() == 1, "the default cap is used"
+            # Clearing the cap turns the check off: with no cap, nothing is claimed.
+            page.fill("#ll-cap", "")
+            page.dispatch_event("#ll-cap", "change")
+            assert page.locator("#tonight .lineup-budget").count() == 0, "cap cleared, no claim"
 
             page.fill("#ll-cap", "23")
             page.dispatch_event("#ll-cap", "change")
@@ -2263,6 +2281,10 @@ def test_incomplete_budget_is_disclosed_once_for_shared_missing_skill(tmp_path: 
         try:
             page,errors=_page(tmp_path,browser)
             page.set_viewport_size({'width':390,'height':844})
+            # The default 23 already meets the shared missing skill level: disclosed once, not per choice.
+            assert page.locator('#next-send .ns-budget-scope').count()==1
+            assert page.locator('#next-send .ns-budget').count()==0
+            page.fill('#ll-cap','');page.locator('#ll-cap').dispatch_event('change')
             assert page.locator('#next-send .ns-budget-scope').count()==0
             before=page.locator('#next-send [data-send-our]').evaluate_all('(els)=>els.map(e=>e.dataset.sendOur)')
             page.fill('#ll-cap','20');page.locator('#ll-cap').dispatch_event('change')
@@ -2980,7 +3002,7 @@ def test_matrix_names_explain_unavailable_and_played_marks_without_changing_hist
                 assert page.locator('#wr-matrix .mcell[data-our="1"][data-opp="10"]').get_attribute('class').find('cat-G') >= 0
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('Played')
             assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Unavailable '+chr(183)+' Played'
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Played'
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('')
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('')
@@ -3024,7 +3046,7 @@ def test_detailed_rankings_disclose_full_roster_scope_and_return_without_changin
             assert page.locator('#next-send [data-send-our="1"]').count() == 0
             assert page.locator('#next-send [data-send-our="3"]').count() == 0
             assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == original
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             assert scopes.count() == page.locator('#team-matchups .rank-block').count() + 1
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
@@ -3050,7 +3072,7 @@ def test_put_up_selection_does_not_claim_an_opponent_in_a_new_fixture(tmp_path, 
                 index = next(i for i in range(cards.count()) if 'Falcons' in cards.nth(i).inner_text())
                 page.click('#md-compare-'+str(index))
                 assert 'Oct 25, 2026' in page.locator('#ll-context').inner_text()
-                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unknown'
+                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Available'   # a new fixture starts with everyone Here
             else:
                 page.fill('#md-date', '2026-10-18')
                 assert page.locator('#next-send').count() == 0
@@ -3231,11 +3253,14 @@ def test_sent_pair_is_not_partly_saved_when_only_one_mark_fits(tmp_path, width):
         try:
             page, errors = _page(tmp_path, browser)
             page.set_viewport_size({"width": width, "height": 844})
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             page.locator('textarea.plan').first.fill('SYNTHETIC retained observation')
             evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
             send = page.locator('#next-send [data-send-our]').first
             own, opponent = send.get_attribute('data-send-our'), send.get_attribute('data-send-opp')
+            # Create a stored fixture plan scope with a mark that is still stored. "Available" used to do this, but
+            # everyone is Here by default now (2026-11-20), so Here is no longer written; a Planned mark is.
+            page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').select_option('Planned')
+            send = page.locator(f'#next-send [data-send-our="{own}"][data-send-opp="{opponent}"]').first
             saved = page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
             page.evaluate("""({own, opponent}) => {
                 const key = 'ultimate-coach:plan-v2', write = Storage.prototype.setItem;
@@ -3391,16 +3416,18 @@ def test_live_cap_edit_preserves_saved_plan_when_saving_is_blocked(tmp_path, wid
                 }
                 return window.__readCapPlan();
             }""", failure)
-            page.locator('#ll-cap').fill('23')
+            # Type a non-default cap: the field now starts at APA's default 23 (2026-11-20), so typing 23 could not tell
+            # "the blocked edit was not saved" apart from "the default came back".
+            page.locator('#ll-cap').fill('21')
             assert page.locator('#ll-cap').evaluate('e=>e===document.activeElement')
-            assert 'Reference budget 23' in page.locator('.lineup-budget').text_content()
+            assert 'Reference budget 21' in page.locator('.lineup-budget').text_content()
             assert page.evaluate('window.__readCapPlan()') == saved
             for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
                 assert page.locator(section + ' .wr-storage-warning').first.is_visible()
             assert page.locator('#scouting-cards .wr-storage-warning').count() == page.locator('textarea.plan').count()
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             page.reload()
-            assert page.locator('#ll-cap').input_value() == ''
+            assert page.locator('#ll-cap').input_value() == '23', 'the blocked 21 was not saved; the default returns'
             assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC retained observation'
             if failure == 'stale':
                 assert page.locator('textarea.plan[data-pid="11"]').input_value() == 'SYNTHETIC newer observation'

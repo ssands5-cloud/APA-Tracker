@@ -223,8 +223,8 @@ def test_every_interactive_tab_follows_match_day(book, built):
     assert book.display(WR, "A4") == status
     assert book.display(SC, "A4") == status
     ours, theirs = _roster(book, WR, 15)
-    assert ours == [(ANN, "5", "6-2", "Unknown · —"), (BEA, "4", "3-3", "Unknown · —"),
-                    (DEE, "No data", "No data", "Unknown · —")]
+    assert ours == [(ANN, "5", "6-2", "Available · —"), (BEA, "4", "3-3", "Available · —"),
+                    (DEE, "No data", "No data", "Available · —")]
     assert theirs == [(CAM, "6", "7-1", "—"), (EVE, "3", "2-2", "—")]
     assert book.display(SC, "A6") == f"{CAM} · SL 6"
     assert book.display(CP, "A2") == "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open"
@@ -275,7 +275,7 @@ def test_best_sends_risks_and_unique_options_use_the_disclosed_rules(book, built
 def test_lineup_marks_change_candidates_but_never_the_evidence(book, built):
     book.set(LL, "C12", "Unavailable")   # Ann
     ours, _ = _roster(book, WR, 15)
-    assert ours[0] == (ANN, "5", "6-2", "Unavailable · —") and ours[1][3] == "Unknown · —"
+    assert ours[0] == (ANN, "5", "6-2", "Unavailable · —") and ours[1][3] == "Available · —"
     assert _opportunities(book, built) == [
         (f"vs {CAM} · SL 6", f"1. {DEE} — 1-1 (2 meetings) · SMALL SAMPLE"),
         (f"vs {EVE} · SL 3", "No favorable, even or indirect evidence among our remaining players."),
@@ -283,7 +283,7 @@ def test_lineup_marks_change_candidates_but_never_the_evidence(book, built):
     risks = _list_after(book, built, "Open risks — unplayed opponents with no favorable direct option left among our remaining players", 8)
     assert risks == [f"{CAM} — only even or indirect evidence left", f"{EVE} — no evidence-backed option left"]
     snapshot = _row(built, WR, "Lineup Lab snapshot (your marks applied; edit them on Lineup Lab)")
-    assert book.display(WR, f"C{snapshot + 1}") == ("2 of 3 (2 with unknown availability — still counted as remaining)")
+    assert book.display(WR, f"C{snapshot + 1}") == "2 of 3"   # everyone is Here unless marked Out: no unknown bucket
     # The evidence itself is untouched: inspecting Cam still shows Ann's real 2-0.
     inspect = _row(built, WR, "Inspect opponent")
     book.set(WR, f"C{inspect}", CAM)
@@ -294,7 +294,7 @@ def test_lineup_marks_only_apply_to_the_team_they_were_made_for(book, built):
     book.set(LL, "C12", "Unavailable")
     book.set(LL, "C5", SHARKS9)
     ours, _ = _roster(book, WR, 15)
-    assert ours[0][3] == "Unknown · —"
+    assert ours[0][3] == "Available · —"
     end = 15 + 8
     assert book.display(WR, f"A{end}").startswith(f"⚠ Lineup Lab marks are for {SHARKS9} — not applied to {SHARKS}.")
     assert book.display(LL, "D5") == f"⚠ Match Day shows {SHARKS} — these marks are NOT applied there."
@@ -312,7 +312,7 @@ def test_selected_lineup_and_remaining_totals_disclose_missing_skill_levels(book
     book.set(LL, "C7", 23)
     assert book.display(WR, f"C{snapshot + 3}") == ("Known subtotal 9 · 1 selected player(s) without a captured SL · "
                                                     "skill cap: 23 (default or override) — not a lineup-legality check.")
-    assert book.display(WR, f"C{snapshot + 1}") == "2 of 3 (2 with unknown availability — still counted as remaining)"
+    assert book.display(WR, f"C{snapshot + 1}") == "2 of 3"
 
 
 def test_opponent_played_marks_retire_that_opponent(book, built):
@@ -443,24 +443,24 @@ def test_lineup_marks_belong_to_one_fixture_and_notes_follow_the_player(book, bu
     book.set(LL, "D12", "Played")        # Ann played on Oct 11
     book.set(LL, "C23", "Played")        # Cam played on Oct 11
     book.set(LL, "D23", "Slow safeties")
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · Played"
     book.set(MD, "B9", "Sun Oct 25, 2026")
     book.set(MD, "B10", book.value("Engine", book.name("uc_FixtureList")[1][1]))   # the Falcons fixture
     assert "vs Falcons" in book.display(MD, "B17")
     ours, theirs = _roster(book, WR, 15)
-    assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"          # nothing leaked
+    assert ours[0][3] == "Available · —" and theirs[0][3] == "—"          # nothing leaked
     assert book.display(WR, "A23").startswith("⚠ Lineup Lab marks are for Sun Oct 11, 2026 · 11:00 AM MDT · Home vs Falcons · match 1 — not applied to this fixture.")
     assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 7:00 PM MDT · Home vs Falcons")
     assert book.display(SC, "C18") == "Slow safeties"                    # notes describe the player
     book.set(LL, "C9", book.value("Engine", book.name("uc_PlanKeyList").ref))  # re-plan for this fixture
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · Played"
     book.set(MD, "B9", "Sun Oct 11, 2026")                               # back: Oct 25 marks don't apply
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · —"
     # War Room exploring by hand (no fixture): marks apply only with the date blank.
     book.set(WR, "C6", FALCONS)
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · —"
     book.set(LL, "C9", "")
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · Played"
     assert _no_bad_values(book, built) == []
 
 
@@ -487,17 +487,17 @@ def test_two_matches_on_the_same_day_never_share_marks(tmp_path):
     book.set(LL, "D12", "Played")          # Ann
     book.set(LL, "C23", "Played")          # Cam
     ours, theirs = _roster(book, WR, 15)
-    assert ours[0][3] == "Unknown · Played" and theirs[0][3] == "Played"
+    assert ours[0][3] == "Available · Played" and theirs[0][3] == "Played"
     book.set(MD, "B10", second)            # same day, same teams, another match
     ours, theirs = _roster(book, WR, 15)
-    assert ours[0][3] == "Unknown · —" and theirs[0][3] == "—"
+    assert ours[0][3] == "Available · —" and theirs[0][3] == "—"
     assert book.display(LL, "D9").startswith("⚠ Match Day’s fixture is Sun Oct 25, 2026 · 9:00 PM MDT")
     assert "· match 4 — not applied to this fixture." in book.display(WR, "A23")
-    assert _packet_roster(book)[0][0][3] == "Unknown · —"     # the packet agrees
+    assert _packet_roster(book)[0][0][3] == "Available · —"     # the packet agrees
     book.set(MD, "B10", first)             # back to the first match: its marks return
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · Played"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · Played"
     book.set(LL, "C9", "")                 # no fixture named: nothing applies (fail-closed)
-    assert _roster(book, WR, 15)[0][0][3] == "Unknown · —"
+    assert _roster(book, WR, 15)[0][0][3] == "Available · —"
 
 
 def test_war_room_overrides_never_change_other_tabs(book, built):
@@ -594,15 +594,15 @@ def test_command_center_next_send_answers_the_player_they_put_up(book, built):
     assert lines[0].startswith("Not an overall player ranking.")
     assert lines[1] == "First direct-record group: 2-0 (2 meetings) · SMALL SAMPLE; equal evidence stays tied."
     assert lines[2:] == [
-        f"Direct-record order 1 {ANN_N} — 2-0 direct record (2 MEETINGS) — favorable · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
-        f"Direct-record order 2 {DEE_N} — 1-1 direct record (2 MEETINGS) — even · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026 · availability unknown",
+        f"Direct-record order 1 {ANN_N} — 2-0 direct record (2 MEETINGS) — favorable · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026",
+        f"Direct-record order 2 {DEE_N} — 1-1 direct record (2 MEETINGS) — even · SMALL SAMPLE · Meeting opponent SL 4; roster capture SL 6 · Latest dated meeting: Sun Sep 20, 2026",
         f"⚠ Avoid records — recorded losses, not exclusions: {BEA_N} — 0-2 (2 meetings) · SMALL SAMPLE",
     ]
     book.set("Command Center", "C6", EVE)
     assert _next_send(book)[0]==lines[0]
     assert _next_send(book)[1:] == [
         "No favorable/even direct option — shared-opponent candidates only (≈, not ordered)",
-        f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample) (availability unknown)",
+        f"≈ Not ordered (shared-opponent results only): {ANN_N} · consider saving — our only favorable direct option vs {CAM} (2-0 in 2 meetings, small sample)",
         f"⚠ Avoid records — recorded losses, not exclusions: {DEE_N} — 0-2 (2 meetings) · SMALL SAMPLE",
         f"❓ Unknown (no verified evidence, not weak): {BEA_N}",
     ]
@@ -637,7 +637,7 @@ def test_command_center_summarises_tonight_from_match_day(book, built):
     vals = [book.display(cc, f"{c}{r}") for r in range(1, 40) for c in "BFJ"]
     text = "\n".join(str(v) for v in vals if v not in ("", None, 0))
     assert "Sun Oct 11, 2026 · 11:00 AM MDT (America/Denver) · Home vs Falcons · 8-Ball Open" in text
-    assert "Available: 0" in text and "Unknown: 3 (not the same as unavailable)" in text and "Already used: 0" in text
+    assert "Available: 3" in text and "Unknown:" not in text and "Already used: 0" in text   # Here unless marked Out
     assert f"{CAM} · SL 6" in text and f"{EVE} · SL 3" in text
     assert "Favorable direct record (any sample size): 1" in text and "Concerning (more direct losses than wins): 2" in text
     assert "Limited evidence: 1 even direct · 1 shared-opponent only" in text
@@ -1279,7 +1279,7 @@ def test_next_send_separates_every_shared_avoid_and_unknown_player_and_keeps_ide
     book.set("Command Center", "C6", EVE)
     lines = _next_send(book)
     assert any("Not ordered" in line and "Ann Archer (SL 5)" in line for line in lines)
-    assert "Ann Archer (SL 4) (availability unknown)" in lines
+    assert "Ann Archer (SL 4)" in lines   # no availability caveat: Here unless marked Out
     assert any("Avoid records — recorded losses, not exclusions:" in line and "Dee Diaz" in line for line in lines)
     assert any("Fay Fox" in line and "0-1 (1 meeting)" in line for line in lines)
     assert any("Dee Diaz — 0-2 (2 meetings) · SMALL SAMPLE" in line for line in lines)

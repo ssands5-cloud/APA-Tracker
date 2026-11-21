@@ -582,10 +582,10 @@
       var js=[];w.blocks.forEach(function(b,j){if(unplayed[j]&&green[j]===1&&w.matrix[i].cells[j].category==="G") js.push(j);});
       if(js.length) unique.push(playerRef(m)+" — only favorable direct option vs "+js.map(function(j){return w.blocks[j].opponent_label+" ("+wrSaveRecord(w.matrix[i].cells[j])+")";}).join(", "));
     });
-    var remN=0,unk=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
+    var remN=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
     w.ours.forEach(function(m){
       var r=rem[String(m.id)],l=wrLineup(ck,m.id),sl=m.skill_level;
-      if(r){remN++;if(wrAvail(ck,m.id)==="Unknown") unk++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
+      if(r){remN++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
       if(l){selN++;if(wrKnown(sl)) selSL+=sl; else selMiss++;}
     });
     var cap=wrCapFor(ta),openN=unplayed.filter(Boolean).length;
@@ -595,9 +595,9 @@
       threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}),
       concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}),
       metrics:[
-        ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
+        ["Remaining players",!n?"—":remN+" of "+n],
         ["Remaining skill total",!n?"—":(remMiss===0?remSL+" (all remaining players have a captured SL)":remSL+" known subtotal · "+remMiss+" remaining player(s) without a captured SL — not a complete total")],
-        ["Selected lineup (Planned + Played)",selN===0?"No players marked Planned or Played yet.":(selMiss===0?"Skill total "+selSL+" for "+selN+" selected player(s)":"Known subtotal "+selSL+" · "+selMiss+" selected player(s) without a captured SL")+(cap?" · your reference cap: "+cap+" (user-entered, not verified)":"")+" — not a lineup-legality check."],
+        ["Selected lineup (Planned + Played)",selN===0?"No players marked Planned or Played yet.":(selMiss===0?"Skill total "+selSL+" for "+selN+" selected player(s)":"Known subtotal "+selSL+" · "+selMiss+" selected player(s) without a captured SL")+(cap?" · skill cap: "+cap+" (default or override)":"")+" — not a lineup-legality check."],
         ["Roster flexibility",openN===0?"—":"Favorable direct option left vs "+greenOpps+" of "+openN+" unplayed opponents · any evidence-backed option vs "+sendOpps+" of "+openN]
       ]};
   }
@@ -1632,7 +1632,7 @@
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
-      +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
+      +'<span>Already used: '+used+' · planned: '+planned+'</span></div>'
       +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
       +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient verified evidence in this snapshot: '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
@@ -1748,7 +1748,7 @@
     }).join("");
     var cap=wrCapFor(ta);
     document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for this fixture</button></div>'
-      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
+      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Everyone is Here unless marked Out. Coach notes follow the opponent player to every fixture.</p>'
       +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th><th>Recent games (recorded)</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
       +(function(){var c=wrLabChecks(w,plan.ck,ta);return '<div id="ll-five-check" class="five-check">'+c.five+'</div><div id="ll-briefing" class="risk-brief">'+c.brief+'</div><div id="ll-swap" class="swap-diff">'+c.swap+'</div>';})()

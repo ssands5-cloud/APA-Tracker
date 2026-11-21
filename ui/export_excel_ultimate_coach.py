@@ -131,7 +131,7 @@ NAV_SHEETS = ["Match Day", "War Room", "Lineup Lab", "Captain Packet", "Coach Da
 SHEET_ORDER = ["START HERE", "Command Center", "Match Day", "Recommended Lineup", "Five-Game Plan", "War Room", "Lineup Lab", "Scouting Cards", "Captain Packet", "Coach Dashboard",
                "Coach Notes", "Schedule", "Team Rosters", "Teams", "Players", "Player vs Player", "Player Teams", "Schedule Keys",
                "Date Keys", "Suggested Dates", "Stale Scopes", "Team Comparison", "Matchup Evidence", "Threats", "Concerning",
-               "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Data Trust", "Build Info"]
+               "Meetings", "Scouting", "Lists", "Engine", "Engine MD", "Lineup Paths", "Roster Matchups", "Data Trust", "Build Info"]
 # Build internals: lookup keys, dropdown sources and the formula engines. They
 # have to exist in the workbook because formulas and data validation point at
 # them, but a captain opening this file should not land in a 30-tab workbook

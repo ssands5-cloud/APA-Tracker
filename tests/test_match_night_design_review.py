@@ -283,7 +283,8 @@ def test_f2_paper_future_opportunity_matches_the_fresh_plan(tmp_path):
     packet = book.display('Captain Packet', f'C{top+1}')
     assert 'Sending now spends' in packet and 'consider saving' not in packet
     assert 'Eve Ellis' in packet and '2-0 in 2 meetings' in packet
-    book.set('Lineup Lab', 'C7', 23)
+    # 23 is the default the printed plan already uses (02fa311); a changed cap is what sends the captain to the phone.
+    book.set('Lineup Lab', 'C7', 24)
     assert 're-plan on the phone' in book.value('Engine', book.name('wr_PlanAnswer').ref)
     assert 'consider saving' in book.value('Engine', book.name('wr_NsCard').ref)
     wb.close()
