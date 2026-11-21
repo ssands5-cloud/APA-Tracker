@@ -392,6 +392,7 @@ body.bc .send-hero{background:linear-gradient(135deg,#061e1e 0%,#04141a 60%,#0a0
 body.bc .send-kicker{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--home)}
 body.bc .send-name{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(34px,6vw,56px);line-height:.95;letter-spacing:-.01em;text-transform:uppercase;color:var(--home);overflow-wrap:anywhere}
 body.bc .night-compare{margin-top:14px}body.bc .night-compare>summary{font-family:var(--cond);font-weight:800;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--home);cursor:pointer;padding:10px 2px}
+body.bc .send-concession{margin:2px 0 8px;font-size:14px;color:var(--gold);line-height:1.4}
 body.bc .send-pick{display:flex;align-items:center;gap:8px;white-space:nowrap;margin:2px 0 10px;font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim)}
 body.bc .send-pick select{font-family:var(--cond);font-weight:700;font-size:14px;letter-spacing:.04em;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:6px 8px;min-height:36px;width:auto;max-width:min(100%,440px)}
 body.bc .send-why{color:var(--fg);font-size:14px;max-width:80ch}
@@ -776,6 +777,13 @@ _JS_BODY = r"""
       if(!pick&&n.ranked.length) pick=n.ranked[0];
       var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
       var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
+      // A concession: nobody on our side has a winning head-to-head record against this opponent, so the engine
+      // names the cheapest player to give up and keeps the others for better spots. Say so instead of presenting
+      // the pick as a strong matchup.
+      var anyWin=all.some(function(c){return c.cat==="G";});
+      var keepFor=(n.holds||[]).filter(function(h){return h.covers.length&&h.our!==pickName;}).slice(0,2);
+      var concessionNote=(pickName&&!anyWin)?'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
+        +' is the cheapest to give up'+(keepFor.length?', saving '+keepFor.map(function(h){return esc(h.our)+' for '+esc(h.covers.slice(0,3).join(", "));}).join("; "):"")+'.</div>':"";
       // Owner request: choose any available player right on the card and see that player's recorded evidence
       // (head-to-head record, evidence level, what sending them now costs). Not odds: no probability is shown.
       var scen=n.sendScenarios||[],swapKey=m.planKey+"|"+n.opp.id+"|"+(m.played||0);
@@ -805,6 +813,7 @@ _JS_BODY = r"""
           +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'
           +(pick?barsHtml(pick.wins,pick.games,"send-bars"):"")
           +(pickId?'<button type="button" class="night-btn primary" data-send="'+esc(pickId)+'" data-opp="'+esc(n.opp.id)+'">✓ Send '+esc(pickName)+'</button>':"")+'</div>'
+          +concessionNote
           +(n.answer&&n.answer.why?'<div class="send-why">'+esc(n.answer.why)+'</div>':'<div class="send-why">'+esc(n.headline)+'</div>')
           +(n.answer&&n.answer.cost?'<div class="send-cost">'+esc(n.answer.cost)+'</div>':'')
           +(pick&&pick.after?'<div class="send-after"><b>After this send:</b> '+esc(afterText(pick.after))+'</div>':'')+'</section>';

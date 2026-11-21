@@ -635,3 +635,23 @@ def test_games_tonight_sits_right_above_the_live_pick(page):
     assert order == [True, True]                                                      # log, then the live pick, then the board
     assert page.locator("#bc-night .game-row .res.W").count() == 1
     assert page.errors == []
+
+
+def test_the_send_card_calls_a_pick_a_concession_only_when_nobody_has_a_winning_record(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=them]")
+    seen = {"note": 0, "plain": 0}
+    for chip_id in page.evaluate("UC_BC_LAST.night.chips.map(c => c.id)"):
+        page.click(f'#bc-night [data-pick="{chip_id}"]')
+        any_win = page.evaluate("""() => { const n = UC_BC_LAST.night;
+            return n.ranked.concat(n.unordered, n.avoid).some(c => c.cat === 'G'); }""")
+        note = page.locator("#bc-night .send-hero .send-concession")
+        has_hero = page.locator("#bc-night .send-hero .send-name").count() == 1
+        if has_hero and not any_win:
+            assert note.count() == 1 and "nobody has a winning record" in note.text_content().lower()
+            seen["note"] += 1
+        else:
+            assert note.count() == 0
+            seen["plain"] += 1
+    assert page.errors == []
