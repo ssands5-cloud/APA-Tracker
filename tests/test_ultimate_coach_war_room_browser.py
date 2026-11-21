@@ -3718,7 +3718,7 @@ def test_player_form_columns_show_only_recorded_facts(tmp_path: Path):
 # Captain workflow MVP: Swap what-if (exact difference of two fives; never changes a mark).
 # ---------------------------------------------------------------------------------------------
 def _swap_entry(name, sl, lineup="", avail="Available", form=""):
-    return {"name": name, "sl": sl, "lineup": lineup, "avail": avail, "form": form}
+    return {"id": name, "name": name, "sl": sl, "lineup": lineup, "avail": avail, "form": form}
 
 
 def test_swap_core_is_an_exact_difference_and_never_mutates(tmp_path: Path):
@@ -3798,6 +3798,108 @@ def test_swap_control_compares_two_fives_without_touching_marks(tmp_path: Path):
             lowered = box.inner_text().lower()
             assert not [b for b in _BRIEF_BANNED if b in lowered]
             assert "not a lineup-legality check" in page.inner_text("#lineup-lab")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Review fixes: swaps use canonical player ids (two players can share a display name), and a
+# player marked both Planned and Out gets their own factual Risk briefing line.
+# ---------------------------------------------------------------------------------------------
+def test_swap_core_uses_ids_when_two_players_share_a_display_name(tmp_path: Path):
+    entries = [
+        {"id": "a", "name": "Pat Doe", "sl": 5, "lineup": "Planned", "avail": "Available", "form": ""},
+        {"id": "b", "name": "Pat Doe", "sl": 2, "lineup": "Planned", "avail": "Available", "form": ""},
+        {"id": "c", "name": "Pat Doe", "sl": 4, "lineup": "", "avail": "Available", "form": ""},
+        {"id": "d", "name": "Lee Roe", "sl": 6, "lineup": "", "avail": "Available", "form": ""},
+    ]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            swap = lambda o, i: page.evaluate("([e, o, i]) => window.__ucSwapCore(e, 23, o, i)", [entries, o, i])  # noqa: E731
+            # The SECOND Pat Doe (SL 2) goes out for the THIRD (SL 4): +2, not the first Pat Doe's -1.
+            res = swap("b", "c")
+            assert res["valid"] and res["change"] == 2 and res["before"]["total"] == 7 and res["after"]["total"] == 9
+            assert res["lines"][0] == "In: Pat Doe (SL 4). Out: Pat Doe (SL 2)."
+            res_a = swap("a", "c")
+            assert res_a["valid"] and res_a["change"] == -1
+            assert swap("a", "b")["valid"] is False and swap("c", "a")["valid"] is False and swap("a", "a")["valid"] is False
+            assert swap("d", "c")["valid"] is False and swap("zz", "c")["valid"] is False
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_swap_control_keeps_two_same_named_teammates_apart(tmp_path: Path):
+    payload = _payload(crowded=True)               # two Sharks both display as "Ann Archer" (ids 1 and 4)
+    path = tmp_path / "dup.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            twins = [pid for pid, n in names.items() if n.startswith("Ann Archer")]
+            assert len(twins) == 2 and names[twins[0]] != names[twins[1]]
+            out_id, in_id = (twins[0], twins[1]) if sl[twins[0]] is not None and sl[twins[1]] is not None else (twins[0], twins[1])
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{out_id}"]', "Planned")
+            page.select_option("#ll-swap-out", out_id)
+            page.select_option("#ll-swap-in", in_id)
+            text = page.inner_text("#ll-swap").replace(chr(10), " ")
+            assert f"In: {names[in_id]}" in text and f"Out: {names[out_id]}" in text
+            if sl[in_id] is not None and sl[out_id] is not None:
+                delta = sl[in_id] - sl[out_id]
+                assert (f"Skill total changes by {'+' if delta > 0 else ''}{delta}." in text) or delta == 0
+            # The marks are untouched: the swapped-out twin is still the only Planned player.
+            planned = [p for p in names if page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() == "Planned"]
+            assert planned == [out_id]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_core_flags_a_player_marked_planned_and_out(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            five = _brief_input()["five"] | {"state": "partial", "count": 2, "conflict": ["Ann Archer"], "out": ["Bea Baker"]}
+            items = page.evaluate("i => window.__ucBriefingCore(i)", _brief_input(five=five))
+            assert items[0] == {"kind": "fact", "text": "1 player marked both Planned and Out: Ann Archer.",
+                                "source": "Lineup marks and Here/Out marks"}
+            assert items[1]["text"] == "1 player marked Out tonight: Bea Baker."        # a separate line for players not selected
+            none = page.evaluate("i => window.__ucBriefingCore(i)", _brief_input(five=_brief_input()["five"] | {"conflict": []}))
+            assert none == []
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_shows_the_planned_and_out_conflict_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            names = _lab_names(page)
+            pid = list(names)[0]
+            box = page.locator("#ll-briefing")
+            assert "marked both Planned and Out" not in box.inner_text()
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{pid}"]', "Planned")
+            assert "marked both Planned and Out" not in box.inner_text()
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
+            text = box.inner_text()
+            assert f"1 player marked both Planned and Out: {names[pid]}." in text
+            assert "source: Lineup marks and Here/Out marks" in text
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Available")
+            assert "marked both Planned and Out" not in box.inner_text()
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
             assert errors == []
         finally:
             browser.close()

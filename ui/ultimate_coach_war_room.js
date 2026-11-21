@@ -470,6 +470,7 @@
     function n(k,word){return k+" "+word+(k===1?"":"s");}
     function names(a){return a.join(", ");}
     var five=inp.five;
+    if(five.conflict&&five.conflict.length) items.push({kind:"fact",text:n(five.conflict.length,"player")+" marked both Planned and Out: "+names(five.conflict)+".",source:"Lineup marks and Here/Out marks"});
     if(five.out.length) items.push({kind:"fact",text:n(five.out.length,"player")+" marked Out tonight: "+names(five.out)+".",source:"Here/Out marks"});
     var noSl=inp.relevant.filter(function(p){return !wrKnown(p.sl);});
     if(noSl.length) items.push({kind:"fact",text:n(noSl.length,"player")+" in "+inp.scopeLabel+" with no captured skill level: "+names(noSl.map(function(p){return p.name;}))+".",source:"Skill level in this format"});
@@ -486,7 +487,7 @@
     return items;
   }
   function wrLabEntries(w,ck){
-    return w.ours.map(function(m){return {name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id),
+    return w.ours.map(function(m){return {id:String(m.id),name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id),
       games:rowsFor(m.id,w.format).length,form:formStripText(formFor(m.id,w.format))};});
   }
   function wrBriefingFrom(w,entries,five){
@@ -509,11 +510,12 @@
   window.__ucBriefingCore=wrBriefingCore;
   // ---- Captain workflow MVP, Swap what-if: the exact difference between two fives; never changes a mark ----
   var WR_SWAP={out:"",in:""};   // this page view only; not saved, not a mark, never evidence
-  function wrSwapCore(entries,cap,outName,inName){
-    var oe=entries.filter(function(e){return e.name===outName;})[0],ie=entries.filter(function(e){return e.name===inName;})[0];
-    if(!oe||!ie||oe.lineup!=="Planned"||ie.lineup||ie.avail==="Unavailable") return {valid:false,lines:[]};
+  function wrSwapCore(entries,cap,outId,inId){
+    // Identity is the canonical player id end to end; display names are only labels (two players can share one).
+    var oe=entries.filter(function(e){return String(e.id)===String(outId);})[0],ie=entries.filter(function(e){return String(e.id)===String(inId);})[0];
+    if(!oe||!ie||oe===ie||oe.lineup!=="Planned"||ie.lineup||ie.avail==="Unavailable") return {valid:false,lines:[]};
     var before=wrFiveCore(entries,cap);
-    var after=wrFiveCore(entries.map(function(e){return e.name===outName?{name:e.name,sl:e.sl,lineup:"",avail:e.avail}:(e.name===inName?{name:e.name,sl:e.sl,lineup:"Planned",avail:e.avail}:e);}),cap);
+    var after=wrFiveCore(entries.map(function(e){return e===oe?Object.assign({},e,{lineup:""}):(e===ie?Object.assign({},e,{lineup:"Planned"}):e);}),cap);
     function sl(x){return wrKnown(x)?String(x):"no captured skill level";}
     var lines=["In: "+ie.name+" (SL "+sl(ie.sl)+"). Out: "+oe.name+" (SL "+sl(oe.sl)+").",
       "Before: "+before.text,"After: "+after.text];
@@ -537,10 +539,10 @@
     if(disabled) return html+'<p class="muted">Mark at least one player Planned and keep one Here player unselected to compare a swap.</p>';
     if(!WR_SWAP.out||!WR_SWAP.in) return html+'<p class="muted">Choose who comes out and who goes in.</p>';
     var outM=planned.filter(function(m){return String(m.id)===WR_SWAP.out;})[0],inM=cands.filter(function(m){return String(m.id)===WR_SWAP.in;})[0];
-    var res=wrSwapCore(entries,cap,playerRef(outM),playerRef(inM));
+    var res=wrSwapCore(entries,cap,WR_SWAP.out,WR_SWAP.in);
     if(!res.valid) return html+'<p class="muted">That swap cannot be compared with the current marks.</p>';
     function briefTexts(list){return wrBriefingFrom(w,list,wrFiveCore(list,cap)).filter(function(i){return i.source!=="Skill levels and cap";}).map(function(i){return i.text;});}   // the cap line is already in Before/After
-    var swapped=entries.map(function(e){return e.name===playerRef(outM)?Object.assign({},e,{lineup:""}):(e.name===playerRef(inM)?Object.assign({},e,{lineup:"Planned"}):e);});
+    var swapped=entries.map(function(e){return e.id===WR_SWAP.out?Object.assign({},e,{lineup:""}):(e.id===WR_SWAP.in?Object.assign({},e,{lineup:"Planned"}):e);});
     var b0=briefTexts(entries),b1=briefTexts(swapped);
     var added=b1.filter(function(x){return b0.indexOf(x)<0;}),cleared=b0.filter(function(x){return b1.indexOf(x)<0;});
     html+='<ul class="wr-list">'+res.lines.map(function(l){return '<li>'+esc(l)+'</li>';}).join("")
