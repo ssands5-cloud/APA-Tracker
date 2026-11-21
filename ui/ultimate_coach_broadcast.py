@@ -798,7 +798,10 @@ _JS_BODY = r"""
     var strategyBench=n.command?'<section class="cmd" aria-label="Remaining bench strategy"><details class="more"><summary>Player details: what each send does to the plan</summary>'
       +'<div class="cmd-grid">'+n.command.cards.map(cardHtml).join("")+'</div></details></section>':"";
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
-    el.innerHTML=status+storage+resultBar+checkin+tossBar+commandHtml(m)+(done?"":chips+hero+strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+    // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
+    // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
+    el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
+      +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-oppout]"),function(b){b.onclick=function(){window.UC_ACT.oppOut(b.getAttribute("data-oppout"),b.getAttribute("data-out")==="1");};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-toss]"),function(b){b.onclick=function(){window.UC_ACT.toss(b.getAttribute("data-toss"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-putup]"),function(b){b.onclick=function(){window.UC_ACT.putUp(b.getAttribute("data-putup"));};});

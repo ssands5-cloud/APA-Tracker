@@ -541,3 +541,15 @@ def test_header_format_switch_shows_the_current_format_and_only_offers_real_matc
     assert nine.is_disabled()                                                         # no 9-Ball match that night here
     assert "no 9-ball match" in nine.get_attribute("title").lower()
     assert page.errors == []
+
+
+def test_the_live_pick_and_send_card_come_before_the_plan_board(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=them]")
+    before = page.evaluate("""() => { const c = document.querySelector('#bc-night .night-chip[data-pick]'),
+        h = document.querySelector('#bc-night .send-hero'), b = document.querySelector('#bc-night .cmd-main');
+        const pre = (x, y) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return [pre(c, b), pre(h, b)]; }""")
+    assert before == [True, True]                                                     # pick, then card, then plan
+    assert page.errors == []
