@@ -539,7 +539,7 @@
     var outM=planned.filter(function(m){return String(m.id)===WR_SWAP.out;})[0],inM=cands.filter(function(m){return String(m.id)===WR_SWAP.in;})[0];
     var res=wrSwapCore(entries,cap,playerRef(outM),playerRef(inM));
     if(!res.valid) return html+'<p class="muted">That swap cannot be compared with the current marks.</p>';
-    function briefTexts(list){return wrBriefingFrom(w,list,wrFiveCore(list,cap)).map(function(i){return i.text;});}
+    function briefTexts(list){return wrBriefingFrom(w,list,wrFiveCore(list,cap)).filter(function(i){return i.source!=="Skill levels and cap";}).map(function(i){return i.text;});}   // the cap line is already in Before/After
     var swapped=entries.map(function(e){return e.name===playerRef(outM)?Object.assign({},e,{lineup:""}):(e.name===playerRef(inM)?Object.assign({},e,{lineup:"Planned"}):e);});
     var b0=briefTexts(entries),b1=briefTexts(swapped);
     var added=b1.filter(function(x){return b0.indexOf(x)<0;}),cleared=b0.filter(function(x){return b1.indexOf(x)<0;});
