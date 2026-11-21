@@ -3540,3 +3540,84 @@ def test_five_core_edge_states(tmp_path: Path):
             assert errors == []
         finally:
             browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Risk briefing (facts only, each line names its source, no score).
+# ---------------------------------------------------------------------------------------------
+_BRIEF_BANNED = ("legal", "illegal", "win", "odds", "probab", "expected", "recommend", "risk score", "predict")
+
+
+def _brief_input(**over):
+    base = {
+        "five": {"state": "empty", "count": 0, "cap": 23, "total": 0, "out": [], "left": [], "conflict": [], "missing": 0, "text": ""},
+        "scopeLabel": "the Here pool", "formatLabel": "8-Ball", "minGames": 10, "relevant": [],
+        "oppNoSl": [], "oppOut": [], "trust": {"quarantined": 0, "issues": 0},
+    }
+    base.update(over)
+    return base
+
+
+def test_briefing_core_lists_only_named_source_facts(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            core = lambda inp: page.evaluate("i => window.__ucBriefingCore(i)", inp)  # noqa: E731
+            assert core(_brief_input()) == []
+            five = _brief_input()["five"] | {"state": "over", "count": 5, "total": 25, "cap": 23, "out": ["Out One", "Out Two"]}
+            items = core(_brief_input(
+                five=five, scopeLabel="the selected five",
+                relevant=[{"name": "Ann", "sl": 5, "games": 4}, {"name": "Bea", "sl": None, "games": 25}, {"name": "Cam", "sl": 3, "games": 10}],
+                oppNoSl=["Opp Blank"], oppOut=["Opp Away"], trust={"quarantined": 2, "issues": 1}))
+            assert [i["source"] for i in items] == [
+                "Here/Out marks", "Skill level in this format", "Recorded games in this archive", "Skill levels and cap",
+                "Opponent roster", "Opponent check-in marks", "Data trust", "Data trust"]
+            texts = [i["text"] for i in items]
+            assert texts[0] == "2 players marked Out tonight: Out One, Out Two."
+            assert texts[1] == "1 player in the selected five with no captured skill level: Bea."
+            assert texts[2] == "Ann (4) has fewer than 10 recorded games in 8-Ball."          # Cam has exactly 10: not short
+            assert texts[3] == "Skill total 25 is 2 over the cap of 23."
+            assert texts[6] == "2 recorded games quarantined and left out of every record."
+            assert texts[7] == "1 source coverage issue noted in the data build."
+            assert all(i["kind"] == "fact" and i["source"] for i in items)
+            joined = " ".join(texts).lower()
+            assert not [b for b in _BRIEF_BANNED if b in joined]
+            within = core(_brief_input(five=five | {"state": "within", "total": 21}))
+            assert [i["text"] for i in within if i["source"] == "Skill levels and cap"] == ["Skill total 21 of 23: 2 under the cap."]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_follows_marks_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            box = page.locator("#ll-briefing")
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            pids = list(names)
+            text = box.inner_text()
+            assert "Risk briefing" in text and "No score and no forecast." in text
+            assert "fewer than 10 recorded games in 8-Ball" in text           # the synthetic fixture has few games
+            assert "source: Recorded games in this archive" in text
+            assert text.count("source:") >= 1
+            # Marking a player Out names them and removes them from the pool the briefing checks.
+            out = pids[0]
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{out}"]', "Unavailable")
+            text = box.inner_text()
+            assert f"marked Out tonight: {names[out]}." in text and "source: Here/Out marks" in text
+            pool_line = [ln for ln in text.splitlines() if "recorded games in 8-Ball" in ln][0]
+            assert names[out] not in pool_line.split("fewer than")[0]
+            # Selecting players switches the briefing to the selected five.
+            keep = pids[1]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            if sl[keep] is None:
+                assert "in the selected five with no captured skill level" in box.inner_text()
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")      # existing row untouched
+            assert errors == []
+        finally:
+            browser.close()
