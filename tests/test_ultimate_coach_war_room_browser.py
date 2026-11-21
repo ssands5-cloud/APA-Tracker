@@ -3621,3 +3621,94 @@ def test_briefing_follows_marks_in_the_lineup_lab(tmp_path: Path):
             assert errors == []
         finally:
             browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Player Form (recorded games only; no label, no trend, no score).
+# ---------------------------------------------------------------------------------------------
+from analytics.player_stats import recent_form  # noqa: E402
+
+
+class _Game:
+    def __init__(self, result):
+        self.result = result
+
+
+def _form_payload():
+    payload = _payload()
+    pid = payload["players"][0]["id"]
+    opp = payload["players"][1]["id"]
+
+    def row(i, fmt, result):
+        return {"player_id": pid, "opponent_id": opp, "match_id": 9000 + i, "match_external_id": f"form-{fmt}-{i}",
+                "match_date": f"2025-{i + 1:02d}-15T19:00:00-06:00", "session_name": "Fall 2025", "format": fmt,
+                "result": result, "own_skill_level": 4, "opponent_skill_level": 4, "points_earned": 1, "nine_ball_points": None}
+
+    eight = [row(i, "EIGHT", c) for i, c in enumerate("WWLWLLWWWLWL")]           # oldest first by date
+    nine = [row(i, "NINE", c) for i, c in enumerate("LLLLLL")]
+    payload["evidence"] = list(payload["evidence"]) + list(reversed(eight)) + nine   # stored out of date order on purpose
+    return payload, pid
+
+
+def _python_form(payload, pid, fmt):
+    rows = sorted((r for r in payload["evidence"] if r["player_id"] == pid and r["format"] == fmt and r["result"] in ("W", "L")),
+                  key=lambda r: str(r["match_date"]))
+    results = [r["result"] for r in rows]
+    return {"strip": recent_form([_Game(x) for x in results], 5), "n": len(results),
+            "w10": results[-10:].count("W"), "n10": len(results[-10:]), "wAll": results.count("W")}
+
+
+def test_player_form_matches_the_python_reference_and_isolates_formats(tmp_path: Path):
+    payload, pid = _form_payload()
+    path = tmp_path / "form.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            for fmt in ("EIGHT", "NINE"):
+                js = page.evaluate("([p, f]) => window.__ucForm(p, f)", [pid, fmt])
+                py = _python_form(payload, pid, fmt)
+                assert (js["strip"], js["n"], js["w10"], js["n10"], js["wAll"]) == (py["strip"], py["n"], py["w10"], py["n10"], py["wAll"])
+            eight = page.evaluate("([p]) => window.__ucForm(p, 'EIGHT')", [pid])
+            nine = page.evaluate("([p]) => window.__ucForm(p, 'NINE')", [pid])
+            assert eight["enough"] and eight["n"] >= 12 and eight["strip"] != nine["strip"]
+            assert nine["strip"].endswith("LLLLL") and nine["n"] >= 6          # never pooled with 8-Ball
+            nobody = page.evaluate("() => window.__ucForm('no-such-player', 'EIGHT')")
+            assert nobody == {"n": 0, "strip": "", "n5": 0, "w10": 0, "n10": 0, "wAll": 0, "enough": False}
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_player_form_columns_show_only_recorded_facts(tmp_path: Path):
+    payload, pid = _form_payload()
+    path = tmp_path / "form-ui.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            assert "recent games (recorded)" in page.inner_text("#team-rosters").lower()
+            roster_rows = page.locator("#team-rosters tbody tr").count()
+            assert roster_rows > 0 and page.locator("#team-rosters td.form-strip").count() == roster_rows
+            assert page.locator("#team-rosters td.form-record").count() == roster_rows
+            lab_players = page.locator('#lineup-lab select[data-plan="lineup"]').count()
+            assert page.locator("#lineup-lab td.form-strip").count() == lab_players
+            cells = page.locator("#team-rosters td.form-strip, #lineup-lab td.form-strip").all_inner_texts()
+            assert any(c.startswith("not enough games (") for c in cells)          # short histories are never given a strip
+            assert any("(last 5)" in c for c in cells)                              # the seeded player has enough games
+            joined = " ".join(cells + page.locator("#team-rosters td.form-record").all_inner_texts()).lower()
+            for banned in ("hot", "cold", "slump", "trend", "improving", "odds", "probab", "expected", "score"):
+                assert banned not in joined, banned
+            assert errors == []
+        finally:
+            browser.close()
