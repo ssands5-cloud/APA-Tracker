@@ -1723,21 +1723,26 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     var ta=TEAM_INDEX[TA.value],tb=TEAM_INDEX[TB.value];
     var date=MATCHUP_CONTEXT&&MATCHUP_CONTEXT.fixture?MATCHUP_CONTEXT.fixture.local_date:null;
     if(!ta||!date) return null;
-    var found=null;
+    // Exact match only: same session, same team name, same opponent name, same date, other format. More than one
+    // candidate is ambiguous and offers nothing; a name alone never picks between them.
+    var found=[];
     Object.keys(SCHEDULE).forEach(function(k){{
-      var s=TEAM_INDEX[k];if(found||!s||s.name!==ta.name||s.format!==fmt) return;
+      var s=TEAM_INDEX[k];if(!s||s.name!==ta.name||s.format!==fmt||s.session_name!==ta.session_name) return;
       (SCHEDULE[k]||[]).forEach(function(side){{
         var f=FIXTURES[side.fixture_index],o=side.opponent||{{}},opp=o.scope_key?TEAM_INDEX[o.scope_key]:null;
-        if(found||!f||f.local_date!==date||o.status!=="resolved"||!opp) return;
-        if(tb&&opp.name!==tb.name) return;
-        found={{scope:s,side:side,fixture:f}};
+        if(!f||f.local_date!==date||o.status!=="resolved"||!opp) return;
+        if(tb&&(opp.name!==tb.name||opp.session_name!==tb.session_name)) return;
+        found.push({{scope:s,side:side,fixture:f}});
       }});
     }});
-    return found;
+    UC_FORMAT_AMBIGUOUS[fmt]=found.length>1;
+    return found.length===1?found[0]:null;
   }}
+  var UC_FORMAT_AMBIGUOUS={{}};
   window.UC_FORMAT={{
     current:function(){{return TF.value;}},
     has:function(fmt){{return fmt===TF.value||!!ucFormatSibling(fmt);}},
+    ambiguous:function(fmt){{ucFormatSibling(fmt);return !!UC_FORMAT_AMBIGUOUS[fmt];}},
     go:function(fmt){{if(fmt===TF.value) return true;var it=ucFormatSibling(fmt);if(!it) return false;mdApplyFixture(it,true);return true;}}
   }};
   var MD_DATE_LIST=document.getElementById("md-date-list");

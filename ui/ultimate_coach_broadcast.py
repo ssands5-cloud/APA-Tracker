@@ -867,7 +867,8 @@ _JS_BODY = r"""
       var f=b.getAttribute("data-fmt"),on=!!F&&F.current()===f,ok=!!F&&F.has(f);
       b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on));b.disabled=!ok;
       b.title=ok?(on?"Showing tonight's "+b.textContent+" match":"Switch to tonight's "+b.textContent+" match")
-        :"No "+b.textContent+" match on this date against this opponent";
+        :(F&&F.ambiguous&&F.ambiguous(f)?"More than one "+b.textContent+" match matches this team and opponent that night; pick it in Schedule Planner"
+          :"No "+b.textContent+" match on this date against this opponent");
       b.onclick=function(){if(!on&&window.UC_FORMAT) window.UC_FORMAT.go(f);};
     });
   }
