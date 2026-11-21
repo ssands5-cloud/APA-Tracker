@@ -1502,7 +1502,8 @@
       var path=after.plan_if_we_lead||[],evidence=block.byMember[id];
       var budget=x.cap===null?null:(sl===null||after.cap.incomplete?"Skill budget incomplete":
         (x.playedSl+sl>x.cap||after.cap.slack<0?"Over the entered cap":"Within the entered cap"));
-      return {id:id,name:wrDisplayName(m,w.ours),level:evidence?evidence.confidence.level:"Unknown",
+      var useV2=UC_ENGINE==="v2"&&evidence&&evidence.v2;
+      return {id:id,name:wrDisplayName(m,w.ours),level:evidence?(useV2?evidence.v2.level+" "+Math.round(100*evidence.v2.p)+"%":evidence.confidence.level):"Unknown",
         recommended:!!answer&&wrDisplayName(m,w.ours)===answer.our,remainingValue:after.total_if_we_lead,
         lost:wrSendCost(w,j,id,plan.rem,plan.unplayed).lost,budget:budget,slots:slots,
         path:path.map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};})};
