@@ -4,12 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 from pandas import Series
-REPO = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker\.worktrees\uc-broadcast-ui"
-sys.path.insert(0, REPO)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import research_common as _rc
+DB, OUT = _rc.setup(__doc__)
 from analytics.ultimate_coach_confidence import pair_confidence, sl_changed_since_last_meeting, LEVEL_POINTS
-sys.path.insert(0, REPO + r"\scripts")
 from replay_confidence_levels import FORMATS, local_day
-DB = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db"
 sys.stdout.reconfigure(encoding="utf-8")
 TRAIN_END = "2025-08-31"; START = "2023-01-01"; B = 1000
 rng = np.random.default_rng(20261120)
@@ -28,6 +27,8 @@ for p, o, res, slp, slo, fmt, day, mid in rows:
     if fmt not in FORMATS or p == o:
         continue
     games[(FORMATS[fmt], local_day(day))].append((p, o, res == "W", slp, slo, mid))
+for _k in games:
+    games[_k].sort(key=lambda g: (str(g[5]), str(g[0]), str(g[1])))
 pairs = defaultdict(dict)
 overall = defaultdict(lambda: [0, 0])
 lvl = {}
@@ -295,5 +296,5 @@ for fmt in ("EIGHT", "NINE"):
             R["by_dm3_bin"].append({"bin": f"{lo}..{hi}", "n": int(k.sum()), "mean_home_pts_diff": float(ypd_te[k].mean()),
                                     "home_win_rate": float((ypd_te[kk] > 0).mean())})
     out[fmt] = R
-Path("results.json").write_text(json.dumps(out, indent=2))
+(OUT / "results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=1))

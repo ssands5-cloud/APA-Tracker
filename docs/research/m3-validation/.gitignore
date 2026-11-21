@@ -1,0 +1,4 @@
+# The archive snapshot contains real league data. Never commit it.
+archive_snapshot.sqlite
+*.sqlite
+*.db

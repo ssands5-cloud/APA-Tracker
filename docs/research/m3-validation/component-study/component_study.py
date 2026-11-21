@@ -4,12 +4,11 @@ from collections import defaultdict, deque
 from pathlib import Path
 import numpy as np
 from pandas import Series
-REPO = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker\.worktrees\uc-broadcast-ui"
-sys.path.insert(0, REPO)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import research_common as _rc
+DB, OUT = _rc.setup(__doc__)
 from analytics.ultimate_coach_confidence import pair_confidence, sl_changed_since_last_meeting
-sys.path.insert(0, REPO + r"\scripts")
 from replay_confidence_levels import FORMATS, local_day
-DB = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db"
 sys.stdout.reconfigure(encoding="utf-8")
 START, FIT_END, VAL_END = "2023-01-01", "2025-02-28", "2025-08-31"
 B = 300
@@ -26,6 +25,8 @@ for p, o, res, slp, slo, fmt, day, mid in rows:
     if fmt in FORMATS and p != o:
         games[(FORMATS[fmt], local_day(day))].append((p, o, res == "W", slp, slo, mid))
 
+for _k in games:
+    games[_k].sort(key=lambda g: (str(g[5]), str(g[0]), str(g[1])))
 pairs = defaultdict(dict); overall = defaultdict(lambda: [0, 0]); recent = defaultdict(lambda: deque(maxlen=10))
 team = defaultdict(lambda: [0, 0])
 FEATS = {"EIGHT": [], "NINE": []}
@@ -180,7 +181,7 @@ for fmt in ("EIGHT", "NINE"):
     for g in GROUPS: names += [f"{g}[{i}]" for i in range(slices[g][1] - slices[g][0])]
     R["full_standardised_coefs"] = {n: float(c) for n, c in zip(names, full_b[1:])}
     out[fmt] = R
-Path("results.json").write_text(json.dumps(out, indent=2))
+(OUT / "results.json").write_text(json.dumps(out, indent=2))
 for fmt in out:
     R = out[fmt]; print(fmt, R["n_test"], "base", round(R["base_rate_logloss_test"], 5), "full", R["full"])
     for g, v in R["groups"].items(): print("  ", g, {k: (round(x, 5) if isinstance(x, float) else x) for k, x in v.items()})

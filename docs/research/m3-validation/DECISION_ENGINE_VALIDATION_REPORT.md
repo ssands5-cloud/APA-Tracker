@@ -201,3 +201,6 @@ python -I m3-captain-study/decomp.py
 ```
 
 Run each from an empty working directory; each writes `results.json` (`decomp_results.json` for the last). The `repro/` folder holds the verification rerun; `cmp` confirms identical output. Pre-registrations are in each study folder.
+
+## 11. Addendum (portability and rerun)
+Scripts now take `--db` or `UC_ARCHIVE_DB` and need no hardcoded paths; see `README.md`. Inputs are sorted so results are independent of database row order. The reruns on the compact snapshot are identical to reruns on the original archive; versus the first run, bootstrap intervals moved by at most 0.005 and no verdict changed. The committed `results.json` files are the rerun. The snapshot itself (real data) stays local.

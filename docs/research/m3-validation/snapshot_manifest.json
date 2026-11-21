@@ -1,0 +1,46 @@
+{
+  "tables": {
+    "matches": {
+      "rows": 90970,
+      "columns": [
+        "id",
+        "home_team_id",
+        "away_team_id",
+        "home_score",
+        "away_score",
+        "match_date",
+        "format",
+        "is_scored",
+        "is_bye"
+      ]
+    },
+    "player_head_to_head": {
+      "rows": 851766,
+      "columns": [
+        "player_id",
+        "opponent_id",
+        "match_id",
+        "own_skill_level",
+        "opponent_skill_level",
+        "result",
+        "format"
+      ]
+    },
+    "player_matches": {
+      "rows": 843075,
+      "columns": [
+        "player_id",
+        "match_id",
+        "team_id",
+        "skill_level"
+      ]
+    }
+  },
+  "scored_matches": {
+    "count": 88980,
+    "first": "2011-05-03T19:00:00-06:00",
+    "last": "2026-09-20T14:00:00-06:00"
+  },
+  "snapshot_sha256": "4f4c861b98b12c6d27c4f59586b3e5afcbabe367eee458b08ff6c5ec5f972710",
+  "snapshot_bytes": 57221120
+}

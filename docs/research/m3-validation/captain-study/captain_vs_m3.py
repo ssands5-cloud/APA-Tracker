@@ -4,12 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 from pandas import Series
-REPO = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker\.worktrees\uc-broadcast-ui"
-sys.path.insert(0, REPO)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import research_common as _rc
+DB, OUT = _rc.setup(__doc__)
 from analytics.ultimate_coach_confidence import pair_confidence, sl_changed_since_last_meeting, LEVEL_POINTS
-sys.path.insert(0, REPO + r"\scripts")
 from replay_confidence_levels import FORMATS, local_day
-DB = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db"
 sys.stdout.reconfigure(encoding="utf-8")
 TRAIN_END = "2025-08-31"; START = "2023-01-01"; B = 1000
 rng = np.random.default_rng(20261121)
@@ -27,6 +26,8 @@ games = defaultdict(list)
 for p, o, res, slp, slo, fmt, day, mid in rows:
     if fmt in FORMATS and p != o:
         games[(FORMATS[fmt], local_day(day))].append((p, o, res == "W", slp, slo, mid))
+for _k in games:
+    games[_k].sort(key=lambda g: (str(g[5]), str(g[0]), str(g[1])))
 pairs = defaultdict(dict); overall = defaultdict(lambda: [0, 0])
 
 
@@ -209,5 +210,5 @@ for fmt in ("EIGHT", "NINE"):
 cnt = con.execute("""SELECT AVG(c) FROM (SELECT COUNT(*) c FROM (SELECT home_team_id t,substr(match_date,1,4) y FROM matches WHERE is_scored=1 AND is_bye=0
   UNION ALL SELECT away_team_id,substr(match_date,1,4) FROM matches WHERE is_scored=1 AND is_bye=0) GROUP BY t,y HAVING COUNT(*)>=6)""").fetchone()
 out["avg_matches_per_team_year"] = cnt[0]
-Path("results.json").write_text(json.dumps(out, indent=2))
+(OUT / "results.json").write_text(json.dumps(out, indent=2))
 print(json.dumps(out, indent=1))

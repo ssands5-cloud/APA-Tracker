@@ -1,15 +1,16 @@
-"""Captain vs M3 (counterfactual matchings of the realized ten players). Read-only. See PREREGISTRATION.md."""
+"""Who-plays vs how-paired decomposition of the M3 board total (derived from captain_vs_m3.py)
+
+Captain vs M3 (counterfactual matchings of the realized ten players). Read-only. See PREREGISTRATION.md."""
 import sys, json, sqlite3, math, itertools
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
 from pandas import Series
-REPO = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker\.worktrees\uc-broadcast-ui"
-sys.path.insert(0, REPO)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import research_common as _rc
+DB, OUT = _rc.setup(__doc__)
 from analytics.ultimate_coach_confidence import pair_confidence, sl_changed_since_last_meeting, LEVEL_POINTS
-sys.path.insert(0, REPO + r"\scripts")
 from replay_confidence_levels import FORMATS, local_day
-DB = r"D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging.db"
 sys.stdout.reconfigure(encoding="utf-8")
 TRAIN_END = "2025-08-31"; START = "2023-01-01"; B = 1000
 rng = np.random.default_rng(20261121)
@@ -27,6 +28,8 @@ games = defaultdict(list)
 for p, o, res, slp, slo, fmt, day, mid in rows:
     if fmt in FORMATS and p != o:
         games[(FORMATS[fmt], local_day(day))].append((p, o, res == "W", slp, slo, mid))
+for _k in games:
+    games[_k].sort(key=lambda g: (str(g[5]), str(g[0]), str(g[1])))
 pairs = defaultdict(dict); overall = defaultdict(lambda: [0, 0])
 
 
@@ -138,22 +141,21 @@ for fmt in ("EIGHT", "NINE"):
                          dex=eh - ea, invh=float(th.mean()), inva=float(ta.mean()), resh=float(th[idx]-th.mean()), resa=float(ta[idx]-ta.mean()), hp=m["hp"], ap=m["ap"]))
 
     tr = [r for r in recs if r["day"] <= TRAIN_END]; te = [r for r in recs if r["day"] > TRAIN_END]
-    def A(L,k): return np.array([r[k] for r in L], float)
-    def X(L): return np.c_[A(L,"dsl"),A(L,"dex"),A(L,"invh")-A(L,"inva"),A(L,"resh")-A(L,"resa")]
-    Xtr,Xte=X(tr),X(te); sd=Xtr.std(0); Xtr/=sd; Xte/=sd
-    ytr=A(tr,"hp")-A(tr,"ap"); yte=A(te,"hp")-A(te,"ap")
-    wtr,wte=ytr!=0,yte!=0
-    yw=(yte>0)[wte].astype(float); ywt=(ytr>0)[wtr].astype(float)
-    f=logit(Xte[wte],yw)
-    cs=[]
+    def A(L, k): return np.array([r[k] for r in L], float)
+    def X(L): return np.c_[A(L, "dsl"), A(L, "dex"), A(L, "invh") - A(L, "inva"), A(L, "resh") - A(L, "resa")]
+    Xtr, Xte = X(tr), X(te); sd = Xtr.std(0); Xtr /= sd; Xte /= sd
+    ytr = A(tr, "hp") - A(tr, "ap"); yte = A(te, "hp") - A(te, "ap")
+    wtr, wte = ytr != 0, yte != 0
+    yw = (yte > 0)[wte].astype(float); ywt = (ytr > 0)[wtr].astype(float)
+    f = logit(Xte[wte], yw)
+    cs = []
     for _ in range(B):
-        k=rng.integers(0,len(te),len(te)); w=wte[k]; cs.append(logit(Xte[k][w],((yte[k]>0)[w]).astype(float),15))
-    cs=np.array(cs)
-    base=logit(Xtr[wtr][:,:2],ywt); inv=logit(Xtr[wtr][:,:3],ywt); full=logit(Xtr[wtr],ywt)
-    a0=auc(yw,logit_p(base,Xte[wte][:,:2])); a1=auc(yw,logit_p(inv,Xte[wte][:,:3])); a2=auc(yw,logit_p(full,Xte[wte]))
-    RES[fmt]=dict(n=len(te),coef_names=["dSL","dExpSL","M3 invariant part (who plays)","M3 matching-specific part (how paired)"],
-      coef=[float(v) for v in f[1:]],ci=[ci(cs[:,i+1]) for i in range(4)],
-      auc_skill=float(a0),auc_plus_invariant=float(a1),auc_plus_both=float(a2),
-      sd_inv=float(sd[2]),sd_res=float(sd[3]),
-      corr_inv_vs_res=float(np.corrcoef(Xte[:,2],Xte[:,3])[0,1]))
-Path("decomp_results.json").write_text(json.dumps(RES,indent=2)); print(json.dumps(RES,indent=1))
+        k = rng.integers(0, len(te), len(te)); w = wte[k]; cs.append(logit(Xte[k][w], ((yte[k] > 0)[w]).astype(float), 15))
+    cs = np.array(cs)
+    base = logit(Xtr[wtr][:, :2], ywt); inv = logit(Xtr[wtr][:, :3], ywt); full = logit(Xtr[wtr], ywt)
+    a0 = auc(yw, logit_p(base, Xte[wte][:, :2])); a1 = auc(yw, logit_p(inv, Xte[wte][:, :3])); a2 = auc(yw, logit_p(full, Xte[wte]))
+    RES[fmt] = dict(n=len(te), coef_names=["dSL", "dExpSL", "M3 invariant part (who plays)", "M3 matching-specific part (how paired)"],
+                    coef=[float(v) for v in f[1:]], ci=[ci(cs[:, i + 1]) for i in range(4)],
+                    auc_skill=float(a0), auc_plus_invariant=float(a1), auc_plus_both=float(a2),
+                    sd_inv=float(sd[2]), sd_res=float(sd[3]), corr_inv_vs_res=float(np.corrcoef(Xte[:, 2], Xte[:, 3])[0, 1]))
+(OUT / "decomp_results.json").write_text(json.dumps(RES, indent=2)); print(json.dumps(RES, indent=1))
