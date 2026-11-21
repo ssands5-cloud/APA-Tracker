@@ -189,7 +189,7 @@ def test_command_board_updates_send_costs_and_the_five_game_path(page):
     send = page.locator("#bc-night .send-hero [data-send]")
     sent_id = send.get_attribute("data-send")
     assert costs.first.get_attribute("data-cost-player") == sent_id
-    assert "Engine answer" in costs.first.inner_text()
+    assert "Engine answer" in costs.first.text_content()
     assert "vs " in costs.first.text_content()
     assert page.locator("#bc-night .path-tabs strong").is_visible()
     assert "we put up" in slots.nth(1).inner_text().lower()
@@ -215,6 +215,7 @@ def test_captain_can_confirm_a_different_player_from_the_send_comparison(page):
     _tab(page, "matchnight")
     page.locator("#bc-night .night-chip").first.click()
     recommended = page.locator("#bc-night .send-hero [data-send]").get_attribute("data-send")
+    page.click("#bc-compare > summary")                                               # the comparison starts closed
     option = page.locator(f'#bc-send-costs [data-cost-player]:not([data-cost-player="{recommended}"])').first
     player = option.get_attribute("data-cost-player")
     name = option.locator("strong").text_content()
@@ -596,4 +597,25 @@ def test_put_up_card_dropdown_swaps_the_player_and_puts_up_the_chosen_one(page):
     assert page.evaluate("UC_BC_LAST.night.putUp") is None                            # nothing committed by browsing
     hero.locator("[data-putup]").click()
     assert page.evaluate("UC_BC_LAST.night.putUp.id") == other                        # the chosen player is put up
+    assert page.errors == []
+
+
+def test_the_long_comparison_lists_start_collapsed_so_picking_never_needs_scrolling(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=them]")
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    compare = page.locator("#bc-compare")
+    assert compare.count() == 1 and not compare.evaluate("d => d.open")
+    assert not page.locator("#bc-send-costs").is_visible()
+    # everything needed to pick and send is above the collapsed line
+    above = page.evaluate("""() => { const c = document.querySelector('#bc-compare'), h = document.querySelector('#bc-night .send-hero'),
+        s = document.querySelector('#bc-night .send-hero [data-sendpick]'), b = document.querySelector('#bc-night .send-hero [data-send]');
+        const pre = (x, y) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return [pre(h, c), pre(s, c), pre(b, c)]; }""")
+    assert above == [True, True, True]
+    page.click("#bc-compare > summary")
+    assert page.locator("#bc-send-costs").is_visible()
+    page.locator("#bc-night .send-hero [data-send]").click()                         # open state survives a re-render
+    assert page.evaluate("UC_BC_LAST.night.games.length") == 1
     assert page.errors == []

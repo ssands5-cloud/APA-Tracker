@@ -391,6 +391,7 @@ body.bc .night-chip small{font-family:var(--sans);font-weight:600;font-size:11px
 body.bc .send-hero{background:linear-gradient(135deg,#061e1e 0%,#04141a 60%,#0a0d11 100%);border:1px solid var(--border);border-left:4px solid var(--home);border-radius:6px;padding:18px 22px;margin-bottom:12px;display:grid;gap:8px}
 body.bc .send-kicker{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--home)}
 body.bc .send-name{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(34px,6vw,56px);line-height:.95;letter-spacing:-.01em;text-transform:uppercase;color:var(--home);overflow-wrap:anywhere}
+body.bc .night-compare{margin-top:14px}body.bc .night-compare>summary{font-family:var(--cond);font-weight:800;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--home);cursor:pointer;padding:10px 2px}
 body.bc .send-pick{display:flex;align-items:center;gap:8px;white-space:nowrap;margin:2px 0 10px;font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim)}
 body.bc .send-pick select{font-family:var(--cond);font-weight:700;font-size:14px;letter-spacing:.04em;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:6px 8px;min-height:36px;width:auto;max-width:min(100%,440px)}
 body.bc .send-why{color:var(--fg);font-size:14px;max-width:80ch}
@@ -677,7 +678,7 @@ _JS_BODY = r"""
   }
   // Player chosen on the send card instead of the engine answer, per fixture, opponent and game (view state only;
   // nothing is recorded until Send).
-  var sendSwap={},putSwap={};
+  var sendSwap={},putSwap={},compareOpen=false;
   function sendPicker(scen,selId,oppId,key){
     return '<label class="send-pick">Send instead <select data-sendpick="'+esc(key)+'" aria-label="Choose who to send">'
       +scen.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===selId?' selected':'')+'>'+esc(s.name+" · "+s.level+(s.recommended?" · engine answer":""))+'</option>';}).join("")
@@ -839,7 +840,9 @@ _JS_BODY = r"""
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
     el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
-      +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+log;
+      +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
+        +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>')+log;
+    var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}
     Array.prototype.forEach.call(el.querySelectorAll("[data-putpick]"),function(sel){sel.onchange=function(){putSwap[sel.getAttribute("data-putpick")]=sel.value;renderNight(m);
       var again=document.querySelector("#bc-night [data-putpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-sendpick]"),function(sel){sel.onchange=function(){sendSwap[sel.getAttribute("data-sendpick")]=sel.value;renderNight(m);
