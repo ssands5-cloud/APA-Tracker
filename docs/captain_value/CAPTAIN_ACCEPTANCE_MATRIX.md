@@ -1,5 +1,7 @@
 # Captain acceptance matrix (25 questions)
 
+> Note (2026-11-20): see `CAPTAIN_VALUE_CURRENT_STATE.md` section 0, which corrects two statements here: dated per-player game rows are already embedded in the Broadcast payload, and the cockpit Lineup Lab already offers a Planned selection. Gap effort for Real Player Form, the Five Advisor and What-If is lower than stated below.
+
 Baseline: `docs/captain_value/CAPTAIN_VALUE_AUDIT_AND_ROADMAP.md` (same branch). Audit and plan only: no UI, code, production, deployment or merge. Reuse-first: every "Missing" entry is only what the repository cannot already do. No player or team names.
 
 Status rule: **Solved** = a shipped captain-facing screen answers it from recorded evidence today. **Partially** = the data or a module exists but the captain-facing answer is incomplete or unconnected. **Not Solved** = neither exists, or the project forbids the claim. Effort: Low = wiring or wording, Medium = a payload field plus a screen element, High = a new interactive surface or new data capture. Priority: P1 = the four highest-value gaps, P2 = finish or connect, P3 = keep, polish only, W = withhold (evidence rules).

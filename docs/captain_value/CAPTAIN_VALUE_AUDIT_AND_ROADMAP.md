@@ -1,5 +1,7 @@
 # Captain Value: reuse-first audit and roadmap (plan only)
 
+> Note (2026-11-20): see `CAPTAIN_VALUE_CURRENT_STATE.md` section 0, which corrects two statements here: dated per-player game rows are already embedded in the Broadcast payload, and the cockpit Lineup Lab already offers a Planned selection. Gap effort for Real Player Form, the Five Advisor and What-If is lower than stated below.
+
 Author: Claude. Date: 2026-11-20. Scope: audit and plan. No UI change, no code change, no deployment, no merge. M3 and the Broadcast UI stay as they are. Contains no player or team names and no row-level data.
 
 The 25-question acceptance matrix is in `CAPTAIN_ACCEPTANCE_MATRIX.md`.
