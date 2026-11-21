@@ -425,6 +425,44 @@
     var v=parseInt(raw,10);if(v>0) return v;
     return wrCapIsDefault(ta)&&(ta.format==="EIGHT"||ta.format==="NINE")?WR_DEFAULT_CAP:null;
   }
+  // ---- Captain workflow MVP, Five check: reference skill arithmetic on the Planned/Played selection ----
+  // Facts only: a recorded skill total against the cap. It is not a verdict on the match and never a prediction.
+  // entries: [{name, sl, lineup ("Planned"|"Played"|""), avail ("Available"|"Unavailable")}]
+  var WR_FIVE=5;
+  function wrFiveCore(entries,cap){
+    var sel=[],left=[],out=[],conflict=[],total=0,missing=0;
+    entries.forEach(function(e){
+      if(e.lineup==="Planned"||e.lineup==="Played"){
+        sel.push(e);
+        if(wrKnown(e.sl)) total+=Number(e.sl); else missing++;
+        if(e.lineup==="Planned"&&e.avail==="Unavailable") conflict.push(e.name);
+      } else if(e.avail==="Unavailable") out.push(e.name);
+      else left.push(e.name);
+    });
+    var n=sel.length,state,text,note=missing?" · "+missing+" without a captured skill level":"";
+    if(n===0){state="empty";text="Mark players Planned in the table above to compare their skill total with the cap.";}
+    else if(n>WR_FIVE){state="toomany";text=n+" players are marked Planned or Played; a team fields five.";}
+    else if(!cap){state="off";text=n+" of "+WR_FIVE+" chosen · "+(missing?"known skill subtotal ":"skill total ")+total+note+" · cap check is off.";}
+    else if(n<WR_FIVE){
+      state="partial";
+      text=n+" of "+WR_FIVE+" chosen · "+(missing?"known skill subtotal ":"skill total ")+total+note+" · "
+        +(missing?"room under the cap of "+cap+" cannot be completed":(cap-total>=0?(cap-total)+" left under the cap of "+cap+" for the other "+(WR_FIVE-n):"already "+(total-cap)+" over the cap of "+cap));
+    }
+    else if(missing){state="unverifiable";text="Cannot verify: "+missing+" of the five have no captured skill level (known subtotal "+total+", cap "+cap+").";}
+    else if(total<=cap){state="within";text="Skill total "+total+" of "+cap+": within the cap.";}
+    else {state="over";text="Skill total "+total+" is "+(total-cap)+" over the cap of "+cap+".";}
+    return {state:state,text:text,total:total,cap:cap,count:n,missing:missing,left:left,out:out,conflict:conflict};
+  }
+  function wrFiveCheck(w,ck,ta){
+    return wrFiveCore(w.ours.map(function(m){return {name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id)};}),wrCapFor(ta));
+  }
+  function wrFiveHtml(r){
+    return '<h3>Five check</h3><p class="five-line five-'+r.state+'"><b>'+esc(r.text)+'</b></p>'
+      +(r.conflict.length?'<p class="five-conflict">Marked Planned and Out: '+esc(r.conflict.join(", "))+'.</p>':'')
+      +(r.count?'<p class="muted">Left out, still Here: '+esc(r.left.length?r.left.join(", "):"nobody")+'.'+(r.out.length?' Out tonight: '+esc(r.out.join(", "))+'.':'')+'</p>':'')
+      +'<p class="muted">Reference arithmetic on recorded skill levels only. Required sends and other match rules are not verified.</p>';
+  }
+  window.__ucFiveCore=wrFiveCore;
   // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
   // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
   function wrOppOut(scope,pid){var n=wrNightMark("opp",scope,pid);return !!((n&&n.o)||wrMark("opp",scope,pid).o);}
@@ -1055,6 +1093,8 @@
     }
     var facts=lab&&lab.querySelector(".matchup-facts");
     if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
+    var fiveEl=lab&&lab.querySelector("#ll-five-check");
+    if(fiveEl) fiveEl.innerHTML=wrFiveHtml(wrFiveCheck(w,plan.ck,ta));
     // The broadcast board shows the cap and the plan it drives: publish the re-planned model (no-op on the classic page).
     var tb2=TEAM_INDEX[TB.value],c2=MATCHUP_CONTEXT;
     if(tb2) wrBroadcastPublish(wrBroadcastModel(w,plan,ta,tb2,c2&&c2.ourKey===ta.key&&c2.oppKey===tb2.key&&c2.fixture?c2:null));
@@ -1611,6 +1651,7 @@
       +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
       +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
+      +'<div id="ll-five-check" class="five-check">'+wrFiveHtml(wrFiveCheck(w,plan.ck,ta))+'</div>'
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Skill cap'+(cap&&wrCapIsDefault(ta)?' (APA default 23)':'')+' \u2014 type a number to change it, clear it to turn the check off<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="off"></label>'
       +'<h3>Recorded options now — and why</h3><p class="muted">For each unplayed opponent: our first-listed option by recorded results, with its meeting count. Listed order is not confidence or a prediction.</p>'

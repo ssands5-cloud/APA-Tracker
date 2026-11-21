@@ -64,6 +64,11 @@ tr.out td,tr.out th,.mcell.out,th.out,.scout.out { opacity:.5; }
 select.plan { width:auto; margin:0; padding:5px 8px; font-size:13.5px; background:#FFF4CC; }
 textarea.plan { width:100%; font:inherit; font-size:13px; padding:6px; border:1px solid var(--line-strong); border-radius:6px; background:#FFF4CC; }
 input#ll-cap { width:160px; display:block; margin-top:6px; padding:8px; font-size:14px; border:1px solid var(--line-strong); border-radius:8px; background:#FFF4CC; }
+.five-check,.risk-brief,.swap-diff { margin-top:12px; padding:10px 12px; border:1px solid var(--line); border-left:5px solid var(--line-strong); border-radius:10px; }
+.five-check h3,.risk-brief h3,.swap-diff h3 { margin:0 0 6px; }
+.five-line { margin:4px 0; font-size:15px; padding-left:8px; border-left:4px solid var(--line-strong); }
+.five-within { border-left-color:#2e7d32; } .five-over { border-left-color:#c62828; } .five-unverifiable,.five-toomany { border-left-color:#b26a00; }
+.five-conflict { margin:4px 0; font-size:13.5px; color:#b26a00; font-weight:600; }
 label.inline { text-transform:none; font-weight:600; letter-spacing:0; display:inline; }
 .cap-label { margin-top:10px; }
 button.secondary { background:#fff; color:var(--felt-deep); border-color:#bcd5c4; }

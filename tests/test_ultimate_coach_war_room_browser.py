@@ -3412,3 +3412,131 @@ def test_live_cap_edit_preserves_saved_plan_when_saving_is_blocked(tmp_path, wid
             assert errors == []
         finally:
             browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Five check (reference skill arithmetic on the Planned/Played selection).
+# Facts only: the new block never uses the words legal or illegal, never predicts, and leaves the
+# existing "not a lineup-legality check" Snapshot row alone.
+# ---------------------------------------------------------------------------------------------
+from analytics.lineup_legality import check_lineup_legality  # noqa: E402
+
+
+def _lab_skill_levels(page) -> dict[str, int | None]:
+    out: dict[str, int | None] = {}
+    selects = page.locator('#lineup-lab select[data-plan="lineup"]')
+    for i in range(selects.count()):
+        sel = selects.nth(i)
+        text = sel.locator("xpath=ancestor::tr/td[2]").inner_text().strip()
+        out[sel.get_attribute("data-pid")] = None if text in ("", "—") else int(text)
+    return out
+
+
+def _lab_names(page) -> dict[str, str]:
+    out: dict[str, str] = {}
+    selects = page.locator('#lineup-lab select[data-plan="lineup"]')
+    for i in range(selects.count()):
+        sel = selects.nth(i)
+        out[sel.get_attribute("data-pid")] = sel.locator("xpath=ancestor::tr/td[1]").inner_text().strip()
+    return out
+
+
+def test_five_check_states_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            box = page.locator("#ll-five-check")
+            sl, names = _lab_skill_levels(page), _lab_names(page)
+            pids = list(sl)
+            assert len(pids) >= 3
+            assert "Mark players Planned in the table above" in box.inner_text()
+            assert "not a lineup-legality check" not in box.inner_text()
+
+            first = pids[0]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{first}"]', "Planned")
+            text = box.inner_text()
+            assert "1 of 5 chosen" in text
+            if sl[first] is not None:
+                assert f"skill total {sl[first]}" in text
+                assert f"{23 - sl[first]} left under the cap of 23 for the other 4" in text
+            assert "Left out, still Here:" in text and names[first] not in text.split("Left out, still Here:")[1]
+
+            for pid in pids:
+                page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{pid}"]', "Planned")
+            text = box.inner_text()
+            assert f"{len(pids)} of 5 chosen" in text
+            known = [v for v in sl.values() if v is not None]
+            missing = len(pids) - len(known)
+            if missing:
+                assert f"known skill subtotal {sum(known)}" in text and f"{missing} without a captured skill level" in text
+            else:
+                assert f"skill total {sum(known)}" in text
+
+            # A Planned player marked Out is named, and appears in neither the left-out nor the Out lists wrongly.
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{first}"]', "Unavailable")
+            assert f"Marked Planned and Out: {names[first]}." in box.inner_text()
+
+            # Typing a smaller cap re-renders the block in place; clearing it turns the check off.
+            page.fill("#ll-cap", "6")
+            assert "the cap of 6" in box.inner_text() or "of 6" in box.inner_text()
+            page.fill("#ll-cap", "")
+            assert "cap check is off" in box.inner_text()
+
+            # Wording contract: no verdict language, no prediction, and the tested Snapshot row is untouched.
+            lowered = box.inner_text().lower()
+            for banned in ("legal", "illegal", "win", "odds", "probab", "expected", "recommend"):
+                assert banned not in lowered, banned
+            assert "required sends and other match rules are not verified" in lowered
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+FIVE_CASES = [
+    ([5, 5, 5, 4, 4], 23), ([6, 5, 5, 4, 3], 23), ([7, 6, 6, 3, 3], 23), ([3, 3, 3, 3, 3], 23),
+    ([6, 6, 5, 4, None], 23), ([None] * 5, 23), ([4, 4, 4, 4, 4], 23), ([7, 7, 5, 4, 2], 23), ([5, 5, 5, 4, 5], 23),
+]
+
+
+@pytest.mark.parametrize("levels,cap", FIVE_CASES)
+def test_five_core_agrees_with_the_verified_lineup_rule(tmp_path: Path, levels, cap):
+    entries = [{"name": f"P{i}", "sl": sl, "lineup": "Planned", "avail": "Available"} for i, sl in enumerate(levels)]
+    reference = check_lineup_legality([(i, sl) for i, sl in enumerate(levels)])
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            js = page.evaluate("([e, c]) => window.__ucFiveCore(e, c)", [entries, cap])
+            if reference is None:
+                assert js["state"] == "unverifiable" and js["missing"] == levels.count(None)
+            else:
+                assert js["state"] == ("within" if reference.is_legal else "over")
+                assert js["total"] == reference.skill_total and cap == reference.limit
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_five_core_edge_states(tmp_path: Path):
+    def entry(i, sl, lineup="Planned", avail="Available"):
+        return {"name": f"P{i}", "sl": sl, "lineup": lineup, "avail": avail}
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            core = lambda entries, cap: page.evaluate("([e, c]) => window.__ucFiveCore(e, c)", [entries, cap])  # noqa: E731
+            assert core([], 23)["state"] == "empty"
+            assert core([entry(i, 3) for i in range(6)], 23)["state"] == "toomany"
+            assert core([entry(i, 3) for i in range(4)], None)["state"] == "off"
+            partial = core([entry(0, 5), entry(1, 4), entry(2, 3, "Played")], 23)
+            assert partial["state"] == "partial" and partial["total"] == 12 and "11 left under the cap of 23 for the other 2" in partial["text"]
+            assert "already 2 over the cap of 12" in core([entry(0, 7), entry(1, 7)], 12)["text"]
+            mixed = core([entry(0, 5), entry(1, None), entry(2, 3, "", "Unavailable"), entry(3, 4, "", "Available")], 23)
+            assert mixed["missing"] == 1 and mixed["left"] == ["P3"] and mixed["out"] == ["P2"]
+            assert core([entry(0, 5, "Planned", "Unavailable")], 23)["conflict"] == ["P0"]
+            assert errors == []
+        finally:
+            browser.close()
