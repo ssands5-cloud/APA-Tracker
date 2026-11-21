@@ -553,3 +553,23 @@ def test_the_live_pick_and_send_card_come_before_the_plan_board(page):
         return [pre(c, b), pre(h, b)]; }""")
     assert before == [True, True]                                                     # pick, then card, then plan
     assert page.errors == []
+
+
+def test_send_card_dropdown_swaps_the_player_shows_their_evidence_and_sends_them(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    picker = page.locator("#bc-night .send-hero [data-sendpick]")
+    remaining = page.evaluate("UC_BC_LAST.night.bench.ours.filter(p => p.rem).map(p => p.id)")
+    assert sorted(picker.locator("option").evaluate_all("os => os.map(o => o.value)")) == sorted(remaining)
+    engine = picker.input_value()
+    other = next(i for i in remaining if i != engine)
+    picker.select_option(other)
+    name = page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).name", other)
+    hero = page.locator("#bc-night .send-hero")
+    assert hero.locator(".send-name").text_content() == name
+    assert hero.locator(".evidence-badge").count() == 1 and hero.locator(".matchup-bars").count() == 1
+    assert "engine answer" in hero.text_content().lower() and "not odds" in hero.text_content().lower()
+    hero.locator("[data-send]").click()
+    assert page.evaluate("UC_BC_LAST.night.games[0].ourId") == other                  # the chosen player is recorded
+    assert page.errors == []

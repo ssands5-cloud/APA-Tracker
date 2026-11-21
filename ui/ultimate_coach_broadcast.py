@@ -391,6 +391,8 @@ body.bc .night-chip small{font-family:var(--sans);font-weight:600;font-size:11px
 body.bc .send-hero{background:linear-gradient(135deg,#061e1e 0%,#04141a 60%,#0a0d11 100%);border:1px solid var(--border);border-left:4px solid var(--home);border-radius:6px;padding:18px 22px;margin-bottom:12px;display:grid;gap:8px}
 body.bc .send-kicker{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--home)}
 body.bc .send-name{font-family:var(--cond);font-weight:900;font-style:italic;font-size:clamp(34px,6vw,56px);line-height:.95;letter-spacing:-.01em;text-transform:uppercase;color:var(--home);overflow-wrap:anywhere}
+body.bc .send-pick{display:flex;align-items:center;gap:8px;white-space:nowrap;margin:2px 0 10px;font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim)}
+body.bc .send-pick select{font-family:var(--cond);font-weight:700;font-size:14px;letter-spacing:.04em;background:var(--bg-card);color:var(--fg);border:1px solid var(--border-hi);border-radius:3px;padding:6px 8px;min-height:36px;width:auto;max-width:min(100%,440px)}
 body.bc .send-why{color:var(--fg);font-size:14px;max-width:80ch}
 body.bc .send-cost{color:var(--gold);font-size:12.5px;font-weight:600}
 body.bc .send-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
@@ -672,6 +674,14 @@ _JS_BODY = r"""
           +'<details class="more path-more"><summary>Plan after this send</summary><span>'+summary+'</span></details></div>';
       }).join("")+'</section>';
   }
+  // Player chosen on the send card instead of the engine answer, per fixture, opponent and game (view state only;
+  // nothing is recorded until Send).
+  var sendSwap={};
+  function sendPicker(scen,selId,oppId,key){
+    return '<label class="send-pick">Send instead <select data-sendpick="'+esc(key)+'" aria-label="Choose who to send">'
+      +scen.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===selId?' selected':'')+'>'+esc(s.name+" · "+s.level+(s.recommended?" · engine answer":""))+'</option>';}).join("")
+      +'</select></label>';
+  }
   function renderNight(m){
     var el=$("bc-night"); if(!el) return;
     if(!m||m.empty||!m.night){el.innerHTML='<div class="home-empty">Pick a team and opponent on Home (or a fixture in Schedule Planner) to run the night.</div>';return;}
@@ -751,9 +761,32 @@ _JS_BODY = r"""
       if(!pick&&n.ranked.length) pick=n.ranked[0];
       var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
       var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
-      if(pickName){
+      // Owner request: choose any available player right on the card and see that player's recorded evidence
+      // (head-to-head record, evidence level, what sending them now costs). Not odds: no probability is shown.
+      var scen=n.sendScenarios||[],swapKey=m.planKey+"|"+n.opp.id+"|"+(m.played||0);
+      var swapId=sendSwap[swapKey]&&scen.some(function(s){return s.id===sendSwap[swapKey];})?sendSwap[swapKey]:null;
+      if(n.chosen&&pickName&&scen.length&&swapId&&swapId!==pickId){
+        var sc=scen.filter(function(s){return s.id===swapId;})[0],cd=all.filter(function(c){return c.id===swapId;})[0]||null;
+        var eng=scen.filter(function(s){return s.recommended;})[0];
+        var inList=function(l){return l.some(function(c){return c.id===swapId;});};
+        var kind=inList(n.ranked)?(CAT[cd.cat]||"Recorded")+" evidence":inList(n.avoid)?"Recorded losing record":inList(n.unordered)?"Shared-opponent evidence only":"No verified evidence";
+        var rec=cd&&cd.games?"recorded "+cd.wins+"-"+(cd.games-cd.wins)+" vs "+n.opp.name+" in "+cd.games+(cd.games===1?" meeting":" meetings")+(cd.games<3?" (small sample)":""):"no direct meetings with "+n.opp.name;
+        var notes=[kind+" — "+rec,cd&&cd.cost,cd&&cd.save,
+          sc.lost.length?"Only favorable answer lost for "+sc.lost.join(", "):"",sc.tradeoff,sc.budget].filter(Boolean);
+        hero='<section class="send-hero swapped" aria-label="Send now"><span class="send-kicker">Send now vs '+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+' · your choice</span>'
+          +'<div class="send-name">'+esc(sc.name)+'</div>'
+          +sendPicker(scen,swapId,n.opp.id,swapKey)
+          +'<div class="send-row"><span class="evidence-badge '+badgeClass(sc.level)+'">'+esc(sc.level)+'</span>'
+          +barsHtml(cd?cd.wins:null,cd?cd.games:0,"send-bars")
+          +'<button type="button" class="night-btn primary" data-send="'+esc(sc.id)+'" data-opp="'+esc(n.opp.id)+'">✓ Send '+esc(sc.name)+'</button></div>'
+          +'<div class="send-why">'+esc(notes.join(" · "))+'</div>'
+          +(eng?'<div class="send-cost">Engine answer: '+esc(eng.name)+' ('+esc(eng.level)+')</div>':'')
+          +'<div class="send-after"><b>After this send:</b> '+esc(cd&&cd.after?afterText(cd.after):(sc.slots?(sc.path.length?sc.path.map(function(p){return p.our+" vs "+p.their;}).join(" · "):"no remaining path"):"final pairing"))+'</div>'
+          +'<p class="matchup-footnote">Bars show the recorded head-to-head record and its sample size, not odds.</p></section>';
+      } else if(pickName){
         hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
           +'<div class="send-name">'+esc(pickName)+'</div>'
+          +(n.chosen&&scen.length?sendPicker(scen,pickId,n.opp.id,swapKey):'')
           +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'
           +(pick?barsHtml(pick.wins,pick.games,"send-bars"):"")
           +(pickId?'<button type="button" class="night-btn primary" data-send="'+esc(pickId)+'" data-opp="'+esc(n.opp.id)+'">✓ Send '+esc(pickName)+'</button>':"")+'</div>'
@@ -802,6 +835,8 @@ _JS_BODY = r"""
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
     el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
       +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-sendpick]"),function(sel){sel.onchange=function(){sendSwap[sel.getAttribute("data-sendpick")]=sel.value;renderNight(m);
+      var again=document.querySelector("#bc-night [data-sendpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-oppout]"),function(b){b.onclick=function(){window.UC_ACT.oppOut(b.getAttribute("data-oppout"),b.getAttribute("data-out")==="1");};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-toss]"),function(b){b.onclick=function(){window.UC_ACT.toss(b.getAttribute("data-toss"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-putup]"),function(b){b.onclick=function(){window.UC_ACT.putUp(b.getAttribute("data-putup"));};});
