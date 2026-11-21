@@ -64,6 +64,11 @@ tr.out td,tr.out th,.mcell.out,th.out,.scout.out { opacity:.5; }
 select.plan { width:auto; margin:0; padding:5px 8px; font-size:13.5px; background:#FFF4CC; }
 textarea.plan { width:100%; font:inherit; font-size:13px; padding:6px; border:1px solid var(--line-strong); border-radius:6px; background:#FFF4CC; }
 input#ll-cap { width:160px; display:block; margin-top:6px; padding:8px; font-size:14px; border:1px solid var(--line-strong); border-radius:8px; background:#FFF4CC; }
+.five-check,.risk-brief,.swap-diff { margin-top:12px; padding:10px 12px; border:1px solid var(--line); border-left:5px solid var(--line-strong); border-radius:10px; }
+.five-check h3,.risk-brief h3,.swap-diff h3 { margin:0 0 6px; }
+.five-line { margin:4px 0; font-size:15px; padding-left:8px; border-left:4px solid var(--line-strong); }
+.five-within { border-left-color:#2e7d32; } .five-over { border-left-color:#c62828; } .five-unverifiable,.five-toomany { border-left-color:#b26a00; }
+.five-conflict { margin:4px 0; font-size:13.5px; color:#b26a00; font-weight:600; }
 label.inline { text-transform:none; font-weight:600; letter-spacing:0; display:inline; }
 .cap-label { margin-top:10px; }
 button.secondary { background:#fff; color:var(--felt-deep); border-color:#bcd5c4; }
@@ -1011,6 +1016,19 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       : found.total+" matching player"+(found.total===1?"":"s")+". Choose a player to load opponents.";
   }}
   function rowsFor(pid,fmt){{return EVIDENCE_INDEX[String(pid)+"|"+fmt]||[];}}
+  // Captain workflow MVP, Player Form: recorded games only (this archive, not lifetime), sorted by date, one
+  // format at a time. Descriptive records and a W/L strip: no label, no trend, no score, no forecast.
+  var FORM_MIN_GAMES=5;
+  function formFor(pid,fmt){{
+    var rows=rowsFor(pid,fmt).slice().sort(function(a,b){{var x=String(val(a,"match_date")),y=String(val(b,"match_date"));return x<y?-1:(x>y?1:0);}});
+    var res=rows.map(function(r){{return val(r,"result")==="W"?"W":"L";}});
+    var n=res.length,last5=res.slice(-5),last10=res.slice(-10);
+    function wins(a){{return a.filter(function(x){{return x==="W";}}).length;}}
+    return {{n:n,strip:last5.join(""),n5:last5.length,w10:wins(last10),n10:last10.length,wAll:wins(res),enough:n>=FORM_MIN_GAMES}};
+  }}
+  function formStripText(f){{return f.enough?f.strip+" (last "+f.n5+")":"not enough games ("+f.n+")";}}
+  function formRecordText(f){{return f.enough?"last "+f.n10+": "+f.w10+"-"+(f.n10-f.w10)+" · recorded: "+f.wAll+"-"+(f.n-f.wAll)+" ("+f.n+" games)":"";}}
+  window.__ucForm=function(pid,fmt){{return formFor(pid,fmt);}};
   function playerBPool() {{
     var playerA=String(A.value||"");
     if(!playerA) return {{players:[],counts:{{}}}};
@@ -1265,7 +1283,8 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
       var evid=rowsFor(m.id,fmt).length;
       var slLabel=m.skill_level===null||m.skill_level===undefined?'—':String(m.skill_level);
       var wl=m.matches_won===null||m.matches_won===undefined||m.matches_played===null||m.matches_played===undefined?'—':m.matches_won+'-'+Math.max(0,m.matches_played-m.matches_won);
-      return '<tr><td>'+(i+1)+'</td><td>'+esc(playerLabel(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td></tr>';
+      var fm=formFor(m.id,fmt);
+      return '<tr><td>'+(i+1)+'</td><td>'+esc(playerLabel(m))+'</td><td>'+slLabel+'</td><td>'+wl+'</td><td>'+evid+'</td><td class="form-strip">'+esc(formStripText(fm))+'</td><td class="form-record">'+esc(formRecordText(fm))+'</td></tr>';
     }}).join("");
     // The team-specific summary (including any "from k of n players" missing-SL disclosure) always stays with
     // the roster; the generic cap/asterisk fine print is repeated in the matchup notes, so the focused print
@@ -1273,7 +1292,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return head+'<p class="roster-scope">'+esc(teamDisplay(team))+'</p><p class="roster-summary">'+team.players.length+' rostered · '+totalNote+'</p>'+
       '<p class="muted roster-fineprint">Not a 5-player lineup total. This data does not capture your division\\'s skill cap; enter one in Lineup Lab if you want a reference shown.'+
       '</p>'+
-      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>SL (this format)</th><th>Team W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>Player</th><th>SL (this format)</th><th>Team W-L</th><th>Evidence rows ('+esc(formatName(fmt))+')</th><th>Recent games (recorded)</th><th>Recorded record</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }}
 
   // ---- Match Night evidence: team comparison + ranking ----
