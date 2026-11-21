@@ -193,6 +193,16 @@ body.bc .badge-strong{background:var(--badge-strong-bg);color:var(--badge-strong
 body.bc .badge-solid{background:rgba(0,200,160,.15);color:#00c8a0;border-color:rgba(0,200,160,.25)}
 body.bc .badge-thin,body.bc .badge-unknown{background:var(--badge-thin-bg);color:var(--badge-thin-fg);border-color:rgba(130,140,160,.2)}
 body.bc .badge-caution,body.bc .badge-conflicted{background:var(--badge-caution-bg);color:var(--badge-caution-fg);border-color:rgba(245,197,24,.3)}
+body.bc .badge-favored{background:var(--badge-strong-bg);color:var(--badge-strong-fg);border-color:rgba(0,212,240,.25)}
+body.bc .badge-edge{background:rgba(0,200,160,.15);color:#00c8a0;border-color:rgba(0,200,160,.25)}
+body.bc .badge-toss-up{background:var(--badge-thin-bg);color:var(--badge-thin-fg);border-color:rgba(130,140,160,.2)}
+body.bc .badge-underdog,body.bc .badge-long{background:var(--badge-caution-bg);color:var(--badge-caution-fg);border-color:rgba(245,197,24,.3)}
+body.bc .uc-engine-switch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+body.bc .uc-compare-scroll{overflow-x:auto}body.bc table.uc-compare{width:100%;border-collapse:collapse;font-size:13px}
+body.bc table.uc-compare th,body.bc table.uc-compare td{padding:6px 8px;border-bottom:1px solid rgba(130,140,160,.2);text-align:left;vertical-align:top}
+body.bc table.uc-compare tr.differs th,body.bc table.uc-compare tr.differs td{background:rgba(245,197,24,.08)}
+body.bc table.uc-compare tr.why td{font-size:12px;color:var(--fg-dim)}
+body.bc .v2-concession{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--badge-caution-fg)}
 body.bc .matchup-why{grid-column:2/-1;font-size:12px;color:var(--fg-dim);margin-top:-6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 body.bc .matchup-footnote{font-size:11px;color:var(--fg-muted);margin:10px 0 0;line-height:1.5}
 body.bc .home-empty{padding:28px 20px;color:var(--fg-dim);font-size:14px;border:1px dashed var(--border-hi);border-radius:4px}
@@ -489,7 +499,7 @@ _JS_BODY = r"""
     return (w[0]||"?").slice(0,2).toUpperCase();
   }
   function pct(w,g){return g>0&&w!=null?Math.round(1000*w/g)/10:null;}
-  function badgeClass(level){return "badge-"+String(level||"unknown").toLowerCase();}
+  function badgeClass(level){return "badge-"+String(level||"unknown").toLowerCase().split(" ")[0];}
   // Team options read "Name · Session · Format · Div · N rostered". The hero shows the name, and adds
   // the format and division only where two teams share a name.
   var TEAM_LABELS={};
@@ -786,7 +796,8 @@ _JS_BODY = r"""
       // the pick as a strong matchup.
       var anyWin=all.some(function(c){return c.cat==="G";});
       var keepFor=(n.holds||[]).filter(function(h){return h.covers.length&&h.our!==pickName;}).slice(0,2);
-      var concessionNote=(pickName&&!anyWin)?'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
+      var v2Note=(n.answer&&n.engine==="v2"&&n.answer.p!==undefined)?'<div class="send-concession v2"><b>'+(n.answer.concession?"Deliberate concession.":"V2 estimate.")+'</b> '+esc(pickName)+' wins this pairing about '+Math.round(100*n.answer.p)+'% of the time'+(n.answer.concession?(n.answer.cost?"; "+esc(n.answer.cost):"; no remaining player does better here without costing more later"):"")+'.</div>':"";
+      var concessionNote=v2Note||(pickName&&!anyWin)?v2Note||'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
         +' is the cheapest to give up'+(keepFor.length?', saving '+keepFor.map(function(h){return esc(h.our)+' for '+esc(h.covers.slice(0,3).join(", "));}).join("; "):"")+'.</div>':"";
       // Owner request: choose any available player right on the card and see that player's recorded evidence
       // (head-to-head record, evidence level, what sending them now costs). Not odds: no probability is shown.
@@ -852,7 +863,8 @@ _JS_BODY = r"""
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
-    el.innerHTML=status+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+commandHtml(m)
+    // V2 candidate builds only: engine switch above the board, M3-vs-V2 comparison under the live pick.
+    el.innerHTML=status+(n.engineSwitchHtml||"")+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+(n.engineCompareHtml?'<details class="more night-compare" id="bc-engine-compare" open><summary>M3 vs V2 candidate</summary>'+n.engineCompareHtml+'</details>':"")+commandHtml(m)
       +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
         +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>');
     var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}

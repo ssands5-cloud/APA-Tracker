@@ -591,9 +591,18 @@ def render(
     viewer_card_number: str | None = None,
     match_night: dict[str, Any] | None = None,
     ui: str = "classic",
+    engine: str = "m3",
 ) -> str:
     if ui not in ("classic", "broadcast"):
         raise ValueError(f"unknown ui {ui!r}: expected 'classic' or 'broadcast'")
+    if engine not in ("m3", "v2"):
+        raise ValueError(f"unknown engine {engine!r}: expected 'm3' or 'v2'")
+    # V2 candidate builds embed the V2 pairing model and open on V2, with M3 one tap away for comparison.
+    # Standard builds (engine="m3") embed nothing new and behave exactly as before.
+    v2_script = ""
+    if engine == "v2":
+        from analytics.uc_v2_pair_model import load_model
+        v2_script = "var UC_V2_MODEL=" + _script_json(load_model()) + ";var UC_ENGINE_DEFAULT=\"v2\";"
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     compact_payload["match_night"] = match_night
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -848,7 +857,8 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
-{_WAR_ROOM_CSS}</style>{bc.style_markup(ui)}</head>
+{_WAR_ROOM_CSS}
+.uc-engine-switch {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }} .uc-compare-scroll {{ overflow-x:auto; }} table.uc-compare {{ border-collapse:collapse; width:100%; font-size:13px; }} table.uc-compare th, table.uc-compare td {{ padding:4px 6px; border-bottom:1px solid #d8ddd9; text-align:left; vertical-align:top; }} table.uc-compare tr.differs th, table.uc-compare tr.differs td {{ background:#fff6db; }} table.uc-compare tr.why td {{ font-size:12px; color:#5b6a61; }} .v2-concession {{ font-weight:700; color:#8f251b; font-size:11px; text-transform:uppercase; }} .mp-favored {{ color:#1d5c34; }} .mp-edge {{ color:#2f6f4a; }} .mp-toss-up {{ color:#7a4b00; }} .mp-underdog, .mp-long {{ color:#8f251b; }}</style>{bc.style_markup(ui)}</head>
 <body class="{'match-night' if match_night else ''}{bc.body_class(ui)}"{' data-view="home"' if ui == "broadcast" else ''}>
 {bc.top_markup(ui, bc_facts)}<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
 <div><h1>Ultimate Coach — Captain's War Room</h1>
@@ -929,7 +939,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div class="section-title"><h2>Data trust &amp; freshness</h2><p>What is verified, what is excluded, and why.</p></div>
 {trust_card}
 </div>
-<footer class="page-foot">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes.</footer>
+<footer class="page-foot">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. {"V2 CANDIDATE build: shows back-tested win-chance estimates from the V2 pairing model next to the M3 baseline; estimates, not guarantees." if engine == "v2" else "This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes."}</footer>
 </main>
 <script id="uc-data" type="application/json">{data}</script>
 <script>
@@ -1410,6 +1420,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return 'None of our roster has met '+playerRef(opp)+' directly. '+plural(ind,'player')+(ind===1?' has':' have')+' shared-opponent evidence only — not ranked against each other; compare ours vs theirs in the matrix.';
   }}
 
+{v2_script}
 {_WAR_ROOM_JS}
   // ---- Matchup header + focused print ----
   // MATCHUP_CONTEXT is set only by Match Day's Compare button and is kept
