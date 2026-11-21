@@ -198,6 +198,7 @@ body.bc .badge-edge{background:rgba(0,200,160,.15);color:#00c8a0;border-color:rg
 body.bc .badge-toss-up{background:var(--badge-thin-bg);color:var(--badge-thin-fg);border-color:rgba(130,140,160,.2)}
 body.bc .badge-underdog,body.bc .badge-long{background:var(--badge-caution-bg);color:var(--badge-caution-fg);border-color:rgba(245,197,24,.3)}
 body.bc .uc-engine-switch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+body.bc .send-pick,body.bc .send-pick select{max-width:100%;min-width:0}body.bc .send-pick select{width:100%;text-overflow:ellipsis}
 body.bc .uc-compare-scroll{overflow-x:auto}body.bc table.uc-compare{width:100%;border-collapse:collapse;font-size:13px}
 body.bc table.uc-compare th,body.bc table.uc-compare td{padding:6px 8px;border-bottom:1px solid rgba(130,140,160,.2);text-align:left;vertical-align:top}
 body.bc table.uc-compare tr.differs th,body.bc table.uc-compare tr.differs td{background:rgba(245,197,24,.08)}
