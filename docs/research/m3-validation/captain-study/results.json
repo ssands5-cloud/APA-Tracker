@@ -1,0 +1,165 @@
+{
+  "EIGHT": {
+    "n_train": 6526,
+    "n_test": 3469,
+    "team_boards_with_alternatives": 6888,
+    "share_no_alternative": 0.0072066878062841955,
+    "category_shares_optimal_near_sub_strong": [
+      0.03411730545876887,
+      0.0011614401858304297,
+      0.30981416957026714,
+      0.6549070847851336
+    ],
+    "null_share_optimal_random_matching": 0.034487514518002325,
+    "mean_regret": 0.5124048645827022,
+    "category_share_cis": [
+      [
+        0.029903455284552845,
+        0.03847270615563299
+      ],
+      [
+        0.00043554006968641115,
+        0.0020325203252032522
+      ],
+      [
+        0.29849012775842043,
+        0.3201219512195122
+      ],
+      [
+        0.6445956736353078,
+        0.6668118466898955
+      ]
+    ],
+    "optimal_minus_null": -0.00037020905923345476,
+    "optimal_minus_null_ci": [
+      -0.00429439484126985,
+      0.0034545586527293813
+    ],
+    "dose_response": {
+      "rdiff_sd_train": 0.4628504105129906,
+      "share_rdiff_zero_test": 0.027097146151628712,
+      "coef_logit_win_per_sd": 0.007437769358975315,
+      "coef_logit_win_ci": [
+        -0.07051963820980743,
+        0.07893118389093619
+      ],
+      "train_coef_logit": 0.060175673787186044,
+      "coef_points_per_sd": 0.062106533092544214,
+      "coef_points_ci": [
+        -0.09667418845830687,
+        0.22389930998052493
+      ],
+      "train_coef_points": 0.19400976680233506,
+      "dAUC": 6.661024387188963e-05,
+      "dAUC_ci": [
+        -0.003874272031716791,
+        0.003792172920349135
+      ],
+      "dR2": -0.0006244268344548498,
+      "dR2_ci": [
+        -0.0032106755695533616,
+        0.0019633498673957634
+      ]
+    },
+    "win_rate_by_own_regret_tercile_low_mid_high": [
+      0.5185919682697074,
+      0.49748973071656777,
+      0.4850606909430439
+    ],
+    "tercile_cuts": [
+      0.4,
+      0.6153846153846154
+    ],
+    "win_rate_optimal_boards": 0.44651162790697674,
+    "n_optimal_boards": 215,
+    "win_rate_strongly_suboptimal": 0.49265237292218744,
+    "n_strongly_sub": 4151,
+    "sensitivity_if_causal": {
+      "mean_regret": 0.5119904769280476,
+      "logit_shift_per_team": 0.008227425092184748,
+      "approx_win_prob_gain_near_even": 0.002056856273046187
+    }
+  },
+  "NINE": {
+    "n_train": 5759,
+    "n_test": 3126,
+    "team_boards_with_alternatives": 6218,
+    "share_no_alternative": 0.005438259756877839,
+    "category_shares_optimal_near_sub_strong": [
+      0.03409456416854294,
+      0.0008041170794467674,
+      0.31939530395625604,
+      0.6457060147957543
+    ],
+    "null_share_optimal_random_matching": 0.03238447517958615,
+    "mean_regret": 0.5068611696064519,
+    "category_share_cis": [
+      [
+        0.029752331939530394,
+        0.03827999356706336
+      ],
+      [
+        0.0001608234158893535,
+        0.0016082341588935349
+      ],
+      [
+        0.30749437118044387,
+        0.3309786104856867
+      ],
+      [
+        0.6333185911868767,
+        0.6582502412351239
+      ]
+    ],
+    "optimal_minus_null": 0.00171008898895679,
+    "optimal_minus_null_ci": [
+      -0.0023967044601694017,
+      0.005678909349201248
+    ],
+    "dose_response": {
+      "rdiff_sd_train": 0.45065749853577014,
+      "share_rdiff_zero_test": 0.01727447216890595,
+      "coef_logit_win_per_sd": 0.026994108365615166,
+      "coef_logit_win_ci": [
+        -0.04098185508436475,
+        0.10142898704997874
+      ],
+      "train_coef_logit": 0.05116519922740477,
+      "coef_points_per_sd": 0.29694027176627724,
+      "coef_points_ci": [
+        -0.46562384836213144,
+        1.055922230360662
+      ],
+      "train_coef_points": 0.2641090319271846,
+      "dAUC": -0.015033210799570984,
+      "dAUC_ci": [
+        -0.03738057570813472,
+        0.005614596771549729
+      ],
+      "dR2": 0.00016459263642409905,
+      "dR2_ci": [
+        -0.0007637119234523371,
+        0.001087951424513067
+      ]
+    },
+    "win_rate_by_own_regret_tercile_low_mid_high": [
+      0.5,
+      0.5054133858267716,
+      0.4945273631840796
+    ],
+    "tercile_cuts": [
+      0.4,
+      0.6190476190476191
+    ],
+    "win_rate_optimal_boards": 0.47761194029850745,
+    "n_optimal_boards": 201,
+    "win_rate_strongly_suboptimal": 0.5038520801232665,
+    "n_strongly_sub": 3894,
+    "sensitivity_if_causal": {
+      "mean_regret": 0.507079989188033,
+      "logit_shift_per_team": 0.03037378102583653,
+      "approx_win_prob_gain_near_even": 0.0075934452564591325
+    }
+  },
+  "avg_matches_per_team_year": 13.98557847244602
+}
