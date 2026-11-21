@@ -2,6 +2,8 @@
 
 Consolidation of the work since the SL3-vs-SL7 recommendation was reproduced (issue #119). No new experiments, fixes, tuning or production changes. Every number below comes from an earlier published run; the source file is named in each row.
 
+**Revision (closeout):** updated with the qualifications from GPT's independent red-team review: corrected 9-Ball new-player share, late-lead tie heterogeneity, no tested tie-break with a consistent average advantage, the 9-Ball skill-level result stated as "no consistent benefit demonstrated", a section separating correctness from predictive accuracy and strategic effectiveness, and the full list of unresolved integrity concerns.
+
 **Verdicts:** SUPPORTED, CONTRADICTED, INCONCLUSIVE. Where an earlier statement of mine failed a stronger test, it is listed as CONTRADICTED.
 
 **Sources** (branch `claude/m3-validation-research`):
@@ -38,7 +40,7 @@ M3 answered their SL7 with our SL3. Reproduced exactly from the captain file: th
 | The threshold causes about 71% of Unknowns | Counterfactual re-scoring with the threshold at 0 | 71% was association only. It causes 41.9% (8-Ball) / 38.3% (9-Ball) of Unknowns, and decides 15.3% / 14.4% of all pairings when removed globally | **CONTRADICTED** (corrected figures SUPPORTED) |
 | The threshold mainly hides unfavourable evidence | Destination levels of threshold-caused Unknowns | It hides both directions: Caution about 50%, Solid about 39-40%, Strong about 10-12% | **CONTRADICTED** |
 | Removing the threshold would improve recommendations | Paired whole-night replays, threshold removed globally and Unknown-only, two evaluators, 1,000 bootstraps | 8-Ball: worse under skill+evidence (-0.003 to -0.006 expected games, CIs below 0), neutral under skill-only. 9-Ball: worse under skill+evidence; slightly better in 1 of 4 skill-only setups | **CONTRADICTED (8-Ball), INCONCLUSIVE (9-Ball)** |
-| Low-history players are mostly capture gaps, not new players | Current rosters: archive games vs APA career totals | 93% of players under 20 recorded games are genuinely new (8-Ball 275 of 296, 9-Ball 177 of 204) | **CONTRADICTED** |
+| Low-history players are mostly capture gaps, not new players | Current rosters: archive games vs APA career totals | Players under 20 recorded games who are genuinely new: 93% in 8-Ball (275 of 296) and 86.8% in 9-Ball (177 of 204) | **CONTRADICTED** |
 | Incomplete capture thins other evidence | Same rosters | About a fifth of rostered players have less than half their career in the archive. The effect on individual recommendations was not isolated | **SUPPORTED** that it exists; **INCONCLUSIVE** on impact |
 
 ## 3. Tie-breaking
@@ -48,8 +50,9 @@ M3 answered their SL7 with our SL3. Reproduced exactly from the captain file: th
 | M3 recommendations are frequently exact ties | Every decision logged by type on test nights (`FOCUSED_CONTROLS.md` 2) | Ties on 35-37% of early leads, 78% of late leads, 21-23% of responses, both formats | **SUPPORTED** |
 | Ties are broken silently | Code review plus planner output | Lead ties are disclosed ("first by roster order"); answer ties are not (only alternatives that lose later value are listed) | **SUPPORTED** for answers |
 | The production tie-break (highest skill level first) systematically loses value | Decision-level comparison with a random tied pick; night-level paired replays | At the decision: within ±0.001 games. Across nights: random tie-breaks within noise, median 0 | **CONTRADICTED** |
-| Tied candidates are strategically interchangeable | Evaluator value of each tied candidate at the same state | Early leads and responses: median spread 0.010-0.022 games, 95th percentile up to 0.08. Late leads: median 0 | **CONTRADICTED (early leads, responses), SUPPORTED (late leads)** |
-| A better tie-break could recover value | Evaluator's best tied candidate vs the production pick | About 0.003-0.013 expected games per tied decision; worst single decision 0.13-0.32. Model-dependent | **SUPPORTED** (small) |
+| Tied candidates are strategically interchangeable | Evaluator value of each tied candidate at the same state | Early leads and responses: 98-100% of ties have different evaluator values (median spread 0.010-0.022 games, 95th percentile up to 0.08). Late leads: median spread 0, but about 35% of late-lead ties (34.9% 8-Ball, 34.7% 9-Ball) still have different evaluator values | **CONTRADICTED (early leads, responses); INCONCLUSIVE (late leads: about 65% equal, 35% not)** |
+| A different tie-break rule would give a better average outcome | Production, reversed, player-id, random orders and random tie-break only, paired nights | No tested tie-break rule showed a consistent average advantage: means within about +/-0.004 expected games, with signs that change with the opponent model and evaluator | **CONTRADICTED** for the tested rules |
+| Choosing the best tied candidate would recover value | Evaluator's best tied candidate vs the production pick at the same decision | About 0.003-0.013 expected games per tied decision; worst single decision 0.13-0.32. This uses the evaluator itself to choose (an upper bound under that model), not a tested tie-break rule | **INCONCLUSIVE** (model-dependent upper bound only) |
 
 ## 4. Roster order
 
@@ -66,7 +69,7 @@ M3 answered their SL7 with our SL3. Reproduced exactly from the captain file: th
 | Original hypothesis | Investigation | Evidence | Verdict |
 |---|---|---|---|
 | Skill-level gaps carry outcome signal | Actual skill-pair outcomes, all years (`issue119` tables) | 8-Ball lower player vs SL7: SL2 10.9%, SL3 22.2%, SL4 34.4%, SL5 34.3%, SL6 37.5%. 9-Ball: about 50% at every level | **SUPPORTED (8-Ball), CONTRADICTED (9-Ball)** |
-| Skill levels add predictive value beyond M3's levels | Chronological backtest, rolling validation, leakage probe, clean vs raw records (`issue119`, `RED_TEAM_RESPONSE.md`) | 8-Ball: M3 levels plus skill beat M3 levels in every one of five rolling blocks (+0.0038 to +0.0067 log loss); skill+evidence +0.0094 to +0.0127. 9-Ball: skill adds nothing to M3 in any block | **SUPPORTED (8-Ball), CONTRADICTED (9-Ball)** |
+| Skill levels add predictive value beyond M3's levels | Chronological backtest, rolling validation, leakage probe, clean vs raw records (`issue119`, `RED_TEAM_RESPONSE.md`) | 8-Ball: M3 levels plus skill beat M3 levels in every one of five rolling blocks (+0.0038 to +0.0067 log loss); skill+evidence +0.0094 to +0.0127. 9-Ball: no consistent incremental benefit under the tested specifications (rolling blocks -0.0011 to +0.0012, intervals mostly including 0; main split +0.0008) | **SUPPORTED (8-Ball); INCONCLUSIVE (9-Ball: no consistent benefit demonstrated)** |
 | Recorded skill levels are pre-match values | Rise-after-win test | A rise follows a win on the next match (5.5% vs 0.7% after a loss), not the same match | **SUPPORTED** |
 | The legacy skill-only win probability is well calibrated | Its 0.40-per-level rule vs archive rates (`FORENSIC_REPORT.md` 3) | Predicts SL3 vs SL7 at 16.8% in both formats; actual 22% (8-Ball) and 50% (9-Ball). +1 level predicted 60%, actual 56% / 49%. Used by legacy surfaces, not the Sunday file | **CONTRADICTED** |
 
@@ -106,15 +109,31 @@ M3 answered their SL7 with our SL3. Reproduced exactly from the captain file: th
 1. **M3 works as designed.** The engine, cap logic and Python/JavaScript parity are correct (392 tests, independent game-tree and brute-force checks). The originating SL3-vs-SL7 pick is a consequence of the scoring design, not a bug.
 2. **The core weakness is how no-evidence pairings are valued in 8-Ball.** Unknown scores as even at every skill gap. In 8-Ball that is wrong at gaps of two or more levels; in 9-Ball it is approximately right.
 3. **The 20-game threshold is not the cause I first claimed.** It causes 38-42% of Unknowns, it did not cause the originating case, and removing it does not improve projected decisions.
-4. **Ties and roster order matter for explanation and for individual nights, not on average.** Ties are frequent and often not strategically equal, but the current tie-break neither helps nor hurts on average.
-5. **Skill levels and recorded form add real predictive information in 8-Ball, consistently over time.** In 9-Ball, form helps and skill level does not.
+4. **Ties and roster order matter for explanation and for individual nights, not on average.** Ties are frequent and often not strategically equal (including about 35% of late-lead ties), and no tested tie-break rule showed a consistent average advantage over another.
+5. **Skill levels and recorded form add real predictive information in 8-Ball, consistently over time.** In 9-Ball, recorded form helps; skill levels showed no consistent incremental benefit under the tested specifications.
 6. **A planner using that information scores better in simulation,** mostly in 8-Ball (about +0.02 to +0.03 expected games per night). Whether it wins more real APA team matches cannot be determined from the archive.
 7. **The main explainability gaps are disclosable:** undisclosed answer ties, an Unknown label that does not say why, and no skill-gap context.
 
+## Implementation correctness vs predictive accuracy vs strategic effectiveness
+
+These are separate questions and were answered separately:
+
+| Question | What was tested | Status |
+|---|---|---|
+| **Implementation correctness**: does M3 compute what its rules say? | 392 engine, confidence, replay, mirror and evidence tests, including an independent game-tree search and brute-force board checks; Python/JavaScript parity | **SUPPORTED**: no coding defect found |
+| **Predictive accuracy**: do the scores track real game outcomes? | Chronological backtests on actual recorded games, rolling validation, calibration | M3's levels are correctly ordered but not calibrated by skill gap in 8-Ball; skill+evidence predicts better (actual outcomes) |
+| **Strategic effectiveness**: do better scores produce better captain decisions and more team points? | Simulated whole-night replays against assumed opponents, scored by pre-2023 evaluators | Simulated gains only; real team-point effect **INCONCLUSIVE** because unplayed boards and the bench are never observed |
+
+A correct implementation can still be a weak predictor, and a better predictor is not automatically a better strategy.
+
 **Open integrity caveats:**
-- Duplicate head-to-head rows block the production replay script.
-- The 2025-09+ holdout has been reused across studies; differences under about 0.005 should be treated as noise.
-- All counterfactual results depend on the evaluators.
-- The replay builds records from archive games while the live product uses APA career totals.
+Unresolved (preserved from GPT's red-team review and earlier reviews):
+- **Preprocessing leakage:** features use strictly earlier dates and a 400-game probe found 0 mismatches, but standardization, penalty selection and feature definitions were set by the same party that ran the tests; no fully independent re-implementation exists.
+- **Duplicate integrity:** 228 identical and 160 conflicting head-to-head keys block the production replay script; the clean policy drops them, but which conflicting record is correct is unknown.
+- **Holdout reuse:** the 2025-09+ period has been reused across the issue #119 experiment, the night replay and the focused studies; differences under about 0.005 should be treated as noise.
+- **Calibration:** M3 points are not probabilities; evaluator calibration on actual test games ranged from slope 0.81 to 1.07, and counterfactual results inherit any evaluator bias.
+- **Bootstrap clustering:** intervals resample matches or nights; setups compared on the same nights are not independent and players recur across nights, so intervals may be too narrow.
+- **Record source:** the replay builds records from archive games while the live product uses APA career totals.
+- **Counterfactuals:** all simulated results depend on the evaluators and on assumed opponent behaviour.
 
 No fixes, tuning, production changes or new investigations follow from this summary.
