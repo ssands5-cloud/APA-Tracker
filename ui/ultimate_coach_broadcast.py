@@ -758,7 +758,11 @@ _JS_BODY = r"""
           +(sel.avail==="Unknown"?'<div class="send-cost">Availability unknown \u2014 confirm '+esc(sel.name)+' is here.</div>':'')
           +(isEngine?'<div class="send-after"><b>Then they put up:</b> '+esc(rec.path.length?rec.path[0].our+" answers "+rec.path[0].their+" next, per the plan":"final pairing")+'</div>'
             :'<div class="send-cost">Engine pick: '+esc(rec.name)+' ('+esc(rec.reply.level)+' for us)</div><div class="send-after">The plan for the later games updates when you tap Put up.</div>')
-          +'<p class="matchup-footnote">Levels describe recorded evidence against their most damaging answer, not odds.</p></section>';
+          +'<p class="matchup-footnote">Levels describe recorded evidence against their most damaging answer, not odds.</p></section>'
+          // One-tap record: tap the player they actually threw and the selected player is put up against them.
+          +'<div class="night-chips night-quick" role="group" aria-label="Who they threw against '+esc(sel.name)+'"><span class="night-ask">They threw</span>'
+          +n.chips.map(function(c){return '<button type="button" class="night-chip" data-quick="'+esc(c.id)+'" data-up="'+esc(sel.id)+'" aria-label="'+esc(sel.name+" vs "+c.name+": record this pairing")+'">'+esc(c.name)+(c.sl!=null?'<small>SL '+esc(c.sl)+'</small>':'')+'</button>';}).join("")
+          +'<span class="matchup-footnote">Tap the player they put up against '+esc(sel.name)+' to record the pairing in one step.</span></div>';
         var others=opts.slice(1).map(function(o){
           var note=["their worst answer: "+o.reply.name+" ("+o.reply.level+")",o.tradeoff||"",o.budget||"",o.avail==="Unknown"?"availability unknown":""].filter(Boolean).join(" \u00b7 ");
           return '<div class="alt-row" data-lead-player="'+esc(o.id)+'"><div class="matchup-num">\u2248</div>'
@@ -852,6 +856,7 @@ _JS_BODY = r"""
       +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
         +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>');
     var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}
+    Array.prototype.forEach.call(el.querySelectorAll("[data-quick]"),function(q){q.onclick=function(){var up=q.getAttribute("data-up");window.UC_ACT.putUp(up);window.UC_ACT.send(up,q.getAttribute("data-quick"));};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-putpick]"),function(sel){sel.onchange=function(){putSwap[sel.getAttribute("data-putpick")]=sel.value;renderNight(m);
       var again=document.querySelector("#bc-night [data-putpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-sendpick]"),function(sel){sel.onchange=function(){sendSwap[sel.getAttribute("data-sendpick")]=sel.value;renderNight(m);

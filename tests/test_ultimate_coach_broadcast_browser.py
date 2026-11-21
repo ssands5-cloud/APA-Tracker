@@ -655,3 +655,23 @@ def test_the_send_card_calls_a_pick_a_concession_only_when_nobody_has_a_winning_
             assert note.count() == 0
             seen["plain"] += 1
     assert page.errors == []
+
+
+def test_one_tap_records_the_put_up_and_the_opponent_they_threw(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=us]")
+    picker = page.locator("#bc-night .send-hero [data-putpick]")
+    options = page.evaluate("UC_BC_LAST.night.leadOptions.map(o => o.id)")
+    chosen = next(i for i in options if i != picker.input_value())
+    picker.select_option(chosen)
+    quick = page.locator("#bc-night .night-quick [data-quick]")
+    chips = page.evaluate("UC_BC_LAST.night.chips.map(c => c.id)")
+    assert sorted(quick.evaluate_all("bs => bs.map(b => b.dataset.quick)")) == sorted(chips)
+    thrown = chips[-1]
+    page.locator(f'#bc-night .night-quick [data-quick="{thrown}"]').click()
+    game = page.evaluate("UC_BC_LAST.night.games[0]")
+    assert (game["ourId"], game["theirId"]) == (chosen, thrown)                       # selected player vs who they threw
+    assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"
+    assert page.evaluate("UC_BC_LAST.night.putUp") is None
+    assert page.errors == []
