@@ -1,0 +1,76 @@
+{
+  "production_rule": "analytics.ultimate_coach_confidence.pair_confidence",
+  "source_sha256": "fb2b098d6b0537b5e0d847dcf83aab43567fd3a257933e38b3123c49d0a43145",
+  "rule_sha256": "b8edf535d3bfe56596ebe49abdacc42fde3552fadd126b9db772188417b7a371",
+  "excluded_matches": 193,
+  "excluded_observations": 1902,
+  "unsupported_format_observations": 8130,
+  "observations": 841686,
+  "levels": {
+    "EIGHT Caution": {
+      "n": 160888,
+      "observed_wins": 68231,
+      "observed_losses": 92657
+    },
+    "EIGHT Conflicted": {
+      "n": 20630,
+      "observed_wins": 10315,
+      "observed_losses": 10315
+    },
+    "EIGHT Solid": {
+      "n": 84710,
+      "observed_wins": 48805,
+      "observed_losses": 35905
+    },
+    "EIGHT Strong": {
+      "n": 17283,
+      "observed_wins": 11772,
+      "observed_losses": 5511
+    },
+    "EIGHT Thin": {
+      "n": 79305,
+      "observed_wins": 42285,
+      "observed_losses": 37020
+    },
+    "EIGHT Unknown": {
+      "n": 122092,
+      "observed_wins": 61046,
+      "observed_losses": 61046
+    },
+    "NINE Caution": {
+      "n": 117269,
+      "observed_wins": 54018,
+      "observed_losses": 63251
+    },
+    "NINE Conflicted": {
+      "n": 15868,
+      "observed_wins": 7934,
+      "observed_losses": 7934
+    },
+    "NINE Solid": {
+      "n": 61885,
+      "observed_wins": 33537,
+      "observed_losses": 28348
+    },
+    "NINE Strong": {
+      "n": 10183,
+      "observed_wins": 6229,
+      "observed_losses": 3954
+    },
+    "NINE Thin": {
+      "n": 61721,
+      "observed_wins": 31745,
+      "observed_losses": 29976
+    },
+    "NINE Unknown": {
+      "n": 89852,
+      "observed_wins": 44926,
+      "observed_losses": 44926
+    }
+  },
+  "limits": [
+    "Incomplete captured history; earlier observed results proxy overall records",
+    "No declaration-order or unplayed-alternative outcomes",
+    "No estimated win probabilities or captain-selection effectiveness claim"
+  ]
+}

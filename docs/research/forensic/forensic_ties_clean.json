@@ -1,0 +1,120 @@
+{
+ "policy": "clean",
+ "snapshot": {
+  "snapshot_sha256": "4f4c861b98b12c6d27c4f59586b3e5afcbabe367eee458b08ff6c5ec5f972710",
+  "manifest_sha256": "4f4c861b98b12c6d27c4f59586b3e5afcbabe367eee458b08ff6c5ec5f972710",
+  "matches_manifest": true
+ },
+ "EIGHT": {
+  "nights": 3476,
+  "answer_unknown": 955,
+  "answer_20game_unknown": 766,
+  "lead_nights": 3475,
+  "lead_tied": 2246,
+  "answer_tied": 1243,
+  "tiebreak_picks_highest_sl_among_tied": 1243,
+  "tied_candidates_differ_in_sl": 1051,
+  "tie_size_distribution": {
+   "1": 2233,
+   "2": 746,
+   "3": 278,
+   "4": 112,
+   "5": 107
+  },
+  "mean_share_of_25_pairings_unknown": 0.2627042577675489,
+  "model_dependent_value_of_other_tiebreaks": {
+   "pre2023_C2_best_tied_minus_roster_first": {
+    "n": 1243,
+    "mean": 0.017930712006252184,
+    "ci": [
+     0.016342160795559488,
+     0.019635805138330364
+    ],
+    "share_positive": 0.504424778761062
+   },
+   "pre2023_C2_lowest_sl_tied_minus_roster_first": {
+    "n": 1243,
+    "mean": -0.017212566275796655,
+    "ci": [
+     -0.02047361606168538,
+     -0.014195147963778756
+    ],
+    "share_positive": 0.39662107803700725
+   },
+   "pre2023_skill_best_tied_minus_roster_first": {
+    "n": 1243,
+    "mean": 0.013198215755468607,
+    "ci": [
+     0.01161310219492285,
+     0.014689509413100191
+    ],
+    "share_positive": 0.36363636363636365
+   },
+   "pre2023_skill_lowest_sl_tied_minus_roster_first": {
+    "n": 1243,
+    "mean": -0.013595744765383139,
+    "ci": [
+     -0.016217542287395293,
+     -0.011214163261487739
+    ],
+    "share_positive": 0.3032984714400644
+   }
+  }
+ },
+ "NINE": {
+  "nights": 3132,
+  "answer_unknown": 788,
+  "answer_20game_unknown": 578,
+  "lead_nights": 3132,
+  "lead_tied": 1936,
+  "answer_tied": 1104,
+  "tiebreak_picks_highest_sl_among_tied": 1104,
+  "tied_candidates_differ_in_sl": 986,
+  "tie_size_distribution": {
+   "1": 2028,
+   "2": 672,
+   "3": 239,
+   "4": 116,
+   "5": 77
+  },
+  "mean_share_of_25_pairings_unknown": 0.27035759897828865,
+  "model_dependent_value_of_other_tiebreaks": {
+   "pre2023_C2_best_tied_minus_roster_first": {
+    "n": 1104,
+    "mean": 0.014150476443485419,
+    "ci": [
+     0.012697872521030482,
+     0.01569161801120589
+    ],
+    "share_positive": 0.5344202898550725
+   },
+   "pre2023_C2_lowest_sl_tied_minus_roster_first": {
+    "n": 1104,
+    "mean": -0.01122854645302916,
+    "ci": [
+     -0.014145373074931874,
+     -0.00803455851022696
+    ],
+    "share_positive": 0.42391304347826086
+   },
+   "pre2023_skill_best_tied_minus_roster_first": {
+    "n": 1104,
+    "mean": 0.012346602083317164,
+    "ci": [
+     0.011048793361689431,
+     0.013896035940646973
+    ],
+    "share_positive": 0.42481884057971014
+   },
+   "pre2023_skill_lowest_sl_tied_minus_roster_first": {
+    "n": 1104,
+    "mean": -0.011948409302691773,
+    "ci": [
+     -0.014819287107217716,
+     -0.008976483422083553
+    ],
+    "share_positive": 0.33242753623188404
+   }
+  }
+ }
+}

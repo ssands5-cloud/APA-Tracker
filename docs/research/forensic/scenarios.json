@@ -1,0 +1,133 @@
+{
+ "levels": {
+  "S1 newcomer SL3 (7 games, 5-2) vs strong SL7": {
+   "level": "Unknown",
+   "points": 0,
+   "why": "no direct history and no clear overall or shared-opponent edge"
+  },
+  "S2 experienced SL3 (60-90) vs strong SL7": {
+   "level": "Caution",
+   "points": -3,
+   "why": "no direct history; weaker overall 60-90 vs 691-393"
+  },
+  "S3 experienced SL6 (264-183) vs strong SL7": {
+   "level": "Unknown",
+   "points": 0,
+   "why": "no direct history and no clear overall or shared-opponent edge"
+  },
+  "S4 newcomer SL2 (0 games) vs strong SL7": {
+   "level": "Unknown",
+   "points": 0,
+   "why": "no direct history and no clear overall or shared-opponent edge"
+  },
+  "S5 one lucky 1-0 vs strong SL7, weak form": {
+   "level": "Conflicted",
+   "points": 0,
+   "why": "1-0 in 1 meeting, but a weaker overall 60-90 vs 691-393"
+  },
+  "S6 1-0 vs SL7, newcomer (no form compare)": {
+   "level": "Thin",
+   "points": 1,
+   "why": "only 1-0 in 1 meeting"
+  },
+  "S7 3-0 direct but much weaker form": {
+   "level": "Conflicted",
+   "points": 0,
+   "why": "3-0 in 3 meetings, but a weaker overall 60-90 vs 691-393"
+  },
+  "S8 9-1 direct, strong form": {
+   "level": "Strong",
+   "points": 6,
+   "why": "9-1 in 10 meetings and a stronger overall 400-200 vs 300-300"
+  },
+  "S9 9-1 direct, skill changed since": {
+   "level": "Solid",
+   "points": 3,
+   "why": "9-1 in 10 meetings and a stronger overall 400-200 vs 300-300; skill levels changed since they last met"
+  },
+  "S10 0-1 direct, much stronger form": {
+   "level": "Conflicted",
+   "points": 0,
+   "why": "0-1 in 1 meeting, but a stronger overall 400-200 vs 100-200"
+  },
+  "S11 equal records, no history (both 20+)": {
+   "level": "Unknown",
+   "points": 0,
+   "why": "no direct history and no clear overall or shared-opponent edge"
+  },
+  "S12 shared opponents 3, edge for us": {
+   "level": "Solid",
+   "points": 3,
+   "why": "3 shared opponents: ours 8-2, theirs 3-7"
+  }
+ },
+ "legacy_skill_only_probability": {
+  "SL2 vs SL7": 0.11920292202211755,
+  "SL3 vs SL7": 0.16798161486607552,
+  "SL4 vs SL7": 0.23147521650098232,
+  "SL5 vs SL7": 0.31002551887238755,
+  "SL6 vs SL7": 0.401312339887548
+ },
+ "planner": {
+  "P1 no evidence anywhere: answer to SL7": {
+   "totals": {
+    "O0(SL6)": 0,
+    "O1(SL5)": 0,
+    "O2(SL4)": 0,
+    "O3(SL4)": 0,
+    "O4(SL3)": 0,
+    "O5(SL3)": 0,
+    "O6(SL3)": 0
+   },
+   "answer": "O0(SL6)"
+  },
+  "P1b same, roster listed low-to-high": {
+   "answer": "O6(SL3)"
+  },
+  "P2 only the SL3 newcomer avoids Caution vs SL7": {
+   "answer": "O4(SL3)"
+  },
+  "P3 cap 23 with 7,6,6,5,2,2": {
+   "lead": "O0(SL7)",
+   "cap": {
+    "cap": 23,
+    "used": 0,
+    "cheapest_rest": 21,
+    "slack": 2,
+    "incomplete": false
+   },
+   "best_board": [
+    "O0(SL7)",
+    "O1(SL6)",
+    "O2(SL6)",
+    "O4(SL2)",
+    "O5(SL2)"
+   ]
+  },
+  "P4 Conflicted (3-0 direct, weaker form) vs Thin (1-1)": {
+   "answer": "O1(SL5)"
+  }
+ },
+ "next_send_order": [
+  [
+   "C two-oh 2-0",
+   "1",
+   "2-0 (2 meetings)"
+  ],
+  [
+   "A one-game 1-0",
+   "2",
+   "1-0 (1 meeting)"
+  ],
+  [
+   "B nine-one 9-1",
+   "3",
+   "9-1 (10 meetings)"
+  ],
+  [
+   "D shared only",
+   "\u2248",
+   "No verified direct meetings in this snapshot"
+  ]
+ ]
+}
