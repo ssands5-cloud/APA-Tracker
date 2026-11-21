@@ -148,21 +148,27 @@ def test_war_room_follows_match_day_and_marks_never_change_evidence(tmp_path: Pa
             assert "No favorable, even or indirect evidence among our remaining players." in sends
             assert f"{EVE} — no evidence-backed option left" in page.inner_text("#wr-risks")
             lab = page.inner_text("#lineup-lab")
-            assert "2 of 3 (2 with unknown availability — still counted as remaining)" in lab
+            # Everyone is Here unless marked Out (owner decision 2026-11-20): no "unknown availability" bucket.
+            assert "Remaining players" + chr(10) + "2 of 3" + chr(10) in lab and "unknown availability" not in lab
             assert "4 known subtotal · 1 remaining player(s) without a captured SL — not a complete total" in lab
             # Evidence is untouched by marks.
             assert page.evaluate(f"JSON.stringify(window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT'))") == before
             assert page.locator("#wr-matrix .mcell").nth(0).inner_text() == "2-0 (2)"
 
-            # Reference cap only when entered; selected lineup totals disclose missing SLs.
+            # The cap line follows the cap: APA's 23 by default (2026-11-20), gone when cleared, back when typed.
+            # Selected lineup totals disclose missing SLs and never claim legality.
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Planned")
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="3"]', "Played")
-            assert "your reference cap" not in page.inner_text("#lineup-lab")
+            cap_line = ("Known subtotal 4 · 1 selected player(s) without a captured SL · skill cap: 23 "
+                        "(default or override) — not a lineup-legality check.")
+            assert cap_line in page.inner_text("#lineup-lab")
+            page.fill("#ll-cap", "")
+            page.press("#ll-cap", "Enter")
+            assert "skill cap:" not in page.inner_text("#lineup-lab")
             page.fill("#ll-cap", "23")
             page.press("#ll-cap", "Enter")
             page.locator("#ll-cap").blur()
-            assert ("Known subtotal 4 · 1 selected player(s) without a captured SL · your reference cap: 23 "
-                    "(user-entered, not verified) — not a lineup-legality check.") in page.inner_text("#lineup-lab")
+            assert cap_line in page.inner_text("#lineup-lab")
 
             # Opponent played retires that opponent; notes reach the scouting card and survive reloads.
             page.check('#lineup-lab input[data-plan="played"][data-pid="10"]')
@@ -249,23 +255,25 @@ def test_planning_marks_belong_to_one_fixture_and_notes_follow_the_player(tmp_pa
 
             page.fill("#md-date", "2026-10-11")                   # back: Oct 11 marks return, Oct 25's don't
             assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
-            assert page.input_value(ann_a) == "Unknown"
+            assert page.input_value(ann_a) == "Available"   # Oct 25's Out mark stays on Oct 25
 
             page.reload(); page.wait_for_load_state("load")       # survives reload, still per fixture
             assert page.input_value(ann_l) == "Played" and page.is_checked(cam_p)
             oct25_falcons(page)
             assert page.input_value(ann_a) == "Unavailable" and page.input_value(ann_l) == ""
 
-            # Same date, other fixture (vs Owls): a different opponent and fixture -> clean.
+            # Same date, other fixture (vs Owls): lineup and played marks start clean, but Here/Out is shared by every
+            # match on the same night (owner decision 2026-11-20, daa7204): Ann is still Out on Oct 25.
             page.fill("#md-date", "2026-10-25")
             page.click("#md-compare-0")
-            assert "Owls" in page.inner_text("#team-rosters") and page.input_value(ann_a) == "Unknown"
+            assert "Owls" in page.inner_text("#team-rosters") and page.input_value(ann_a) == "Unavailable"
+            assert page.input_value(ann_l) == ""   # lineup marks stay with their own fixture
 
             # Teams picked by hand (no fixture): its own context, no fixture's marks.
             page.fill("#search-team-b", "Falcons"); page.wait_for_timeout(400)
             page.select_option("#team-b", THEIRS)
             assert "picked by hand" in page.inner_text("#ll-context")
-            assert page.input_value(ann_l) == "" and page.input_value(ann_a) == "Unknown" and not page.is_checked(cam_p)
+            assert page.input_value(ann_l) == "" and page.input_value(ann_a) == "Available" and not page.is_checked(cam_p)
             assert errors == []
         finally:
             browser.close()
@@ -416,19 +424,21 @@ def test_tonight_is_a_command_center_with_excels_counts(tmp_path: Path):
         try:
             page, errors = _page(tmp_path, browser)
             t = page.inner_text("#tonight")
-            for needle in ("Available: 0", "Unavailable: 0", "Unknown: 3 (not the same as unavailable)",
+            # Everyone is Here unless marked Out: all three count as Available and there is no Unknown count.
+            assert "Unknown:" not in t and "not the same as unavailable" not in t
+            for needle in ("Available: 3", "Unavailable: 0",
                            "Already used: 0 · planned: 0",
                            "Favorable direct record (any sample size): 1", "Concerning (more direct losses than wins): 2",
                            "Limited evidence: 1 even direct · 1 shared-opponent only", "Insufficient verified evidence in this snapshot: 1",
                            "Missing information: 0 player(s) without a captured SL · 2 not yet played"):
                 assert needle in t, needle
             lines = t.splitlines()                                         # each count on its own line
-            for needle in ("Available: 0", "Unavailable: 0", "Concerning (more direct losses than wins): 2"):
+            for needle in ("Available: 3", "Unavailable: 0", "Concerning (more direct losses than wins): 2"):
                 assert needle in lines, needle
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
             page.select_option('#lineup-lab select[data-plan="lineup"][data-pid="2"]', "Played")
             t = page.inner_text("#tonight")
-            assert "Unavailable: 1" in t and "Unknown: 2 (not the same as unavailable)" in t and "Already used: 1 · planned: 0" in t
+            assert "Unavailable: 1" in t and "Available: 2" in t and "Unknown:" not in t and "Already used: 1 · planned: 0" in t
             assert errors == []
         finally:
             browser.close()
@@ -535,11 +545,13 @@ def test_next_send_card_matches_python_and_mark_sent_moves_the_night_forward(tmp
             assert first.locator(".ns-m").inner_text()=="Direct-record order 1"
             assert first.locator(".ns-sample").inner_text()=="2 meetings · small sample"
             assert "Ann Archer (player 1 of 2)" in first.inner_text() and "2-0 direct record (2 meetings)" in first.inner_text()
-            assert text.count("availability unknown") == 2                     # said at the action, still eligible
+            # Everyone is Here unless marked Out: no "availability unknown" caveat; Out removes a player, Here restores them.
+            assert text.count("availability unknown") == 0
+            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unavailable")
+            assert "Ann Archer (player 1 of 2)" not in card.locator(".ns-medal").first.inner_text()
             page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Available")
-            assert page.locator("#next-send .ns-medal").nth(0).inner_text().count("availability unknown") == 0
-            assert page.locator("#next-send .ns-medal").nth(1).inner_text().count("availability unknown") == 1
-            page.select_option('#lineup-lab select[data-plan="avail"][data-pid="1"]', "Unknown")
+            assert "Ann Archer (player 1 of 2)" in card.locator(".ns-medal").first.inner_text()
+            assert card.inner_text().count("availability unknown") == 0
             text = card.inner_text()
             # Below the medals, the rest is one line that still names the players; tapping shows each reason.
             assert card.locator(".ns-more summary").inner_text() == "⚠ Avoid records — recorded losses: Bea Baker (0-2 (2 meetings), small sample)"
@@ -1554,13 +1566,19 @@ def test_skill_cap_warns_before_a_send_locks_the_captain_out_of_a_legal_lineup(t
     """APA caps the total skill level you put up; spend the low numbers early and you are stuck.
 
     The cap constant existed in the page and was never used, and the Excel cap said outright it
-    was not a legality check. Nothing is assumed: with no cap entered this renders nothing.
+    was not a legality check. APA's 23 is the default for 8-Ball and 9-Ball; a cleared cap renders nothing.
     """
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
             page, errors = _page(tmp_path, browser)
-            assert page.locator("#tonight .lineup-budget").count() == 0, "no cap entered, no claim"
+            # Owner decision 2026-11-20: APA's 23 applies by default to 8-Ball and 9-Ball and is used, not just shown.
+            assert page.input_value("#ll-cap") == "23"
+            assert page.locator("#tonight .lineup-budget").count() == 1, "the default cap is used"
+            # Clearing the cap turns the check off: with no cap, nothing is claimed.
+            page.fill("#ll-cap", "")
+            page.dispatch_event("#ll-cap", "change")
+            assert page.locator("#tonight .lineup-budget").count() == 0, "cap cleared, no claim"
 
             page.fill("#ll-cap", "23")
             page.dispatch_event("#ll-cap", "change")
@@ -2263,6 +2281,10 @@ def test_incomplete_budget_is_disclosed_once_for_shared_missing_skill(tmp_path: 
         try:
             page,errors=_page(tmp_path,browser)
             page.set_viewport_size({'width':390,'height':844})
+            # The default 23 already meets the shared missing skill level: disclosed once, not per choice.
+            assert page.locator('#next-send .ns-budget-scope').count()==1
+            assert page.locator('#next-send .ns-budget').count()==0
+            page.fill('#ll-cap','');page.locator('#ll-cap').dispatch_event('change')
             assert page.locator('#next-send .ns-budget-scope').count()==0
             before=page.locator('#next-send [data-send-our]').evaluate_all('(els)=>els.map(e=>e.dataset.sendOur)')
             page.fill('#ll-cap','20');page.locator('#ll-cap').dispatch_event('change')
@@ -2980,7 +3002,7 @@ def test_matrix_names_explain_unavailable_and_played_marks_without_changing_hist
                 assert page.locator('#wr-matrix .mcell[data-our="1"][data-opp="10"]').get_attribute('class').find('cat-G') >= 0
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('Played')
             assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Unavailable '+chr(183)+' Played'
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             assert page.locator('#wr-matrix tbody tr').first.locator('th .matrix-status').inner_text() == 'Played'
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="1"]').select_option('')
             page.locator('#lineup-lab select[data-plan="lineup"][data-pid="2"]').select_option('')
@@ -3024,7 +3046,7 @@ def test_detailed_rankings_disclose_full_roster_scope_and_return_without_changin
             assert page.locator('#next-send [data-send-our="1"]').count() == 0
             assert page.locator('#next-send [data-send-our="3"]').count() == 0
             assert page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')") == original
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Unknown')
+            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             assert scopes.count() == page.locator('#team-matchups .rank-block').count() + 1
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             assert errors == []
@@ -3050,7 +3072,7 @@ def test_put_up_selection_does_not_claim_an_opponent_in_a_new_fixture(tmp_path, 
                 index = next(i for i in range(cards.count()) if 'Falcons' in cards.nth(i).inner_text())
                 page.click('#md-compare-'+str(index))
                 assert 'Oct 25, 2026' in page.locator('#ll-context').inner_text()
-                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Unknown'
+                assert page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').input_value() == 'Available'   # a new fixture starts with everyone Here
             else:
                 page.fill('#md-date', '2026-10-18')
                 assert page.locator('#next-send').count() == 0
@@ -3231,11 +3253,14 @@ def test_sent_pair_is_not_partly_saved_when_only_one_mark_fits(tmp_path, width):
         try:
             page, errors = _page(tmp_path, browser)
             page.set_viewport_size({"width": width, "height": 844})
-            page.locator('#lineup-lab select[data-plan="avail"][data-pid="1"]').select_option('Available')
             page.locator('textarea.plan').first.fill('SYNTHETIC retained observation')
             evidence = page.evaluate(f"window.__ucWarRoomPair({OURS!r}, {THEIRS!r}, 'EIGHT')")
             send = page.locator('#next-send [data-send-our]').first
             own, opponent = send.get_attribute('data-send-our'), send.get_attribute('data-send-opp')
+            # Create a stored fixture plan scope with a mark that is still stored. "Available" used to do this, but
+            # everyone is Here by default now (2026-11-20), so Here is no longer written; a Planned mark is.
+            page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{own}"]').select_option('Planned')
+            send = page.locator(f'#next-send [data-send-our="{own}"][data-send-opp="{opponent}"]').first
             saved = page.evaluate("localStorage.getItem('ultimate-coach:plan-v2')")
             page.evaluate("""({own, opponent}) => {
                 const key = 'ultimate-coach:plan-v2', write = Storage.prototype.setItem;
@@ -3391,16 +3416,18 @@ def test_live_cap_edit_preserves_saved_plan_when_saving_is_blocked(tmp_path, wid
                 }
                 return window.__readCapPlan();
             }""", failure)
-            page.locator('#ll-cap').fill('23')
+            # Type a non-default cap: the field now starts at APA's default 23 (2026-11-20), so typing 23 could not tell
+            # "the blocked edit was not saved" apart from "the default came back".
+            page.locator('#ll-cap').fill('21')
             assert page.locator('#ll-cap').evaluate('e=>e===document.activeElement')
-            assert 'Reference budget 23' in page.locator('.lineup-budget').text_content()
+            assert 'Reference budget 21' in page.locator('.lineup-budget').text_content()
             assert page.evaluate('window.__readCapPlan()') == saved
             for section in ('#tonight', '#lineup-lab', '#scouting-cards'):
                 assert page.locator(section + ' .wr-storage-warning').first.is_visible()
             assert page.locator('#scouting-cards .wr-storage-warning').count() == page.locator('textarea.plan').count()
             assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
             page.reload()
-            assert page.locator('#ll-cap').input_value() == ''
+            assert page.locator('#ll-cap').input_value() == '23', 'the blocked 21 was not saved; the default returns'
             assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC retained observation'
             if failure == 'stale':
                 assert page.locator('textarea.plan[data-pid="11"]').input_value() == 'SYNTHETIC newer observation'
@@ -3409,6 +3436,497 @@ def test_live_cap_edit_preserves_saved_plan_when_saving_is_blocked(tmp_path, wid
             page.reload()
             assert page.locator('#ll-cap').input_value() == '24'
             assert page.locator('textarea.plan').first.input_value() == 'SYNTHETIC retained observation'
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Five check (reference skill arithmetic on the Planned/Played selection).
+# Facts only: the new block never uses the words legal or illegal, never predicts, and leaves the
+# existing "not a lineup-legality check" Snapshot row alone.
+# ---------------------------------------------------------------------------------------------
+from analytics.lineup_legality import check_lineup_legality  # noqa: E402
+
+
+def _lab_skill_levels(page) -> dict[str, int | None]:
+    out: dict[str, int | None] = {}
+    selects = page.locator('#lineup-lab select[data-plan="lineup"]')
+    for i in range(selects.count()):
+        sel = selects.nth(i)
+        text = sel.locator("xpath=ancestor::tr/td[2]").inner_text().strip()
+        out[sel.get_attribute("data-pid")] = None if text in ("", "—") else int(text)
+    return out
+
+
+def _lab_names(page) -> dict[str, str]:
+    out: dict[str, str] = {}
+    selects = page.locator('#lineup-lab select[data-plan="lineup"]')
+    for i in range(selects.count()):
+        sel = selects.nth(i)
+        out[sel.get_attribute("data-pid")] = sel.locator("xpath=ancestor::tr/td[1]").inner_text().strip()
+    return out
+
+
+def test_five_check_states_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            box = page.locator("#ll-five-check")
+            sl, names = _lab_skill_levels(page), _lab_names(page)
+            pids = list(sl)
+            assert len(pids) >= 3
+            assert "Mark players Planned in the table above" in box.inner_text()
+            assert "not a lineup-legality check" not in box.inner_text()
+
+            first = pids[0]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{first}"]', "Planned")
+            text = box.inner_text()
+            assert "1 of 5 chosen" in text
+            if sl[first] is not None:
+                assert f"skill total {sl[first]}" in text
+                assert f"{23 - sl[first]} left under the cap of 23 for the other 4" in text
+            assert "Left out, still Here:" in text and names[first] not in text.split("Left out, still Here:")[1]
+
+            for pid in pids:
+                page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{pid}"]', "Planned")
+            text = box.inner_text()
+            assert f"{len(pids)} of 5 chosen" in text
+            known = [v for v in sl.values() if v is not None]
+            missing = len(pids) - len(known)
+            if missing:
+                assert f"known skill subtotal {sum(known)}" in text and f"{missing} without a captured skill level" in text
+            else:
+                assert f"skill total {sum(known)}" in text
+
+            # A Planned player marked Out is named, and appears in neither the left-out nor the Out lists wrongly.
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{first}"]', "Unavailable")
+            assert f"Marked Planned and Out: {names[first]}." in box.inner_text()
+
+            # Typing a smaller cap re-renders the block in place; clearing it turns the check off.
+            page.fill("#ll-cap", "6")
+            assert "the cap of 6" in box.inner_text() or "of 6" in box.inner_text()
+            page.fill("#ll-cap", "")
+            assert "cap check is off" in box.inner_text()
+
+            # Wording contract: no verdict language, no prediction, and the tested Snapshot row is untouched.
+            lowered = box.inner_text().lower()
+            for banned in ("legal", "illegal", "win", "odds", "probab", "expected", "recommend"):
+                assert banned not in lowered, banned
+            assert "required sends and other match rules are not verified" in lowered
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+FIVE_CASES = [
+    ([5, 5, 5, 4, 4], 23), ([6, 5, 5, 4, 3], 23), ([7, 6, 6, 3, 3], 23), ([3, 3, 3, 3, 3], 23),
+    ([6, 6, 5, 4, None], 23), ([None] * 5, 23), ([4, 4, 4, 4, 4], 23), ([7, 7, 5, 4, 2], 23), ([5, 5, 5, 4, 5], 23),
+]
+
+
+@pytest.mark.parametrize("levels,cap", FIVE_CASES)
+def test_five_core_agrees_with_the_verified_lineup_rule(tmp_path: Path, levels, cap):
+    entries = [{"name": f"P{i}", "sl": sl, "lineup": "Planned", "avail": "Available"} for i, sl in enumerate(levels)]
+    reference = check_lineup_legality([(i, sl) for i, sl in enumerate(levels)])
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            js = page.evaluate("([e, c]) => window.__ucFiveCore(e, c)", [entries, cap])
+            if reference is None:
+                assert js["state"] == "unverifiable" and js["missing"] == levels.count(None)
+            else:
+                assert js["state"] == ("within" if reference.is_legal else "over")
+                assert js["total"] == reference.skill_total and cap == reference.limit
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_five_core_edge_states(tmp_path: Path):
+    def entry(i, sl, lineup="Planned", avail="Available"):
+        return {"name": f"P{i}", "sl": sl, "lineup": lineup, "avail": avail}
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            core = lambda entries, cap: page.evaluate("([e, c]) => window.__ucFiveCore(e, c)", [entries, cap])  # noqa: E731
+            assert core([], 23)["state"] == "empty"
+            assert core([entry(i, 3) for i in range(6)], 23)["state"] == "toomany"
+            assert core([entry(i, 3) for i in range(4)], None)["state"] == "off"
+            partial = core([entry(0, 5), entry(1, 4), entry(2, 3, "Played")], 23)
+            assert partial["state"] == "partial" and partial["total"] == 12 and "11 left under the cap of 23 for the other 2" in partial["text"]
+            assert "already 2 over the cap of 12" in core([entry(0, 7), entry(1, 7)], 12)["text"]
+            mixed = core([entry(0, 5), entry(1, None), entry(2, 3, "", "Unavailable"), entry(3, 4, "", "Available")], 23)
+            assert mixed["missing"] == 1 and mixed["left"] == ["P3"] and mixed["out"] == ["P2"]
+            assert core([entry(0, 5, "Planned", "Unavailable")], 23)["conflict"] == ["P0"]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Risk briefing (facts only, each line names its source, no score).
+# ---------------------------------------------------------------------------------------------
+_BRIEF_BANNED = ("legal", "illegal", "win", "odds", "probab", "expected", "recommend", "risk score", "predict")
+
+
+def _brief_input(**over):
+    base = {
+        "five": {"state": "empty", "count": 0, "cap": 23, "total": 0, "out": [], "left": [], "conflict": [], "missing": 0, "text": ""},
+        "scopeLabel": "the Here pool", "formatLabel": "8-Ball", "minGames": 10, "relevant": [],
+        "oppNoSl": [], "oppOut": [], "trust": {"quarantined": 0, "issues": 0},
+    }
+    base.update(over)
+    return base
+
+
+def test_briefing_core_lists_only_named_source_facts(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            core = lambda inp: page.evaluate("i => window.__ucBriefingCore(i)", inp)  # noqa: E731
+            assert core(_brief_input()) == []
+            five = _brief_input()["five"] | {"state": "over", "count": 5, "total": 25, "cap": 23, "out": ["Out One", "Out Two"]}
+            items = core(_brief_input(
+                five=five, scopeLabel="the selected five",
+                relevant=[{"name": "Ann", "sl": 5, "games": 4}, {"name": "Bea", "sl": None, "games": 25}, {"name": "Cam", "sl": 3, "games": 10}],
+                oppNoSl=["Opp Blank"], oppOut=["Opp Away"], trust={"quarantined": 2, "issues": 1}))
+            assert [i["source"] for i in items] == [
+                "Here/Out marks", "Skill level in this format", "Recorded games in this archive", "Skill levels and cap",
+                "Opponent roster", "Opponent check-in marks", "Data trust", "Data trust"]
+            texts = [i["text"] for i in items]
+            assert texts[0] == "2 players marked Out tonight: Out One, Out Two."
+            assert texts[1] == "1 player in the selected five with no captured skill level: Bea."
+            assert texts[2] == "Ann (4) has fewer than 10 recorded games in 8-Ball."          # Cam has exactly 10: not short
+            assert texts[3] == "Skill total 25 is 2 over the cap of 23."
+            assert texts[6] == "2 recorded games quarantined and left out of every record."
+            assert texts[7] == "1 source coverage issue noted in the data build."
+            assert all(i["kind"] == "fact" and i["source"] for i in items)
+            joined = " ".join(texts).lower()
+            assert not [b for b in _BRIEF_BANNED if b in joined]
+            within = core(_brief_input(five=five | {"state": "within", "total": 21}))
+            assert [i["text"] for i in within if i["source"] == "Skill levels and cap"] == ["Skill total 21 of 23: 2 under the cap."]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_follows_marks_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            box = page.locator("#ll-briefing")
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            pids = list(names)
+            text = box.inner_text()
+            assert "Risk briefing" in text and "No score and no forecast." in text
+            assert "fewer than 10 recorded games in 8-Ball" in text           # the synthetic fixture has few games
+            assert "source: Recorded games in this archive" in text
+            assert text.count("source:") >= 1
+            # Marking a player Out names them and removes them from the pool the briefing checks.
+            out = pids[0]
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{out}"]', "Unavailable")
+            text = box.inner_text()
+            assert f"marked Out tonight: {names[out]}." in text and "source: Here/Out marks" in text
+            pool_line = [ln for ln in text.splitlines() if "recorded games in 8-Ball" in ln][0]
+            assert names[out] not in pool_line.split("fewer than")[0]
+            # Selecting players switches the briefing to the selected five.
+            keep = pids[1]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            if sl[keep] is None:
+                assert "in the selected five with no captured skill level" in box.inner_text()
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")      # existing row untouched
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Player Form (recorded games only; no label, no trend, no score).
+# ---------------------------------------------------------------------------------------------
+from analytics.player_stats import recent_form  # noqa: E402
+
+
+class _Game:
+    def __init__(self, result):
+        self.result = result
+
+
+def _form_payload():
+    payload = _payload()
+    pid = payload["players"][0]["id"]
+    opp = payload["players"][1]["id"]
+
+    def row(i, fmt, result):
+        return {"player_id": pid, "opponent_id": opp, "match_id": 9000 + i, "match_external_id": f"form-{fmt}-{i}",
+                "match_date": f"2025-{i + 1:02d}-15T19:00:00-06:00", "session_name": "Fall 2025", "format": fmt,
+                "result": result, "own_skill_level": 4, "opponent_skill_level": 4, "points_earned": 1, "nine_ball_points": None}
+
+    eight = [row(i, "EIGHT", c) for i, c in enumerate("WWLWLLWWWLWL")]           # oldest first by date
+    nine = [row(i, "NINE", c) for i, c in enumerate("LLLLLL")]
+    payload["evidence"] = list(payload["evidence"]) + list(reversed(eight)) + nine   # stored out of date order on purpose
+    return payload, pid
+
+
+def _python_form(payload, pid, fmt):
+    rows = sorted((r for r in payload["evidence"] if r["player_id"] == pid and r["format"] == fmt and r["result"] in ("W", "L")),
+                  key=lambda r: str(r["match_date"]))
+    results = [r["result"] for r in rows]
+    return {"strip": recent_form([_Game(x) for x in results], 5), "n": len(results),
+            "w10": results[-10:].count("W"), "n10": len(results[-10:]), "wAll": results.count("W")}
+
+
+def test_player_form_matches_the_python_reference_and_isolates_formats(tmp_path: Path):
+    payload, pid = _form_payload()
+    path = tmp_path / "form.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            for fmt in ("EIGHT", "NINE"):
+                js = page.evaluate("([p, f]) => window.__ucForm(p, f)", [pid, fmt])
+                py = _python_form(payload, pid, fmt)
+                assert (js["strip"], js["n"], js["w10"], js["n10"], js["wAll"]) == (py["strip"], py["n"], py["w10"], py["n10"], py["wAll"])
+            eight = page.evaluate("([p]) => window.__ucForm(p, 'EIGHT')", [pid])
+            nine = page.evaluate("([p]) => window.__ucForm(p, 'NINE')", [pid])
+            assert eight["enough"] and eight["n"] >= 12 and eight["strip"] != nine["strip"]
+            assert nine["strip"].endswith("LLLLL") and nine["n"] >= 6          # never pooled with 8-Ball
+            nobody = page.evaluate("() => window.__ucForm('no-such-player', 'EIGHT')")
+            assert nobody == {"n": 0, "strip": "", "n5": 0, "w10": 0, "n10": 0, "wAll": 0, "enough": False}
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_player_form_columns_show_only_recorded_facts(tmp_path: Path):
+    payload, pid = _form_payload()
+    path = tmp_path / "form-ui.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            assert "recent games (recorded)" in page.inner_text("#team-rosters").lower()
+            roster_rows = page.locator("#team-rosters tbody tr").count()
+            assert roster_rows > 0 and page.locator("#team-rosters td.form-strip").count() == roster_rows
+            assert page.locator("#team-rosters td.form-record").count() == roster_rows
+            lab_players = page.locator('#lineup-lab select[data-plan="lineup"]').count()
+            assert page.locator("#lineup-lab td.form-strip").count() == lab_players
+            cells = page.locator("#team-rosters td.form-strip, #lineup-lab td.form-strip").all_inner_texts()
+            assert any(c.startswith("not enough games (") for c in cells)          # short histories are never given a strip
+            assert any("(last 5)" in c for c in cells)                              # the seeded player has enough games
+            joined = " ".join(cells + page.locator("#team-rosters td.form-record").all_inner_texts()).lower()
+            for banned in ("hot", "cold", "slump", "trend", "improving", "odds", "probab", "expected", "score"):
+                assert banned not in joined, banned
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Swap what-if (exact difference of two fives; never changes a mark).
+# ---------------------------------------------------------------------------------------------
+def _swap_entry(name, sl, lineup="", avail="Available", form=""):
+    return {"id": name, "name": name, "sl": sl, "lineup": lineup, "avail": avail, "form": form}
+
+
+def test_swap_core_is_an_exact_difference_and_never_mutates(tmp_path: Path):
+    entries = [_swap_entry("A", 5, "Planned", form="WLWLW (last 5)"), _swap_entry("B", 5, "Planned"), _swap_entry("C", 5, "Planned"),
+               _swap_entry("D", 4, "Planned"), _swap_entry("E", 4, "Planned", form="not enough games (2)"),
+               _swap_entry("F", 7), _swap_entry("G", None), _swap_entry("H", 2, "", "Unavailable")]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            swap = lambda e, c, o, i: page.evaluate("([e, c, o, i]) => window.__ucSwapCore(e, c, o, i)", [e, c, o, i])  # noqa: E731
+            res = swap(entries, 23, "E", "F")
+            assert res["valid"] and res["before"]["state"] == "within" and res["before"]["total"] == 23
+            assert res["after"]["state"] == "over" and res["after"]["total"] == 26 and res["change"] == 3
+            assert res["lines"][0] == "In: F (SL 7). Out: E (SL 4)."
+            assert res["lines"][1].startswith("Before: Skill total 23 of 23: within the cap.")
+            assert res["lines"][2].startswith("After: Skill total 26 is 3 over the cap of 23.")
+            assert "Recent games (recorded): F — · E not enough games (2)." in res["lines"]            # F has no form text
+            assert "within" not in res["lines"][2]
+            unknown = swap(entries, 23, "E", "G")
+            assert unknown["valid"] and unknown["after"]["state"] == "unverifiable" and unknown["change"] is None
+            with_form = swap(entries, 23, "A", "F")
+            assert any("Recent games (recorded): F — · A WLWLW (last 5)." in line for line in with_form["lines"])
+            for bad in (("F", "E"), ("A", "B"), ("A", "H"), ("A", "A"), ("Z", "F"), ("A", "Z")):
+                assert swap(entries, 23, *bad)["valid"] is False, bad
+            # Pure: the input entries are untouched after any number of swaps.
+            before = page.evaluate("e => JSON.stringify(e)", entries)
+            after = page.evaluate("([e]) => { window.__ucSwapCore(e, 23, 'E', 'F'); return JSON.stringify(e); }", [entries])
+            assert before == after
+            joined = " ".join(res["lines"]).lower()
+            assert not [b for b in _BRIEF_BANNED if b in joined]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_swap_control_compares_two_fives_without_touching_marks(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            pids = list(names)
+            box = page.locator("#ll-swap")
+            # Nothing Planned yet: the controls are disabled and say why.
+            assert page.locator("#ll-swap-out").is_disabled() and page.locator("#ll-swap-in").is_disabled()
+            assert "Mark at least one player Planned" in box.inner_text()
+            keep, bring = pids[0], pids[1]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            assert page.locator("#ll-swap-out").is_enabled()
+            assert [o for o in page.locator("#ll-swap-out option").all_inner_texts() if names[keep] in o]
+            assert not [o for o in page.locator("#ll-swap-in option").all_inner_texts() if names[keep] in o]   # selected players cannot be swapped in
+            marks_before = page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)]))")
+            selects_before = [page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() for p in pids]
+            page.select_option("#ll-swap-out", keep)
+            assert "Choose who comes out and who goes in." in box.inner_text()
+            page.select_option("#ll-swap-in", bring)
+            text = box.inner_text()
+            assert f"In: {names[bring]}" in text.replace("\n", " ") and f"Out: {names[keep]}" in text.replace("\n", " ")
+            assert "Before:" in text and "After:" in text and "No outcome claim." in text
+            assert "Recent games (recorded):" in text
+            # The real marks and every stored value are untouched by the comparison.
+            assert page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)]))") == marks_before
+            assert [page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() for p in pids] == selects_before
+            # Reset clears the comparison and nothing else; a mark change re-validates the choice.
+            page.click("#ll-swap-reset")
+            assert page.locator("#ll-swap-out").input_value() == "" and "Choose who comes out" in box.inner_text()
+            page.select_option("#ll-swap-out", keep)
+            page.select_option("#ll-swap-in", bring)
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "")        # the swapped-out player is no longer Planned
+            assert page.locator("#ll-swap-out").is_disabled()
+            assert "Mark at least one player Planned" in box.inner_text()
+            # A player marked Out is not offered as a swap-in.
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{bring}"]', "Unavailable")
+            assert not [o for o in page.locator("#ll-swap-in option").all_inner_texts() if names[bring] in o]
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")
+            assert errors == []
+        finally:
+            browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Review fixes: swaps use canonical player ids (two players can share a display name), and a
+# player marked both Planned and Out gets their own factual Risk briefing line.
+# ---------------------------------------------------------------------------------------------
+def test_swap_core_uses_ids_when_two_players_share_a_display_name(tmp_path: Path):
+    entries = [
+        {"id": "a", "name": "Pat Doe", "sl": 5, "lineup": "Planned", "avail": "Available", "form": ""},
+        {"id": "b", "name": "Pat Doe", "sl": 2, "lineup": "Planned", "avail": "Available", "form": ""},
+        {"id": "c", "name": "Pat Doe", "sl": 4, "lineup": "", "avail": "Available", "form": ""},
+        {"id": "d", "name": "Lee Roe", "sl": 6, "lineup": "", "avail": "Available", "form": ""},
+    ]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            swap = lambda o, i: page.evaluate("([e, o, i]) => window.__ucSwapCore(e, 23, o, i)", [entries, o, i])  # noqa: E731
+            # The SECOND Pat Doe (SL 2) goes out for the THIRD (SL 4): +2, not the first Pat Doe's -1.
+            res = swap("b", "c")
+            assert res["valid"] and res["change"] == 2 and res["before"]["total"] == 7 and res["after"]["total"] == 9
+            assert res["lines"][0] == "In: Pat Doe (SL 4). Out: Pat Doe (SL 2)."
+            res_a = swap("a", "c")
+            assert res_a["valid"] and res_a["change"] == -1
+            assert swap("a", "b")["valid"] is False and swap("c", "a")["valid"] is False and swap("a", "a")["valid"] is False
+            assert swap("d", "c")["valid"] is False and swap("zz", "c")["valid"] is False
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_swap_control_keeps_two_same_named_teammates_apart(tmp_path: Path):
+    payload = _payload(crowded=True)               # two Sharks both display as "Ann Archer" (ids 1 and 4)
+    path = tmp_path / "dup.html"
+    path.write_text(render(payload, built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001"), encoding="utf-8")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(path.as_uri())
+            page.wait_for_load_state("load")
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            twins = [pid for pid, n in names.items() if n.startswith("Ann Archer")]
+            assert len(twins) == 2 and names[twins[0]] != names[twins[1]]
+            out_id, in_id = (twins[0], twins[1]) if sl[twins[0]] is not None and sl[twins[1]] is not None else (twins[0], twins[1])
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{out_id}"]', "Planned")
+            page.select_option("#ll-swap-out", out_id)
+            page.select_option("#ll-swap-in", in_id)
+            text = page.inner_text("#ll-swap").replace(chr(10), " ")
+            assert f"In: {names[in_id]}" in text and f"Out: {names[out_id]}" in text
+            if sl[in_id] is not None and sl[out_id] is not None:
+                delta = sl[in_id] - sl[out_id]
+                assert (f"Skill total changes by {'+' if delta > 0 else ''}{delta}." in text) or delta == 0
+            # The marks are untouched: the swapped-out twin is still the only Planned player.
+            planned = [p for p in names if page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() == "Planned"]
+            assert planned == [out_id]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_core_flags_a_player_marked_planned_and_out(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            five = _brief_input()["five"] | {"state": "partial", "count": 2, "conflict": ["Ann Archer"], "out": ["Bea Baker"]}
+            items = page.evaluate("i => window.__ucBriefingCore(i)", _brief_input(five=five))
+            assert items[0] == {"kind": "fact", "text": "1 player marked both Planned and Out: Ann Archer.",
+                                "source": "Lineup marks and Here/Out marks"}
+            assert items[1]["text"] == "1 player marked Out tonight: Bea Baker."        # a separate line for players not selected
+            none = page.evaluate("i => window.__ucBriefingCore(i)", _brief_input(five=_brief_input()["five"] | {"conflict": []}))
+            assert none == []
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_briefing_shows_the_planned_and_out_conflict_in_the_lineup_lab(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            names = _lab_names(page)
+            pid = list(names)[0]
+            box = page.locator("#ll-briefing")
+            assert "marked both Planned and Out" not in box.inner_text()
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{pid}"]', "Planned")
+            assert "marked both Planned and Out" not in box.inner_text()
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Unavailable")
+            text = box.inner_text()
+            assert f"1 player marked both Planned and Out: {names[pid]}." in text
+            assert "source: Lineup marks and Here/Out marks" in text
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{pid}"]', "Available")
+            assert "marked both Planned and Out" not in box.inner_text()
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
             assert errors == []
         finally:
             browser.close()

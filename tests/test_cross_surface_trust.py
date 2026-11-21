@@ -225,7 +225,8 @@ def test_packet_prints_the_phone_start_of_night_plan_and_retires_it_after_any_ch
     from analytics.match_night_engine import STALE_PLAN, plan_for_war_room, plan_text
     payload=_payload()
     payload['evidence']=_games(1,10,'W')+_games(1,11,'WW')+_games(2,10,'L')+_games(3,11,'WWWWW')
-    text=plan_text(plan_for_war_room(_python_war_room_for(payload)))
+    # The printed start-of-night plan uses the same default cap as the phone: APA 23 for 8-Ball (02fa311).
+    text=plan_text(plan_for_war_room(_python_war_room_for(payload),cap=23))
     path=tmp_path/'plan.html';path.write_text(render(payload,built_at='2026-10-07 18:00 UTC',viewer_member_external_id='1001'),encoding='utf-8')
     with sync_playwright() as pw:
         browser=pw.chromium.launch()
@@ -250,7 +251,10 @@ def test_packet_prints_the_phone_start_of_night_plan_and_retires_it_after_any_ch
     assert show('IF WE PUT UP FIRST').startswith(STALE_PLAN) and show('IF THEY PUT UP')==''
     book.set('Lineup Lab','D12','')
     assert show('IF WE PUT UP FIRST').split('\n')[0]==text['lead']
-    book.set('Lineup Lab','C7',23)
+    # A changed cap retires it (23 is now the default it was planned with, so use another value); so does clearing it.
+    book.set('Lineup Lab','C7',24)
+    assert show('IF WE PUT UP FIRST').startswith(STALE_PLAN)
+    book.set('Lineup Lab','C7','')
     assert show('IF WE PUT UP FIRST').startswith(STALE_PLAN)
     wb.close()
 

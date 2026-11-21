@@ -675,3 +675,38 @@ def test_one_tap_records_the_put_up_and_the_opponent_they_threw(page):
     assert page.evaluate("UC_BC_LAST.night.nextLeader") == "them"
     assert page.evaluate("UC_BC_LAST.night.putUp") is None
     assert page.errors == []
+
+
+def test_team_status_carries_the_captain_workflow_and_nothing_leaks_to_other_tabs(html_path):
+    """Captain workflow MVP end to end: Planned five -> Five check -> Risk briefing -> Player form -> Swap what-if."""
+    for width in (1280, 390):
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": width, "height": 900})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(html_path.as_uri())
+            page.wait_for_selector("#bc-team-a")
+            _pick(page)
+            _tab(page, "team")
+            for sel in ("#ll-five-check", "#ll-briefing", "#ll-swap", "#team-rosters td.form-strip", "#lineup-lab td.form-strip"):
+                assert page.locator(sel).first.is_visible(), (width, sel)
+            for other in ("home", "recs", "threats", "summary"):
+                _tab(page, other)
+                for sel in ("#ll-five-check", "#ll-briefing", "#ll-swap"):
+                    assert not page.locator(sel).first.is_visible(), (width, other, sel)
+            _tab(page, "team")
+            selects = page.locator('#lineup-lab select[data-plan="lineup"]')
+            assert selects.count() >= 2
+            first, second = selects.nth(0).get_attribute("data-pid"), selects.nth(1).get_attribute("data-pid")
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{first}"]', "Planned")
+            assert "1 of 5 chosen" in page.inner_text("#ll-five-check")
+            assert "source:" in page.inner_text("#ll-briefing")
+            page.select_option("#ll-swap-out", first)
+            page.select_option("#ll-swap-in", second)
+            text = page.inner_text("#ll-swap")
+            assert "Before:" in text and "After:" in text
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")      # existing row untouched
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
+            assert errors == []
+            browser.close()

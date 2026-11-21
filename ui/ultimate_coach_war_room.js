@@ -425,6 +425,144 @@
     var v=parseInt(raw,10);if(v>0) return v;
     return wrCapIsDefault(ta)&&(ta.format==="EIGHT"||ta.format==="NINE")?WR_DEFAULT_CAP:null;
   }
+  // ---- Captain workflow MVP, Five check: reference skill arithmetic on the Planned/Played selection ----
+  // Facts only: a recorded skill total against the cap. It is not a verdict on the match and never a prediction.
+  // entries: [{name, sl, lineup ("Planned"|"Played"|""), avail ("Available"|"Unavailable")}]
+  var WR_FIVE=5;
+  function wrFiveCore(entries,cap){
+    var sel=[],left=[],out=[],conflict=[],total=0,missing=0;
+    entries.forEach(function(e){
+      if(e.lineup==="Planned"||e.lineup==="Played"){
+        sel.push(e);
+        if(wrKnown(e.sl)) total+=Number(e.sl); else missing++;
+        if(e.lineup==="Planned"&&e.avail==="Unavailable") conflict.push(e.name);
+      } else if(e.avail==="Unavailable") out.push(e.name);
+      else left.push(e.name);
+    });
+    var n=sel.length,state,text,note=missing?" · "+missing+" without a captured skill level":"";
+    if(n===0){state="empty";text="Mark players Planned in the table above to compare their skill total with the cap.";}
+    else if(n>WR_FIVE){state="toomany";text=n+" players are marked Planned or Played; a team fields five.";}
+    else if(!cap){state="off";text=n+" of "+WR_FIVE+" chosen · "+(missing?"known skill subtotal ":"skill total ")+total+note+" · cap check is off.";}
+    else if(n<WR_FIVE){
+      state="partial";
+      text=n+" of "+WR_FIVE+" chosen · "+(missing?"known skill subtotal ":"skill total ")+total+note+" · "
+        +(missing?"room under the cap of "+cap+" cannot be completed":(cap-total>=0?(cap-total)+" left under the cap of "+cap+" for the other "+(WR_FIVE-n):"already "+(total-cap)+" over the cap of "+cap));
+    }
+    else if(missing){state="unverifiable";text="Cannot verify: "+missing+" of the five have no captured skill level (known subtotal "+total+", cap "+cap+").";}
+    else if(total<=cap){state="within";text="Skill total "+total+" of "+cap+": within the cap.";}
+    else {state="over";text="Skill total "+total+" is "+(total-cap)+" over the cap of "+cap+".";}
+    return {state:state,text:text,total:total,cap:cap,count:n,missing:missing,left:left,out:out,conflict:conflict};
+  }
+  function wrFiveCheck(w,ck,ta){
+    return wrFiveCore(w.ours.map(function(m){return {name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id)};}),wrCapFor(ta));
+  }
+  function wrFiveHtml(r){
+    return '<h3>Five check</h3><p class="five-line five-'+r.state+'"><b>'+esc(r.text)+'</b></p>'
+      +(r.conflict.length?'<p class="five-conflict">Marked Planned and Out: '+esc(r.conflict.join(", "))+'.</p>':'')
+      +(r.count?'<p class="muted">Left out, still Here: '+esc(r.left.length?r.left.join(", "):"nobody")+'.'+(r.out.length?' Out tonight: '+esc(r.out.join(", "))+'.':'')+'</p>':'')
+      +'<p class="muted">Reference arithmetic on recorded skill levels only. Required sends and other match rules are not verified.</p>';
+  }
+  window.__ucFiveCore=wrFiveCore;
+  // ---- Captain workflow MVP, Risk briefing: facts only; every line names its source; no score, no forecast ----
+  var WR_SHORT_HISTORY=10;   // recorded games below which a player is flagged as a short history (owner decision 2026-11-21)
+  function wrBriefingCore(inp){
+    var items=[];
+    function n(k,word){return k+" "+word+(k===1?"":"s");}
+    function names(a){return a.join(", ");}
+    var five=inp.five;
+    if(five.conflict&&five.conflict.length) items.push({kind:"fact",text:n(five.conflict.length,"player")+" marked both Planned and Out: "+names(five.conflict)+".",source:"Lineup marks and Here/Out marks"});
+    if(five.out.length) items.push({kind:"fact",text:n(five.out.length,"player")+" marked Out tonight: "+names(five.out)+".",source:"Here/Out marks"});
+    var noSl=inp.relevant.filter(function(p){return !wrKnown(p.sl);});
+    if(noSl.length) items.push({kind:"fact",text:n(noSl.length,"player")+" in "+inp.scopeLabel+" with no captured skill level: "+names(noSl.map(function(p){return p.name;}))+".",source:"Skill level in this format"});
+    var short=inp.relevant.filter(function(p){return p.games<inp.minGames;});
+    if(short.length) items.push({kind:"fact",text:names(short.map(function(p){return p.name+" ("+p.games+")";}))+(short.length===1?" has":" have")+" fewer than "+inp.minGames+" recorded games in "+inp.formatLabel+".",source:"Recorded games in this archive"});
+    if(five.count>0&&five.cap){
+      if(five.state==="within") items.push({kind:"fact",text:"Skill total "+five.total+" of "+five.cap+": "+(five.cap-five.total)+" under the cap.",source:"Skill levels and cap"});
+      else if(five.state==="over") items.push({kind:"fact",text:"Skill total "+five.total+" is "+(five.total-five.cap)+" over the cap of "+five.cap+".",source:"Skill levels and cap"});
+    }
+    if(inp.oppNoSl.length) items.push({kind:"fact",text:n(inp.oppNoSl.length,"opponent player")+" with no captured skill level: "+names(inp.oppNoSl)+".",source:"Opponent roster"});
+    if(inp.oppOut.length) items.push({kind:"fact",text:n(inp.oppOut.length,"opponent player")+" marked absent: "+names(inp.oppOut)+".",source:"Opponent check-in marks"});
+    if(inp.trust.quarantined>0) items.push({kind:"fact",text:n(inp.trust.quarantined,"recorded game")+" quarantined and left out of every record.",source:"Data trust"});
+    if(inp.trust.issues>0) items.push({kind:"fact",text:n(inp.trust.issues,"source coverage issue")+" noted in the data build.",source:"Data trust"});
+    return items;
+  }
+  function wrLabEntries(w,ck){
+    return w.ours.map(function(m){return {id:String(m.id),name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id),
+      games:rowsFor(m.id,w.format).length,form:formStripText(formFor(m.id,w.format))};});
+  }
+  function wrBriefingFrom(w,entries,five){
+    var sel=entries.filter(function(e){return e.lineup==="Planned"||e.lineup==="Played";});
+    var pool=sel.length?sel:entries.filter(function(e){return e.avail!=="Unavailable";});
+    var t=DATA.trust||{};
+    return wrBriefingCore({five:five,scopeLabel:sel.length?"the selected five":"the Here pool",formatLabel:fmtLabel(w.format),minGames:WR_SHORT_HISTORY,
+      relevant:pool.map(function(e){return {name:e.name,sl:e.sl,games:e.games};}),
+      oppNoSl:w.theirs.filter(function(o){return !wrKnown(o.skill_level);}).map(function(o){return playerRef(o);}),
+      oppOut:w.theirs.filter(function(o,j){return !!(w.oppOut&&w.oppOut[j]);}).map(function(o){return playerRef(o);}),
+      trust:{quarantined:t.quarantined_game_count||0,issues:t.source_coverage_issue_count||0}});
+  }
+  function wrBriefing(w,ck,ta,five){return wrBriefingFrom(w,wrLabEntries(w,ck),five);}
+  function wrBriefingHtml(items){
+    return '<h3>Risk briefing</h3>'
+      +(items.length?'<ul class="wr-list">'+items.map(function(i){return '<li class="brief-'+i.kind+'">'+esc(i.text)+' <span class="muted">· source: '+esc(i.source)+'</span></li>';}).join("")+'</ul>'
+        :'<p class="muted">Checked: availability, skill levels, recorded games, cap, opponent roster, data trust. Nothing flagged.</p>')
+      +'<p class="muted">Facts from recorded data and your own marks. No score and no forecast.</p>';
+  }
+  window.__ucBriefingCore=wrBriefingCore;
+  // ---- Captain workflow MVP, Swap what-if: the exact difference between two fives; never changes a mark ----
+  var WR_SWAP={out:"",in:""};   // this page view only; not saved, not a mark, never evidence
+  function wrSwapCore(entries,cap,outId,inId){
+    // Identity is the canonical player id end to end; display names are only labels (two players can share one).
+    var oe=entries.filter(function(e){return String(e.id)===String(outId);})[0],ie=entries.filter(function(e){return String(e.id)===String(inId);})[0];
+    if(!oe||!ie||oe===ie||oe.lineup!=="Planned"||ie.lineup||ie.avail==="Unavailable") return {valid:false,lines:[]};
+    var before=wrFiveCore(entries,cap);
+    var after=wrFiveCore(entries.map(function(e){return e===oe?Object.assign({},e,{lineup:""}):(e===ie?Object.assign({},e,{lineup:"Planned"}):e);}),cap);
+    function sl(x){return wrKnown(x)?String(x):"no captured skill level";}
+    var lines=["In: "+ie.name+" (SL "+sl(ie.sl)+"). Out: "+oe.name+" (SL "+sl(oe.sl)+").",
+      "Before: "+before.text,"After: "+after.text];
+    if(ie.form||oe.form) lines.push("Recent games (recorded): "+ie.name+" "+(ie.form||"—")+" · "+oe.name+" "+(oe.form||"—")+".");
+    return {valid:true,lines:lines,before:before,after:after,
+      change:(!before.missing&&!after.missing)?after.total-before.total:null};
+  }
+  function wrSwapInner(w,ck,ta){
+    var cap=wrCapFor(ta),entries=wrLabEntries(w,ck);
+    var planned=w.ours.filter(function(m){return wrLineup(ck,m.id)==="Planned";});
+    var cands=w.ours.filter(function(m){return !wrLineup(ck,m.id)&&wrAvail(ck,m.id)!=="Unavailable";});
+    var okOut=planned.some(function(m){return String(m.id)===WR_SWAP.out;}),okIn=cands.some(function(m){return String(m.id)===WR_SWAP.in;});
+    if(!okOut) WR_SWAP.out="";
+    if(!okIn) WR_SWAP.in="";
+    function opts(list,cur,blank){return '<option value="">'+esc(blank)+'</option>'+list.map(function(m){return '<option value="'+esc(m.id)+'"'+(String(m.id)===cur?' selected':'')+'>'+esc(playerRef(m))+(wrKnown(m.skill_level)?' (SL '+esc(m.skill_level)+')':'')+'</option>';}).join("");}
+    var disabled=(!planned.length||!cands.length)?' disabled':'';
+    var html='<h3>Swap what-if</h3><p class="muted">Compare two fives. Nothing here changes your Planned marks.</p>'
+      +'<div class="swap-controls"><label>Swap out <select id="ll-swap-out"'+disabled+' aria-label="Planned player to swap out">'+opts(planned,WR_SWAP.out,"Choose a Planned player")+'</select></label> '
+      +'<label>for <select id="ll-swap-in"'+disabled+' aria-label="Player still Here to swap in">'+opts(cands,WR_SWAP.in,"Choose a player still Here")+'</select></label> '
+      +'<button type="button" class="secondary" id="ll-swap-reset"'+(WR_SWAP.out||WR_SWAP.in?'':' disabled')+'>Reset</button></div>';
+    if(disabled) return html+'<p class="muted">Mark at least one player Planned and keep one Here player unselected to compare a swap.</p>';
+    if(!WR_SWAP.out||!WR_SWAP.in) return html+'<p class="muted">Choose who comes out and who goes in.</p>';
+    var outM=planned.filter(function(m){return String(m.id)===WR_SWAP.out;})[0],inM=cands.filter(function(m){return String(m.id)===WR_SWAP.in;})[0];
+    var res=wrSwapCore(entries,cap,WR_SWAP.out,WR_SWAP.in);
+    if(!res.valid) return html+'<p class="muted">That swap cannot be compared with the current marks.</p>';
+    function briefTexts(list){return wrBriefingFrom(w,list,wrFiveCore(list,cap)).filter(function(i){return i.source!=="Skill levels and cap";}).map(function(i){return i.text;});}   // the cap line is already in Before/After
+    var swapped=entries.map(function(e){return e.id===WR_SWAP.out?Object.assign({},e,{lineup:""}):(e.id===WR_SWAP.in?Object.assign({},e,{lineup:"Planned"}):e);});
+    var b0=briefTexts(entries),b1=briefTexts(swapped);
+    var added=b1.filter(function(x){return b0.indexOf(x)<0;}),cleared=b0.filter(function(x){return b1.indexOf(x)<0;});
+    html+='<ul class="wr-list">'+res.lines.map(function(l){return '<li>'+esc(l)+'</li>';}).join("")
+      +(res.change!==null?'<li>'+esc("Skill total changes by "+(res.change>0?"+":"")+res.change+".")+'</li>':'')
+      +(added.length?'<li>'+esc("Newly flagged in the briefing: "+added.join(" "))+'</li>':'')
+      +(cleared.length?'<li>'+esc("No longer flagged in the briefing: "+cleared.join(" "))+'</li>':'')
+      +'</ul><p class="muted">Facts from recorded data and your marks. No outcome claim.</p>';
+    return html;
+  }
+  function wrLabChecks(w,ck,ta){
+    var five=wrFiveCheck(w,ck,ta);
+    return {five:wrFiveHtml(five),brief:wrBriefingHtml(wrBriefing(w,ck,ta,five)),swap:wrSwapInner(w,ck,ta)};
+  }
+  function wrRenderSwap(ta,tb){
+    var el=document.getElementById("ll-swap");
+    if(!el||!ta||!tb) return;
+    var w=warRoomPair(ta,tb,TF.value);wrPlan(w,ta,tb);
+    el.innerHTML=wrSwapInner(w,wrCtx(ta,tb),ta);
+  }
+  window.__ucSwapCore=wrSwapCore;
   // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
   // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
   function wrOppOut(scope,pid){var n=wrNightMark("opp",scope,pid);return !!((n&&n.o)||wrMark("opp",scope,pid).o);}
@@ -444,10 +582,10 @@
       var js=[];w.blocks.forEach(function(b,j){if(unplayed[j]&&green[j]===1&&w.matrix[i].cells[j].category==="G") js.push(j);});
       if(js.length) unique.push(playerRef(m)+" — only favorable direct option vs "+js.map(function(j){return w.blocks[j].opponent_label+" ("+wrSaveRecord(w.matrix[i].cells[j])+")";}).join(", "));
     });
-    var remN=0,unk=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
+    var remN=0,remSL=0,remMiss=0,selN=0,selSL=0,selMiss=0;
     w.ours.forEach(function(m){
       var r=rem[String(m.id)],l=wrLineup(ck,m.id),sl=m.skill_level;
-      if(r){remN++;if(wrAvail(ck,m.id)==="Unknown") unk++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
+      if(r){remN++;if(wrKnown(sl)) remSL+=sl; else remMiss++;}
       if(l){selN++;if(wrKnown(sl)) selSL+=sl; else selMiss++;}
     });
     var cap=wrCapFor(ta),openN=unplayed.filter(Boolean).length;
@@ -457,9 +595,9 @@
       threats:wrLiveThreats(w,rem).filter(function(c){return unplayed[c.j];}),
       concerning:w.concerning.filter(function(c){return rem[String(c.our.id)]&&unplayed[c.j];}),
       metrics:[
-        ["Remaining players",!n?"—":remN+" of "+n+(unk>0?" ("+unk+" with unknown availability — still counted as remaining)":"")],
+        ["Remaining players",!n?"—":remN+" of "+n],
         ["Remaining skill total",!n?"—":(remMiss===0?remSL+" (all remaining players have a captured SL)":remSL+" known subtotal · "+remMiss+" remaining player(s) without a captured SL — not a complete total")],
-        ["Selected lineup (Planned + Played)",selN===0?"No players marked Planned or Played yet.":(selMiss===0?"Skill total "+selSL+" for "+selN+" selected player(s)":"Known subtotal "+selSL+" · "+selMiss+" selected player(s) without a captured SL")+(cap?" · your reference cap: "+cap+" (user-entered, not verified)":"")+" — not a lineup-legality check."],
+        ["Selected lineup (Planned + Played)",selN===0?"No players marked Planned or Played yet.":(selMiss===0?"Skill total "+selSL+" for "+selN+" selected player(s)":"Known subtotal "+selSL+" · "+selMiss+" selected player(s) without a captured SL")+(cap?" · skill cap: "+cap+" (default or override)":"")+" — not a lineup-legality check."],
         ["Roster flexibility",openN===0?"—":"Favorable direct option left vs "+greenOpps+" of "+openN+" unplayed opponents · any evidence-backed option vs "+sendOpps+" of "+openN]
       ]};
   }
@@ -1055,6 +1193,8 @@
     }
     var facts=lab&&lab.querySelector(".matchup-facts");
     if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
+    var fiveEl=lab&&lab.querySelector("#ll-five-check"),briefEl=lab&&lab.querySelector("#ll-briefing"),swapEl=lab&&lab.querySelector("#ll-swap");
+    if(fiveEl||briefEl||swapEl){var chk=wrLabChecks(w,plan.ck,ta);if(fiveEl) fiveEl.innerHTML=chk.five;if(briefEl) briefEl.innerHTML=chk.brief;if(swapEl) swapEl.innerHTML=chk.swap;}
     // The broadcast board shows the cap and the plan it drives: publish the re-planned model (no-op on the classic page).
     var tb2=TEAM_INDEX[TB.value],c2=MATCHUP_CONTEXT;
     if(tb2) wrBroadcastPublish(wrBroadcastModel(w,plan,ta,tb2,c2&&c2.ourKey===ta.key&&c2.oppKey===tb2.key&&c2.fixture?c2:null));
@@ -1492,7 +1632,7 @@
       +'<div class="decide-risks"><b>Open risks</b>'+wrRiskSummary(riskNames,unplayedN)+'</div>'
       +'</div><p class="muted ns-foot">Next Send uses recorded results only — not odds. "✓ Sent" marks our player Played and the opponent played (Lineup Lab).</p><div class="tonight-grid detail">'
       +'<div><b>Our team</b><span>Remaining: '+remN+' of '+w.ours.length+'</span><span>Available: '+av.Available+'</span><span>Unavailable: '+av.Unavailable+'</span>'
-      +'<span>Unknown: '+av.Unknown+' (not the same as unavailable)</span><span>Already used: '+used+' · planned: '+planned+'</span></div>'
+      +'<span>Already used: '+used+' · planned: '+planned+'</span></div>'
       +'<div><b>Evidence across all pairings</b><span>Favorable direct record (any sample size): '+cat.G+'</span><span>Concerning (more direct losses than wins): '+cat.R+'</span>'
       +'<span>Limited evidence: '+cat.E+' even direct · '+cat.I+' shared-opponent only</span><span>Insufficient verified evidence in this snapshot: '+cat.X+'</span></div>'
       +'<div><b>Opponent roster</b><span>'+w.theirs.length+' players</span><span>Missing information: '+noSL+' player(s) without a captured SL · '+unplayedN+' not yet played</span></div>'
@@ -1601,16 +1741,17 @@
       var a=wrAvail(plan.ck,m.id),l=wrLineup(plan.ck,m.id),pid=esc(m.id);
       return '<tr class="'+(plan.rem[String(m.id)]?'':'out')+'"><td>'+esc(playerRef(m))+'</td><td>'+esc(slText(m))+'</td>'
         +'<td><select class="plan" data-plan="avail" data-pid="'+pid+'" aria-label="Availability for '+esc(playerRef(m))+'">'+["Available","Unavailable"].map(function(v){return '<option'+(v===a?' selected':'')+'>'+v+'</option>';}).join("")+'</select><span class="print-only">'+esc(a)+'</span></td>'
-        +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(playerRef(m))+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td></tr>';
+        +'<td><select class="plan" data-plan="lineup" data-pid="'+pid+'" aria-label="Lineup for '+esc(playerRef(m))+'">'+[["","—"],["Planned","Planned"],["Played","Played"]].map(function(v){return '<option value="'+v[0]+'"'+(v[0]===l?' selected':'')+'>'+v[1]+'</option>';}).join("")+'</select><span class="print-only">'+esc(l||"—")+'</span></td><td class="form-strip">'+esc(formStripText(formFor(m.id,w.format)))+'</td></tr>';
     }).join("");
     var oppRows=w.theirs.map(function(o,j){
       return '<tr class="'+(plan.unplayed[j]?'':'out')+'"><td>'+esc(playerRef(o))+'</td><td>'+esc(slText(o))+'</td><td><label class="inline"><input type="checkbox" class="plan" data-plan="played" data-pid="'+esc(o.id)+'"'+(plan.unplayed[j]?'':' checked')+'> Played</label><span class="print-only">'+(plan.unplayed[j]?'—':'Played')+'</span></td></tr>';
     }).join("");
     var cap=wrCapFor(ta);
     document.getElementById("lineup-lab").innerHTML='<div class="card-head"><h2>Lineup Lab</h2><button type="button" class="secondary" id="ll-clear">Clear marks for this fixture</button></div>'
-      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
-      +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
+      +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Everyone is Here unless marked Out. Coach notes follow the opponent player to every fixture.</p>'
+      +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th><th>Recent games (recorded)</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
+      +(function(){var c=wrLabChecks(w,plan.ck,ta);return '<div id="ll-five-check" class="five-check">'+c.five+'</div><div id="ll-briefing" class="risk-brief">'+c.brief+'</div><div id="ll-swap" class="swap-diff">'+c.swap+'</div>';})()
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Skill cap'+(cap&&wrCapIsDefault(ta)?' (APA default 23)':'')+' \u2014 type a number to change it, clear it to turn the check off<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="off"></label>'
       +'<h3>Recorded options now — and why</h3><p class="muted">For each unplayed opponent: our first-listed option by recorded results, with its meeting count. Listed order is not confidence or a prediction.</p>'
@@ -1670,6 +1811,12 @@
     function current(){return {ta:TEAM_INDEX[TA.value],tb:TEAM_INDEX[TB.value]};}
     root.addEventListener("change",function(ev){
       var t=ev.target,k=t&&t.getAttribute&&t.getAttribute("data-plan"),cur=current();
+      if(t&&(t.id==="ll-swap-out"||t.id==="ll-swap-in")&&cur.ta&&cur.tb){
+        if(t.id==="ll-swap-out") WR_SWAP.out=t.value; else WR_SWAP.in=t.value;
+        wrRenderSwap(cur.ta,cur.tb);
+        var again2=document.getElementById(t.id);if(again2) again2.focus();
+        return;
+      }
       if((k==="tag1"||k==="tag2")&&t.getAttribute("data-pid")){
         wrSetCoach(t.getAttribute("data-pid"),k==="tag1"?"t1":"t2",t.value);
         wrPatchCoachObservation(t.getAttribute("data-pid"));
@@ -1706,6 +1853,7 @@
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
       if(!t) return;
       var cur=current();
+      if(t.id==="ll-swap-reset"&&cur.ta&&cur.tb){WR_SWAP.out="";WR_SWAP.in="";wrRenderSwap(cur.ta,cur.tb);return;}
       if(t.id==="ll-clear"&&cur.ta&&cur.tb){var ck=wrCtx(cur.ta,cur.tb);delete WR_PLAN.our[ck];delete WR_PLAN.opp[ck];wrSave();renderTeamMatchups();return;}
       if(t.hasAttribute("data-view")){WR_VIEW=t.getAttribute("data-view")==="captain"?"captain":"evidence";
         try{window.localStorage.setItem("ultimate-coach:matrix-view",WR_VIEW);}catch(e){}
