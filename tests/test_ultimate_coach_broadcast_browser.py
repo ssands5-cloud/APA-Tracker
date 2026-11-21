@@ -619,3 +619,19 @@ def test_the_long_comparison_lists_start_collapsed_so_picking_never_needs_scroll
     page.locator("#bc-night .send-hero [data-send]").click()                         # open state survives a re-render
     assert page.evaluate("UC_BC_LAST.night.games.length") == 1
     assert page.errors == []
+
+
+def test_games_tonight_sits_right_above_the_live_pick(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=them]")
+    page.locator("#bc-night .night-chip[data-pick]").first.click()
+    page.click("#bc-night .send-hero [data-send]")
+    page.locator("#bc-night .night-results [data-r=W]").first.click()
+    order = page.evaluate("""() => { const log = [...document.querySelectorAll('#bc-night h3.night-h')].find(h => /Games tonight/.test(h.textContent)),
+        live = document.querySelector('#bc-night .send-hero'), board = document.querySelector('#bc-night .cmd-main');
+        const pre = (x, y) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return [!!log && pre(log, live), pre(live, board)]; }""")
+    assert order == [True, True]                                                      # log, then the live pick, then the board
+    assert page.locator("#bc-night .game-row .res.W").count() == 1
+    assert page.errors == []

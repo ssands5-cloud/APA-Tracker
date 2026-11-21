@@ -839,9 +839,9 @@ _JS_BODY = r"""
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
-    el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
+    el.innerHTML=status+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+commandHtml(m)
       +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
-        +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>')+log;
+        +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>');
     var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}
     Array.prototype.forEach.call(el.querySelectorAll("[data-putpick]"),function(sel){sel.onchange=function(){putSwap[sel.getAttribute("data-putpick")]=sel.value;renderNight(m);
       var again=document.querySelector("#bc-night [data-putpick]");if(again) again.focus();};});
