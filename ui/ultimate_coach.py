@@ -1027,7 +1027,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return {{n:n,strip:last5.join(""),n5:last5.length,w10:wins(last10),n10:last10.length,wAll:wins(res),enough:n>=FORM_MIN_GAMES}};
   }}
   function formStripText(f){{return f.enough?f.strip+" (last "+f.n5+")":"not enough games ("+f.n+")";}}
-  function formRecordText(f){{return f.enough?"last "+f.n10+": "+f.w10+"-"+(f.n10-f.w10)+" · recorded: "+f.wAll+"-"+(f.n-f.wAll)+" ("+f.n+" games)":"—";}}
+  function formRecordText(f){{return f.enough?"last "+f.n10+": "+f.w10+"-"+(f.n10-f.w10)+" · recorded: "+f.wAll+"-"+(f.n-f.wAll)+" ("+f.n+" games)":"";}}
   window.__ucForm=function(pid,fmt){{return formFor(pid,fmt);}};
   function playerBPool() {{
     var playerA=String(A.value||"");
