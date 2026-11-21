@@ -1,0 +1,670 @@
+{
+ "policy": "clean",
+ "snapshot": {
+  "snapshot_sha256": "4f4c861b98b12c6d27c4f59586b3e5afcbabe367eee458b08ff6c5ec5f972710",
+  "manifest_sha256": "4f4c861b98b12c6d27c4f59586b3e5afcbabe367eee458b08ff6c5ec5f972710",
+  "matches_manifest": true
+ },
+ "by_format": {
+  "EIGHT": {
+   "nights": 3476,
+   "first_answer": {
+    "nights": 3475,
+    "first_answer_differs": 2454
+   },
+   "explainability": {
+    "m3": {
+     "decisions": 34750,
+     "ties": 13136,
+     "pair_has_direct": 7325,
+     "pair_unknown": 9654,
+     "pairs": 34750
+    },
+    "c2": {
+     "decisions": 34750,
+     "ties": 3944,
+     "margin_lt_0.02": 15951,
+     "pair_has_direct": 7235,
+     "pair_unknown": 9365,
+     "pairs": 34750
+    }
+   },
+   "scenarios": {
+    "pre2023_C2|adversarial|we_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.456270615737586,
+      "c2_mean": 2.4848776624478277,
+      "diff": 0.0286070467102416,
+      "ci": [
+       0.02736096122109181,
+       0.030105238706392846
+      ],
+      "c2_better_share": 0.7280575539568346,
+      "m3_better_share": 0.23741007194244604
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4837021003688106,
+      "c2_mean": 0.49418303008368775,
+      "diff": 0.010480929714877178,
+      "ci": [
+       0.009897097973168621,
+       0.011047780985325882
+      ],
+      "c2_better_share": 0.7202877697841726,
+      "m3_better_share": 0.24517985611510792
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.26705035971223,
+      "c2_mean": 3.0719424460431655
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.06294203309450173,
+      "c2_mean": 0.070266500993149
+     },
+     "identical_board_share": 0.034532374100719423
+    },
+    "pre2023_C2|adversarial|they_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.4475872111301538,
+      "c2_mean": 2.468347073932766,
+      "diff": 0.020759862802612987,
+      "ci": [
+       0.01933548527946175,
+       0.022208796823471495
+      ],
+      "c2_better_share": 0.68,
+      "m3_better_share": 0.26762589928057556
+     },
+     "night_win_probability": {
+      "m3_mean": 0.48040243207461897,
+      "c2_mean": 0.4879456799635706,
+      "diff": 0.007543247888951634,
+      "ci": [
+       0.007022126990658792,
+       0.008048527657055741
+      ],
+      "c2_better_share": 0.6687769784172661,
+      "m3_better_share": 0.27884892086330937
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.133525179856115,
+      "c2_mean": 2.588201438848921
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.04728501902305668,
+      "c2_mean": 0.056308127044174885
+     },
+     "identical_board_share": 0.051798561151079135
+    },
+    "pre2023_C2|top_first|we_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.509934867210189,
+      "c2_mean": 2.5412603696061895,
+      "diff": 0.03132550239600031,
+      "ci": [
+       0.02903234455270278,
+       0.03332715289818984
+      ],
+      "c2_better_share": 0.661294964028777,
+      "m3_better_share": 0.30503597122302156
+     },
+     "night_win_probability": {
+      "m3_mean": 0.50364351898787,
+      "c2_mean": 0.5153523737152682,
+      "diff": 0.011708854727398387,
+      "ci": [
+       0.01104955284112321,
+       0.012557246246083672
+      ],
+      "c2_better_share": 0.6601438848920863,
+      "m3_better_share": 0.3061870503597122
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2123741007194244,
+      "c2_mean": 3.265611510791367
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.051793165815793914,
+      "c2_mean": 0.06940686880319304
+     },
+     "identical_board_share": 0.03338129496402878
+    },
+    "pre2023_C2|top_first|they_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.5073061033599697,
+      "c2_mean": 2.539464375987312,
+      "diff": 0.032158272627342596,
+      "ci": [
+       0.029792946334559683,
+       0.034714798946537416
+      ],
+      "c2_better_share": 0.6359712230215827,
+      "m3_better_share": 0.30848920863309354
+     },
+     "night_win_probability": {
+      "m3_mean": 0.5029792031916378,
+      "c2_mean": 0.5150114669348439,
+      "diff": 0.012032263743206135,
+      "ci": [
+       0.011098507927368082,
+       0.01292050877694092
+      ],
+      "c2_better_share": 0.6333812949640287,
+      "m3_better_share": 0.31107913669064746
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.1821582733812948,
+      "c2_mean": 2.853525179856115
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.04787533631471422,
+      "c2_mean": 0.052763303836517124
+     },
+     "identical_board_share": 0.05553956834532374
+    },
+    "pre2023_skill|adversarial|we_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.469620544007685,
+      "c2_mean": 2.4865465935909756,
+      "diff": 0.01692604958329132,
+      "ci": [
+       0.015731778938572832,
+       0.01829188501601679
+      ],
+      "c2_better_share": 0.5597122302158274,
+      "m3_better_share": 0.20258992805755396
+     },
+     "night_win_probability": {
+      "m3_mean": 0.48862989631949066,
+      "c2_mean": 0.49482882050098786,
+      "diff": 0.006198924181497238,
+      "ci": [
+       0.005591123925832731,
+       0.006617253573893969
+      ],
+      "c2_better_share": 0.5565467625899281,
+      "m3_better_share": 0.20575539568345325
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2581294964028777,
+      "c2_mean": 3.117697841726619
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.047843167241547094,
+      "c2_mean": 0.06605550930171798
+     },
+     "identical_board_share": 0.04892086330935252
+    },
+    "pre2023_skill|adversarial|they_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.467412424042589,
+      "c2_mean": 2.4803105691996232,
+      "diff": 0.012898145157033719,
+      "ci": [
+       0.011822752815293788,
+       0.014093937899212835
+      ],
+      "c2_better_share": 0.5188489208633094,
+      "m3_better_share": 0.21035971223021582
+     },
+     "night_win_probability": {
+      "m3_mean": 0.48786488120580596,
+      "c2_mean": 0.492480783323119,
+      "diff": 0.004615902117313196,
+      "ci": [
+       0.004202705011562455,
+       0.005077072588171542
+      ],
+      "c2_better_share": 0.5128057553956834,
+      "m3_better_share": 0.21640287769784172
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.145323741007194,
+      "c2_mean": 2.7223021582733815
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.039526219058825876,
+      "c2_mean": 0.051688051971490345
+     },
+     "identical_board_share": 0.07366906474820144
+    },
+    "pre2023_skill|top_first|we_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.5028552722841577,
+      "c2_mean": 2.524462844322236,
+      "diff": 0.02160757203807885,
+      "ci": [
+       0.01983231111484403,
+       0.023564272228406166
+      ],
+      "c2_better_share": 0.5867625899280575,
+      "m3_better_share": 0.2699280575539568
+     },
+     "night_win_probability": {
+      "m3_mean": 0.5010779435282525,
+      "c2_mean": 0.5089912138131746,
+      "diff": 0.007913270284922022,
+      "ci": [
+       0.007177627381597409,
+       0.008538262962553939
+      ],
+      "c2_better_share": 0.5861870503597122,
+      "m3_better_share": 0.27050359712230215
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.224748201438849,
+      "c2_mean": 3.2716546762589926
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.04272911038135048,
+      "c2_mean": 0.0713861249776379
+     },
+     "identical_board_share": 0.028489208633093524
+    },
+    "pre2023_skill|top_first|they_lead_first": {
+     "n": 3475,
+     "expected_games": {
+      "m3_mean": 2.496521964746295,
+      "c2_mean": 2.5256851298673237,
+      "diff": 0.029163165121028962,
+      "ci": [
+       0.02721655932039245,
+       0.03128716627224198
+      ],
+      "c2_better_share": 0.5815827338129497,
+      "m3_better_share": 0.24201438848920864
+     },
+     "night_win_probability": {
+      "m3_mean": 0.49892129855547124,
+      "c2_mean": 0.5098467327193142,
+      "diff": 0.010925434163842949,
+      "ci": [
+       0.010196557017734828,
+       0.011698278978583613
+      ],
+      "c2_better_share": 0.5815827338129497,
+      "m3_better_share": 0.24201438848920864
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.177841726618705,
+      "c2_mean": 2.843453237410072
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.04134044571054131,
+      "c2_mean": 0.04958578017414382
+     },
+     "identical_board_share": 0.05410071942446043
+    }
+   }
+  },
+  "NINE": {
+   "nights": 3132,
+   "first_answer": {
+    "nights": 3132,
+    "first_answer_differs": 2253
+   },
+   "explainability": {
+    "m3": {
+     "decisions": 31320,
+     "ties": 11603,
+     "pair_has_direct": 5950,
+     "pair_unknown": 9140,
+     "pairs": 31320
+    },
+    "c2": {
+     "decisions": 31320,
+     "ties": 3481,
+     "margin_lt_0.02": 17819,
+     "pair_has_direct": 8369,
+     "pair_unknown": 8339,
+     "pairs": 31320
+    }
+   },
+   "scenarios": {
+    "pre2023_C2|adversarial|we_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.461693822545248,
+      "c2_mean": 2.4738497102325026,
+      "diff": 0.01215588768725471,
+      "ci": [
+       0.010897349959521097,
+       0.013240829181899958
+      ],
+      "c2_better_share": 0.6602809706257982,
+      "m3_better_share": 0.3103448275862069
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4856488143906884,
+      "c2_mean": 0.49019807670872056,
+      "diff": 0.004549262318032202,
+      "ci": [
+       0.00415661469955489,
+       0.004987203744123014
+      ],
+      "c2_better_share": 0.6621966794380587,
+      "m3_better_share": 0.30842911877394635
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2279693486590038,
+      "c2_mean": 3.259897828863346
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.032461917044200275,
+      "c2_mean": 0.030399740091368917
+     },
+     "identical_board_share": 0.02937420178799489
+    },
+    "pre2023_C2|adversarial|they_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.455366670272968,
+      "c2_mean": 2.4660392101201154,
+      "diff": 0.010672539847147559,
+      "ci": [
+       0.009762121968414092,
+       0.011813341466254791
+      ],
+      "c2_better_share": 0.6436781609195402,
+      "m3_better_share": 0.303639846743295
+     },
+     "night_win_probability": {
+      "m3_mean": 0.483290410841749,
+      "c2_mean": 0.4872767107608458,
+      "diff": 0.003986299919096783,
+      "ci": [
+       0.003615194750618812,
+       0.004354950567085707
+      ],
+      "c2_better_share": 0.6420817369093231,
+      "m3_better_share": 0.3052362707535121
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.172733077905492,
+      "c2_mean": 2.6481481481481484
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.027799582498759842,
+      "c2_mean": 0.027894699740549294
+     },
+     "identical_board_share": 0.05268199233716475
+    },
+    "pre2023_C2|top_first|we_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.492744942353317,
+      "c2_mean": 2.505749177042264,
+      "diff": 0.013004234688946832,
+      "ci": [
+       0.011272479072528345,
+       0.014723704444304809
+      ],
+      "c2_better_share": 0.5977011494252874,
+      "m3_better_share": 0.3773946360153257
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4972717340979461,
+      "c2_mean": 0.5021590994847758,
+      "diff": 0.004887365386829615,
+      "ci": [
+       0.004118623371019174,
+       0.0055888547150386
+      ],
+      "c2_better_share": 0.598978288633461,
+      "m3_better_share": 0.37611749680715195
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2557471264367814,
+      "c2_mean": 3.466794380587484
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.03063277328216648,
+      "c2_mean": 0.02693399575012159
+     },
+     "identical_board_share": 0.02490421455938697
+    },
+    "pre2023_C2|top_first|they_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.4950354917835855,
+      "c2_mean": 2.5058414948399923,
+      "diff": 0.010806003056406843,
+      "ci": [
+       0.008985437220699253,
+       0.012493524979741301
+      ],
+      "c2_better_share": 0.5648148148148148,
+      "m3_better_share": 0.3850574712643678
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4981406770493873,
+      "c2_mean": 0.5021953430389265,
+      "diff": 0.004054665989539164,
+      "ci": [
+       0.0033795976727895548,
+       0.004734014410591332
+      ],
+      "c2_better_share": 0.5654533844189017,
+      "m3_better_share": 0.384418901660281
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2132822477650063,
+      "c2_mean": 2.9233716475095783
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.027119939794532227,
+      "c2_mean": 0.024062350033489104
+     },
+     "identical_board_share": 0.05012771392081737
+    },
+    "pre2023_skill|adversarial|we_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.4588355693295263,
+      "c2_mean": 2.4673122209919254,
+      "diff": 0.0084766516623991,
+      "ci": [
+       0.0071841115712362805,
+       0.009720724392811514
+      ],
+      "c2_better_share": 0.5124521072796935,
+      "m3_better_share": 0.2946998722860792
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4845625894398226,
+      "c2_mean": 0.48773745255468354,
+      "diff": 0.003174863114860889,
+      "ci": [
+       0.0027624030047447203,
+       0.0035976185462896415
+      ],
+      "c2_better_share": 0.51213282247765,
+      "m3_better_share": 0.2950191570881226
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.241698595146871,
+      "c2_mean": 3.288633461047254
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.014059259933387884,
+      "c2_mean": 0.013250941110184211
+     },
+     "identical_board_share": 0.034482758620689655
+    },
+    "pre2023_skill|adversarial|they_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.4563855686117666,
+      "c2_mean": 2.463204901500602,
+      "diff": 0.006819332888835183,
+      "ci": [
+       0.005867984056427842,
+       0.007925412937234205
+      ],
+      "c2_better_share": 0.45146871008939976,
+      "m3_better_share": 0.320242656449553
+     },
+     "night_win_probability": {
+      "m3_mean": 0.48364539433337184,
+      "c2_mean": 0.4861981210428771,
+      "diff": 0.0025527267095051924,
+      "ci": [
+       0.0021428437143545575,
+       0.0028838151104398453
+      ],
+      "c2_better_share": 0.4521072796934866,
+      "m3_better_share": 0.31960408684546615
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.195721583652618,
+      "c2_mean": 2.7298850574712645
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.012544034930291336,
+      "c2_mean": 0.011107357298434786
+     },
+     "identical_board_share": 0.05555555555555555
+    },
+    "pre2023_skill|top_first|we_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.472147533574108,
+      "c2_mean": 2.4796035582980838,
+      "diff": 0.007456024723975624,
+      "ci": [
+       0.005938332577731457,
+       0.008759531471804399
+      ],
+      "c2_better_share": 0.5105363984674329,
+      "m3_better_share": 0.3492975734355045
+     },
+     "night_win_probability": {
+      "m3_mean": 0.48955432273507316,
+      "c2_mean": 0.4923477489988467,
+      "diff": 0.002793426263773626,
+      "ci": [
+       0.0022718231041630142,
+       0.0034260097294398864
+      ],
+      "c2_better_share": 0.5111749680715197,
+      "m3_better_share": 0.3486590038314176
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.2375478927203063,
+      "c2_mean": 3.4099616858237547
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.015205644117729672,
+      "c2_mean": 0.0114117815462216
+     },
+     "identical_board_share": 0.033524904214559385
+    },
+    "pre2023_skill|top_first|they_lead_first": {
+     "n": 3132,
+     "expected_games": {
+      "m3_mean": 2.4769636392949947,
+      "c2_mean": 2.486709575525067,
+      "diff": 0.009745936230071915,
+      "ci": [
+       0.00809316328666087,
+       0.011342344401746288
+      ],
+      "c2_better_share": 0.5140485312899106,
+      "m3_better_share": 0.33109833971902936
+     },
+     "night_win_probability": {
+      "m3_mean": 0.4913609045617805,
+      "c2_mean": 0.4950154409816078,
+      "diff": 0.0036545364198273434,
+      "ci": [
+       0.003070240158041628,
+       0.004228152087294793
+      ],
+      "c2_better_share": 0.514367816091954,
+      "m3_better_share": 0.33077905491698595
+     },
+     "cap_compliance": {
+      "m3": 1.0,
+      "c2": 1.0
+     },
+     "game_our_top_player_played": {
+      "m3_mean": 2.219029374201788,
+      "c2_mean": 2.922733077905492
+     },
+     "response_regret_this_game": {
+      "m3_mean": 0.014333598530476343,
+      "c2_mean": 0.009952821259194224
+     },
+     "identical_board_share": 0.04885057471264368
+    }
+   }
+  }
+ }
+}
