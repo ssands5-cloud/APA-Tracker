@@ -677,7 +677,7 @@ _JS_BODY = r"""
   }
   // Player chosen on the send card instead of the engine answer, per fixture, opponent and game (view state only;
   // nothing is recorded until Send).
-  var sendSwap={};
+  var sendSwap={},putSwap={};
   function sendPicker(scen,selId,oppId,key){
     return '<label class="send-pick">Send instead <select data-sendpick="'+esc(key)+'" aria-label="Choose who to send">'
       +scen.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===selId?' selected':'')+'>'+esc(s.name+" · "+s.level+(s.recommended?" · engine answer":""))+'</option>';}).join("")
@@ -740,13 +740,23 @@ _JS_BODY = r"""
       var opts=n.leadOptions||[],rec=opts[0];
       chips="";
       if(rec){
-        hero='<section class="send-hero" aria-label="Put up now"><span class="send-kicker">Put up now \u00b7 game '+gameNo+'</span>'
-          +'<div class="send-name">'+esc(rec.name)+'</div>'
-          +'<div class="send-row"><span class="evidence-badge '+badgeClass(rec.reply.level)+'">'+esc(rec.reply.level)+'</span>'
-          +'<button type="button" class="night-btn primary" data-putup="'+esc(rec.id)+'">\u2713 Put up '+esc(rec.name)+'</button></div>'
-          +'<div class="send-why">'+esc(m.lead&&m.lead.our===rec.name?m.lead.why:"Their most damaging answer is "+rec.reply.name+" ("+rec.reply.level+" for us)")+'</div>'
-          +(rec.avail==="Unknown"?'<div class="send-cost">Availability unknown \u2014 confirm '+esc(rec.name)+' is here.</div>':'')
-          +'<div class="send-after"><b>Then they put up:</b> '+esc(rec.path.length?rec.path[0].our+" answers "+rec.path[0].their+" next, per the plan":"final pairing")+'</div></section>';
+        // Same choice as the send card: pick anyone available from a dropdown; the card redraws for that player and
+        // the Put up button puts up whoever is selected. Nothing is recorded until Put up is tapped.
+        var putKey=m.planKey+"|lead|"+(m.played||0);
+        var sel=putSwap[putKey]&&opts.filter(function(o){return o.id===putSwap[putKey];})[0]||rec;
+        var isEngine=sel.id===rec.id;
+        hero='<section class="send-hero'+(isEngine?'':' swapped')+'" aria-label="Put up now"><span class="send-kicker">Put up now \u00b7 game '+gameNo+(isEngine?'':' \u00b7 your choice')+'</span>'
+          +'<div class="send-name">'+esc(sel.name)+'</div>'
+          +'<label class="send-pick">Put up instead <select data-putpick="'+esc(putKey)+'" aria-label="Choose who to put up">'
+          +opts.map(function(o){return '<option value="'+esc(o.id)+'"'+(o.id===sel.id?' selected':'')+'>'+esc(o.name+" \u00b7 "+o.reply.level+(o.recommended?" \u00b7 engine pick":""))+'</option>';}).join("")+'</select></label>'
+          +'<div class="send-row"><span class="evidence-badge '+badgeClass(sel.reply.level)+'">'+esc(sel.reply.level)+'</span>'
+          +'<button type="button" class="night-btn primary" data-putup="'+esc(sel.id)+'">\u2713 Put up '+esc(sel.name)+'</button></div>'
+          +'<div class="send-why">'+esc(isEngine?(m.lead&&m.lead.our===rec.name?m.lead.why:"Their most damaging answer is "+rec.reply.name+" ("+rec.reply.level+" for us)")
+            :"Their most damaging answer would be "+sel.reply.name+" ("+sel.reply.level+" for us)"+(sel.tradeoff?" \u00b7 "+sel.tradeoff:"")+(sel.budget?" \u00b7 "+sel.budget:""))+'</div>'
+          +(sel.avail==="Unknown"?'<div class="send-cost">Availability unknown \u2014 confirm '+esc(sel.name)+' is here.</div>':'')
+          +(isEngine?'<div class="send-after"><b>Then they put up:</b> '+esc(rec.path.length?rec.path[0].our+" answers "+rec.path[0].their+" next, per the plan":"final pairing")+'</div>'
+            :'<div class="send-cost">Engine pick: '+esc(rec.name)+' ('+esc(rec.reply.level)+' for us)</div><div class="send-after">The plan for the later games updates when you tap Put up.</div>')
+          +'<p class="matchup-footnote">Levels describe recorded evidence against their most damaging answer, not odds.</p></section>';
         var others=opts.slice(1).map(function(o){
           var note=["their worst answer: "+o.reply.name+" ("+o.reply.level+")",o.tradeoff||"",o.budget||"",o.avail==="Unknown"?"availability unknown":""].filter(Boolean).join(" \u00b7 ");
           return '<div class="alt-row" data-lead-player="'+esc(o.id)+'"><div class="matchup-num">\u2248</div>'
@@ -830,6 +840,8 @@ _JS_BODY = r"""
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
     el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
       +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+log;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-putpick]"),function(sel){sel.onchange=function(){putSwap[sel.getAttribute("data-putpick")]=sel.value;renderNight(m);
+      var again=document.querySelector("#bc-night [data-putpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-sendpick]"),function(sel){sel.onchange=function(){sendSwap[sel.getAttribute("data-sendpick")]=sel.value;renderNight(m);
       var again=document.querySelector("#bc-night [data-sendpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-oppout]"),function(b){b.onclick=function(){window.UC_ACT.oppOut(b.getAttribute("data-oppout"),b.getAttribute("data-out")==="1");};});

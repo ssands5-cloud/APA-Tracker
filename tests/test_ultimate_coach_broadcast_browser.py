@@ -575,3 +575,25 @@ def test_send_card_dropdown_swaps_the_player_shows_their_evidence_and_sends_them
     hero.locator("[data-send]").click()
     assert page.evaluate("UC_BC_LAST.night.games[0].ourId") == other                  # the chosen player is recorded
     assert page.errors == []
+
+
+def test_put_up_card_dropdown_swaps_the_player_and_puts_up_the_chosen_one(page):
+    _pick(page)
+    _tab(page, "matchnight")
+    page.click("#bc-night [data-toss=us]")
+    picker = page.locator("#bc-night .send-hero [data-putpick]")
+    options = page.evaluate("UC_BC_LAST.night.leadOptions.map(o => o.id)")
+    assert sorted(picker.locator("option").evaluate_all("os => os.map(o => o.value)")) == sorted(options)
+    engine = picker.input_value()
+    assert engine == options[0]                                                       # starts on the engine's pick
+    other = next(i for i in options if i != engine)
+    picker.select_option(other)
+    name = page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).name", other)
+    hero = page.locator("#bc-night .send-hero")
+    assert hero.locator(".send-name").text_content() == name
+    assert "your choice" in hero.locator(".send-kicker").text_content().lower()
+    assert "engine pick" in hero.text_content().lower() and "not odds" in hero.text_content().lower()
+    assert page.evaluate("UC_BC_LAST.night.putUp") is None                            # nothing committed by browsing
+    hero.locator("[data-putup]").click()
+    assert page.evaluate("UC_BC_LAST.night.putUp.id") == other                        # the chosen player is put up
+    assert page.errors == []
