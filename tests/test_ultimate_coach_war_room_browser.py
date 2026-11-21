@@ -3712,3 +3712,92 @@ def test_player_form_columns_show_only_recorded_facts(tmp_path: Path):
             assert errors == []
         finally:
             browser.close()
+
+
+# ---------------------------------------------------------------------------------------------
+# Captain workflow MVP: Swap what-if (exact difference of two fives; never changes a mark).
+# ---------------------------------------------------------------------------------------------
+def _swap_entry(name, sl, lineup="", avail="Available", form=""):
+    return {"name": name, "sl": sl, "lineup": lineup, "avail": avail, "form": form}
+
+
+def test_swap_core_is_an_exact_difference_and_never_mutates(tmp_path: Path):
+    entries = [_swap_entry("A", 5, "Planned", form="WLWLW (last 5)"), _swap_entry("B", 5, "Planned"), _swap_entry("C", 5, "Planned"),
+               _swap_entry("D", 4, "Planned"), _swap_entry("E", 4, "Planned", form="not enough games (2)"),
+               _swap_entry("F", 7), _swap_entry("G", None), _swap_entry("H", 2, "", "Unavailable")]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            swap = lambda e, c, o, i: page.evaluate("([e, c, o, i]) => window.__ucSwapCore(e, c, o, i)", [e, c, o, i])  # noqa: E731
+            res = swap(entries, 23, "E", "F")
+            assert res["valid"] and res["before"]["state"] == "within" and res["before"]["total"] == 23
+            assert res["after"]["state"] == "over" and res["after"]["total"] == 26 and res["change"] == 3
+            assert res["lines"][0] == "In: F (SL 7). Out: E (SL 4)."
+            assert res["lines"][1].startswith("Before: Skill total 23 of 23: within the cap.")
+            assert res["lines"][2].startswith("After: Skill total 26 is 3 over the cap of 23.")
+            assert "Recent games (recorded): F — · E not enough games (2)." in res["lines"]            # F has no form text
+            assert "within" not in res["lines"][2]
+            unknown = swap(entries, 23, "E", "G")
+            assert unknown["valid"] and unknown["after"]["state"] == "unverifiable" and unknown["change"] is None
+            with_form = swap(entries, 23, "A", "F")
+            assert any("Recent games (recorded): F — · A WLWLW (last 5)." in line for line in with_form["lines"])
+            for bad in (("F", "E"), ("A", "B"), ("A", "H"), ("A", "A"), ("Z", "F"), ("A", "Z")):
+                assert swap(entries, 23, *bad)["valid"] is False, bad
+            # Pure: the input entries are untouched after any number of swaps.
+            before = page.evaluate("e => JSON.stringify(e)", entries)
+            after = page.evaluate("([e]) => { window.__ucSwapCore(e, 23, 'E', 'F'); return JSON.stringify(e); }", [entries])
+            assert before == after
+            joined = " ".join(res["lines"]).lower()
+            assert not [b for b in _BRIEF_BANNED if b in joined]
+            assert errors == []
+        finally:
+            browser.close()
+
+
+def test_swap_control_compares_two_fives_without_touching_marks(tmp_path: Path):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page, errors = _page(tmp_path, browser)
+            names, sl = _lab_names(page), _lab_skill_levels(page)
+            pids = list(names)
+            box = page.locator("#ll-swap")
+            # Nothing Planned yet: the controls are disabled and say why.
+            assert page.locator("#ll-swap-out").is_disabled() and page.locator("#ll-swap-in").is_disabled()
+            assert "Mark at least one player Planned" in box.inner_text()
+            keep, bring = pids[0], pids[1]
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            assert page.locator("#ll-swap-out").is_enabled()
+            assert [o for o in page.locator("#ll-swap-out option").all_inner_texts() if names[keep] in o]
+            assert not [o for o in page.locator("#ll-swap-in option").all_inner_texts() if names[keep] in o]   # selected players cannot be swapped in
+            marks_before = page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)]))")
+            selects_before = [page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() for p in pids]
+            page.select_option("#ll-swap-out", keep)
+            assert "Choose who comes out and who goes in." in box.inner_text()
+            page.select_option("#ll-swap-in", bring)
+            text = box.inner_text()
+            assert f"In: {names[bring]}" in text.replace("\n", " ") and f"Out: {names[keep]}" in text.replace("\n", " ")
+            assert "Before:" in text and "After:" in text and "No outcome claim." in text
+            assert "Recent games (recorded):" in text
+            # The real marks and every stored value are untouched by the comparison.
+            assert page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)]))") == marks_before
+            assert [page.locator(f'#lineup-lab select[data-plan="lineup"][data-pid="{p}"]').input_value() for p in pids] == selects_before
+            # Reset clears the comparison and nothing else; a mark change re-validates the choice.
+            page.click("#ll-swap-reset")
+            assert page.locator("#ll-swap-out").input_value() == "" and "Choose who comes out" in box.inner_text()
+            page.select_option("#ll-swap-out", keep)
+            page.select_option("#ll-swap-in", bring)
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "")        # the swapped-out player is no longer Planned
+            assert page.locator("#ll-swap-out").is_disabled()
+            assert "Mark at least one player Planned" in box.inner_text()
+            # A player marked Out is not offered as a swap-in.
+            page.select_option(f'#lineup-lab select[data-plan="lineup"][data-pid="{keep}"]', "Planned")
+            page.select_option(f'#lineup-lab select[data-plan="avail"][data-pid="{bring}"]', "Unavailable")
+            assert not [o for o in page.locator("#ll-swap-in option").all_inner_texts() if names[bring] in o]
+            lowered = box.inner_text().lower()
+            assert not [b for b in _BRIEF_BANNED if b in lowered]
+            assert "not a lineup-legality check" in page.inner_text("#lineup-lab")
+            assert errors == []
+        finally:
+            browser.close()

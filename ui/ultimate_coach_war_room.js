@@ -485,27 +485,82 @@
     if(inp.trust.issues>0) items.push({kind:"fact",text:n(inp.trust.issues,"source coverage issue")+" noted in the data build.",source:"Data trust"});
     return items;
   }
-  function wrBriefing(w,ck,ta,five){
-    var sel=w.ours.filter(function(m){var l=wrLineup(ck,m.id);return l==="Planned"||l==="Played";});
-    var pool=sel.length?sel:w.ours.filter(function(m){return wrAvail(ck,m.id)!=="Unavailable";});
+  function wrLabEntries(w,ck){
+    return w.ours.map(function(m){return {name:playerRef(m),sl:m.skill_level,lineup:wrLineup(ck,m.id),avail:wrAvail(ck,m.id),
+      games:rowsFor(m.id,w.format).length,form:formStripText(formFor(m.id,w.format))};});
+  }
+  function wrBriefingFrom(w,entries,five){
+    var sel=entries.filter(function(e){return e.lineup==="Planned"||e.lineup==="Played";});
+    var pool=sel.length?sel:entries.filter(function(e){return e.avail!=="Unavailable";});
     var t=DATA.trust||{};
     return wrBriefingCore({five:five,scopeLabel:sel.length?"the selected five":"the Here pool",formatLabel:fmtLabel(w.format),minGames:WR_SHORT_HISTORY,
-      relevant:pool.map(function(m){return {name:playerRef(m),sl:m.skill_level,games:rowsFor(m.id,w.format).length};}),
+      relevant:pool.map(function(e){return {name:e.name,sl:e.sl,games:e.games};}),
       oppNoSl:w.theirs.filter(function(o){return !wrKnown(o.skill_level);}).map(function(o){return playerRef(o);}),
       oppOut:w.theirs.filter(function(o,j){return !!(w.oppOut&&w.oppOut[j]);}).map(function(o){return playerRef(o);}),
       trust:{quarantined:t.quarantined_game_count||0,issues:t.source_coverage_issue_count||0}});
   }
+  function wrBriefing(w,ck,ta,five){return wrBriefingFrom(w,wrLabEntries(w,ck),five);}
   function wrBriefingHtml(items){
     return '<h3>Risk briefing</h3>'
       +(items.length?'<ul class="wr-list">'+items.map(function(i){return '<li class="brief-'+i.kind+'">'+esc(i.text)+' <span class="muted">· source: '+esc(i.source)+'</span></li>';}).join("")+'</ul>'
         :'<p class="muted">Checked: availability, skill levels, recorded games, cap, opponent roster, data trust. Nothing flagged.</p>')
       +'<p class="muted">Facts from recorded data and your own marks. No score and no forecast.</p>';
   }
+  window.__ucBriefingCore=wrBriefingCore;
+  // ---- Captain workflow MVP, Swap what-if: the exact difference between two fives; never changes a mark ----
+  var WR_SWAP={out:"",in:""};   // this page view only; not saved, not a mark, never evidence
+  function wrSwapCore(entries,cap,outName,inName){
+    var oe=entries.filter(function(e){return e.name===outName;})[0],ie=entries.filter(function(e){return e.name===inName;})[0];
+    if(!oe||!ie||oe.lineup!=="Planned"||ie.lineup||ie.avail==="Unavailable") return {valid:false,lines:[]};
+    var before=wrFiveCore(entries,cap);
+    var after=wrFiveCore(entries.map(function(e){return e.name===outName?{name:e.name,sl:e.sl,lineup:"",avail:e.avail}:(e.name===inName?{name:e.name,sl:e.sl,lineup:"Planned",avail:e.avail}:e);}),cap);
+    function sl(x){return wrKnown(x)?String(x):"no captured skill level";}
+    var lines=["In: "+ie.name+" (SL "+sl(ie.sl)+"). Out: "+oe.name+" (SL "+sl(oe.sl)+").",
+      "Before: "+before.text,"After: "+after.text];
+    if(ie.form||oe.form) lines.push("Recent games (recorded): "+ie.name+" "+(ie.form||"—")+" · "+oe.name+" "+(oe.form||"—")+".");
+    return {valid:true,lines:lines,before:before,after:after,
+      change:(!before.missing&&!after.missing)?after.total-before.total:null};
+  }
+  function wrSwapInner(w,ck,ta){
+    var cap=wrCapFor(ta),entries=wrLabEntries(w,ck);
+    var planned=w.ours.filter(function(m){return wrLineup(ck,m.id)==="Planned";});
+    var cands=w.ours.filter(function(m){return !wrLineup(ck,m.id)&&wrAvail(ck,m.id)!=="Unavailable";});
+    var okOut=planned.some(function(m){return String(m.id)===WR_SWAP.out;}),okIn=cands.some(function(m){return String(m.id)===WR_SWAP.in;});
+    if(!okOut) WR_SWAP.out="";
+    if(!okIn) WR_SWAP.in="";
+    function opts(list,cur,blank){return '<option value="">'+esc(blank)+'</option>'+list.map(function(m){return '<option value="'+esc(m.id)+'"'+(String(m.id)===cur?' selected':'')+'>'+esc(playerRef(m))+(wrKnown(m.skill_level)?' (SL '+esc(m.skill_level)+')':'')+'</option>';}).join("");}
+    var disabled=(!planned.length||!cands.length)?' disabled':'';
+    var html='<h3>Swap what-if</h3><p class="muted">Compare two fives. Nothing here changes your Planned marks.</p>'
+      +'<div class="swap-controls"><label>Swap out <select id="ll-swap-out"'+disabled+' aria-label="Planned player to swap out">'+opts(planned,WR_SWAP.out,"Choose a Planned player")+'</select></label> '
+      +'<label>for <select id="ll-swap-in"'+disabled+' aria-label="Player still Here to swap in">'+opts(cands,WR_SWAP.in,"Choose a player still Here")+'</select></label> '
+      +'<button type="button" class="secondary" id="ll-swap-reset"'+(WR_SWAP.out||WR_SWAP.in?'':' disabled')+'>Reset</button></div>';
+    if(disabled) return html+'<p class="muted">Mark at least one player Planned and keep one Here player unselected to compare a swap.</p>';
+    if(!WR_SWAP.out||!WR_SWAP.in) return html+'<p class="muted">Choose who comes out and who goes in.</p>';
+    var outM=planned.filter(function(m){return String(m.id)===WR_SWAP.out;})[0],inM=cands.filter(function(m){return String(m.id)===WR_SWAP.in;})[0];
+    var res=wrSwapCore(entries,cap,playerRef(outM),playerRef(inM));
+    if(!res.valid) return html+'<p class="muted">That swap cannot be compared with the current marks.</p>';
+    function briefTexts(list){return wrBriefingFrom(w,list,wrFiveCore(list,cap)).map(function(i){return i.text;});}
+    var swapped=entries.map(function(e){return e.name===playerRef(outM)?Object.assign({},e,{lineup:""}):(e.name===playerRef(inM)?Object.assign({},e,{lineup:"Planned"}):e);});
+    var b0=briefTexts(entries),b1=briefTexts(swapped);
+    var added=b1.filter(function(x){return b0.indexOf(x)<0;}),cleared=b0.filter(function(x){return b1.indexOf(x)<0;});
+    html+='<ul class="wr-list">'+res.lines.map(function(l){return '<li>'+esc(l)+'</li>';}).join("")
+      +(res.change!==null?'<li>'+esc("Skill total changes by "+(res.change>0?"+":"")+res.change+".")+'</li>':'')
+      +(added.length?'<li>'+esc("Newly flagged in the briefing: "+added.join(" "))+'</li>':'')
+      +(cleared.length?'<li>'+esc("No longer flagged in the briefing: "+cleared.join(" "))+'</li>':'')
+      +'</ul><p class="muted">Facts from recorded data and your marks. No outcome claim.</p>';
+    return html;
+  }
   function wrLabChecks(w,ck,ta){
     var five=wrFiveCheck(w,ck,ta);
-    return {five:wrFiveHtml(five),brief:wrBriefingHtml(wrBriefing(w,ck,ta,five))};
+    return {five:wrFiveHtml(five),brief:wrBriefingHtml(wrBriefing(w,ck,ta,five)),swap:wrSwapInner(w,ck,ta)};
   }
-  window.__ucBriefingCore=wrBriefingCore;
+  function wrRenderSwap(ta,tb){
+    var el=document.getElementById("ll-swap");
+    if(!el||!ta||!tb) return;
+    var w=warRoomPair(ta,tb,TF.value);wrPlan(w,ta,tb);
+    el.innerHTML=wrSwapInner(w,wrCtx(ta,tb),ta);
+  }
+  window.__ucSwapCore=wrSwapCore;
   // An opponent marked absent tonight cannot be put up: out of the plan like a played opponent, but their skill
   // level is not spent against their team's cap (mnPlanFor reads w.oppOut for that).
   function wrOppOut(scope,pid){var n=wrNightMark("opp",scope,pid);return !!((n&&n.o)||wrMark("opp",scope,pid).o);}
@@ -1136,8 +1191,8 @@
     }
     var facts=lab&&lab.querySelector(".matchup-facts");
     if(facts) facts.innerHTML=plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("");
-    var fiveEl=lab&&lab.querySelector("#ll-five-check"),briefEl=lab&&lab.querySelector("#ll-briefing");
-    if(fiveEl||briefEl){var chk=wrLabChecks(w,plan.ck,ta);if(fiveEl) fiveEl.innerHTML=chk.five;if(briefEl) briefEl.innerHTML=chk.brief;}
+    var fiveEl=lab&&lab.querySelector("#ll-five-check"),briefEl=lab&&lab.querySelector("#ll-briefing"),swapEl=lab&&lab.querySelector("#ll-swap");
+    if(fiveEl||briefEl||swapEl){var chk=wrLabChecks(w,plan.ck,ta);if(fiveEl) fiveEl.innerHTML=chk.five;if(briefEl) briefEl.innerHTML=chk.brief;if(swapEl) swapEl.innerHTML=chk.swap;}
     // The broadcast board shows the cap and the plan it drives: publish the re-planned model (no-op on the classic page).
     var tb2=TEAM_INDEX[TB.value],c2=MATCHUP_CONTEXT;
     if(tb2) wrBroadcastPublish(wrBroadcastModel(w,plan,ta,tb2,c2&&c2.ourKey===ta.key&&c2.oppKey===tb2.key&&c2.fixture?c2:null));
@@ -1694,7 +1749,7 @@
       +'<p class="muted" id="ll-context">'+esc(wrCtxLabel(ta,tb))+' <span class="wr-save-scope">'+esc(wrStorageScope())+'</span> Marks change which candidates count as remaining — never the evidence. Unknown is not Unavailable. Coach notes follow the opponent player to every fixture.</p>'
       +'<div class="grid"><div><h3>Our team</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Availability</th><th>Lineup</th><th>Recent games (recorded)</th></tr></thead><tbody>'+ourRows+'</tbody></table></div></div>'
       +'<div><h3>Opponent</h3><div class="table-wrap"><table><thead><tr><th>Player</th><th>SL</th><th>Already played</th></tr></thead><tbody>'+oppRows+'</tbody></table></div></div></div>'
-      +(function(){var c=wrLabChecks(w,plan.ck,ta);return '<div id="ll-five-check" class="five-check">'+c.five+'</div><div id="ll-briefing" class="risk-brief">'+c.brief+'</div>';})()
+      +(function(){var c=wrLabChecks(w,plan.ck,ta);return '<div id="ll-five-check" class="five-check">'+c.five+'</div><div id="ll-briefing" class="risk-brief">'+c.brief+'</div><div id="ll-swap" class="swap-diff">'+c.swap+'</div>';})()
       +'<h3>Snapshot</h3><dl class="matchup-facts">'+plan.metrics.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(x[1])+'</dd>';}).join("")+'</dl>'
       +'<label class="cap-label">Skill cap'+(cap&&wrCapIsDefault(ta)?' (APA default 23)':'')+' \u2014 type a number to change it, clear it to turn the check off<input type="number" id="ll-cap" min="1" max="99" value="'+(cap?esc(cap):'')+'" placeholder="off"></label>'
       +'<h3>Recorded options now — and why</h3><p class="muted">For each unplayed opponent: our first-listed option by recorded results, with its meeting count. Listed order is not confidence or a prediction.</p>'
@@ -1754,6 +1809,12 @@
     function current(){return {ta:TEAM_INDEX[TA.value],tb:TEAM_INDEX[TB.value]};}
     root.addEventListener("change",function(ev){
       var t=ev.target,k=t&&t.getAttribute&&t.getAttribute("data-plan"),cur=current();
+      if(t&&(t.id==="ll-swap-out"||t.id==="ll-swap-in")&&cur.ta&&cur.tb){
+        if(t.id==="ll-swap-out") WR_SWAP.out=t.value; else WR_SWAP.in=t.value;
+        wrRenderSwap(cur.ta,cur.tb);
+        var again2=document.getElementById(t.id);if(again2) again2.focus();
+        return;
+      }
       if((k==="tag1"||k==="tag2")&&t.getAttribute("data-pid")){
         wrSetCoach(t.getAttribute("data-pid"),k==="tag1"?"t1":"t2",t.value);
         wrPatchCoachObservation(t.getAttribute("data-pid"));
@@ -1790,6 +1851,7 @@
       var t=ev.target&&ev.target.closest?ev.target.closest("button"):null;
       if(!t) return;
       var cur=current();
+      if(t.id==="ll-swap-reset"&&cur.ta&&cur.tb){WR_SWAP.out="";WR_SWAP.in="";wrRenderSwap(cur.ta,cur.tb);return;}
       if(t.id==="ll-clear"&&cur.ta&&cur.tb){var ck=wrCtx(cur.ta,cur.tb);delete WR_PLAN.our[ck];delete WR_PLAN.opp[ck];wrSave();renderTeamMatchups();return;}
       if(t.hasAttribute("data-view")){WR_VIEW=t.getAttribute("data-view")==="captain"?"captain":"evidence";
         try{window.localStorage.setItem("ultimate-coach:matrix-view",WR_VIEW);}catch(e){}
