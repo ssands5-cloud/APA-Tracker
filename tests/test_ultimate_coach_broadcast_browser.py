@@ -118,7 +118,7 @@ def test_match_night_runs_the_loop_pick_send_result_undo(page):
     assert hero_name == engine_answer, (hero_name, engine_answer)                      # same decision as the engine
     page.click("#bc-night .send-hero [data-send]")                                    # confirm the pairing
     assert page.locator("#bc-night .night-pill").nth(0).text_content().lower() == "game 2 of 5"
-    assert page.locator("#bc-night .bench-item.used").count() >= 1
+    assert page.locator("#bc-night .night-checkin .played").count() >= 1             # struck through at the top
     assert page.locator("#bc-night .game-row").count() == 1
     page.click("#bc-night [data-result][data-r=W]")                                   # record the result
     assert "1-0" in page.locator("#bc-night .night-pill").nth(1).text_content()
@@ -130,19 +130,19 @@ def test_match_night_runs_the_loop_pick_send_result_undo(page):
     page.wait_for_selector("#bc-night .game-row")
     assert page.locator("#bc-night .game-row .res.W").count() == 1
     page.click("#bc-night [data-undo]")                                               # undo the send
-    assert page.locator("#bc-night .game-row").count() == 0 and page.locator("#bc-night .bench-item.used").count() == 0
+    assert page.locator("#bc-night .game-row").count() == 0 and page.locator("#bc-night .night-checkin .played").count() == 0
     assert page.errors == []
 
 
 def test_bench_availability_changes_the_recommendation_inputs(page):
     _pick(page)
     _tab(page, "matchnight")
-    first = page.locator("#bc-night .bench [data-avail]").first
-    assert first.text_content() == "Available"                                        # everyone starts here
+    first = page.locator("#bc-night .night-checkin [data-avail]").first
+    assert first.text_content().endswith("Here")                                        # everyone starts here
     first.click()
-    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Unavailable"
-    page.locator("#bc-night .bench [data-avail]").first.click()
-    assert page.locator("#bc-night .bench [data-avail]").first.text_content() == "Available"
+    assert page.locator("#bc-night .night-checkin [data-avail]").first.text_content().endswith("Out")
+    page.locator("#bc-night .night-checkin [data-avail]").first.click()
+    assert page.locator("#bc-night .night-checkin [data-avail]").first.text_content().endswith("Here")
     assert page.locator("#bc-night .alt-row .matchup-player, #bc-night .send-name").all_text_contents()  # engine still answers
 
 
@@ -407,10 +407,12 @@ def test_check_in_before_game_one_and_results_to_record_at_the_top(page):
     checkin.first.click()                                                            # Out: same mark as the bench
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).rem", out) is False
-    assert page.locator(f'#bc-night .bench [data-avail="{out}"]').text_content() == "Unavailable"
+    assert page.locator(f'#bc-night .night-checkin [data-avail="{out}"]').text_content().endswith("Out")
+    assert page.locator("#bc-night .bench").count() == 0                              # no separate Bench
     page.locator("#bc-night .night-chip[data-pick]").first.click()
     page.click("#bc-night .send-hero [data-send]")
-    assert page.locator("#bc-night .night-checkin").count() == 0                     # check-in closes at game 1
+    assert page.locator("#bc-night .night-checkin").count() == 1                     # stays open all night
+    assert page.locator("#bc-night .night-checkin .played").count() == 1               # the player who played
     bar = page.locator("#bc-night .night-results")
     assert "g1 result" in bar.text_content().lower()
     bar.locator("[data-r=L]").click()
@@ -449,8 +451,8 @@ def test_marking_an_opponent_absent_removes_them_from_the_plan_without_spending_
     # Absent is not "played": their skill level is not counted against their cap.
     used = page.evaluate("UC_BC_LAST.night.oppBudget")
     assert used is None or used["used"] == 0
-    assert page.locator(f'#bc-night .bench [data-oppout="{gone}"]').text_content() == "Out"
-    page.click(f'#bc-night .bench [data-oppout="{gone}"]')                           # back in
+    assert page.locator(f'#bc-night .night-checkin-opp [data-oppout="{gone}"]').text_content().endswith("Out")
+    page.click(f'#bc-night .night-checkin-opp [data-oppout="{gone}"]')                           # back in
     assert gone in page.evaluate("UC_BC_LAST.night.chips.map(c => c.id)")
     assert page.errors == []
 
@@ -492,7 +494,7 @@ def test_availability_is_shared_by_every_match_on_the_same_night(page):
     assert page.evaluate("UC_BC_LAST.planKey") != first_ck
     assert page.evaluate("id => UC_BC_LAST.night.bench.ours.find(p => p.id === id).avail", out) == "Unavailable"
     assert page.evaluate("UC_BC_LAST.night.games.length") == 0                        # games stay per match
-    page.click(f'#bc-night .bench [data-avail="{out}"]')                             # Out -> Here, from here
+    page.click(f'#bc-night .night-checkin [data-avail="{out}"]')                             # Out -> Here, from here
     _tab(page, "schedule")
     page.click("#md-compare-0")
     _tab(page, "matchnight")

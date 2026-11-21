@@ -414,6 +414,7 @@ body.bc .bench-item .bn{font-family:var(--cond);font-weight:800;font-size:16px;l
 body.bc .bench-item.used .bn{text-decoration:line-through;color:var(--fg-muted)}
 body.bc .bench-item .tagx{font-size:11px;color:var(--fg-dim)}
 body.bc .avail-btn{font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--border-hi);background:transparent;color:var(--fg-dim);border-radius:3px;padding:5px 10px;min-height:32px;cursor:pointer}
+body.bc .avail-btn.played{text-decoration:line-through;opacity:.5;cursor:default}
 body.bc .avail-btn.Available{color:#00c8a0;border-color:rgba(0,200,160,.4)}body.bc .avail-btn.Unavailable{color:var(--away);border-color:rgba(255,61,98,.4)}
 body.bc .game-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:3px}
 body.bc .game-row .gn{font-family:var(--cond);font-weight:800;color:var(--fg-muted);width:2.2em}
@@ -709,14 +710,17 @@ _JS_BODY = r"""
     }
     // Before game 1: who is here. Everyone is Here unless tapped Out; same marks as the bench.
     var checkin="";
-    if(!done&&!n.games.length){
+    // Owner decision (2026-11-20): Who's here / Their players stay at the top all night and replace the Bench.
+    // Played players are struck through and cannot be toggled; Out still applies to every match tonight.
+    if(!done){
       var avlNext0={Available:"Unavailable",Unavailable:"Available"},label={Available:"Here",Unavailable:"Out"};
-      checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who\u2019s here?</span>'
-        +n.bench.ours.map(function(b){return '<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' \u00b7 '+label[b.avail]+'</button>';}).join("")
-        +'<span class="matchup-footnote">Everyone starts Here; tap anyone who is not. Out players leave the plan. Applies to every match tonight (8-Ball and 9-Ball).</span></div>'
+      var played=function(name){return '<span class="avail-btn played" aria-label="'+esc(name+" has played tonight")+'">'+esc(name)+' · played</span>';};
+      checkin='<div class="night-chips night-checkin" role="group" aria-label="Who is here tonight"><span class="night-ask">Who’s here?</span>'
+        +n.bench.ours.map(function(b){return b.lineup==="Played"?played(b.name):'<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext0[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.name)+' · '+label[b.avail]+'</button>';}).join("")
+        +(n.games.length?'':'<span class="matchup-footnote">Everyone starts Here; tap anyone who is not. Out players leave the plan. Applies to every match tonight (8-Ball and 9-Ball).</span>')+'</div>'
         +'<div class="night-chips night-checkin-opp" role="group" aria-label="Their players here tonight"><span class="night-ask">Their players</span>'
-        +n.bench.theirs.map(function(b){return '<button type="button" class="avail-btn '+(b.out?'Unavailable':'Available')+'" data-oppout="'+esc(b.id)+'" data-out="'+(b.out?'':'1')+'" aria-label="'+esc(b.name+(b.out?" is out; mark here":" is here; mark out"))+'">'+esc(b.name)+' \u00b7 '+(b.out?'Out':'Here')+'</button>';}).join("")
-        +'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them. Applies to every match tonight.</span></div>';
+        +n.bench.theirs.map(function(b){return !b.unplayed&&!b.out?played(b.name):'<button type="button" class="avail-btn '+(b.out?'Unavailable':'Available')+'" data-oppout="'+esc(b.id)+'" data-out="'+(b.out?'':'1')+'" aria-label="'+esc(b.name+(b.out?" is out; mark here":" is here; mark out"))+'">'+esc(b.name)+' · '+(b.out?'Out':'Here')+'</button>';}).join("")
+        +(n.games.length?'':'<span class="matchup-footnote">Mark anyone not here; the plan stops guarding against them. Applies to every match tonight.</span>')+'</div>';
     }
     // Results still to enter, at the top where the captain is looking.
     var pending=n.games.filter(function(g){return !g.r;});
@@ -811,15 +815,6 @@ _JS_BODY = r"""
       risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.slice(0,4).join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>'
         +(rl.length>4?'<details class="more"><summary>'+(rl.length-4)+' more risk'+(rl.length-4===1?'':'s')+'</summary><ul class="risk-list">'+rl.slice(4).join("")+'</ul></details>':"");
     }
-    var avlNext={Available:"Unavailable",Unavailable:"Available"};
-    var bench='<h3 class="night-h">Bench</h3><div class="bench"><div class="bench-col"><h4>Our players</h4>'
-      +n.bench.ours.map(function(b){return '<div class="bench-item'+(b.lineup==="Played"?" used":"")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
-        +(b.lineup==="Played"?'<span class="tagx">played</span>':'<button type="button" class="avail-btn '+esc(b.avail)+'" data-avail="'+esc(b.id)+'" data-next="'+esc(avlNext[b.avail])+'" aria-label="'+esc(b.name+" availability "+b.avail+"; change")+'">'+esc(b.avail)+'</button>')+'</div>';}).join("")
-      +'</div><div class="bench-col"><h4>Their players</h4>'
-      +n.bench.theirs.map(function(b){return '<div class="bench-item'+(b.unplayed?"":" used")+'"><span class="bn">'+esc(b.name)+'</span>'+slTag(b.sl)
-        +(b.out?'<button type="button" class="avail-btn Unavailable" data-oppout="'+esc(b.id)+'" data-out="" aria-label="'+esc(b.name+" is out; mark here")+'">Out</button>'
-          :b.unplayed?'<button type="button" class="avail-btn Available" data-oppout="'+esc(b.id)+'" data-out="1" aria-label="'+esc(b.name+" is here; mark out")+'">Here</button>'
-          :'<span class="tagx">played</span>')+'</div>';}).join("")+'</div></div>';
     var log="";
     if(n.games.length){
       log='<h3 class="night-h">Games tonight</h3>'+n.games.map(function(g){
@@ -834,7 +829,7 @@ _JS_BODY = r"""
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
     el.innerHTML=status+storage+resultBar+checkin+tossBar+(done?"":chips+hero)+commandHtml(m)
-      +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+bench+log;
+      +(done?"":strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks)+log;
     Array.prototype.forEach.call(el.querySelectorAll("[data-sendpick]"),function(sel){sel.onchange=function(){sendSwap[sel.getAttribute("data-sendpick")]=sel.value;renderNight(m);
       var again=document.querySelector("#bc-night [data-sendpick]");if(again) again.focus();};});
     Array.prototype.forEach.call(el.querySelectorAll("[data-oppout]"),function(b){b.onclick=function(){window.UC_ACT.oppOut(b.getAttribute("data-oppout"),b.getAttribute("data-out")==="1");};});
