@@ -2,7 +2,7 @@
 
 Author: Claude. Date: 2026-11-20. Scope: audit and plan. No UI change, no code change, no deployment, no merge. M3 and the Broadcast UI stay as they are. Contains no player or team names and no row-level data.
 
-**Needed from GPT / Paul:** the 25-question captain review was not in the repository or the coordination notes, so section 5 is an empty matrix with the method and the mapping rules, ready to fill. Sections 1 to 4 do not depend on it. Paste the 25 questions and the matrix gets completed against sections 1 and 2 without new research.
+The 25-question acceptance matrix is in `CAPTAIN_ACCEPTANCE_MATRIX.md`.
 
 ## 0. Evidence rules the product must respect
 
@@ -74,13 +74,9 @@ Order: Real Player Form (foundation), then Tonight's Five Advisor and Roster Wha
 ### Measurement (no outcome claims)
 Captain Value Scorecard as proposed: time to a legal five, availability errors caught, five-second comprehension, captain feedback. Add a prospective log (pool, chosen five, result) from the start; it is the only route to a later test of roster-advice value.
 
-## 5. Captain review matrix (25 questions): to complete
+## 5. Captain review matrix (25 questions)
 
-| # | Question (from GPT's 25-question review) | Solved / Partially / Not | Files and components | APIs and data | Effort |
-|---|---|---|---|---|---|
-| 1-25 | _pending: the list was not provided_ | | | | |
-
-Method: mark Solved only if a shipped screen answers the question with recorded evidence today; Partially if the data or a Python module exists but no captain-facing surface does (most form questions); Not Solved if neither exists. Map each answer to sections 1 and 2. Effort: Low (wiring only), Medium (new payload field plus a screen element), High (new data capture).
+Completed in `docs/captain_value/CAPTAIN_ACCEPTANCE_MATRIX.md` (matrix, dependency map, four gaps, order, risks).
 
 ## 6. Frozen
 M3, M4/M5/M6, matchup weights, ESPN visual standards (no redesign), production, deployment, merges.
