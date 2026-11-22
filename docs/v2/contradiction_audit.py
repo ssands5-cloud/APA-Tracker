@@ -170,6 +170,9 @@ def check(state, label, fails, exceptions, counts=None, expect=None):
     # I5 / I8 / I9 per put-up
     for x in state.get("per", []):
         t = x.get("trace")
+        # This safety check must run even when the trace is absent.
+        if v2 and not x.get("answer") and x.get("nextLeader") != "us" and x.get("sendButtons"):
+            fail("I8", f"Send button shown vs {x['their']} without a V2 engine answer")
         if x.get("answer") and not t:
             fail("I5", f"answer vs {x['their']} has no decision trace")
             continue
@@ -187,6 +190,10 @@ def check(state, label, fails, exceptions, counts=None, expect=None):
         else:
             ok("I5")
         cmp_row = next((cr for cr in (state.get("compare") or {}).get("rows", []) if cr["their"] == x["their"]), None)
+        if v2 and (not cmp_row or not cmp_row.get("v2")):
+            fail("I5", f"comparison answer missing vs {x['their']}")
+        elif cmp_row and cmp_row.get("v2") and cmp_row["v2"]["our"] != pick["name"]:
+            fail("I5", f"comparison and trace select different players vs {x['their']}")
         if cmp_row and cmp_row.get("v2") and cmp_row["v2"]["our"] == pick["name"]:
             if abs((cmp_row["v2"]["p"] if cmp_row["v2"]["p"] is not None else -1) - pick["p"]) > 1e-12:
                 fail("I5", f"comparison and trace give different win chances for {pick['name']} vs {x['their']}")
@@ -364,6 +371,8 @@ def main():
     print(json.dumps(summary, indent=1))
     if not coverage_ok:
         sys.exit("coverage check failed: zero pairs/states or a mandatory invariant was never checked")
+    if fails:
+        sys.exit("contradiction check failed; inspect the private report")
 
 
 if __name__ == "__main__":

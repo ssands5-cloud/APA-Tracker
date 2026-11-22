@@ -149,3 +149,24 @@ def test_our_put_up_turn_checks_the_lead_card_not_the_answer():
     s["per"][0]["rendered"] = "B"                              # a put-up card naming someone else is a contradiction
     fails, _ = _run(s)
     assert any(f["invariant"] == "I8" and "put-up card" in f["detail"] for f in fails)
+
+
+def test_independent_missing_trace_cannot_hide_send_without_answer():
+    s = copy.deepcopy(_clean())
+    s["per"][0].update(answer=None, trace=None, sendButtons=1, nextLeader="them", rendered="A")
+    failures, _ = _run(s)
+    assert any(f["invariant"] == "I8" for f in failures)
+
+
+def test_independent_comparison_must_select_the_trace_player():
+    s = copy.deepcopy(_clean())
+    s["compare"]["rows"][0]["v2"].update(our="WRONG", p=0.01)
+    failures, _ = _run(s)
+    assert any(f["invariant"] == "I5" for f in failures)
+
+
+def test_independent_missing_comparison_answer_must_fail():
+    s = copy.deepcopy(_clean())
+    s["compare"]["rows"][0]["v2"] = None
+    failures, _ = _run(s)
+    assert any(f["invariant"] == "I5" for f in failures)
