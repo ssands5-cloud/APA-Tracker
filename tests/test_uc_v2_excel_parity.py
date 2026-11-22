@@ -131,6 +131,8 @@ def built(tmp_path_factory):
 
 class Book:
     def __init__(self, path):
+        import pythoncom
+        pythoncom.CoInitialize()      # an earlier test (refresh validator) may have uninitialized COM on this thread
         self.xl = win32.DispatchEx("Excel.Application")
         self.xl.Visible = False
         self.xl.DisplayAlerts = False
