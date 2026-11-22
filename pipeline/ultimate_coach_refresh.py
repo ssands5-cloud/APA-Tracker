@@ -378,6 +378,12 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             else:
                 base = None
             base_sha = sha256(base) if base else None
+            # Name the base database in the report: a silent fallback to the small pipeline database once made
+            # refreshes build without the archive history (2026-11-22).
+            status(f"BASE DATABASE: {base} ({base.stat().st_size:,} bytes, sha256 {base_sha[:12]})" if base
+                   else "BASE DATABASE: none (empty build)")
+            if base and base.name == "apa_tracker.db" and not base_setting:
+                status("WARNING: no archive database configured; building from the current-session pipeline database only")
             previous = previous_bundle(root, check)
             seed = base
             if previous and previous.get("base_sha256") == base_sha:
@@ -493,7 +499,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             keys = {"Ultimate_Coach.xlsx": digest({**common, "exporter": sha256(ROOT / "ui/export_excel_ultimate_coach.py"),
                       "engine": sha256(ROOT / "ui/excel_war_room.py")}),
                     "ultimate_coach.html": digest({**common, "renderer": sha256(ROOT / "ui/ultimate_coach.py"),
-                      "ui": "broadcast", "broadcast": sha256(ROOT / "ui/ultimate_coach_broadcast.py"),
+                      "ui": "broadcast", "engine": "v2", "v2_model": sha256(ROOT / "analytics/uc_v2_model.json"),
+                      "broadcast": sha256(ROOT / "ui/ultimate_coach_broadcast.py"),
                       "runtime": sha256(ROOT / "ui/ultimate_coach_war_room.js")})}
             validations, reused = {}, []
             for name, key in keys.items():
@@ -523,12 +530,39 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
                     # Workbook consumes/derives its data first; HTML may release
                     # evidence memory only after the shared payload is used.
                     with progress_span(status, "generate Ultimate Coach HTML"):
-                        target.write_text(render(payload, built_at=built_at, consume_evidence=False, ui="broadcast",
+                        target.write_text(render(payload, built_at=built_at, consume_evidence=False, ui="broadcast", engine="v2",
                             viewer_member_external_id=settings.viewer_member_external_id,
                             viewer_card_number=settings.viewer_card_number), encoding="utf-8")
                     with progress_span(status, "Chromium HTML validation"):
                         validations[name] = html_validator(target)
                     status("HTML REBUILT")
+            # The live V2 workbook: the validated .xlsx plus the V2 engine, its inputs taken from THIS HTML's
+            # embedded data, so both files recommend from one snapshot. Rebuilt whenever either input changed.
+            step = "7b V2 WORKBOOK"
+            status("STEP 7b/8 - live V2 workbook (same snapshot as the HTML) and native Excel check")
+            v2_name = "Ultimate_Coach_V2.xlsm"
+            v2_key = digest({"xlsx": keys["Ultimate_Coach.xlsx"], "html": keys["ultimate_coach.html"],
+                             "engine": sha256(ROOT / "ui/excel_v2/UcV2Engine.bas"), "installer": sha256(ROOT / "ui/excel_v2_coach.py")})
+            keys[v2_name] = v2_key
+            old_v2 = root / previous["run"] / v2_name if previous else None
+            if (mode == "quick" and previous and previous.get("dependencies", {}).get(v2_name) == v2_key and old_v2
+                    and old_v2.is_file() and sha256(old_v2) == previous["artifacts"].get(v2_name)):
+                shutil.copyfile(old_v2, directory / v2_name)
+                reused.append(v2_name)
+                validations[v2_name] = previous["validations"][v2_name]
+                status("V2 WORKBOOK UP TO DATE - verified bytes reused")
+            else:
+                from analytics.uc_v2_inputs import load_compact_from_html
+                from ui.excel_v2_coach import install
+                with progress_span(status, "install the live V2 engine and check it in native Excel"):
+                    info = install(directory / "Ultimate_Coach.xlsx", load_compact_from_html(directory / "ultimate_coach.html"),
+                                   directory / v2_name, meta={"data_snapshot": payload_key, "run": directory.name})
+                    trace = json.loads(info.pop("trace") or "{}")
+                    if trace.get("status") not in ("ok",) and not str(trace.get("status", "")).startswith("Choose"):
+                        raise RefreshFailed(f"V2 workbook engine did not answer at the default state: {trace.get('status')}")
+                    validations[v2_name] = {k: info[k] for k in ("policy", "model_sha256", "engine_sha256", "v2_inputs_sha256",
+                                                                 "roster_rows", "pair_rows")} | {"default_state": trace.get("status")}
+                status("V2 WORKBOOK BUILT")
             step = "8 VALIDATION AND COMPLETION"
             status("STEP 8/8 - database integrity, source preservation and completion bindings")
             with progress_span(status, "database integrity and foreign-key validation"):
@@ -557,7 +591,8 @@ def run_refresh(*, mode="full", config_path=None, run_root=None, fixture_source=
             # One pointer commits the DB/workbook/HTML generation together.
             atomic_json(pointer, manifest)
             status("ALL REFRESH TASKS COMPLETE" + (" (OFFLINE VALIDATION)" if not live else ""), required=False)
-            status("Workbook: " + str(directory / "Ultimate_Coach.xlsx"), required=False)
+            status("Workbook (live V2 answers, enable macros): " + str(directory / "Ultimate_Coach_V2.xlsm"), required=False)
+            status("Workbook (no macros): " + str(directory / "Ultimate_Coach.xlsx"), required=False)
             status("HTML: " + str(directory / "ultimate_coach.html"), required=False)
             status(completion_summary(summary_counts, live=live, data_reused=data_same, reused=reused,
                                       directory=directory, elapsed=time.monotonic()-started), required=False)
@@ -591,7 +626,7 @@ def main(argv=None):
         return 1
     if args.open:
         root = args.run_root or ROOT / "ultimate-coach-runs" / "refresh"
-        for name in ("Ultimate_Coach.xlsx", "ultimate_coach.html"):
+        for name in ("Ultimate_Coach_V2.xlsm", "ultimate_coach.html"):
             try:
                 os.startfile(str((root / manifest["run"] / name).resolve()))
             except OSError:

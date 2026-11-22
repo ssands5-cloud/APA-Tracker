@@ -162,7 +162,7 @@ def test_quick_unchanged_sources_reuse_both_outputs_and_derived_generation(setup
     monkeypatch.setattr(refresh,'replay_ingest',lambda *a:pytest.fail('unchanged fixtures reingested'))
     second=run(mode='quick')
     assert calls==[]
-    assert set(second['reused'])=={'Ultimate_Coach.xlsx','ultimate_coach.html'}
+    assert set(second['reused'])=={'Ultimate_Coach.xlsx','ultimate_coach.html','Ultimate_Coach_V2.xlsm'}
     assert second['artifacts']==first['artifacts']
     summary=(root/'REFRESH_STATUS.txt').read_text()
     assert 'Teams Updated: 0 (2 checked; database reused)' in summary
@@ -190,7 +190,7 @@ def test_quick_rebuilds_only_a_corrupt_output(setup):
     first=run();calls.clear()
     (root/first['run']/'ultimate_coach.html').write_text('damaged',encoding='utf-8')
     second=run(mode='quick')
-    assert calls==['html'] and second['reused']==['Ultimate_Coach.xlsx']
+    assert calls==['html'] and second['reused']==['Ultimate_Coach.xlsx','Ultimate_Coach_V2.xlsm']
 
 
 @pytest.mark.parametrize('dependency',['ultimate_coach_war_room.js','ultimate_coach_broadcast.py'])
@@ -241,7 +241,7 @@ def test_quick_detects_invalid_generation_or_missing_output(setup,problem):
     if problem=='missing_workbook':
         (folder/'Ultimate_Coach.xlsx').unlink()
         second=run(mode='quick')
-        assert calls==['workbook'] and second['reused']==['ultimate_coach.html']
+        assert calls==['workbook'] and second['reused']==['ultimate_coach.html','Ultimate_Coach_V2.xlsm']
         return
     if problem=='database':
         (folder/'ultimate_coach_staging.db').write_bytes(b'broken')
