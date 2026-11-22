@@ -40,6 +40,11 @@ STATE_JS = """([a, b, fmt, cap, outId, playFirst]) => {
   document.getElementById('bc-team-b').value = b; document.getElementById('bc-team-b').dispatchEvent(new Event('change', {bubbles: true}));
   const capEl = document.getElementById('bc-cap');
   if (capEl) { capEl.value = cap === null ? '' : String(cap); capEl.dispatchEvent(new Event('input', {bubbles: true})); capEl.dispatchEvent(new Event('change', {bubbles: true})); }
+  // Reset this fixture's in-memory marks (clearing storage does not reset the page's state).
+  let guard = 10;
+  while (guard-- > 0 && window.UC_BC_LAST && window.UC_BC_LAST.night && (window.UC_BC_LAST.night.games || []).length) window.UC_ACT.undo();
+  window.UC_ACT.toss('');
+  for (const p of ((window.UC_BC_LAST && window.UC_BC_LAST.night && window.UC_BC_LAST.night.bench.ours) || [])) if (p.avail === 'Unavailable') window.UC_ACT.avail(p.id, 'Available');
   if (outId) window.UC_ACT.avail(outId, 'Unavailable');
   let m = window.UC_BC_LAST;
   if (playFirst && m && m.rows && m.rows.length) {
