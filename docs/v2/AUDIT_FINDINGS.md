@@ -100,6 +100,16 @@ bdc6c82 are covered by the run on b2e549f, pending at writing).
 
 Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FIXED with open lock 1 (S2) · REOPENED 0.
 
+**Independent review (Codex, tmp/red-team-audit/V2_INDEPENDENT_REVIEW.md, 2026-11-21 23:32, at b664d39 / code 683d5f5):**
+LOCKED narrowly (tested regression behaviour at this version only; not model quality, APA points or release): S1, S4, S5,
+S6 (implementation only; threshold provisional), S8 (product regression only), S9, GPT-004, T1, AC2/AC8 (numerical
+properties). OPEN: S2 (no controlled timing test), S3 and S7 (depend on detector gaps and display-name identity), GPT-009
+(follow-up reproduced the shipped model byte-for-byte incl. symmetrized metrics .67203 / .68461 - numerical reproduction
+satisfied; not an untouched holdout for the all-data refit). REOPENED: GA-02 (two detector false passes) - fixed in Codex
+12793ce, reviewed and cherry-picked as f8cf9a1. New open item: command cards and some comparisons are matched by display
+name; uniqueness of display names within a roster must be established, not assumed. Recommendation: OWNER REVIEW ONLY.
+Counts after review: LOCKED 9 · OPEN 4 · REOPENED 1 (fix pending Codex reruns).
+
 ## GPT acceptance gates (PR #120, owner-approved)
 | ID | Sev | Requirement | Status |
 |---|---|---|---|
