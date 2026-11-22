@@ -1,5 +1,14 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## League Catch-up history import (2026-11-22, Claude)
+
+- `scripts/import_league_catchup.py` imports scoresheets saved by `tools/league_catchup.py` into a **new copy** of the archive. It works offline and replays the unchanged `sync_division_wide` against the saved files. It supports `--dry-run` and `--resume`.
+- Output: `APA-Tracker-Ultimate-Coach-Live\data\ultimate_coach_staging_catchup-20261121.db`, with `.report.json` and `.import.log` next to it. Status: verified.
+- The import added 1,904 matches with games (9,194 games, 52 divisions: Spring 2024 and Fall 2026). That is +18,602 head-to-head rows and +18,285 player-match rows.
+- Every played match from 2024 through 2026-11-21 in the catch-up league now has game results. The exception is 592 matches whose APA scoresheets contain no games.
+- The original `ultimate_coach_staging.db` is unchanged; its SHA-256 matched before and after the import. Pre-existing game rows have identical fingerprints.
+- **Owner decision (Paul):** whether Ultimate Coach and the broadcast builds use the new copy. Nothing reads it yet.
+
 ## Phase 1 integration (2026-11-11)
 
 Audited code checkpoint on `origin/feat/phase1-war-room`: `821baa3`. PRs #105–#111 are integrated and audited, with no open audit findings.
