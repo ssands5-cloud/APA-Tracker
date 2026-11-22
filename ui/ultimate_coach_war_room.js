@@ -174,6 +174,94 @@
     if(!known(ls)||!known(lo)) return false;
     return ls!==ownSL||lo!==oppSL;
   }
+  // ---- Ultimate Coach V2 candidate: a calibrated win probability per pairing ----
+  // Mirrors analytics/uc_v2_pair_model.py (model: analytics/uc_v2_model.json, fitted by
+  // scripts/fit_uc_v2_pair_model.py). V2 keeps M3's lineup search and changes only what a pairing is worth:
+  // its estimated chance of winning from the skill-level pair in this format, direct record, shared opponents,
+  // last-10 form and recorded career -- never "even" just because evidence is missing. M3 stays the baseline.
+  var UC_V2=(typeof UC_V2_MODEL!=="undefined"&&UC_V2_MODEL)?UC_V2_MODEL:null;
+  var V2_BANDS=[[60,"Favored"],[53,"Edge"],[47,"Toss-up"],[40,"Underdog"],[0,"Long shot"]];
+  var V2_LEVELS=["Favored","Edge","Toss-up","Underdog","Long shot"];
+  // The engine is never remembered between page loads: a V2 build ALWAYS opens on V2 and a standard build on M3.
+  // Switching to M3 lasts only until the page is reloaded or reopened. (An earlier candidate stored the choice in
+  // browser storage, which let an old "M3" tap override a rebuilt V2 file; that key is removed on load.)
+  var UC_ENGINE_KEY="ultimate-coach:engine";
+  try{localStorage.removeItem(UC_ENGINE_KEY);}catch(e){}
+  var UC_ENGINE=(typeof UC_ENGINE_DEFAULT!=="undefined"&&UC_ENGINE_DEFAULT==="v2"&&UC_V2)?"v2":"m3";
+  var UC_BUILD=(typeof UC_BUILD_INFO!=="undefined"&&UC_BUILD_INFO)?UC_BUILD_INFO:null;
+  function ucSetEngine(e){UC_ENGINE=(e==="v2"&&UC_V2)?"v2":"m3";ucEngineBadge();}
+  // The engine actually used for a format: V2 only where a V2 model exists; anything else is said, never silent.
+  function ucEngineFor(fmt){return UC_ENGINE==="v2"&&UC_V2&&UC_V2.formats&&UC_V2.formats[fmt]?"v2":"m3";}
+  var UC_BADGE_FMT=null;
+  function ucEngineBadge(fmt){
+    if(!UC_V2||typeof document==="undefined"||!document.body) return;
+    if(fmt!==undefined) UC_BADGE_FMT=fmt;
+    var el=document.getElementById("uc-engine-badge");
+    if(!el){el=document.createElement("div");el.id="uc-engine-badge";el.setAttribute("role","status");el.setAttribute("aria-live","polite");document.body.insertBefore(el,document.body.firstChild);}
+    var used=UC_BADGE_FMT?ucEngineFor(UC_BADGE_FMT):UC_ENGINE,fallback=UC_ENGINE==="v2"&&used==="m3";
+    el.className="uc-engine-badge engine-"+used+(fallback?" fallback":"");
+    el.innerHTML='<b>'+(used==="v2"?"ENGINE: V2 CANDIDATE":"ENGINE: M3 BASELINE")+'</b>'
+      +(fallback?' \u00b7 V2 has no model for this format, so these are M3 recommendations':used==="m3"?' \u00b7 comparison only; reload the page to return to V2':' \u00b7 recommendations use V2 win-chance estimates')
+      +(UC_BUILD?' <span class="uc-build">\u00b7 build '+esc(UC_BUILD.version||"")+(UC_BUILD.built?' \u00b7 '+esc(UC_BUILD.built):'')+'</span>':'')
+      +' <button type="button" class="uc-badge-switch" data-engine="'+(UC_ENGINE==="v2"?"m3":"v2")+'">'+(UC_ENGINE==="v2"?"Compare with M3":"Back to V2")+'</button>';
+  }
+  if(typeof document!=="undefined"){if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",function(){ucEngineBadge();}); else ucEngineBadge();}
+  function v2Sh(w,n,k){k=k===undefined?6:k;return (w+k/2)/(n+k);}
+  function v2Known(sl){return typeof sl==="number"&&isFinite(sl)&&sl>=1&&sl<=9;}
+  function v2Features(slp,slo,d,s,rp,ro,fp,fo){
+    var x=[];for(var a=1;a<=9;a++) for(var b=1;b<=9;b++) x.push(slp===a&&slo===b?1:0);
+    var dw=d?d[0]:0,dg=d?d[1]:0;
+    x.push(v2Sh(dw,dg,2)-0.5,Math.log1p(dg),dg>0?1:0);
+    if(s&&!dg) x.push(v2Sh(s[0],s[1])-v2Sh(s[2],s[3]),s[4]); else x.push(0,0);
+    x.push(v2Sh(rp[0],rp[1])-0.5,v2Sh(ro[0],ro[1])-0.5,v2Sh(fp[0],fp[1])-0.5,v2Sh(fo[0],fo[1])-0.5,Math.log1p(fp[1]),Math.log1p(fo[1]));
+    return x;
+  }
+  function v2Raw(m,slp,slo,d,s,rp,ro,fp,fo){
+    var x=v2Features(slp,slo,d,s,rp,ro,fp,fo);
+    if(!(v2Known(slp)&&v2Known(slo))) for(var i=0;i<81;i++) x[i]=m.mu[i];
+    var z=m.intercept;for(var k=0;k<x.length;k++) z+=m.coef[k]*(x[k]-m.mu[k])/m.sd[k];
+    return 1/(1+Math.exp(-z));
+  }
+  function v2WinProbability(fmt,slp,slo,o){
+    var m=UC_V2&&UC_V2.formats&&UC_V2.formats[fmt];if(!m) return null;o=o||{};
+    var d=o.direct||null,s=o.shared||null,rp=o.recent_p||[0,0],ro=o.recent_o||[0,0],fp=o.form_p||[0,0],fo=o.form_o||[0,0];
+    var a=v2Raw(m,slp,slo,d,s,rp,ro,fp,fo);
+    var b=v2Raw(m,slo,slp,d?[d[1]-d[0],d[1]]:null,s?[s[2],s[3],s[0],s[1],s[4]]:null,ro,rp,fo,fp);
+    return (a+(1-b))/2;
+  }
+  function v2Band(p){var pct=100*p;for(var i=0;i<V2_BANDS.length;i++) if(pct>=V2_BANDS[i][0]) return V2_BANDS[i][1];return "Long shot";}
+  function v2Gaps(d,s,fp,fo,slp,slo){
+    var g=[];
+    if(!(v2Known(slp)&&v2Known(slo))) g.push("skill level missing");
+    if(!d||!d[1]) g.push("no direct meetings"+(s&&s[4]?"":", no shared opponents"));
+    if(fp[1]<10||fo[1]<10) g.push("fewer than 10 recorded games for "+(fp[1]<10&&fo[1]<10?"both players":fp[1]<10?"our player":"their player"));
+    return g;
+  }
+  function v2PairValue(fmt,slp,slo,o){
+    var p=v2WinProbability(fmt,slp,slo,o);if(p===null) return null;o=o||{};
+    var lv=v2Band(p),gaps=v2Gaps(o.direct||null,o.shared||null,o.form_p||[0,0],o.form_o||[0,0],slp,slo);
+    var why=Math.round(100*p)+"% estimated win chance"+(gaps.length?" · "+gaps.join("; "):"");
+    return {level:lv,points:Math.floor(1000*(p-0.5)+0.5),p:p,why:why,text:lv+" — "+why,v2:true,gaps:gaps};
+  }
+  function v2Record(pid,fmt){
+    var rows=rowsFor(pid,fmt).filter(function(r){var x=val(r,"result");return x==="W"||x==="L";}).slice()
+      .sort(function(a,b){var x=String(val(a,"match_date")),y=String(val(b,"match_date"));return x<y?-1:(x>y?1:0);});
+    var w=0;rows.forEach(function(r){if(val(r,"result")==="W") w++;});
+    var last=rows.slice(-10),lw=0;last.forEach(function(r){if(val(r,"result")==="W") lw++;});
+    return {form:[w,rows.length],recent:[lw,last.length]};
+  }
+  function v2ForRow(r,b,fmt){
+    if(!UC_V2||!UC_V2.formats||!UC_V2.formats[fmt]) return null;
+    var a=v2Record(r.member.id,fmt),o=v2Record(b.opponent.id,fmt),c=r.c;
+    return v2PairValue(fmt,r.member.skill_level,b.opponent.skill_level,{
+      direct:c.direct?[c.direct.w,c.direct.g]:null,
+      shared:(c.shared&&c.og>0&&c.tg>0)?[c.ow,c.og,c.tw,c.tg,c.shared]:null,
+      recent_p:a.recent,recent_o:o.recent,form_p:a.form,form_o:o.form});
+  }
+  function v2TeamPoints(fmt,p){
+    var t=UC_V2&&UC_V2.formats&&UC_V2.formats[fmt]&&UC_V2.formats[fmt].team_points;
+    return t?p*t.per_individual_win+(1-p)*t.per_individual_loss:null;
+  }
   function warRoomPair(ta,tb,fmt){
     var ours=ta.players.slice().sort(memberOrder),theirs=tb.players.slice().sort(memberOrder);
     var blocks=theirs.map(function(opp){return rankVsOpponent(ours,opp,fmt);});
@@ -187,6 +275,7 @@
       r.confidence=wrPairConfidence(r.c.direct,wrOverall(PLAYERS[String(r.member.id)],fmt),wrOverall(PLAYERS[String(b.opponent.id)],fmt),
         r.c.shared?{ow:r.c.ow,og:r.c.og,tw:r.c.tw,tg:r.c.tg,n:r.c.shared}:null,
         r.c.direct?wrSlChanged(games,r.member.skill_level,b.opponent.skill_level):false);
+      r.v2=v2ForRow(r,b,fmt);
     });});
     var matrix=ours.map(function(m){return {member:m,cells:blocks.map(function(b){return b.byMember[String(m.id)];})};});
     var concerning=[];
@@ -701,7 +790,7 @@
     return wrNextSendLines(wrNextSend(w,j,rem,unplayed||w.theirs.map(function(){return true;})));
   };
   // ---- Match Night Engine (M3): mirrors analytics/match_night_engine.py exactly (same order, same tie-breaks) ----
-  var MN_LEVEL_ORDER=["Strong","Solid","Thin","Unknown","Conflicted","Caution"];
+  var MN_LEVEL_ORDER=["Strong","Solid","Thin","Unknown","Conflicted","Caution","Favored","Edge","Toss-up","Underdog","Long shot"];
   function mnKnown(sl){return typeof sl==="number"&&isFinite(sl)&&sl>0;}
   function mnBits(m){var n=0;while(m){n+=m&1;m>>>=1;}return n;}
   function MnNight(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed){
@@ -847,6 +936,7 @@
     if(oppCap!==null&&gamesLeft&&!night.legalTheirs(om,tm).length){night=new MnNight(ours,theirs,value,gamesLeft,cap,used);oppCap=null;}
     function name(side,i){return (side==="our"?night.ours:night.theirs)[i].name;}
     function conf(i,j){return night.value[String(night.ours[i].id)+"|"+String(night.theirs[j].id)];}
+    var v2Plan=Object.keys(value).some(function(k){return value[k]&&value[k].v2;});
     var incomplete=cap!==null&&ours.some(function(p){return !mnKnown(p.sl);});
     var out={games_left:gamesLeft,cap_incomplete:incomplete,
       opponent_budget:oppCap===null?null:{cap:oppCap,used:oppUsed,incomplete:theirs.some(function(p){return !mnKnown(p.sl);})}};
@@ -862,7 +952,7 @@
       if(wj!==null) leadOptions.push({our_id:ours[ii].id,value:ww,reply_id:theirs[wj].id,level:conf(ii,wj).level});}
     // Every legal lead with its worst-case value, for the Broadcast put-up comparison. Non-enumerable so the
     // engine's output stays identical to analytics.match_night_engine (the parity tests compare it field by field).
-    Object.defineProperty(out,"lead_options",{value:leadOptions,enumerable:false});
+    Object.defineProperty(out,"lead_options",{value:leadOptions,enumerable:false,writable:true,configurable:true});
     out.lead={our:name("our",li),our_id:ours[li].id,their_reply:name("their",lj),level:conf(li,lj).level,why:conf(li,lj).text,equally_good:equal};
     var totalThey=night.solve(om,tm,false),responses=[];
     for(var rj=0;rj<LT.length;rj++){var j=LT[rj];
@@ -873,10 +963,14 @@
         if(loss>0&&(alternative===null||night.pair(k,j)>night.pair(alternative,j)||(night.pair(k,j)===night.pair(alternative,j)&&loss>largestLoss))){alternative=k;largestLoss=loss;}}
       var cost="";
       if(alternative!==null){
-        var k=alternative,comparison=conf(k,j).level===conf(i,j).level?"an equally supported option here":night.pair(k,j)>night.pair(i,j)?"a stronger recorded option here":"another option here";
+        var k=alternative,comparison=conf(k,j).level===conf(i,j).level?"an equally supported option here":night.pair(k,j)>night.pair(i,j)?(v2Plan?"a stronger option here":"a stronger recorded option here"):"another option here";
+        if(v2Plan&&conf(k,j).p!==undefined){var pk=Math.round(100*conf(k,j).p),pi=Math.round(100*conf(i,j).p);
+          comparison=(pk>pi?"a stronger option here":pk===pi?"an equally strong option here":"another option here")+" ("+pk+"% vs "+pi+"%)";}
         var future=night.principalLine(om&~(1<<i),tm&~(1<<j),true).filter(function(p){return p.our===k;})[0];
         var keep="keep "+name("our",k)+" available"+(future?" for "+name("their",future.their)+" ("+conf(k,future.their).level+")":"");
         cost=name("our",k)+" is "+comparison+" ("+conf(k,j).level+"), but sending them now leaves a weaker remaining plan; "+keep;
+        if(v2Plan){var gain=(night.pair(i,j)+night.solve(om&~(1<<i),tm&~(1<<j),true))-(night.pair(k,j)+night.solve(om&~(1<<k),tm&~(1<<j),true));
+          if(gain>0) cost+=" (worth about "+(gain/1000).toFixed(2)+" expected games over the rest of the night)";}
       }
       responses.push({their:name("their",j),our:name("our",i),level:conf(i,j).level,why:conf(i,j).text,cost_later:cost});
     }
@@ -889,7 +983,7 @@
     }
     var planLead=night.principalLine(om,tm,true),planThem=night.principalLine(om,tm,false);
     function covers(i){
-      var good={Strong:1,Solid:1},mine=[];
+      var good={Strong:1,Solid:1,Favored:1,Edge:1},mine=[];
       for(var tj=0;tj<LT.length;tj++){var j=LT[tj];
         if(!good[conf(i,j).level]) continue;
         var other=false;for(var ok=0;ok<LO.length;ok++){var k=LO[ok];if(k!==i&&good[conf(k,j).level]&&conf(k,j).points>=conf(i,j).points) other=true;}
@@ -928,10 +1022,11 @@
     out.confidence={};MN_LEVEL_ORDER.forEach(function(lv){if(counts[lv]) out.confidence[lv]=counts[lv];});
     var wd=0,wi=null;drops.forEach(function(d){if(wi===null||d[0]>wd||(d[0]===wd&&d[1]<wi)){wd=d[0];wi=d[1];}});
     if(!drops.length){wd=0;wi=null;}
-    var thin=planLead.filter(function(p){var lv=conf(p.our,p.their).level;return lv==="Thin"||lv==="Conflicted";});
+    var thin=planLead.filter(function(p){var lv=conf(p.our,p.their).level;return lv==="Thin"||lv==="Conflicted"||lv==="Toss-up";});
     out.fragility={player:wd>0?name("our",wi):null,player_drop:wd,
       thin_pairings:thin.map(function(p){return name("our",p.our)+" vs "+name("their",p.their)+" ("+conf(p.our,p.their).level+")";}),
-      rating:(wd>=6||thin.length>=2)?"High":(wd>=3||thin.length)?"Medium":"Low"};
+      rating:v2Plan?((wd>=150||thin.length>=2)?"High":(wd>=70||thin.length)?"Medium":"Low")
+        :((wd>=6||thin.length>=2)?"High":(wd>=3||thin.length)?"Medium":"Low")};
     out.cap=mnCapSafety(night,om);out.total_if_we_lead=base;out.total_if_they_lead=totalThey;
     return out;
   }
@@ -940,30 +1035,245 @@
   // depends only on these inputs and the pair's evidence, so identical requests share one solve. Callers treat
   // the plan as read-only.
   var MN_PLAN_MEMO=typeof WeakMap==="function"?new WeakMap():null;
-  function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap){
-    if(!MN_PLAN_MEMO) return mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap);
+  // ---- V2 strategic layer: ONE executed policy, valued by rolling it out ----
+  // The captain-control rule decides every one of our choices (answers and leads). Every number V2 shows -- the
+  // answer, the lead, the game plans, totals, designated answers, concessions, trace and the M3 comparison --
+  // comes from rolling out that same policy against two opponent models: their captain always makes the choice
+  // that hurts us most ("worst case"), or picks evenly among their legal players ("even choices"). The best
+  // possible worst-case plan (plain minimax, what M3's search computes) is kept only as a labelled benchmark.
+  //
+  // Answer rule (they put up j): the strongest matchup now unless another answer gains at least
+  // V2_STRATEGIC_MIN_GAIN expected wins in the worst case AND with even choices (a small modelled edge in one
+  // opponent model is not enough to give up the stronger matchup).
+  // Lead rule (we put up first): the best worst-case total; among leads within V2_PLAN_TIE of it, the best
+  // even-choice total. Both thresholds are provisional policy choices, not validated constants.
+  var V2_STRATEGIC_MIN_GAIN=0.10;        // expected individual wins
+  var V2_PRACTICAL_TIE=0.01;             // win chances within 1 point are practically tied
+  var V2_PLAN_TIE=0.02;                  // plan totals within 0.02 expected wins are practically equal
+  function v2P(night,i,j){var v=night.value[String(night.ours[i].id)+"|"+String(night.theirs[j].id)];return v&&v.p!==undefined?v.p:0.5;}
+  // Benchmark only: the best possible worst-case plan (plain minimax on win chances).
+  function v2Benchmark(night){
+    var memo={};
+    function rec(om,tm,weLead){
+      var key=om+"|"+tm+"|"+(weLead?1:0);if(key in memo) return memo[key];
+      var ours=night.legalOurs(om),theirs=night.legalTheirs(om,tm),best;
+      if(!ours.length||!theirs.length) return (memo[key]=0);
+      if(weLead){best=-1;ours.forEach(function(i){var low=Infinity;theirs.forEach(function(j){var v=v2P(night,i,j)+rec(om&~(1<<i),tm&~(1<<j),false);if(v<low) low=v;});if(low>best) best=low;});}
+      else{best=Infinity;theirs.forEach(function(j){var top=-1;ours.forEach(function(i){var v=v2P(night,i,j)+rec(om&~(1<<i),tm&~(1<<j),true);if(v>top) top=v;});if(top<best) best=top;});}
+      return (memo[key]=best);
+    }
+    return rec;
+  }
+  function v2Classify(rows){
+    var by=function(f){return rows.reduce(function(a,b){return f(b)>f(a)+1e-12?b:a;});};
+    var now=by(function(r){return r.p;}),strat=by(function(r){return r.totalWorst;}),avgBest=by(function(r){return r.totalAvg;});
+    var gainW=strat.totalWorst-now.totalWorst,gainA=strat.totalAvg-now.totalAvg;
+    var strategic=strat!==now&&gainW>=V2_STRATEGIC_MIN_GAIN&&gainA>=V2_STRATEGIC_MIN_GAIN,pick=strategic?strat:now;
+    rows.forEach(function(r){
+      r.tiedNow=r!==now&&now.p-r.p<V2_PRACTICAL_TIE;
+      r.equalPlan=r!==pick&&Math.abs(r.totalWorst-pick.totalWorst)<V2_PLAN_TIE&&Math.abs(r.totalAvg-pick.totalAvg)<V2_PLAN_TIE;
+      r.role=r===pick?(strategic?(r.p<0.40?"Strategic choice (deliberate concession)":"Strategic choice")
+        :(r.p>=0.47?"Recommended competitive matchup":r.p>=0.40?"Recommended (underdog)":"Best available (every option is a long shot)"))
+        :r===now?"Strongest matchup now":r===strat?"Strategic alternative":r===avgBest?"Best if they choose evenly"
+        :r.tiedNow?"Practically tied with the strongest":r.equalPlan?"Practically equal plan":"";
+    });
+    return {rows:rows,now:now,strat:strat,avgBest:avgBest,pick:pick,strategic:strategic,gainWorst:gainW,gainAvg:gainA};
+  }
+  // The executed policy. st(om,tm,weLead) -> {w,a,...}: the rest of the night under the policy, worst case / even.
+  function v2Policy(night){
+    var memo={},rmemo={};
+    function st(om,tm,weLead){
+      var key=om+"|"+tm+"|"+(weLead?1:0);if(memo[key]) return memo[key];
+      var ours=night.legalOurs(om),theirs=night.legalTheirs(om,tm),out;
+      if(!ours.length||!theirs.length) out={w:0,a:0};
+      else if(weLead){
+        var rows=ours.map(function(i){
+          var w=Infinity,a=0,reply=null;
+          theirs.forEach(function(j){var c=st(om&~(1<<i),tm&~(1<<j),false),p=v2P(night,i,j);if(p+c.w<w){w=p+c.w;reply=j;}a+=(p+c.a)/theirs.length;});
+          return {i:i,w:w,a:a,reply:reply};});
+        var top=Math.max.apply(null,rows.map(function(r){return r.w;}));
+        var best=rows.filter(function(r){return r.w>=top-V2_PLAN_TIE;}).reduce(function(x,y){return y.a>x.a+1e-12?y:x;});
+        out={w:best.w,a:best.a,lead:best,rows:rows};
+      } else {
+        var w=Infinity,a=0,worstJ=null;
+        theirs.forEach(function(j){var r=respond(om,tm,j);if(r.w<w){w=r.w;worstJ=j;}a+=r.a/theirs.length;});
+        out={w:w,a:a,worstJ:worstJ};
+      }
+      return (memo[key]=out);
+    }
+    function respond(om,tm,j){
+      var key=om+"|"+tm+"|"+j;if(rmemo[key]) return rmemo[key];
+      var rows=night.legalOurs(om).map(function(i){var c=st(om&~(1<<i),tm&~(1<<j),true),p=v2P(night,i,j);
+        return {i:i,p:p,restWorst:c.w,restAvg:c.a,totalWorst:p+c.w,totalAvg:p+c.a};});
+      var o=v2Classify(rows);o.w=o.pick.totalWorst;o.a=o.pick.totalAvg;o.i=o.pick.i;
+      return (rmemo[key]=o);
+    }
+    // The night as the policy plays it, with their captain making the most damaging choice each time.
+    function line(om,tm,weLead){
+      var out=[];
+      for(;;){
+        if(!night.legalOurs(om).length||!night.legalTheirs(om,tm).length) break;
+        var i,j,s=st(om,tm,weLead);
+        if(weLead){i=s.lead.i;j=s.lead.reply;} else {j=s.worstJ;i=respond(om,tm,j).i;}
+        out.push({leader:weLead?"us":"them",our:i,their:j,p:v2P(night,i,j)});
+        om&=~(1<<i);tm&=~(1<<j);weLead=!weLead;
+      }
+      return out;
+    }
+    return {st:st,respond:respond,line:line};
+  }
+  // Any policy (ours chosen by chooser) evaluated with V2's win chances against both opponent models.
+  function v2Evaluate(night,chooseLead,chooseAnswer){
+    var memo={};
+    function rec(om,tm,weLead){
+      var key=om+"|"+tm+"|"+(weLead?1:0);if(memo[key]) return memo[key];
+      var ours=night.legalOurs(om),theirs=night.legalTheirs(om,tm),w=Infinity,a=0;
+      if(!ours.length||!theirs.length) return (memo[key]={w:0,a:0});
+      if(weLead){var i=chooseLead(om,tm);if(i===null||i===undefined) return (memo[key]={w:0,a:0});
+        theirs.forEach(function(j){var c=rec(om&~(1<<i),tm&~(1<<j),false),p=v2P(night,i,j);if(p+c.w<w) w=p+c.w;a+=(p+c.a)/theirs.length;});}
+      else theirs.forEach(function(j){var i2=chooseAnswer(om,tm,j);if(i2===null||i2===undefined){w=Math.min(w,0);return;}
+        var c=rec(om&~(1<<i2),tm&~(1<<j),true),p=v2P(night,i2,j);if(p+c.w<w) w=p+c.w;a+=(p+c.a)/theirs.length;});
+      return (memo[key]={w:w,a:a});
+    }
+    return rec;
+  }
+  function v2Pct(p){return Math.round(100*p)+"%";}
+  function v2Wins(x){return (x>=0?"+":"")+x.toFixed(3);}
+  function v2Options(night,j,pol){
+    pol=pol||v2Policy(night);
+    var om=night.fullOurs,tm=night.fullTheirs;
+    if(!night.legalOurs(om).length) return null;
+    var o=pol.respond(om,tm,j);
+    o.rows.forEach(function(r){r.later=pol.line(om&~(1<<r.i),tm&~(1<<j),true);});
+    return o;
+  }
+  function v2OptionsText(night,o){
+    var nm=function(r){return night.ours[r.i].name;};
+    var later=function(r){return (r.later||[]).slice(0,2).map(function(g){return night.ours[g.our].name+" vs "+night.theirs[g.their].name;}).join(", ");};
+    var tied=o.rows.filter(function(r){return r.tiedNow;}).map(nm),equal=o.rows.filter(function(r){return r.equalPlan;}).map(nm);
+    var tie=(tied.length?" Practically tied now with "+tied.join(", ")+" (within 1 point).":"")
+      +(equal.length?" Practically equal plan with "+equal.join(", ")+" instead (within "+V2_PLAN_TIE+" expected wins either way); your read decides.":"");
+    if(o.pick===o.now&&o.strat===o.now) return "Strongest matchup available ("+v2Pct(o.now.p)+") and also the best plan for the rest of the night."+tie;
+    if(o.pick===o.now) return "Strongest matchup available ("+v2Pct(o.now.p)+")."+tie+" Strategic alternative: "+nm(o.strat)+" ("+v2Pct(o.strat.p)+") keeps "+nm(o.now)
+      +" for later ("+later(o.strat)+"): "+v2Wins(o.gainWorst)+" expected wins only if they always make their most damaging choice, "+v2Wins(o.gainAvg)
+      +" if they choose evenly. Not enough to give up the stronger matchup (needs "+V2_STRATEGIC_MIN_GAIN.toFixed(2)+" under both).";
+    return "Strategic choice: "+nm(o.strat)+" ("+v2Pct(o.strat.p)+") instead of the strongest matchup "+nm(o.now)+" ("+v2Pct(o.now.p)+"). It keeps "+nm(o.now)
+      +" for later ("+later(o.strat)+"): "+v2Wins(o.gainWorst)+" expected wins if they make their most damaging choices, "+v2Wins(o.gainAvg)+" if they choose evenly."+tie
+      +" The captain may prefer the stronger matchup now.";
+  }
+  // V2 plans: every field of the plan comes from the executed policy (same night, cap and marks).
+  function v2ApplyOptions(mp,ours,theirs,value,games,cap,used,oppUsed,valueM3){
+    var mk=function(vals,withOpp){var n=new MnNight(ours,theirs,vals,games,cap,used,withOpp?cap:null,oppUsed);return n;};
+    var night=mk(value,true);
+    if(cap!==null&&games&&!night.legalTheirs(night.fullOurs,night.fullTheirs).length) night=mk(value,false);
+    var om=night.fullOurs,tm=night.fullTheirs,pol=v2Policy(night),opts={};
+    if(!night.legalOurs(om).length||!night.legalTheirs(om,tm).length){mp.v2={night:night,policy:pol,options:opts};return mp;}
+    var conf=function(i,j){return value[String(ours[i].id)+"|"+String(theirs[j].id)];};
+    var describe=function(l){return l.map(function(g,n){return {game:n+1,leader:g.leader,our:ours[g.our].name,our_id:String(ours[g.our].id),their:theirs[g.their].name,their_id:String(theirs[g.their].id),level:conf(g.our,g.their).level,p:g.p};});};
+    // Answers to each put-up.
+    mp.responses=night.legalTheirs(om,tm).map(function(j){
+      var o=v2Options(night,j,pol),me=ours[o.pick.i],v=conf(o.pick.i,j);opts[theirs[j].name]=o;
+      return {their:theirs[j].name,our:me.name,level:v.level,why:v.text,role:o.pick.role,p:o.pick.p,cost_later:v2OptionsText(night,o)};});
+    // Lead, game plans and totals.
+    var L=pol.st(om,tm,true),T=pol.st(om,tm,false),lv=conf(L.lead.i,L.lead.reply);
+    var leadEqual=L.rows.filter(function(r){return r!==L.lead&&Math.abs(r.w-L.lead.w)<V2_PLAN_TIE&&Math.abs(r.a-L.lead.a)<V2_PLAN_TIE;}).map(function(r){return ours[r.i].name;});
+    mp.lead={our:ours[L.lead.i].name,our_id:ours[L.lead.i].id,their_reply:theirs[L.lead.reply].name,level:lv.level,why:lv.text,equally_good:leadEqual,
+      why_lead:"Lead "+ours[L.lead.i].name+": their most damaging reply is "+theirs[L.lead.reply].name+" ("+v2Pct(v2P(night,L.lead.i,L.lead.reply))
+        +" for us); night "+L.w.toFixed(2)+" expected wins if they always make the most damaging choice, "+L.a.toFixed(2)+" if they choose evenly"};
+    var planLead=pol.line(om,tm,true),planThem=pol.line(om,tm,false);
+    mp.plan_if_we_lead=describe(planLead);mp.plan_if_they_lead=describe(planThem);
+    mp.total_if_we_lead=Math.round(1000*L.w);mp.total_if_they_lead=Math.round(1000*T.w);
+    // Planned long shots in the policy's own night: deliberate concessions only where the rule chose one.
+    // Each planned long shot is classified at its own step of the night (GPT-004: not at the starting state).
+    var stepOm=om,stepTm=tm,steps=planThem.map(function(g){var r={g:g,om:stepOm,tm:stepTm};stepOm&=~(1<<g.our);stepTm&=~(1<<g.their);return r;});
+    mp.sacrifices=steps.filter(function(x){return x.g.p<0.40;}).slice(0,2).map(function(x){var g=x.g;
+      var role=g.leader==="them"?pol.respond(x.om,x.tm,g.their).pick.role:"planned long shot";
+      return {our:ours[g.our].name,their:theirs[g.their].name,level:conf(g.our,g.their).level,why:role+" — "+conf(g.our,g.their).text};});
+    // Designated answers: how much the executed policy loses without each player (worst case).
+    var lazy=function(obj,key,fn){var v,done=false;Object.defineProperty(obj,key,{enumerable:true,configurable:true,
+      get:function(){if(!done){v=fn();done=true;}return v;},set:function(n){v=n;done=true;}});};
+    var dropsCache=null,dropsOf=function(){if(dropsCache) return dropsCache;dropsCache=night.legalOurs(om).map(function(x){
+      var sub=ours.filter(function(p,k){return k!==x;}),n2=new MnNight(sub,theirs,value,Math.min(games,sub.length,theirs.length),cap,used,night.oppCap,oppUsed);
+      return {x:x,drop:T.w-(n2.legalOurs(n2.fullOurs).length?v2Policy(n2).st(n2.fullOurs,n2.fullTheirs,false).w:0)};});return dropsCache;};
+    var faces=function(x){return mp.responses.filter(function(r){return r.our===ours[x].name;}).map(function(r){return r.their;});};
+    lazy(mp,"holds",function(){return dropsOf().filter(function(d){return d.drop>=V2_PLAN_TIE&&ours[d.x].name!==mp.lead.our;}).sort(function(a,b){return b.drop-a.drop||a.x-b.x;}).slice(0,3)
+      .map(function(d){return {our:ours[d.x].name,covers:faces(d.x),why:"the plan is worth "+d.drop.toFixed(2)+" expected wins less without them (worst case)"};});});
+    var counts={};MN_LEVEL_ORDER.forEach(function(k){counts[k]=0;});planLead.forEach(function(g){counts[conf(g.our,g.their).level]++;});
+    mp.confidence={};MN_LEVEL_ORDER.forEach(function(k){if(counts[k]) mp.confidence[k]=counts[k];});
+    lazy(mp,"fragility",function(){var lean=dropsOf().reduce(function(a,b){return b.drop>a.drop?b:a;},{drop:0,x:null}),thin=planLead.filter(function(g){return conf(g.our,g.their).level==="Toss-up";});
+    return {player:lean.drop>0?ours[lean.x].name:null,player_drop:Math.round(1000*lean.drop),
+      thin_pairings:thin.map(function(g){return ours[g.our].name+" vs "+theirs[g.their].name+" (Toss-up)";}),
+      rating:(lean.drop>=0.15||thin.length>=2)?"High":(lean.drop>=0.07||thin.length)?"Medium":"Low"};});
+    // Benchmark and M3's own policy, both scored with V2's win chances against the same two opponent models.
+    var computeCmp=function(){var bench=v2Benchmark(night),cmp={v2:{lead:{w:L.w,a:L.a},them:{w:T.w,a:T.a}},bench:{lead:bench(om,tm,true),them:bench(om,tm,false)}};
+    if(valueM3){
+      var m3n=mk(valueM3,night.oppCap!==null);
+      var ev=v2Evaluate(night,function(o2,t2){return m3n.lead(o2,t2)[0];},function(o2,t2,j2){return m3n.bestAnswer(o2,t2,j2)[0];});
+      cmp.m3={lead:ev(om,tm,true),them:ev(om,tm,false)};
+    }
+    // Two reference policies on the same terms: always the strongest matchup now, and plain worst-case
+    // optimisation (what V2 played before the captain-control rule).
+    var greedy=v2Evaluate(night,function(o2,t2){var T2=night.legalTheirs(o2,t2),best=null,bv=-1;night.legalOurs(o2).forEach(function(i){var m=0;T2.forEach(function(j2){m+=v2P(night,i,j2)/T2.length;});if(m>bv+1e-12){bv=m;best=i;}});return best;},
+      function(o2,t2,j2){var best=null,bv=-1;night.legalOurs(o2).forEach(function(i){var p=v2P(night,i,j2);if(p>bv+1e-12){bv=p;best=i;}});return best;});
+    var mm=v2Evaluate(night,function(o2,t2){var best=null,bv=-1;night.legalOurs(o2).forEach(function(i){var low=Infinity;night.legalTheirs(o2,t2).forEach(function(j2){var v=v2P(night,i,j2)+bench(o2&~(1<<i),t2&~(1<<j2),false);if(v<low) low=v;});if(low>bv+1e-12){bv=low;best=i;}});return best;},
+      function(o2,t2,j2){var best=null,bv=-1;night.legalOurs(o2).forEach(function(i){var v=v2P(night,i,j2)+bench(o2&~(1<<i),t2&~(1<<j2),true);if(v>bv+1e-12){bv=v;best=i;}});return best;});
+    var rankOf=function(list,mask,k){var sl=function(q){return mnKnown(list[q].sl)?Number(list[q].sl):0;};var r=0;for(var q=0;q<list.length;q++) if(mask>>q&1&&(sl(q)>sl(k)||(sl(q)===sl(k)&&q<k))) r++;return r;};
+    var matched=v2Evaluate(night,function(o2){var L2=night.legalOurs(o2);return L2.reduce(function(a,b){return rankOf(ours,o2,b)<rankOf(ours,o2,a)?b:a;});},
+      function(o2,t2,j2){var want=rankOf(theirs,t2,j2),L2=night.legalOurs(o2);return L2.reduce(function(a,b){return Math.abs(rankOf(ours,o2,b)-want)<Math.abs(rankOf(ours,o2,a)-want)?b:a;});});
+    cmp.skillMatched={lead:matched(om,tm,true),them:matched(om,tm,false)};
+    cmp.strongestNow={lead:greedy(om,tm,true),them:greedy(om,tm,false)};cmp.minimax={lead:mm(om,tm,true),them:mm(om,tm,false)};return cmp;};
+    Object.defineProperty(mp,"lead_options",{value:L.rows.map(function(r){return {our_id:ours[r.i].id,value:Math.round(1000*r.w),reply_id:theirs[r.reply].id,level:conf(r.i,r.reply).level};}),enumerable:false});
+    mp.v2={night:night,policy:pol,options:opts};
+    lazy(mp.v2,"compare",computeCmp);
+    lazy(mp.v2,"drops",function(){var d={};dropsOf().forEach(function(x){d[ours[x.x].name]=x.drop;});return d;});
+    return mp;
+  }
+  function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap,engine){
+    engine=(engine||UC_ENGINE)==="v2"&&UC_V2&&UC_V2.formats&&UC_V2.formats[w.format]?"v2":"m3";
+    if(!MN_PLAN_MEMO) return mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap,engine);
     var memo=MN_PLAN_MEMO.get(w);if(!memo){memo=new Map();MN_PLAN_MEMO.set(w,memo);}
     var key=JSON.stringify([w.ours.map(function(m){return rem[String(m.id)]?1:0;}),unplayed.map(function(u){return u?1:0;}),
-      (w.oppOut||[]).map(function(o){return o?1:0;}),playedCount,playedSl,cap===undefined?null:cap]);
-    if(!memo.has(key)){if(memo.size>400) memo.clear();memo.set(key,mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap));}
+      (w.oppOut||[]).map(function(o){return o?1:0;}),playedCount,playedSl,cap===undefined?null:cap,engine]);
+    if(!memo.has(key)){if(memo.size>400) memo.clear();memo.set(key,mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap,engine));}
     return memo.get(key);
   }
-  function mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap){
+  function mnPlanForUncached(w,rem,unplayed,playedCount,playedSl,cap,engine){
     var ours=w.ours.filter(function(m){return rem[String(m.id)];}).map(function(m){return {id:m.id,name:wrDisplayName(m,w.ours),sl:m.skill_level===undefined?null:m.skill_level};});
-    var theirs=[],value={},oppUsed=0;
+    var theirs=[],value={},valueM3={},oppUsed=0;
     w.blocks.forEach(function(b,j){if(!unplayed[j]&&!(w.oppOut&&w.oppOut[j])&&mnKnown(b.opponent.skill_level)) oppUsed+=Math.trunc(b.opponent.skill_level);});
     w.blocks.forEach(function(b,j){
       if(!unplayed[j]) return;
       theirs.push({id:b.opponent.id,name:wrDisplayName(b.opponent,w.theirs),sl:b.opponent.skill_level===undefined?null:b.opponent.skill_level});
-      b.rows.forEach(function(r){value[String(r.member.id)+"|"+String(b.opponent.id)]=r.confidence;});
+      b.rows.forEach(function(r){var k=String(r.member.id)+"|"+String(b.opponent.id);value[k]=(engine==="v2"&&r.v2)?r.v2:r.confidence;valueM3[k]=r.confidence;});
     });
-    return mnMatchPlan(ours,theirs,value,5-playedCount,cap,playedSl,cap,oppUsed);
+    var mp=mnMatchPlan(ours,theirs,value,5-playedCount,cap,playedSl,cap,oppUsed);
+    if(engine==="v2") v2ApplyOptions(mp,ours,theirs,value,5-playedCount,cap===undefined?null:cap,playedSl,oppUsed,valueM3);
+    return mp;
   }
-  window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap){
+  window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap,engine){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
     w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
-    return mnPlanFor(w,rem,unplayed||w.theirs.map(function(){return true;}),playedCount||0,playedSl||0,cap===undefined?null:cap);
+    return mnPlanFor(w,rem,unplayed||w.theirs.map(function(){return true;}),playedCount||0,playedSl||0,cap===undefined?null:cap,engine||"m3");
   };
+  // Test hooks for the V2 candidate (cross-checked with analytics.uc_v2_pair_model).
+  window.__ucV2Probability=function(fmt,slp,slo,o){return v2WinProbability(fmt,slp,slo,o||{});};
+  // Audit hook (docs/v2/data_reconcile.py): the per-player inputs V2 reads, straight from the page's data.
+  window.__ucRowsFor=function(pid,fmt){return rowsFor(pid,fmt).map(function(g){var o={};['match_id','match_external_id','match_date','opponent_id','result','own_skill_level','opponent_skill_level','session_name'].forEach(function(k){o[k]=val(g,k);});return o;});};
+  window.__ucReconcileData=function(ourKey,oppKey,fmt){
+    var ta=TEAM_INDEX[ourKey],tb=TEAM_INDEX[oppKey];
+    var one=function(m,opps){var r=v2Record(m.id,fmt),mm=oppMap(m.id,fmt),d={};(opps||[]).forEach(function(o){var x=mm[String(o.id)];d[String(o.id)]=x?[x.w,x.g]:[0,0];});
+      var seen={},dup=0;rowsFor(m.id,fmt).forEach(function(g){var k=[val(g,"match_date"),val(g,"opponent_id"),val(g,"result"),val(g,"own_skill_level"),val(g,"opponent_skill_level")].join("|");if(seen[k]) dup++;seen[k]=1;});
+      return {id:m.id,name:m.name,sl:m.skill_level,form:r.form,recent:r.recent,direct:d,pageDuplicateRows:dup};};
+    return {ours:ta.players.map(function(m){return one(m,tb.players);}),theirs:tb.players.map(function(m){return one(m,[]);}),
+      latest:(DATA.build&&DATA.build.latest_result)||null};
+  };
+  window.__ucEngineCompare=function(ourKey,oppKey,fmt,cap){var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    w.ours.forEach(function(m){rem[String(m.id)]=true;});
+    return wrEngineCompare(w,{rem:rem,unplayed:w.theirs.map(function(){return true;})},{playedN:0,playedSl:0,cap:cap===undefined?null:cap});};
+  window.__ucV2Apply=function(mp,ours,theirs,value,games,cap,used,oppUsed,valueM3){return v2ApplyOptions(mp,ours,theirs,value,games,cap,used,oppUsed,valueM3);};
+  window.__ucV2Pairs=function(ourKey,oppKey,fmt){var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt);
+    return w.blocks.map(function(b){return w.ours.map(function(m){var v=b.byMember[String(m.id)].v2;return v?{p:v.p,level:v.level,points:v.points}:null;});});};
+  window.__ucEngine=function(e){if(e) {ucSetEngine(e);wrRefreshEngine();}return UC_ENGINE;};
   // Test hook: the engine on explicit inputs (cross-checked with analytics.match_night_engine.match_plan).
   window.__ucMatchPlan=function(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed){return mnMatchPlan(ours,theirs,value,gamesLeft,cap,used,oppCap,oppUsed);};
   // Test hook: every pairing's confidence text, [opponent][our player] in roster order (cross-checked with Python).
@@ -1338,7 +1648,7 @@
         +'<p><b>If they lead</b></p>'+line(p.plan_if_they_lead)
         +'<p><b>Best-case board</b> (if every ideal matchup occurs)</p>'+board(p.best_board)
         +'<p><b>Safest board</b> (protects the worst pairing first)</p>'+board(p.safest_board)+'</details>'
-      +'<p class="muted mp-foot">Levels describe recorded evidence, not odds. The plan assumes their captain makes the choice that hurts us most, and re-plans after every ✓ Sent.</p></div>';
+      +'<p class="muted mp-foot">'+(UC_ENGINE==="v2"&&UC_V2&&UC_V2.formats&&UC_V2.formats[w.format]?"V2 candidate: each pairing is worth its estimated win chance (skill levels by format, direct record, shared opponents, recent form, recorded career). Estimates, not guarantees.":"Levels describe recorded evidence, not odds.")+' The plan assumes their captain makes the choice that hurts us most, and re-plans after every ✓ Sent.</p></div>';
   }
   // Broadcast presentation (ui="broadcast"): a plain-data model of what the engine already decided, handed to the
   // presentation layer. It reads the same plan, evidence and marks the classic page shows and calculates nothing new.
@@ -1368,7 +1678,8 @@
       var g=WR_PLAN.games[c.ck]||[],last=g.pop();if(!last) return;
       wrSetMark("our",c.ck,last.o,"l","",true);wrSetMark("opp",c.ck,last.t,"p",false,true);wrSave();WR_STATE.next=null;renderTeamMatchups();},
     avail:function(pid,val){var c=wrBcCur();if(!c) return;wrSetAvail(c.ck,pid,val);renderTeamMatchups();},
-    oppOut:function(pid,out){var c=wrBcCur();if(!c||wrPlayed(c.ck,pid)) return;wrSetOppOut(c.ck,pid,out);WR_STATE.next=null;renderTeamMatchups();}
+    oppOut:function(pid,out){var c=wrBcCur();if(!c||wrPlayed(c.ck,pid)) return;wrSetOppOut(c.ck,pid,out);WR_STATE.next=null;renderTeamMatchups();},
+    engine:function(e){ucSetEngine(e);renderTeamMatchups();}
   };
   // Every current team playing the selected format, for the scoreboard's team pickers (the classic selects only list
   // search matches). Same scope key and label the classic selects use.
@@ -1413,7 +1724,8 @@
       var path=after.plan_if_we_lead||[],evidence=block.byMember[id];
       var budget=x.cap===null?null:(sl===null||after.cap.incomplete?"Skill budget incomplete":
         (x.playedSl+sl>x.cap||after.cap.slack<0?"Over the entered cap":"Within the entered cap"));
-      return {id:id,name:wrDisplayName(m,w.ours),level:evidence?evidence.confidence.level:"Unknown",
+      var useV2=UC_ENGINE==="v2"&&evidence&&evidence.v2;
+      return {id:id,name:wrDisplayName(m,w.ours),level:evidence?(useV2?evidence.v2.level+" "+Math.round(100*evidence.v2.p)+"%":evidence.confidence.level):"Unknown",
         recommended:!!answer&&wrDisplayName(m,w.ours)===answer.our,remainingValue:after.total_if_we_lead,
         lost:wrSendCost(w,j,id,plan.rem,plan.unplayed).lost,budget:budget,slots:slots,
         path:path.map(function(p){return {leader:p.leader,our:p.our,their:p.their,level:p.level};})};
@@ -1452,10 +1764,49 @@
   }
   function wrAfterSendSummary(after,x){
     var slots=Math.max(0,5-x.playedN-1);
+    if(after.v2) return {conf:after.lead?wrConfText(after):"no remaining path",frag:null,leans:"",left:after.plan_if_we_lead.length,slots:slots,
+      wins:after.lead?after.total_if_we_lead/1000:null};
     return {conf:after.lead?wrConfText(after):"no remaining path",frag:after.lead?after.fragility.rating:null,
       leans:after.lead&&after.fragility.player||"",left:after.plan_if_we_lead.length,slots:slots};
   }
+  // Command Board for V2 plans: every role, value and "save" comes from the same executed policy as Match Night.
+  // Conditional answers ("if they put up X, send Y") are kept apart from the actual five-game plan: one player can
+  // be the best answer to several put-ups but plays only once.
+  function wrCommandV2(w,plan,mp,x){
+    var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];}),ck=plan.ck,drops=mp.v2.drops||{};
+    var five={};(mp.plan_if_they_lead||[]).concat(mp.plan_if_we_lead||[]).forEach(function(g){(five[g.our]||(five[g.our]=[])).push(g);});
+    var cards=w.ours.map(function(m){
+      var id=String(m.id),name=wrDisplayName(m,w.ours),rem=!!plan.rem[id];
+      var card={id:id,name:name,sl:wrKnown(m.skill_level)?m.skill_level:null,used:wrLineup(ck,m.id)==="Played",avail:wrAvail(ck,m.id),
+        targets:[],avoid:[],even:[],shared:[],unique:[],role:"",grade:"",recommend:"",whatIf:null,v2:true};
+      card.answers=(mp.responses||[]).filter(function(r){return r.our===name;}).map(function(r){return {opp:r.their,level:r.level,p:r.p,role:r.role};});
+      card.targets=card.answers.map(function(a){var j=w.theirs.findIndex(function(o){return wrDisplayName(o,w.theirs)===a.opp;});var o=j>=0?w.theirs[j]:null;
+        return {opp:a.opp+" "+wrPct(a.p)+(/concession/.test(a.role)?" (concession)":""),oppId:o?String(o.id):"",oppSl:o&&wrKnown(o.skill_level)?o.skill_level:null,cell:wrPct(a.p),g:0,rank:1};});
+      open.forEach(function(j){var r=w.blocks[j].byMember[id];if(!r||!r.v2) return;var who=wrDisplayName(w.theirs[j],w.theirs);
+        if(r.v2.p<0.40&&!card.answers.some(function(a){return a.opp===who;})) card.avoid.push({opp:who+" "+wrPct(r.v2.p),oppId:String(w.theirs[j].id),cell:wrPct(r.v2.p),g:0,rank:99});});
+      if(card.used||!rem){card.role=card.used?"used":"out";card.recommend=card.used?"Already played tonight":"Marked unavailable";return card;}
+      var drop=drops[name]||0,n=card.answers.length,games=five[name]||[];
+      var comp=card.answers.filter(function(a){return !/concession/.test(a.role)&&a.p>=0.40;}),conc=card.answers.filter(function(a){return /concession/.test(a.role);});
+      var lst=function(xs){return xs.map(function(a){return a.opp+" ("+wrPct(a.p)+")";}).join(", ");};
+      if(mp.lead&&mp.lead.our===name){card.role="core";card.recommend="Planned lead if we put up first ("+mp.lead.their_reply+" is their most damaging reply)"+(n?"; also the planned answer to "+lst(card.answers):"");}
+      else if(comp.length){card.role="save";card.recommend="Planned answer to "+lst(comp)+(comp.length>1?" — conditional: plays only one of these":"")+(conc.length?"; planned concession vs "+lst(conc):"");}
+      else if(conc.length){card.role="burn";card.recommend="Planned concession vs "+lst(conc)+" — keeps stronger players for later matchups";}
+      else if(n){card.role="flexible";card.recommend="Best available vs "+lst(card.answers)+" (every option is a long shot)";}
+      else if(games.length){card.role="flexible";card.recommend="In the planned five: "+games.map(function(g){return "vs "+g.their+" ("+wrPct(g.p)+")";}).join(" or ");}
+      else if(drop>=V2_PLAN_TIE){card.role="backup";card.recommend="Backup: not in the planned five, but the plan relies on having them available";}
+      else{card.role="situational";card.recommend="Not in the planned five; an alternative only";}
+      card.recommend+=" · plan "+(drop>0?"loses "+drop.toFixed(2):"keeps its value")+" expected wins without them";
+      card.grade=(drop>=0.15||n>=3)?"A":(drop>=0.07||comp.length)?"B":(drop>=0.02||games.length||n)?"C":"D";
+      return card;});
+    var order={core:0,save:1,flexible:2,burn:3,backup:4,situational:5,used:6,out:7};
+    cards.sort(function(a,b){return (order[a.role]-order[b.role])||String(a.grade||"Z").localeCompare(String(b.grade||"Z"))||a.name.localeCompare(b.name);});
+    var path=function(rows){return (rows||[]).map(function(g){return {leader:g.leader,our:g.our,their:g.their,level:g.level};});};
+    var fragility=mp.fragility||{rating:"Unavailable",player:""};
+    return {v2:true,cards:cards,plan:{conf:wrConfText(mp),fragility:fragility.rating,leans:fragility.player||"",gamesLeft:mp.games_left,
+      weLead:path(mp.plan_if_we_lead),theyLead:path(mp.plan_if_they_lead)}};
+  }
   function wrCommand(w,plan,mp,x,solveAfterSend){
+    if(mp.v2&&mp.v2.night) return wrCommandV2(w,plan,mp,x);
     var open=w.theirs.map(function(o,j){return j;}).filter(function(j){return plan.unplayed[j];}),ck=plan.ck;
     var fragility=mp.fragility||{rating:"Unavailable",player:""};
     var holds={};(mp.holds||[]).forEach(function(h){holds[h.our]=h;});
@@ -1529,6 +1880,137 @@
       else if(o.worst===best.worst) o.tradeoff="Equally good put-up";});
     return opts;
   }
+
+  // ---- V2 decision trace: every available answer to their put-up j, with the numbers behind the recommendation ----
+  function wrV2Trace(w,plan,x,j){
+    var mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap,"v2");
+    if(!mp.v2) return null;
+    var night=mp.v2.night,who=wrDisplayName(w.theirs[j],w.theirs),o=mp.v2.options[who];
+    if(!o){var jj=-1;night.theirs.forEach(function(t,k){if(jj<0&&t.name===who) jj=k;});if(jj<0) return null;o=v2Options(night,jj,mp.v2.policy);}
+    if(!o) return null;
+    var fmt=w.format,tp=UC_V2.formats[fmt]&&UC_V2.formats[fmt].team_points,G=night.gamesLeft;
+    var pts=function(wins,games){return tp?wins*tp.per_individual_win+(games-wins)*tp.per_individual_loss:null;};
+    var byName={};w.ours.forEach(function(m){byName[wrDisplayName(m,w.ours)]=m;});
+    var rec=function(a){return a[1]?a[0]+"-"+(a[1]-a[0])+" ("+a[1]+")":"none";};
+    var rows=o.rows.slice().sort(function(a,b){return ((b===o.pick)-(a===o.pick))||(b.p-a.p);}).map(function(r){
+      var me=night.ours[r.i],m=byName[me.name],row=w.blocks[j].byMember[String(m.id)],c=row.c,v=row.v2,a=v2Record(m.id,fmt);
+      var apa=wrOverall(PLAYERS[String(m.id)],fmt),cap=null;
+      if(night.cap!==null){
+        var rest=night.ours.filter(function(p,k){return k!==r.i&&mnKnown(p.sl);}).map(function(p){return Number(p.sl);}).sort(function(x1,y1){return x1-y1;});
+        var need=Math.max(0,G-1),spend=night.used+(mnKnown(me.sl)?Number(me.sl):0)+rest.slice(0,need).reduce(function(s,v1){return s+v1;},0);
+        cap={cap:night.cap,slack:night.cap-spend,incomplete:!mnKnown(me.sl)||rest.length<need};
+      }
+      return {name:me.name,sl:mnKnown(me.sl)?me.sl:null,
+        direct:c.direct?c.direct.w+"-"+(c.direct.g-c.direct.w)+" ("+c.direct.g+")":"no meetings",
+        shared:(c.shared&&c.og>0)?"ours "+c.ow+"-"+(c.og-c.ow)+" vs theirs "+c.tw+"-"+(c.tg-c.tw)+" ("+c.shared+" shared)":"none",
+        recent:rec(a.recent),career:rec(a.form),apaCareer:rec(apa),p:r.p,level:v?v.level:"",gaps:v?v.gaps:[],
+        matchPoints:pts(r.p,1),restWorst:r.restWorst,restAvg:r.restAvg,totalWorst:r.totalWorst,totalAvg:r.totalAvg,
+        nightPointsWorst:pts(r.totalWorst,G),nightPointsAvg:pts(r.totalAvg,G),
+        later:r.later.map(function(g){return night.ours[g.our].name+" vs "+night.theirs[g.their].name+" "+v2Pct(g.p);}),
+        cap:cap,role:r.role,pick:r===o.pick};
+    });
+    return {opponent:who,opponentSl:mnKnown(w.theirs[j].skill_level)?w.theirs[j].skill_level:null,games:G,cap:night.cap,
+      gainWorst:o.gainWorst,gainAvg:o.gainAvg,strategic:o.strategic,minGain:V2_STRATEGIC_MIN_GAIN,summary:v2OptionsText(night,o),rows:rows,
+      teamPoints:tp||null,compare:mp.v2.compare};
+  }
+  function wrV2TraceHtml(t){
+    if(!t) return "";
+    var f2=function(x){return x===null||x===undefined?"—":x.toFixed(2);};
+    return '<details class="more night-compare" id="bc-v2-trace"><summary>Every option vs '+esc(t.opponent)+' — V2 decision trace</summary>'
+      +'<p class="matchup-footnote">'+esc(t.summary)+'</p>'
+      +'<div class="uc-compare-scroll"><table class="uc-compare uc-trace"><thead><tr><th scope="col">Player</th><th scope="col">Evidence</th><th scope="col">Win chance now</th>'
+      +'<th scope="col">Rest of night: worst case / even choices</th><th scope="col">Night total: expected wins (team points)</th><th scope="col">Later games (worst case)</th><th scope="col">Cap</th></tr></thead><tbody>'
+      +t.rows.map(function(r){return '<tr'+(r.pick?' class="differs"':'')+'><th scope="row">'+esc(r.name)+(r.sl!==null?' · SL '+esc(r.sl):'')+(r.role?'<br><span class="v2-concession">'+esc(r.role)+'</span>':'')+'</th>'
+        +'<td>direct '+esc(r.direct)+'<br>shared '+esc(r.shared)+'<br>last 10 '+esc(r.recent)+'<br>recorded '+esc(r.career)+' · APA '+esc(r.apaCareer)+(r.gaps.length?'<br><i>'+esc(r.gaps.join("; "))+'</i>':'')+'</td>'
+        +'<td><b>'+v2Pct(r.p)+'</b> '+esc(r.level)+(r.matchPoints!==null?'<br>'+f2(r.matchPoints)+' team pts':'')+'</td>'
+        +'<td>'+f2(r.restWorst)+' / '+f2(r.restAvg)+'</td>'
+        +'<td>'+f2(r.totalWorst)+(r.nightPointsWorst!==null?' ('+r.nightPointsWorst.toFixed(1)+')':'')+' / '+f2(r.totalAvg)+(r.nightPointsAvg!==null?' ('+r.nightPointsAvg.toFixed(1)+')':'')+'</td>'
+        +'<td>'+esc(r.later.join("; "))+'</td>'
+        +'<td>'+(r.cap?(r.cap.incomplete?"incomplete":r.cap.slack+" to spare"):"no cap")+'</td></tr>';}).join("")+'</tbody></table></div>'
+      +(t.compare?'<p class="matchup-footnote">If they put up first, the whole night as V2 plays it: '+f2(t.compare.v2.them.w)+' expected wins worst case / '+f2(t.compare.v2.them.a)+' even choices'
+        +(t.compare.m3?'; M3\u2019s choices scored the same way: '+f2(t.compare.m3.them.w)+' / '+f2(t.compare.m3.them.a):'')
+        +'; best possible worst-case plan (benchmark, not what V2 plays): '+f2(t.compare.bench.them)+'.</p>':'')
+      +'<p class="matchup-footnote">Worst case: their captain always makes the choice that hurts us most. Even choices: they pick evenly among their legal players. Rest-of-night values roll out the same rule V2 uses for every later choice. '
+      +'V2 gives up the strongest matchup now only for at least '+t.minGain.toFixed(2)+' expected wins in the worst case with no loss on average (a provisional threshold). Team points are a straight conversion of expected wins'
+      +(t.teamPoints?' ('+t.teamPoints.per_individual_win+' per individual win, '+t.teamPoints.per_individual_loss+' per loss, archive average)':'')+'; they never change a choice. APA point margins (8-Ball hill and shutout points, 9-Ball ball points) are not modelled yet. Estimates, not guarantees.</p></details>';
+  }
+  window.__ucV2Trace=function(ourKey,oppKey,fmt,theirName,remainingIds,cap){
+    var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
+    var plan={rem:rem,unplayed:w.theirs.map(function(){return true;})};
+    var j=-1;w.theirs.forEach(function(o,k){if(j<0&&wrDisplayName(o,w.theirs)===theirName) j=k;});
+    return j<0?null:wrV2Trace(w,plan,{playedN:0,playedSl:0,cap:cap===undefined?null:cap},j);
+  };
+  // ---- V2 candidate: compare M3 (baseline) and V2 on the same night, marks and cap ----
+  function wrV2For(w,ourName,theirName){
+    if(!ourName||!theirName) return null;
+    var j=-1;w.theirs.forEach(function(o,k){if(j<0&&wrDisplayName(o,w.theirs)===theirName) j=k;});
+    var m=w.ours.filter(function(x){return wrDisplayName(x,w.ours)===ourName;})[0];
+    if(j<0||!m) return null;
+    var row=w.blocks[j].byMember[String(m.id)];return row&&row.v2?row.v2:null;
+  }
+  function wrPct(p){return p===null||p===undefined?"—":Math.round(100*p)+"%";}
+  function wrEngineCompare(w,plan,x){
+    if(!UC_V2||!UC_V2.formats||!UC_V2.formats[w.format]) return null;
+    var m3=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap,"m3"),v2=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap,"v2");
+    var rows=[];
+    w.theirs.forEach(function(o,j){
+      if(!plan.unplayed[j]) return;
+      var who=wrDisplayName(o,w.theirs);
+      var a=(m3.responses||[]).filter(function(r){return r.their===who;})[0],b=(v2.responses||[]).filter(function(r){return r.their===who;})[0];
+      if(!a&&!b) return;
+      var pa=a?wrV2For(w,a.our,who):null,pb=b?wrV2For(w,b.our,who):null,differs=!!(a&&b&&a.our!==b.our);
+      var why="";
+      if(differs) why="M3 rates "+a.our+" vs "+who+" as "+a.level+" ("+a.why.split(" \u2014 ").slice(1).join(" \u2014 ")+"); V2 estimates that pairing at "+wrPct(pa&&pa.p)+". "+(b.cost_later||"");
+      else if(b&&b.role&&!/competitive/.test(b.role)) why="Both engines send "+b.our+". "+(b.cost_later||"");
+      rows.push({their:who,theirSl:wrKnown(o.skill_level)?o.skill_level:null,
+        m3:a?{our:a.our,level:a.level,p:pa?pa.p:null}:null,
+        v2:b?{our:b.our,level:b.level,p:pb?pb.p:null,role:b.role||"",concession:/deliberate concession/.test(b.role||"")}:null,
+        differs:differs,why:why});
+    });
+    var lead={m3:m3.lead?{our:m3.lead.our,level:m3.lead.level}:null,v2:v2.lead?{our:v2.lead.our,level:v2.lead.level,ties:v2.lead.equally_good||[]}:null};
+    lead.differs=!!(lead.m3&&lead.v2&&lead.m3.our!==lead.v2.our);
+    var c=v2.v2&&v2.v2.compare,G=v2.v2?v2.v2.night.gamesLeft:0,t=UC_V2.formats[w.format].team_points;
+    var pts=function(x){return t?x*t.per_individual_win+(G-x)*t.per_individual_loss:null;};
+    var pack=function(v){return v?{w:v.w,a:v.a,pw:pts(v.w),pa:pts(v.a)}:null;};
+    return {rows:rows,lead:lead,differs:rows.filter(function(r){return r.differs;}).length+(lead.differs?1:0),games:G,
+      v2Them:c?pack(c.v2.them):null,m3Them:c&&c.m3?pack(c.m3.them):null,v2Lead:c?pack(c.v2.lead):null,m3Lead:c&&c.m3?pack(c.m3.lead):null,
+      benchThem:c?c.bench.them:null,benchLead:c?c.bench.lead:null,metrics:UC_V2.formats[w.format].holdout||null,
+      strongestNowThem:c?pack(c.strongestNow.them):null,strongestNowLead:c?pack(c.strongestNow.lead):null,
+      minimaxThem:c?pack(c.minimax.them):null,minimaxLead:c?pack(c.minimax.lead):null,
+      skillMatchedThem:c?pack(c.skillMatched.them):null,skillMatchedLead:c?pack(c.skillMatched.lead):null};
+  }
+  function wrEngineCompareHtml(c,engine){
+    if(!c) return "";
+    var r1=function(r){return '<tr'+(r.differs?' class="differs"':'')+'><th scope="row">'+esc(r.their)+(r.theirSl!==null?' <span class="muted">SL '+esc(r.theirSl)+'</span>':'')+'</th>'
+      +'<td>'+(r.m3?esc(r.m3.our)+' <span class="muted">'+esc(r.m3.level)+' \u00b7 V2 est. '+wrPct(r.m3.p)+'</span>':'—')+'</td>'
+      +'<td>'+(r.v2?'<b>'+esc(r.v2.our)+'</b> <span class="muted">'+wrPct(r.v2.p)+'</span>'+(r.v2.role?' <span class="v2-concession">'+esc(r.v2.role)+'</span>':''):'—')+'</td></tr>'
+      +(r.why?'<tr class="why"><td colspan="3">'+esc(r.why)+'</td></tr>':'');};
+    var plan=function(s){return s?s.w.toFixed(2)+" worst case / "+s.a.toFixed(2)+" even choices"+(s.pw!==null?" (about "+s.pw.toFixed(1)+" / "+s.pa.toFixed(1)+" team points)":""):"—";};
+    var m=c.metrics;
+    return '<section id="uc-engine-compare" class="uc-engine-compare" aria-label="M3 and V2 recommendations compared">'
+      +'<h3>M3 vs V2 candidate</h3>'
+      +'<p class="muted">Showing <b>'+(engine==="v2"?"V2 candidate":"M3 baseline")+'</b> recommendations on this page. '
+      +(c.differs?c.differs+' recommendation'+(c.differs===1?' differs':'s differ')+' between the engines tonight.':'Both engines agree on every recommendation tonight.')+'</p>'
+      +'<div class="uc-compare-scroll"><table class="uc-compare"><thead><tr><th scope="col">If they put up</th><th scope="col">M3 answer</th><th scope="col">V2 answer (est. win chance)</th></tr></thead><tbody>'
+      +(c.lead.m3||c.lead.v2?'<tr'+(c.lead.differs?' class="differs"':'')+'><th scope="row">We put up first</th><td>'+(c.lead.m3?esc(c.lead.m3.our)+' <span class="muted">'+esc(c.lead.m3.level)+'</span>':'—')+'</td><td>'
+        +(c.lead.v2?'<b>'+esc(c.lead.v2.our)+'</b> <span class="muted">'+esc(c.lead.v2.level)+'</span>'+(c.lead.v2.ties.length?' <span class="muted">(tied with '+esc(c.lead.v2.ties.join(", "))+')</span>':''):'—')+'</td></tr>':'')
+      +c.rows.map(r1).join("")+'</tbody></table></div>'
+      +'<p class="muted">Each engine\u2019s own choices for the rest of the night, played against the same opponent behaviour and scored with V2\u2019s estimates (expected wins of '+c.games+'). If they put up first: V2 '+plan(c.v2Them)+'; M3 '+plan(c.m3Them)+'. If we put up first: V2 '+plan(c.v2Lead)+'; M3 '+plan(c.m3Lead)+'. Best possible worst-case plan (benchmark, not what V2 plays): '+(c.benchThem!==null?c.benchThem.toFixed(2):'—')+'. Model-dependent: M3 has no probabilities of its own. Team points are a straight conversion of expected wins and never change a choice.</p>'
+      +(m?'<p class="muted">V2 model check on 2025-09 onward games not used to fit the checked model (the shipped model is refit on all games): log loss '+(m.symmetrized_test_logloss||m.test_logloss)+' vs '+m.test_logloss_constant+' for a coin flip; calibration slope '+(m.symmetrized_test_calibration_intercept_slope||m.test_calibration_intercept_slope)[1]+' (1.00 = perfectly calibrated).</p>':'')
+      +'</section>';
+  }
+  function wrEngineSwitchHtml(){
+    if(!UC_V2) return "";
+    return '<div class="uc-engine-switch" role="group" aria-label="Recommendation engine"><span class="night-ask">Engine</span>'
+      +'<button type="button" class="night-btn'+(UC_ENGINE==="v2"?' primary':'')+'" data-engine="v2" aria-pressed="'+(UC_ENGINE==="v2")+'">V2 candidate</button>'
+      +'<button type="button" class="night-btn'+(UC_ENGINE==="m3"?' primary':'')+'" data-engine="m3" aria-pressed="'+(UC_ENGINE==="m3")+'">M3 baseline</button></div>';
+  }
+  function wrRefreshEngine(){if(typeof renderTeamMatchups==="function") renderTeamMatchups();}
+  document.addEventListener("click",function(ev){
+    var t=ev.target&&ev.target.closest?ev.target.closest("[data-engine]"):null;if(!t) return;
+    ucSetEngine(t.getAttribute("data-engine"));wrRefreshEngine();
+  });
   function wrBroadcastModel(w,plan,ta,tb,ctx){
     var x=mnInputs(w,plan,ta),mp=mnPlanFor(w,plan.rem,plan.unplayed,x.playedN,x.playedSl,x.cap),f=ctx?ctx.fixture:null;
     var solveAfterSend=wrAfterSendPlanner(w,plan,x);
@@ -1564,6 +2046,23 @@
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
     night.command=wrCommand(w,plan,mp,x,solveAfterSend);
+    // The exact plan behind this screen (read by docs/v2/contradiction_audit.py; no extra solving).
+    night.planCheck={responses:mp.responses||[],plan_if_they_lead:mp.plan_if_they_lead||[],plan_if_we_lead:mp.plan_if_we_lead||[],total_if_they_lead:mp.total_if_they_lead,total_if_we_lead:mp.total_if_we_lead,lead:mp.lead||null};
+    night.engine=ucEngineFor(w.format);ucEngineBadge(w.format);night.engineCompare=wrEngineCompare(w,plan,x);
+    night.trace=(night.engine==="v2"&&selJ!==undefined)?wrV2Trace(w,plan,x,selJ):null;night.traceHtml=wrV2TraceHtml(night.trace);
+    // V2 screens: alternatives ordered by V2's estimate (recorded records stay as facts); the M3-era "consider
+    // saving" / "spends our only favorable option" notes and the recorded-record risk line give way to V2's plan.
+    if(night.engine==="v2"){
+      var pOf={};if(night.trace) night.trace.rows.forEach(function(r){pOf[r.name]=r.p;});
+      var merged=night.ranked.concat(night.unordered,night.avoid).map(function(c){c.save="";c.cost="";c.v2p=pOf[c.name];return c;});
+      merged.sort(function(a,b){return (b.v2p===undefined?-1:b.v2p)-(a.v2p===undefined?-1:a.v2p);});
+      night.ranked=merged;night.unordered=[];night.avoid=[];
+      night.openRisks=(mp.responses||[]).filter(function(r){return r.p!==undefined&&r.p<0.40;}).map(function(r){return r.their;});
+      night.openRisksV2=true;
+    }
+    night.engineSwitchHtml=night.engineCompare?wrEngineSwitchHtml():"";night.engineCompareHtml=wrEngineCompareHtml(night.engineCompare,UC_ENGINE);
+    if(night.answer&&night.engine==="v2"){var av2=wrV2For(w,night.answer.our,night.opp?night.opp.name:null);
+      if(av2){night.answer.p=av2.p;night.answer.role=ans&&ans.role||"";night.answer.concession=/deliberate concession/.test(night.answer.role);}}
     // Put-up order. With the toss recorded, game N's leader is known; when it is ours, every available put-up is
     // compared the way the engine chooses its lead: their most damaging reply, then the rest of the night with
     // them putting up next. The engine's own lead stays the recommendation.
@@ -1578,7 +2077,8 @@
     }
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
-    night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
+    // V2 builds keep V2's own risk list (set above); the recorded-record list is the M3 view only.
+    if(!night.openRisksV2) night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return wrDisplayName(o,w.theirs);});
     night.capText=mp.cap?(mp.cap.incomplete?"Cap "+mp.cap.cap+": check incomplete (missing skill levels)":"Cap "+mp.cap.cap+": "+mp.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
     night.bench={ours:w.ours.map(function(m){return {id:String(m.id),name:wrDisplayName(m,w.ours),sl:wrKnown(m.skill_level)?m.skill_level:null,avail:wrAvail(ck,m.id),lineup:wrLineup(ck,m.id),rem:!!plan.rem[String(m.id)]};}),
@@ -1624,7 +2124,9 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
+      +(function(){ucEngineBadge(w.format);var x2=mnInputs(w,plan,ta),c2=wrEngineCompare(w,plan,x2);return c2?wrEngineSwitchHtml():"";})()
       +wrMatchPlanCard(w,plan,ta)+wrBudgetLine(w,plan,ta,mnLeadId(w,plan,ta))
+      +(function(){var x2=mnInputs(w,plan,ta);return wrEngineCompareHtml(wrEngineCompare(w,plan,x2),UC_ENGINE);})()
       +wrNextSendCard(w,plan,ta,tb)
       +'<div class="tonight-grid decide">'
       +'<div class="decide-sends"><b>Recorded options now</b>'+(sends.length?sends.map(function(x){return '<span>'+esc(x.text)+'</span>'+wrNoteFlagSlot(x.pid,"preview","opinion");}).join(''):'<span>Every opponent has played.</span>')+'</div>'
@@ -1695,7 +2197,7 @@
         var items=plan.threats.map(function(c){return '<li>'+(c.live&&c.games===1?'<strong class="ns-sample">Beat us once (1 meeting)</strong> ':'')+esc(c.text)+wrNoteFlagSlot(c.opponent.id,"dot")+'</li>';});
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("No unplayed opponent has a live winning record against our remaining roster.")+'</li>')+'</ul>';
       })()+'</div>'
-      +'<div><h3>Avoid records — more losses than wins</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text.replace(/ · SMALL SAMPLE( · Lost once)?$/,""))+' <strong class="ns-sample">'+esc((c.g===1?"Lost once · ":"")+plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
+      +'<div><h3>'+(UC_V2?'Recorded losing records (facts; V2 already weighs them in its estimates)':'Avoid records — more losses than wins')+'</h3><p class="muted">More direct losses than wins (remaining players vs unplayed opponents). A single loss is a caution, not an instruction to rule out a player.</p><ul class="wr-list">'+(plan.concerning.length?plan.concerning.map(function(c){return '<li>'+esc(c.text.replace(/ · SMALL SAMPLE( · Lost once)?$/,""))+' <strong class="ns-sample">'+esc((c.g===1?"Lost once · ":"")+plural(c.g,"meeting")+(c.g<3?" · small sample":""))+'</strong></li>';}).join(""):'<li class="muted">No concerning direct records among remaining pairings.</li>')+'</ul></div>'
       +'<div><h3>Open risks</h3><p class="muted">Unplayed opponents with no favorable direct option left among our remaining players.</p>'+wrList(plan.risks,"None — every unplayed opponent still has a favorable direct option.")+'</div></div>';
     // Matrix
     var pair=WR_STATE.pair,pairHtml="";
@@ -1762,7 +2264,7 @@
         }).filter(Boolean);
         return '<ul class="wr-list">'+(items.length?items.join(""):'<li class="muted">'+esc("Every opponent has already played.")+'</li>')+'</ul>';
       })()
-      +'<h3>Protected players — unique favorable options (consider saving)</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
+      +'<h3>'+(UC_V2?'Unique winning records (facts; who to save is decided by the V2 plan on the Command Board)':'Protected players — unique favorable options (consider saving)')+'</h3><p class="muted">The only remaining favorable direct option against an unplayed opponent.</p>'+wrList(plan.unique,"None right now.");
     // Scouting cards
     document.getElementById("scouting-cards").innerHTML='<h2>Opponent scouting cards</h2><p class="muted">Full-roster history; ignores tonight’s availability marks. Use Next Send for current choices. No meetings with our roster is unknown — never a weakness. Coach observations are your notes (this browser only).</p><div class="scout-grid">'
       +w.cards.map(function(c,j){

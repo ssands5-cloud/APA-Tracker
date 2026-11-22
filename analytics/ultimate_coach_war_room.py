@@ -1024,8 +1024,10 @@ ONBOARDING_LIMITS = [
     "• No validated win-probability model exists: no predicted or calibrated odds are shown (NOT CALIBRATED). Historical win rates that appear (e.g. Player vs Player) describe past results only, always with their sample size.",
     "• Recommendations only rank the available evidence; small samples are labelled with their counts.",
     "• Rosters are current captured rosters, not who played on a past date.",
-    "• Unknown availability is not Unavailable, and neither is a prediction. No lineup-legality or skill cap is assumed.",
-    "• Planning marks belong to one fixture: clear old marks before planning another night.",
+    "• Everyone is Here unless marked Out; marks are never a prediction. APA's 23 skill cap applies by default to 8-Ball and "
+    "9-Ball (type a number to change it, clear it to turn the check off); the cap check is reference arithmetic, not a lineup-legality check.",
+    "• Lineup and played marks belong to one fixture; Here/Out applies to every match on the same night. Clear old marks "
+    "before planning another night.",
     "• Coach Notes are your opinions, never APA facts.",
 ]
 # Player vs Player status line (GPT audit #84): the page DOES show historical win-rate percentages, so the

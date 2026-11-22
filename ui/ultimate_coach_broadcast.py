@@ -193,6 +193,17 @@ body.bc .badge-strong{background:var(--badge-strong-bg);color:var(--badge-strong
 body.bc .badge-solid{background:rgba(0,200,160,.15);color:#00c8a0;border-color:rgba(0,200,160,.25)}
 body.bc .badge-thin,body.bc .badge-unknown{background:var(--badge-thin-bg);color:var(--badge-thin-fg);border-color:rgba(130,140,160,.2)}
 body.bc .badge-caution,body.bc .badge-conflicted{background:var(--badge-caution-bg);color:var(--badge-caution-fg);border-color:rgba(245,197,24,.3)}
+body.bc .badge-favored{background:var(--badge-strong-bg);color:var(--badge-strong-fg);border-color:rgba(0,212,240,.25)}
+body.bc .badge-edge{background:rgba(0,200,160,.15);color:#00c8a0;border-color:rgba(0,200,160,.25)}
+body.bc .badge-toss-up{background:var(--badge-thin-bg);color:var(--badge-thin-fg);border-color:rgba(130,140,160,.2)}
+body.bc .badge-underdog,body.bc .badge-long{background:var(--badge-caution-bg);color:var(--badge-caution-fg);border-color:rgba(245,197,24,.3)}
+body.bc .uc-engine-switch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+body.bc .send-pick,body.bc .send-pick select{max-width:100%;min-width:0}body.bc .send-pick select{width:100%;text-overflow:ellipsis}
+body.bc .uc-compare-scroll{overflow-x:auto}body.bc table.uc-compare{width:100%;border-collapse:collapse;font-size:13px}
+body.bc table.uc-compare th,body.bc table.uc-compare td{padding:6px 8px;border-bottom:1px solid rgba(130,140,160,.2);text-align:left;vertical-align:top}
+body.bc table.uc-compare tr.differs th,body.bc table.uc-compare tr.differs td{background:rgba(245,197,24,.08)}
+body.bc table.uc-compare tr.why td{font-size:12px;color:var(--fg-dim)}
+body.bc .v2-concession{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--badge-caution-fg)}
 body.bc .matchup-why{grid-column:2/-1;font-size:12px;color:var(--fg-dim);margin-top:-6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 body.bc .matchup-footnote{font-size:11px;color:var(--fg-muted);margin:10px 0 0;line-height:1.5}
 body.bc .home-empty{padding:28px 20px;color:var(--fg-dim);font-size:14px;border:1px dashed var(--border-hi);border-radius:4px}
@@ -489,7 +500,7 @@ _JS_BODY = r"""
     return (w[0]||"?").slice(0,2).toUpperCase();
   }
   function pct(w,g){return g>0&&w!=null?Math.round(1000*w/g)/10:null;}
-  function badgeClass(level){return "badge-"+String(level||"unknown").toLowerCase();}
+  function badgeClass(level){return "badge-"+String(level||"unknown").toLowerCase().split(" ")[0];}
   // Team options read "Name · Session · Format · Div · N rostered". The hero shows the name, and adds
   // the format and division only where two teams share a name.
   var TEAM_LABELS={};
@@ -588,7 +599,7 @@ _JS_BODY = r"""
   var CAT={G:"Favorable",E:"Even",I:"Shared only",R:"Avoid",X:"Unknown"};
   function candRow(c,kind,oppId){
     var mark=kind==="ranked"?((c.choice||0)<10?"0":"")+c.choice:(kind==="avoid"?"✕":"≈");
-    var note=[CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost,c.after?"if sent: "+afterText(c.after):""].filter(Boolean).join(" · ");
+    var note=[c.v2p!=null?"V2 "+Math.round(100*c.v2p)+"%":"",CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost,c.after?"if sent: "+afterText(c.after):""].filter(Boolean).join(" · ");
     return '<div class="alt-row'+(kind==="avoid"?" avoid":"")+'"><div class="matchup-num">'+mark+'</div>'
       +'<div class="matchup-our"><div class="matchup-kicker">'+(kind==="avoid"?"Recorded losing record":"Option")+'</div><div class="matchup-player">'+esc(c.name)+slTag(c.sl)+'</div></div>'
       +barsHtml(c.wins,c.games)
@@ -601,20 +612,23 @@ _JS_BODY = r"""
   function afterText(a){
     if(!a.slots) return "final pairing";
     var open=a.slots-a.left;
-    return "plan after: "+a.conf+(a.frag?" · fragility "+a.frag+(a.leans?" (leans on "+a.leans+")":""):"")
+    return (a.wins!=null?"rest of night "+a.wins.toFixed(2)+" expected wins if they make their most damaging choices · ":"")+"plan after: "+a.conf+(a.frag?" · fragility "+a.frag+(a.leans?" (leans on "+a.leans+")":""):"")
       +(open?" · "+open+" open "+(open===1?"slot":"slots"):"");
   }
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
-    var best=c.targets.length?'<p class="plist"><span class="k">Winning record vs</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Winning record vs</span><span class="matchup-sl">no winning head-to-head record left</span></p>';
+    var best=c.targets.length?'<p class="plist"><span class="k">'+(c.v2?'Planned answer if they put up':'Winning record vs')+'</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Winning record vs</span><span class="matchup-sl">no winning head-to-head record left</span></p>';
     var ans=(c.answers&&c.answers.length)?'<p class="plist"><span class="k">Plan answer</span>'+c.answers.map(function(a){return esc(a.opp)+' <span class="evidence-badge '+badgeClass(a.level)+'">'+esc(a.level)+'</span>';}).join(" ")+'</p>':"";
-    var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
+    if(c.v2) ans="";
+    var av=c.avoid.length?'<p class="plist"><span class="k">'+(c.v2?'Long shot vs':'Avoid')+'</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
     var wi=c.whatIf?'<div class="pwhatif"><b>Save:</b> plan stays '+esc(c.whatIf.before)+' \u00b7 <b>If unavailable:</b> becomes '+esc(c.whatIf.after)+' (fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+')</div>':"";
     return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
-      +'<span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
+      +'<span class="prole '+esc(c.role)+'">'+esc(roleLabel(c))+'</span></div>'+best+ans+av
       +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
   }
+  var V2_ROLE_LABEL={core:"Lead",save:"Planned answer",burn:"Concession",flexible:"In the five",backup:"Backup",situational:"Not planned",used:"Played",out:"Out"};
+  function roleLabel(c){return (c.v2?V2_ROLE_LABEL[c.role]:ROLE_LABEL[c.role])||c.role;}
   function commandHtml(m){
     var cmd=m.night&&m.night.command; if(!cmd) return "";
     var cards=cmd.cards,pl=cmd.plan;
@@ -643,9 +657,9 @@ _JS_BODY = r"""
       +gone.map(function(c){return esc(c.name)+' ('+(c.role==="used"?"played":"out")+')';}).join(", ")+'</p></details>':'';
     var glance=matchDone?'<p class="cmd-sum glance-final"><b>Played tonight:</b> '+(gone.filter(function(c){return c.role==="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")
         +' \u00b7 <b>Didn\u2019t play:</b> '+(cards.filter(function(c){return c.role!=="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")+'</p>'
-      :'<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
+      :'<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th>'+(cmd.v2?'<th title="If they put up this opponent, V2 sends this player (conditional: one player plays once)">Planned answer if they put up</th><th title="V2 estimate below 40% and not this player\u2019s planned answer">Long shot vs</th>':'<th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th>')+'<th>Recommendation</th></tr></thead><tbody>'
       +active.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
-        +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
+        +'<td><span class="prole '+esc(c.role)+'">'+esc(roleLabel(c))+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
         +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>'+goneLine;
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
     var start=matchDone?'<strong>Final \u00b7 Matches '+m.night.score.w+'-'+m.night.score.l+'</strong>':upOpt?'<strong>Path after we put up '+esc(upOpt.name)+'</strong>'
@@ -655,10 +669,11 @@ _JS_BODY = r"""
     return '<section class="cmd cmd-main" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
       +'<span class="cmd-sum">'+(matchDone?'Match complete':(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left')+'</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
-      +(matchDone?'':'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p>')+'</div>'
+      +(matchDone?'':cmd.v2?'<p class="cmd-sum" style="margin:8px 0 0">The slots above are the actual five-game plan as V2 plays it. The table below lists conditional answers: who V2 sends if they put up each player (one player can be the answer to several put-ups but plays only once). <b>Lead:</b> '+names("core")+' \u00b7 <b>Planned answers:</b> '+names("save")+' \u00b7 <b>Concessions:</b> '+names("burn")+' \u00b7 <b>Backups:</b> '+names("backup")+' \u00b7 <b>Not planned:</b> '+names("situational")+'</p>'
+        :'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p>')+'</div>'
       +glance
 
-      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
+      +(cmd.v2?'<details class="ladder"><summary>How V2 assigns roles and values</summary><p>Everything here comes from the same V2 plan as Match Night. <b>Lead</b>: our planned put-up when we go first. <b>Planned answer</b>: the player V2 sends if they put up that opponent (conditional; one player plays once). <b>Concession</b>: a planned long shot chosen to keep stronger players for later matchups (only when that gains at least 0.10 expected wins under both opponent models). <b>In the five</b>: plays in the planned five-game path. <b>Backup</b>: not in the planned five, but the plan loses 0.02+ expected wins without them. <b>Not planned</b>: an alternative only. <b>Value</b>: A if the plan loses 0.15+ expected wins without them or they answer 3+ put-ups; B for 0.07+ or a competitive planned answer; C if they matter at all; D otherwise.</p></details></section>':'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>');
   }
 
   function renderSendCosts(scenarios,opp){
@@ -692,6 +707,7 @@ _JS_BODY = r"""
     var undo=n.putUp?'<button type="button" class="night-btn" data-undo="1">Undo put-up</button>'
       :n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
     var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
+      +(n.engineCompare?'<span class="night-pill engine-pill engine-'+esc(n.engine)+'">'+(n.engine==="v2"?"V2 candidate engine":"M3 baseline engine")+'</span>':'')
       +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
       +(n.nextLeader&&!done?'<span class="night-pill" data-leader="'+n.nextLeader+'">'+(n.nextLeader==="us"?"We put up":"They put up")+'</span>':'')
       +'<span class="night-pill" title="Individual matches won and lost tonight">Matches '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
@@ -778,7 +794,8 @@ _JS_BODY = r"""
       var all=n.ranked.concat(n.unordered).concat(n.avoid);
       var pick=null;
       if(n.answer) pick=all.filter(function(c){return c.name===n.answer.our;})[0]||null;
-      if(!pick&&n.ranked.length) pick=n.ranked[0];
+      // V2 never turns the recorded-record ranking into a Send pick: no engine answer means no Send (GPT-008).
+      if(!pick&&n.ranked.length&&n.engine!=="v2") pick=n.ranked[0];
       var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
       var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
       // A concession: nobody on our side has a winning head-to-head record against this opponent, so the engine
@@ -786,7 +803,8 @@ _JS_BODY = r"""
       // the pick as a strong matchup.
       var anyWin=all.some(function(c){return c.cat==="G";});
       var keepFor=(n.holds||[]).filter(function(h){return h.covers.length&&h.our!==pickName;}).slice(0,2);
-      var concessionNote=(pickName&&!anyWin)?'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
+      var v2Note=(n.answer&&n.engine==="v2"&&n.answer.p!==undefined)?'<div class="send-concession v2"><b>'+esc(n.answer.role||"V2 estimate")+'.</b> '+esc(pickName)+' wins this pairing about '+Math.round(100*n.answer.p)+'% of the time. Every option is compared in the decision trace below.</div>':"";
+      var concessionNote=v2Note||(pickName&&!anyWin)?v2Note||'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
         +' is the cheapest to give up'+(keepFor.length?', saving '+keepFor.map(function(h){return esc(h.our)+' for '+esc(h.covers.slice(0,3).join(", "));}).join("; "):"")+'.</div>':"";
       // Owner request: choose any available player right on the card and see that player's recorded evidence
       // (head-to-head record, evidence level, what sending them now costs). Not odds: no probability is shown.
@@ -811,7 +829,7 @@ _JS_BODY = r"""
           +'<div class="send-after"><b>After this send:</b> '+esc(cd&&cd.after?afterText(cd.after):(sc.slots?(sc.path.length?sc.path.map(function(p){return p.our+" vs "+p.their;}).join(" · "):"no remaining path"):"final pairing"))+'</div>'
           +'<p class="matchup-footnote">Bars show the recorded head-to-head record and its sample size, not odds.</p></section>';
       } else if(pickName){
-        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
+        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.engineCompare?(n.engine==="v2"?"V2 \u00b7 ":"M3 baseline \u00b7 "):"")+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
           +'<div class="send-name">'+esc(pickName)+'</div>'
           +(n.chosen&&scen.length?sendPicker(scen,pickId,n.opp.id,swapKey):'')
           +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'
@@ -835,7 +853,7 @@ _JS_BODY = r"""
       all.forEach(function(c){if(c.save) rl.push('<li>'+esc(c.name+" — "+c.save)+'</li>');});
       n.holds.forEach(function(h){rl.push('<li>'+esc("Keep "+h.our+(h.covers.length?" for "+h.covers.join(", "):"")+" — "+h.why)+'</li>');});
       n.sacrifices.forEach(function(s){rl.push('<li class="bad">'+esc("If we must absorb a bad matchup: "+s.our+" vs "+s.their+" ("+s.level+") — "+s.why)+'</li>');});
-      if(n.openRisks.length) rl.push('<li class="bad">'+esc("No favorable direct option left vs "+n.openRisks.join(", "))+'</li>');
+      if(n.openRisks.length) rl.push('<li class="bad">'+esc((n.openRisksV2?"Every option is a long shot (under 40%) vs ":"No favorable direct option left vs ")+n.openRisks.join(", "))+'</li>');
       risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.slice(0,4).join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>'
         +(rl.length>4?'<details class="more"><summary>'+(rl.length-4)+' more risk'+(rl.length-4===1?'':'s')+'</summary><ul class="risk-list">'+rl.slice(4).join("")+'</ul></details>':"");
     }
@@ -852,7 +870,8 @@ _JS_BODY = r"""
     var storage='<div class="night-save-warning" role="status">'+esc(n.storageWarning||"")+'</div>';
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
-    el.innerHTML=status+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+commandHtml(m)
+    // V2 candidate builds only: engine switch above the board, M3-vs-V2 comparison under the live pick.
+    el.innerHTML=status+(n.engineSwitchHtml||"")+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+(n.traceHtml||"")+(n.engineCompareHtml?'<details class="more night-compare" id="bc-engine-compare" open><summary>M3 vs V2 candidate</summary>'+n.engineCompareHtml+'</details>':"")+commandHtml(m)
       +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
         +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>');
     var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}

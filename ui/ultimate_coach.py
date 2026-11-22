@@ -582,6 +582,17 @@ def _trust_card(payload: dict[str, Any]) -> str:
 </div>"""
 
 
+def _limits_for(engine: str) -> list[str]:
+    """Start Here limitations. A V2 candidate build does show estimated win chances, so it says so instead of the
+    standard "no win-probability model" line (the Excel workbook keeps the standard text: it has no V2)."""
+    if engine != "v2":
+        return list(ONBOARDING_LIMITS)
+    return [("• V2 CANDIDATE: recommendations use estimated win chances from a back-tested model (checked on 2025-09 "
+             "onward games it was not fitted on). Estimates, not guarantees. Record views, the Excel workbook and "
+             "Player vs Player still show recorded results only.") if "No validated win-probability model" in line else line
+            for line in ONBOARDING_LIMITS]
+
+
 def render(
     payload: dict[str, Any],
     *,
@@ -591,9 +602,21 @@ def render(
     viewer_card_number: str | None = None,
     match_night: dict[str, Any] | None = None,
     ui: str = "classic",
+    engine: str = "m3",
 ) -> str:
     if ui not in ("classic", "broadcast"):
         raise ValueError(f"unknown ui {ui!r}: expected 'classic' or 'broadcast'")
+    if engine not in ("m3", "v2"):
+        raise ValueError(f"unknown engine {engine!r}: expected 'm3' or 'v2'")
+    # V2 candidate builds embed the V2 pairing model and open on V2, with M3 one tap away for comparison.
+    # Standard builds (engine="m3") embed nothing new and behave exactly as before.
+    v2_script = ""
+    if engine == "v2":
+        from analytics.uc_v2_pair_model import load_model
+        import os
+        build = {"version": os.environ.get("UC_BUILD_LABEL") or "V2 candidate", "built": built_at or ""}
+        v2_script = ("var UC_V2_MODEL=" + _script_json(load_model()) + ";var UC_ENGINE_DEFAULT=\"v2\";"
+                     + "var UC_BUILD_INFO=" + _script_json(build) + ";")
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     compact_payload["match_night"] = match_night
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -658,7 +681,7 @@ def render(
         '<div><h3>Worked example from this build</h3><ul>'
         + (li(example) if example else "<li>No viewer is configured for this build: pick yourself on Match Day and it "
            "fills in team, date and fixture the same way.</li>")
-        + f'</ul></div></div><h3>Important limitations</h3><ul>{li(ONBOARDING_LIMITS)}</ul>'
+        + f'</ul></div></div><h3>Important limitations</h3><ul>{li(_limits_for(engine))}</ul>'
         f'<h3>Mobile match night</h3><ul>{li(MATCH_NIGHT_GUIDE)}</ul>'
         f'<p class="muted">Version: {escape(version)} · Build date: {escape(fresh["build_date"])} · data current to the '
         f'latest recorded result {escape(fresh["latest_result"])}'
@@ -848,7 +871,9 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .rank-table th:nth-child(3),body.print-matchup .rank-table td:nth-child(3) {{ display:none; }}
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
-{_WAR_ROOM_CSS}</style>{bc.style_markup(ui)}</head>
+{_WAR_ROOM_CSS}
+#uc-engine-badge {{ position:sticky; top:0; z-index:10000; padding:8px max(16px,env(safe-area-inset-left,0px)); font:700 13px/1.4 system-ui,sans-serif; text-align:center; color:#fff; }} #uc-engine-badge.engine-v2 {{ background:#0b6b3a; }} #uc-engine-badge.engine-m3 {{ background:#6b4d00; }} #uc-engine-badge.fallback {{ background:#8f251b; }} #uc-engine-badge .uc-build {{ font-weight:400; opacity:.9; }} #uc-engine-badge .uc-badge-switch {{ margin-left:8px; min-height:32px; border:1px solid #fff; background:transparent; color:#fff; border-radius:4px; padding:2px 10px; font:600 12px system-ui,sans-serif; cursor:pointer; }}
+.uc-engine-switch {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }} .uc-compare-scroll {{ overflow-x:auto; }} table.uc-compare {{ border-collapse:collapse; width:100%; font-size:13px; }} table.uc-compare th, table.uc-compare td {{ padding:4px 6px; border-bottom:1px solid #d8ddd9; text-align:left; vertical-align:top; }} table.uc-compare tr.differs th, table.uc-compare tr.differs td {{ background:#fff6db; }} table.uc-compare tr.why td {{ font-size:12px; color:#5b6a61; }} .v2-concession {{ font-weight:700; color:#8f251b; font-size:11px; text-transform:uppercase; }} .mp-favored {{ color:#1d5c34; }} .mp-edge {{ color:#2f6f4a; }} .mp-toss-up {{ color:#7a4b00; }} .mp-underdog, .mp-long {{ color:#8f251b; }}</style>{bc.style_markup(ui)}</head>
 <body class="{'match-night' if match_night else ''}{bc.body_class(ui)}"{' data-view="home"' if ui == "broadcast" else ''}>
 {bc.top_markup(ui, bc_facts)}<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>
 <div><h1>Ultimate Coach — Captain's War Room</h1>
@@ -929,7 +954,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
 <div class="section-title"><h2>Data trust &amp; freshness</h2><p>What is verified, what is excluded, and why.</p></div>
 {trust_card}
 </div>
-<footer class="page-foot">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes.</footer>
+<footer class="page-foot">Built {escape(built_at) if built_at else "from the selected SQLite snapshot"}. {"V2 CANDIDATE build: shows back-tested win-chance estimates from the V2 pairing model next to the M3 baseline; estimates, not guarantees." if engine == "v2" else "This page shows recorded APA facts and derived comparisons only. No matchup probability is displayed until a separately back-tested calibration gate passes."}</footer>
 </main>
 <script id="uc-data" type="application/json">{data}</script>
 <script>
@@ -1410,6 +1435,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
     return 'None of our roster has met '+playerRef(opp)+' directly. '+plural(ind,'player')+(ind===1?' has':' have')+' shared-opponent evidence only — not ranked against each other; compare ours vs theirs in the matrix.';
   }}
 
+{v2_script}
 {_WAR_ROOM_JS}
   // ---- Matchup header + focused print ----
   // MATCHUP_CONTEXT is set only by Match Day's Compare button and is kept
