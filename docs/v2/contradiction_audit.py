@@ -159,7 +159,7 @@ def check(state, label, fails, exceptions, counts=None, expect=None):
             ok("I3")
         if c.get("grade") == "D" and n:
             fail("I4", f"{c['name']} graded D but answers {n} put-up(s)")
-        elif c.get("grade") in ("A", "B") and c["role"] == "situational":
+        elif c.get("grade") in ("A", "B", "C") and c["role"] == "situational":
             fail("I4", f"{c['name']} graded {c['grade']} but Not planned")
         else:
             ok("I4")

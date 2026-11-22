@@ -1793,11 +1793,12 @@
       else if(conc.length){card.role="burn";card.recommend="Planned concession vs "+lst(conc)+" — keeps stronger players for later matchups";}
       else if(n){card.role="flexible";card.recommend="Best available vs "+lst(card.answers)+" (every option is a long shot)";}
       else if(games.length){card.role="flexible";card.recommend="In the planned five: "+games.map(function(g){return "vs "+g.their+" ("+wrPct(g.p)+")";}).join(" or ");}
+      else if(drop>=V2_PLAN_TIE){card.role="backup";card.recommend="Backup: not in the planned five, but the plan relies on having them available";}
       else{card.role="situational";card.recommend="Not in the planned five; an alternative only";}
       card.recommend+=" · plan "+(drop>0?"loses "+drop.toFixed(2):"keeps its value")+" expected wins without them";
       card.grade=(drop>=0.15||n>=3)?"A":(drop>=0.07||comp.length)?"B":(drop>=0.02||games.length||n)?"C":"D";
       return card;});
-    var order={core:0,save:1,flexible:2,burn:3,situational:4,used:5,out:6};
+    var order={core:0,save:1,flexible:2,burn:3,backup:4,situational:5,used:6,out:7};
     cards.sort(function(a,b){return (order[a.role]-order[b.role])||String(a.grade||"Z").localeCompare(String(b.grade||"Z"))||a.name.localeCompare(b.name);});
     var path=function(rows){return (rows||[]).map(function(g){return {leader:g.leader,our:g.our,their:g.their,level:g.level};});};
     var fragility=mp.fragility||{rating:"Unavailable",player:""};
