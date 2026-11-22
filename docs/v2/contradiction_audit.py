@@ -1,224 +1,357 @@
-"""Ultimate Coach contradiction detector (reusable audit harness).
+"""Ultimate Coach contradiction detector, version 2 (GA-01 / GA-02).
 
 Drives a built V2 review HTML in a real browser through many match-night states for every team pair of one
-division, and cross-checks what each screen says. Real data stays local: the full report (with names) is written
-to --out; --summary writes counts and invariant names only (safe to publish).
+division and cross-checks what each screen says. Every invariant reports checked / skipped / failed counts, a
+missing mandatory output is a failure (never a silent pass), and zero coverage fails the run. Real data stays
+local: --out holds the detailed report (names); --summary holds counts, invariant names and the HTML hash only.
 
-    python -I docs/v2/contradiction_audit.py --html <V2 HTML> --division <id> --format EIGHT --out report.json --summary summary.json
+    python -I docs/v2/contradiction_audit.py --html <V2 HTML> --division <id> --format EIGHT --out report.json --summary summary.json [--shard i/n]
 
-States per ordered team pair: start of night with cap 23, cap 22 and cap cleared; one of our players marked Out;
-one game already played (engine's own first answer recorded). Invariants (each failure is a contradiction unless it
-is listed as a quantified strategic exception):
+States per ordered team pair (format given by --format): cap 23 / 22 / cleared; toss us / them; 1-4 games already
+played (the engine's own answers recorded); one of ours Out; one of theirs Out; no feasible five (all but three
+of ours Out). Invariants:
 
-  I1  recommended player is available and has not played
-  I2  Match Night answer vs Command Board: the answer is listed as that player's planned answer, never under
-      "long shot vs/avoid"; a player with planned answers is never "Not planned"
-  I3  "save"/"planned answer" roles only with planned answers; concession role only with a concession answer
-  I4  value grade consistent with stated value (D never has planned answers; A/B never "Not planned")
-  I5  one probability per pairing: trace = comparison = send card = V2 pair table
-  I6  plan consistency: first game of each plan = the card's lead/answer; totals = plan path sums; the
-      comparison scores the same policy
-  I7  skill cap: every planned five fits the effective cap (known skill levels); the board shows the cap in force
-  I8  no M3 vocabulary in V2 recommendations (levels, roles, lead options, send scenarios, board)
-  I9  giving up the strongest matchup now only as a labelled strategic choice with gains >= 0.10 under both
-      opponent models (quantified exception); near-ties disclosed
-  I10 state changes are reflected (Out player gone, played player gone, cap shown = cap in force)
-  I11 no unsupported claims (no "optimal team points"; APA point margins disclosed as not modelled)
+  I0  the page shows the requested teams and format, in V2 (engine badge says V2)
+  I1  recommended players are available on both sides and have not played; no duplicates in any planned line
+  I2  Match Night answer vs Command Board (planned answer listed, never "long shot vs/avoid", never "Not planned")
+  I3  roles need their evidence (planned answer / concession)
+  I4  value grade consistent with stated value
+  I5  one probability per pairing (trace = send card = comparison); the trace exists whenever there is an answer
+  I6  plan consistency (first games = cards; totals = paths; comparison = same policy); comparison exists in V2
+  I7  skill cap: prior spend + planned line <= cap when every skill level is known; unknown skill levels are
+      reported as incomplete (skipped), never counted as zero
+  I8  no M3 vocabulary in V2 recommendations; rendered send card names the model's answer; no legacy notes
+  I9  giving up the strongest matchup only as a labelled strategic choice with >= 0.10 under both models
+  I10 state changes reflected (Out players gone on both sides, played players gone, cap shown = cap in force)
+  I11 no unsupported claims (no "optimal team points")
 """
 import argparse
+import hashlib
 import json
+import sys
+import time
 from pathlib import Path
-
-from playwright.sync_api import sync_playwright
 
 V2_LEVELS = {"Favored", "Edge", "Toss-up", "Underdog", "Long shot"}
 M3_LEVELS = {"Strong", "Solid", "Thin", "Unknown", "Conflicted", "Caution"}
+INVARIANTS = ["I0", "I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9", "I10", "I11"]
 
-STATE_JS = """([a, b, fmt, cap, outId, playFirst]) => {
-  localStorage.clear();
-  document.getElementById('bc-team-a').value = a; document.getElementById('bc-team-a').dispatchEvent(new Event('change', {bubbles: true}));
-  document.getElementById('bc-team-b').value = b; document.getElementById('bc-team-b').dispatchEvent(new Event('change', {bubbles: true}));
-  const capEl = document.getElementById('bc-cap');
-  if (capEl) { capEl.value = cap === null ? '' : String(cap); capEl.dispatchEvent(new Event('input', {bubbles: true})); capEl.dispatchEvent(new Event('change', {bubbles: true})); }
-  // Reset this fixture's in-memory marks (clearing storage does not reset the page's state).
+STATE_JS = """([a, b, fmt, cap, outIds, oppOutIds, played, toss]) => {
+  const fire = (id, v, ev) => { const el = document.getElementById(id); if (!el) return; el.value = v; for (const e of ev) el.dispatchEvent(new Event(e, {bubbles: true})); };
+  fire('bc-team-a', a, ['change']); fire('bc-team-b', b, ['change']);
   let guard = 10;
   while (guard-- > 0 && window.UC_BC_LAST && window.UC_BC_LAST.night && (window.UC_BC_LAST.night.games || []).length) window.UC_ACT.undo();
   window.UC_ACT.toss('');
-  for (const p of ((window.UC_BC_LAST && window.UC_BC_LAST.night && window.UC_BC_LAST.night.bench.ours) || [])) if (p.avail === 'Unavailable') window.UC_ACT.avail(p.id, 'Available');
-  if (outId) window.UC_ACT.avail(outId, 'Unavailable');
-  let m = window.UC_BC_LAST;
-  if (playFirst && m && m.rows && m.rows.length) {
-    const r = m.rows[0]; window.UC_ACT.send(r.ourId, r.theirId); m = window.UC_BC_LAST;
+  const nb = () => (window.UC_BC_LAST && window.UC_BC_LAST.night && window.UC_BC_LAST.night.bench) || {ours: [], theirs: []};
+  for (const p of nb().ours) if (p.avail === 'Unavailable') window.UC_ACT.avail(p.id, 'Available');
+  for (const p of nb().theirs) if (p.out) window.UC_ACT.oppOut(p.id, false);
+  fire('bc-cap', cap === null ? '' : String(cap), ['input', 'change']);
+  if (toss) window.UC_ACT.toss(toss);
+  for (const id of outIds) window.UC_ACT.avail(id, 'Unavailable');
+  for (const id of oppOutIds) window.UC_ACT.oppOut(id, true);
+  for (let k = 0; k < played; k++) {           // record the engine's own answers, one game at a time
+    const m = window.UC_BC_LAST; if (!m || !m.rows || !m.rows.length) break;
+    const r = m.rows[0]; window.UC_ACT.send(r.ourId, r.theirId);
   }
-  // Open the night on each put-up to read the send card and trace for that opponent.
+  const m = window.UC_BC_LAST;
   const per = [];
-  const ids = ((m && m.rows) || []).map(r => [r.their, r.theirId]);
-  for (const [their, theirId] of ids) {
-    const r = {their: their, theirId: theirId};
-    window.UC_ACT.pick(r.theirId);
-    const n = window.UC_BC_LAST.night;
-    per.push({their: r.their, theirId: r.theirId, answer: n.answer, trace: n.trace, avoid: (n.avoid || []).map(c => c.name),
+  for (const [their, theirId] of ((m && m.rows) || []).map(r => [r.their, r.theirId])) {
+    window.UC_ACT.pick(theirId);
+    const n = window.UC_BC_LAST.night, hero = document.querySelector('#bc-night .send-hero .send-name');
+    per.push({their: their, theirId: theirId, answer: n.answer, trace: n.trace, avoid: (n.avoid || []).map(c => c.name),
               notes: (n.ranked || []).concat(n.unordered || []).map(c => (c.save || '') + (c.cost || '')).join(' '),
+              rendered: hero ? hero.textContent.trim() : null,
               scen: (n.sendScenarios || []).map(s => ({name: s.name, level: s.level, recommended: s.recommended}))});
   }
-  window.UC_ACT.pick(null);
+  window.UC_ACT.pick('');
   const mm = window.UC_BC_LAST;
-  return {engine: window.__ucEngine(), cap: mm.cap, played: mm.played, rows: mm.rows, lead: mm.lead,
-          command: mm.night.command, compare: mm.night.engineCompare, bench: mm.night.bench,
-          leadOptions: (mm.night.leadOptions || []).map(o => ({name: o.name, level: o.reply && o.reply.level})),
-          per: per, badge: (document.getElementById('uc-engine-badge') || {}).innerText || '',
-          plan: mm.night.planCheck};
+  return {engine: window.__ucEngine(), ourKey: mm.ourKey, theirKey: mm.theirKey, format: mm.format, cap: mm.cap, played: mm.played,
+          rows: mm.rows, command: mm.night.command, compare: mm.night.engineCompare, bench: mm.night.bench, games: mm.night.games,
+          per: per, badge: (document.getElementById('uc-engine-badge') || {}).innerText || '', plan: mm.night.planCheck};
 }"""
 
 
-def check(state, label, fails, exceptions):
+class Counter:
+    def __init__(self):
+        self.c = {k: {"checked": 0, "skipped": 0, "failed": 0} for k in INVARIANTS}
+
+
+def check(state, label, fails, exceptions, counts=None, expect=None):
+    """Cross-check one rendered state. expect = (ourKey, theirKey, format label or None). Returns the counts."""
+    counts = counts or Counter()
+
+    def ok(inv):
+        counts.c[inv]["checked"] += 1
+
+    def skip(inv):
+        counts.c[inv]["skipped"] += 1
+
     def fail(inv, msg):
+        counts.c[inv]["checked"] += 1
+        counts.c[inv]["failed"] += 1
         fails.append({"state": label, "invariant": inv, "detail": msg})
-    rows, cmd = state["rows"] or [], state["command"] or {}
-    cards = {c["name"]: c for c in cmd.get("cards", [])}
-    bench = {b["name"]: b for b in state["bench"]["ours"]}
-    # I1 / I10
+
+    rows, cmd, plan = state.get("rows") or [], state.get("command") or {}, state.get("plan")
+    v2 = state.get("engine") == "v2"
+    # I0 requested teams/format, V2
+    if expect:
+        if state.get("ourKey") != expect[0] or state.get("theirKey") != expect[1]:
+            fail("I0", f"page shows {state.get('ourKey')} v {state.get('theirKey')}, requested {expect[0]} v {expect[1]}")
+        elif expect[2] and expect[2] not in str(state.get("format")):
+            fail("I0", f"page format {state.get('format')} != requested {expect[2]}")
+        else:
+            ok("I0")
+    if not v2 or "ENGINE: V2 CANDIDATE" not in (state.get("badge") or ""):
+        fail("I0", "not in V2 (engine or badge)")
+    else:
+        ok("I0")
+    bench_ours = {str(b["id"]): b for b in (state.get("bench") or {}).get("ours", [])}
+    bench_theirs = {str(b["id"]): b for b in (state.get("bench") or {}).get("theirs", [])}
+    # I1 availability on both sides; no duplicates (stable ids)
     for r in rows:
-        b = bench.get(r["our"])
+        b, t = bench_ours.get(str(r.get("ourId"))), bench_theirs.get(str(r.get("theirId")))
         if not b or not b["rem"]:
             fail("I1", f"{r['our']} recommended vs {r['their']} but is not available/remaining")
+        elif not t or not t["unplayed"] or t.get("out"):
+            fail("I1", f"answer offered vs {r['their']} who has played or is out")
+        else:
+            ok("I1")
+    if plan is None:
+        fail("I6", "plan missing")
+        plan = {}
+    for nm in ("plan_if_they_lead", "plan_if_we_lead"):
+        line = plan.get(nm) or []
+        ids = [str(g.get("our_id") or g["our"]) for g in line]
+        tids = [str(g.get("their_id") or g["their"]) for g in line]
+        if len(set(ids)) != len(ids) or len(set(tids)) != len(tids):
+            fail("I1", f"{nm} uses a player twice")
+        elif any(i in bench_ours and not bench_ours[i]["rem"] for i in ids):
+            fail("I1", f"{nm} uses a player of ours who is out or has played")
+        elif any(t in bench_theirs and (not bench_theirs[t]["unplayed"] or bench_theirs[t].get("out")) for t in tids):
+            fail("I1", f"{nm} plans against an opponent who has played or is out")
+        elif line:
+            ok("I1")
     # I2 / I3 / I4
+    cards = {c["name"]: c for c in cmd.get("cards", [])}
+    if rows and not cards:
+        fail("I2", "answers exist but the Command Board is empty")
     for r in rows:
         c = cards.get(r["our"])
         if not c:
-            fail("I2", f"no board card for {r['our']}"); continue
+            fail("I2", f"no board card for {r['our']}")
+            continue
         ans = [a["opp"] for a in c.get("answers", [])]
         if r["their"] not in ans:
             fail("I2", f"{r['our']} is Match Night's answer to {r['their']} but the board does not list it")
-        if any(x["opp"].startswith(r["their"] + " ") or x["opp"] == r["their"] for x in c.get("avoid", [])):
+        elif any(x["opp"] == r["their"] or x["opp"].startswith(r["their"] + " ") for x in c.get("avoid", [])):
             fail("I2", f"board says {r['our']} should avoid {r['their']}, Match Night sends them")
-        if c["role"] == "situational":
+        elif c["role"] == "situational":
             fail("I2", f"{r['our']} answers {r['their']} but the board says Not planned")
+        else:
+            ok("I2")
     for c in cmd.get("cards", []):
         n = len(c.get("answers", []))
         if c["role"] == "save" and not n:
             fail("I3", f"{c['name']} has role Planned answer without any planned answer")
-        if c["role"] == "burn" and not any("concession" in (a.get("role") or "") for a in c.get("answers", [])):
+        elif c["role"] == "burn" and not any("concession" in (a.get("role") or "") for a in c.get("answers", [])):
             fail("I3", f"{c['name']} is a Concession without a concession answer")
+        else:
+            ok("I3")
         if c.get("grade") == "D" and n:
             fail("I4", f"{c['name']} graded D but answers {n} put-up(s)")
-        if c.get("grade") in ("A", "B") and c["role"] == "situational":
+        elif c.get("grade") in ("A", "B") and c["role"] == "situational":
             fail("I4", f"{c['name']} graded {c['grade']} but Not planned")
-        if not c.get("v2") and state["engine"] == "v2" and c["role"] not in ("used", "out"):
+        else:
+            ok("I4")
+        if v2 and not c.get("v2") and c["role"] not in ("used", "out"):
             fail("I8", f"board card for {c['name']} built by M3 logic")
-    # I5 / I9
-    for x in state["per"]:
-        t = x["trace"]
+    # I5 / I8 / I9 per put-up
+    for x in state.get("per", []):
+        t = x.get("trace")
+        if x.get("answer") and not t:
+            fail("I5", f"answer vs {x['their']} has no decision trace")
+            continue
         if not t:
+            skip("I5")
             continue
         pick = next((rr for rr in t["rows"] if rr["pick"]), None)
-        if x["answer"] and pick and x["answer"]["our"] != pick["name"]:
+        if not pick:
+            fail("I5", f"trace vs {x['their']} has no pick")
+            continue
+        if x.get("answer") and x["answer"]["our"] != pick["name"]:
             fail("I5", f"send card answer {x['answer']['our']} != trace pick {pick['name']} vs {x['their']}")
-        if x["answer"] and pick and abs((x["answer"].get("p") or 0) - pick["p"]) > 1e-12:
+        elif x.get("answer") and abs((x["answer"].get("p") if x["answer"].get("p") is not None else -1) - pick["p"]) > 1e-12:
             fail("I5", f"send card and trace give different win chances for {pick['name']} vs {x['their']}")
-        cmp_row = next((cr for cr in (state["compare"] or {}).get("rows", []) if cr["their"] == x["their"]), None)
-        if cmp_row and cmp_row.get("v2") and pick and cmp_row["v2"]["our"] == pick["name"] and abs((cmp_row["v2"]["p"] or 0) - pick["p"]) > 1e-12:
-            fail("I5", f"comparison and trace give different win chances for {pick['name']} vs {x['their']}")
-        now = max(t["rows"], key=lambda rr: rr["p"])
-        if pick and now["p"] - pick["p"] > 0.01:
-            if not (t["strategic"] and t["gainWorst"] >= 0.10 - 1e-9 and t["gainAvg"] >= 0.10 - 1e-9 and "Strategic choice" in t["summary"]):
-                fail("I9", f"{pick['name']} ({pick['p']:.3f}) chosen over stronger {now['name']} ({now['p']:.3f}) vs {x['their']} without a qualifying explanation")
+        else:
+            ok("I5")
+        cmp_row = next((cr for cr in (state.get("compare") or {}).get("rows", []) if cr["their"] == x["their"]), None)
+        if cmp_row and cmp_row.get("v2") and cmp_row["v2"]["our"] == pick["name"]:
+            if abs((cmp_row["v2"]["p"] if cmp_row["v2"]["p"] is not None else -1) - pick["p"]) > 1e-12:
+                fail("I5", f"comparison and trace give different win chances for {pick['name']} vs {x['their']}")
             else:
+                ok("I5")
+        if v2 and x.get("answer"):
+            if x.get("rendered") is None:
+                fail("I8", f"no rendered send card vs {x['their']}")
+            elif x["rendered"] != x["answer"]["our"]:
+                fail("I8", f"rendered send card names {x['rendered']} but the plan answer is {x['answer']['our']}")
+            elif x["answer"]["our"] in x.get("avoid", []):
+                fail("I2", f"send card recommends {x['answer']['our']} and lists them under avoid vs {x['their']}")
+            elif "consider saving" in x.get("notes", "") or "Sending now spends" in x.get("notes", ""):
+                fail("I8", f"legacy save/spend note on a V2 send card vs {x['their']}")
+            elif any(s["level"].split(" ")[0] in M3_LEVELS for s in x.get("scen", [])):
+                fail("I8", "send scenario shows an M3 level")
+            else:
+                ok("I8")
+        now = max(t["rows"], key=lambda rr: rr["p"])
+        if now["p"] - pick["p"] > 0.01:
+            if t["strategic"] and t["gainWorst"] >= 0.10 - 1e-9 and t["gainAvg"] >= 0.10 - 1e-9 and "Strategic choice" in t["summary"]:
+                ok("I9")
                 exceptions.append({"state": label, "their": x["their"], "pick": pick["name"], "strongest": now["name"],
                                    "gainWorst": round(t["gainWorst"], 3), "gainAvg": round(t["gainAvg"], 3)})
-        if state["engine"] == "v2" and x["answer"] and x["answer"]["our"] in x.get("avoid", []):
-            fail("I2", f"send card recommends {x['answer']['our']} and lists them under avoid vs {x['their']}")
-        if state["engine"] == "v2" and ("consider saving" in x.get("notes", "") or "Sending now spends" in x.get("notes", "")):
-            fail("I8", f"legacy save/spend note on a V2 send card vs {x['their']}")
-        for s in x["scen"]:
-            if state["engine"] == "v2" and s["level"].split(" ")[0] in M3_LEVELS:
-                fail("I8", f"send scenario shows M3 level {s['level']}")
-    # I6
-    p = state["plan"]
-    them, lead = p.get("plan_if_they_lead") or [], p.get("plan_if_we_lead") or []
+            else:
+                fail("I9", f"{pick['name']} ({pick['p']:.3f}) chosen over stronger {now['name']} ({now['p']:.3f}) vs {x['their']} without a qualifying explanation")
+        else:
+            ok("I9")
+    # I6 plan consistency
+    them, lead = plan.get("plan_if_they_lead") or [], plan.get("plan_if_we_lead") or []
+    if rows and not them:
+        fail("I6", "answers exist but the they-lead plan is empty")
     if them:
-        first = next((r for r in p["responses"] if r["their"] == them[0]["their"]), None)
+        first = next((r for r in plan.get("responses", []) if r["their"] == them[0]["their"]), None)
         if not first or first["our"] != them[0]["our"]:
             fail("I6", "first game of the they-lead plan differs from the card's answer")
-        if p.get("total_if_they_lead") is not None and abs(p["total_if_they_lead"] - round(1000 * sum(g["p"] for g in them))) > 1:
+        elif plan.get("total_if_they_lead") is not None and abs(plan["total_if_they_lead"] - round(1000 * sum(g["p"] for g in them))) > 1:
             fail("I6", "they-lead total is not the plan path's expected wins")
-    if lead and p.get("lead") and lead[0]["our"] != p["lead"]["our"]:
-        fail("I6", "first game of the we-lead plan differs from the lead card")
-    c = state["compare"]
-    if c and c.get("v2Them") and them and abs(c["v2Them"]["w"] - sum(g["p"] for g in them)) > 1e-9:
-        fail("I6", "comparison scores a different policy than the plan")
-    # I7
-    sl = {b["name"]: b["sl"] for b in state["bench"]["ours"]}
-    if state["cap"] is not None:
+        else:
+            ok("I6")
+    if lead and plan.get("lead"):
+        if lead[0]["our"] != plan["lead"]["our"]:
+            fail("I6", "first game of the we-lead plan differs from the lead card")
+        else:
+            ok("I6")
+    c = state.get("compare")
+    if v2 and rows and not c:
+        fail("I6", "V2 comparison missing")
+    elif c and c.get("v2Them") and them:
+        if abs(c["v2Them"]["w"] - sum(g["p"] for g in them)) > 1e-9:
+            fail("I6", "comparison scores a different policy than the plan")
+        else:
+            ok("I6")
+    # I7 skill cap including prior spend; unknown skill levels are incomplete, never zero
+    sl = {str(b["id"]): b.get("sl") for b in (state.get("bench") or {}).get("ours", [])}
+    if state.get("cap") is None:
+        skip("I7")
+    else:
+        prior = [sl.get(str(g.get("ourId"))) for g in state.get("games") or []]
         for nm, line in (("they-lead", them), ("we-lead", lead)):
-            known = [sl.get(g["our"]) for g in line]
-            if all(v is not None for v in known) and len(line) == 5 - (state["played"] or 0) and sum(known) > state["cap"]:
-                fail("I7", f"{nm} plan uses skill total {sum(known)} over cap {state['cap']}")
-    # I8 levels
-    if state["engine"] == "v2":
-        for r in rows:
-            if r["level"] not in V2_LEVELS:
-                fail("I8", f"answer level {r['level']} is not a V2 band")
-        for g in them + lead:
-            if g["level"] not in V2_LEVELS:
-                fail("I8", f"plan level {g['level']} is not a V2 band")
-        if "ENGINE: V2 CANDIDATE" not in state["badge"]:
-            fail("I8", "engine badge does not say V2")
+            if not line:
+                skip("I7")
+                continue
+            plan_sl = [sl.get(str(g.get("our_id"))) for g in line]
+            if any(v is None for v in plan_sl + prior):
+                skip("I7")
+                continue
+            total = sum(prior) + sum(plan_sl)
+            if total > state["cap"]:          # the cap limits any total, not only a full five
+                fail("I7", f"{nm}: prior {sum(prior)} + plan {sum(plan_sl)} = {total} over cap {state['cap']}")
+            else:
+                ok("I7")
+    # I8 vocabulary
+    if v2:
+        bad = [r["level"] for r in rows if r["level"] not in V2_LEVELS] + [g["level"] for g in them + lead if g["level"] not in V2_LEVELS]
+        if bad:
+            fail("I8", f"non-V2 levels in recommendations: {sorted(set(bad))}")
+        elif rows:
+            ok("I8")
+    return counts
 
 
 def main():
+    from playwright.sync_api import sync_playwright
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--html", required=True)
     ap.add_argument("--division", required=True)
     ap.add_argument("--format", default="EIGHT")
     ap.add_argument("--out", required=True)
     ap.add_argument("--summary")
-    ap.add_argument("--limit", type=int, default=0, help="only the first N ordered team pairs (0 = all)")
-    ap.add_argument("--shard", default="1/1", help="i/n: run every n-th pair starting at i (parallel runs)")
+    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--shard", default="1/1")
     a = ap.parse_args()
-    fails, exceptions, states = [], [], 0
+    fmt_label = {"EIGHT": "8-Ball", "NINE": "9-Ball"}.get(a.format)
+    html_hash = hashlib.sha256(Path(a.html).read_bytes()).hexdigest()
+    fails, exceptions, counts, states, no_answer = [], [], Counter(), 0, 0
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         page.goto(Path(a.html).resolve().as_uri())
         page.wait_for_selector("#bc-team-a")
-        text = page.inner_text("body")
-        if "optimal team points" in text.lower() or "optimizes team points" in text.lower():
+        text = page.inner_text("body").lower()
+        counts.c["I11"]["checked"] += 1
+        if "optimal team points" in text or "optimizes team points" in text:
             fails.append({"state": "page", "invariant": "I11", "detail": "unsupported team-point optimisation claim"})
+            counts.c["I11"]["failed"] += 1
         keys = page.evaluate("d => Array.from(document.querySelectorAll('#bc-team-a option')).map(o => o.value).filter(v => v && v.indexOf('|' + d + '|') >= 0)", a.division)
         pairs = [(x, y) for x in keys for y in keys if x != y]
         if a.limit:
             pairs = pairs[:a.limit]
         si, sn = (int(v) for v in a.shard.split("/"))
         pairs = pairs[si - 1::sn]
-        import sys, time
         t0 = time.time()
+
+        def i10(label, cond, msg):
+            counts.c["I10"]["checked"] += 1
+            if cond:
+                counts.c["I10"]["failed"] += 1
+                fails.append({"state": label, "invariant": "I10", "detail": msg})
+
         for k, (x, y) in enumerate(pairs, 1):
-            base = page.evaluate(STATE_JS, [x, y, a.format, 23, None, False])
-            variants = [("cap23", 23, None, False), ("cap22", 22, None, False), ("capOff", None, None, False), ("played1", 23, None, True)]
+            base = page.evaluate(STATE_JS, [x, y, a.format, 23, [], [], 0, ""])
+            ours = [p["id"] for p in base["bench"]["ours"]]
+            theirs = [p["id"] for p in base["bench"]["theirs"]]
+            variants = [("cap23", 23, [], [], 0, ""), ("cap22", 22, [], [], 0, ""), ("capOff", None, [], [], 0, ""),
+                        ("tossUs", 23, [], [], 0, "us"), ("tossThem", 23, [], [], 0, "them")]
+            variants += [(f"played{n}", 23, [], [], n, "them") for n in range(1, 5)]
             if base["rows"]:
-                variants.append(("out1", 23, base["rows"][0]["ourId"], False))
-            for tag, cap, out_id, play in variants:
-                st = page.evaluate(STATE_JS, [x, y, a.format, cap, out_id, play])
+                variants.append(("ourOut", 23, [base["rows"][0]["ourId"]], [], 0, ""))
+            if theirs:
+                variants.append(("theirOut", 23, [], [theirs[0]], 0, ""))
+            if len(ours) > 3:
+                variants.append(("noFive", 23, ours[3:], [], 0, ""))
+            for tag, cap, out_ids, opp_out, played, toss in variants:
+                st = page.evaluate(STATE_JS, [x, y, a.format, cap, out_ids, opp_out, played, toss])
                 states += 1
                 label = f"{x} v {y} [{tag}]"
-                check(st, label, fails, exceptions)
-                if tag.startswith("cap") and st["cap"] != cap:
-                    fails.append({"state": label, "invariant": "I10", "detail": f"cap in force {st['cap']} != set {cap}"})
-                if out_id and any(r["ourId"] == out_id for r in st["rows"]):
-                    fails.append({"state": label, "invariant": "I10", "detail": "Out player still recommended"})
+                if not st["rows"]:
+                    no_answer += 1
+                check(st, label, fails, exceptions, counts, (x, y, fmt_label))
+                if tag.startswith("cap"):
+                    i10(label, st["cap"] != cap, f"cap in force {st['cap']} != set {cap}")
+                for oid in out_ids:
+                    i10(label, any(str(r["ourId"]) == str(oid) for r in st["rows"]), "Out player still recommended")
+                for tid in opp_out:
+                    i10(label, any(str(r["theirId"]) == str(tid) for r in st["rows"]), "their Out player still offered as a put-up")
+                if played:
+                    i10(label, (st["played"] or 0) != min(played, 5), f"{played} sends recorded but {st['played']} shown played")
             print(f"progress {k}/{len(pairs)} pairs, {states} states, {len(fails)} contradictions, {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
         page.evaluate("localStorage.clear()")
         browser.close()
+    mandatory = ("I0", "I1", "I2", "I5", "I6", "I8", "I9")
+    coverage_ok = len(pairs) > 0 and states > 0 and all(counts.c[i]["checked"] > 0 for i in mandatory)
     by = {}
     for f in fails:
         by[f["invariant"]] = by.get(f["invariant"], 0) + 1
-    report = {"team_pairs": len(pairs), "states": states, "contradictions": len(fails), "by_invariant": by,
-              "strategic_exceptions": len(exceptions), "fails": fails, "exceptions": exceptions}
+    report = {"html_sha256": html_hash, "format": a.format, "shard": a.shard, "team_pairs": len(pairs), "states": states,
+              "no_answer_states": no_answer, "coverage_ok": coverage_ok, "counts": counts.c, "contradictions": len(fails),
+              "by_invariant": by, "strategic_exceptions": len(exceptions), "fails": fails, "exceptions": exceptions}
     Path(a.out).write_text(json.dumps(report, indent=1), encoding="utf-8")
+    summary = {k: report[k] for k in ("html_sha256", "format", "shard", "team_pairs", "states", "no_answer_states", "coverage_ok",
+                                      "counts", "contradictions", "by_invariant", "strategic_exceptions")}
     if a.summary:
-        Path(a.summary).write_text(json.dumps({k: report[k] for k in ("team_pairs", "states", "contradictions", "by_invariant", "strategic_exceptions")}, indent=1), encoding="utf-8")
-    print(json.dumps({k: report[k] for k in ("team_pairs", "states", "contradictions", "by_invariant", "strategic_exceptions")}, indent=1))
+        Path(a.summary).write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    print(json.dumps(summary, indent=1))
+    if not coverage_ok:
+        sys.exit("coverage check failed: zero pairs/states or a mandatory invariant was never checked")
 
 
 if __name__ == "__main__":

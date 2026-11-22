@@ -1169,7 +1169,7 @@
     var om=night.fullOurs,tm=night.fullTheirs,pol=v2Policy(night),opts={};
     if(!night.legalOurs(om).length||!night.legalTheirs(om,tm).length){mp.v2={night:night,policy:pol,options:opts};return mp;}
     var conf=function(i,j){return value[String(ours[i].id)+"|"+String(theirs[j].id)];};
-    var describe=function(l){return l.map(function(g,n){return {game:n+1,leader:g.leader,our:ours[g.our].name,their:theirs[g.their].name,level:conf(g.our,g.their).level,p:g.p};});};
+    var describe=function(l){return l.map(function(g,n){return {game:n+1,leader:g.leader,our:ours[g.our].name,our_id:String(ours[g.our].id),their:theirs[g.their].name,their_id:String(theirs[g.their].id),level:conf(g.our,g.their).level,p:g.p};});};
     // Answers to each put-up.
     mp.responses=night.legalTheirs(om,tm).map(function(j){
       var o=v2Options(night,j,pol),me=ours[o.pick.i],v=conf(o.pick.i,j);opts[theirs[j].name]=o;
