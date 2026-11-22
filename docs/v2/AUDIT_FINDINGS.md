@@ -31,6 +31,18 @@ locations and rules only. Tools: `docs/v2/contradiction_audit.py` (cross-screen 
 | Engine badge | `ucEngineBadge` | build flag; never remembered | reopen test |
 | Excel workbook | `ui/excel_war_room.py` | **M3 only** (no V2) | Excel suites |
 
+
+### Full screen inventory (Broadcast build, 7 tabs)
+| Tab | Sections (DOM id / heading) | Source (function) | Logic | V2 build uses |
+|---|---|---|---|---|
+| Home | team pickers `#bc-team-a/b`, cap `#bc-cap`, Key Matchups list | broadcast `renderHome` from `wrBroadcastModel.rows` | plan answers per put-up | V2 policy |
+| Schedule | Match Day `#match-day-card`, fixtures, viewer, coverage | `ui/ultimate_coach.py` Match Day | schedule facts | facts |
+| Match Night | night board `#bc-night` (status, who's here, toss, chips, send card), decision trace `#bc-v2-trace`, M3 vs V2 `#bc-engine-compare`, Captain command board, Compare all options `#bc-compare` (player details, Alternatives, Risks I accept) | `wrBroadcastModel`, `wrV2Trace`, `wrEngineCompare`, `wrCommandV2`, `wrSendScenarios`, broadcast `renderNight`/`commandHtml` | V2 policy; recorded records shown as facts | V2 |
+| Recommendations | Captain's War Room: `#wr-opportunities` (recorded options preview), `#wr-matrix`, `#team-comparison`, `#team-matchups` (evidence ranking per opponent) | `renderWarRoom`, `wrPlan`, `rankVsOpponent` | recorded head-to-head ordering (M3-era categories) | **recorded facts (not V2)** — L1 |
+| Threats | `#wr-risks` (threats, losing records, open risks), `#scouting-cards`, coach notes | `wrLiveThreats`, `renderWarRoom`, scouting cards | recorded records; notes are opinions | facts (V2 relabel of losing-records heading, a111f46) |
+| Team Status | `#team-rosters` (Player Form), `#lineup-lab` (marks, Five check, Risk briefing, Swap what-if, Snapshot, Recorded options now, unique winning records) | `formFor`, `wrFiveCore`, `wrBriefingCore`, `wrSwapCore`, `wrPlan` | facts / arithmetic; recorded-record lists | facts (V2 relabel of protected heading, a111f46) |
+| Summary | League table, recent results, Start here (incl. limitations), Data trust | broadcast `renderLeague`, `ui/ultimate_coach.py` start-here, trust card | facts; limitations text | V2-specific limitation line (a111f46) |
+
 Duplicated business logic / competing sources of truth found:
 1. Recorded-record "categories" (G/E/R/I/X in `rankVsOpponent` / `wrCategory`) still drive the classic Next Send list,
    blind send card, send-cost text and War Room opportunities. In V2 builds these describe recorded facts, but
@@ -56,6 +68,8 @@ Duplicated business logic / competing sources of truth found:
 | P2 | Medium | Base tap latency ~15 s on a 4x-throttled phone (shared with the Sunday build) | open, not V2-specific |
 | X1 | Low | Excel has no V2 | open by scope |
 | W1 | Low | Summary printed 0.099 as "+0.10" beside a 0.10 threshold | fixed a0bf857 (3 decimals) |
+| T1 | High | Start Here / Excel START HERE limits contradicted the product: "no skill cap is assumed", "Unknown availability is not Unavailable", "marks belong to one fixture"; V2 build also said no win-probability model exists | fixed a111f46 |
+| T2 | Medium | War Room "Avoid records" and Lineup Lab "Protected players (consider saving)" read as instructions that can contradict the V2 plan | relabelled as recorded facts in V2 builds, a111f46 |
 
 ## Owner fixture (sanitized), latest policy
 Their SL7 (64% APA career) put up first; 8 of ours available, none played, no player excluded. Estimates
