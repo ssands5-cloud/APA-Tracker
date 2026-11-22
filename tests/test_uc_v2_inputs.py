@@ -17,6 +17,7 @@ PAGE = """([a, b, cap]) => { const mp = window.__ucPlanFor(a, b, 'EIGHT', null, 
   const n = mp.v2.night, val = {};
   for (const o of n.ours) for (const t of n.theirs) { const v = n.value[String(o.id) + '|' + String(t.id)]; val[String(o.id) + '|' + String(t.id)] = v ? v.p : null; }
   return {ours: n.ours.map(p => String(p.id)), theirs: n.theirs.map(p => String(p.id)), p: val,
+          ourNames: n.ours.map(p => p.name), theirNames: n.theirs.map(p => p.name),
           lead: mp.lead ? String(mp.lead.our_id) : null, responses: (mp.responses || []).map(r => ({their: r.their, our: r.our, role: r.role}))}; }"""
 
 
@@ -34,6 +35,8 @@ def _differences(inputs, page_state, cap):
         diffs.append("our roster order")
     if [t["id"] for t in theirs] != page_state["theirs"]:
         diffs.append("their roster order")
+    if [o["name"] for o in ours] != page_state["ourNames"] or [t["name"] for t in theirs] != page_state["theirNames"]:
+        diffs.append("display names")
     for k, v in page_state["p"].items():
         o, t = k.split("|")
         if abs(p[(o, t)] - v) > 1e-12:
@@ -45,7 +48,7 @@ def _differences(inputs, page_state, cap):
         tid = next(k for k, v in tname.items() if v == r["their"])
         py = tr["responses"][tid]
         role = next(row["role"] for row in py["rows"] if row["our_id"] == py["pick"])
-        if not r["our"].startswith(name[py["pick"]]) or role != r["role"]:
+        if r["our"] != name[py["pick"]] or role != r["role"]:
             diffs.append(f"answer vs {r['their']}")
     if tr["lead"] and tr["lead"]["our_id"] != page_state["lead"]:
         diffs.append("lead")

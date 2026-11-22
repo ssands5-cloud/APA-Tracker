@@ -92,6 +92,15 @@ class V2Inputs:
                 team["players"].append({"id": p["id"], "external_id": p.get("external_id"), "name": p.get("name"),
                                         "skill_level": sl})
         self.teams = teams
+        # DISPLAY_LABELS: league-wide same-name groups get "(player i of n)", ordered by external ID (page: localeCompare).
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for p in compact.get("players") or []:
+            groups.setdefault(str(p.get("name") or "").strip().lower(), []).append(p)
+        self.labels: dict[str, str] = {}
+        for group in groups.values():
+            group = sorted(group, key=lambda q: _js_str(q.get("external_id")))
+            for i, q in enumerate(group):
+                self.labels[str(q["id"])] = q["name"] + (f" (player {i + 1} of {len(group)})" if len(group) > 1 else "")
         self.rows_for = lru_cache(maxsize=None)(self._rows_for)
         self.opp_map = lru_cache(maxsize=None)(self._opp_map)
         self.record = lru_cache(maxsize=None)(self._record)
@@ -122,6 +131,16 @@ class V2Inputs:
     def roster(self, team_key: str) -> list[dict[str, Any]]:
         return sorted(self.teams[team_key]["players"], key=_member_key)
 
+    def display_name(self, member: dict[str, Any], roster: list[dict[str, Any]]) -> str:
+        """wrDisplayName: within a roster, same-name players with distinct known skill levels read "Name (SL n)";
+        otherwise the league-wide label."""
+        key = str(member.get("name") or "").strip().lower()
+        dupes = [m for m in roster if m["id"] != member["id"] and str(m.get("name") or "").strip().lower() == key]
+        sl = member.get("skill_level")
+        if dupes and sl is not None and not any(m.get("skill_level") == sl for m in dupes):
+            return f"{member['name']} (SL {sl})"
+        return self.labels.get(str(member["id"]), member.get("name"))
+
     def pair_inputs(self, member, opp, fmt) -> dict[str, Any]:
         mm, om = self.opp_map(member["id"], fmt), self.opp_map(opp["id"], fmt)
         d = mm.get(str(opp["id"]))
@@ -144,5 +163,5 @@ class V2Inputs:
                 if v is None:
                     raise ValueError(f"no V2 model for format {fmt}")
                 p[(str(m["id"]), str(t["id"]))] = v
-        shape = lambda xs: [{"id": str(x["id"]), "name": x["name"], "sl": x["skill_level"]} for x in xs]
+        shape = lambda xs: [{"id": str(x["id"]), "name": self.display_name(x, xs), "sl": x["skill_level"]} for x in xs]
         return shape(ours), shape(theirs), p
