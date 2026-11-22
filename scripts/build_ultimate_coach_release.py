@@ -58,6 +58,8 @@ def main(argv=None) -> int:
         log.append(line)
     t0 = time.time()
     settings = load_match_day_settings(a.config.resolve())
+    step(f"VIEWER {'configured' if settings.viewer_member_external_id else 'NOT configured - no default team on Match Day'} "
+         f"(config {a.config.resolve()}, local overrides beside it)")
     commit = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
                            capture_output=True, text=True).stdout.strip()
@@ -88,7 +90,8 @@ def main(argv=None) -> int:
     manifest = {
         "schema": "ultimate-coach-release-v1", "built_at_utc": built_at, "code_commit": commit,
         "code_tree_clean": not dirty, "source_database": str(a.db), "source_database_sha256": src_sha,
-        "snapshot_sha256": snap_sha, "source_database_promoted": False, "policy": POLICY_VERSION,
+        "snapshot_sha256": snap_sha, "source_database_promoted": False,
+        "viewer_configured": bool(settings.viewer_member_external_id), "policy": POLICY_VERSION,
         "model_sha256": info["model_sha256"], "engine_sha256": info["engine_sha256"],
         "v2_inputs_sha256": info["v2_inputs_sha256"], "counts": payload.get("counts"),
         "artifacts": {p.name: sha256(p) for p in (html, xlsx, xlsm)},
