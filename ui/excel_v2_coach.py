@@ -93,7 +93,7 @@ def install(xlsx_in: str | Path, compact: dict[str, Any], xlsm_out: str | Path, 
     stamp = hashlib.sha256(json.dumps([roster, pairs], sort_keys=True, default=str).encode()).hexdigest()
     info = dict(meta, policy=POLICY_VERSION, model_sha256=_sha(MODEL), engine_sha256=_sha(BAS),
                 v2_inputs_sha256=stamp, roster_rows=str(len(roster)), pair_rows=str(len(pairs)))
-    xl = win32.dynamic.Dispatch("Excel.Application")
+    xl = win32.DispatchEx("Excel.Application")   # a fresh instance, never a running one
     xl.Visible = False
     xl.DisplayAlerts = False
     wb = None
