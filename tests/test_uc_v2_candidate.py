@@ -194,8 +194,10 @@ def test_v2_build_opens_on_v2_shows_the_comparison_and_switches_to_m3(tmp_path, 
             assert all(r["level"] in V2_LEVEL_ORDER for r in v2_plan["responses"])
             assert all(r["level"] not in V2_LEVEL_ORDER for r in m3_plan["responses"])
             assert page.evaluate("window.__ucEngine('m3')") == "m3"
+            assert "ENGINE: M3 BASELINE" in page.inner_text("#uc-engine-badge")
             page.reload()
-            assert page.evaluate("window.__ucEngine()") == "m3", "the captain's engine choice is remembered"
+            assert page.evaluate("window.__ucEngine()") == "v2", "a V2 build always reopens on V2"
+            assert "ENGINE: V2 CANDIDATE" in page.inner_text("#uc-engine-badge")
             assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
             assert errors == []
         finally:
@@ -351,5 +353,42 @@ def test_best_available_long_shot_is_not_called_a_deliberate_concession(tmp_path
             assert r["our"] == "Ace" and r["p"] < 0.40
             assert r["role"] == "Best available (every option is a long shot)"
             assert "deliberate concession" not in r["role"]
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("ui", ["classic", "broadcast"])
+def test_rebuilt_v2_file_opens_on_v2_even_after_m3_was_chosen_before(tmp_path, ui, monkeypatch):
+    """Owner review failure: an earlier 'M3' choice stored in the browser made a rebuilt V2 file open on M3."""
+    monkeypatch.setenv("UC_BUILD_LABEL", "test-build-1")
+    old = _render(tmp_path, ui=ui)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            context = browser.new_context(viewport={"width": 390, "height": 900})
+            page = context.new_page(); errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(old.as_uri())
+            page.locator("#uc-engine-badge [data-engine='m3']").click()
+            assert page.evaluate("window.__ucEngine()") == "m3"
+            # Simulate the earlier candidate's stored preference too.
+            page.evaluate("localStorage.setItem('ultimate-coach:engine','m3')")
+            # Rebuild (new label) at the same path and reopen in the same browser profile.
+            monkeypatch.setenv("UC_BUILD_LABEL", "test-build-2")
+            _render(tmp_path, ui=ui)
+            page.goto(old.as_uri())
+            assert page.evaluate("window.__ucEngine()") == "v2"
+            assert page.evaluate("localStorage.getItem('ultimate-coach:engine')") is None
+            badge = page.locator("#uc-engine-badge")
+            assert badge.is_visible() and "engine-v2" in badge.get_attribute("class")
+            text = badge.inner_text()
+            assert "ENGINE: V2 CANDIDATE" in text and "build test-build-2" in text and "2026-10-07 18:00 UTC" in text
+            # The badge stays on screen while scrolling (sticky at the top).
+            page.mouse.wheel(0, 3000); page.wait_for_timeout(100)
+            assert badge.bounding_box()["y"] <= 1
+            plan = page.evaluate(f"window.__ucPlanFor({OURS!r},{THEIRS!r},'EIGHT',null,null,0,0,23,window.__ucEngine())")
+            assert all(r["level"] in V2_LEVEL_ORDER for r in plan["responses"]), "default plan is V2"
+            assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+            assert errors == []
         finally:
             browser.close()

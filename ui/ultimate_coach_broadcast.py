@@ -703,6 +703,7 @@ _JS_BODY = r"""
     var undo=n.putUp?'<button type="button" class="night-btn" data-undo="1">Undo put-up</button>'
       :n.games.length?'<button type="button" class="night-btn" data-undo="1">Undo send</button>':"";
     var status='<div class="night-status"><span class="nm">'+esc(m.ourName)+'<i>vs</i>'+esc(m.theirName)+'</span>'
+      +(n.engineCompare?'<span class="night-pill engine-pill engine-'+esc(n.engine)+'">'+(n.engine==="v2"?"V2 candidate engine":"M3 baseline engine")+'</span>':'')
       +'<span class="night-pill gold">'+(done?"Final":"Game "+gameNo+" of 5")+'</span>'
       +(n.nextLeader&&!done?'<span class="night-pill" data-leader="'+n.nextLeader+'">'+(n.nextLeader==="us"?"We put up":"They put up")+'</span>':'')
       +'<span class="night-pill" title="Individual matches won and lost tonight">Matches '+n.score.w+"-"+n.score.l+'</span><span class="night-pill">'+esc(n.capText)+'</span><span class="night-spacer"></span>'+undo
@@ -823,7 +824,7 @@ _JS_BODY = r"""
           +'<div class="send-after"><b>After this send:</b> '+esc(cd&&cd.after?afterText(cd.after):(sc.slots?(sc.path.length?sc.path.map(function(p){return p.our+" vs "+p.their;}).join(" · "):"no remaining path"):"final pairing"))+'</div>'
           +'<p class="matchup-footnote">Bars show the recorded head-to-head record and its sample size, not odds.</p></section>';
       } else if(pickName){
-        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
+        hero='<section class="send-hero" aria-label="Send now"><span class="send-kicker">'+(n.engineCompare?(n.engine==="v2"?"V2 \u00b7 ":"M3 baseline \u00b7 "):"")+(n.chosen?"Send now vs ":"Preview — if they put up ")+esc(n.opp.name)+(n.opp.sl!=null?' · SL '+esc(n.opp.sl):'')+'</span>'
           +'<div class="send-name">'+esc(pickName)+'</div>'
           +(n.chosen&&scen.length?sendPicker(scen,pickId,n.opp.id,swapKey):'')
           +'<div class="send-row"><span class="evidence-badge '+badgeClass(n.answer?n.answer.level:"Unknown")+'">'+esc(n.answer?n.answer.level:"Unknown")+'</span>'

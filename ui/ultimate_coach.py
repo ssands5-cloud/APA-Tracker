@@ -602,7 +602,10 @@ def render(
     v2_script = ""
     if engine == "v2":
         from analytics.uc_v2_pair_model import load_model
-        v2_script = "var UC_V2_MODEL=" + _script_json(load_model()) + ";var UC_ENGINE_DEFAULT=\"v2\";"
+        import os
+        build = {"version": os.environ.get("UC_BUILD_LABEL") or "V2 candidate", "built": built_at or ""}
+        v2_script = ("var UC_V2_MODEL=" + _script_json(load_model()) + ";var UC_ENGINE_DEFAULT=\"v2\";"
+                     + "var UC_BUILD_INFO=" + _script_json(build) + ";")
     compact_payload = _browser_payload(payload, consume_evidence=consume_evidence)
     compact_payload["match_night"] = match_night
     format_options = _format_options(compact_payload.get("formats_present") or [])
@@ -858,6 +861,7 @@ td .id-line {{ display:block; margin:2px 0 0; font-size:12px; font-weight:400; }
   body.print-matchup .note {{ font-size:10.5px; padding:4px 8px; margin:4px 0; }}
 }}
 {_WAR_ROOM_CSS}
+#uc-engine-badge {{ position:sticky; top:0; z-index:10000; padding:8px max(16px,env(safe-area-inset-left,0px)); font:700 13px/1.4 system-ui,sans-serif; text-align:center; color:#fff; }} #uc-engine-badge.engine-v2 {{ background:#0b6b3a; }} #uc-engine-badge.engine-m3 {{ background:#6b4d00; }} #uc-engine-badge.fallback {{ background:#8f251b; }} #uc-engine-badge .uc-build {{ font-weight:400; opacity:.9; }} #uc-engine-badge .uc-badge-switch {{ margin-left:8px; min-height:32px; border:1px solid #fff; background:transparent; color:#fff; border-radius:4px; padding:2px 10px; font:600 12px system-ui,sans-serif; cursor:pointer; }}
 .uc-engine-switch {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }} .uc-compare-scroll {{ overflow-x:auto; }} table.uc-compare {{ border-collapse:collapse; width:100%; font-size:13px; }} table.uc-compare th, table.uc-compare td {{ padding:4px 6px; border-bottom:1px solid #d8ddd9; text-align:left; vertical-align:top; }} table.uc-compare tr.differs th, table.uc-compare tr.differs td {{ background:#fff6db; }} table.uc-compare tr.why td {{ font-size:12px; color:#5b6a61; }} .v2-concession {{ font-weight:700; color:#8f251b; font-size:11px; text-transform:uppercase; }} .mp-favored {{ color:#1d5c34; }} .mp-edge {{ color:#2f6f4a; }} .mp-toss-up {{ color:#7a4b00; }} .mp-underdog, .mp-long {{ color:#8f251b; }}</style>{bc.style_markup(ui)}</head>
 <body class="{'match-night' if match_night else ''}{bc.body_class(ui)}"{' data-view="home"' if ui == "broadcast" else ''}>
 {bc.top_markup(ui, bc_facts)}<header class="hero"><div class="hero-inner"><div class="ball" aria-hidden="true"><span>8</span></div>

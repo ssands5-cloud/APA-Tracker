@@ -182,17 +182,30 @@
   var UC_V2=(typeof UC_V2_MODEL!=="undefined"&&UC_V2_MODEL)?UC_V2_MODEL:null;
   var V2_BANDS=[[60,"Favored"],[53,"Edge"],[47,"Toss-up"],[40,"Underdog"],[0,"Long shot"]];
   var V2_LEVELS=["Favored","Edge","Toss-up","Underdog","Long shot"];
+  // The engine is never remembered between page loads: a V2 build ALWAYS opens on V2 and a standard build on M3.
+  // Switching to M3 lasts only until the page is reloaded or reopened. (An earlier candidate stored the choice in
+  // browser storage, which let an old "M3" tap override a rebuilt V2 file; that key is removed on load.)
   var UC_ENGINE_KEY="ultimate-coach:engine";
-  var UC_ENGINE=(function(){
-    var d=(typeof UC_ENGINE_DEFAULT!=="undefined"&&UC_ENGINE_DEFAULT==="v2"&&UC_V2)?"v2":"m3";
-    if(!UC_V2) return "m3";
-    try{var s=localStorage.getItem(UC_ENGINE_KEY);if(s==="v2"||s==="m3") return s;}catch(e){}
-    return d;
-  })();
-  function ucSetEngine(e){
-    UC_ENGINE=(e==="v2"&&UC_V2)?"v2":"m3";
-    try{localStorage.setItem(UC_ENGINE_KEY,UC_ENGINE);}catch(err){}
+  try{localStorage.removeItem(UC_ENGINE_KEY);}catch(e){}
+  var UC_ENGINE=(typeof UC_ENGINE_DEFAULT!=="undefined"&&UC_ENGINE_DEFAULT==="v2"&&UC_V2)?"v2":"m3";
+  var UC_BUILD=(typeof UC_BUILD_INFO!=="undefined"&&UC_BUILD_INFO)?UC_BUILD_INFO:null;
+  function ucSetEngine(e){UC_ENGINE=(e==="v2"&&UC_V2)?"v2":"m3";ucEngineBadge();}
+  // The engine actually used for a format: V2 only where a V2 model exists; anything else is said, never silent.
+  function ucEngineFor(fmt){return UC_ENGINE==="v2"&&UC_V2&&UC_V2.formats&&UC_V2.formats[fmt]?"v2":"m3";}
+  var UC_BADGE_FMT=null;
+  function ucEngineBadge(fmt){
+    if(!UC_V2||typeof document==="undefined"||!document.body) return;
+    if(fmt!==undefined) UC_BADGE_FMT=fmt;
+    var el=document.getElementById("uc-engine-badge");
+    if(!el){el=document.createElement("div");el.id="uc-engine-badge";el.setAttribute("role","status");el.setAttribute("aria-live","polite");document.body.insertBefore(el,document.body.firstChild);}
+    var used=UC_BADGE_FMT?ucEngineFor(UC_BADGE_FMT):UC_ENGINE,fallback=UC_ENGINE==="v2"&&used==="m3";
+    el.className="uc-engine-badge engine-"+used+(fallback?" fallback":"");
+    el.innerHTML='<b>'+(used==="v2"?"ENGINE: V2 CANDIDATE":"ENGINE: M3 BASELINE")+'</b>'
+      +(fallback?' \u00b7 V2 has no model for this format, so these are M3 recommendations':used==="m3"?' \u00b7 comparison only; reload the page to return to V2':' \u00b7 recommendations use V2 win-chance estimates')
+      +(UC_BUILD?' <span class="uc-build">\u00b7 build '+esc(UC_BUILD.version||"")+(UC_BUILD.built?' \u00b7 '+esc(UC_BUILD.built):'')+'</span>':'')
+      +' <button type="button" class="uc-badge-switch" data-engine="'+(UC_ENGINE==="v2"?"m3":"v2")+'">'+(UC_ENGINE==="v2"?"Compare with M3":"Back to V2")+'</button>';
   }
+  if(typeof document!=="undefined"){if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",function(){ucEngineBadge();}); else ucEngineBadge();}
   function v2Sh(w,n,k){k=k===undefined?6:k;return (w+k/2)/(n+k);}
   function v2Known(sl){return typeof sl==="number"&&isFinite(sl)&&sl>=1&&sl<=9;}
   function v2Features(slp,slo,d,s,rp,ro,fp,fo){
@@ -1971,10 +1984,10 @@
       night.ranked=ns.ranked.map(cand);night.unordered=ns.unordered.map(cand);night.avoid=ns.avoid.map(cand);night.unknown=ns.unknown;night.headline=ns.headline;
     }
     night.command=wrCommand(w,plan,mp,x,solveAfterSend);
-    night.engine=UC_ENGINE;night.engineCompare=wrEngineCompare(w,plan,x);
-    night.trace=(UC_ENGINE==="v2"&&selJ!==undefined)?wrV2Trace(w,plan,x,selJ):null;night.traceHtml=wrV2TraceHtml(night.trace);
+    night.engine=ucEngineFor(w.format);ucEngineBadge(w.format);night.engineCompare=wrEngineCompare(w,plan,x);
+    night.trace=(night.engine==="v2"&&selJ!==undefined)?wrV2Trace(w,plan,x,selJ):null;night.traceHtml=wrV2TraceHtml(night.trace);
     night.engineSwitchHtml=night.engineCompare?wrEngineSwitchHtml():"";night.engineCompareHtml=wrEngineCompareHtml(night.engineCompare,UC_ENGINE);
-    if(night.answer&&UC_ENGINE==="v2"){var av2=wrV2For(w,night.answer.our,night.opp?night.opp.name:null);
+    if(night.answer&&night.engine==="v2"){var av2=wrV2For(w,night.answer.our,night.opp?night.opp.name:null);
       if(av2){night.answer.p=av2.p;night.answer.role=ans&&ans.role||"";night.answer.concession=/deliberate concession/.test(night.answer.role);}}
     // Put-up order. With the toss recorded, game N's leader is known; when it is ours, every available put-up is
     // compared the way the engine chooses its lead: their most damaging reply, then the rest of the night with
@@ -2036,7 +2049,7 @@
     el.innerHTML='<h2>Tonight</h2>'
       +(f?'<div class="when">'+esc(f.date_status==="ok"?f.local_display:"Undated fixture")+'</div>':'<div class="when">Teams picked by hand — not a Match Day fixture</div>')
       +'<div class="vs"><b>'+esc(ta.name)+'</b>'+(ctx?' ('+(ctx.ourSide==="home"?"home":"away")+')':'')+' vs <b>'+esc(tb.name)+'</b> · '+esc(fmtLabel(w.format))+(f?' · Venue: '+esc(f.location||"No data"):'')+'</div>'
-      +(function(){var x2=mnInputs(w,plan,ta),c2=wrEngineCompare(w,plan,x2);return c2?wrEngineSwitchHtml():"";})()
+      +(function(){ucEngineBadge(w.format);var x2=mnInputs(w,plan,ta),c2=wrEngineCompare(w,plan,x2);return c2?wrEngineSwitchHtml():"";})()
       +wrMatchPlanCard(w,plan,ta)+wrBudgetLine(w,plan,ta,mnLeadId(w,plan,ta))
       +(function(){var x2=mnInputs(w,plan,ta);return wrEngineCompareHtml(wrEngineCompare(w,plan,x2),UC_ENGINE);})()
       +wrNextSendCard(w,plan,ta,tb)
