@@ -55,3 +55,20 @@ python docs/v2/verify_review_package.py --review $B/v2_candidate_$C.html --packa
 4. GA-01 remaining: 9-Ball division run; played 0-4 under both toss orders; absent-answer check on the real page.
 5. Final gate: candidate at final commit + manifest, full local suite, final harness-v2 audit on that exact build,
    verifier, owner file update, PR #120 report. Then GPT review and owner acceptance. No merge/deploy without approval.
+
+## Update Sat Nov 21 2026, 21:17 MT (after the restart)
+- Done since the restart: harness-v2 contradictions diagnosed (all GPT-008, fixed 424b9e0, re-verified); regression-lock
+  matrix in AUDIT_FINDINGS.md (S5 test strengthened; T1, GPT-009, S7, GPT-008-on-real-page detector cases added, each
+  with fail-before evidence); GA-01 coverage: 9-Ball support and played 1-4 under both toss orders (683d5f5).
+- Final candidate: `tmp\...\v2-build\final-683d5f5\v2_candidate_683d5f5.html`, sha256
+  `46618509c44cdb4310ef2cb4041a556da8dac3db1c67f621f13b9d29dda21154`, clean commit 683d5f5, verifier PASS.
+  Not yet copied to the owner folder (that waits for the final audit).
+- Final audit RUNNING since 21:16 on that exact build: 8-Ball division 436647 (6 shards) + 9-Ball division 436654
+  (2 shards), outputs in `final-683d5f5\` (`eight_*`, `nine_*`). If interrupted, re-run the same commands:
+```bash
+F=../../tmp/ultimate-coach-release/claude-captain-workflow/v2-build/final-683d5f5
+for i in 1 2 3 4 5 6; do (python docs/v2/contradiction_audit.py --html $F/v2_candidate_683d5f5.html --division 436647 --format EIGHT --shard $i/6 --out $F/eight_s$i.json --summary $F/eight_summary_s$i.json 2> $F/eight_progress_s$i.txt &); done
+for i in 1 2; do (python docs/v2/contradiction_audit.py --html $F/v2_candidate_683d5f5.html --division 436654 --format NINE --shard $i/2 --out $F/nine_s$i.json --summary $F/nine_summary_s$i.json 2> $F/nine_progress_s$i.txt &); done
+```
+- After it finishes: if 0 contradictions with coverage_ok, copy the candidate to the owner folder (keep the e22310e file
+  as the previous verified checkpoint), update README, publish results to PR #120; otherwise diagnose first.
