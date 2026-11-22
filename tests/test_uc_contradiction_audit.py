@@ -90,6 +90,7 @@ MUTATIONS = {
     "planned answer marked Not planned": (lambda s: s["command"]["cards"][1].update(role="situational", grade="C"), "I2"),
     "save role without an answer": (lambda s: s["command"]["cards"].append({"name": "C", "role": "save", "grade": "C", "v2": True, "answers": [], "avoid": []}), "I3"),
     "grade D despite answers": (lambda s: s["command"]["cards"][0].update(grade="D"), "I4"),
+    "Send button without an engine answer (GPT-008)": (lambda s: s["per"][0].update(answer=None, sendButtons=1, rendered="A"), "I8"),
     "graded B but Not planned (S7)": (lambda s: s["command"]["cards"].append({"name": "C", "role": "situational", "grade": "B", "v2": True, "answers": [], "avoid": []}), "I4"),
     "board card built by M3 logic": (lambda s: s["command"]["cards"][0].update(v2=False), "I8"),
     "M3 level in a V2 recommendation": (lambda s: s["rows"][0].update(level="Strong"), "I8"),

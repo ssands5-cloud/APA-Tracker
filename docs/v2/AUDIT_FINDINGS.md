@@ -103,7 +103,7 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 ## GPT acceptance gates (PR #120, owner-approved)
 | ID | Sev | Requirement | Status |
 |---|---|---|---|
-| GA-01 | High | Harness must not false-pass: per-invariant checked/skipped/failed counts, nonzero coverage, requested team/format validated, missing outputs = failure, no-answer states separated; EIGHT+NINE, both toss orders, played 0-4, both sides' availability, no-feasible-five; I7 with prior spend, uniqueness, unknown SL never zero; stable IDs; rendered advice checked; absent engine answer never becomes a legacy Send | open — current division run predates this; results reported as preliminary |
+| GA-01 | High | Harness must not false-pass (counts, coverage gate, validated teams/format, missing outputs fail, both sides' availability, stable ids, prior-spend cap, unknown SL never zero, rendered advice, absent answer never a Send) | implemented: harness v2 + 33 seeded detector cases; states now cap 23/22/cleared, both toss orders, 1-4 played under BOTH toss orders, our/their player Out, no feasible five; 8-Ball and 9-Ball (format set and verified per state); remaining: final full run on the exact final build |
 | GA-02 | High | Seeded negative/mutation tests for each fault class plus a positive control; coverage + build hashes in aggregate output | open (first seeded case: GPT-004 regression test fails on the old code, passes on the fix) |
 | GA-03 | High | D1-D3 are preliminary: reconcile raw -> verified eligible game keys -> compact HTML on stable identities and the same snapshot/cutoff; raw vs filtered separately; reuse the production build manifest/hash for V2 builds; no record changes on preliminary counts | open; D1-D3 reclassified preliminary |
 | GA-04 | High | Recheck GPT-004/006/007/008/009/010/011/013/014 | see rows below |
@@ -112,7 +112,7 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 | GPT-007 | Medium | shortened lineup / 4-player 19 fallback | open: V2 plays min(5, rosters) games (inherited); the APA 4/19 fallback is not modelled |
 | GPT-008 | High | silent broadcast fallback to M3 | fixed e55b45f: red badge when V2 has no model for the format |
 | GPT-009 | High | reported holdout metrics were single-orientation, app uses symmetrized p | fixed: fit reports symmetrized holdout (8-Ball log loss 0.6720, slope 0.958; 9-Ball 0.6846, slope 0.963); on-page check uses them; coefficients unchanged |
-| GPT-010/011 | Medium | verified mirror/finalization and train/live feature parity | partly: Python/JS parity to 1e-12 and fit/module feature identity tested; live inputs come from compact page evidence (no match ids, D2) while training used the clean archive - parity not yet verified (GA-03) |
+| GPT-010/011 | Medium | train/live parity | Python/JS parity (1e-12) and fit/module feature identity tested. Known difference: training dropped identical and conflicting duplicate rows (clean policy), but live page rows carry no match ids, so V2's live inputs cannot drop them (D2: 8 identical rows across the owner fixture's 16 players). Open; no records changed. Other definitions match: decided games only, per format, last 10 by date, recorded career = archive games, shared opponents only without a direct record |
 | GPT-013 | Low | opponent cap assumption | documented: same cap assumed for them; dropped if they have no legal lineup (inherited) |
 | GPT-014 | Medium | model uncertainty | open: no uncertainty ranges on win chances; only 1-point tie and 0.02 equal-plan tolerances |
 

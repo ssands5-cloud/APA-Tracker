@@ -38,6 +38,7 @@ INVARIANTS = ["I0", "I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9", "I10",
 
 STATE_JS = """([a, b, fmt, cap, outIds, oppOutIds, played, toss]) => {
   const fire = (id, v, ev) => { const el = document.getElementById(id); if (!el) return; el.value = v; for (const e of ev) el.dispatchEvent(new Event(e, {bubbles: true})); };
+  fire('team-format', fmt, ['change']);           // the team pickers list one format's teams
   fire('bc-team-a', a, ['change']); fire('bc-team-b', b, ['change']);
   let guard = 10;
   while (guard-- > 0 && window.UC_BC_LAST && window.UC_BC_LAST.night && (window.UC_BC_LAST.night.games || []).length) window.UC_ACT.undo();
@@ -61,6 +62,7 @@ STATE_JS = """([a, b, fmt, cap, outIds, oppOutIds, played, toss]) => {
     per.push({their: their, theirId: theirId, answer: n.answer, trace: n.trace, avoid: (n.avoid || []).map(c => c.name),
               notes: (n.ranked || []).concat(n.unordered || []).map(c => (c.save || '') + (c.cost || '')).join(' '),
               rendered: hero ? hero.textContent.trim() : null, nextLeader: n.nextLeader || null,
+              sendButtons: document.querySelectorAll('#bc-night .send-hero [data-send]').length,
               scen: (n.sendScenarios || []).map(s => ({name: s.name, level: s.level, recommended: s.recommended}))});
   }
   window.UC_ACT.pick('');
@@ -190,6 +192,8 @@ def check(state, label, fails, exceptions, counts=None, expect=None):
                 fail("I5", f"comparison and trace give different win chances for {pick['name']} vs {x['their']}")
             else:
                 ok("I5")
+        if v2 and not x.get("answer") and x.get("nextLeader") != "us" and x.get("sendButtons"):
+            fail("I8", f"Send button shown vs {x['their']} without a V2 engine answer")
         if v2 and x.get("answer"):
             if x.get("rendered") is None:
                 fail("I8", f"no rendered send card vs {x['their']}")
@@ -298,7 +302,8 @@ def main():
         if "optimal team points" in text or "optimizes team points" in text:
             fails.append({"state": "page", "invariant": "I11", "detail": "unsupported team-point optimisation claim"})
             counts.c["I11"]["failed"] += 1
-        keys = page.evaluate("d => Array.from(document.querySelectorAll('#bc-team-a option')).map(o => o.value).filter(v => v && v.indexOf('|' + d + '|') >= 0)", a.division)
+        page.evaluate("f => { const el = document.getElementById('team-format'); el.value = f; el.dispatchEvent(new Event('change', {bubbles: true})); }", a.format)
+        keys = page.evaluate("d => Array.from(new Set(Array.from(document.querySelectorAll('#bc-team-a option')).map(o => o.value).filter(v => v && v.indexOf('|' + d + '|') >= 0)))", a.division)
         pairs = [(x, y) for x in keys for y in keys if x != y]
         if a.limit:
             pairs = pairs[:a.limit]
@@ -318,7 +323,7 @@ def main():
             theirs = [p["id"] for p in base["bench"]["theirs"]]
             variants = [("cap23", 23, [], [], 0, ""), ("cap22", 22, [], [], 0, ""), ("capOff", None, [], [], 0, ""),
                         ("tossUs", 23, [], [], 0, "us"), ("tossThem", 23, [], [], 0, "them")]
-            variants += [(f"played{n}", 23, [], [], n, "them") for n in range(1, 5)]
+            variants += [(f"played{n}{t}", 23, [], [], n, t) for n in range(1, 5) for t in ("them", "us")]
             if base["rows"]:
                 variants.append(("ourOut", 23, [base["rows"][0]["ourId"]], [], 0, ""))
             if theirs:
