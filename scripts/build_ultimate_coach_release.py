@@ -66,7 +66,7 @@ def main(argv=None) -> int:
         step(f"SNAPSHOT {a.db}")
         src_sha, snap_sha = _snapshot_sqlite(a.db.resolve(), snap)
         check_database(snap)
-        step(f"SNAPSHOT OK source {src_sha[:12]} snapshot {snap_sha[:12]} (integrity + foreign keys ok)")
+        step(f"SNAPSHOT OK source {src_sha} snapshot {snap_sha} (integrity + foreign keys ok)")
         payload = build_payload(snap, settings)
         step(f"PAYLOAD players {payload['counts'].get('players')} head-to-head {payload['counts'].get('head_to_head_rows')}")
     built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

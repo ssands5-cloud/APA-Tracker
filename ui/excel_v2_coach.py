@@ -84,7 +84,10 @@ def _sha(path: Path) -> str:
 
 def install(xlsx_in: str | Path, compact: dict[str, Any], xlsm_out: str | Path, *, meta: dict[str, str]) -> dict[str, Any]:
     """Open xlsx_in in Microsoft Excel, add the V2 coach, save as xlsm_out. Returns what was installed."""
+    import pythoncom
     import win32com.client as win32
+
+    pythoncom.CoInitialize()          # callers (e.g. the workbook validator) may have uninitialized COM on this thread
 
     xlsx_in, xlsm_out = Path(xlsx_in).resolve(), Path(xlsm_out).resolve()
     if xlsm_out.exists():
@@ -173,4 +176,5 @@ def install(xlsx_in: str | Path, compact: dict[str, Any], xlsm_out: str | Path, 
         if wb is not None:
             wb.Close(SaveChanges=False)
         xl.Quit()
+        pythoncom.CoUninitialize()
     return dict(info, out=str(xlsm_out), out_sha256=_sha(xlsm_out), trace=trace)
