@@ -42,6 +42,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--label", required=True)
     ap.add_argument("--built", required=True)
+    ap.add_argument("--upstream", help="folder holding the source package's build records (history-scope.json, verification.json)")
     a = ap.parse_args()
     wt = Path(a.worktree).resolve()
     env = dict(os.environ, UC_BUILD_LABEL=a.label)
@@ -96,7 +97,31 @@ def main():
     data_after = re.search(r'<script id="uc-data" type="application/json">(.*?)</script>', html, re.S).group(1)
     assert data_before == data_after, "embedded data changed"
     Path(a.out).write_text(html, encoding="utf-8")
-    print(f"applied {blocks} code blocks; data block unchanged -> {a.out}")
+    # Provenance manifest (GA-03): what this review copy is made of, with hashes, next to the HTML (kept local).
+    import hashlib, json
+    sha = lambda b: hashlib.sha256(b).hexdigest()
+    pkg = Path(a.package).resolve()
+    head = subprocess.run(["git", "-C", str(wt), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", str(wt), "status", "--porcelain", "--", "ui", "analytics", "docs/v2"], capture_output=True, text=True).stdout.strip()
+    upstream = {}
+    for f in sorted(pkg.parent.glob("*.json")) + (sorted(Path(a.upstream).glob("*.json")) if a.upstream else []):
+        try:
+            upstream[f.name] = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    manifest = {
+        "review_html": {"path": str(Path(a.out).resolve()), "sha256": sha(Path(a.out).read_bytes())},
+        "source_package": {"path": str(pkg), "sha256": sha(pkg.read_bytes()), "embedded_data_sha256": sha(data_before.encode())},
+        "code": {"commit": head, "base_rev": a.base, "uncommitted_changes_in_ui_analytics_docs_v2": bool(dirty)},
+        "model": {"path": "analytics/uc_v2_model.json", "sha256": sha((wt / "analytics" / "uc_v2_model.json").read_bytes())},
+        "label": a.label, "built": a.built,
+        "data_provenance_note": ("embedded data copied byte-for-byte from the source package; its upstream build records "
+                                 "(base refresh run, catch-up counts, verification) are listed below when present"),
+        "upstream_folder": str(Path(a.upstream).resolve()) if a.upstream else None,
+        "upstream_records_in_source_folder": {k: v for k, v in upstream.items() if k in ("history-scope.json", "verification.json", "workbook-reuse-provenance.json")},
+    }
+    Path(str(a.out) + ".manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    print(f"applied {blocks} code blocks; data block unchanged -> {a.out} (+ manifest)")
 
 
 if __name__ == "__main__":
