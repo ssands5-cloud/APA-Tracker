@@ -9,7 +9,7 @@ locations and rules only. Tools: `docs/v2/contradiction_audit.py` (cross-screen 
 |---|---|
 | 1 Inventory (V2-relevant surfaces, engine used, legacy logic) | done for Match Night, Command Board, plans, trace, comparison, Team Status features; classic-only cards listed below |
 | 2 Data integrity | owner fixture done (16 players, 64 direct pairings); division-wide not yet |
-| 3 Contradiction detector | harness-v2 run on e22310e STOPPED for the owner's restart at 7/72 pairs (84 states, 13 contradictions in shards 3-4, not yet diagnosed - see RECOVERY_CHECKPOINT.md); v1 division run complete (72 pairs, 360 states, 2 contradictions -> S7 fixed; 29 quantified strategic exceptions); harness v2 + 31 seeded-fault tests; final v2 run against e22310e in progress |
+| 3 Contradiction detector | harness-v2 run on e22310e stopped for the owner's restart at 7/72 pairs (84 states); its 13 contradictions (shards 3-4) all diagnosed as GPT-008 (send card fell back to the recorded ranking when V2's answer had no recorded category) and re-verified clean on 424b9e0 (2 pairs x 12 states); final re-run pending; v1 division run complete (72 pairs, 360 states, 2 contradictions -> S7 fixed; 29 quantified strategic exceptions); harness v2 + 31 seeded-fault tests; final v2 run against e22310e in progress |
 | 4 Strategic audit | sweep done at 539408f (576 put-ups); rerun pending on the latest policy |
 
 ## Phase 1 — where each screen's logic comes from (V2 build)
@@ -72,6 +72,33 @@ Duplicated business logic / competing sources of truth found:
 | T1 | High | Start Here / Excel START HERE limits contradicted the product: "no skill cap is assumed", "Unknown availability is not Unavailable", "marks belong to one fixture"; V2 build also said no win-probability model exists | fixed a111f46 |
 | T2 | Medium | War Room "Avoid records" and Lineup Lab "Protected players (consider saving)" read as instructions that can contradict the V2 plan | relabelled as recorded facts in V2 builds, a111f46 |
 
+
+
+## Regression-lock matrix (owner-approved rules, PR #120)
+Status rules: OPEN -> FIXED (pending verification) -> VERIFIED (targeted test + CI pass on the same code) -> LOCKED
+(VERIFIED + independent review for High/Critical; Medium/Low lock on VERIFIED). REOPENED if evidence fails. CI: every
+commit on the branch runs the whole `tests/` suite on Python 3.12 and 3.13 (`.github/workflows/tests.yml`); these
+locked tests are part of that run. Latest green run covering every row: CI 44982036898 at bdc6c82 (rows added after
+bdc6c82 are covered by the run on b2e549f, pending at writing).
+
+| ID | Sev | Locked behaviour | Test node(s) | Fail-before evidence | Fix | Status |
+|---|---|---|---|---|---|---|
+| S1 | Critical | V2 file reopens on V2 after M3 was chosen / stored | `tests/test_uc_v2_candidate.py::test_rebuilt_v2_file_opens_on_v2_even_after_m3_was_chosen_before` + verifier on the owner file | not separable (badge introduced with the fix); real-file reopen check PASS | e55b45f | VERIFIED, awaiting independent review |
+| S2 | Critical | V2 tap latency not worse than Sunday | none automated (measured 15.9 s vs 16.1 s at 4x throttle) | — | 942e77b | FIXED, **lock open** (needs a timing test) |
+| S3 | High | Command Board built from the V2 plan (no avoid/save/grade contradictions) | `tests/test_uc_contradiction_audit.py::test_seeded_fault_is_detected` (I2/I3/I4 cases); real-data harness | detector cases fail on faulty states; real-data owner fixture 0 contradictions | fc5b7ff | VERIFIED, awaiting independent review |
+| S4 | High | every V2 number = the executed policy | `tests/test_uc_v2_candidate.py::test_gpt_counterexample_every_reported_number_is_the_policy_v2_actually_plays`, `test_whole_night_rollout_is_consistent_on_every_surface` | fails on f628b13 (plan Xan->Bo) | 11879db | VERIFIED, awaiting independent review |
+| S5 | High | no legacy save/spend notes on V2 send cards; answer never under avoid | `tests/test_uc_v2_candidate.py::test_v2_send_card_has_no_legacy_save_or_spend_notes_and_never_lists_its_answer_as_avoid` (strengthened b2e549f) | fails on 942e77b ('consider saving' present) | a0bf857 | VERIFIED, awaiting independent review |
+| S6 | High | give up the strongest matchup only for >= 0.10 under both models | `tests/test_uc_v2_candidate.py::test_v2_keeps_the_strongest_matchup_when_saving_a_player_gains_too_little` | not demonstrated | fc5b7ff | VERIFIED, awaiting independent review; threshold provisional |
+| S7 | Medium | no "graded B but Not planned" (Backup role) | `tests/test_uc_contradiction_audit.py::test_seeded_fault_is_detected[graded B but Not planned (S7)]`; real-data harness | detector case fails on the faulty state | e22310e | VERIFIED (real-data re-run pending) |
+| S8 | High | rendered send card = V2 answer (no recorded-ranking fallback) — GPT-008 | `tests/test_uc_v2_candidate.py::test_absent_v2_answer_never_becomes_a_recorded_ranking_send`; harness I8 | fails on 82ab6a4; real data: 13 contradictions on e22310e (2 pairs, 24 states) -> 0 on 424b9e0 | 424b9e0 | VERIFIED, awaiting independent review |
+| S9 | High | V2 risk list not overwritten by the recorded-record list | `tests/test_uc_v2_candidate.py::test_v2_risk_line_is_v2s_own_list_not_the_recorded_record_list` | fails on 82ab6a4 (['Eve Ellis'] vs []) | 424b9e0 | VERIFIED, awaiting independent review |
+| GPT-004 | High | later long shot classified at its own step | `tests/test_uc_v2_candidate.py::test_later_long_shot_is_classified_at_its_own_step_of_the_night` | fails on the previous code | 6b2d952 | VERIFIED, awaiting independent review |
+| GPT-009 | High | holdout metrics describe the symmetrized prediction | `tests/test_uc_v2_candidate.py::test_deployed_holdout_metrics_describe_the_symmetrized_prediction` | fails on b51988a | 4f27e6b | VERIFIED, awaiting independent review |
+| T1 | High | Start Here limits match the product | `tests/test_uc_v2_candidate.py::test_start_here_limits_match_the_product_in_both_builds` | fails on ad4a0d2 | a111f46 | VERIFIED, awaiting independent review |
+| GA-02 | High | detector catches seeded faults; empty runs never pass | `tests/test_uc_contradiction_audit.py::` (32 seeded faults + controls) | each seeded fault must fail its invariant | b51988a, 82ab6a4 | VERIFIED, awaiting independent review |
+| AC2/AC8 etc. | High | model properties (missing evidence never even, JS/Python parity, symmetry) | `tests/test_uc_v2_candidate.py::test_missing_evidence_is_never_scored_as_even_and_skill_gaps_count_by_format`, `test_js_probabilities_match_python_exactly`, `test_probability_is_symmetric_and_bounded` | — | 82ef551 | VERIFIED, awaiting independent review |
+
+Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FIXED with open lock 1 (S2) · REOPENED 0.
 
 ## GPT acceptance gates (PR #120, owner-approved)
 | ID | Sev | Requirement | Status |

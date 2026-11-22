@@ -47,8 +47,8 @@ python docs/v2/verify_review_package.py --review $B/v2_candidate_$C.html --packa
 ```
 
 ## Remaining work, in order
-1. Diagnose the 13 harness-v2 contradictions from shards 3-4 (real defect or checker bug), fix with fail-before tests.
-2. Regression-lock matrix in `AUDIT_FINDINGS.md` (finding, behaviour, test node ID, negative control, fixing SHA, CI run, status).
+1. DONE (after restart): the 13 harness-v2 contradictions were GPT-008 instances, fixed in 424b9e0, re-verified on 2 pairs x 12 states.
+2. DONE: regression-lock matrix in `AUDIT_FINDINGS.md`; S5 test strengthened; T1/GPT-009/S7 tests added with fail-before evidence.
 3. GA-03: reclassify D1 (the Sunday data is the v7 build: base run `run-20261119T183918Z-1cdb65c6` + 8,440 catch-up pairs,
    cutoff 2026-11-19, Codex-verified 0 differences over 549,936 pair records; the base run's input folder was not found on
    disk); GPT-010/011 train/live parity.
