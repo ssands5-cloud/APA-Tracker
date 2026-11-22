@@ -66,7 +66,7 @@ Duplicated business logic / competing sources of truth found:
 | L1 | Medium | Classic-page Next Send list, blind send card and send-cost text still use recorded-record categories inside V2 builds | open (labelled as recorded facts; align or hide in V2) |
 | P1 | Medium | APA team-point margins (8-Ball hill/shutout, 9-Ball ball points) not modelled; team points are a linear conversion that never changes a choice | open (requirement) |
 | P2 | Medium | Base tap latency ~15 s on a 4x-throttled phone (shared with the Sunday build) | open, not V2-specific |
-| X1 | Low | Excel has no V2 | open by scope |
+| X1 | Medium | Excel has no V2; the Sunday companion workbook (02fa311) also predates the c3e2bbf/a111f46 fixes (blank availability = Unknown; stale START HERE limits) | documented in docs/v2/V2_VS_EXCEL.md; no V2 parity claimed; regeneration needs owner approval |
 | W1 | Low | Summary printed 0.099 as "+0.10" beside a 0.10 threshold | fixed a0bf857 (3 decimals) |
 | S7 | Medium | Command Board: player graded B but labelled Not planned (2 of 360 states, division harness v1) | fixed e22310e: Backup role for players outside the planned five the plan still relies on |
 | T1 | High | Start Here / Excel START HERE limits contradicted the product: "no skill cap is assumed", "Unknown availability is not Unavailable", "marks belong to one fixture"; V2 build also said no win-probability model exists | fixed a111f46 |
@@ -105,7 +105,7 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 |---|---|---|---|
 | GA-01 | High | Harness must not false-pass (counts, coverage gate, validated teams/format, missing outputs fail, both sides' availability, stable ids, prior-spend cap, unknown SL never zero, rendered advice, absent answer never a Send) | implemented: harness v2 + 33 seeded detector cases; states now cap 23/22/cleared, both toss orders, 1-4 played under BOTH toss orders, our/their player Out, no feasible five; 8-Ball and 9-Ball (format set and verified per state); final run done on 683d5f5 (8-Ball complete, 9-Ball sample): 1,536 states, 0 contradictions |
 | GA-02 | High | Seeded negative/mutation tests for each fault class plus a positive control; coverage + build hashes in aggregate output | open (first seeded case: GPT-004 regression test fails on the old code, passes on the fix) |
-| GA-03 | High | D1-D3 are preliminary: reconcile raw -> verified eligible game keys -> compact HTML on stable identities and the same snapshot/cutoff; raw vs filtered separately; reuse the production build manifest/hash for V2 builds; no record changes on preliminary counts | open; D1-D3 reclassified preliminary |
+| GA-03 | High | reconciliation and provenance | Retained input package for 683d5f5 (local, private): source package, companion workbook, model (exact bytes), git bundle, candidate, manifest, v7 upstream records, SHA256SUMS (14 files verify). Rebuild from the bundle alone reproduced the candidate byte-for-byte (46618509...). Still open: the v7 base refresh run's raw input is not on disk (the data is retained only in embedded form); raw -> verified-key -> page reconciliation not done |
 | GA-04 | High | Recheck GPT-004/006/007/008/009/010/011/013/014 | see rows below |
 | GPT-004 | High | later long shot classified at the root state | fixed 6b2d952; regression test fails on old code |
 | GPT-006 | Medium | unknown skill level | documented: V2 uses the average skill-pair effect (never a made-up pair); cap check marked incomplete; harness never counts unknown SL as zero |
