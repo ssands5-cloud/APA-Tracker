@@ -1901,7 +1901,9 @@
     var pack=function(v){return v?{w:v.w,a:v.a,pw:pts(v.w),pa:pts(v.a)}:null;};
     return {rows:rows,lead:lead,differs:rows.filter(function(r){return r.differs;}).length+(lead.differs?1:0),games:G,
       v2Them:c?pack(c.v2.them):null,m3Them:c&&c.m3?pack(c.m3.them):null,v2Lead:c?pack(c.v2.lead):null,m3Lead:c&&c.m3?pack(c.m3.lead):null,
-      benchThem:c?c.bench.them:null,benchLead:c?c.bench.lead:null,metrics:UC_V2.formats[w.format].holdout||null};
+      benchThem:c?c.bench.them:null,benchLead:c?c.bench.lead:null,metrics:UC_V2.formats[w.format].holdout||null,
+      strongestNowThem:c?pack(c.strongestNow.them):null,strongestNowLead:c?pack(c.strongestNow.lead):null,
+      minimaxThem:c?pack(c.minimax.them):null,minimaxLead:c?pack(c.minimax.lead):null};
   }
   function wrEngineCompareHtml(c,engine){
     if(!c) return "";
