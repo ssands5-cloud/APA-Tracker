@@ -599,7 +599,7 @@ _JS_BODY = r"""
   var CAT={G:"Favorable",E:"Even",I:"Shared only",R:"Avoid",X:"Unknown"};
   function candRow(c,kind,oppId){
     var mark=kind==="ranked"?((c.choice||0)<10?"0":"")+c.choice:(kind==="avoid"?"✕":"≈");
-    var note=[CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost,c.after?"if sent: "+afterText(c.after):""].filter(Boolean).join(" · ");
+    var note=[c.v2p!=null?"V2 "+Math.round(100*c.v2p)+"%":"",CAT[c.cat]||"",c.tied.length?"tied with "+c.tied.join(", "):"",c.avail==="Unknown"?"availability unknown":"",c.save,c.cost,c.after?"if sent: "+afterText(c.after):""].filter(Boolean).join(" · ");
     return '<div class="alt-row'+(kind==="avoid"?" avoid":"")+'"><div class="matchup-num">'+mark+'</div>'
       +'<div class="matchup-our"><div class="matchup-kicker">'+(kind==="avoid"?"Recorded losing record":"Option")+'</div><div class="matchup-player">'+esc(c.name)+slTag(c.sl)+'</div></div>'
       +barsHtml(c.wins,c.games)
@@ -852,7 +852,7 @@ _JS_BODY = r"""
       all.forEach(function(c){if(c.save) rl.push('<li>'+esc(c.name+" — "+c.save)+'</li>');});
       n.holds.forEach(function(h){rl.push('<li>'+esc("Keep "+h.our+(h.covers.length?" for "+h.covers.join(", "):"")+" — "+h.why)+'</li>');});
       n.sacrifices.forEach(function(s){rl.push('<li class="bad">'+esc("If we must absorb a bad matchup: "+s.our+" vs "+s.their+" ("+s.level+") — "+s.why)+'</li>');});
-      if(n.openRisks.length) rl.push('<li class="bad">'+esc("No favorable direct option left vs "+n.openRisks.join(", "))+'</li>');
+      if(n.openRisks.length) rl.push('<li class="bad">'+esc((n.openRisksV2?"Every option is a long shot (under 40%) vs ":"No favorable direct option left vs ")+n.openRisks.join(", "))+'</li>');
       risks='<h3 class="night-h">Risks I accept</h3><ul class="risk-list">'+(rl.slice(0,4).join("")||'<li>Nothing recorded to give up with this send.</li>')+'</ul>'
         +(rl.length>4?'<details class="more"><summary>'+(rl.length-4)+' more risk'+(rl.length-4===1?'':'s')+'</summary><ul class="risk-list">'+rl.slice(4).join("")+'</ul></details>':"");
     }

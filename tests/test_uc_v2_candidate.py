@@ -169,7 +169,7 @@ def test_v2_explains_why_a_stronger_option_is_saved_in_expected_games(tmp_path):
             # labelled as one, with the strongest matchup named and the captain's option stated.
             assert r["our"] == "Bo" and r["role"] == "Strategic choice"
             assert "Strategic choice: Bo (55%) instead of the strongest matchup Ace (60%)" in r["cost_later"]
-            assert "keeps Ace for later (Ace vs Yul)" in r["cost_later"] and "+0.25 expected wins" in r["cost_later"]
+            assert "keeps Ace for later (Ace vs Yul)" in r["cost_later"] and "+0.250 expected wins" in r["cost_later"]
             assert "The captain may prefer the stronger matchup now." in r["cost_later"]
         finally:
             browser.close()
@@ -252,7 +252,7 @@ def test_v2_keeps_the_strongest_matchup_when_saving_a_player_gains_too_little(tm
             assert r["our"] == "Ace" and r["role"] == "Recommended competitive matchup"
             assert "Strongest matchup available (60%)" in r["cost_later"]
             assert "Strategic alternative: Bo (55%) keeps Ace for later" in r["cost_later"]
-            assert "+0.03 expected wins only if they always make their most damaging choice" in r["cost_later"]
+            assert "+0.030 expected wins only if they always make their most damaging choice" in r["cost_later"]
             assert "Not enough to give up the stronger matchup" in r["cost_later"]
         finally:
             browser.close()
@@ -390,5 +390,27 @@ def test_rebuilt_v2_file_opens_on_v2_even_after_m3_was_chosen_before(tmp_path, u
             assert all(r["level"] in V2_LEVEL_ORDER for r in plan["responses"]), "default plan is V2"
             assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
             assert errors == []
+        finally:
+            browser.close()
+
+
+def test_v2_send_card_has_no_legacy_save_or_spend_notes_and_never_lists_its_answer_as_avoid(tmp_path):
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            page.select_option("#bc-team-a", OURS); page.select_option("#bc-team-b", THEIRS)
+            page.wait_for_selector(".matchup-row[data-their]")
+            for their in page.evaluate("() => window.UC_BC_LAST.rows.map(r => r.theirId)"):
+                page.evaluate("id => window.UC_ACT.pick(id)", their)
+                n = page.evaluate("""() => { const n = window.UC_BC_LAST.night;
+                    return {engine: n.engine, answer: n.answer && n.answer.our, avoid: n.avoid.map(c => c.name),
+                            notes: n.ranked.map(c => (c.save || '') + (c.cost || '')).join(' '), p: n.ranked.map(c => c.v2p)}; }""")
+                assert n["engine"] == "v2"
+                assert n["answer"] not in n["avoid"]
+                assert "consider saving" not in n["notes"] and "Sending now spends" not in n["notes"]
+                ps = [x for x in n["p"] if x is not None]
+                assert ps == sorted(ps, reverse=True), "alternatives ordered by V2's estimate"
         finally:
             browser.close()

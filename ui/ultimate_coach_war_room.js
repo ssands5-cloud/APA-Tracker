@@ -1138,7 +1138,7 @@
     return rec;
   }
   function v2Pct(p){return Math.round(100*p)+"%";}
-  function v2Wins(x){return (x>=0?"+":"")+x.toFixed(2);}
+  function v2Wins(x){return (x>=0?"+":"")+x.toFixed(3);}
   function v2Options(night,j,pol){
     pol=pol||v2Policy(night);
     var om=night.fullOurs,tm=night.fullTheirs;
@@ -2047,6 +2047,16 @@
     night.planCheck={responses:mp.responses||[],plan_if_they_lead:mp.plan_if_they_lead||[],plan_if_we_lead:mp.plan_if_we_lead||[],total_if_they_lead:mp.total_if_they_lead,total_if_we_lead:mp.total_if_we_lead,lead:mp.lead||null};
     night.engine=ucEngineFor(w.format);ucEngineBadge(w.format);night.engineCompare=wrEngineCompare(w,plan,x);
     night.trace=(night.engine==="v2"&&selJ!==undefined)?wrV2Trace(w,plan,x,selJ):null;night.traceHtml=wrV2TraceHtml(night.trace);
+    // V2 screens: alternatives ordered by V2's estimate (recorded records stay as facts); the M3-era "consider
+    // saving" / "spends our only favorable option" notes and the recorded-record risk line give way to V2's plan.
+    if(night.engine==="v2"){
+      var pOf={};if(night.trace) night.trace.rows.forEach(function(r){pOf[r.name]=r.p;});
+      var merged=night.ranked.concat(night.unordered,night.avoid).map(function(c){c.save="";c.cost="";c.v2p=pOf[c.name];return c;});
+      merged.sort(function(a,b){return (b.v2p===undefined?-1:b.v2p)-(a.v2p===undefined?-1:a.v2p);});
+      night.ranked=merged;night.unordered=[];night.avoid=[];
+      night.openRisks=(mp.responses||[]).filter(function(r){return r.p!==undefined&&r.p<0.40;}).map(function(r){return r.their;});
+      night.openRisksV2=true;
+    }
     night.engineSwitchHtml=night.engineCompare?wrEngineSwitchHtml():"";night.engineCompareHtml=wrEngineCompareHtml(night.engineCompare,UC_ENGINE);
     if(night.answer&&night.engine==="v2"){var av2=wrV2For(w,night.answer.our,night.opp?night.opp.name:null);
       if(av2){night.answer.p=av2.p;night.answer.role=ans&&ans.role||"";night.answer.concession=/deliberate concession/.test(night.answer.role);}}

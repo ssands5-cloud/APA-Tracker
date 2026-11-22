@@ -52,7 +52,8 @@ STATE_JS = """([a, b, fmt, cap, outId, playFirst]) => {
     const r = {their: their, theirId: theirId};
     window.UC_ACT.pick(r.theirId);
     const n = window.UC_BC_LAST.night;
-    per.push({their: r.their, theirId: r.theirId, answer: n.answer, trace: n.trace,
+    per.push({their: r.their, theirId: r.theirId, answer: n.answer, trace: n.trace, avoid: (n.avoid || []).map(c => c.name),
+              notes: (n.ranked || []).concat(n.unordered || []).map(c => (c.save || '') + (c.cost || '')).join(' '),
               scen: (n.sendScenarios || []).map(s => ({name: s.name, level: s.level, recommended: s.recommended}))});
   }
   window.UC_ACT.pick(null);
@@ -120,6 +121,10 @@ def check(state, label, fails, exceptions):
             else:
                 exceptions.append({"state": label, "their": x["their"], "pick": pick["name"], "strongest": now["name"],
                                    "gainWorst": round(t["gainWorst"], 3), "gainAvg": round(t["gainAvg"], 3)})
+        if state["engine"] == "v2" and x["answer"] and x["answer"]["our"] in x.get("avoid", []):
+            fail("I2", f"send card recommends {x['answer']['our']} and lists them under avoid vs {x['their']}")
+        if state["engine"] == "v2" and ("consider saving" in x.get("notes", "") or "Sending now spends" in x.get("notes", "")):
+            fail("I8", f"legacy save/spend note on a V2 send card vs {x['their']}")
         for s in x["scen"]:
             if state["engine"] == "v2" and s["level"].split(" ")[0] in M3_LEVELS:
                 fail("I8", f"send scenario shows M3 level {s['level']}")
