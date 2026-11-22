@@ -2,6 +2,8 @@
 
 Consolidation of the work since the SL3-vs-SL7 recommendation was reproduced (issue #119). No new experiments, fixes, tuning or production changes. Every number below comes from an earlier published run; the source file is named in each row.
 
+**Comparator note (Codex red-team audit, RT-3):** wherever these tables compare against "M3's levels" or "M3 levels", the comparator is a logistic regression fitted on M3's six level indicators (it learns its own weight for each level). It is not M3's fixed 6/3/1/0/0/-3 points and not the M3 planner. These results compare the information in the levels with richer predictors; they do not show that a refit beats M3's fixed weights or M3's lineup decisions. Preprocessing in these models also used fit+validation rows before penalty selection (test outcomes not leaked; magnitude unmeasured), and duplicate handling relied on key equality, which cannot separate erroneous repeats from repeated meetings.
+
 **Revision (closeout):** updated with the qualifications from GPT's independent red-team review: corrected 9-Ball new-player share, late-lead tie heterogeneity, no tested tie-break with a consistent average advantage, the 9-Ball skill-level result stated as "no consistent benefit demonstrated", a section separating correctness from predictive accuracy and strategic effectiveness, and the full list of unresolved integrity concerns.
 
 **Verdicts:** SUPPORTED, CONTRADICTED, INCONCLUSIVE. Where an earlier statement of mine failed a stronger test, it is listed as CONTRADICTED.
