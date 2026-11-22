@@ -60,7 +60,7 @@ STATE_JS = """([a, b, fmt, cap, outIds, oppOutIds, played, toss]) => {
     const n = window.UC_BC_LAST.night, hero = document.querySelector('#bc-night .send-hero .send-name');
     per.push({their: their, theirId: theirId, answer: n.answer, trace: n.trace, avoid: (n.avoid || []).map(c => c.name),
               notes: (n.ranked || []).concat(n.unordered || []).map(c => (c.save || '') + (c.cost || '')).join(' '),
-              rendered: hero ? hero.textContent.trim() : null,
+              rendered: hero ? hero.textContent.trim() : null, nextLeader: n.nextLeader || null,
               scen: (n.sendScenarios || []).map(s => ({name: s.name, level: s.level, recommended: s.recommended}))});
   }
   window.UC_ACT.pick('');
@@ -193,6 +193,13 @@ def check(state, label, fails, exceptions, counts=None, expect=None):
         if v2 and x.get("answer"):
             if x.get("rendered") is None:
                 fail("I8", f"no rendered send card vs {x['their']}")
+            elif x.get("nextLeader") == "us":
+                # Our put-up turn: the card is our put-up, which must be V2's lead (not an answer to their put-up).
+                lead_pick = (plan or {}).get("lead") or {}
+                if lead_pick.get("our") and x["rendered"] != lead_pick["our"]:
+                    fail("I8", f"our put-up card names {x['rendered']} but V2's lead is {lead_pick.get('our')}")
+                else:
+                    ok("I8")
             elif x["rendered"] != x["answer"]["our"]:
                 fail("I8", f"rendered send card names {x['rendered']} but the plan answer is {x['answer']['our']}")
             elif x["answer"]["our"] in x.get("avoid", []):

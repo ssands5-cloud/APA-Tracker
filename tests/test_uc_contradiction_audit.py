@@ -136,3 +136,14 @@ def test_empty_state_fails_coverage_rather_than_passing():
     s.update(rows=[], per=[], plan={})
     fails, counts = _run(s)
     assert counts.c["I2"]["checked"] == 0 and counts.c["I5"]["checked"] == 0   # nothing to compare is NOT a pass
+
+
+def test_our_put_up_turn_checks_the_lead_card_not_the_answer():
+    s = copy.deepcopy(_clean())
+    for x in s["per"]:
+        x["nextLeader"] = "us"; x["rendered"] = "A"           # V2's lead is A
+    fails, _ = _run(s)
+    assert not any(f["invariant"] == "I8" for f in fails)
+    s["per"][0]["rendered"] = "B"                              # a put-up card naming someone else is a contradiction
+    fails, _ = _run(s)
+    assert any(f["invariant"] == "I8" and "put-up card" in f["detail"] for f in fails)
