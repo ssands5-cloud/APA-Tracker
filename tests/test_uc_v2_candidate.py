@@ -438,3 +438,42 @@ def test_later_long_shot_is_classified_at_its_own_step_of_the_night(tmp_path):
             assert sac[0]["why"].startswith("Best available (every option is a long shot)"), sac[0]["why"]
         finally:
             browser.close()
+
+
+def test_absent_v2_answer_never_becomes_a_recorded_ranking_send(tmp_path):
+    """GPT-008: with no engine answer, a V2 page shows no Send pick (M3 mode keeps its baseline behaviour)."""
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            page.select_option("#bc-team-a", OURS); page.select_option("#bc-team-b", THEIRS)
+            page.wait_for_selector(".matchup-row[data-their]")
+            page.evaluate("id => window.UC_ACT.pick(id)", page.evaluate("() => window.UC_BC_LAST.rows[0].theirId"))
+            out = page.evaluate("""() => { const m = JSON.parse(JSON.stringify(window.UC_BC_LAST));
+                m.night.answer = null; window.UC_BC.render(m);
+                const hero = document.querySelector('#bc-night .send-hero');
+                return {engine: m.night.engine, ranked: m.night.ranked.length, send: document.querySelectorAll('#bc-night .send-hero [data-send]').length,
+                        text: hero ? hero.innerText : ''}; }""")
+            assert out["engine"] == "v2" and out["ranked"] > 0
+            assert out["send"] == 0, "no Send button without an engine answer"
+            assert "No engine answer" in out["text"]
+        finally:
+            browser.close()
+
+
+def test_v2_risk_line_is_v2s_own_list_not_the_recorded_record_list(tmp_path):
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            page.select_option("#bc-team-a", OURS); page.select_option("#bc-team-b", THEIRS)
+            page.wait_for_selector(".matchup-row[data-their]")
+            page.evaluate("id => window.UC_ACT.pick(id)", page.evaluate("() => window.UC_BC_LAST.rows[0].theirId"))
+            n = page.evaluate("""() => { const n = window.UC_BC_LAST.night;
+                return {flag: n.openRisksV2, risks: n.openRisks, plan: n.planCheck.responses.filter(r => r.p < 0.40).map(r => r.their)}; }""")
+            assert n["flag"] is True
+            assert sorted(n["risks"]) == sorted(n["plan"])
+        finally:
+            browser.close()

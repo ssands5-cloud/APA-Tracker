@@ -794,7 +794,8 @@ _JS_BODY = r"""
       var all=n.ranked.concat(n.unordered).concat(n.avoid);
       var pick=null;
       if(n.answer) pick=all.filter(function(c){return c.name===n.answer.our;})[0]||null;
-      if(!pick&&n.ranked.length) pick=n.ranked[0];
+      // V2 never turns the recorded-record ranking into a Send pick: no engine answer means no Send (GPT-008).
+      if(!pick&&n.ranked.length&&n.engine!=="v2") pick=n.ranked[0];
       var ourBench=n.bench.ours.filter(function(b){return n.answer&&b.name===n.answer.our;})[0];
       var pickId=pick?pick.id:(ourBench?ourBench.id:null),pickName=pick?pick.name:(n.answer?n.answer.our:null);
       // A concession: nobody on our side has a winning head-to-head record against this opponent, so the engine

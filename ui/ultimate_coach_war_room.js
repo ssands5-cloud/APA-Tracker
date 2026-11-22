@@ -2077,7 +2077,8 @@
     }
     night.holds=(mp.holds||[]).map(function(h){return {our:h.our,covers:h.covers,why:h.why};});
     night.sacrifices=(mp.sacrifices||[]).map(function(s){return {our:s.our,their:s.their,level:s.level,why:s.why};});
-    night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
+    // V2 builds keep V2's own risk list (set above); the recorded-record list is the M3 view only.
+    if(!night.openRisksV2) night.openRisks=w.theirs.filter(function(o,j){return plan.unplayed[j]&&plan.sends[j].filter(function(r){return r.category==="G";}).length===0;})
       .map(function(o){return wrDisplayName(o,w.theirs);});
     night.capText=mp.cap?(mp.cap.incomplete?"Cap "+mp.cap.cap+": check incomplete (missing skill levels)":"Cap "+mp.cap.cap+": "+mp.cap.slack+" to spare after the cheapest remaining lineup"):"No skill cap entered";
     night.bench={ours:w.ours.map(function(m){return {id:String(m.id),name:wrDisplayName(m,w.ours),sl:wrKnown(m.skill_level)?m.skill_level:null,avail:wrAvail(ck,m.id),lineup:wrLineup(ck,m.id),rem:!!plan.rem[String(m.id)]};}),
