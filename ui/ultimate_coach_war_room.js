@@ -1996,7 +1996,7 @@
         +(c.lead.v2?'<b>'+esc(c.lead.v2.our)+'</b> <span class="muted">'+esc(c.lead.v2.level)+'</span>'+(c.lead.v2.ties.length?' <span class="muted">(tied with '+esc(c.lead.v2.ties.join(", "))+')</span>':''):'—')+'</td></tr>':'')
       +c.rows.map(r1).join("")+'</tbody></table></div>'
       +'<p class="muted">Each engine\u2019s own choices for the rest of the night, played against the same opponent behaviour and scored with V2\u2019s estimates (expected wins of '+c.games+'). If they put up first: V2 '+plan(c.v2Them)+'; M3 '+plan(c.m3Them)+'. If we put up first: V2 '+plan(c.v2Lead)+'; M3 '+plan(c.m3Lead)+'. Best possible worst-case plan (benchmark, not what V2 plays): '+(c.benchThem!==null?c.benchThem.toFixed(2):'—')+'. Model-dependent: M3 has no probabilities of its own. Team points are a straight conversion of expected wins and never change a choice.</p>'
-      +(m?'<p class="muted">V2 model check on 2025-09 onward games it was not fitted on: log loss '+m.test_logloss+' vs '+m.test_logloss_constant+' for a coin flip; calibration slope '+m.test_calibration_intercept_slope[1]+' (1.00 = perfectly calibrated).</p>':'')
+      +(m?'<p class="muted">V2 model check on 2025-09 onward games not used to fit the checked model (the shipped model is refit on all games): log loss '+(m.symmetrized_test_logloss||m.test_logloss)+' vs '+m.test_logloss_constant+' for a coin flip; calibration slope '+(m.symmetrized_test_calibration_intercept_slope||m.test_calibration_intercept_slope)[1]+' (1.00 = perfectly calibrated).</p>':'')
       +'</section>';
   }
   function wrEngineSwitchHtml(){

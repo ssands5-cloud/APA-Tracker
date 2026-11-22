@@ -146,7 +146,11 @@ def main():
             rp, ro = recent[(fmt, p)], recent[(fmt, o)]
             x = feature_vector(slp, slo, (rec[0], rec[1]) if rec else None, shared, (sum(rp), len(rp)), (sum(ro), len(ro)),
                                tuple(overall[(fmt, p)]), tuple(overall[(fmt, o)]))
-            rows[fmt].append((day, int(won), x))
+            # The same game from the opponent's side: the app symmetrizes P = (p(us) + 1 - p(them)) / 2 (GPT-009).
+            xr = feature_vector(slo, slp, (rec[1] - rec[0], rec[1]) if rec else None,
+                                (shared[2], shared[3], shared[0], shared[1], shared[4]) if shared else None,
+                                (sum(ro), len(ro)), (sum(rp), len(rp)), tuple(overall[(fmt, o)]), tuple(overall[(fmt, p)]))
+            rows[fmt].append((day, int(won), x, xr))
         for p, o, won, slp, slo, mid in obs:   # update after the whole day: features use strictly earlier dates
             rec = pairs[(fmt, p)].setdefault(o, [0, 0])
             rec[0] += int(won)
@@ -189,6 +193,7 @@ def main():
         days = np.array([r[0] for r in rows[fmt]])
         y = np.array([r[1] for r in rows[fmt]], float)
         X = np.array([r[2] for r in rows[fmt]], float)
+        XR = np.array([r[3] for r in rows[fmt]], float)
         fit_m, val_m = days <= FIT_END, (days > FIT_END) & (days <= VAL_END)
         train_m, test_m = days <= VAL_END, days > VAL_END
         mu, sd = X[train_m].mean(0), X[train_m].std(0)
@@ -197,12 +202,19 @@ def main():
         best = min(LAMBDAS, key=lambda lam: logloss(y[val_m], predict(fit(Z[fit_m], y[fit_m], lam), Z[val_m])))
         b = fit(Z[train_m], y[train_m], best)
         pt = predict(b, Z[test_m])
+        pt_sym = (pt + 1 - predict(b, ((XR - mu) / sd)[test_m])) / 2
         base = np.full(test_m.sum(), y[train_m].mean())
         metrics = {"lambda": best, "train_games": int(train_m.sum()), "test_games": int(test_m.sum()),
                    "test_window": f"{VAL_END} < day", "test_logloss": round(logloss(y[test_m], pt), 5),
                    "test_logloss_constant": round(logloss(y[test_m], base), 5),
                    "test_brier": round(float(((pt - y[test_m]) ** 2).mean()), 5),
-                   "test_calibration_intercept_slope": calib(y[test_m], pt)}
+                   "test_calibration_intercept_slope": calib(y[test_m], pt),
+                   "symmetrized_test_logloss": round(logloss(y[test_m], pt_sym), 5),
+                   "symmetrized_test_brier": round(float(((pt_sym - y[test_m]) ** 2).mean()), 5),
+                   "symmetrized_test_calibration_intercept_slope": calib(y[test_m], pt_sym),
+                   "note": ("holdout metrics describe the model fitted on games through the end of the validation window; "
+                            "the shipped coefficients are refit on every game through the snapshot date with the same penalty, "
+                            "so they have no untouched holdout of their own. The app uses the symmetrized prediction.")}
         # production refit on every game from START onward, same penalty and standardization rule
         mu_all, sd_all = X.mean(0), X.std(0)
         sd_all[sd_all == 0] = 1.0
