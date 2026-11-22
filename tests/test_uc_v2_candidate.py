@@ -414,3 +414,27 @@ def test_v2_send_card_has_no_legacy_save_or_spend_notes_and_never_lists_its_answ
                 assert ps == sorted(ps, reverse=True), "alternatives ordered by V2's estimate"
         finally:
             browser.close()
+
+
+def test_later_long_shot_is_classified_at_its_own_step_of_the_night(tmp_path):
+    """GPT-004: a planned long shot in a later game gets the role the rule gives at THAT state, not at the start."""
+    path = _render(tmp_path)
+    ours = [{"id": "a", "name": "Ace", "sl": 5}, {"id": "b", "name": "Bo", "sl": 5}, {"id": "c", "name": "Cy", "sl": 5}]
+    theirs = [{"id": "x", "name": "Xan", "sl": 5}, {"id": "y", "name": "Yul", "sl": 5}, {"id": "z", "name": "Zed", "sl": 5}]
+    mk = lambda p: {"level": band(p), "points": int(round(1000 * (p - 0.5))), "p": p, "why": "", "text": f"{band(p)} — {round(100 * p)}%", "v2": True}
+    ps = {"a": 0.70, "b": 0.60, "c": 0.30}
+    value = {f"{o}|{t}": mk(ps[o]) for o in "abc" for t in "xyz"}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            mp = page.evaluate("([o,t,v]) => window.__ucV2Apply(window.__ucMatchPlan(o,t,v,3,null,0,null,0),o,t,v,3,null,0,0)", [ours, theirs, value])
+            line = mp["plan_if_they_lead"]
+            assert [g["leader"] for g in line] == ["them", "us", "them"] and line[2]["our"] == "Cy"
+            sac = [x for x in mp["sacrifices"] if x["our"] == "Cy"]
+            assert sac, "the forced 30% game must be reported"
+            # At game 3 only Cy is left: best available. At the start state the same put-up would get Ace's
+            # "Recommended competitive matchup" label, which was the bug.
+            assert sac[0]["why"].startswith("Best available (every option is a long shot)"), sac[0]["why"]
+        finally:
+            browser.close()

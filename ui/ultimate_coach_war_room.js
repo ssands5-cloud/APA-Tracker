@@ -1184,8 +1184,10 @@
     mp.plan_if_we_lead=describe(planLead);mp.plan_if_they_lead=describe(planThem);
     mp.total_if_we_lead=Math.round(1000*L.w);mp.total_if_they_lead=Math.round(1000*T.w);
     // Planned long shots in the policy's own night: deliberate concessions only where the rule chose one.
-    mp.sacrifices=planThem.filter(function(g){return g.p<0.40;}).slice(0,2).map(function(g){
-      var role=g.leader==="them"?pol.respond(om,tm,g.their).pick.role:"planned long shot";
+    // Each planned long shot is classified at its own step of the night (GPT-004: not at the starting state).
+    var stepOm=om,stepTm=tm,steps=planThem.map(function(g){var r={g:g,om:stepOm,tm:stepTm};stepOm&=~(1<<g.our);stepTm&=~(1<<g.their);return r;});
+    mp.sacrifices=steps.filter(function(x){return x.g.p<0.40;}).slice(0,2).map(function(x){var g=x.g;
+      var role=g.leader==="them"?pol.respond(x.om,x.tm,g.their).pick.role:"planned long shot";
       return {our:ours[g.our].name,their:theirs[g.their].name,level:conf(g.our,g.their).level,why:role+" — "+conf(g.our,g.their).text};});
     // Designated answers: how much the executed policy loses without each player (worst case).
     var lazy=function(obj,key,fn){var v,done=false;Object.defineProperty(obj,key,{enumerable:true,configurable:true,

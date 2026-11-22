@@ -60,9 +60,9 @@ Duplicated business logic / competing sources of truth found:
 | S4 | High | Plans/totals/trace/comparison scored a different policy than the one recommended | fixed 11879db; GPT counterexample test |
 | S5 | High | V2 send card listed its own answer under recorded "avoid" and showed M3-era "consider saving / spends our only favorable option" notes | fixed a0bf857; test + harness |
 | S6 | High | Sacrifice accepted on a gain that held in only one opponent model (owner fixture +0.110 worst / +0.099 even) | fixed fc5b7ff: needs >= 0.10 under both |
-| D1 | High | Package evidence not reproducible from any database on disk (12/16 players' totals differ vs newest catch-up DB, both directions; one newcomer's 7 games in no DB) | open — needs a build manifest with source path + hash |
-| D2 | Medium | Page evidence rows carry no match ids; 8 fully identical rows among 16 players cannot be told from same-day rematches; counted by V2 and record views | open |
-| D3 | Medium | 1 direct record differs page vs DB (pair absent in DB) | open (follows D1) |
+| D1 | High (preliminary, GA-03) | Package evidence not reproducible from any database on disk (12/16 players' totals differ vs newest catch-up DB, both directions; one newcomer's 7 games in no DB) | open — needs a build manifest with source path + hash |
+| D2 | Medium (preliminary, GA-03) | Page evidence rows carry no match ids; 8 fully identical rows among 16 players cannot be told from same-day rematches; counted by V2 and record views | open |
+| D3 | Medium (preliminary, GA-03) | 1 direct record differs page vs DB (pair absent in DB) | open (follows D1) |
 | L1 | Medium | Classic-page Next Send list, blind send card and send-cost text still use recorded-record categories inside V2 builds | open (labelled as recorded facts; align or hide in V2) |
 | P1 | Medium | APA team-point margins (8-Ball hill/shutout, 9-Ball ball points) not modelled; team points are a linear conversion that never changes a choice | open (requirement) |
 | P2 | Medium | Base tap latency ~15 s on a 4x-throttled phone (shared with the Sunday build) | open, not V2-specific |
@@ -70,6 +70,17 @@ Duplicated business logic / competing sources of truth found:
 | W1 | Low | Summary printed 0.099 as "+0.10" beside a 0.10 threshold | fixed a0bf857 (3 decimals) |
 | T1 | High | Start Here / Excel START HERE limits contradicted the product: "no skill cap is assumed", "Unknown availability is not Unavailable", "marks belong to one fixture"; V2 build also said no win-probability model exists | fixed a111f46 |
 | T2 | Medium | War Room "Avoid records" and Lineup Lab "Protected players (consider saving)" read as instructions that can contradict the V2 plan | relabelled as recorded facts in V2 builds, a111f46 |
+
+
+## GPT acceptance gates (PR #120, owner-approved)
+| ID | Sev | Requirement | Status |
+|---|---|---|---|
+| GA-01 | High | Harness must not false-pass: per-invariant checked/skipped/failed counts, nonzero coverage, requested team/format validated, missing outputs = failure, no-answer states separated; EIGHT+NINE, both toss orders, played 0-4, both sides' availability, no-feasible-five; I7 with prior spend, uniqueness, unknown SL never zero; stable IDs; rendered advice checked; absent engine answer never becomes a legacy Send | open — current division run predates this; results reported as preliminary |
+| GA-02 | High | Seeded negative/mutation tests for each fault class plus a positive control; coverage + build hashes in aggregate output | open (first seeded case: GPT-004 regression test fails on the old code, passes on the fix) |
+| GA-03 | High | D1-D3 are preliminary: reconcile raw -> verified eligible game keys -> compact HTML on stable identities and the same snapshot/cutoff; raw vs filtered separately; reuse the production build manifest/hash for V2 builds; no record changes on preliminary counts | open; D1-D3 reclassified preliminary |
+| GA-04 | High | Recheck GPT-004/006/007/008/009/010/011/013/014 | GPT-004 fixed (later long shot classified at its own step; regression test with negative control); others open |
+
+Notes: APA team-point optimisation remains an unmet requirement (P1). Model-dependent rollout gains are not observed wins.
 
 ## Owner fixture (sanitized), latest policy
 Their SL7 (64% APA career) put up first; 8 of ours available, none played, no player excluded. Estimates
