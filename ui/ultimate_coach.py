@@ -582,6 +582,17 @@ def _trust_card(payload: dict[str, Any]) -> str:
 </div>"""
 
 
+def _limits_for(engine: str) -> list[str]:
+    """Start Here limitations. A V2 candidate build does show estimated win chances, so it says so instead of the
+    standard "no win-probability model" line (the Excel workbook keeps the standard text: it has no V2)."""
+    if engine != "v2":
+        return list(ONBOARDING_LIMITS)
+    return [("• V2 CANDIDATE: recommendations use estimated win chances from a back-tested model (checked on 2025-09 "
+             "onward games it was not fitted on). Estimates, not guarantees. Record views, the Excel workbook and "
+             "Player vs Player still show recorded results only.") if "No validated win-probability model" in line else line
+            for line in ONBOARDING_LIMITS]
+
+
 def render(
     payload: dict[str, Any],
     *,
@@ -670,7 +681,7 @@ def render(
         '<div><h3>Worked example from this build</h3><ul>'
         + (li(example) if example else "<li>No viewer is configured for this build: pick yourself on Match Day and it "
            "fills in team, date and fixture the same way.</li>")
-        + f'</ul></div></div><h3>Important limitations</h3><ul>{li(ONBOARDING_LIMITS)}</ul>'
+        + f'</ul></div></div><h3>Important limitations</h3><ul>{li(_limits_for(engine))}</ul>'
         f'<h3>Mobile match night</h3><ul>{li(MATCH_NIGHT_GUIDE)}</ul>'
         f'<p class="muted">Version: {escape(version)} · Build date: {escape(fresh["build_date"])} · data current to the '
         f'latest recorded result {escape(fresh["latest_result"])}'
