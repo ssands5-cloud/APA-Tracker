@@ -103,7 +103,7 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 ## GPT acceptance gates (PR #120, owner-approved)
 | ID | Sev | Requirement | Status |
 |---|---|---|---|
-| GA-01 | High | Harness must not false-pass (counts, coverage gate, validated teams/format, missing outputs fail, both sides' availability, stable ids, prior-spend cap, unknown SL never zero, rendered advice, absent answer never a Send) | implemented: harness v2 + 33 seeded detector cases; states now cap 23/22/cleared, both toss orders, 1-4 played under BOTH toss orders, our/their player Out, no feasible five; 8-Ball and 9-Ball (format set and verified per state); remaining: final full run on the exact final build |
+| GA-01 | High | Harness must not false-pass (counts, coverage gate, validated teams/format, missing outputs fail, both sides' availability, stable ids, prior-spend cap, unknown SL never zero, rendered advice, absent answer never a Send) | implemented: harness v2 + 33 seeded detector cases; states now cap 23/22/cleared, both toss orders, 1-4 played under BOTH toss orders, our/their player Out, no feasible five; 8-Ball and 9-Ball (format set and verified per state); final run done on 683d5f5 (8-Ball complete, 9-Ball sample): 1,536 states, 0 contradictions |
 | GA-02 | High | Seeded negative/mutation tests for each fault class plus a positive control; coverage + build hashes in aggregate output | open (first seeded case: GPT-004 regression test fails on the old code, passes on the fix) |
 | GA-03 | High | D1-D3 are preliminary: reconcile raw -> verified eligible game keys -> compact HTML on stable identities and the same snapshot/cutoff; raw vs filtered separately; reuse the production build manifest/hash for V2 builds; no record changes on preliminary counts | open; D1-D3 reclassified preliminary |
 | GA-04 | High | Recheck GPT-004/006/007/008/009/010/011/013/014 | see rows below |
@@ -118,6 +118,18 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 
 Notes: APA team-point optimisation remains an unmet requirement (P1). Model-dependent rollout gains are not observed wins.
 
+
+
+## Final harness-v2 audit on the exact candidate (683d5f5, review HTML sha256 46618509c44c...)
+| Run | Scope | Pairs | States | Contradictions | Coverage | Strategic exceptions |
+|---|---|---|---|---|---|---|
+| 8-Ball | division 436647, COMPLETE (every ordered team pair) | 72/72 | 1,152 | 0 | ok | 116, all >= 0.10 expected wins under both opponent models |
+| 9-Ball | division 436654, SAMPLE (first 24 of 182 ordered pairs) | 24 | 384 | 0 | ok | 0 |
+States per pair: cap 23/22/cleared; toss us/them; 1-4 played under both toss orders; our player Out; their player Out;
+no feasible five. Invariant checks (checked/skipped/failed): I0 3072/0/0, I1 12892/0/0, I2 9820/0/0, I3 12080/0/0,
+I4 12080/0/0, I5 19640/0/0, I6 4608/0/0, I7 2880/96/0 (96 skipped: unknown skill level, never counted as zero),
+I8 11356/0/0, I9 9820/0/0, I10 1715/0/0, I11 8/0/0. Not covered: other divisions, the remaining 158 9-Ball pairs,
+Masters (stays on M3).
 
 ## Codex red-team audit (tmp/red-team-audit/RED_TEAM_AUDIT.md) — what it means for the V2 candidate
 | ID | Sev | Codex finding | Applies to V2? | Status |

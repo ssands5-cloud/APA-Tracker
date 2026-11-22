@@ -72,3 +72,14 @@ for i in 1 2; do (python docs/v2/contradiction_audit.py --html $F/v2_candidate_6
 ```
 - After it finishes: if 0 contradictions with coverage_ok, copy the candidate to the owner folder (keep the e22310e file
   as the previous verified checkpoint), update README, publish results to PR #120; otherwise diagnose first.
+
+## Update Sat Nov 21 2026, 23:45 MT
+- Final audit COMPLETE on 683d5f5: 8-Ball division 72/72 pairs (1,152 states) + 9-Ball sample 24/182 pairs (384 states),
+  0 contradictions, coverage ok. Evidence: `tmp\...2-buildinal-683d5f5\`.
+- Owner folder now holds 683d5f5 (sha256 46618509c44cdb4310ef2cb4041a556da8dac3db1c67f621f13b9d29dda21154) with
+  BUILD_MANIFEST_683d5f5.json; previous verified e22310e kept in `previous-verified\`.
+- Codex red-team audit answered (RT-1..RT-5 in AUDIT_FINDINGS.md); research summary qualified (04c201c).
+- Catch-up import: stopped 23:04 on "database is locked", very likely from Claude's read-only check; DB consistent; not
+  restarted by Claude (other session's process). Do not open that DB while an import may run.
+- Remaining blockers: RT-1/RT-2 (duplicates, preprocessing - unmeasured, no refit approved), base-run input retention
+  (GA-03), APA team-point margins (P1), GPT-007/014, S2 timing lock, independent review, owner acceptance.
