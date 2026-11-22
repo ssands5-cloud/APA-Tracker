@@ -9,7 +9,7 @@ locations and rules only. Tools: `docs/v2/contradiction_audit.py` (cross-screen 
 |---|---|
 | 1 Inventory (V2-relevant surfaces, engine used, legacy logic) | done for Match Night, Command Board, plans, trace, comparison, Team Status features; classic-only cards listed below |
 | 2 Data integrity | owner fixture done (16 players, 64 direct pairings); division-wide not yet |
-| 3 Contradiction detector | v1 division run complete (72 pairs, 360 states, 2 contradictions -> S7 fixed; 29 quantified strategic exceptions); harness v2 + 31 seeded-fault tests; final v2 run against e22310e in progress |
+| 3 Contradiction detector | harness-v2 run on e22310e STOPPED for the owner's restart at 7/72 pairs (84 states, 13 contradictions in shards 3-4, not yet diagnosed - see RECOVERY_CHECKPOINT.md); v1 division run complete (72 pairs, 360 states, 2 contradictions -> S7 fixed; 29 quantified strategic exceptions); harness v2 + 31 seeded-fault tests; final v2 run against e22310e in progress |
 | 4 Strategic audit | sweep done at 539408f (576 put-ups); rerun pending on the latest policy |
 
 ## Phase 1 — where each screen's logic comes from (V2 build)
@@ -60,7 +60,7 @@ Duplicated business logic / competing sources of truth found:
 | S4 | High | Plans/totals/trace/comparison scored a different policy than the one recommended | fixed 11879db; GPT counterexample test |
 | S5 | High | V2 send card listed its own answer under recorded "avoid" and showed M3-era "consider saving / spends our only favorable option" notes | fixed a0bf857; test + harness |
 | S6 | High | Sacrifice accepted on a gain that held in only one opponent model (owner fixture +0.110 worst / +0.099 even) | fixed fc5b7ff: needs >= 0.10 under both |
-| D1 | High (preliminary, GA-03) | Package evidence not reproducible from any database on disk (12/16 players' totals differ vs newest catch-up DB, both directions; one newcomer's 7 games in no DB) | open — needs a build manifest with source path + hash |
+| D1 | Medium (reclassified, GA-03) | The page matches its own verified source: the Sunday data is the v7 build (base refresh run `run-20261119T183918Z-1cdb65c6` + 8,440 catch-up pairs, cutoff 2026-11-19; Codex verification 0 differences over 549,936 pair records). The earlier comparison used unrelated databases. Open: the base run's input folder was not found on disk, so the private input is not retained for rebuilding. Original text: Package evidence not reproducible from any database on disk (12/16 players' totals differ vs newest catch-up DB, both directions; one newcomer's 7 games in no DB) | open — needs a build manifest with source path + hash |
 | D2 | Medium (preliminary, GA-03) | Page evidence rows carry no match ids; 8 fully identical rows among 16 players cannot be told from same-day rematches; counted by V2 and record views | open |
 | D3 | Medium (preliminary, GA-03) | 1 direct record differs page vs DB (pair absent in DB) | open (follows D1) |
 | L1 | Medium | Classic-page Next Send list, blind send card and send-cost text still use recorded-record categories inside V2 builds | open (labelled as recorded facts; align or hide in V2) |
