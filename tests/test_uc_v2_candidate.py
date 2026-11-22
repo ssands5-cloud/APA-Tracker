@@ -275,3 +275,81 @@ def test_decision_trace_lists_every_available_player_with_the_numbers(tmp_path):
             assert pick["role"] and t["summary"]
         finally:
             browser.close()
+
+
+def _two_by_two(page, a_x, b_x, a_y, b_y):
+    ours = [{"id": "a", "name": "Ace", "sl": 5}, {"id": "b", "name": "Bo", "sl": 5}]
+    theirs = [{"id": "x", "name": "Xan", "sl": 5}, {"id": "y", "name": "Yul", "sl": 5}]
+    mk = lambda p: {"level": band(p), "points": int(round(1000 * (p - 0.5))), "p": p,
+                    "why": f"{round(100 * p)}% estimated win chance", "text": f"{band(p)} — {round(100 * p)}%", "v2": True}
+    value = {"a|x": mk(a_x), "b|x": mk(b_x), "a|y": mk(a_y), "b|y": mk(b_y)}
+    return page.evaluate("([o,t,v]) => window.__ucV2Apply(window.__ucMatchPlan(o,t,v,2,null,0,null,0),o,t,v,2,null,0,0)",
+                         [ours, theirs, value])
+
+
+def test_gpt_counterexample_every_reported_number_is_the_policy_v2_actually_plays(tmp_path):
+    """GPT review of f628b13: Ace/Xan .60, Bo/Xan .55, Ace/Yul .58, Bo/Yul .50. V2 answers Xan with Ace, so the night
+    it plays is .60 + .50 = 1.10 if they put up Xan; the old pure-minimax 1.13 must appear only as a benchmark."""
+    path = _render(tmp_path)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            mp = _two_by_two(page, 0.60, 0.55, 0.58, 0.50)
+            r = {x["their"]: x for x in mp["responses"]}
+            assert r["Xan"]["our"] == "Ace" and r["Yul"]["our"] == "Ace"
+            line = mp["plan_if_they_lead"]
+            assert [(g["their"], g["our"]) for g in line] == [("Xan", "Ace"), ("Yul", "Bo")]
+            assert mp["total_if_they_lead"] == 1100                 # .60 + .50, the policy's own worst case
+            assert abs(sum(g["p"] for g in line) - 1.10) < 1e-9
+        finally:
+            browser.close()
+
+
+def test_whole_night_rollout_is_consistent_on_every_surface(tmp_path):
+    """Lead, answers, both game plans, totals and the comparison all come from one executed policy."""
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            mp = page.evaluate(f"window.__ucPlanFor({OURS!r},{THEIRS!r},'EIGHT',null,null,0,0,23,'v2')")
+            them, lead = mp["plan_if_they_lead"], mp["plan_if_we_lead"]
+            assert them and lead
+            # First game of each plan is exactly what the cards recommend.
+            assert lead[0]["our"] == mp["lead"]["our"] and lead[0]["leader"] == "us"
+            first = next(r for r in mp["responses"] if r["their"] == them[0]["their"])
+            assert them[0]["our"] == first["our"] and them[0]["leader"] == "them"
+            # Totals are the plans' own expected wins (worst-case path), in thousandths.
+            assert mp["total_if_they_lead"] == round(1000 * sum(g["p"] for g in them))
+            assert mp["total_if_we_lead"] == round(1000 * sum(g["p"] for g in lead))
+            # The comparison scores the same policy the same way, and never above the best possible worst case.
+            c = page.evaluate(f"window.__ucEngineCompare({OURS!r},{THEIRS!r},'EIGHT',23)")
+            assert abs(c["v2Them"]["w"] - sum(g["p"] for g in them)) < 1e-9
+            assert c["v2Them"]["w"] <= c["benchThem"] + 1e-9 and c["v2Lead"]["w"] <= c["benchLead"] + 1e-9
+            assert c["m3Them"]["w"] <= c["benchThem"] + 1e-9            # M3's choices scored on the same terms
+            assert c["v2Them"]["a"] >= c["v2Them"]["w"] - 1e-9
+            # Every answer in the comparison carries the plan's own role (no separate under-40% rule).
+            roles = {r["their"]: r["role"] for r in mp["responses"]}
+            for row in c["rows"]:
+                if row["v2"]:
+                    assert row["v2"]["role"] == roles[row["their"]]
+                    assert row["v2"]["concession"] == ("deliberate concession" in roles[row["their"]])
+        finally:
+            browser.close()
+
+
+def test_best_available_long_shot_is_not_called_a_deliberate_concession(tmp_path):
+    """GPT finding 5: a sub-40% answer that IS the strongest matchup now is the best available, not a concession."""
+    path = _render(tmp_path)
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            mp = _two_by_two(page, 0.35, 0.30, 0.45, 0.40)
+            r = next(x for x in mp["responses"] if x["their"] == "Xan")
+            assert r["our"] == "Ace" and r["p"] < 0.40
+            assert r["role"] == "Best available (every option is a long shot)"
+            assert "deliberate concession" not in r["role"]
+        finally:
+            browser.close()
