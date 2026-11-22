@@ -618,14 +618,17 @@ _JS_BODY = r"""
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}
   function cardHtml(c){
     var g=c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'" title="Strategic value (rule below)">'+esc(c.grade)+'</span>':"";
-    var best=c.targets.length?'<p class="plist"><span class="k">Winning record vs</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Winning record vs</span><span class="matchup-sl">no winning head-to-head record left</span></p>';
+    var best=c.targets.length?'<p class="plist"><span class="k">'+(c.v2?'Planned answer if they put up':'Winning record vs')+'</span><span class="goodt">'+oppList(c.targets,true)+'</span></p>':'<p class="plist"><span class="k">Winning record vs</span><span class="matchup-sl">no winning head-to-head record left</span></p>';
     var ans=(c.answers&&c.answers.length)?'<p class="plist"><span class="k">Plan answer</span>'+c.answers.map(function(a){return esc(a.opp)+' <span class="evidence-badge '+badgeClass(a.level)+'">'+esc(a.level)+'</span>';}).join(" ")+'</p>':"";
-    var av=c.avoid.length?'<p class="plist"><span class="k">Avoid</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
+    if(c.v2) ans="";
+    var av=c.avoid.length?'<p class="plist"><span class="k">'+(c.v2?'Long shot vs':'Avoid')+'</span><span class="badt">'+oppList(c.avoid,true)+'</span></p>':"";
     var wi=c.whatIf?'<div class="pwhatif"><b>Save:</b> plan stays '+esc(c.whatIf.before)+' \u00b7 <b>If unavailable:</b> becomes '+esc(c.whatIf.after)+' (fragility '+esc(c.whatIf.fragBefore)+' \u2192 '+esc(c.whatIf.fragAfter)+')</div>':"";
     return '<article class="pcard '+esc(c.role)+'" aria-label="'+esc(c.name)+'"><div class="pcard-top"><span class="pcard-name">'+esc(c.name)+slTag(c.sl)+'</span>'+g
-      +'<span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></div>'+best+ans+av
+      +'<span class="prole '+esc(c.role)+'">'+esc(roleLabel(c))+'</span></div>'+best+ans+av
       +'<div class="precommend">'+esc(c.recommend)+'</div>'+wi+'</article>';
   }
+  var V2_ROLE_LABEL={core:"Lead",save:"Planned answer",burn:"Concession",flexible:"In the five",situational:"Not planned",used:"Played",out:"Out"};
+  function roleLabel(c){return (c.v2?V2_ROLE_LABEL[c.role]:ROLE_LABEL[c.role])||c.role;}
   function commandHtml(m){
     var cmd=m.night&&m.night.command; if(!cmd) return "";
     var cards=cmd.cards,pl=cmd.plan;
@@ -654,9 +657,9 @@ _JS_BODY = r"""
       +gone.map(function(c){return esc(c.name)+' ('+(c.role==="used"?"played":"out")+')';}).join(", ")+'</p></details>':'';
     var glance=matchDone?'<p class="cmd-sum glance-final"><b>Played tonight:</b> '+(gone.filter(function(c){return c.role==="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")
         +' \u00b7 <b>Didn\u2019t play:</b> '+(cards.filter(function(c){return c.role!=="used";}).map(function(c){return esc(c.name);}).join(", ")||"none")+'</p>'
-      :'<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th><th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th><th>Recommendation</th></tr></thead><tbody>'
+      :'<div class="table-wrap"><table class="glance" aria-label="Roster at a glance"><thead><tr><th>Player</th><th>Role</th><th>Value</th>'+(cmd.v2?'<th title="If they put up this opponent, V2 sends this player (conditional: one player plays once)">Planned answer if they put up</th><th title="V2 estimate below 40% and not this player\u2019s planned answer">Long shot vs</th>':'<th title="Opponents this player has a winning head-to-head record against">Winning record vs</th><th>Avoid</th>')+'<th>Recommendation</th></tr></thead><tbody>'
       +active.map(function(c){return '<tr class="'+esc(c.role)+'"><td class="gn">'+esc(c.name)+(c.sl!=null?'<span class="matchup-sl">SL '+esc(c.sl)+'</span>':'')+'</td>'
-        +'<td><span class="prole '+esc(c.role)+'">'+esc(ROLE_LABEL[c.role]||c.role)+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
+        +'<td><span class="prole '+esc(c.role)+'">'+esc(roleLabel(c))+'</span></td><td>'+(c.grade?'<span class="grade'+(/^[CD]/.test(c.grade)?' lo':'')+'">'+esc(c.grade)+'</span>':'')+'</td>'
         +'<td class="goodt">'+names2(c.targets)+'</td><td class="badt">'+names2(c.avoid)+'</td><td title="'+esc(c.recommend)+'">'+esc(c.recommend.replace(/\s*\([^)]*\)\s*$/,""))+'</td></tr>';}).join("")+'</tbody></table></div>'+goneLine;
     var tab=function(k,l){return '<button type="button" class="night-btn'+(pathMode===k?' primary':'')+'" data-path="'+k+'">'+l+'</button>';};
     var start=matchDone?'<strong>Final \u00b7 Matches '+m.night.score.w+'-'+m.night.score.l+'</strong>':upOpt?'<strong>Path after we put up '+esc(upOpt.name)+'</strong>'
@@ -666,10 +669,11 @@ _JS_BODY = r"""
     return '<section class="cmd cmd-main" aria-label="Captain command board"><div class="cmd-head"><h3>Captain command board</h3>'
       +'<span class="cmd-sum">'+(matchDone?'Match complete':(selected?'':'Plan: <b>'+esc(pl.conf)+'</b> \u00b7 fragility <b>'+esc(pl.fragility)+'</b>'+(pl.leans?' (leans on '+esc(pl.leans)+')':'')+' \u00b7 ')+left+' game'+(left===1?'':'s')+' left')+'</span></div>'
       +'<div class="path"><div class="path-tabs">'+start+'</div><div class="path-slots">'+completed+slots+'</div>'
-      +(matchDone?'':'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p>')+'</div>'
+      +(matchDone?'':cmd.v2?'<p class="cmd-sum" style="margin:8px 0 0">The slots above are the actual five-game plan as V2 plays it. The table below lists conditional answers: who V2 sends if they put up each player (one player can be the answer to several put-ups but plays only once). <b>Lead:</b> '+names("core")+' \u00b7 <b>Planned answers:</b> '+names("save")+' \u00b7 <b>Concessions:</b> '+names("burn")+' \u00b7 <b>Not planned:</b> '+names("situational")+'</p>'
+        :'<p class="cmd-sum" style="margin:8px 0 0"><b>Protect:</b> '+names("save")+' \u00b7 <b>Core:</b> '+names("core")+' \u00b7 <b>Flexible:</b> '+names("flexible")+' \u00b7 <b>Burn early:</b> '+names("burn")+'</p>')+'</div>'
       +glance
 
-      +'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>';
+      +(cmd.v2?'<details class="ladder"><summary>How V2 assigns roles and values</summary><p>Everything here comes from the same V2 plan as Match Night. <b>Lead</b>: our planned put-up when we go first. <b>Planned answer</b>: the player V2 sends if they put up that opponent (conditional; one player plays once). <b>Concession</b>: a planned long shot chosen to keep stronger players for later matchups (only when that gains at least 0.10 expected wins under both opponent models). <b>In the five</b>: plays in the planned five-game path. <b>Not planned</b>: an alternative only. <b>Value</b>: A if the plan loses 0.15+ expected wins without them or they answer 3+ put-ups; B for 0.07+ or a competitive planned answer; C if they matter at all; D otherwise.</p></details></section>':'<details class="ladder"><summary>How player values and roles are assigned</summary><p><b>Protect</b> means this player has our only winning record against an opponent, or the plan designates them as its best answer to that opponent (that can rest on overall or shared-opponent evidence, so <i>Winning record vs</i> may be empty). <b>Core</b> means the plan relies on this player even without a favorable target. <b>Burn early</b> means no favorable target and the remaining plan holds without them. A = unique answer and at least two favorable targets. A− = protect for remaining coverage. B+ = at least two favorable targets. B = one. C = even or shared-opponent evidence. D = no supported target. Evidence comes from recorded matches.</p></details></section>');
   }
 
   function renderSendCosts(scenarios,opp){
