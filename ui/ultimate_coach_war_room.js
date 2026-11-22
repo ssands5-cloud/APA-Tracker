@@ -1255,6 +1255,16 @@
   };
   // Test hooks for the V2 candidate (cross-checked with analytics.uc_v2_pair_model).
   window.__ucV2Probability=function(fmt,slp,slo,o){return v2WinProbability(fmt,slp,slo,o||{});};
+  // Audit hook (docs/v2/data_reconcile.py): the per-player inputs V2 reads, straight from the page's data.
+  window.__ucRowsFor=function(pid,fmt){return rowsFor(pid,fmt).map(function(g){var o={};['match_id','match_external_id','match_date','opponent_id','result','own_skill_level','opponent_skill_level','session_name'].forEach(function(k){o[k]=val(g,k);});return o;});};
+  window.__ucReconcileData=function(ourKey,oppKey,fmt){
+    var ta=TEAM_INDEX[ourKey],tb=TEAM_INDEX[oppKey];
+    var one=function(m,opps){var r=v2Record(m.id,fmt),mm=oppMap(m.id,fmt),d={};(opps||[]).forEach(function(o){var x=mm[String(o.id)];d[String(o.id)]=x?[x.w,x.g]:[0,0];});
+      var seen={},dup=0;rowsFor(m.id,fmt).forEach(function(g){var k=[val(g,"match_date"),val(g,"opponent_id"),val(g,"result"),val(g,"own_skill_level"),val(g,"opponent_skill_level")].join("|");if(seen[k]) dup++;seen[k]=1;});
+      return {id:m.id,name:m.name,sl:m.skill_level,form:r.form,recent:r.recent,direct:d,pageDuplicateRows:dup};};
+    return {ours:ta.players.map(function(m){return one(m,tb.players);}),theirs:tb.players.map(function(m){return one(m,[]);}),
+      latest:(DATA.build&&DATA.build.latest_result)||null};
+  };
   window.__ucEngineCompare=function(ourKey,oppKey,fmt,cap){var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
     w.ours.forEach(function(m){rem[String(m.id)]=true;});
     return wrEngineCompare(w,{rem:rem,unplayed:w.theirs.map(function(){return true;})},{playedN:0,playedSl:0,cap:cap===undefined?null:cap});};

@@ -164,6 +164,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--summary")
     ap.add_argument("--limit", type=int, default=0, help="only the first N ordered team pairs (0 = all)")
+    ap.add_argument("--shard", default="1/1", help="i/n: run every n-th pair starting at i (parallel runs)")
     a = ap.parse_args()
     fails, exceptions, states = [], [], 0
     with sync_playwright() as pw:
@@ -178,7 +179,11 @@ def main():
         pairs = [(x, y) for x in keys for y in keys if x != y]
         if a.limit:
             pairs = pairs[:a.limit]
-        for x, y in pairs:
+        si, sn = (int(v) for v in a.shard.split("/"))
+        pairs = pairs[si - 1::sn]
+        import sys, time
+        t0 = time.time()
+        for k, (x, y) in enumerate(pairs, 1):
             base = page.evaluate(STATE_JS, [x, y, a.format, 23, None, False])
             variants = [("cap23", 23, None, False), ("cap22", 22, None, False), ("capOff", None, None, False), ("played1", 23, None, True)]
             if base["rows"]:
@@ -192,6 +197,7 @@ def main():
                     fails.append({"state": label, "invariant": "I10", "detail": f"cap in force {st['cap']} != set {cap}"})
                 if out_id and any(r["ourId"] == out_id for r in st["rows"]):
                     fails.append({"state": label, "invariant": "I10", "detail": "Out player still recommended"})
+            print(f"progress {k}/{len(pairs)} pairs, {states} states, {len(fails)} contradictions, {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
         page.evaluate("localStorage.clear()")
         browser.close()
     by = {}
