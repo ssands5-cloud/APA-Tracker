@@ -612,7 +612,7 @@ _JS_BODY = r"""
   function afterText(a){
     if(!a.slots) return "final pairing";
     var open=a.slots-a.left;
-    return "plan after: "+a.conf+(a.frag?" · fragility "+a.frag+(a.leans?" (leans on "+a.leans+")":""):"")
+    return (a.wins!=null?"rest of night "+a.wins.toFixed(2)+" expected wins if they make their most damaging choices · ":"")+"plan after: "+a.conf+(a.frag?" · fragility "+a.frag+(a.leans?" (leans on "+a.leans+")":""):"")
       +(open?" · "+open+" open "+(open===1?"slot":"slots"):"");
   }
   function oppList(items,withRecord){return items.map(function(i){return '<span class="oitem">'+esc(i.opp)+(withRecord&&i.g?' <span class="matchup-sl">'+esc(i.cell)+'</span>':'')+(withRecord&&i.after?'<span class="afterline">If used now vs '+esc(i.opp)+': '+esc(afterText(i.after))+'</span>':'')+'</span>';}).join("");}

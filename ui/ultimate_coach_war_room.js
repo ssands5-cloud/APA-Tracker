@@ -1188,20 +1188,22 @@
       var role=g.leader==="them"?pol.respond(om,tm,g.their).pick.role:"planned long shot";
       return {our:ours[g.our].name,their:theirs[g.their].name,level:conf(g.our,g.their).level,why:role+" — "+conf(g.our,g.their).text};});
     // Designated answers: how much the executed policy loses without each player (worst case).
-    var drops=night.legalOurs(om).map(function(x){
+    var lazy=function(obj,key,fn){var v,done=false;Object.defineProperty(obj,key,{enumerable:true,configurable:true,
+      get:function(){if(!done){v=fn();done=true;}return v;},set:function(n){v=n;done=true;}});};
+    var dropsCache=null,dropsOf=function(){if(dropsCache) return dropsCache;dropsCache=night.legalOurs(om).map(function(x){
       var sub=ours.filter(function(p,k){return k!==x;}),n2=new MnNight(sub,theirs,value,Math.min(games,sub.length,theirs.length),cap,used,night.oppCap,oppUsed);
-      return {x:x,drop:T.w-(n2.legalOurs(n2.fullOurs).length?v2Policy(n2).st(n2.fullOurs,n2.fullTheirs,false).w:0)};});
+      return {x:x,drop:T.w-(n2.legalOurs(n2.fullOurs).length?v2Policy(n2).st(n2.fullOurs,n2.fullTheirs,false).w:0)};});return dropsCache;};
     var faces=function(x){return mp.responses.filter(function(r){return r.our===ours[x].name;}).map(function(r){return r.their;});};
-    mp.holds=drops.filter(function(d){return d.drop>=V2_PLAN_TIE&&ours[d.x].name!==mp.lead.our;}).sort(function(a,b){return b.drop-a.drop||a.x-b.x;}).slice(0,3)
-      .map(function(d){return {our:ours[d.x].name,covers:faces(d.x),why:"the plan is worth "+d.drop.toFixed(2)+" expected wins less without them (worst case)"};});
+    lazy(mp,"holds",function(){return dropsOf().filter(function(d){return d.drop>=V2_PLAN_TIE&&ours[d.x].name!==mp.lead.our;}).sort(function(a,b){return b.drop-a.drop||a.x-b.x;}).slice(0,3)
+      .map(function(d){return {our:ours[d.x].name,covers:faces(d.x),why:"the plan is worth "+d.drop.toFixed(2)+" expected wins less without them (worst case)"};});});
     var counts={};MN_LEVEL_ORDER.forEach(function(k){counts[k]=0;});planLead.forEach(function(g){counts[conf(g.our,g.their).level]++;});
     mp.confidence={};MN_LEVEL_ORDER.forEach(function(k){if(counts[k]) mp.confidence[k]=counts[k];});
-    var lean=drops.reduce(function(a,b){return b.drop>a.drop?b:a;},{drop:0,x:null}),thin=planLead.filter(function(g){return conf(g.our,g.their).level==="Toss-up";});
-    mp.fragility={player:lean.drop>0?ours[lean.x].name:null,player_drop:Math.round(1000*lean.drop),
+    lazy(mp,"fragility",function(){var lean=dropsOf().reduce(function(a,b){return b.drop>a.drop?b:a;},{drop:0,x:null}),thin=planLead.filter(function(g){return conf(g.our,g.their).level==="Toss-up";});
+    return {player:lean.drop>0?ours[lean.x].name:null,player_drop:Math.round(1000*lean.drop),
       thin_pairings:thin.map(function(g){return ours[g.our].name+" vs "+theirs[g.their].name+" (Toss-up)";}),
-      rating:(lean.drop>=0.15||thin.length>=2)?"High":(lean.drop>=0.07||thin.length)?"Medium":"Low"};
+      rating:(lean.drop>=0.15||thin.length>=2)?"High":(lean.drop>=0.07||thin.length)?"Medium":"Low"};});
     // Benchmark and M3's own policy, both scored with V2's win chances against the same two opponent models.
-    var bench=v2Benchmark(night),cmp={v2:{lead:{w:L.w,a:L.a},them:{w:T.w,a:T.a}},bench:{lead:bench(om,tm,true),them:bench(om,tm,false)}};
+    var computeCmp=function(){var bench=v2Benchmark(night),cmp={v2:{lead:{w:L.w,a:L.a},them:{w:T.w,a:T.a}},bench:{lead:bench(om,tm,true),them:bench(om,tm,false)}};
     if(valueM3){
       var m3n=mk(valueM3,night.oppCap!==null);
       var ev=v2Evaluate(night,function(o2,t2){return m3n.lead(o2,t2)[0];},function(o2,t2,j2){return m3n.bestAnswer(o2,t2,j2)[0];});
@@ -1217,10 +1219,11 @@
     var matched=v2Evaluate(night,function(o2){var L2=night.legalOurs(o2);return L2.reduce(function(a,b){return rankOf(ours,o2,b)<rankOf(ours,o2,a)?b:a;});},
       function(o2,t2,j2){var want=rankOf(theirs,t2,j2),L2=night.legalOurs(o2);return L2.reduce(function(a,b){return Math.abs(rankOf(ours,o2,b)-want)<Math.abs(rankOf(ours,o2,a)-want)?b:a;});});
     cmp.skillMatched={lead:matched(om,tm,true),them:matched(om,tm,false)};
-    cmp.strongestNow={lead:greedy(om,tm,true),them:greedy(om,tm,false)};cmp.minimax={lead:mm(om,tm,true),them:mm(om,tm,false)};
-    var dropBy={};drops.forEach(function(d){dropBy[ours[d.x].name]=d.drop;});
+    cmp.strongestNow={lead:greedy(om,tm,true),them:greedy(om,tm,false)};cmp.minimax={lead:mm(om,tm,true),them:mm(om,tm,false)};return cmp;};
     Object.defineProperty(mp,"lead_options",{value:L.rows.map(function(r){return {our_id:ours[r.i].id,value:Math.round(1000*r.w),reply_id:theirs[r.reply].id,level:conf(r.i,r.reply).level};}),enumerable:false});
-    mp.v2={night:night,policy:pol,options:opts,compare:cmp,drops:dropBy};
+    mp.v2={night:night,policy:pol,options:opts};
+    lazy(mp.v2,"compare",computeCmp);
+    lazy(mp.v2,"drops",function(){var d={};dropsOf().forEach(function(x){d[ours[x.x].name]=x.drop;});return d;});
     return mp;
   }
   function mnPlanFor(w,rem,unplayed,playedCount,playedSl,cap,engine){
@@ -1749,6 +1752,8 @@
   }
   function wrAfterSendSummary(after,x){
     var slots=Math.max(0,5-x.playedN-1);
+    if(after.v2) return {conf:after.lead?wrConfText(after):"no remaining path",frag:null,leans:"",left:after.plan_if_we_lead.length,slots:slots,
+      wins:after.lead?after.total_if_we_lead/1000:null};
     return {conf:after.lead?wrConfText(after):"no remaining path",frag:after.lead?after.fragility.rating:null,
       leans:after.lead&&after.fragility.player||"",left:after.plan_if_we_lead.length,slots:slots};
   }
