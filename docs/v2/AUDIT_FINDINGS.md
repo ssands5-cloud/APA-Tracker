@@ -1,0 +1,76 @@
+# Ultimate Coach V2 candidate — intelligence and contradiction audit (living document)
+
+Branch `claude/uc-v2-candidate`, draft PR #120. Real player data stays local; this file holds counts, code
+locations and rules only. Tools: `docs/v2/contradiction_audit.py` (cross-screen invariants),
+`docs/v2/data_reconcile.py` (page vs source records), `docs/v2/strategy_sweep.py` (policy behaviour).
+
+## Status
+| Phase | State |
+|---|---|
+| 1 Inventory (V2-relevant surfaces, engine used, legacy logic) | done for Match Night, Command Board, plans, trace, comparison, Team Status features; classic-only cards listed below |
+| 2 Data integrity | owner fixture done (16 players, 64 direct pairings); division-wide not yet |
+| 3 Contradiction detector | harness built (11 invariants + 2 added); full division run in progress |
+| 4 Strategic audit | sweep done at 539408f (576 put-ups); rerun pending on the latest policy |
+
+## Phase 1 — where each screen's logic comes from (V2 build)
+| Surface | Function (ui/ultimate_coach_war_room.js unless noted) | Engine / source | Tests |
+|---|---|---|---|
+| Send card answer, role, concession note | `wrBroadcastModel` → `mnPlanFor(...,"v2")` → `v2ApplyOptions` | V2 executed policy | test_uc_v2_candidate (owner scenario, rollout, roles) |
+| Decision trace ("Every option") | `wrV2Trace`, `wrV2TraceHtml` | V2 policy rollout, M3 + benchmark scored on same terms | trace fields, rollout consistency |
+| M3 vs V2 table | `wrEngineCompare`, `wrEngineCompareHtml` | both engines' own policies, scored with V2 estimates | rollout + role consistency |
+| Lead / put-up options | `v2ApplyOptions` (lead, `lead_options`), `wrLeadOptions` | V2 policy | rollout consistency |
+| Game plans, totals, holds, fragility | `v2ApplyOptions` (lazy holds/fragility) | V2 policy | rollout consistency |
+| Captain Command Board | `wrCommandV2` (V2), `wrCommand` (M3 builds) | V2 plan | harness I2–I4, I8 |
+| Send instead picker | `wrSendScenarios` | V2 bands + estimate | harness I8 |
+| Alternatives / risks on send card | `wrBroadcastModel` (V2 reorder), broadcast `renderNight` | V2 estimate order; records shown as facts | legacy-notes test |
+| Next Send direct-record list (classic) | `wrNextSend`, `wrNextSendCard` | **recorded head-to-head categories (M3-era)** — labelled as recorded results | existing classic tests |
+| Blind send card (classic Tonight) | `wrBlindSend`, `wrBlindSendCard` | **recorded categories (M3-era)** | existing classic tests |
+| Send cost text | `wrSendCost`, `wrCostText` | **recorded categories**; suppressed on V2 send cards since a0bf857, still on classic cards | — |
+| Threat panel, matrix, opportunities, risks (classic War Room) | `wrLiveThreats`, `renderWarRoom`, `wrPlan` | recorded records (facts) | existing |
+| Team Status: Player Form, Five check, Risk briefing, Swap what-if | `ui/ultimate_coach.py formFor`, `wrFiveCore`, `wrBriefingCore`, `wrSwapCore` | facts / arithmetic (no engine) | existing MVP tests |
+| Engine badge | `ucEngineBadge` | build flag; never remembered | reopen test |
+| Excel workbook | `ui/excel_war_room.py` | **M3 only** (no V2) | Excel suites |
+
+Duplicated business logic / competing sources of truth found:
+1. Recorded-record "categories" (G/E/R/I/X in `rankVsOpponent` / `wrCategory`) still drive the classic Next Send list,
+   blind send card, send-cost text and War Room opportunities. In V2 builds these describe recorded facts, but
+   they rank players differently from V2 — a source of apparent contradiction on the classic page.
+2. Python mirror (`analytics/match_night_engine.py`) has no V2 policy; V2 exists only in JS
+   (`analytics/uc_v2_pair_model.py` mirrors the pairing model, not the policy).
+3. Excel prints M3's start-of-night plan.
+
+## Findings (severity; status)
+| ID | Sev | Finding | Status |
+|---|---|---|---|
+| S1 | Critical | Rebuilt V2 file opened on M3 when M3 had been chosen before (stored preference) | fixed e55b45f; reopen test |
+| S2 | Critical | V2 tap latency on a throttled phone 23.9 s vs Sunday 16.1 s | fixed 942e77b (15.9 s) |
+| S3 | High | Command Board used M3 categories: "avoid" Match Night's own answer; "save" for a 25% matchup; strongest responder graded C | fixed fc5b7ff; harness I2–I4 |
+| S4 | High | Plans/totals/trace/comparison scored a different policy than the one recommended | fixed 11879db; GPT counterexample test |
+| S5 | High | V2 send card listed its own answer under recorded "avoid" and showed M3-era "consider saving / spends our only favorable option" notes | fixed a0bf857; test + harness |
+| S6 | High | Sacrifice accepted on a gain that held in only one opponent model (owner fixture +0.110 worst / +0.099 even) | fixed fc5b7ff: needs >= 0.10 under both |
+| D1 | High | Package evidence not reproducible from any database on disk (12/16 players' totals differ vs newest catch-up DB, both directions; one newcomer's 7 games in no DB) | open — needs a build manifest with source path + hash |
+| D2 | Medium | Page evidence rows carry no match ids; 8 fully identical rows among 16 players cannot be told from same-day rematches; counted by V2 and record views | open |
+| D3 | Medium | 1 direct record differs page vs DB (pair absent in DB) | open (follows D1) |
+| L1 | Medium | Classic-page Next Send list, blind send card and send-cost text still use recorded-record categories inside V2 builds | open (labelled as recorded facts; align or hide in V2) |
+| P1 | Medium | APA team-point margins (8-Ball hill/shutout, 9-Ball ball points) not modelled; team points are a linear conversion that never changes a choice | open (requirement) |
+| P2 | Medium | Base tap latency ~15 s on a 4x-throttled phone (shared with the Sunday build) | open, not V2-specific |
+| X1 | Low | Excel has no V2 | open by scope |
+| W1 | Low | Summary printed 0.099 as "+0.10" beside a 0.10 threshold | fixed a0bf857 (3 decimals) |
+
+## Owner fixture (sanitized), latest policy
+Their SL7 (64% APA career) put up first; 8 of ours available, none played, no player excluded. Estimates
+36.5% (SL6), 34.8% / 34.7% (two SL4s, practical tie), 30.3% (SL5), 28.0% (SL4), 25.3% (SL3 newcomer), 18.8%, 17.5%.
+| Effective cap | V2 answer | Why |
+|---|---|---|
+| 23 | SL6, 36.5% (best available; every option a long shot) | saving him: +0.110 worst / +0.099 even — not >= 0.10 under both |
+| 22 | SL6, 36.5% | +0.123 worst / +0.089 even — not under both |
+| cleared | SL6, 36.5% | +0.076 worst / +0.108 even — not under both |
+M3 answers with the SL3 newcomer in all three (Unknown scored as even).
+
+## Phase 4 — strategy (sweep at 539408f; rerun pending on fc5b7ff+)
+One 8-Ball division, 72 ordered team pairs, 576 put-ups, start of night, cap 23. Whole night, expected wins
+(they put up first; worst case / even choices), each policy scored with V2 estimates under identical opponent
+models: V2 executed 2.43 / 2.75; M3's choices 2.27 / 2.68; always strongest now 2.36 / 2.72; plain worst case
+2.50 / 2.77 (benchmark 2.50). V2 gave up the strongest matchup in 19 of 576 put-ups (plain worst case: 357).
+Skill-matched (strong vs strong) reference policy: added in fc5b7ff; numbers in the rerun.
+All results are model-dependent (V2's own estimates); thresholds are provisional.
