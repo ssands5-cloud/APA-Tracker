@@ -11,6 +11,19 @@ Read, in order: AGENTS.md, SYSTEM_STATE.md, PROJECT_STATUS.md, RECOVERY.md, docs
 - Recovery: RECOVERY.md; records in docs/migration/2026-11-05/.
 - Leave other agents' uncommitted work alone. Never bypass the boundary guard. Don't delete worktrees or data.
 
+## Overnight integration (2026-11-22, Claude)
+
+- Integrated product line: `claude/v2-policy-parity-review` (feat → uc-broadcast-ui → uc-v2-candidate → PR #121 → this
+  branch), worktree `.worktrees/review-pr121`. It has the V2 HTML, the live Excel V2 engine, the repaired refresh and
+  `scripts/build_ultimate_coach_release.py`. It is not merged.
+- Release candidate: `D:\APA Tracker Scorekeeper\ULTIMATE COACH - RELEASE CANDIDATE 2026-11-22\` (README, MANIFEST,
+  TEST_RESULTS, KNOWN_LIMITATIONS, REFRESH_GUIDE). Earlier owner packages are unchanged.
+- Refresh base in that worktree: `data/ultimate_coach_staging.db` = Codex's verified catch-up seed (a copy).
+  `apa_config.local.yaml` was copied from `tmp/ultimate-coach-release/offline-refresh-recovery-20261119` (identical in
+  every worktree).
+- Blocker for a live refresh: Paul's identity review of 2 scoresheet rows (matches 51007725, 51007781).
+  `data/identity_overrides.json` is picked up automatically once written with his review.
+
 ## Worktree coordination (2026-11-11)
 
 - Codex integrates Phase 1 in the canonical checkout at `D:\APA Tracker Scorekeeper\ssands5-cloud\APA-Tracker` on `feat/phase1-war-room`. Use `origin/feat/phase1-war-room` as the shared sync point and read `AI_HANDOFF.md` and `PROJECT_STATUS.md` there. Codex maintains those shared files.

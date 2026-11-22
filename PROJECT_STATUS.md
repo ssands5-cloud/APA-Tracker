@@ -1,5 +1,38 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## Overnight integration: one product, one snapshot (2026-11-22, Claude, branch `claude/v2-policy-parity-review`)
+
+Not merged into `feat/phase1-war-room`; nothing deployed. Owner decisions are listed at the end of this section.
+
+- **Release candidate (local):** `D:\APA Tracker Scorekeeper\ULTIMATE COACH - RELEASE CANDIDATE 2026-11-22\`, built at
+  `34dfbb7` by `scripts/build_ultimate_coach_release.py` from one snapshot of Codex's verified catch-up seed
+  (sha `92587025…`; catch-up DB `14b3b221…`; original `fb2b098d…` unchanged). It holds the HTML (broadcast, V2 engine),
+  `Ultimate_Coach.xlsx` and `Ultimate_Coach_V2.xlsm` (live VBA V2 engine), with MANIFEST, test results, limitations
+  and the refresh guide. Data runs to Fri Nov 20: 15,198 players and 846,718 head-to-head rows.
+- **HTML/Excel parity:**
+  - native Excel, real data on the release files: 120 live states, 776 answers, 0 differences;
+  - synthetic: 48 states, 0 differences, with negative controls detected;
+  - suite: `tests/test_uc_v2_excel_parity.py`.
+  - The V2 workbook pieces are `ui/excel_v2/UcV2Engine.bas` and `ui/excel_v2_coach.py`; the input adapter and wording
+    are `analytics/uc_v2_inputs.py` and `analytics/uc_v2_explain.py`.
+- **Catch-up database:** verified by Codex (`tmp/ultimate-coach-release/catchup-authoritative-20261122/catchup-db-verification.json`,
+  status pass). It is the refresh base in the integration worktree only, as a copy at `data/ultimate_coach_staging.db`.
+- **QUICK_REFRESH (`d157d9b`):**
+  - The project venv is Python 3.14, so the launcher silently fell back. It now picks a 3.12/3.13 Python that has
+    every dependency.
+  - No base database was configured, so refreshes silently used the 1 MB `data/apa_tracker.db`. The base database is
+    now named, with its hash, in REFRESH_STATUS, and a missing configured database fails the run.
+  - The refresh rendered M3. It now renders the V2 HTML and builds `Ultimate_Coach_V2.xlsm` in the same atomic bundle.
+  - No launcher ever passed identity overrides. The launcher now passes `data/identity_overrides.json` when it exists.
+  - The Nov 18 run's stop (2 unresolved scoresheet identities, matches 51007725/51007781) reproduces offline. It needs
+    Paul's identity review.
+- **Tests:** full suite 3,294 passed. The 3 failures were the new Excel parity tests failing on COM initialization in
+  suite order; fixed in `e8012f8`. Two refresh standings tests are order-flaky (pre-existing) and pass alone.
+- **Owner decisions:**
+  1. Confirm the two scoresheet identities (release folder, IDENTITY_REVIEW.md).
+  2. Whether to merge this branch.
+  3. Whether the main checkout adopts the catch-up archive as its refresh base.
+
 ## Phase 1 integration (2026-11-11)
 
 Audited code checkpoint on `origin/feat/phase1-war-room`: `821baa3`. PRs #105–#111 are integrated and audited, with no open audit findings.
