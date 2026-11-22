@@ -118,6 +118,16 @@ Counts: LOCKED 0 (no independent review of these fixes yet) · VERIFIED 13 · FI
 
 Notes: APA team-point optimisation remains an unmet requirement (P1). Model-dependent rollout gains are not observed wins.
 
+
+## Codex red-team audit (tmp/red-team-audit/RED_TEAM_AUDIT.md) — what it means for the V2 candidate
+| ID | Sev | Codex finding | Applies to V2? | Status |
+|---|---|---|---|---|
+| RT-1 | High | 388 repeated (match, player, opponent) keys; key equality cannot tell an erroneous repeat from a legitimate repeated meeting (no event position in the snapshot); history replays update on every raw row | Yes. The V2 fit (`scripts/fit_uc_v2_pair_model.py`) uses the research "clean" policy: drops repeats of 228 identical keys and both rows of 160 conflicting keys, before any history update, so training history is not inflated by them; but some dropped rows may be legitimate meetings. Live V2 inputs come from page rows without match ids and are not de-duplicated (D2). | CONDITIONAL, open: whether the clean policy changes V2's fitted estimates materially is unmeasured; no records changed; no refit done |
+| RT-2 | High | Preprocessing uses fit+validation rows (means, scales, non-constant columns) before choosing the penalty on validation; test outcomes not leaked; magnitude unmeasured | Yes. V2 fit standardizes on fit+validation (`mu, sd = X[train_m]`) then picks the penalty on the validation window. The reported 2025-09+ holdout numbers carry that exposure. The shipped coefficients are refit on all games with the chosen penalty (already disclosed). | CONDITIONAL, open: disclosed; not changed (changing it could change the penalty and therefore the shipped model, which needs a separate approved refit) |
+| RT-3 | High | "Refit beats M3's fixed weights" is not what was tested: the "M3" model is a logistic fit on M3's six level indicators, not the fixed 6/3/1/0/0/-3 utility or the planner | V2 materials make no such claim (checked: PR #120, AUDIT_FINDINGS, model notes, page text). The only V2-vs-M3 numbers are each engine's own choices scored with V2's estimates, labelled model-dependent ("M3 has no probabilities of its own"). The research summary on `claude/m3-validation-research` uses "M3 levels" for the fitted level model; qualifier needed there. | V2: no misleading claim found. Research summary qualified in 04c201c on `claude/m3-validation-research` |
+| RT-4 | Medium | Subgroup calibration: low SL vs SL7 predicted 46.4% vs 34.3% observed in an issue #119 model | V2's skill-pair terms give SL3 vs SL7 (8-Ball) about 25-30%, close to the archive's 220/990 (22%); subgroup calibration of V2 itself is not verified | open (GPT-014 uncertainty) |
+| RT-5 | Medium | Karsten case: expected M3 behaviour, not proof of a wrong or right choice | Agreed; V2's different answer is a different policy, not proof of a better team outcome (no counterfactual outcomes) | documented |
+
 ## Owner fixture (sanitized), latest policy
 Their SL7 (64% APA career) put up first; 8 of ours available, none played, no player excluded. Estimates
 36.5% (SL6), 34.8% / 34.7% (two SL4s, practical tie), 30.3% (SL5), 28.0% (SL4), 25.3% (SL3 newcomer), 18.8%, 17.5%.
