@@ -156,18 +156,21 @@ def test_v2_explains_why_a_stronger_option_is_saved_in_expected_games(tmp_path):
     path = _render(tmp_path)
     ours = [{"id": "a", "name": "Ace", "sl": 5}, {"id": "b", "name": "Bo", "sl": 5}]
     theirs = [{"id": "x", "name": "Xan", "sl": 5}, {"id": "y", "name": "Yul", "sl": 5}]
-    mk = lambda p: {"level": band(p), "points": int(100 * (p - 0.5) + 0.5 if p >= 0.5 else -int(100 * (0.5 - p) + 0.5)),
+    mk = lambda p: {"level": band(p), "points": int(round(1000 * (p - 0.5))),
                     "p": p, "why": f"{round(100 * p)}% estimated win chance", "text": "", "v2": True}
     value = {"a|x": mk(0.60), "b|x": mk(0.55), "a|y": mk(0.70), "b|y": mk(0.40)}
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         try:
             page = browser.new_page(); page.goto(path.as_uri())
-            p = page.evaluate("([o,t,v]) => window.__ucMatchPlan(o,t,v,2,null,0,null,0)", [ours, theirs, value])
+            p = page.evaluate("([o,t,v]) => window.__ucV2Apply(window.__ucMatchPlan(o,t,v,2,null,0,null,0),o,t,v,2,null,0,0)", [ours, theirs, value])
             r = next(r for r in p["responses"] if r["their"] == "Xan")
-            assert r["our"] == "Bo"                                          # Ace is saved for Yul
-            assert "Ace is a stronger option here (60% vs 55%)" in r["cost_later"]
-            assert "keep Ace available for Yul" in r["cost_later"] and "expected games" in r["cost_later"]
+            # Saving Ace for Yul is worth 0.25 expected wins in the worst case and on average: a strategic choice,
+            # labelled as one, with the strongest matchup named and the captain's option stated.
+            assert r["our"] == "Bo" and r["role"] == "Strategic choice"
+            assert "Strategic choice: Bo (55%) instead of the strongest matchup Ace (60%)" in r["cost_later"]
+            assert "keeps Ace for later (Ace vs Yul)" in r["cost_later"] and "+0.25 expected wins" in r["cost_later"]
+            assert "The captain may prefer the stronger matchup now." in r["cost_later"]
         finally:
             browser.close()
 
@@ -218,3 +221,57 @@ def test_default_build_is_unchanged_m3_only(tmp_path):
 def test_unknown_engine_is_rejected():
     with pytest.raises(ValueError):
         render(_payload(), built_at="2026-10-07 18:00 UTC", engine="v3")
+
+
+def test_v2_keeps_the_strongest_matchup_when_saving_a_player_gains_too_little(tmp_path):
+    """Worst-case solving alone gave up the strongest matchup for tiny gains (63% of real decisions); V2 does not."""
+    path = _render(tmp_path)
+    ours = [{"id": "a", "name": "Ace", "sl": 5}, {"id": "b", "name": "Bo", "sl": 5}]
+    theirs = [{"id": "x", "name": "Xan", "sl": 5}, {"id": "y", "name": "Yul", "sl": 5}]
+    mk = lambda p: {"level": band(p), "points": int(round(1000 * (p - 0.5))), "p": p,
+                    "why": f"{round(100 * p)}% estimated win chance", "text": "", "v2": True}
+    value = {"a|x": mk(0.60), "b|x": mk(0.55), "a|y": mk(0.58), "b|y": mk(0.50)}   # saving Ace gains only 0.03
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            m3_style = page.evaluate("([o,t,v]) => window.__ucMatchPlan(o,t,v,2,null,0,null,0)", [ours, theirs, value])
+            assert next(r for r in m3_style["responses"] if r["their"] == "Xan")["our"] == "Bo"   # the worst-case search alone
+        finally:
+            browser.close()
+    # Through the V2 plan path the captain-control rule applies: strongest matchup, alternative shown with its numbers.
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            out = page.evaluate("""([o,t,v]) => { const mp = window.__ucMatchPlan(o,t,v,2,null,0,null,0);
+                return window.__ucV2Apply(mp,o,t,v,2,null,0,0).responses; }""", [ours, theirs, value])
+            r = next(r for r in out if r["their"] == "Xan")
+            assert r["our"] == "Ace" and r["role"] == "Recommended competitive matchup"
+            assert "Strongest matchup available (60%)" in r["cost_later"]
+            assert "Strategic alternative: Bo (55%) keeps Ace for later" in r["cost_later"]
+            assert "+0.03 expected wins only if they always make their most damaging choice" in r["cost_later"]
+            assert "Not enough to give up the stronger matchup" in r["cost_later"]
+        finally:
+            browser.close()
+
+
+def test_decision_trace_lists_every_available_player_with_the_numbers(tmp_path):
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            t = page.evaluate(f"window.__ucV2Trace({OURS!r},{THEIRS!r},'EIGHT','Cam Cole',null,23)")
+            assert t["opponent"] == "Cam Cole" and t["games"] >= 1 and t["minGain"] == 0.10
+            assert len(t["rows"]) == 3 and sum(r["pick"] for r in t["rows"]) == 1
+            for r in t["rows"]:
+                for k in ("sl", "direct", "shared", "recent", "career", "apaCareer", "p", "matchPoints", "restWorst", "restAvg",
+                          "totalWorst", "totalAvg", "nightPointsWorst", "nightPointsAvg", "later", "cap", "role"):
+                    assert k in r, k
+                assert abs(r["totalWorst"] - (r["p"] + r["restWorst"])) < 1e-12
+                assert r["totalAvg"] >= r["totalWorst"] - 1e-12      # even choices are never worse than the worst case
+            pick = next(r for r in t["rows"] if r["pick"])
+            assert pick["role"] and t["summary"]
+        finally:
+            browser.close()

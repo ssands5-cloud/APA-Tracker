@@ -111,14 +111,14 @@ def evidence_gaps(direct, shared, form_p, form_o, slp, slo) -> list[str]:
 
 
 def pair_value(fmt, slp, slo, **kw) -> dict[str, Any] | None:
-    """The V2 value of a pairing in the shape the lineup search uses: points = floor(100 * (p - 0.5) + 0.5), half-up as in the JS mirror."""
+    """The V2 value of a pairing in the shape the lineup search uses: points = floor(1000 * (p - 0.5) + 0.5) (tenths of a point), half-up as in the JS mirror."""
     p = win_probability(fmt, slp, slo, **kw)
     if p is None:
         return None
     lv = band(p)
     gaps = evidence_gaps(kw.get("direct"), kw.get("shared"), kw.get("form_p", (0, 0)), kw.get("form_o", (0, 0)), slp, slo)
     why = f"{round(100 * p)}% estimated win chance" + (" · " + "; ".join(gaps) if gaps else "")
-    return {"level": lv, "points": math.floor(100 * (p - 0.5) + 0.5), "p": p, "why": why, "text": f"{lv} — {why}", "v2": True,
+    return {"level": lv, "points": math.floor(1000 * (p - 0.5) + 0.5), "p": p, "why": why, "text": f"{lv} — {why}", "v2": True,
             "gaps": gaps}
 
 

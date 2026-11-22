@@ -797,7 +797,7 @@ _JS_BODY = r"""
       // the pick as a strong matchup.
       var anyWin=all.some(function(c){return c.cat==="G";});
       var keepFor=(n.holds||[]).filter(function(h){return h.covers.length&&h.our!==pickName;}).slice(0,2);
-      var v2Note=(n.answer&&n.engine==="v2"&&n.answer.p!==undefined)?'<div class="send-concession v2"><b>'+(n.answer.concession?"Deliberate concession.":"V2 estimate.")+'</b> '+esc(pickName)+' wins this pairing about '+Math.round(100*n.answer.p)+'% of the time'+(n.answer.concession?(n.answer.cost?"; the reason is below":"; no remaining player does better here without costing more later"):"")+'.</div>':"";
+      var v2Note=(n.answer&&n.engine==="v2"&&n.answer.p!==undefined)?'<div class="send-concession v2"><b>'+esc(n.answer.role||"V2 estimate")+'.</b> '+esc(pickName)+' wins this pairing about '+Math.round(100*n.answer.p)+'% of the time. Every option is compared in the decision trace below.</div>':"";
       var concessionNote=v2Note||(pickName&&!anyWin)?v2Note||'<div class="send-concession"><b>Concession pick.</b> Nobody has a winning record vs '+esc(n.opp.name)+'. '+esc(pickName)
         +' is the cheapest to give up'+(keepFor.length?', saving '+keepFor.map(function(h){return esc(h.our)+' for '+esc(h.covers.slice(0,3).join(", "));}).join("; "):"")+'.</div>':"";
       // Owner request: choose any available player right on the card and see that player's recorded evidence
@@ -865,7 +865,7 @@ _JS_BODY = r"""
     // Owner request (2026-11-20): the live decision (their put-up / our put-up and the send card) sits right under
     // the night's setup rows, so the captain picks without scrolling; the plan and comparisons follow below.
     // V2 candidate builds only: engine switch above the board, M3-vs-V2 comparison under the live pick.
-    el.innerHTML=status+(n.engineSwitchHtml||"")+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+(n.engineCompareHtml?'<details class="more night-compare" id="bc-engine-compare" open><summary>M3 vs V2 candidate</summary>'+n.engineCompareHtml+'</details>':"")+commandHtml(m)
+    el.innerHTML=status+(n.engineSwitchHtml||"")+storage+resultBar+checkin+tossBar+log+(done?"":chips+hero)+(n.traceHtml||"")+(n.engineCompareHtml?'<details class="more night-compare" id="bc-engine-compare" open><summary>M3 vs V2 candidate</summary>'+n.engineCompareHtml+'</details>':"")+commandHtml(m)
       +(done?"":'<details class="more night-compare" id="bc-compare"><summary>Compare all options and risks</summary>'
         +strategyBench+(leadFlow?"":renderSendCosts(n.sendScenarios,n.opp))+alts+risks+'</details>');
     var cmp=el.querySelector("#bc-compare");if(cmp){if(compareOpen) cmp.open=true;cmp.ontoggle=function(){compareOpen=cmp.open;};}
