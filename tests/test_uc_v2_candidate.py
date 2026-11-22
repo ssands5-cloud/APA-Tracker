@@ -406,7 +406,8 @@ def test_v2_send_card_has_no_legacy_save_or_spend_notes_and_never_lists_its_answ
                 page.evaluate("id => window.UC_ACT.pick(id)", their)
                 n = page.evaluate("""() => { const n = window.UC_BC_LAST.night;
                     return {engine: n.engine, answer: n.answer && n.answer.our, avoid: n.avoid.map(c => c.name),
-                            notes: n.ranked.map(c => (c.save || '') + (c.cost || '')).join(' '), p: n.ranked.map(c => c.v2p)}; }""")
+                            notes: n.ranked.concat(n.unordered, n.avoid).map(c => (c.save || '') + (c.cost || '')).join(' '),
+                            p: n.ranked.map(c => c.v2p)}; }""")
                 assert n["engine"] == "v2"
                 assert n["answer"] not in n["avoid"]
                 assert "consider saving" not in n["notes"] and "Sending now spends" not in n["notes"]
@@ -475,5 +476,36 @@ def test_v2_risk_line_is_v2s_own_list_not_the_recorded_record_list(tmp_path):
                 return {flag: n.openRisksV2, risks: n.openRisks, plan: n.planCheck.responses.filter(r => r.p < 0.40).map(r => r.their)}; }""")
             assert n["flag"] is True
             assert sorted(n["risks"]) == sorted(n["plan"])
+        finally:
+            browser.close()
+
+
+def test_start_here_limits_match_the_product_in_both_builds():
+    """T1: no limitation line may contradict the product (cap default, Here unless Out, V2 estimates)."""
+    m3 = render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001")
+    v2 = render(_payload(), built_at="2026-10-07 18:00 UTC", viewer_member_external_id="1001", engine="v2")
+    for html in (m3, v2):
+        assert "No lineup-legality or skill cap is assumed" not in html
+        assert "Unknown availability is not Unavailable" not in html
+        assert "Everyone is Here unless marked Out" in html and "23 skill cap applies by default" in html
+    assert "No validated win-probability model exists" in m3                 # standard build: no estimates shown
+    assert "No validated win-probability model exists" not in v2              # V2 build shows estimates
+    assert "V2 CANDIDATE: recommendations use estimated win chances" in v2
+
+
+def test_deployed_holdout_metrics_describe_the_symmetrized_prediction(tmp_path):
+    """GPT-009: the model file carries holdout metrics for the symmetrized prediction and the page shows those."""
+    for fmt, m in load_model()["formats"].items():
+        h = m["holdout"]
+        assert h["symmetrized_test_logloss"] < h["test_logloss_constant"], fmt
+        assert 0.8 <= h["symmetrized_test_calibration_intercept_slope"][1] <= 1.2, fmt
+        assert "refit on every game" in h["note"]
+    path = _render(tmp_path, ui="broadcast")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(path.as_uri())
+            text = page.locator("#uc-engine-compare").first.inner_text()
+            assert str(load_model()["formats"]["EIGHT"]["holdout"]["symmetrized_test_logloss"]) in text
         finally:
             browser.close()
