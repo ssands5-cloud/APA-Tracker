@@ -9,7 +9,7 @@ locations and rules only. Tools: `docs/v2/contradiction_audit.py` (cross-screen 
 |---|---|
 | 1 Inventory (V2-relevant surfaces, engine used, legacy logic) | done for Match Night, Command Board, plans, trace, comparison, Team Status features; classic-only cards listed below |
 | 2 Data integrity | owner fixture done (16 players, 64 direct pairings); division-wide not yet |
-| 3 Contradiction detector | harness built (11 invariants + 2 added); full division run in progress |
+| 3 Contradiction detector | v1 division run complete (72 pairs, 360 states, 2 contradictions -> S7 fixed; 29 quantified strategic exceptions); harness v2 + 31 seeded-fault tests; final v2 run against e22310e in progress |
 | 4 Strategic audit | sweep done at 539408f (576 put-ups); rerun pending on the latest policy |
 
 ## Phase 1 — where each screen's logic comes from (V2 build)
@@ -68,6 +68,7 @@ Duplicated business logic / competing sources of truth found:
 | P2 | Medium | Base tap latency ~15 s on a 4x-throttled phone (shared with the Sunday build) | open, not V2-specific |
 | X1 | Low | Excel has no V2 | open by scope |
 | W1 | Low | Summary printed 0.099 as "+0.10" beside a 0.10 threshold | fixed a0bf857 (3 decimals) |
+| S7 | Medium | Command Board: player graded B but labelled Not planned (2 of 360 states, division harness v1) | fixed e22310e: Backup role for players outside the planned five the plan still relies on |
 | T1 | High | Start Here / Excel START HERE limits contradicted the product: "no skill cap is assumed", "Unknown availability is not Unavailable", "marks belong to one fixture"; V2 build also said no win-probability model exists | fixed a111f46 |
 | T2 | Medium | War Room "Avoid records" and Lineup Lab "Protected players (consider saving)" read as instructions that can contradict the V2 plan | relabelled as recorded facts in V2 builds, a111f46 |
 
