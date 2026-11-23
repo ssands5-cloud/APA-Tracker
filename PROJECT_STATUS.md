@@ -1,5 +1,21 @@
 # Project status: Ultimate Coach (Captain's War Room)
 
+## BUILD 2 release candidate (2026-11-22 evening, Claude; candidate, owner decision pending)
+
+- **Folder and build:** `D:\APA Tracker Scorekeeper\ULTIMATE COACH - RELEASE CANDIDATE 2026-11-22 - BUILD 2\` (EVIDENCE_REPORT.md,
+  MANIFEST, evidence\). Built at `bbabcdd` on `claude/uc-v2-opp-availability`: this branch plus the Excel opponent-availability
+  feature from the catch-up session, natively reviewed and fixed.
+- **Data:** the alias-resolved catch-up DB (`8d3ed49a…`, 32 aliases mapped), refreshed offline with the Nov 19 captures
+  and Paul's Nov 11 identity review (DB `2f67c48b…`).
+- **vs release 1:** +146 rows (73 Fall 2026 games), 0 lost. The rest of the gap vs Sunday v7 is explained by the existing
+  trust rules: repeat meetings, the identity gate, and unverifiable 2013 overlay rows.
+- **Tests:**
+  - parity on the BUILD 2 files: 120 real states (63 with absent opponents), 693 answers, 0 differences;
+  - full suite on `bbabcdd`: 3,307 passed;
+  - QUICK_REFRESH (repaired) end to end offline: SUCCESS, with no new duplicates.
+- **Previous release:** kept for rollback. Its `.xlsm` was re-saved at 17:43 outside the build (likely opened and saved in
+  Excel); its HTML and `.xlsx` match its manifest.
+
 ## Overnight integration: one product, one snapshot (2026-11-22, Claude, branch `claude/v2-policy-parity-review`)
 
 Not merged into `feat/phase1-war-room`; nothing deployed. Owner decisions are listed at the end of this section.
