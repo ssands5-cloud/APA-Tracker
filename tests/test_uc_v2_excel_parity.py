@@ -111,7 +111,7 @@ PAGE = """([a, b, fmt, rem, unplayedIds, playedN, playedSl, cap, outIds]) => {
   const oid = {}, tid = {};
   n.ours.forEach(p => oid[p.name] = String(p.id)); n.theirs.forEach(p => tid[p.name] = String(p.id));
   const plan = l => (l || []).map(g => ({leader: g.leader, our: String(g.our_id), their: String(g.their_id), p: g.p}));
-  return {ours: n.ours.map(p => String(p.id)), theirs: n.theirs.map(p => String(p.id)), games: n.gamesLeft,
+  return {ours: n.ours.map(p => String(p.id)), theirs: n.theirs.map(p => String(p.id)), games: n.gamesLeft, used: n.used, oppUsed: n.oppUsed,
     lead: mp.lead && mp.lead.our_id !== undefined && mp.responses ? {our: String(mp.lead.our_id), reply: tid[mp.lead.their_reply],
       equal: (mp.lead.equally_good || []).map(x => oid[x]), why: mp.lead.why, whyLead: mp.lead.why_lead} : null,
     responses: (mp.responses || []).map(r => ({their: tid[r.their], pick: oid[r.our], role: r.role, p: r.p, why: r.why, cost: r.cost_later})),
@@ -184,6 +184,9 @@ def _compare(x, h):
     d = []
     if x.get("status") != "ok":
         return [f"excel status {x.get('status')}"]
+    for key in ("used", "oppUsed"):        # skill already spent on each side (cap bookkeeping): an absent opponent spends none
+        if abs(float(x[key]) - float(h[key])) > 1e-9:
+            d.append(f"{key}: {x[key]} vs {h[key]}")
     for k in ("ours", "theirs"):
         if x[k] != h[k]:
             d.append(f"{k}: {x[k]} vs {h[k]}")
