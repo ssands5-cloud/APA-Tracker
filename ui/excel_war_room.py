@@ -539,7 +539,9 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
         else:
             cols += [
                 (f"{prefix}Played", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$C${ll_first + k - 1}="Played","Played","—"),"—"))'),
-                (f"{prefix}Unplayed", lambda k, r: f'=AND(B{r}<>"",H{r}<>"Played")'),
+                # Unplayed = still a live candidate: not played AND not marked Unavailable. Every consumer of
+                # wr_OppUnplayed (best sends, threats, risks, plans, scouting) therefore excludes absent opponents.
+                (f"{prefix}Unplayed", lambda k, r: f'=AND(B{r}<>"",H{r}<>"Played",N{r}<>"Unavailable")'),
                 (f"{prefix}Notes", lambda k, r: f'=IF(B{r}="","",IFERROR(IF(INDEX(cn_Summary,MATCH(INDEX(TeamRosters_Table[Player Label],B{r}),'
                                                 f'cn_Player,0))="","","Coach: "&INDEX(cn_Summary,MATCH(INDEX(TeamRosters_Table[Player Label],B{r}),'
                                                 f'cn_Player,0))&IF(AND(ll_OppTeamOK,{ll}$D${ll_first + k - 1}<>"")," · ","")),"")&'
@@ -550,6 +552,12 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
                 (f"{prefix}Count", lambda k, r: f'=IF(K{r}="",0,INDEX(MatchupEvidence_Table[Rows],K{r}))'),
                 (f"{prefix}Card", lambda k, r: f'=IF(OR(B{r}="",NOT(wr_HasEvidence)),"",IFERROR(MATCH(wr_PairKey&"|{k}",'
                                                f'Scouting_Table[Key],0),""))'),
+                # Opponent availability (Lineup Lab column G) is a mark for ONE fixture, like our own. It is kept
+                # separate from Played: Out = marked Unavailable and has not played (a player who played stays
+                # Played). Out opponents are neither candidates nor spent against their team's cap.
+                (f"{prefix}Avail", lambda k, r: f'=IF(B{r}="","",IF({ok},IF({ll}$G${ll_first + k - 1}="Unavailable","Unavailable",'
+                                                f'"Available"),"Available"))'),
+                (f"{prefix}Out", lambda k, r: f'=AND(B{r}<>"",H{r}<>"Played",N{r}="Unavailable")'),
             ]
         return cols
 
@@ -557,6 +565,8 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     theirs = e.block("Opponent roster slot", R, roster_cols("wr_Opp", "wr_OppScope", ll_opp_first, "ll_OppOK", False))
     our_pid_col, our_first = ours["wr_OurPids"][0], ours["wr_OurPids"][1]
     opp_start_col, opp_count_col, opp_first = theirs["wr_OppStart"][0], theirs["wr_OppCount"][0], theirs["wr_OppStart"][1]
+    # Unplayed/Out read Played (H) and Avail (N) by letter; fail loudly if the block ever shifts.
+    assert (theirs["wr_OppPlayed"][0], theirs["wr_OppAvail"][0], theirs["wr_OppOut"][0]) == ("H", "N", "O")
 
     # Mirror the existing phone reference arithmetic. Slots are unplayed roster
     # opponents, never a claim about required sends or tournament legality.
@@ -897,6 +907,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     e.cell("wr_NsInput", "They put up", "=" + guard(f"{cc}$C$6"))
     e.cell("wr_NsJ", "Opponent slot", '=IF(wr_NsInput="","",IFERROR(MATCH(wr_NsInput,wr_OppLabels,0),""))')
     e.cell("wr_NsOpen", "Opponent unplayed", '=IF(wr_NsJ="",FALSE,INDEX(wr_OppUnplayed,wr_NsJ))')
+    e.cell("wr_NsOut", "Opponent marked unavailable", '=IF(wr_NsJ="",FALSE,INDEX(wr_OppOut,wr_NsJ))')
     e.cell("wr_NsStart", "Ranked block start", '=IF(wr_NsJ="","",INDEX(wr_OppStart,wr_NsJ))')
     e.cell("wr_NsCount", "Ranked rows", '=IF(OR(wr_NsJ="",wr_NsStart=""),0,INDEX(wr_OppCount,wr_NsJ))')
     e.cell("wr_NsSelfUnique", "One favorable option left vs them", '=IF(wr_NsJ="",FALSE,INDEX(wr_GreenLeft,wr_NsJ)=1)')
@@ -1024,7 +1035,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
     ])
     e.cell("wr_NsHeadline", "Next Send headline", (
         '=IF(wr_NsInput="","Pick the opponent player they put up (cell C6).",IF(wr_NsJ="","That player is not on tonight’s opponent roster.",'
-        'IF(NOT(wr_NsOpen),wr_NsInput&" has already played (Lineup Lab).",IF(MAX(wr_NsMedalRun)>0,"First direct-record group: "&'
+        'IF(NOT(wr_NsOpen),wr_NsInput&IF(wr_NsOut," is marked unavailable (Lineup Lab)."," has already played (Lineup Lab)."),IF(MAX(wr_NsMedalRun)>0,"First direct-record group: "&'
         'INDEX(MatchupEvidence_Table[Direct Record],INDEX(wr_NsRow,MATCH(1,wr_NsMedalRun,0)))&'
         'IF(INDEX(MatchupEvidence_Table[Direct Games],INDEX(wr_NsRow,MATCH(1,wr_NsMedalRun,0)))<3," · SMALL SAMPLE","")&'
         '"; equal evidence stays tied.",IF(MAX(wr_NsUnordRun)>0,"No favorable/even direct option — '
@@ -1073,7 +1084,7 @@ def build_engine(wb, *, slots: dict[str, int], tz_name: str) -> dict[str, Any]:
            '=SUMIFS(wr_OurSLNum,wr_OurLineup,"Planned")+SUMIFS(wr_OurSLNum,wr_OurLineup,"Played")')
     e.cell("wr_SelectedMissing", "Selected without a captured SL",
            '=COUNTIFS(wr_OurLineup,"Planned",wr_OurSLNum,"")+COUNTIFS(wr_OurLineup,"Played",wr_OurSLNum,"")')
-    e.cell("wr_UnplayedCount", "Opponents not yet played", "=COUNTIF(wr_OppUnplayed,TRUE)")
+    e.cell("wr_UnplayedCount", "Opponents still to play (available, not yet played)", "=COUNTIF(wr_OppUnplayed,TRUE)")
     e.cell("wr_GreenOpps", "Unplayed opponents with a favorable option left", '=COUNTIFS(wr_OppUnplayed,TRUE,wr_GreenLeft,">0")')
     e.cell("wr_SendOpps", "Unplayed opponents with any evidence-backed option left", '=COUNTIFS(wr_OppUnplayed,TRUE,wr_SendLeft,">0")')
 
@@ -1316,7 +1327,7 @@ def _roster_section(ws, top: int, R: int, *, title_ours: str, title_theirs: str)
         ws.cell(row=r, column=11, value=f'=IF(INDEX(wr_OppCard,{k})="","",INDEX(Scouting_Table[Vs Our Roster],INDEX(wr_OppCard,{k})))')
         ws.cell(row=r, column=11).font = SMALL
         ws.cell(row=r, column=11).alignment = base.WRAP_TOP
-        ws.cell(row=r, column=12, value=f'=INDEX(wr_OppPlayed,{k})')
+        ws.cell(row=r, column=12, value=f'=IF(INDEX(wr_OppOut,{k}),"Unavailable",INDEX(wr_OppPlayed,{k}))')
         for c in range(1, 13):
             ws.cell(row=r, column=c).border = base.CELL_BORDER
         ws.row_dimensions[r].height = 28
@@ -1362,7 +1373,7 @@ def build_war_room(wb, *, slots: dict[str, int], engine: dict[str, Any]) -> dict
         r = top + k
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k}))',
               font=SMALL)
-        _span(ws, r, 3, 12, (f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
+        _span(ws, r, 3, 12, (f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),IF(INDEX(wr_OppOut,{k}),"Marked unavailable.","Already played."),'
                              f'IF(INDEX(wr_Send1,{k})="",IF(wr_HasEvidence,"No favorable, even or indirect evidence among our remaining players.",""),'
                              f'INDEX(wr_SendList,{k}))))'), font=SMALL)
         ws.row_dimensions[r].height = 28
@@ -1675,12 +1686,12 @@ def build_recommended_lineup(wb, *, slots: dict[str, int]) -> None:
         ws.cell(row, 8, f'=IF(D{row}="",C{row},D{row})')
         ws.cell(row, 9, f'=IF(H{row}="","",IFERROR(MATCH(H{row},wr_OppLabels,0),""))')
         _calc(ws.cell(row, 5), f'=IF(G{row}="","",IF(H{row}="","No opponent left to suggest",'
-              f'IF(I{row}="","Pick an opponent from this fixture",IF(NOT(INDEX(wr_OppUnplayed,I{row})),"Opponent already played",'
+              f'IF(I{row}="","Pick an opponent from this fixture",IF(NOT(INDEX(wr_OppUnplayed,I{row})),IF(INDEX(wr_OppOut,I{row}),"Opponent marked unavailable","Opponent already played"),'
               f'IF(SUMPRODUCT(--($D$9:$D${end}=H{row}))>1,"Opponent locked more than once",'
               f'IFERROR(INDEX(RosterMatchups_Table[Evidence],MATCH(G{row}&I{row},RosterMatchups_Table[Key],0)),'
               f'"Evidence unavailable"))))))')
         _calc(ws.cell(row, 6), f'=IF(OR(G{row}="",I{row}=""),"",IF(NOT(INDEX(wr_OppUnplayed,I{row})),'
-              f'"Opponent already played",IF(NOT(wr_PlanFresh),"Use Broadcast Match Night for the updated send",'
+              f'IF(INDEX(wr_OppOut,I{row}),"Opponent marked unavailable","Opponent already played"),IF(NOT(wr_PlanFresh),"Use Broadcast Match Night for the updated send",'
               f'IFERROR(INDEX(PlanAnswers_Table[Answer],MATCH(uc_PairKey&"|"&I{row},PlanAnswers_Table[Key],0)),'
               f'"No starting-plan answer"))))')
         ws.row_dimensions[row].height = 56
@@ -1744,7 +1755,7 @@ def build_five_game_plan(wb, *, engine: dict[str, Any], slots: dict[str, int]) -
         _calc(ws.cell(row, 7), f'=IF(OR(J{row}="",K{row}=""),"",IF(OR(L{row}=0,M{row}=0),"Check player selection",'
               f'IF(INDEX(wr_OurAvail,L{row})="Unavailable","Our player unavailable",'
               f'IF(INDEX(wr_OurLineup,L{row})="Played","Our player already played",'
-              f'IF(NOT(INDEX(wr_OppUnplayed,M{row})),"Opponent already played",'
+              f'IF(NOT(INDEX(wr_OppUnplayed,M{row})),IF(INDEX(wr_OppOut,M{row}),"Opponent marked unavailable","Opponent already played"),'
               f'IF(OR(COUNTIF($J$10:$J$14,J{row})>1,COUNTIF($K$10:$K$14,K{row})>1),"Duplicate player",'
               f'IFERROR(INDEX({first}:{last},L{row},M{row}),"Evidence unavailable")))))))')
         _calc(ws.cell(row, 8), f'=IF(L{row}=0,"",IF(INDEX(wr_OurSLNum,L{row})>0,INDEX(wr_OurSLNum,L{row}),"Unknown"))')
@@ -1775,7 +1786,8 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
                      default_date: str | None = None) -> None:
     R = slots["roster"]
     ws = wb.create_sheet("Lineup Lab", 2)
-    for letter, width in zip("ABCDEFGH", (6, 44, 18, 30, 10, 12, 3, 3)):
+    # G holds the opponent Availability dropdown (it was a 3-wide spacer; nothing else uses it on this sheet).
+    for letter, width in zip("ABCDEFGH", (6, 44, 18, 30, 10, 12, 14, 3)):
         ws.column_dimensions[letter].width = width
     status_width = sum(ws.column_dimensions[c].width for c in "DEF")   # the merged status span
     _head(ws, "Lineup Lab", "Your planning marks for tonight — inputs, never evidence. Results update instantly on this "
@@ -1852,9 +1864,9 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
         ws.cell(row=r, column=5, value=f'=INDEX(ll_OurSL,{k})')
         ws.cell(row=r, column=6, value=f'=INDEX(ll_OurWL,{k})')
     opp_top = our_first + R + 1
-    base._section(ws, opp_top, "Opponent roster — who has played, and your scouting notes", last_col=6)
+    base._section(ws, opp_top, "Opponent roster — who has played, who is available, and your scouting notes", last_col=7)
     base._subheader(ws, opp_top + 1, [(1, "#"), (2, "Player"), (3, "Played"), (4, "Coach notes"), (5, "SL"),
-                                      (6, "Team W-L")])
+                                      (6, "Team W-L"), (7, "Availability")])
     opp_first = opp_top + 2
     for k in range(1, R + 1):
         r = opp_first + k - 1
@@ -1864,6 +1876,9 @@ def build_lineup_lab(wb, *, slots: dict[str, int], default_team: str | None, def
             base._input(ws.cell(row=r, column=c))
             ws.cell(row=r, column=c).font = Font(bold=True)
         played.add(f"C{r}")
+        base._input(ws.cell(row=r, column=7))
+        ws.cell(row=r, column=7).font = Font(bold=True)
+        avail.add(f"G{r}")          # same Available / Unavailable list as our roster; blank = Available
         ws.cell(row=r, column=4).alignment = base.WRAP_TOP
         ws.cell(row=r, column=5, value=f'=INDEX(ll_OppSL,{k})')
         ws.cell(row=r, column=6, value=f'=INDEX(ll_OppWL,{k})')
@@ -1920,7 +1935,7 @@ def _coach_note_preview(k: int, limit: int) -> str:
 def _card_block(ws, top: int, k: int, *, compact: bool = False, quick_height: float | None = None) -> int:
     card = f"INDEX(wr_OppCard,{k})"
     _span(ws, top, 1, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
-                          f'IF(INDEX(wr_OppPlayed,{k})="Played"," · already played",""))',
+                          f'IF(INDEX(wr_OppPlayed,{k})="Played"," · already played",IF(INDEX(wr_OppOut,{k})," · unavailable","")))',
           font=Font(bold=True, size=12, color="FFFFFF"), fill=base.OPPONENT_FILL)
     fields = CARD_FIELDS if not compact else [f for f in CARD_FIELDS if f[1] in ("Quick Read", "Vs Our Roster", "Met List", "By SL", "Missing")]
     for n, (label, col) in enumerate(fields, start=1):
@@ -2083,7 +2098,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     for k in range(1, R + 1):
         r += 1
         _span(ws, r, 1, 2, f'=IF(INDEX(wr_OppLabels,{k})="","","vs "&INDEX(wr_OppLabels,{k}))', font=font(10, bold=True))
-        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),"Already played.",'
+        _span(ws, r, 3, 12, f'=IF(INDEX(wr_OppLabels,{k})="","",IF(NOT(INDEX(wr_OppUnplayed,{k})),IF(INDEX(wr_OppOut,{k}),"Marked unavailable.","Already played."),'
                             f'IF(INDEX(wr_Send1,{k})="","No evidence-backed option left among our remaining players.",'
                             f'INDEX(wr_Send1,{k})&IF(INDEX(wr_Send2,{k})="",""," · "&INDEX(wr_Send2,{k}))))'
                             f'&IF(INDEX(wr_PacketSave,{k})="","",CHAR(10)&INDEX(wr_PacketSave,{k}))'
@@ -2131,7 +2146,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
         ws.cell(row=r, column=5, value=f'=IF(INDEX(wr_OurLabels,{k})="","",INDEX(wr_OurAvail,{k})&" · "&INDEX(wr_OurLineup,{k}))').font = f11
         _span(ws, r, 7, 10, f'=INDEX(wr_OppLabels,{k})', font=f11, wrap=False)
         ws.cell(row=r, column=11, value=f'=IF(INDEX(wr_OppLabels,{k})="","","SL "&INDEX(wr_OppSL,{k})&" · "&INDEX(wr_OppWL,{k}))').font = f11
-        ws.cell(row=r, column=12, value=f'=INDEX(wr_OppPlayed,{k})').font = f11
+        ws.cell(row=r, column=12, value=f'=IF(INDEX(wr_OppOut,{k}),"Unavailable",INDEX(wr_OppPlayed,{k}))').font = f11
         for c in range(1, 13):
             if c != 6:
                 ws.cell(row=r, column=c).border = base.CELL_BORDER
@@ -2187,7 +2202,7 @@ def build_captain_packet(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
                 continue
             lbl = f"INDEX(wr_OppLabels,{k})"
             _span(ws, r, c0, c9, f'=IF({lbl}="","",{lbl}&" · SL "&INDEX(wr_OppSL,{k})&IF(INDEX(wr_OppPlayed,{k})="Played",'
-                                 f'" · already played",""))', font=font(10.5, bold=True, color="3B2410"), wrap=False)
+                                 f'" · already played",IF(INDEX(wr_OppOut,{k})," · unavailable","")))', font=font(10.5, bold=True, color="3B2410"), wrap=False)
         for i, (label, col, pt) in enumerate(card_fields, start=1):
             rr = r + i
             h(rr, pt)
@@ -2778,7 +2793,7 @@ def build_command_center(wb, *, slots: dict[str, int], stats: dict[str, Any]) ->
     opp_lines = ['=IF(wr_OppLabel="","No opponent roster for the selected fixture.",wr_OppLabel)']
     for k in range(1, R + 1):
         opp_lines.append(f'=IF(INDEX(wr_OppLabels,{k})="","",INDEX(wr_OppLabels,{k})&" · SL "&INDEX(wr_OppSL,{k})&'
-                         f'IF(INDEX(wr_OppPlayed,{k})="Played"," · played",""))')
+                         f'IF(INDEX(wr_OppPlayed,{k})="Played"," · played",IF(INDEX(wr_OppOut,{k})," · unavailable","")))')
     opp_end = _card(ws, top, 6, 8, "OPPONENT TEAM", opp_lines, size=10, title_fill=base.OPPONENT_FILL, line_height=16)
     _span(ws, opp_end + 1, 6, 8, '=IF(wr_OppLabel="","","Missing information: "&COUNTIF(wr_OppSL,"No data")&" player(s) without a '
                                  'captured SL · "&wr_UnplayedCount&" not yet played")', font=Font(size=10, color="5B6A61"), height=30)

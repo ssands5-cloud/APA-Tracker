@@ -30,7 +30,7 @@ from analytics.uc_v2_policy import POLICY_VERSION
 
 BAS = Path(__file__).with_name("excel_v2") / "UcV2Engine.bas"
 MODEL = Path(__file__).resolve().parents[1] / "analytics" / "uc_v2_model.json"
-ARGS = ("wr_OurScope,wr_OppScope,wr_Category,wr_OurPids,wr_OurRemaining,wr_OurLineup,wr_OppPids,wr_OppUnplayed,"
+ARGS = ("wr_OurScope,wr_OppScope,wr_Category,wr_OurPids,wr_OurRemaining,wr_OurLineup,wr_OppPids,wr_OppUnplayed,wr_OppOut,"
         "wr_OppLabels,ll_Cap,'Command Center'!$C$6,'Five-Game Plan'!$B$5")
 FORMATS = ("EIGHT", "NINE")
 
@@ -143,7 +143,7 @@ def install(xlsx_in: str | Path, compact: dict[str, Any], xlsm_out: str | Path, 
         coach.Range("A1").Font.Bold = True
         coach.Range("A1").Font.Size = 18
         coach.Range("A2").Value = (
-            "Recalculates from your marks: availability and played players (Lineup Lab), the opponent and teams (Match Day / "
+            "Recalculates from your marks: availability and played players on both sides (Lineup Lab), the opponent and teams (Match Day / "
             "War Room), the skill cap (Lineup Lab C7), who put up first (Five-Game Plan B5), their put-up (Command Center C6) "
             "and the format. Same V2 policy, model and data snapshot as the owner-review HTML. Win chances are estimates, "
             "not guarantees. Needs macros enabled in desktop Excel; Excel for the web and mobile cannot run it.")

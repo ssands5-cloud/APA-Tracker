@@ -21,6 +21,7 @@ Private tId() As String, tNm() As String, tKn() As Boolean, tSl() As Double
 Private PP() As Double, PT() As String
 Private gGames As Long, gCapOn As Boolean, gCap As Double, gUsed As Double
 Private gOppCapOn As Boolean, gOppUsed As Double
+Private gOutD As Object              ' opponent id -> marked Unavailable (and has not played)
 Private fullO As Long, fullT As Long
 Private stD As Object, rsD As Object, lgD As Object, tlD As Object
 Private sW() As Double, sA() As Double, sHasLead() As Boolean, sLeadI() As Long, sLeadR() As Long, sWorst() As Long, sN As Long
@@ -42,15 +43,15 @@ Private gTrace As String, gAnswer As String, gTable As Variant
 ' view: "answer" (one line for Command Center), "table" (the V2 Coach sheet, spills), "trace" (machine-readable, tests)
 Public Function UC_V2(view As String, ourScope As Variant, oppScope As Variant, fmt As Variant, ourPids As Variant, _
                      ourRemaining As Variant, ourLineup As Variant, oppPids As Variant, oppUnplayed As Variant, _
-                     oppLabels As Variant, cap As Variant, putUp As Variant, firstPutUp As Variant) As Variant
+                     oppOut As Variant, oppLabels As Variant, cap As Variant, putUp As Variant, firstPutUp As Variant) As Variant
     On Error GoTo Failed
     Dim a() As Variant, sig As String
     a = Array(V1(ourScope), V1(oppScope), V1(fmt), Flat(ourPids), Flat(ourRemaining), Flat(ourLineup), Flat(oppPids), _
-              Flat(oppUnplayed), Flat(oppLabels), V1(cap), V1(putUp), V1(firstPutUp))
+              Flat(oppUnplayed), Flat(oppOut), Flat(oppLabels), V1(cap), V1(putUp), V1(firstPutUp))
     LoadData
     sig = gStamp & Chr(1) & Join(a, Chr(1))
     If sig <> gSig Then
-        Compute a(0), a(1), a(2), ourPids, ourRemaining, ourLineup, oppPids, oppUnplayed, oppLabels, a(9), a(10), a(11)
+        Compute a(0), a(1), a(2), ourPids, ourRemaining, ourLineup, oppPids, oppUnplayed, oppOut, oppLabels, a(10), a(11), a(12)
         gSig = sig
     End If
     Select Case LCase(view)
@@ -62,6 +63,12 @@ Public Function UC_V2(view As String, ourScope As Variant, oppScope As Variant, 
 Failed:
     gSig = ""
     UC_V2 = "V2 engine error: " & Err.Description & " — no recommendation shown (no fallback)."
+End Function
+
+Private Function IsOutPid(pid As String) As Boolean
+    IsOutPid = False
+    If gOutD Is Nothing Then Exit Function
+    If gOutD.Exists(pid) Then IsOutPid = CBool(gOutD(pid))
 End Function
 
 ' ============================== data loading ==============================
@@ -104,13 +111,13 @@ End Sub
 ' ============================== state from the workbook ==============================
 
 Private Sub Compute(ourScope As Variant, oppScope As Variant, fmt As Variant, ourPids As Variant, ourRemaining As Variant, _
-                    ourLineup As Variant, oppPids As Variant, oppUnplayed As Variant, oppLabels As Variant, _
+                    ourLineup As Variant, oppPids As Variant, oppUnplayed As Variant, oppOut As Variant, oppLabels As Variant, _
                     cap As Variant, putUp As Variant, firstPutUp As Variant)
     Dim k As Long
     For k = 0 To 30: BITV(k) = 2 ^ k: Next k
     gTrace = "": gAnswer = "": gTable = Empty
     Dim status As String
-    status = Prepare(CStr(ourScope), CStr(oppScope), CStr(fmt), ourPids, ourRemaining, ourLineup, oppPids, oppUnplayed, cap)
+    status = Prepare(CStr(ourScope), CStr(oppScope), CStr(fmt), ourPids, ourRemaining, ourLineup, oppPids, oppUnplayed, oppOut, cap)
     Dim tossKnown As Boolean, tossUs As Boolean, nextUs As Boolean, playedN As Long
     tossKnown = (CStr(firstPutUp) = "We put up first" Or CStr(firstPutUp) = "They put up first")
     tossUs = (CStr(firstPutUp) = "We put up first")
@@ -126,25 +133,30 @@ Private Sub Compute(ourScope As Variant, oppScope As Variant, fmt As Variant, ou
 End Sub
 
 Private Function Prepare(ourScope As String, oppScope As String, fmt As String, ourPids As Variant, ourRemaining As Variant, _
-                         ourLineup As Variant, oppPids As Variant, oppUnplayed As Variant, cap As Variant) As String
+                         ourLineup As Variant, oppPids As Variant, oppUnplayed As Variant, oppOut As Variant, cap As Variant) As String
     nO = 0: nT = 0: gGames = 0
     If ourScope = "" Or oppScope = "" Then Prepare = "Choose your team and the opponent (Match Day or War Room) to see the V2 answer.": Exit Function
     If fmt <> "EIGHT" And fmt <> "NINE" Then Prepare = "V2 has no pairing model for this format (8-Ball and 9-Ball only). No recommendation shown.": Exit Function
     If Not rosterIdx.Exists(ourScope) Then Prepare = "V2 data has no roster for your team in this snapshot. No recommendation shown.": Exit Function
     If Not rosterIdx.Exists(oppScope) Then Prepare = "V2 data has no roster for this opponent in this snapshot. No recommendation shown.": Exit Function
-    Dim pidsO As Variant, remO As Variant, lineO As Variant, pidsT As Variant, unpT As Variant
+    Dim pidsO As Variant, remO As Variant, lineO As Variant, pidsT As Variant, unpT As Variant, outT As Variant
     pidsO = Grid(ourPids): remO = Grid(ourRemaining): lineO = Grid(ourLineup): pidsT = Grid(oppPids): unpT = Grid(oppUnplayed)
-    Dim remD As Object, played As Object, unp As Object, r As Long, p As String
+    outT = Grid(oppOut)
+    Dim remD As Object, played As Object, unp As Object, outD As Object, r As Long, p As String, outN As Long
     Set remD = CreateObject("Scripting.Dictionary"): Set played = CreateObject("Scripting.Dictionary")
-    Set unp = CreateObject("Scripting.Dictionary")
+    Set unp = CreateObject("Scripting.Dictionary"): Set outD = CreateObject("Scripting.Dictionary")
     For r = 1 To UBound(pidsO, 1)
         p = CStr(pidsO(r, 1))
         If p <> "" Then remD(p) = IsTrue(remO(r, 1)): played(p) = (CStr(lineO(r, 1)) = "Played")
     Next r
     For r = 1 To UBound(pidsT, 1)
         p = CStr(pidsT(r, 1))
-        If p <> "" Then unp(p) = IsTrue(unpT(r, 1))
+        If p <> "" Then
+            unp(p) = IsTrue(unpT(r, 1)): outD(p) = IsTrue(outT(r, 1))
+            If outD(p) Then outN = outN + 1
+        End If
     Next r
+    Set gOutD = outD
     Dim f0 As Long, c0 As Long, f1 As Long, c1 As Long, i As Long
     Span ourScope, f0, c0
     Span oppScope, f1, c1
@@ -172,10 +184,14 @@ Private Function Prepare(ourScope As String, oppScope As String, fmt As String, 
         If unp(rsPid(i)) Then
             If nT >= MAX_PLAYERS Then Prepare = "More than 16 opponent players: beyond the V2 engine's limit.": Exit Function
             tRow(nT) = i: nT = nT + 1
-        ElseIf rsKn(i) Then
+        ElseIf rsKn(i) And Not outD(rsPid(i)) Then
+            ' played: spent against their cap. An opponent marked Unavailable has not played and is not spent.
             oppUsed = oppUsed + Fix(rsSl(i))
         End If
     Next i
+    If nT = 0 And outN > 0 And playedN < 5 Then
+        Prepare = "Every opponent who has not played is marked Unavailable on Lineup Lab, so there is no one to put up. No recommendation shown.": Exit Function
+    End If
     ReDim oId(0 To MAX_PLAYERS): ReDim oNm(0 To MAX_PLAYERS): ReDim oKn(0 To MAX_PLAYERS): ReDim oSl(0 To MAX_PLAYERS)
     ReDim tId(0 To MAX_PLAYERS): ReDim tNm(0 To MAX_PLAYERS): ReDim tKn(0 To MAX_PLAYERS): ReDim tSl(0 To MAX_PLAYERS)
     ReDim PP(0 To MAX_PLAYERS, 0 To MAX_PLAYERS): ReDim PT(0 To MAX_PLAYERS, 0 To MAX_PLAYERS)
@@ -685,7 +701,11 @@ Private Sub BuildOutputs(putUp As String, oppPids As Variant, oppLabels As Varia
             If tId(respJ(y)) = pid Then sel = y
         Next y
         If sel = -1 Then
-            ans = putUp & " has already played, is not on their roster, or cannot be put up under the cap. Check Lineup Lab."
+            If IsOutPid(pid) Then
+                ans = putUp & " is marked Unavailable on Lineup Lab, so they cannot be put up. Choose another opponent."
+            Else
+                ans = putUp & " has already played, is not on their roster, or cannot be put up under the cap. Check Lineup Lab."
+            End If
         Else
             ans = "They put up " & tNm(respJ(sel)) & " (game " & (6 - gGames) & "): send " & respOur(sel) & " — " & respRole(sel) & " · " & respWhy(sel) & ". " & respCost(sel)
         End If

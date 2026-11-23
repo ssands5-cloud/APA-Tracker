@@ -9,8 +9,11 @@ state (__ucPlanFor). Compared: rosters left, lead (player, their reply, equally 
 every put-up (player, role, win chance, matchup text, strategic explanation), both five-game plans, night totals,
 planned long shots, and the live answer for the selected put-up. Any difference fails.
 
-Negative controls: a wrong win chance in the workbook's V2 data and a changed strategic threshold in the VBA engine
-must each be detected. Needs Windows, Microsoft Excel and "Trust access to the VBA project object model".
+Opponent Availability (Lineup Lab column G) is part of every state: several opponents may be absent, one may be marked
+both Played and Unavailable (he stays Played), and when every opponent still to play is absent the workbook says so.
+
+Negative controls: a wrong win chance in the workbook's V2 data, a changed strategic threshold in the VBA engine, and an
+absent opponent counted as played (spent against their cap) must each be detected. Needs Windows, Microsoft Excel and "Trust access to the VBA project object model".
 """
 from __future__ import annotations
 
@@ -98,10 +101,11 @@ def _payload():
     return payload
 
 
-PAGE = """([a, b, fmt, rem, unplayedIds, playedN, playedSl, cap]) => {
+PAGE = """([a, b, fmt, rem, unplayedIds, playedN, playedSl, cap, outIds]) => {
   const full = window.__ucPlanFor(a, b, fmt, null, null, 0, 0, null, 'v2').v2.night;
+  // unplayedIds = opponents who may still be put up (not played, not Unavailable); outIds = Unavailable and not played
   const unplayed = full.theirs.map(t => unplayedIds.indexOf(String(t.id)) >= 0);
-  const mp = window.__ucPlanFor(a, b, fmt, rem, unplayed, playedN, playedSl, cap, 'v2');
+  const mp = window.__ucPlanFor(a, b, fmt, rem, unplayed, playedN, playedSl, cap, 'v2', outIds || []);
   const n = mp.v2 && mp.v2.night;
   if (!n) return {none: true};
   const oid = {}, tid = {};
@@ -155,7 +159,7 @@ class Book:
             self.set(sheet, "C6", _label(theirs))
         self.set("Lineup Lab", "C9", "")
 
-    def state(self, unavailable, played_ours, played_theirs, cap, first, put_up_label):
+    def state(self, unavailable, played_ours, played_theirs, cap, first, put_up_label, out_theirs=()):
         ll_our, ll_opp = 12, 15 + self.R
         our_pids, opp_pids = self.col("wr_OurPids"), self.col("wr_OppPids")
         for k, pid in enumerate(our_pids):
@@ -163,6 +167,7 @@ class Book:
             self.set("Lineup Lab", f"D{ll_our + k}", "Played" if pid in played_ours else "")
         for k, pid in enumerate(opp_pids):
             self.set("Lineup Lab", f"C{ll_opp + k}", "Played" if pid in played_theirs else "")
+            self.set("Lineup Lab", f"G{ll_opp + k}", "Unavailable" if pid in out_theirs else "")
         self.set("Lineup Lab", "C7", "" if cap is None else cap)
         self.set("Five-Game Plan", "B5", first)
         self.set("Command Center", "C6", put_up_label)
@@ -227,9 +232,15 @@ def _states(rng, ours, theirs, fmt):
         played_theirs = rng.sample(their_ids, min(len(their_ids) - 1, played_n + rng.choice([0, 0, 1, -1]) if played_n else 0))
         rest = [p for p in our_ids if p not in played_ours]
         unavailable = rng.sample(rest, rng.choice([0, 0, 1, 2]))
+        # opponent Availability: several may be absent, but one opponent is always left to put up; sometimes a player
+        # who already played is ALSO marked Unavailable (he must still count as Played, not as absent)
+        still = [p for p in their_ids if p not in played_theirs]
+        out_theirs = rng.sample(still, min(rng.choice([0, 1, 1, 2, 3]), len(still) - 1))
+        if played_theirs and rng.random() < 0.3:
+            out_theirs.append(rng.choice(played_theirs))
         cap = rng.choice([23, 23, 22, 19, 25, None]) if n else 23
         first = rng.choice(["We put up first", "They put up first"])
-        out.append((unavailable, played_ours, played_theirs, cap, first))
+        out.append((unavailable, played_ours, played_theirs, out_theirs, cap, first))
     return out
 
 
@@ -239,22 +250,23 @@ def _run(book, page, pairs, states_per_pair=None, rng_seed=20261122):
     for ours, theirs, fmt in pairs:
         book.teams(ours, theirs)
         sl = {str(p[0]): p[3] for p in TEAMS[ours][2]}
-        for unavailable, played_ours, played_theirs, cap, first in _states(rng, ours, theirs, fmt)[:states_per_pair]:
-            unplayed = [str(p[0]) for p in TEAMS[theirs][2] if str(p[0]) not in played_theirs]
+        for unavailable, played_ours, played_theirs, out_theirs, cap, first in _states(rng, ours, theirs, fmt)[:states_per_pair]:
+            unplayed = [str(p[0]) for p in TEAMS[theirs][2] if str(p[0]) not in played_theirs and str(p[0]) not in out_theirs]
+            absent = [i for i in out_theirs if i not in played_theirs]
             labels = book.col("wr_OppLabels")
             pick = rng.choice(unplayed)
             put_up = labels[book.col("wr_OppPids").index(pick)]
-            x = book.state(set(unavailable), set(played_ours), set(played_theirs), cap, first, put_up)
+            x = book.state(set(unavailable), set(played_ours), set(played_theirs), cap, first, put_up, set(out_theirs))
             rem = [p for p in sl if p not in unavailable and p not in played_ours]
             played_sl = sum(sl[p] for p in played_ours if sl[p])
-            h = page.evaluate(PAGE, [_key(ours), _key(theirs), fmt, rem, unplayed, len(played_ours), played_sl, cap])
+            h = page.evaluate(PAGE, [_key(ours), _key(theirs), fmt, rem, unplayed, len(played_ours), played_sl, cap, absent])
             if h.get("none"):
                 continue
             compared += 1
             kinds |= {r["role"] for r in h["responses"]} | {"tie" for r in h["responses"] if "Practically" in r["cost"]}
             d = _compare(x, h)
             if d:
-                diffs.append((ours, theirs, unavailable, played_ours, played_theirs, cap, d[:4]))
+                diffs.append((ours, theirs, unavailable, played_ours, played_theirs, out_theirs, cap, d[:4]))
     return diffs, compared, kinds
 
 
@@ -276,7 +288,7 @@ def test_excel_v2_gives_the_same_advice_as_the_html(built):
     assert "Recommended competitive matchup" in kinds and len(kinds) >= 3, f"too few answer kinds covered: {kinds}"
 
 
-@pytest.mark.parametrize("fault", ["win_chance", "strategic_threshold"])
+@pytest.mark.parametrize("fault", ["win_chance", "strategic_threshold", "out_counted_as_played"])
 def test_negative_controls_detect_a_wrong_workbook(built, tmp_path, fault):
     html, xlsm, _ = built
     copy = tmp_path / "fault.xlsm"
@@ -288,6 +300,14 @@ def test_negative_controls_detect_a_wrong_workbook(built, tmp_path, fault):
             for r in range(1, pairs.Rows.Count + 1):
                 pairs.Cells(r, 2).Value = 1 - pairs.Cells(r, 2).Value if r % 3 == 0 else pairs.Cells(r, 2).Value
             book.name("v2_Stamp").Value = "tampered"
+        elif fault == "out_counted_as_played":
+            code = book.wb.VBProject.VBComponents("UcV2Engine").CodeModule
+            hit = 0
+            for i in range(1, code.CountOfLines + 1):
+                if code.Lines(i, 1).strip() == "ElseIf rsKn(i) And Not outD(rsPid(i)) Then":
+                    code.ReplaceLine(i, "        ElseIf rsKn(i) Then")      # an absent opponent now spends their cap
+                    hit += 1
+            assert hit == 1, "the out-opponent cap rule was not found in the VBA engine"
         else:
             code = book.wb.VBProject.VBComponents("UcV2Engine").CodeModule
             for i in range(1, code.CountOfLines + 1):
@@ -304,3 +324,47 @@ def test_negative_controls_detect_a_wrong_workbook(built, tmp_path, fault):
     finally:
         book.close()
     assert compared and diffs, f"the {fault} fault must be detected"
+
+
+def test_every_opponent_still_to_play_unavailable_says_so_and_html_has_nobody_to_plan_against(built):
+    html, xlsm, _ = built
+    ours, theirs, fmt = PAIRS[0]
+    book = Book(xlsm)
+    try:
+        book.teams(ours, theirs)
+        their_ids = [str(p[0]) for p in TEAMS[theirs][2]]
+        played = set(their_ids[:2])
+        labels = book.col("wr_OppLabels")
+        x = book.state(set(), set(), played, 23, "We put up first", labels[0], set(their_ids))   # all marked Unavailable
+        assert x["status"] != "ok" and "marked Unavailable" in x["status"], x
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(); page.goto(html.as_uri())
+                h = page.evaluate(PAGE, [_key(ours), _key(theirs), fmt, [str(p[0]) for p in TEAMS[ours][2]], [], 0, 0, 23,
+                                         [i for i in their_ids if i not in played]])
+            finally:
+                browser.close()
+        assert h.get("none") or h["theirs"] == [], h
+    finally:
+        book.close()
+
+
+def test_html_excludes_unavailable_opponents_from_every_plan(built):
+    html, _, _ = built
+    ours, theirs, fmt = PAIRS[0]
+    their_ids = [str(p[0]) for p in TEAMS[theirs][2]]
+    gone = their_ids[:2]
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(); page.goto(html.as_uri())
+            out = page.evaluate(PAGE, [_key(ours), _key(theirs), fmt, [str(p[0]) for p in TEAMS[ours][2]],
+                                       their_ids[2:], 0, 0, 23, gone])
+            base = page.evaluate(PAGE, [_key(ours), _key(theirs), fmt, [str(p[0]) for p in TEAMS[ours][2]],
+                                        their_ids, 0, 0, 23, []])
+        finally:
+            browser.close()
+    assert out["theirs"] == their_ids[2:] and base["theirs"] == their_ids
+    used = {g["their"] for g in out["planUs"] + out["planThem"]} | {r["their"] for r in out["responses"]}
+    assert used and not used & set(gone), used

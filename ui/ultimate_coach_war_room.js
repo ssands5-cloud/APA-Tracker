@@ -1250,8 +1250,11 @@
     if(engine==="v2") v2ApplyOptions(mp,ours,theirs,value,5-playedCount,cap===undefined?null:cap,playedSl,oppUsed,valueM3);
     return mp;
   }
-  window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap,engine){
+  window.__ucPlanFor=function(ourKey,oppKey,fmt,remainingIds,unplayed,playedCount,playedSl,cap,engine,oppOutIds){
     var w=warRoomPair(TEAM_INDEX[ourKey],TEAM_INDEX[oppKey],fmt),rem={};
+    // Test hook only: opponents marked absent (not played). Same rule as wrPlan: out = marked out and not unplayed-by-play,
+    // so they are neither candidates nor spent against their cap. Always assigned so a cached pair never keeps stale marks.
+    w.oppOut=w.theirs.map(function(o){return !!oppOutIds&&oppOutIds.map(String).indexOf(String(o.id))>=0;});
     w.ours.forEach(function(m){rem[String(m.id)]=!remainingIds||remainingIds.map(String).indexOf(String(m.id))>=0;});
     return mnPlanFor(w,rem,unplayed||w.theirs.map(function(){return true;}),playedCount||0,playedSl||0,cap===undefined?null:cap,engine||"m3");
   };
